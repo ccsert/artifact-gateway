@@ -213,7 +213,7 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 		{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), GiteaClient{Username: "gitea", Token: "gitea-token"})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()

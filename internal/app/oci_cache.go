@@ -20,6 +20,10 @@ var errOCICacheMiss = errors.New("OCI cache miss")
 var errOCICacheNegative = errors.New("OCI negative cache hit")
 var errOCIUpstreamOpen = errors.New("OCI upstream circuit is open")
 
+const defaultOCICacheTTL = 15 * time.Minute
+const defaultOCINegativeCacheTTL = time.Minute
+const defaultOCIProxyBreakerTTL = 30 * time.Second
+
 // OCIObjectStore is deliberately small so the cache's publication ordering can
 // be tested without a running object-store service.
 type OCIObjectStore interface {
@@ -144,6 +148,10 @@ func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duratio
 	return &OCICache{store: store, ttl: ttl, negativeTTL: negativeTTL, breakerTTL: breakerTTL, allowedProxyHost: allowed, openUntil: make(map[string]time.Time)}
 }
 
+func NewDefaultOCICache(store OCIObjectStore, allowedProxyHosts []string) *OCICache {
+	return NewOCICache(store, defaultOCICacheTTL, defaultOCINegativeCacheTTL, defaultOCIProxyBreakerTTL, allowedProxyHosts)
+}
+
 func (c *OCICache) key(group, repository, resource, reference string) string {
 	sum := sha256.Sum256([]byte(group + "\x00" + repository + "\x00" + resource + "\x00" + reference))
 	return "oci/index/" + hex.EncodeToString(sum[:]) + ".json"
@@ -205,7 +213,7 @@ func (c *OCICache) Do(key string, fetch func() (CachedOCIContent, error)) (Cache
 
 func (c *OCICache) ProxyAllowed(endpoint string) bool {
 	if len(c.allowedProxyHost) == 0 {
-		return true
+		return false
 	}
 	host := strings.ToLower(strings.Split(strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://"), "/")[0])
 	_, ok := c.allowedProxyHost[host]

@@ -100,7 +100,14 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	cacheKey := ""
-	if h.Cache != nil {
+	hasHostedMember := false
+	for _, member := range members {
+		if member.Type == repository.MemberHosted {
+			hasHostedMember = true
+			break
+		}
+	}
+	if h.Cache != nil && !hasHostedMember {
 		cacheKey = h.Cache.key(groupName, repositoryName, resource, reference)
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
 		if cacheErr == nil {
@@ -121,7 +128,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.Resolver.Metrics.ociCacheMiss.Add(1)
 	}
 	var content CachedOCIContent
-	if request.Method == http.MethodGet && h.Cache != nil {
+	if request.Method == http.MethodGet && h.Cache != nil && !hasHostedMember {
 		// The complete fetch, verification, object write, and index publication
 		// are one singleflight operation for a cache key.
 		content, err = h.Cache.Do(cacheKey, func() (CachedOCIContent, error) {
@@ -144,6 +151,9 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.Resolver.RecordOCIRequestFailure()
 		var fetchErr *ociFetchError
 		if errors.As(err, &fetchErr) {
+			if request.Method == http.MethodGet && h.Cache != nil && !hasHostedMember && fetchErr.status == http.StatusNotFound {
+				_ = h.Cache.StoreNegative(request.Context(), cacheKey)
+			}
 			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
 			return
 		}
@@ -235,9 +245,6 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			return CachedOCIContent{}, &ociFetchError{http.StatusBadGateway, "UNKNOWN", "upstream registry returned an error"}
 		}
 		return CachedOCIContent{}, errOCIUpstreamOpen
-	}
-	if h.Cache != nil {
-		_ = h.Cache.StoreNegative(ctx, h.Cache.key(groupName, repositoryName, resource, reference))
 	}
 	return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
 }

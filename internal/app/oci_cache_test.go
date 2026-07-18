@@ -3,9 +3,11 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,7 +46,8 @@ func TestOCICacheServesVerifiedContentAndCoalescesConcurrentPulls(t *testing.T) 
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
 	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	metrics := &Metrics{}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 
 	var wg sync.WaitGroup
 	for range 8 {
@@ -72,6 +75,34 @@ func TestOCICacheServesVerifiedContentAndCoalescesConcurrentPulls(t *testing.T) 
 	handler.ServeHTTP(response, req)
 	if response.Code != http.StatusOK || response.Body.String() != string(content) || client.Calls() != 1 {
 		t.Fatalf("cached response = %d %q; upstream calls = %d", response.Code, response.Body.String(), client.Calls())
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_oci_cache_requests_total{outcome="hit"} 1`) {
+		t.Fatalf("metrics = %s", metricResponse.Body.String())
+	}
+}
+
+func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
+	cache := NewOCICache(NewMemoryOCIObjectStore(), -time.Millisecond, time.Hour, time.Hour, []string{"trusted.example"})
+	key := cache.key("team", "team/app", ociManifest, "latest")
+	if err := cache.Store(context.Background(), key, CachedOCIContent{Body: []byte("content"), Digest: digestOf([]byte("content"))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Load(context.Background(), key); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("expired cache error = %v, want miss", err)
+	}
+
+	client := &countingOCIClient{content: []byte(`{"schemaVersion":2}`), status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	req := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(req, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusNotFound || client.Calls() != 0 {
+		t.Fatalf("untrusted proxy response = %d, calls = %d", response.Code, client.Calls())
 	}
 }
 

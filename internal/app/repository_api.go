@@ -245,7 +245,7 @@ type GatewayStore interface {
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
-	return NewGatewayHandlerWithOCICache(dependencies, store, adapter, authenticator, NewOCICache(NewMemoryOCIObjectStore(), 15*time.Minute, time.Minute, 30*time.Second, nil), ociClients...)
+	return NewGatewayHandlerWithOCICache(dependencies, store, adapter, authenticator, NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), ociClients...)
 }
 
 func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, ociClients ...OCIClient) http.Handler {
