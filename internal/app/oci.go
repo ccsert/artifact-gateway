@@ -107,8 +107,10 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			break
 		}
 	}
-	if h.Cache != nil && !hasHostedMember {
+	if h.Cache != nil {
 		cacheKey = h.Cache.key(groupName, repositoryName, resource, reference)
+	}
+	if h.Cache != nil && !hasHostedMember {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
 		if cacheErr == nil {
 			h.Resolver.Metrics.ociCacheHit.Add(1)
@@ -135,7 +137,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			if cached, loadErr := h.Cache.Load(request.Context(), cacheKey); loadErr == nil {
 				return cached, nil
 			}
-			fetched, fetchErr := h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor)
+			fetched, fetchErr := h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 			if fetchErr != nil {
 				return CachedOCIContent{}, fetchErr
 			}
@@ -145,7 +147,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			return fetched, nil
 		})
 	} else {
-		content, err = h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor)
+		content, err = h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 	}
 	if err != nil {
 		h.Resolver.RecordOCIRequestFailure()
@@ -160,6 +162,12 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
 		return
 	}
+	if request.Method == http.MethodGet && h.Cache != nil && hasHostedMember && content.cacheable {
+		if err := h.Cache.Store(request.Context(), cacheKey, content); err != nil {
+			writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "unable to cache verified upstream content")
+			return
+		}
+	}
 	serveCachedOCIContent(w, request, reference, content)
 }
 
@@ -171,13 +179,32 @@ type ociFetchError struct {
 
 func (e *ociFetchError) Error() string { return e.message }
 
-func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members []repository.Member, repositoryName, resource, reference string, requestHeaders http.Header, groupName, actor string) (CachedOCIContent, error) {
+func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members []repository.Member, repositoryName, resource, reference string, requestHeaders http.Header, groupName, actor, cacheKey string) (CachedOCIContent, error) {
 	headers := requestHeaders.Clone()
 	headers.Del("Range")
 	hadUpstreamFailure := false
 	lastUpstreamStatus := 0
 	digestInvalid := false
+	hostedAttempted := false
 	for _, member := range members {
+		if member.Type == repository.MemberProxy && hostedAttempted && h.Cache != nil {
+			cached, cacheErr := h.Cache.Load(ctx, cacheKey)
+			if cacheErr == nil {
+				h.Resolver.Metrics.ociCacheHit.Add(1)
+				if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, cached.Member, actor); err != nil {
+					return CachedOCIContent{}, err
+				}
+				return cached, nil
+			}
+			if errors.Is(cacheErr, errOCICacheNegative) {
+				h.Resolver.Metrics.ociCacheHit.Add(1)
+				return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
+			}
+			h.Resolver.Metrics.ociCacheMiss.Add(1)
+		}
+		if member.Type == repository.MemberHosted {
+			hostedAttempted = true
+		}
 		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.ProxyAllowed(member.Endpoint) {
 			continue
 		}
@@ -235,7 +262,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		if h.Cache != nil {
 			h.Cache.RecordUpstreamSuccess(member.Endpoint)
 		}
-		return CachedOCIContent{Body: content, Digest: response.Header.Get("Docker-Content-Digest"), ContentType: response.Header.Get("Content-Type"), Member: member.Name}, nil
+		return CachedOCIContent{Body: content, Digest: response.Header.Get("Docker-Content-Digest"), ContentType: response.Header.Get("Content-Type"), Member: member.Name, cacheable: member.Type == repository.MemberProxy}, nil
 	}
 	if hadUpstreamFailure {
 		if digestInvalid {
@@ -308,30 +335,6 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 	if request.Method != http.MethodHead {
 		_, _ = w.Write(content.Body)
 	}
-}
-
-func copyOCIHeaders(destination, source http.Header) {
-	for _, key := range []string{"Content-Type", "Content-Length", "Content-Range", "Docker-Content-Digest", "Docker-Distribution-API-Version", "Etag", "Accept-Ranges"} {
-		if value := source.Get(key); value != "" {
-			destination.Set(key, value)
-		}
-	}
-}
-
-func writeUpstreamOCIError(w http.ResponseWriter, status int, resource string) {
-	if status == http.StatusNotFound {
-		code, message := "MANIFEST_UNKNOWN", "manifest unknown"
-		if resource == ociBlob {
-			code, message = "BLOB_UNKNOWN", "blob unknown to registry"
-		}
-		writeOCIError(w, status, code, message)
-		return
-	}
-	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		writeOCIError(w, http.StatusBadGateway, "DENIED", "upstream registry denied access")
-		return
-	}
-	writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry returned an error")
 }
 
 func writeOCIChallenge(w http.ResponseWriter, request *http.Request) {

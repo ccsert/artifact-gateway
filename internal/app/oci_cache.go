@@ -94,7 +94,7 @@ func (s *S3OCIObjectStore) Get(ctx context.Context, key string) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer object.Close()
+	defer func() { _ = object.Close() }()
 	value, err := io.ReadAll(object)
 	if minio.ToErrorResponse(err).Code == "NoSuchKey" {
 		return nil, errOCICacheMiss
@@ -125,6 +125,7 @@ type CachedOCIContent struct {
 	Digest      string
 	ContentType string
 	Member      string
+	cacheable   bool
 }
 
 type OCICache struct {

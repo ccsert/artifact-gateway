@@ -198,9 +198,14 @@ func TestOCIHostedGroupPrefersHostedMember(t *testing.T) {
 func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2}`)
 	digest := digestOf(manifest)
+	proxyAvailable := true
 	hosted := httptest.NewServer(http.NotFoundHandler())
 	defer hosted.Close()
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !proxyAvailable {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		if _, _, ok := r.BasicAuth(); ok {
 			t.Fatal("proxy received Gitea credentials")
 		}
@@ -224,6 +229,14 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 	}
 	if got := store.Audits[len(store.Audits)-1].MemberName; got != "proxy" {
 		t.Fatalf("audit member = %q", got)
+	}
+	proxyAvailable = false
+	cachedRequest := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(cachedRequest, "resolver-secret")
+	cachedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(cachedResponse, cachedRequest)
+	if cachedResponse.Code != http.StatusOK || cachedResponse.Body.String() != string(manifest) {
+		t.Fatalf("cached manifest = %d %q", cachedResponse.Code, cachedResponse.Body.String())
 	}
 }
 
