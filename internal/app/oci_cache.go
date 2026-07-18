@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,8 @@ var errOCIUpstreamOpen = errors.New("OCI upstream circuit is open")
 const defaultOCICacheTTL = 15 * time.Minute
 const defaultOCINegativeCacheTTL = time.Minute
 const defaultOCIProxyBreakerTTL = 30 * time.Second
+const ociSharedWorkTimeout = 30 * time.Second
+const ociDistributedLockLease = 35 * time.Second
 
 // OCIObjectStore is deliberately small so the cache's publication ordering can
 // be tested without a running object-store service.
@@ -142,8 +145,8 @@ type OCICache struct {
 }
 
 type OCICacheCoordinator interface {
-	Acquire(context.Context, string, time.Duration) (bool, error)
-	Release(context.Context, string) error
+	Acquire(context.Context, string, time.Duration) (string, bool, error)
+	Release(context.Context, string, string) error
 	CircuitOpen(context.Context, string) (bool, error)
 	OpenCircuit(context.Context, string, time.Duration) error
 	CloseCircuit(context.Context, string) error
@@ -155,11 +158,25 @@ func NewRedisOCICacheCoordinator(address string) *RedisOCICacheCoordinator {
 	return &RedisOCICacheCoordinator{client: redis.NewClient(&redis.Options{Addr: address})}
 }
 
-func (c *RedisOCICacheCoordinator) Acquire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
-	return c.client.SetNX(ctx, "artifact-gateway:oci:lock:"+key, "1", ttl).Result()
+func (c *RedisOCICacheCoordinator) Acquire(ctx context.Context, key string, ttl time.Duration) (string, bool, error) {
+	owner, err := newOCILockOwner()
+	if err != nil {
+		return "", false, err
+	}
+	ok, err := c.client.SetNX(ctx, "artifact-gateway:oci:lock:"+key, owner, ttl).Result()
+	return owner, ok, err
 }
-func (c *RedisOCICacheCoordinator) Release(ctx context.Context, key string) error {
-	return c.client.Del(ctx, "artifact-gateway:oci:lock:"+key).Err()
+func (c *RedisOCICacheCoordinator) Release(ctx context.Context, key, owner string) error {
+	_, err := c.client.Eval(ctx, "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0", []string{"artifact-gateway:oci:lock:" + key}, owner).Result()
+	return err
+}
+
+func newOCILockOwner() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value[:]), nil
 }
 func (c *RedisOCICacheCoordinator) CircuitOpen(ctx context.Context, key string) (bool, error) {
 	result, err := c.client.Exists(ctx, "artifact-gateway:oci:circuit:"+key).Result()
@@ -254,12 +271,12 @@ func (c *OCICache) Do(ctx context.Context, key string, fetch func() (CachedOCICo
 			return fetch()
 		}
 		for {
-			acquired, err := c.coordinator.Acquire(ctx, key, 30*time.Second)
+			owner, acquired, err := c.coordinator.Acquire(ctx, key, ociDistributedLockLease)
 			if err != nil {
 				return nil, err
 			}
 			if acquired {
-				defer func() { _ = c.coordinator.Release(context.Background(), key) }()
+				defer func() { _ = c.coordinator.Release(context.Background(), key, owner) }()
 				return fetch()
 			}
 			select {
