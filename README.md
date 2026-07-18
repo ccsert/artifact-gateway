@@ -16,6 +16,12 @@ Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean 
 
 Run `make integration-test` to start an isolated PostgreSQL container, apply every migration, and exercise the OCI Group HTTP flow against the database. It removes the test containers and volume after a successful run; `make integration-down` removes them after a failed run.
 
+Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group.
+
+## OCI hosted reads
+
+Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_TOKEN` to let the Gateway read a Gitea Container Registry Hosted member. Create a Group whose name is the leading OCI namespace and whose first member is `hosted` with the Gitea registry base URL as its endpoint. Clients pull `gateway-host:port/<group>/<image>:<tag>` after logging in with any username and `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway presents a standard Bearer challenge, forwards manifest/blob GET, HEAD, and Range requests, and uses the configured Gitea credentials upstream.
+
 ## Gitea development fixture
 
 The local Gitea fixture runs independently from the Gateway and exposes both package protocols through one HTTP address. It uses PostgreSQL and named Docker volumes; no repository data, password, or API token is checked in.

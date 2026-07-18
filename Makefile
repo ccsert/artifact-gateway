@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture up down test integration-test integration-down lint fmt build docker-build migrate
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e up down test integration-test integration-down lint fmt build docker-build migrate
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture'
+	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -55,3 +55,6 @@ gitea-seed:
 	@./scripts/gitea-seed.sh
 
 gitea-fixture: gitea-up gitea-seed
+
+oci-e2e: gitea-fixture
+	@./scripts/oci-e2e.sh

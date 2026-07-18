@@ -2,11 +2,15 @@ package app
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,31 +35,74 @@ type Resolver struct {
 }
 
 func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor string) (repository.Member, error) {
+	return r.resolve(ctx, groupName, repositoryName, actor, func(member repository.Member) bool {
+		return r.Adapter.Available(ctx, member, repositoryName)
+	})
+}
+
+func (r Resolver) ResolveOCIMembers(ctx context.Context, groupName, repositoryName, actor string) ([]repository.Member, error) {
 	resolved := false
 	defer func() {
 		if !resolved {
 			r.Metrics.failed.Add(1)
 		}
 	}()
-	group, err := r.Store.GetGroup(ctx, groupName)
+	group, err := r.loadActiveGroup(ctx, groupName, repositoryName, actor)
 	if err != nil {
-		outcome := repository.AuditStorageError
-		if errors.Is(err, repository.ErrNotFound) {
-			outcome = repository.AuditNotFound
+		return nil, err
+	}
+	var hosted, proxy []repository.Member
+	for _, member := range group.Members {
+		if !r.Adapter.Available(ctx, member, repositoryName) {
+			continue
 		}
-		if auditErr := r.audit(ctx, groupName, repositoryName, "", outcome, actor); auditErr != nil {
-			return repository.Member{}, auditErr
+		switch member.Type {
+		case repository.MemberHosted:
+			hosted = append(hosted, member)
+		case repository.MemberProxy:
+			proxy = append(proxy, member)
 		}
+	}
+	if len(hosted)+len(proxy) == 0 {
+		if err := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); err != nil {
+			return nil, err
+		}
+		return nil, repository.ErrNotFound
+	}
+	resolved = true
+	return append(hosted, proxy...), nil
+}
+
+func (r Resolver) RecordOCIResolution(ctx context.Context, groupName, repositoryName, memberName, actor string) error {
+	if err := r.audit(ctx, groupName, repositoryName, memberName, repository.AuditResolved, actor); err != nil {
+		r.Metrics.failed.Add(1)
+		return err
+	}
+	r.Metrics.resolved.Add(1)
+	return nil
+}
+
+func (r Resolver) RecordOCIFailure(ctx context.Context, groupName, repositoryName, memberName, actor string, outcome repository.AuditOutcome) error {
+	return r.audit(ctx, groupName, repositoryName, memberName, outcome, actor)
+}
+
+func (r Resolver) RecordOCIRequestFailure() {
+	r.Metrics.failed.Add(1)
+}
+
+func (r Resolver) resolve(ctx context.Context, groupName, repositoryName, actor string, eligible func(repository.Member) bool) (repository.Member, error) {
+	resolved := false
+	defer func() {
+		if !resolved {
+			r.Metrics.failed.Add(1)
+		}
+	}()
+	group, err := r.loadActiveGroup(ctx, groupName, repositoryName, actor)
+	if err != nil {
 		return repository.Member{}, err
 	}
-	if !group.Enabled {
-		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditGroupDisabled, actor); auditErr != nil {
-			return repository.Member{}, auditErr
-		}
-		return repository.Member{}, repository.ErrDisabled
-	}
 	for _, member := range group.Members {
-		if r.Adapter.Available(ctx, member, repositoryName) {
+		if eligible(member) {
 			if err := r.audit(ctx, groupName, repositoryName, member.Name, repository.AuditResolved, actor); err != nil {
 				return repository.Member{}, err
 			}
@@ -68,6 +115,27 @@ func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor 
 		return repository.Member{}, err
 	}
 	return repository.Member{}, repository.ErrNotFound
+}
+
+func (r Resolver) loadActiveGroup(ctx context.Context, groupName, repositoryName, actor string) (repository.Group, error) {
+	group, err := r.Store.GetGroup(ctx, groupName)
+	if err != nil {
+		outcome := repository.AuditStorageError
+		if errors.Is(err, repository.ErrNotFound) {
+			outcome = repository.AuditNotFound
+		}
+		if auditErr := r.audit(ctx, groupName, repositoryName, "", outcome, actor); auditErr != nil {
+			return repository.Group{}, auditErr
+		}
+		return repository.Group{}, err
+	}
+	if !group.Enabled {
+		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditGroupDisabled, actor); auditErr != nil {
+			return repository.Group{}, auditErr
+		}
+		return repository.Group{}, repository.ErrDisabled
+	}
+	return group, nil
 }
 
 func (r Resolver) audit(ctx context.Context, groupName, repositoryName, memberName string, outcome repository.AuditOutcome, actor string) error {
@@ -125,23 +193,66 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	if tokenMatches(token, a.ResolverToken) {
 		return Principal{Actor: a.ResolverActor}, true
 	}
+	if actor, ok := a.tokenActor(token); ok {
+		return Principal{Actor: actor}, true
+	}
 	return Principal{}, false
+}
+
+func (a Authenticator) IssueToken(actor string) string {
+	expiresAt := time.Now().UTC().Add(5 * time.Minute).Unix()
+	payload := "v1." + base64.RawURLEncoding.EncodeToString([]byte(actor)) + "." + strconv.FormatInt(expiresAt, 10)
+	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (a Authenticator) tokenActor(token string) (string, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 || parts[0] != "v1" || a.ResolverToken == "" {
+		return "", false
+	}
+	actor, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || len(actor) == 0 {
+		return "", false
+	}
+	expiresAt, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().UTC().Unix() >= expiresAt {
+		return "", false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[3])
+	if err != nil {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
+	_, _ = mac.Write([]byte(strings.Join(parts[:3], ".")))
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", false
+	}
+	return string(actor), true
 }
 
 func tokenMatches(value, expected string) bool {
 	return expected != "" && len(value) == len(expected) && subtle.ConstantTimeCompare([]byte(value), []byte(expected)) == 1
 }
 
-func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapter Adapter, authenticator Authenticator) http.Handler {
+func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
 	metrics := &Metrics{}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
 	api := apiHandler{store: store, resolver: resolver, authenticator: authenticator}
+	ociClient := OCIClient(GiteaClient{})
+	if len(ociClients) > 0 {
+		ociClient = ociClients[0]
+	}
+	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
+	mux.Handle("/v2/", oci)
+	mux.HandleFunc("GET /auth/token", oci.Token)
 	return mux
 }
 

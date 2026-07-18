@@ -36,7 +36,7 @@ func main() {
 			ResolverToken: cfg.ResolverToken,
 			AdminActor:    cfg.AdminActor,
 			ResolverActor: cfg.ResolverActor,
-		}),
+		}, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

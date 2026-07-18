@@ -18,6 +18,8 @@ type Config struct {
 	ResolverToken string
 	AdminActor    string
 	ResolverActor string
+	GiteaUsername string
+	GiteaToken    string
 }
 
 func Load() (Config, error) {
@@ -32,10 +34,15 @@ func Load() (Config, error) {
 		ResolverToken: os.Getenv("GATEWAY_RESOLVER_TOKEN"),
 		AdminActor:    value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
 		ResolverActor: value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
+		GiteaUsername: os.Getenv("GATEWAY_GITEA_USERNAME"),
+		GiteaToken:    os.Getenv("GATEWAY_GITEA_TOKEN"),
 	}
 
 	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
 		return Config{}, fmt.Errorf("GATEWAY_ADAPTER_MODE must be test or gitea")
+	}
+	if cfg.AdapterMode == "gitea" && (cfg.GiteaUsername == "" || cfg.GiteaToken == "") {
+		return Config{}, fmt.Errorf("GATEWAY_GITEA_USERNAME and GATEWAY_GITEA_TOKEN are required when GATEWAY_ADAPTER_MODE is gitea")
 	}
 	if cfg.DatabaseURL == "" || cfg.RedisAddress == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_REDIS_ADDRESS, GATEWAY_S3_ENDPOINT, GATEWAY_S3_BUCKET, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")

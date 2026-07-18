@@ -18,11 +18,15 @@ services:
       GATEWAY_REDIS_ADDRESS: redis:6379
       GATEWAY_S3_ENDPOINT: http://minio:9000
       GATEWAY_S3_BUCKET: gateway-cache
-      GATEWAY_ADAPTER_MODE: test
+      GATEWAY_ADAPTER_MODE: ${GATEWAY_ADAPTER_MODE:-test}
       GATEWAY_ADMIN_TOKEN: ${GATEWAY_ADMIN_TOKEN:?set GATEWAY_ADMIN_TOKEN in .env}
       GATEWAY_RESOLVER_TOKEN: ${GATEWAY_RESOLVER_TOKEN:?set GATEWAY_RESOLVER_TOKEN in .env}
+      GATEWAY_GITEA_USERNAME: ${GATEWAY_GITEA_USERNAME:-}
+      GATEWAY_GITEA_TOKEN: ${GATEWAY_GITEA_TOKEN:-}
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "/gateway-healthcheck"]
       interval: 5s

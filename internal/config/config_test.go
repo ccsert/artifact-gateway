@@ -32,6 +32,21 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresGiteaCredentialsForGiteaAdapter(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_ADAPTER_MODE", "gitea")
+	t.Setenv("GATEWAY_GITEA_USERNAME", "")
+	t.Setenv("GATEWAY_GITEA_TOKEN", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want error")
+	}
+}
+
 func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {
 	secret := "not-a-url-password"
 	t.Setenv("GATEWAY_DATABASE_URL", secret)
