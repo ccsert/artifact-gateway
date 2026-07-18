@@ -236,7 +236,12 @@ func tokenMatches(value, expected string) bool {
 	return expected != "" && len(value) == len(expected) && subtle.ConstantTimeCompare([]byte(value), []byte(expected)) == 1
 }
 
-func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
+type GatewayStore interface {
+	repository.Store
+	repository.MavenStore
+}
+
+func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -247,13 +252,93 @@ func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapte
 	if len(ociClients) > 0 {
 		ociClient = ociClients[0]
 	}
+	mavenClient := MavenClient(GiteaClient{})
+	if client, ok := ociClient.(MavenClient); ok {
+		mavenClient = client
+	}
 	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
+	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/v2/", oci)
+	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return mux
+}
+
+type mavenAPIHandler struct {
+	store         repository.MavenStore
+	authenticator Authenticator
+}
+
+func (a mavenAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	principal, ok := a.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
+		return
+	}
+	if !principal.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/maven/groups")
+	if path == "" || path == "/" {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+		var group repository.Group
+		if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
+			return
+		}
+		if err := validateGroup(group); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
+		created, err := a.store.CreateMavenGroup(r.Context(), group)
+		if errors.Is(err, repository.ErrNameExists) {
+			writeError(w, http.StatusConflict, "group_exists", "group name already exists")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to create group")
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+		return
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 1 && r.Method == http.MethodGet {
+		group, err := a.store.GetMavenGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to read group")
+			return
+		}
+		writeJSON(w, http.StatusOK, group)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "disable" && r.Method == http.MethodPost {
+		err := a.store.DisableMavenGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to disable group")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeError(w, http.StatusNotFound, "not_found", "resource not found")
 }
 
 type apiHandler struct {

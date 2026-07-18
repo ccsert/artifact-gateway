@@ -61,13 +61,24 @@ type Store interface {
 	RecordAudit(context.Context, AuditRecord) error
 }
 
-type MemoryStore struct {
-	mu     sync.RWMutex
-	groups map[string]Group
-	Audits []AuditRecord
+// MavenStore keeps Maven Group configuration separate from OCI Groups.
+type MavenStore interface {
+	CreateMavenGroup(context.Context, Group) (Group, error)
+	GetMavenGroup(context.Context, string) (Group, error)
+	DisableMavenGroup(context.Context, string) error
+	RecordAudit(context.Context, AuditRecord) error
 }
 
-func NewMemoryStore() *MemoryStore { return &MemoryStore{groups: make(map[string]Group)} }
+type MemoryStore struct {
+	mu          sync.RWMutex
+	groups      map[string]Group
+	mavenGroups map[string]Group
+	Audits      []AuditRecord
+}
+
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group)}
+}
 
 func (s *MemoryStore) CreateGroup(_ context.Context, group Group) (Group, error) {
 	s.mu.Lock()
@@ -112,5 +123,39 @@ func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Audits = append(s.Audits, record)
+	return nil
+}
+
+func (s *MemoryStore) CreateMavenGroup(_ context.Context, group Group) (Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.mavenGroups[group.Name]; exists {
+		return Group{}, ErrNameExists
+	}
+	group.CreatedAt = time.Now().UTC()
+	normalizeGroup(&group)
+	s.mavenGroups[group.Name] = group
+	return group, nil
+}
+
+func (s *MemoryStore) GetMavenGroup(_ context.Context, name string) (Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	group, exists := s.mavenGroups[name]
+	if !exists {
+		return Group{}, ErrNotFound
+	}
+	return group, nil
+}
+
+func (s *MemoryStore) DisableMavenGroup(_ context.Context, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group, exists := s.mavenGroups[name]
+	if !exists {
+		return ErrNotFound
+	}
+	group.Enabled = false
+	s.mavenGroups[name] = group
 	return nil
 }

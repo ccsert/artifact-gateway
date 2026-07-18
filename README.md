@@ -16,11 +16,15 @@ Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean 
 
 Run `make integration-test` to start an isolated PostgreSQL container, apply every migration, and exercise the OCI Group HTTP flow against the database. It removes the test containers and volume after a successful run; `make integration-down` removes them after a failed run.
 
-Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group.
+Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group. Run `make maven-e2e` to resolve the seeded Maven dependency through a Maven Hosted Group with both Maven and Gradle.
 
 ## OCI hosted reads
 
 Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_TOKEN` to let the Gateway read a Gitea Container Registry Hosted member. Create a Group whose name is the leading OCI namespace and whose first member is `hosted` with the Gitea registry base URL as its endpoint. Clients pull `gateway-host:port/<group>/<image>:<tag>` after logging in with any username and `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway presents a standard Bearer challenge, forwards manifest/blob GET, HEAD, and Range requests, and uses the configured Gitea credentials upstream.
+
+## Maven hosted reads
+
+Create a Maven Group through `POST /api/v1/maven/groups` using the same member schema as OCI. Maven clients use `http://gateway-host:port/maven/<group>` as the repository URL and HTTP Basic authentication with any username plus `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway serves POMs, JARs, checksum sidecars, and `maven-metadata.xml`; it tries Hosted members before Proxy members and records each upstream attempt in the resolver audit log.
 
 ## Gitea development fixture
 
