@@ -135,18 +135,18 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		defer cancel()
 		// The complete Hosted-first resolution, Proxy fallback, verification, and
 		// publication is one operation, including Hosted-first Groups.
-		content, err = h.Cache.Do(workCtx, cacheKey, func() (CachedOCIContent, error) {
+		content, err = h.Cache.Do(workCtx, cacheKey, func(fetchCtx context.Context) (CachedOCIContent, error) {
 			if !hasHostedMember {
-				if cached, loadErr := h.Cache.Load(workCtx, cacheKey); loadErr == nil {
+				if cached, loadErr := h.Cache.Load(fetchCtx, cacheKey); loadErr == nil {
 					return cached, nil
 				}
 			}
-			fetched, fetchErr := h.fetchOCIContent(workCtx, request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
+			fetched, fetchErr := h.fetchOCIContent(fetchCtx, request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 			if fetchErr != nil {
 				return CachedOCIContent{}, fetchErr
 			}
 			if fetched.cacheable {
-				if cacheErr := h.Cache.Store(workCtx, cacheKey, fetched); cacheErr != nil {
+				if cacheErr := h.Cache.Store(fetchCtx, cacheKey, fetched); cacheErr != nil {
 					return CachedOCIContent{}, cacheErr
 				}
 			}

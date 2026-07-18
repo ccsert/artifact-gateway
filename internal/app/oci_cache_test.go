@@ -23,6 +23,66 @@ type countingOCIClient struct {
 	delay   time.Duration
 }
 
+type renewingTestCoordinator struct {
+	mu       sync.Mutex
+	renewals int
+	fail     bool
+}
+
+func (c *renewingTestCoordinator) Acquire(context.Context, string, time.Duration) (string, bool, error) {
+	return "owner", true, nil
+}
+
+func (c *renewingTestCoordinator) Renew(context.Context, string, string, time.Duration) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.renewals++
+	return !c.fail, nil
+}
+
+func (c *renewingTestCoordinator) Release(context.Context, string, string) error { return nil }
+func (c *renewingTestCoordinator) CircuitOpen(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (c *renewingTestCoordinator) OpenCircuit(context.Context, string, time.Duration) error {
+	return nil
+}
+func (c *renewingTestCoordinator) CloseCircuit(context.Context, string) error { return nil }
+
+func (c *renewingTestCoordinator) Renewals() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.renewals
+}
+
+func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
+	coordinator := &renewingTestCoordinator{}
+	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), nil).WithCoordinator(coordinator)
+	cache.lockLease = 30 * time.Millisecond
+	cache.lockRenewEvery = 5 * time.Millisecond
+
+	content, err := cache.Do(context.Background(), "key", func(ctx context.Context) (CachedOCIContent, error) {
+		select {
+		case <-time.After(16 * time.Millisecond):
+			return CachedOCIContent{Body: []byte("ok")}, nil
+		case <-ctx.Done():
+			return CachedOCIContent{}, ctx.Err()
+		}
+	})
+	if err != nil || string(content.Body) != "ok" || coordinator.Renewals() < 2 {
+		t.Fatalf("content=%q err=%v renewals=%d", content.Body, err, coordinator.Renewals())
+	}
+
+	coordinator.fail = true
+	_, err = cache.Do(context.Background(), "lost-owner", func(ctx context.Context) (CachedOCIContent, error) {
+		<-ctx.Done()
+		return CachedOCIContent{}, ctx.Err()
+	})
+	if err == nil || !strings.Contains(err.Error(), "renewal failed") {
+		t.Fatalf("error = %v, want renewal failure", err)
+	}
+}
+
 func (c *countingOCIClient) Fetch(_ context.Context, method string, _ repository.Member, _, _, _ string, _ http.Header) (*http.Response, error) {
 	if c.delay > 0 {
 		time.Sleep(c.delay)
@@ -103,6 +163,43 @@ func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 	handler.ServeHTTP(response, req)
 	if response.Code != http.StatusNotFound || client.Calls() != 0 {
 		t.Fatalf("untrusted proxy response = %d, calls = %d", response.Code, client.Calls())
+	}
+}
+
+func TestOCICacheCollectsOnlyUnreferencedDigestObjectsAfterGracePeriod(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewOCICache(store, time.Hour, time.Hour, time.Hour, nil)
+	cache.gcGrace = 5 * time.Millisecond
+	first := []byte("first")
+	second := []byte("second")
+	firstObject := "oci/objects/" + strings.ReplaceAll(digestOf(first), ":", "/")
+	keyA := cache.key("team", "team/a", ociManifest, "latest")
+	keyB := cache.key("team", "team/b", ociManifest, "latest")
+	if err := cache.Store(context.Background(), keyA, CachedOCIContent{Body: first, Digest: digestOf(first)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Store(context.Background(), keyB, CachedOCIContent{Body: first, Digest: digestOf(first)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Store(context.Background(), keyA, CachedOCIContent{Body: second, Digest: digestOf(second)}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if err := cache.CollectGarbage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(context.Background(), firstObject); err != nil {
+		t.Fatalf("shared digest was removed: %v", err)
+	}
+	if err := cache.Store(context.Background(), keyB, CachedOCIContent{Body: second, Digest: digestOf(second)}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if err := cache.CollectGarbage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(context.Background(), firstObject); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("orphan digest error = %v, want miss", err)
 	}
 }
 
