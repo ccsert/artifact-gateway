@@ -23,19 +23,54 @@ func TestLivenessDoesNotRequireDependencies(t *testing.T) {
 	}
 }
 
-func TestNewDependenciesUsesTestAdapter(t *testing.T) {
-	dependencies := NewDependencies(config.Config{AdapterMode: "test"})
-	if dependencies.adapter.Mode() != "test" {
-		t.Fatalf("adapter mode = %q, want test", dependencies.adapter.Mode())
-	}
-}
-
 func TestReadinessReportsDependencyFailure(t *testing.T) {
 	handler := NewHandler(Dependencies{checkers: []Checker{checkerFunc(func(context.Context) error { return errors.New("down") })}})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
+	dependencies := NewDependencies(config.Config{
+		DatabaseURL:  "postgres://gateway:password@db:5432/gateway",
+		RedisAddress: "redis:6379",
+		S3Endpoint:   "https://objects.example.test/prefix",
+	})
+	if len(dependencies.checkers) != 3 {
+		t.Fatalf("checker count = %d, want 3", len(dependencies.checkers))
+	}
+	s3Checker, ok := dependencies.checkers[2].(httpChecker)
+	if !ok {
+		t.Fatalf("S3 checker type = %T, want httpChecker", dependencies.checkers[2])
+	}
+	if s3Checker.url != "https://objects.example.test/prefix/" {
+		t.Fatalf("S3 checker URL = %q", s3Checker.url)
+	}
+}
+
+func TestReadinessReportsS3Failure(t *testing.T) {
+	handler := NewHandler(Dependencies{checkers: []Checker{
+		checkerFunc(func(context.Context) error { return nil }),
+		checkerFunc(func(context.Context) error { return nil }),
+		checkerFunc(func(context.Context) error { return errors.New("object storage down") }),
+	}})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestHTTPCheckerRejectsUnavailableS3HealthEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	if err := (httpChecker{url: server.URL}).Check(context.Background()); err == nil {
+		t.Fatal("Check() error = nil, want error")
 	}
 }
 

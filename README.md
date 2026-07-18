@@ -2,7 +2,7 @@
 
 ## Gateway local development
 
-Prerequisites: Docker Desktop, Go 1.26+, `golangci-lint`, and `psql` for the optional migration target.
+Prerequisite: Docker Desktop. The Go compiler and linter run in fixed-version containers, so no host Go or `golangci-lint` installation is required.
 
 ```sh
 cp .env.example .env
@@ -10,9 +10,9 @@ cp .env.example .env
 make up
 ```
 
-`make up` starts Gateway, PostgreSQL, Redis, and MinIO with the built-in `test` Adapter, so it does not need a live Gitea instance. The service exposes `GET /livez` for process liveness and `GET /readyz` for PostgreSQL and Redis network availability. `make down` preserves local volumes.
+`make up` starts Gateway, PostgreSQL, Redis, and MinIO with the built-in `test` Adapter, so it does not need a live Gitea instance. The service exposes `GET /livez` for process liveness and `GET /readyz` for PostgreSQL, Redis, and S3-compatible object-storage availability. `make down` preserves local volumes.
 
-Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean checkout. `make up` runs all SQL files in `migrations/` through an isolated one-shot migration service before starting Gateway; `make migrate` reruns that idempotent service when needed.
+Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean checkout. `make up` runs all SQL files in `migrations/` through an isolated one-shot migration service before starting Gateway; it also waits for MinIO's built-in live endpoint through a fixed-version curl sidecar. `make migrate` reruns that idempotent service when needed.
 
 ## Gitea development fixture
 

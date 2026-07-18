@@ -8,8 +8,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-ready:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     environment:
@@ -70,13 +70,16 @@ services:
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
     volumes:
       - gateway-minio:/data
+
+  minio-ready:
+    image: curlimages/curl:8.14.1
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["until curl --fail --silent http://minio:9000/minio/health/live > /dev/null; do sleep 1; done"]
 
 volumes:
   gateway-postgres:

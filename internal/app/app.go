@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
@@ -16,36 +18,16 @@ type Checker interface {
 
 type Dependencies struct {
 	checkers []Checker
-	adapter  Adapter
 }
-
-type Adapter interface {
-	Mode() string
-}
-
-type testAdapter struct{}
-
-func (testAdapter) Mode() string { return "test" }
-
-type giteaAdapter struct{}
-
-func (giteaAdapter) Mode() string { return "gitea" }
 
 func NewDependencies(cfg config.Config) Dependencies {
 	return Dependencies{
 		checkers: []Checker{
 			tcpChecker{address: databaseAddress(cfg.DatabaseURL)},
 			tcpChecker{address: cfg.RedisAddress},
+			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
 		},
-		adapter: newAdapter(cfg.AdapterMode),
 	}
-}
-
-func newAdapter(mode string) Adapter {
-	if mode == "gitea" {
-		return giteaAdapter{}
-	}
-	return testAdapter{}
 }
 
 func NewHandler(dependencies Dependencies) http.Handler {
@@ -77,6 +59,24 @@ func (t tcpChecker) Check(ctx context.Context) error {
 	return connection.Close()
 }
 
+type httpChecker struct{ url string }
+
+func (h httpChecker) Check(ctx context.Context) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, h.url, nil)
+	if err != nil {
+		return err
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode >= http.StatusInternalServerError {
+		return fmt.Errorf("health endpoint returned HTTP %d", response.StatusCode)
+	}
+	return nil
+}
+
 func databaseAddress(databaseURL string) string {
 	parsed, err := url.Parse(databaseURL)
 	if err != nil || parsed.Hostname() == "" {
@@ -87,4 +87,8 @@ func databaseAddress(databaseURL string) string {
 		port = "5432"
 	}
 	return net.JoinHostPort(parsed.Hostname(), port)
+}
+
+func s3EndpointURL(endpoint string) string {
+	return strings.TrimRight(endpoint, "/") + "/"
 }

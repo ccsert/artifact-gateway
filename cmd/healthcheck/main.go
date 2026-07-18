@@ -12,7 +12,7 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusNoContent {
 		os.Exit(1)
 	}
