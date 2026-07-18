@@ -14,7 +14,7 @@ make up
 
 Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean checkout. `make up` runs all SQL files in `migrations/` through an isolated one-shot migration service before starting Gateway; it also waits for MinIO's built-in live endpoint through a fixed-version curl sidecar. `make migrate` reruns that idempotent service when needed.
 
-Run `make integration-test` to start an isolated PostgreSQL container, apply every migration, and exercise the OCI Group HTTP flow against the database. Run `make integration-down` afterward to remove its containers and volume.
+Run `make integration-test` to start an isolated PostgreSQL container, apply every migration, and exercise the OCI Group HTTP flow against the database. It removes the test containers and volume after a successful run; `make integration-down` removes them after a failed run.
 
 ## Gitea development fixture
 

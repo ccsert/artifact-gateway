@@ -156,14 +156,14 @@ func TestMetricsCountDisabledAndMissingGroupsAsFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
-	for _, target := range []string{"/api/v1/oci/groups/missing/resolve?repository=app", "/api/v1/oci/groups/disabled/resolve?repository=app"} {
+	for _, target := range []string{"/api/v1/oci/groups/missing/resolve?repository=app", "/api/v1/oci/groups/disabled/resolve?repository=app", "/api/v1/oci/groups/disabled/resolve"} {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
 		authorize(request, "resolver-secret")
 		handler.ServeHTTP(httptest.NewRecorder(), request)
 	}
 	metrics := httptest.NewRecorder()
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if !strings.Contains(metrics.Body.String(), `outcome="failed"} 2`) {
+	if !strings.Contains(metrics.Body.String(), `outcome="failed"} 3`) {
 		t.Fatalf("metrics = %s", metrics.Body.String())
 	}
 }

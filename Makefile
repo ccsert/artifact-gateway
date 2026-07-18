@@ -18,10 +18,11 @@ down:
 test:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./...
 
-integration-test:
+integration-test: integration-down
 	@docker compose -f compose.integration.yml up -d --wait postgres
 	@docker compose -f compose.integration.yml run --rm --no-deps migrate
 	@docker compose -f compose.integration.yml run --rm --no-deps test
+	@docker compose -f compose.integration.yml down -v
 
 integration-down:
 	@docker compose -f compose.integration.yml down -v

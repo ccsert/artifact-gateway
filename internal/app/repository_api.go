@@ -245,6 +245,7 @@ func (a apiHandler) disable(w http.ResponseWriter, r *http.Request, name string)
 func (a apiHandler) resolve(w http.ResponseWriter, r *http.Request, name, actor string) {
 	repositoryName := r.URL.Query().Get("repository")
 	if repositoryName == "" {
+		a.resolver.Metrics.failed.Add(1)
 		writeError(w, 400, "invalid_repository", "repository query parameter is required")
 		return
 	}
