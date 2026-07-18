@@ -175,6 +175,7 @@ type OCICache struct {
 	lockLease        time.Duration
 	lockRenewEvery   time.Duration
 	gcGrace          time.Duration
+	publicationMu    sync.Mutex
 }
 
 type OCICacheCoordinator interface {
@@ -287,6 +288,12 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 }
 
 func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		return c.storeContent(workCtx, key, content)
+	})
+}
+
+func (c *OCICache) storeContent(ctx context.Context, key string, content CachedOCIContent) error {
 	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
 	previous := c.loadIndex(ctx, key)
 	// Publish the index only after its immutable, digest-addressed object exists.
@@ -303,11 +310,17 @@ func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIConte
 	if previous.Object != "" && previous.Object != object {
 		_ = c.markObjectForCollection(ctx, previous.Object)
 	}
-	_ = c.CollectGarbage(ctx)
+	_ = c.collectGarbage(ctx)
 	return nil
 }
 
 func (c *OCICache) StoreNegative(ctx context.Context, key string) error {
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		return c.storeNegative(workCtx, key)
+	})
+}
+
+func (c *OCICache) storeNegative(ctx context.Context, key string) error {
 	previous := c.loadIndex(ctx, key)
 	encoded, err := json.Marshal(cachedOCIIndex{Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
@@ -319,7 +332,7 @@ func (c *OCICache) StoreNegative(ctx context.Context, key string) error {
 	if previous.Object != "" {
 		_ = c.markObjectForCollection(ctx, previous.Object)
 	}
-	_ = c.CollectGarbage(ctx)
+	_ = c.collectGarbage(ctx)
 	return nil
 }
 
@@ -336,13 +349,19 @@ func (c *OCICache) loadIndex(ctx context.Context, key string) cachedOCIIndex {
 }
 
 func (c *OCICache) removeIndex(ctx context.Context, key string, index cachedOCIIndex) error {
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		return c.removeIndexLocked(workCtx, key, index)
+	})
+}
+
+func (c *OCICache) removeIndexLocked(ctx context.Context, key string, index cachedOCIIndex) error {
 	if err := c.store.Delete(ctx, key); err != nil {
 		return err
 	}
 	if index.Object != "" {
 		_ = c.markObjectForCollection(ctx, index.Object)
 	}
-	_ = c.CollectGarbage(ctx)
+	_ = c.collectGarbage(ctx)
 	return nil
 }
 
@@ -358,6 +377,10 @@ func (c *OCICache) markObjectForCollection(ctx context.Context, object string) e
 // CollectGarbage deletes only candidates whose grace period has elapsed and
 // whose digest object is not referenced by any currently valid OCI index.
 func (c *OCICache) CollectGarbage(ctx context.Context) error {
+	return c.withPublicationLock(ctx, c.collectGarbage)
+}
+
+func (c *OCICache) collectGarbage(ctx context.Context) error {
 	garbage, err := c.store.List(ctx, "oci/gc/")
 	if err != nil {
 		return err
@@ -386,6 +409,40 @@ func (c *OCICache) CollectGarbage(ctx context.Context) error {
 		_ = c.store.Delete(ctx, key)
 	}
 	return nil
+}
+
+func (c *OCICache) withPublicationLock(ctx context.Context, work func(context.Context) error) error {
+	c.publicationMu.Lock()
+	defer c.publicationMu.Unlock()
+	if c.coordinator == nil {
+		return work(ctx)
+	}
+	for {
+		owner, acquired, err := c.coordinator.Acquire(ctx, "oci-publication", c.lockLease)
+		if err != nil {
+			return err
+		}
+		if !acquired {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(20 * time.Millisecond):
+				continue
+			}
+		}
+		defer func() { _ = c.coordinator.Release(context.Background(), "oci-publication", owner) }()
+		workCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		renewalFailed := make(chan struct{})
+		go c.renewOCILock(workCtx, "oci-publication", owner, renewalFailed, cancel)
+		err = work(workCtx)
+		select {
+		case <-renewalFailed:
+			return errors.New("OCI distributed publication lock renewal failed")
+		default:
+			return err
+		}
+	}
 }
 
 func (c *OCICache) referencedObjects(ctx context.Context) (map[string]bool, error) {
