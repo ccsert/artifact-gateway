@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -63,6 +63,7 @@ type OCIHandler struct {
 	Resolver      Resolver
 	Client        OCIClient
 	Authenticator Authenticator
+	Cache         *OCICache
 }
 
 func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
@@ -98,89 +99,147 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to resolve repository")
 		return
 	}
-	headers := request.Header.Clone()
+	cacheKey := ""
+	if h.Cache != nil {
+		cacheKey = h.Cache.key(groupName, repositoryName, resource, reference)
+		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
+		if cacheErr == nil {
+			h.Resolver.Metrics.ociCacheHit.Add(1)
+			if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, content.Member, principal.Actor); err != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+				return
+			}
+			serveCachedOCIContent(w, request, reference, content)
+			return
+		}
+		if errors.Is(cacheErr, errOCICacheNegative) {
+			h.Resolver.Metrics.ociCacheHit.Add(1)
+			h.Resolver.RecordOCIRequestFailure()
+			writeOCIError(w, http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
+			return
+		}
+		h.Resolver.Metrics.ociCacheMiss.Add(1)
+	}
+	var content CachedOCIContent
+	if request.Method == http.MethodGet && h.Cache != nil {
+		// The complete fetch, verification, object write, and index publication
+		// are one singleflight operation for a cache key.
+		content, err = h.Cache.Do(cacheKey, func() (CachedOCIContent, error) {
+			if cached, loadErr := h.Cache.Load(request.Context(), cacheKey); loadErr == nil {
+				return cached, nil
+			}
+			fetched, fetchErr := h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor)
+			if fetchErr != nil {
+				return CachedOCIContent{}, fetchErr
+			}
+			if err := h.Cache.Store(request.Context(), cacheKey, fetched); err != nil {
+				return CachedOCIContent{}, err
+			}
+			return fetched, nil
+		})
+	} else {
+		content, err = h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor)
+	}
+	if err != nil {
+		h.Resolver.RecordOCIRequestFailure()
+		var fetchErr *ociFetchError
+		if errors.As(err, &fetchErr) {
+			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
+			return
+		}
+		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
+		return
+	}
+	serveCachedOCIContent(w, request, reference, content)
+}
+
+type ociFetchError struct {
+	status  int
+	code    string
+	message string
+}
+
+func (e *ociFetchError) Error() string { return e.message }
+
+func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members []repository.Member, repositoryName, resource, reference string, requestHeaders http.Header, groupName, actor string) (CachedOCIContent, error) {
+	headers := requestHeaders.Clone()
 	headers.Del("Range")
 	hadUpstreamFailure := false
 	lastUpstreamStatus := 0
 	digestInvalid := false
 	for _, member := range members {
-		response, fetchErr := h.Client.Fetch(request.Context(), request.Method, member, repositoryName, resource, reference, headers)
+		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.ProxyAllowed(member.Endpoint) {
+			continue
+		}
+		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.UpstreamAllowed(member.Endpoint) {
+			h.Resolver.Metrics.ociCircuitOpen.Add(1)
+			hadUpstreamFailure = true
+			continue
+		}
+		response, fetchErr := h.Client.Fetch(ctx, method, member, repositoryName, resource, reference, headers)
 		if fetchErr != nil {
-			if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, member.Name, principal.Actor, repository.AuditUpstreamError); err != nil {
-				h.Resolver.RecordOCIRequestFailure()
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
-				return
+			if err := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditUpstreamError); err != nil {
+				return CachedOCIContent{}, err
+			}
+			if member.Type == repository.MemberProxy && h.Cache != nil {
+				h.Cache.RecordUpstreamFailure(member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			continue
 		}
 		if response.StatusCode == http.StatusNotFound {
 			_ = response.Body.Close()
-			if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, member.Name, principal.Actor, repository.AuditNotFound); err != nil {
-				h.Resolver.RecordOCIRequestFailure()
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
-				return
+			if err := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditNotFound); err != nil {
+				return CachedOCIContent{}, err
 			}
 			continue
 		}
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 			_ = response.Body.Close()
-			if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, member.Name, principal.Actor, repository.AuditUpstreamError); err != nil {
-				h.Resolver.RecordOCIRequestFailure()
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
-				return
+			if err := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditUpstreamError); err != nil {
+				return CachedOCIContent{}, err
+			}
+			if member.Type == repository.MemberProxy && h.Cache != nil {
+				h.Cache.RecordUpstreamFailure(member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			lastUpstreamStatus = response.StatusCode
 			continue
 		}
-		if err := verifyOCIResponse(response, reference); err != nil {
+		content, err := verifyOCIResponse(response, reference)
+		if err != nil {
 			_ = response.Body.Close()
-			if auditErr := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, member.Name, principal.Actor, repository.AuditUpstreamError); auditErr != nil {
-				h.Resolver.RecordOCIRequestFailure()
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
-				return
+			if auditErr := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditUpstreamError); auditErr != nil {
+				return CachedOCIContent{}, auditErr
+			}
+			if member.Type == repository.MemberProxy && h.Cache != nil {
+				h.Cache.RecordUpstreamFailure(member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			digestInvalid = true
 			continue
 		}
-		defer func() { _ = response.Body.Close() }()
-		if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, member.Name, principal.Actor); err != nil {
-			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
-			return
+		if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, member.Name, actor); err != nil {
+			return CachedOCIContent{}, err
 		}
-		copyOCIHeaders(w.Header(), response.Header)
-		if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
-			content, ok := response.Body.(io.ReadSeeker)
-			if !ok {
-				writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "verified content is not seekable")
-				return
-			}
-			http.ServeContent(w, request, reference, time.Time{}, content)
-			return
+		if h.Cache != nil {
+			h.Cache.RecordUpstreamSuccess(member.Endpoint)
 		}
-		w.WriteHeader(response.StatusCode)
-		if request.Method != http.MethodHead {
-			_, _ = io.Copy(w, response.Body)
-		}
-		return
+		return CachedOCIContent{Body: content, Digest: response.Header.Get("Docker-Content-Digest"), ContentType: response.Header.Get("Content-Type"), Member: member.Name}, nil
 	}
 	if hadUpstreamFailure {
-		h.Resolver.RecordOCIRequestFailure()
 		if digestInvalid {
-			writeOCIError(w, http.StatusBadGateway, "DIGEST_INVALID", "upstream content failed digest verification")
-			return
+			return CachedOCIContent{}, &ociFetchError{http.StatusBadGateway, "DIGEST_INVALID", "upstream content failed digest verification"}
 		}
 		if lastUpstreamStatus != 0 {
-			writeUpstreamOCIError(w, lastUpstreamStatus, resource)
-			return
+			return CachedOCIContent{}, &ociFetchError{http.StatusBadGateway, "UNKNOWN", "upstream registry returned an error"}
 		}
-		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
-		return
+		return CachedOCIContent{}, errOCIUpstreamOpen
 	}
-	h.Resolver.RecordOCIRequestFailure()
-	writeOCIError(w, http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
+	if h.Cache != nil {
+		_ = h.Cache.StoreNegative(ctx, h.Cache.key(groupName, repositoryName, resource, reference))
+	}
+	return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
 }
 
 func (h OCIHandler) authenticateProbe(w http.ResponseWriter, request *http.Request) {
@@ -202,60 +261,46 @@ func parseOCIPath(path string) (repositoryName, resource, reference string, ok b
 	return "", "", "", false
 }
 
-func verifyOCIResponse(response *http.Response, reference string) error {
+func verifyOCIResponse(response *http.Response, reference string) ([]byte, error) {
 	expectedDigest := response.Header.Get("Docker-Content-Digest")
 	if strings.HasPrefix(reference, "sha256:") && expectedDigest != reference {
-		return errors.New("upstream digest header does not match requested digest")
+		return nil, errors.New("upstream digest header does not match requested digest")
 	}
 	if !strings.HasPrefix(expectedDigest, "sha256:") {
-		return errors.New("upstream response does not include a sha256 digest")
+		return nil, errors.New("upstream response does not include a sha256 digest")
 	}
 	if response.Request.Method == http.MethodHead {
-		return nil
+		return nil, nil
 	}
-	content, err := os.CreateTemp("", "artifact-gateway-oci-*")
-	if err != nil {
-		return err
-	}
-	removeContent := true
-	defer func() {
-		if removeContent {
-			_ = content.Close()
-			_ = os.Remove(content.Name())
-		}
-	}()
 	hash := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(content, hash), response.Body); err != nil {
-		return err
+	content, err := io.ReadAll(io.TeeReader(response.Body, hash))
+	if err != nil {
+		return nil, err
 	}
 	if err := response.Body.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	if "sha256:"+hex.EncodeToString(hash.Sum(nil)) != expectedDigest {
-		return errors.New("upstream body digest does not match requested digest")
+		return nil, errors.New("upstream body digest does not match requested digest")
 	}
-	if _, err := content.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	response.Body = temporaryOCIContent{File: content, name: content.Name()}
-	removeContent = false
-	return nil
+	return content, nil
 }
 
-// temporaryOCIContent releases the on-disk verification buffer after it has
-// been copied to the downstream client.
-type temporaryOCIContent struct {
-	*os.File
-	name string
-}
-
-func (content temporaryOCIContent) Close() error {
-	err := content.File.Close()
-	removeErr := os.Remove(content.name)
-	if err != nil {
-		return err
+func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, reference string, content CachedOCIContent) {
+	if content.ContentType != "" {
+		w.Header().Set("Content-Type", content.ContentType)
 	}
-	return removeErr
+	w.Header().Set("Docker-Content-Digest", content.Digest)
+	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+	if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
+		http.ServeContent(w, request, reference, time.Time{}, bytes.NewReader(content.Body))
+		return
+	}
+	w.Header().Set("Content-Length", utoa(uint64(len(content.Body))))
+	w.WriteHeader(http.StatusOK)
+	if request.Method != http.MethodHead {
+		_, _ = w.Write(content.Body)
+	}
 }
 
 func copyOCIHeaders(destination, source http.Header) {

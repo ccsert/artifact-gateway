@@ -23,6 +23,15 @@ func main() {
 	}
 
 	dependencies := app.NewDependencies(cfg)
+	objectStore, err := app.NewS3OCIObjectStore(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket)
+	if err != nil {
+		slog.Error("create OCI object store", "error", err)
+		os.Exit(1)
+	}
+	if err := objectStore.EnsureBucket(context.Background()); err != nil {
+		slog.Error("ensure OCI cache bucket", "error", err)
+		os.Exit(1)
+	}
 	store, err := repository.NewPostgresStore(cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("open repository store", "error", err)
@@ -31,12 +40,12 @@ func main() {
 	defer func() { _ = store.Close() }()
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
-		Handler: app.NewGatewayHandler(dependencies, store, app.TestAdapter{}, app.Authenticator{
+		Handler: app.NewGatewayHandlerWithOCICache(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:    cfg.AdminToken,
 			ResolverToken: cfg.ResolverToken,
 			AdminActor:    cfg.AdminActor,
 			ResolverActor: cfg.ResolverActor,
-		}, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, app.NewOCICache(objectStore, 15*time.Minute, time.Minute, 30*time.Second, cfg.OCIProxyAllowedHosts), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -146,13 +146,16 @@ func (r Resolver) audit(ctx context.Context, groupName, repositoryName, memberNa
 }
 
 type Metrics struct {
-	resolved atomic.Uint64
-	failed   atomic.Uint64
+	resolved       atomic.Uint64
+	failed         atomic.Uint64
+	ociCacheHit    atomic.Uint64
+	ociCacheMiss   atomic.Uint64
+	ociCircuitOpen atomic.Uint64
 }
 
 func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	_, _ = w.Write([]byte("# TYPE artifact_gateway_resolver_requests_total counter\nartifact_gateway_resolver_requests_total{outcome=\"resolved\"} " + utoa(m.resolved.Load()) + "\nartifact_gateway_resolver_requests_total{outcome=\"failed\"} " + utoa(m.failed.Load()) + "\n"))
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_resolver_requests_total counter\nartifact_gateway_resolver_requests_total{outcome=\"resolved\"} " + utoa(m.resolved.Load()) + "\nartifact_gateway_resolver_requests_total{outcome=\"failed\"} " + utoa(m.failed.Load()) + "\n# TYPE artifact_gateway_oci_cache_requests_total counter\nartifact_gateway_oci_cache_requests_total{outcome=\"hit\"} " + utoa(m.ociCacheHit.Load()) + "\nartifact_gateway_oci_cache_requests_total{outcome=\"miss\"} " + utoa(m.ociCacheMiss.Load()) + "\n# TYPE artifact_gateway_oci_upstream_circuit_open_total counter\nartifact_gateway_oci_upstream_circuit_open_total " + utoa(m.ociCircuitOpen.Load()) + "\n"))
 }
 
 func utoa(value uint64) string {
@@ -242,6 +245,10 @@ type GatewayStore interface {
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
+	return NewGatewayHandlerWithOCICache(dependencies, store, adapter, authenticator, NewOCICache(NewMemoryOCIObjectStore(), 15*time.Minute, time.Minute, 30*time.Second, nil), ociClients...)
+}
+
+func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -256,7 +263,7 @@ func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Ad
 	if client, ok := ociClient.(MavenClient); ok {
 		mavenClient = client
 	}
-	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator}
+	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
