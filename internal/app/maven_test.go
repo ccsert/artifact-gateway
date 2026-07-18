@@ -1,14 +1,144 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+type countingMavenClient struct {
+	mu     sync.Mutex
+	calls  int
+	status int
+	body   []byte
+	err    error
+}
+
+func (c *countingMavenClient) FetchMaven(_ context.Context, method string, _ repository.Member, _ string, _ http.Header) (*http.Response, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	if c.err != nil {
+		return nil, c.err
+	}
+	return &http.Response{StatusCode: c.status, Header: http.Header{"Content-Type": []string{"application/java-archive"}, "ETag": []string{`"fixture"`}, "Last-Modified": []string{"Wed, 01 Jan 2025 00:00:00 GMT"}}, Body: io.NopCloser(bytes.NewReader(c.body)), Request: &http.Request{Method: method}}, nil
+}
+
+func (c *countingMavenClient) Calls() int { c.mu.Lock(); defer c.mu.Unlock(); return c.calls }
+
+func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
+	client := &countingMavenClient{status: http.StatusOK, body: []byte("jar")}
+	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, -time.Millisecond, time.Hour, time.Hour, []string{"repo.example"})
+	metrics := &Metrics{}
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
+	request := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/maven/engineering/"+path, nil)
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for range 2 {
+		if response := request("com/example/library/1.0/library-1.0.jar"); response.Code != http.StatusOK || response.Body.String() != "jar" {
+			t.Fatalf("component response = %d %q", response.Code, response.Body.String())
+		}
+	}
+	if calls := client.Calls(); calls != 1 {
+		t.Fatalf("component upstream calls = %d, want 1", calls)
+	}
+	rangeRequest := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.jar", nil)
+	rangeRequest.Header.Set("Range", "bytes=0-1")
+	rangeRequest.SetBasicAuth("maven", "resolver-secret")
+	rangeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(rangeResponse, rangeRequest)
+	if rangeResponse.Code != http.StatusPartialContent || rangeResponse.Body.String() != "ja" || client.Calls() != 1 {
+		t.Fatalf("cached range response=%d body=%q calls=%d", rangeResponse.Code, rangeResponse.Body.String(), client.Calls())
+	}
+	conditionalRequest := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.jar", nil)
+	conditionalRequest.Header.Set("If-Modified-Since", "Wed, 01 Jan 2025 00:00:00 GMT")
+	conditionalRequest.SetBasicAuth("maven", "resolver-secret")
+	conditionalResponse := httptest.NewRecorder()
+	handler.ServeHTTP(conditionalResponse, conditionalRequest)
+	if conditionalResponse.Code != http.StatusNotModified || client.Calls() != 1 {
+		t.Fatalf("cached conditional response=%d calls=%d", conditionalResponse.Code, client.Calls())
+	}
+	client.body = []byte("metadata-v1")
+	if response := request("com/example/library/maven-metadata.xml"); response.Code != http.StatusOK || response.Body.String() != "metadata-v1" {
+		t.Fatalf("metadata response = %d %q", response.Code, response.Body.String())
+	}
+	client.body = []byte("metadata-v2")
+	if response := request("com/example/library/maven-metadata.xml"); response.Code != http.StatusOK || response.Body.String() != "metadata-v2" {
+		t.Fatalf("expired metadata response = %d %q", response.Code, response.Body.String())
+	}
+	if calls := client.Calls(); calls != 3 {
+		t.Fatalf("metadata should refresh separately; calls = %d", calls)
+	}
+	if metrics.mavenCacheHit.Load() != 3 || metrics.mavenCacheMiss.Load() < 3 {
+		t.Fatalf("cache metrics hit=%d miss=%d", metrics.mavenCacheHit.Load(), metrics.mavenCacheMiss.Load())
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_maven_cache_requests_total{outcome="hit"} 3`) {
+		t.Fatalf("metrics = %s", metricResponse.Body.String())
+	}
+}
+
+func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
+	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	client := &countingMavenClient{status: http.StatusNotFound}
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
+	for range 2 {
+		r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/missing/1.0/missing-1.0.pom", nil)
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("negative response = %d", w.Code)
+		}
+	}
+	if calls := client.Calls(); calls != 1 {
+		t.Fatalf("negative cache calls = %d", calls)
+	}
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "untrusted", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
+	disallowedRequest := httptest.NewRequest(http.MethodGet, "/maven/untrusted/com/example/library/1.0/library-1.0.pom", nil)
+	disallowedRequest.SetBasicAuth("maven", "resolver-secret")
+	disallowedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(disallowedResponse, disallowedRequest)
+	if disallowedResponse.Code != http.StatusNotFound || client.Calls() != 1 {
+		t.Fatalf("disallowed proxy response=%d calls=%d", disallowedResponse.Code, client.Calls())
+	}
+
+	client.err = errors.New("temporary upstream failure")
+	cache.RecordUpstreamSuccess("https://repo.example")
+	r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/live/1.0/live-1.0.pom", nil)
+	r.SetBasicAuth("maven", "resolver-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusBadGateway || client.Calls() != 3 {
+		t.Fatalf("retry response=%d calls=%d", w.Code, client.Calls())
+	}
+
+	key := cache.key("engineering", "com/example/corrupt/1.0/corrupt-1.0.pom")
+	if err := cache.store.Put(context.Background(), key, []byte("not json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Load(context.Background(), key); !errors.Is(err, errMavenCacheMiss) {
+		t.Fatalf("corrupt cache = %v", err)
+	}
+}
 
 func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 	files := map[string]string{

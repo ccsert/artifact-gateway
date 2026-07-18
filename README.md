@@ -24,7 +24,7 @@ Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_T
 
 ## Maven hosted reads
 
-Create a Maven Group through `POST /api/v1/maven/groups` using the same member schema as OCI. Maven clients use `http://gateway-host:port/maven/<group>` as the repository URL and HTTP Basic authentication with any username plus `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway serves POMs, JARs, checksum sidecars, and `maven-metadata.xml`; it tries Hosted members before Proxy members and records each upstream attempt in the resolver audit log.
+Create a Maven Group through `POST /api/v1/maven/groups` using the same member schema as OCI. Maven clients use `http://gateway-host:port/maven/<group>` as the repository URL and HTTP Basic authentication with any username plus `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway serves POMs, JARs, checksum sidecars, and `maven-metadata.xml`; it tries Hosted members before Proxy members and records each upstream attempt in the resolver audit log. Set `GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS` to a comma-separated allowlist before enabling external Maven Proxy members. Proxy component files are cached for 15 minutes, version metadata for one minute, and cached misses for one minute.
 
 ## Gitea development fixture
 

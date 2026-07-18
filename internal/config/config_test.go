@@ -25,12 +25,16 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
+	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.AdapterMode != "test" {
 		t.Fatalf("AdapterMode = %q", cfg.AdapterMode)
+	}
+	if got := strings.Join(cfg.MavenProxyAllowedHosts, ","); got != "repo.example,mirror.example" {
+		t.Fatalf("MavenProxyAllowedHosts = %q", got)
 	}
 }
 

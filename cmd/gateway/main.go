@@ -40,12 +40,12 @@ func main() {
 	defer func() { _ = store.Close() }()
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
-		Handler: app.NewGatewayHandlerWithOCICache(dependencies, store, app.TestAdapter{}, app.Authenticator{
+		Handler: app.NewGatewayHandlerWithCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:    cfg.AdminToken,
 			ResolverToken: cfg.ResolverToken,
 			AdminActor:    cfg.AdminActor,
 			ResolverActor: cfg.ResolverActor,
-		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)), app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

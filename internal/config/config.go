@@ -8,40 +8,42 @@ import (
 )
 
 type Config struct {
-	ListenAddress        string
-	DatabaseURL          string
-	RedisAddress         string
-	S3Endpoint           string
-	S3Bucket             string
-	S3AccessKey          string
-	S3SecretKey          string
-	OCIProxyAllowedHosts []string
-	AdapterMode          string
-	AdminToken           string
-	ResolverToken        string
-	AdminActor           string
-	ResolverActor        string
-	GiteaUsername        string
-	GiteaToken           string
+	ListenAddress          string
+	DatabaseURL            string
+	RedisAddress           string
+	S3Endpoint             string
+	S3Bucket               string
+	S3AccessKey            string
+	S3SecretKey            string
+	OCIProxyAllowedHosts   []string
+	MavenProxyAllowedHosts []string
+	AdapterMode            string
+	AdminToken             string
+	ResolverToken          string
+	AdminActor             string
+	ResolverActor          string
+	GiteaUsername          string
+	GiteaToken             string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		ListenAddress:        value("GATEWAY_LISTEN_ADDRESS", ":8080"),
-		DatabaseURL:          os.Getenv("GATEWAY_DATABASE_URL"),
-		RedisAddress:         os.Getenv("GATEWAY_REDIS_ADDRESS"),
-		S3Endpoint:           os.Getenv("GATEWAY_S3_ENDPOINT"),
-		S3Bucket:             os.Getenv("GATEWAY_S3_BUCKET"),
-		S3AccessKey:          os.Getenv("GATEWAY_S3_ACCESS_KEY"),
-		S3SecretKey:          os.Getenv("GATEWAY_S3_SECRET_KEY"),
-		OCIProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
-		AdapterMode:          value("GATEWAY_ADAPTER_MODE", "test"),
-		AdminToken:           os.Getenv("GATEWAY_ADMIN_TOKEN"),
-		ResolverToken:        os.Getenv("GATEWAY_RESOLVER_TOKEN"),
-		AdminActor:           value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
-		ResolverActor:        value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
-		GiteaUsername:        os.Getenv("GATEWAY_GITEA_USERNAME"),
-		GiteaToken:           os.Getenv("GATEWAY_GITEA_TOKEN"),
+		ListenAddress:          value("GATEWAY_LISTEN_ADDRESS", ":8080"),
+		DatabaseURL:            os.Getenv("GATEWAY_DATABASE_URL"),
+		RedisAddress:           os.Getenv("GATEWAY_REDIS_ADDRESS"),
+		S3Endpoint:             os.Getenv("GATEWAY_S3_ENDPOINT"),
+		S3Bucket:               os.Getenv("GATEWAY_S3_BUCKET"),
+		S3AccessKey:            os.Getenv("GATEWAY_S3_ACCESS_KEY"),
+		S3SecretKey:            os.Getenv("GATEWAY_S3_SECRET_KEY"),
+		OCIProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
+		MavenProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
+		AdapterMode:            value("GATEWAY_ADAPTER_MODE", "test"),
+		AdminToken:             os.Getenv("GATEWAY_ADMIN_TOKEN"),
+		ResolverToken:          os.Getenv("GATEWAY_RESOLVER_TOKEN"),
+		AdminActor:             value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
+		ResolverActor:          value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
+		GiteaUsername:          os.Getenv("GATEWAY_GITEA_USERNAME"),
+		GiteaToken:             os.Getenv("GATEWAY_GITEA_TOKEN"),
 	}
 
 	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
