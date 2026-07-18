@@ -39,7 +39,11 @@ func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor 
 	}()
 	group, err := r.Store.GetGroup(ctx, groupName)
 	if err != nil {
-		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); auditErr != nil {
+		outcome := repository.AuditStorageError
+		if errors.Is(err, repository.ErrNotFound) {
+			outcome = repository.AuditNotFound
+		}
+		if auditErr := r.audit(ctx, groupName, repositoryName, "", outcome, actor); auditErr != nil {
 			return repository.Member{}, auditErr
 		}
 		return repository.Member{}, err

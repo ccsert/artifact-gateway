@@ -24,6 +24,12 @@ func (f failingAuditStore) RecordAudit(context.Context, repository.AuditRecord) 
 	return errors.New("audit unavailable")
 }
 
+type failingGetStore struct{ *repository.MemoryStore }
+
+func (f failingGetStore) GetGroup(context.Context, string) (repository.Group, error) {
+	return repository.Group{}, errors.New("database read failed")
+}
+
 func testAuthenticator() Authenticator {
 	return Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", AdminActor: "alice", ResolverActor: "build-agent"}
 }
@@ -126,6 +132,26 @@ func TestResolverFailsWhenAuditCannotBeRecorded(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `resolver_error`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	metrics := httptest.NewRecorder()
+	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metrics.Body.String(), `outcome="failed"} 1`) {
+		t.Fatalf("metrics = %s", metrics.Body.String())
+	}
+}
+
+func TestResolverAuditsStorageFailureAccurately(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, failingGetStore{store}, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `resolver_error`) {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditStorageError {
+		t.Fatalf("audits = %#v", store.Audits)
 	}
 	metrics := httptest.NewRecorder()
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
