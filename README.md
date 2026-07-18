@@ -1,4 +1,20 @@
-# Artifact Gateway development fixtures
+# Artifact Gateway
+
+## Gateway local development
+
+Prerequisites: Docker Desktop, Go 1.26+, `golangci-lint`, and `psql` for the optional migration target.
+
+```sh
+cp .env.example .env
+# Replace every replace-with-* value with local-only credentials.
+make up
+```
+
+`make up` starts Gateway, PostgreSQL, Redis, and MinIO with the built-in `test` Adapter, so it does not need a live Gitea instance. The service exposes `GET /livez` for process liveness and `GET /readyz` for PostgreSQL and Redis network availability. `make down` preserves local volumes.
+
+Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean checkout. `make up` runs all SQL files in `migrations/` through an isolated one-shot migration service before starting Gateway; `make migrate` reruns that idempotent service when needed.
+
+## Gitea development fixture
 
 The local Gitea fixture runs independently from the Gateway and exposes both package protocols through one HTTP address. It uses PostgreSQL and named Docker volumes; no repository data, password, or API token is checked in.
 

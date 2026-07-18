@@ -1,0 +1,6 @@
+.env
+.git
+.multica
+.agent_context
+.gitea-fixture
+.go-build-cache
