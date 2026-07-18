@@ -13,6 +13,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -137,6 +138,38 @@ type OCICache struct {
 	group            singleflight.Group
 	mu               sync.Mutex
 	openUntil        map[string]time.Time
+	coordinator      OCICacheCoordinator
+}
+
+type OCICacheCoordinator interface {
+	Acquire(context.Context, string, time.Duration) (bool, error)
+	Release(context.Context, string) error
+	CircuitOpen(context.Context, string) (bool, error)
+	OpenCircuit(context.Context, string, time.Duration) error
+	CloseCircuit(context.Context, string) error
+}
+
+type RedisOCICacheCoordinator struct{ client *redis.Client }
+
+func NewRedisOCICacheCoordinator(address string) *RedisOCICacheCoordinator {
+	return &RedisOCICacheCoordinator{client: redis.NewClient(&redis.Options{Addr: address})}
+}
+
+func (c *RedisOCICacheCoordinator) Acquire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return c.client.SetNX(ctx, "artifact-gateway:oci:lock:"+key, "1", ttl).Result()
+}
+func (c *RedisOCICacheCoordinator) Release(ctx context.Context, key string) error {
+	return c.client.Del(ctx, "artifact-gateway:oci:lock:"+key).Err()
+}
+func (c *RedisOCICacheCoordinator) CircuitOpen(ctx context.Context, key string) (bool, error) {
+	result, err := c.client.Exists(ctx, "artifact-gateway:oci:circuit:"+key).Result()
+	return result == 1, err
+}
+func (c *RedisOCICacheCoordinator) OpenCircuit(ctx context.Context, key string, ttl time.Duration) error {
+	return c.client.Set(ctx, "artifact-gateway:oci:circuit:"+key, "1", ttl).Err()
+}
+func (c *RedisOCICacheCoordinator) CloseCircuit(ctx context.Context, key string) error {
+	return c.client.Del(ctx, "artifact-gateway:oci:circuit:"+key).Err()
 }
 
 func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *OCICache {
@@ -151,6 +184,11 @@ func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duratio
 
 func NewDefaultOCICache(store OCIObjectStore, allowedProxyHosts []string) *OCICache {
 	return NewOCICache(store, defaultOCICacheTTL, defaultOCINegativeCacheTTL, defaultOCIProxyBreakerTTL, allowedProxyHosts)
+}
+
+func (c *OCICache) WithCoordinator(coordinator OCICacheCoordinator) *OCICache {
+	c.coordinator = coordinator
+	return c
 }
 
 func (c *OCICache) key(group, repository, resource, reference string) string {
@@ -210,8 +248,28 @@ func (c *OCICache) StoreNegative(ctx context.Context, key string) error {
 	return c.store.Put(ctx, key, encoded)
 }
 
-func (c *OCICache) Do(key string, fetch func() (CachedOCIContent, error)) (CachedOCIContent, error) {
-	value, err, _ := c.group.Do(key, func() (any, error) { return fetch() })
+func (c *OCICache) Do(ctx context.Context, key string, fetch func() (CachedOCIContent, error)) (CachedOCIContent, error) {
+	value, err, _ := c.group.Do(key, func() (any, error) {
+		if c.coordinator == nil {
+			return fetch()
+		}
+		for {
+			acquired, err := c.coordinator.Acquire(ctx, key, 30*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			if acquired {
+				defer func() { _ = c.coordinator.Release(context.Background(), key) }()
+				return fetch()
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(20 * time.Millisecond):
+				continue
+			}
+		}
+	})
 	if err != nil {
 		return CachedOCIContent{}, err
 	}
@@ -227,20 +285,32 @@ func (c *OCICache) ProxyAllowed(endpoint string) bool {
 	return ok
 }
 
-func (c *OCICache) UpstreamAllowed(endpoint string) bool {
+func (c *OCICache) UpstreamAllowed(ctx context.Context, endpoint string) bool {
+	if c.coordinator != nil {
+		open, err := c.coordinator.CircuitOpen(ctx, endpoint)
+		if err == nil && open {
+			return false
+		}
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	until := c.openUntil[endpoint]
 	return until.IsZero() || !time.Now().UTC().Before(until)
 }
 
-func (c *OCICache) RecordUpstreamFailure(endpoint string) {
+func (c *OCICache) RecordUpstreamFailure(ctx context.Context, endpoint string) {
+	if c.coordinator != nil {
+		_ = c.coordinator.OpenCircuit(ctx, endpoint, c.breakerTTL)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.openUntil[endpoint] = time.Now().UTC().Add(c.breakerTTL)
 }
 
-func (c *OCICache) RecordUpstreamSuccess(endpoint string) {
+func (c *OCICache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
+	if c.coordinator != nil {
+		_ = c.coordinator.CloseCircuit(ctx, endpoint)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.openUntil, endpoint)

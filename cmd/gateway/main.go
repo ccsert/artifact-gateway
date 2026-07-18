@@ -45,7 +45,7 @@ func main() {
 			ResolverToken: cfg.ResolverToken,
 			AdminActor:    cfg.AdminActor,
 			ResolverActor: cfg.ResolverActor,
-		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

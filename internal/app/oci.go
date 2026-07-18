@@ -131,20 +131,22 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	}
 	var content CachedOCIContent
 	if request.Method == http.MethodGet && h.Cache != nil {
+		workCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		// The complete Hosted-first resolution, Proxy fallback, verification, and
 		// publication is one operation, including Hosted-first Groups.
-		content, err = h.Cache.Do(cacheKey, func() (CachedOCIContent, error) {
+		content, err = h.Cache.Do(workCtx, cacheKey, func() (CachedOCIContent, error) {
 			if !hasHostedMember {
-				if cached, loadErr := h.Cache.Load(request.Context(), cacheKey); loadErr == nil {
+				if cached, loadErr := h.Cache.Load(workCtx, cacheKey); loadErr == nil {
 					return cached, nil
 				}
 			}
-			fetched, fetchErr := h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
+			fetched, fetchErr := h.fetchOCIContent(workCtx, request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 			if fetchErr != nil {
 				return CachedOCIContent{}, fetchErr
 			}
 			if fetched.cacheable {
-				if cacheErr := h.Cache.Store(request.Context(), cacheKey, fetched); cacheErr != nil {
+				if cacheErr := h.Cache.Store(workCtx, cacheKey, fetched); cacheErr != nil {
 					return CachedOCIContent{}, cacheErr
 				}
 			}
@@ -206,7 +208,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.ProxyAllowed(member.Endpoint) {
 			continue
 		}
-		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.UpstreamAllowed(member.Endpoint) {
+		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.UpstreamAllowed(ctx, member.Endpoint) {
 			h.Resolver.Metrics.ociCircuitOpen.Add(1)
 			hadUpstreamFailure = true
 			continue
@@ -217,7 +219,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 				return CachedOCIContent{}, err
 			}
 			if member.Type == repository.MemberProxy && h.Cache != nil {
-				h.Cache.RecordUpstreamFailure(member.Endpoint)
+				h.Cache.RecordUpstreamFailure(ctx, member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			continue
@@ -235,7 +237,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 				return CachedOCIContent{}, err
 			}
 			if member.Type == repository.MemberProxy && h.Cache != nil {
-				h.Cache.RecordUpstreamFailure(member.Endpoint)
+				h.Cache.RecordUpstreamFailure(ctx, member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			lastUpstreamStatus = response.StatusCode
@@ -248,7 +250,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 				return CachedOCIContent{}, auditErr
 			}
 			if member.Type == repository.MemberProxy && h.Cache != nil {
-				h.Cache.RecordUpstreamFailure(member.Endpoint)
+				h.Cache.RecordUpstreamFailure(ctx, member.Endpoint)
 			}
 			hadUpstreamFailure = true
 			digestInvalid = true
@@ -258,7 +260,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			return CachedOCIContent{}, err
 		}
 		if h.Cache != nil {
-			h.Cache.RecordUpstreamSuccess(member.Endpoint)
+			h.Cache.RecordUpstreamSuccess(ctx, member.Endpoint)
 		}
 		return CachedOCIContent{Body: content, Digest: response.Header.Get("Docker-Content-Digest"), ContentType: response.Header.Get("Content-Type"), Member: member.Name, cacheable: member.Type == repository.MemberProxy}, nil
 	}

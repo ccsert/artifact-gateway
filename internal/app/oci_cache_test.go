@@ -125,8 +125,8 @@ func TestOCICacheNegativeResultAndCircuitBreakerAvoidRepeatedProxyRequests(t *te
 		t.Fatalf("negative cache upstream calls = %d, want 1", got)
 	}
 
-	cache.RecordUpstreamFailure("https://registry.example")
-	if cache.UpstreamAllowed("https://registry.example") {
+	cache.RecordUpstreamFailure(context.Background(), "https://registry.example")
+	if cache.UpstreamAllowed(context.Background(), "https://registry.example") {
 		t.Fatal("open circuit allowed upstream request")
 	}
 	if cache.ProxyAllowed("https://untrusted.example") {
