@@ -14,6 +14,7 @@ type Config struct {
 	S3Endpoint    string
 	S3Bucket      string
 	AdapterMode   string
+	AuthToken     string
 }
 
 func Load() (Config, error) {
@@ -24,13 +25,14 @@ func Load() (Config, error) {
 		S3Endpoint:    os.Getenv("GATEWAY_S3_ENDPOINT"),
 		S3Bucket:      os.Getenv("GATEWAY_S3_BUCKET"),
 		AdapterMode:   value("GATEWAY_ADAPTER_MODE", "test"),
+		AuthToken:     os.Getenv("GATEWAY_AUTH_TOKEN"),
 	}
 
 	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
 		return Config{}, fmt.Errorf("GATEWAY_ADAPTER_MODE must be test or gitea")
 	}
-	if cfg.DatabaseURL == "" || cfg.RedisAddress == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" {
-		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_REDIS_ADDRESS, GATEWAY_S3_ENDPOINT, and GATEWAY_S3_BUCKET are required")
+	if cfg.DatabaseURL == "" || cfg.RedisAddress == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.AuthToken == "" {
+		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_REDIS_ADDRESS, GATEWAY_S3_ENDPOINT, GATEWAY_S3_BUCKET, and GATEWAY_AUTH_TOKEN are required")
 	}
 	if _, err := url.ParseRequestURI(cfg.DatabaseURL); err != nil {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL is not a valid URL")

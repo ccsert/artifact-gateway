@@ -12,6 +12,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 func main() {
@@ -22,9 +23,15 @@ func main() {
 	}
 
 	dependencies := app.NewDependencies(cfg)
+	store, err := repository.NewPostgresStore(cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("open repository store", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = store.Close() }()
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,
-		Handler:           app.NewHandler(dependencies),
+		Handler:           app.NewGatewayHandler(dependencies, store, app.TestAdapter{}, cfg.AuthToken),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
