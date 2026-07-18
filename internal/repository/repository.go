@@ -35,11 +35,19 @@ type Group struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type AuditOutcome string
+
+const (
+	AuditResolved      AuditOutcome = "resolved"
+	AuditNotFound      AuditOutcome = "not_found"
+	AuditGroupDisabled AuditOutcome = "group_disabled"
+)
+
 type AuditRecord struct {
 	GroupName  string
 	Repository string
 	MemberName string
-	Outcome    string
+	Outcome    AuditOutcome
 	Actor      string
 	OccurredAt time.Time
 }
@@ -66,10 +74,14 @@ func (s *MemoryStore) CreateGroup(_ context.Context, group Group) (Group, error)
 		return Group{}, ErrNameExists
 	}
 	group.CreatedAt = time.Now().UTC()
-	group.Enabled = true
-	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	normalizeGroup(&group)
 	s.groups[group.Name] = group
 	return group, nil
+}
+
+func normalizeGroup(group *Group) {
+	group.Enabled = true
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
 }
 
 func (s *MemoryStore) GetGroup(_ context.Context, name string) (Group, error) {

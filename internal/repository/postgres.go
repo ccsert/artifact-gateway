@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -29,7 +29,7 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, er
 		return Group{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	group.Enabled = true
+	normalizeGroup(&group)
 	err = tx.QueryRowContext(ctx, `INSERT INTO oci_groups (name, enabled) VALUES ($1, true) RETURNING created_at`, group.Name).Scan(&group.CreatedAt)
 	if err != nil {
 		if isUnique(err) {
@@ -45,7 +45,6 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, er
 	if err := tx.Commit(); err != nil {
 		return Group{}, err
 	}
-	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
 	return group, nil
 }
 
@@ -96,13 +95,6 @@ func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) erro
 }
 
 func isUnique(err error) bool {
-	return len(err.Error()) >= 5 && err.Error()[:5] == "ERROR" && contains(err.Error(), "23505")
-}
-func contains(value, needle string) bool {
-	for i := 0; i+len(needle) <= len(value); i++ {
-		if value[i:i+len(needle)] == needle {
-			return true
-		}
-	}
-	return false
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505"
 }

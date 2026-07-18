@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,12 @@ type selectiveAdapter struct{ available map[string]bool }
 
 func (a selectiveAdapter) Available(_ context.Context, member repository.Member, _ string) bool {
 	return a.available[member.Name]
+}
+
+type failingAuditStore struct{ *repository.MemoryStore }
+
+func (f failingAuditStore) RecordAudit(context.Context, repository.AuditRecord) error {
+	return errors.New("audit unavailable")
 }
 
 func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
@@ -51,7 +58,7 @@ func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 	if resolved.Code != http.StatusOK || !strings.Contains(resolved.Body.String(), `"name":"proxy"`) {
 		t.Fatalf("resolve = %d %s", resolved.Code, resolved.Body.String())
 	}
-	if len(store.Audits) != 1 || store.Audits[0].Outcome != "resolved" || store.Audits[0].MemberName != "proxy" {
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditResolved || store.Audits[0].MemberName != "proxy" {
 		t.Fatalf("audits = %#v", store.Audits)
 	}
 
@@ -84,6 +91,17 @@ func TestAPIRejectsUnauthenticatedAndInvalidGroup(t *testing.T) {
 	handler.ServeHTTP(invalid, request)
 	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), `"code":"invalid_group"`) {
 		t.Fatalf("invalid = %d %s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestResolverFailsWhenAuditCannotBeRecorded(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, failingAuditStore{store}, TestAdapter{}, "")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil))
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `resolver_error`) {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }
 

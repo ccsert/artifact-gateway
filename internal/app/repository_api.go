@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -18,7 +19,9 @@ type Adapter interface {
 
 type TestAdapter struct{}
 
-func (TestAdapter) Available(_ context.Context, _ repository.Member, _ string) bool { return true }
+func (TestAdapter) Available(_ context.Context, member repository.Member, _ string) bool {
+	return member.Endpoint != "test://unavailable"
+}
 
 type Resolver struct {
 	Store   repository.Store
@@ -29,21 +32,38 @@ type Resolver struct {
 func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor string) (repository.Member, error) {
 	group, err := r.Store.GetGroup(ctx, groupName)
 	if err != nil {
+		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); auditErr != nil {
+			return repository.Member{}, auditErr
+		}
 		return repository.Member{}, err
 	}
 	if !group.Enabled {
+		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditGroupDisabled, actor); auditErr != nil {
+			return repository.Member{}, auditErr
+		}
 		return repository.Member{}, repository.ErrDisabled
 	}
 	for _, member := range group.Members {
 		if r.Adapter.Available(ctx, member, repositoryName) {
-			_ = r.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: repositoryName, MemberName: member.Name, Outcome: "resolved", Actor: actor, OccurredAt: time.Now().UTC()})
+			if err := r.audit(ctx, groupName, repositoryName, member.Name, repository.AuditResolved, actor); err != nil {
+				return repository.Member{}, err
+			}
 			r.Metrics.resolved.Add(1)
 			return member, nil
 		}
 	}
-	_ = r.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: repositoryName, Outcome: "not_found", Actor: actor, OccurredAt: time.Now().UTC()})
+	if err := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); err != nil {
+		return repository.Member{}, err
+	}
 	r.Metrics.failed.Add(1)
 	return repository.Member{}, repository.ErrNotFound
+}
+
+func (r Resolver) audit(ctx context.Context, groupName, repositoryName, memberName string, outcome repository.AuditOutcome, actor string) error {
+	if err := r.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: repositoryName, MemberName: memberName, Outcome: outcome, Actor: actor, OccurredAt: time.Now().UTC()}); err != nil {
+		return fmt.Errorf("record resolver audit: %w", err)
+	}
+	return nil
 }
 
 type Metrics struct {
@@ -218,6 +238,11 @@ func validateGroup(group repository.Group) error {
 			return errors.New("member positions must be unique non-negative integers")
 		}
 		positions[member.Position] = true
+	}
+	for position := range group.Members {
+		if !positions[position] {
+			return errors.New("member positions must start at zero and be contiguous")
+		}
 	}
 	return nil
 }
