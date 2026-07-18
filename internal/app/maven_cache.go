@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 var errMavenCacheMiss = errors.New("maven cache miss")
@@ -26,6 +28,7 @@ type cachedMavenIndex struct {
 	ETag         string    `json:"etag,omitempty"`
 	LastModified string    `json:"last_modified,omitempty"`
 	Member       string    `json:"member,omitempty"`
+	Endpoint     string    `json:"endpoint,omitempty"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Negative     bool      `json:"negative,omitempty"`
 }
@@ -36,6 +39,7 @@ type CachedMavenContent struct {
 	ETag         string
 	LastModified string
 	Member       string
+	Endpoint     string
 }
 
 // MavenCache stores complete upstream responses. Maven's metadata has a
@@ -82,7 +86,7 @@ func (c *MavenCache) Load(ctx context.Context, key string) (CachedMavenContent, 
 		return CachedMavenContent{}, errMavenCacheMiss
 	}
 	if index.Negative {
-		return CachedMavenContent{}, errMavenCacheNegative
+		return CachedMavenContent{Member: index.Member, Endpoint: index.Endpoint}, errMavenCacheNegative
 	}
 	body, err := c.store.Get(ctx, index.Object)
 	if err != nil {
@@ -95,7 +99,7 @@ func (c *MavenCache) Load(ctx context.Context, key string) (CachedMavenContent, 
 		_ = c.store.Delete(ctx, index.Object)
 		return CachedMavenContent{}, errMavenCacheMiss
 	}
-	return CachedMavenContent{Body: body, ContentType: index.ContentType, ETag: index.ETag, LastModified: index.LastModified, Member: index.Member}, nil
+	return CachedMavenContent{Body: body, ContentType: index.ContentType, ETag: index.ETag, LastModified: index.LastModified, Member: index.Member, Endpoint: index.Endpoint}, nil
 }
 
 func (c *MavenCache) Store(ctx context.Context, key, artifactPath string, content CachedMavenContent) error {
@@ -109,20 +113,22 @@ func (c *MavenCache) Store(ctx context.Context, key, artifactPath string, conten
 	if isMavenMetadata(artifactPath) {
 		ttl = c.metadataTTL
 	}
-	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, ExpiresAt: time.Now().UTC().Add(ttl)})
+	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
 	if err != nil {
 		return err
 	}
 	return c.store.Put(ctx, key, encoded)
 }
 
-func (c *MavenCache) StoreNegative(ctx context.Context, key string) error {
-	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
+func (c *MavenCache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
+	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
 		return err
 	}
 	return c.store.Put(ctx, key, encoded)
 }
+
+func (c *MavenCache) Invalidate(ctx context.Context, key string) { _ = c.store.Delete(ctx, key) }
 
 func (c *MavenCache) ProxyAllowed(endpoint string) bool {
 	if len(c.allowedProxyHost) == 0 {

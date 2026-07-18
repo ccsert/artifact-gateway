@@ -72,6 +72,9 @@ curl --silent --show-error --fail -X PUT -u "$GITEA_ADMIN_USERNAME:$GITEA_ADMIN_
 mkdir -p "$fixture_dir/maven/$maven_path"
 pom="$fixture_dir/maven/$maven_path/$maven_artifact-$maven_version.pom"
 jar="$fixture_dir/maven/$maven_path/$maven_artifact-$maven_version.jar"
+metadata="$fixture_dir/maven/${maven_group}/$maven_artifact/maven-metadata.xml"
+mkdir -p "$(dirname "$metadata")"
+printf '%s\n' "<metadata><groupId>com.example.gatewayfixture</groupId><artifactId>$maven_artifact</artifactId><versioning><latest>$maven_version</latest><release>$maven_version</release><versions><version>$maven_version</version></versions></versioning></metadata>" >"$metadata"
 printf '%s\n' "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion><groupId>com.example.gatewayfixture</groupId><artifactId>$maven_artifact</artifactId><version>$maven_version</version><packaging>jar</packaging></project>" >"$pom"
 if [[ ! -f "$jar" ]]; then
   printf 'Artifact Gateway Gitea Maven fixture %s\n' "$maven_version" >"$fixture_dir/maven/fixture.txt"

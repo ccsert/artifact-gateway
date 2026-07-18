@@ -118,16 +118,16 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	if h.Cache != nil && hasProxy {
 		cacheKey = h.Cache.key(groupName, artifactPath)
 		if !hasHosted {
-			if h.serveMavenCache(w, request, groupName, artifactPath, actor, cacheKey) {
+			if h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey) {
 				return
 			}
 		}
 	}
 	hadFailure := false
-	proxyNotFound := false
+	var notFoundProxy repository.Member
 	for index, member := range members {
 		if member.Type == repository.MemberProxy && h.Cache != nil {
-			if hasHosted && h.serveMavenCache(w, request, groupName, artifactPath, actor, cacheKey) {
+			if hasHosted && h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey) {
 				return
 			}
 			if !h.Cache.ProxyAllowed(member.Endpoint) {
@@ -160,7 +160,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				return
 			}
 			if member.Type == repository.MemberProxy {
-				proxyNotFound = true
+				notFoundProxy = member
 			}
 			continue
 		}
@@ -206,7 +206,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 					h.Cache.RecordUpstreamFailure(member.Endpoint)
 					continue
 				}
-				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name}
+				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint}
 				if err := h.Cache.Store(request.Context(), cacheKey, artifactPath, content); err != nil {
 					h.Metrics.failed.Add(1)
 					http.Error(w, "unable to cache Maven content", http.StatusInternalServerError)
@@ -248,15 +248,20 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return
 	}
-	if h.Cache != nil && proxyNotFound && !hadFailure && request.Method == http.MethodGet {
-		_ = h.Cache.StoreNegative(request.Context(), cacheKey)
+	if h.Cache != nil && notFoundProxy.Name != "" && !hadFailure && request.Method == http.MethodGet {
+		_ = h.Cache.StoreNegative(request.Context(), cacheKey, notFoundProxy)
 	}
 	http.NotFound(w, request)
 }
 
-func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Request, groupName, artifactPath, actor, cacheKey string) bool {
+func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Request, groupName, artifactPath, actor string, members []repository.Member, cacheKey string) bool {
 	content, err := h.Cache.Load(request.Context(), cacheKey)
 	if errors.Is(err, errMavenCacheNegative) {
+		if !h.cacheSourceAllowed(content, members) {
+			h.Cache.Invalidate(request.Context(), cacheKey)
+			h.Metrics.mavenCacheMiss.Add(1)
+			return false
+		}
 		if auditErr := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditNotFound); auditErr != nil {
 			h.Metrics.failed.Add(1)
 			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -271,6 +276,11 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		h.Metrics.mavenCacheMiss.Add(1)
 		return false
 	}
+	if !h.cacheSourceAllowed(content, members) {
+		h.Cache.Invalidate(request.Context(), cacheKey)
+		h.Metrics.mavenCacheMiss.Add(1)
+		return false
+	}
 	if err := h.audit(request.Context(), groupName, artifactPath, content.Member, actor, repository.AuditResolved); err != nil {
 		h.Metrics.failed.Add(1)
 		http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -282,16 +292,33 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 	return true
 }
 
+func (h MavenHandler) cacheSourceAllowed(content CachedMavenContent, members []repository.Member) bool {
+	for _, member := range members {
+		if member.Type == repository.MemberProxy && member.Name == content.Member && member.Endpoint == content.Endpoint {
+			return h.Cache.ProxyAllowed(member.Endpoint)
+		}
+	}
+	return false
+}
+
 func (h MavenHandler) fetchMavenWithRetry(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		response, err := h.Client.FetchMaven(ctx, method, member, artifactPath, headers)
-		if err == nil {
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if !retryableMavenStatus(response.StatusCode) || attempt == 1 {
 			return response, nil
 		}
-		lastErr = err
+		_ = response.Body.Close()
 	}
 	return nil, lastErr
+}
+
+func retryableMavenStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
 }
 
 func serveCachedMavenContent(w http.ResponseWriter, request *http.Request, artifactPath string, content CachedMavenContent) {

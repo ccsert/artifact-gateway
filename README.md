@@ -2,7 +2,7 @@
 
 ## Gateway local development
 
-Prerequisite: Docker Desktop. The Go compiler and linter run in fixed-version containers, so no host Go or `golangci-lint` installation is required.
+Prerequisites: Docker Desktop and `python3` for the Maven Proxy E2E fixture. The Go compiler and linter run in fixed-version containers, so no host Go or `golangci-lint` installation is required.
 
 ```sh
 cp .env.example .env
@@ -50,4 +50,4 @@ After seeding, source `.gitea-fixture/connection.env` from an integration-test s
 - Maven repository: `GITEA_MAVEN_REGISTRY`, with `com.example.gatewayfixture:sample-library:1.0.0`, including POM, JAR, `.sha1`, `.sha256`, and `.md5` files.
 - Minimal client identity: `GITEA_FIXTURE_USERNAME`, `GITEA_FIXTURE_PASSWORD`, and `GITEA_FIXTURE_TOKEN`. The generated token has only `read:package` and `write:package` scopes.
 
-The seed process needs Docker to pull and push `busybox:1.36`, plus `curl`, `zip`, `shasum`, and `md5` from macOS. It is idempotent for users, organization, team membership, and fixture package coordinates; each run intentionally creates a fresh locally stored API token.
+The seed process needs Docker to pull and push `busybox:1.36`, plus `curl`, `python3`, `zip`, `shasum`, and `md5` from macOS. It is idempotent for users, organization, team membership, and fixture package coordinates; each run intentionally creates a fresh locally stored API token.

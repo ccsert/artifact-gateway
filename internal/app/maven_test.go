@@ -16,11 +16,12 @@ import (
 )
 
 type countingMavenClient struct {
-	mu     sync.Mutex
-	calls  int
-	status int
-	body   []byte
-	err    error
+	mu       sync.Mutex
+	calls    int
+	status   int
+	statuses []int
+	body     []byte
+	err      error
 }
 
 func (c *countingMavenClient) FetchMaven(_ context.Context, method string, _ repository.Member, _ string, _ http.Header) (*http.Response, error) {
@@ -30,7 +31,11 @@ func (c *countingMavenClient) FetchMaven(_ context.Context, method string, _ rep
 	if c.err != nil {
 		return nil, c.err
 	}
-	return &http.Response{StatusCode: c.status, Header: http.Header{"Content-Type": []string{"application/java-archive"}, "ETag": []string{`"fixture"`}, "Last-Modified": []string{"Wed, 01 Jan 2025 00:00:00 GMT"}}, Body: io.NopCloser(bytes.NewReader(c.body)), Request: &http.Request{Method: method}}, nil
+	status := c.status
+	if index := c.calls - 1; index < len(c.statuses) {
+		status = c.statuses[index]
+	}
+	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"application/java-archive"}, "ETag": []string{`"fixture"`}, "Last-Modified": []string{"Wed, 01 Jan 2025 00:00:00 GMT"}}, Body: io.NopCloser(bytes.NewReader(c.body)), Request: &http.Request{Method: method}}, nil
 }
 
 func (c *countingMavenClient) Calls() int { c.mu.Lock(); defer c.mu.Unlock(); return c.calls }
@@ -112,6 +117,15 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	if calls := client.Calls(); calls != 1 {
 		t.Fatalf("negative cache calls = %d", calls)
 	}
+	cache.allowedProxyHost = map[string]struct{}{}
+	r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/missing/1.0/missing-1.0.pom", nil)
+	r.SetBasicAuth("maven", "resolver-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound || client.Calls() != 1 {
+		t.Fatalf("revoked negative response=%d calls=%d", w.Code, client.Calls())
+	}
+	cache.allowedProxyHost = map[string]struct{}{"repo.example": {}}
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "untrusted", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
 	disallowedRequest := httptest.NewRequest(http.MethodGet, "/maven/untrusted/com/example/library/1.0/library-1.0.pom", nil)
 	disallowedRequest.SetBasicAuth("maven", "resolver-secret")
@@ -123,9 +137,9 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 
 	client.err = errors.New("temporary upstream failure")
 	cache.RecordUpstreamSuccess("https://repo.example")
-	r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/live/1.0/live-1.0.pom", nil)
+	r = httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/live/1.0/live-1.0.pom", nil)
 	r.SetBasicAuth("maven", "resolver-secret")
-	w := httptest.NewRecorder()
+	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusBadGateway || client.Calls() != 3 {
 		t.Fatalf("retry response=%d calls=%d", w.Code, client.Calls())
@@ -137,6 +151,33 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	}
 	if _, err := cache.Load(context.Background(), key); !errors.Is(err, errMavenCacheMiss) {
 		t.Fatalf("corrupt cache = %v", err)
+	}
+}
+
+func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{member}})
+	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	client := &countingMavenClient{status: http.StatusOK, statuses: []int{http.StatusServiceUnavailable, http.StatusOK}, body: []byte("recovered")}
+	metrics := &Metrics{}
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "recovered" || client.Calls() != 2 {
+		t.Fatalf("HTTP retry response=%d body=%q calls=%d", response.Code, response.Body.String(), client.Calls())
+	}
+
+	cache.allowedProxyHost = map[string]struct{}{}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || client.Calls() != 2 {
+		t.Fatalf("revoked cached source response=%d calls=%d", response.Code, client.Calls())
+	}
+	if _, err := cache.Load(context.Background(), cache.key("engineering", "com/example/library/1.0/library-1.0.pom")); err == nil {
+		t.Fatal("revoked cache was still readable")
 	}
 }
 
