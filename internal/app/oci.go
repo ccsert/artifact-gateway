@@ -130,19 +130,23 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.Resolver.Metrics.ociCacheMiss.Add(1)
 	}
 	var content CachedOCIContent
-	if request.Method == http.MethodGet && h.Cache != nil && !hasHostedMember {
-		// The complete fetch, verification, object write, and index publication
-		// are one singleflight operation for a cache key.
+	if request.Method == http.MethodGet && h.Cache != nil {
+		// The complete Hosted-first resolution, Proxy fallback, verification, and
+		// publication is one operation, including Hosted-first Groups.
 		content, err = h.Cache.Do(cacheKey, func() (CachedOCIContent, error) {
-			if cached, loadErr := h.Cache.Load(request.Context(), cacheKey); loadErr == nil {
-				return cached, nil
+			if !hasHostedMember {
+				if cached, loadErr := h.Cache.Load(request.Context(), cacheKey); loadErr == nil {
+					return cached, nil
+				}
 			}
 			fetched, fetchErr := h.fetchOCIContent(request.Context(), request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 			if fetchErr != nil {
 				return CachedOCIContent{}, fetchErr
 			}
-			if err := h.Cache.Store(request.Context(), cacheKey, fetched); err != nil {
-				return CachedOCIContent{}, err
+			if fetched.cacheable {
+				if cacheErr := h.Cache.Store(request.Context(), cacheKey, fetched); cacheErr != nil {
+					return CachedOCIContent{}, cacheErr
+				}
 			}
 			return fetched, nil
 		})
@@ -153,7 +157,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.Resolver.RecordOCIRequestFailure()
 		var fetchErr *ociFetchError
 		if errors.As(err, &fetchErr) {
-			if request.Method == http.MethodGet && h.Cache != nil && !hasHostedMember && fetchErr.status == http.StatusNotFound {
+			if request.Method == http.MethodGet && h.Cache != nil && fetchErr.status == http.StatusNotFound {
 				_ = h.Cache.StoreNegative(request.Context(), cacheKey)
 			}
 			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
@@ -161,12 +165,6 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
 		return
-	}
-	if request.Method == http.MethodGet && h.Cache != nil && hasHostedMember && content.cacheable {
-		if err := h.Cache.Store(request.Context(), cacheKey, content); err != nil {
-			writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "unable to cache verified upstream content")
-			return
-		}
 	}
 	serveCachedOCIContent(w, request, reference, content)
 }

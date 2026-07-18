@@ -180,6 +180,12 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 		_ = c.store.Delete(ctx, key)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
+	sum := sha256.Sum256(body)
+	if "sha256:"+hex.EncodeToString(sum[:]) != index.Digest {
+		_ = c.store.Delete(ctx, key)
+		_ = c.store.Delete(ctx, index.Object)
+		return CachedOCIContent{}, errOCICacheMiss
+	}
 	return CachedOCIContent{Body: body, Digest: index.Digest, ContentType: index.ContentType, Member: index.Member}, nil
 }
 
