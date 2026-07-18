@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture up down test lint fmt build docker-build migrate
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture up down test integration-test integration-down lint fmt build docker-build migrate
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, lint, fmt, build, docker-build, migrate, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture'
+	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -17,6 +17,14 @@ down:
 
 test:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./...
+
+integration-test:
+	@docker compose -f compose.integration.yml up -d --wait postgres
+	@docker compose -f compose.integration.yml run --rm --no-deps migrate
+	@docker compose -f compose.integration.yml run --rm --no-deps test
+
+integration-down:
+	@docker compose -f compose.integration.yml down -v
 
 lint:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run

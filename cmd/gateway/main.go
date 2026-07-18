@@ -30,8 +30,13 @@ func main() {
 	}
 	defer func() { _ = store.Close() }()
 	server := &http.Server{
-		Addr:              cfg.ListenAddress,
-		Handler:           app.NewGatewayHandler(dependencies, store, app.TestAdapter{}, cfg.AuthToken),
+		Addr: cfg.ListenAddress,
+		Handler: app.NewGatewayHandler(dependencies, store, app.TestAdapter{}, app.Authenticator{
+			AdminToken:    cfg.AdminToken,
+			ResolverToken: cfg.ResolverToken,
+			AdminActor:    cfg.AdminActor,
+			ResolverActor: cfg.ResolverActor,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

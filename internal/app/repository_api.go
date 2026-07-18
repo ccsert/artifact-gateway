@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,12 @@ type Resolver struct {
 }
 
 func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor string) (repository.Member, error) {
+	resolved := false
+	defer func() {
+		if !resolved {
+			r.Metrics.failed.Add(1)
+		}
+	}()
 	group, err := r.Store.GetGroup(ctx, groupName)
 	if err != nil {
 		if auditErr := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); auditErr != nil {
@@ -49,13 +56,13 @@ func (r Resolver) Resolve(ctx context.Context, groupName, repositoryName, actor 
 				return repository.Member{}, err
 			}
 			r.Metrics.resolved.Add(1)
+			resolved = true
 			return member, nil
 		}
 	}
 	if err := r.audit(ctx, groupName, repositoryName, "", repository.AuditNotFound, actor); err != nil {
 		return repository.Member{}, err
 	}
-	r.Metrics.failed.Add(1)
 	return repository.Member{}, repository.ErrNotFound
 }
 
@@ -90,13 +97,44 @@ func utoa(value uint64) string {
 	return string(digits[i:])
 }
 
-func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapter Adapter, token string) http.Handler {
+type Principal struct {
+	Actor string
+	Admin bool
+}
+
+type Authenticator struct {
+	AdminToken    string
+	ResolverToken string
+	AdminActor    string
+	ResolverActor string
+}
+
+func (a Authenticator) Authenticate(header string) (Principal, bool) {
+	const bearer = "Bearer "
+	if !strings.HasPrefix(header, bearer) {
+		return Principal{}, false
+	}
+	token := strings.TrimPrefix(header, bearer)
+	if tokenMatches(token, a.AdminToken) {
+		return Principal{Actor: a.AdminActor, Admin: true}, true
+	}
+	if tokenMatches(token, a.ResolverToken) {
+		return Principal{Actor: a.ResolverActor}, true
+	}
+	return Principal{}, false
+}
+
+func tokenMatches(value, expected string) bool {
+	return expected != "" && len(value) == len(expected) && subtle.ConstantTimeCompare([]byte(value), []byte(expected)) == 1
+}
+
+func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapter Adapter, authenticator Authenticator) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
 	metrics := &Metrics{}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
-	api := apiHandler{store: store, resolver: resolver, token: token}
+	api := apiHandler{store: store, resolver: resolver, authenticator: authenticator}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -104,13 +142,13 @@ func NewGatewayHandler(dependencies Dependencies, store repository.Store, adapte
 }
 
 type apiHandler struct {
-	store    repository.Store
-	resolver Resolver
-	token    string
+	store         repository.Store
+	resolver      Resolver
+	authenticator Authenticator
 }
 
 func (a apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	actor, ok := a.authorized(r)
+	principal, ok := a.authenticator.Authenticate(r.Header.Get("Authorization"))
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
 		return
@@ -121,33 +159,40 @@ func (a apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
+		if !a.requireAdmin(w, principal) {
+			return
+		}
 		a.create(w, r)
 		return
 	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) == 1 && r.Method == http.MethodGet {
+		if !a.requireAdmin(w, principal) {
+			return
+		}
 		a.get(w, r, parts[0])
 		return
 	}
 	if len(parts) == 2 && parts[1] == "disable" && r.Method == http.MethodPost {
+		if !a.requireAdmin(w, principal) {
+			return
+		}
 		a.disable(w, r, parts[0])
 		return
 	}
 	if len(parts) == 2 && parts[1] == "resolve" && r.Method == http.MethodGet {
-		a.resolve(w, r, parts[0], actor)
+		a.resolve(w, r, parts[0], principal.Actor)
 		return
 	}
 	writeError(w, http.StatusNotFound, "not_found", "resource not found")
 }
 
-func (a apiHandler) authorized(r *http.Request) (string, bool) {
-	if a.token == "" {
-		return "anonymous", true
+func (a apiHandler) requireAdmin(w http.ResponseWriter, principal Principal) bool {
+	if principal.Admin {
+		return true
 	}
-	if r.Header.Get("Authorization") != "Bearer "+a.token {
-		return "", false
-	}
-	return "token", true
+	writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+	return false
 }
 
 func (a apiHandler) create(w http.ResponseWriter, r *http.Request) {

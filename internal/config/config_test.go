@@ -20,7 +20,8 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_AUTH_TOKEN", "test-token")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	cfg, err := Load()
 	if err != nil {
@@ -37,7 +38,8 @@ func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {
 	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_AUTH_TOKEN", "test-token")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("Load() error = nil, want error")
