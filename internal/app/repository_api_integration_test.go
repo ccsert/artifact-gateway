@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,6 +68,31 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	blocked := integrationRequest(handler, http.MethodGet, "/api/v1/oci/groups/engineering/resolve?repository=team/app", "", "resolver-secret")
 	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), `group_disabled`) {
 		t.Fatalf("disabled resolve = %d %s", blocked.Code, blocked.Body.String())
+	}
+
+	mavenUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("artifact")) }))
+	defer mavenUpstream.Close()
+	mavenGroup := fmt.Sprintf(`{"name":"maven-engineering","members":[{"name":"hosted","type":"hosted","endpoint":"%s","position":0},{"name":"proxy","type":"proxy","endpoint":"%s","position":1}]}`, mavenUpstream.URL, mavenUpstream.URL)
+	createdMaven := integrationRequest(handler, http.MethodPost, "/api/v1/maven/groups", mavenGroup, "admin-secret")
+	if createdMaven.Code != http.StatusCreated {
+		t.Fatalf("create Maven group = %d %s", createdMaven.Code, createdMaven.Body.String())
+	}
+	mavenRequest := httptest.NewRequest(http.MethodGet, "/maven/maven-engineering/com/example/library/1.0/library-1.0.pom", nil)
+	mavenRequest.SetBasicAuth("integration", "resolver-secret")
+	mavenResponse := httptest.NewRecorder()
+	handler.ServeHTTP(mavenResponse, mavenRequest)
+	if mavenResponse.Code != http.StatusOK || mavenResponse.Header().Get("X-Artifact-Gateway-Conflict") != "internal-preferred" || mavenResponse.Body.String() != "artifact" {
+		t.Fatalf("Maven response = %d headers=%v body=%q", mavenResponse.Code, mavenResponse.Header(), mavenResponse.Body.String())
+	}
+	var conflictCount, resolvedCount int
+	if err := db.QueryRowContext(context.Background(), `SELECT count(*) FROM resolver_audit_log WHERE group_name=$1 AND outcome=$2`, "maven-engineering", repository.AuditInternalPreferred).Scan(&conflictCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(context.Background(), `SELECT count(*) FROM resolver_audit_log WHERE group_name=$1 AND outcome=$2`, "maven-engineering", repository.AuditResolved).Scan(&resolvedCount); err != nil {
+		t.Fatal(err)
+	}
+	if conflictCount != 1 || resolvedCount != 1 {
+		t.Fatalf("Maven audit counts = conflict:%d resolved:%d", conflictCount, resolvedCount)
 	}
 }
 

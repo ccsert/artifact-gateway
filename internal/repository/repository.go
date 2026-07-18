@@ -38,11 +38,12 @@ type Group struct {
 type AuditOutcome string
 
 const (
-	AuditResolved      AuditOutcome = "resolved"
-	AuditNotFound      AuditOutcome = "not_found"
-	AuditGroupDisabled AuditOutcome = "group_disabled"
-	AuditStorageError  AuditOutcome = "storage_error"
-	AuditUpstreamError AuditOutcome = "upstream_error"
+	AuditResolved          AuditOutcome = "resolved"
+	AuditInternalPreferred AuditOutcome = "internal_preferred"
+	AuditNotFound          AuditOutcome = "not_found"
+	AuditGroupDisabled     AuditOutcome = "group_disabled"
+	AuditStorageError      AuditOutcome = "storage_error"
+	AuditUpstreamError     AuditOutcome = "upstream_error"
 )
 
 type AuditRecord struct {

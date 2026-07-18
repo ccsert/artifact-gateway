@@ -107,7 +107,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	hadFailure := false
-	for _, member := range members {
+	for index, member := range members {
 		response, fetchErr := h.Client.FetchMaven(request.Context(), request.Method, member, artifactPath, request.Header)
 		if fetchErr != nil {
 			if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); err != nil {
@@ -129,6 +129,13 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 		if response.StatusCode == http.StatusNotModified {
 			defer func() { _ = response.Body.Close() }()
+			if member.Type == repository.MemberHosted {
+				if err := h.recordInternalPreference(request.Context(), groupName, artifactPath, members[index+1:], actor, w); err != nil {
+					h.Metrics.failed.Add(1)
+					http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+					return
+				}
+			}
 			if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditResolved); err != nil {
 				h.Metrics.failed.Add(1)
 				http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -150,6 +157,13 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			continue
 		}
 		defer func() { _ = response.Body.Close() }()
+		if member.Type == repository.MemberHosted {
+			if err := h.recordInternalPreference(request.Context(), groupName, artifactPath, members[index+1:], actor, w); err != nil {
+				h.Metrics.failed.Add(1)
+				http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+				return
+			}
+		}
 		if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditResolved); err != nil {
 			h.Metrics.failed.Add(1)
 			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -169,6 +183,72 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	http.NotFound(w, request)
+}
+
+func (h MavenHandler) recordInternalPreference(ctx context.Context, groupName, artifactPath string, members []repository.Member, actor string, w http.ResponseWriter) error {
+	conflictingMember, err := h.findConflict(ctx, groupName, members, artifactPath, actor)
+	if err != nil {
+		return err
+	}
+	if conflictingMember == "" {
+		return nil
+	}
+	if err := h.audit(ctx, groupName, artifactPath, conflictingMember, actor, repository.AuditInternalPreferred); err != nil {
+		return err
+	}
+	w.Header().Set("X-Artifact-Gateway-Conflict", "internal-preferred")
+	return nil
+}
+
+func (h MavenHandler) findConflict(ctx context.Context, groupName string, members []repository.Member, artifactPath, actor string) (string, error) {
+	probeContext, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	for _, member := range members {
+		response, err := h.Client.FetchMaven(probeContext, http.MethodHead, member, artifactPath, http.Header{})
+		if err != nil {
+			if auditErr := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); auditErr != nil {
+				return "", auditErr
+			}
+			continue
+		}
+		_ = response.Body.Close()
+		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+			return member.Name, nil
+		}
+		if response.StatusCode == http.StatusNotFound {
+			if err := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditNotFound); err != nil {
+				return "", err
+			}
+			continue
+		}
+		if response.StatusCode != http.StatusMethodNotAllowed && response.StatusCode != http.StatusNotImplemented {
+			if err := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); err != nil {
+				return "", err
+			}
+			continue
+		}
+		response, err = h.Client.FetchMaven(probeContext, http.MethodGet, member, artifactPath, http.Header{})
+		if err != nil {
+			if auditErr := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); auditErr != nil {
+				return "", auditErr
+			}
+			continue
+		}
+		_ = response.Body.Close()
+		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+			return member.Name, nil
+		}
+		if response.StatusCode == http.StatusNotFound {
+			if err := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditNotFound); err != nil {
+				return "", err
+			}
+			continue
+		}
+		if err := h.audit(ctx, groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func (h MavenHandler) authenticate(request *http.Request) (string, bool) {

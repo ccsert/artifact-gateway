@@ -14,7 +14,9 @@ func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 	files := map[string]string{
 		"/com/example/library/1.0/library-1.0.pom":        "<project/>",
 		"/com/example/library/1.0/library-1.0.jar":        "jar-content",
-		"/com/example/library/1.0/library-1.0.jar.sha256": "checksum",
+		"/com/example/library/1.0/library-1.0.jar.sha1":   "sha1",
+		"/com/example/library/1.0/library-1.0.jar.sha256": "sha256",
+		"/com/example/library/1.0/library-1.0.jar.md5":    "md5",
 		"/com/example/library/maven-metadata.xml":         "<metadata/>",
 	}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -74,6 +76,10 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 		if _, _, ok := request.BasicAuth(); ok {
 			t.Fatal("proxy received Gitea credentials")
 		}
+		if request.URL.Path != "/com/example/library/2.0/library-2.0.pom" {
+			http.NotFound(w, request)
+			return
+		}
 		_, _ = w.Write([]byte("proxy"))
 	}))
 	defer proxy.Close()
@@ -87,7 +93,7 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || response.Body.String() != "internal" || len(store.Audits) != 1 || store.Audits[0].MemberName != "hosted" {
+	if response.Code != http.StatusOK || response.Body.String() != "internal" || len(store.Audits) != 2 || store.Audits[0].Outcome != repository.AuditNotFound || store.Audits[1].MemberName != "hosted" {
 		t.Fatalf("response=%d body=%q audits=%#v", response.Code, response.Body.String(), store.Audits)
 	}
 
@@ -95,8 +101,39 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 	request.SetBasicAuth("maven", "resolver-secret")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || response.Body.String() != "proxy" || len(store.Audits) != 3 || store.Audits[1].Outcome != repository.AuditNotFound || store.Audits[2].MemberName != "proxy-first" {
+	if response.Code != http.StatusOK || response.Body.String() != "proxy" || len(store.Audits) != 4 || store.Audits[2].Outcome != repository.AuditNotFound || store.Audits[3].MemberName != "proxy-first" {
 		t.Fatalf("fallback response=%d body=%q audits=%#v", response.Code, response.Body.String(), store.Audits)
+	}
+}
+
+func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
+	hosted := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("internal"))
+	}))
+	defer hosted.Close()
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		_, _ = w.Write([]byte("external"))
+	}))
+	defer proxy.Close()
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{
+		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
+		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
+	}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "internal" || response.Header().Get("X-Artifact-Gateway-Conflict") != "internal-preferred" {
+		t.Fatalf("response=%d header=%q body=%q", response.Code, response.Header().Get("X-Artifact-Gateway-Conflict"), response.Body.String())
+	}
+	if len(store.Audits) != 2 || store.Audits[0].Outcome != repository.AuditInternalPreferred || store.Audits[0].MemberName != "proxy" || store.Audits[1].Outcome != repository.AuditResolved || store.Audits[1].MemberName != "hosted" {
+		t.Fatalf("audits = %#v", store.Audits)
 	}
 }
 
@@ -129,23 +166,30 @@ func TestMavenFailsWhenAuditCannotBeRecorded(t *testing.T) {
 }
 
 func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	hosted := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("If-None-Match") != `"cached"` {
 			t.Fatalf("If-None-Match = %q", request.Header.Get("If-None-Match"))
 		}
 		w.Header().Set("ETag", `"cached"`)
 		w.WriteHeader(http.StatusNotModified)
 	}))
-	defer upstream.Close()
+	defer hosted.Close()
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodHead {
+			t.Fatal("conflict probe did not use HEAD")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer proxy.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}, {Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1}}})
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/maven-metadata.xml", nil)
 	request.Header.Set("If-None-Match", `"cached"`)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusNotModified || response.Header().Get("ETag") != `"cached"` || len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditResolved {
+	if response.Code != http.StatusNotModified || response.Header().Get("ETag") != `"cached"` || response.Header().Get("X-Artifact-Gateway-Conflict") != "internal-preferred" || len(store.Audits) != 2 || store.Audits[0].Outcome != repository.AuditInternalPreferred || store.Audits[1].Outcome != repository.AuditResolved {
 		t.Fatalf("response=%d headers=%v audits=%#v", response.Code, response.Header(), store.Audits)
 	}
 	if err := store.DisableMavenGroup(context.Background(), "engineering"); err != nil {
@@ -153,7 +197,7 @@ func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.
 	}
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "disabled") || len(store.Audits) != 2 || store.Audits[1].Outcome != repository.AuditGroupDisabled {
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "disabled") || len(store.Audits) != 3 || store.Audits[2].Outcome != repository.AuditGroupDisabled {
 		t.Fatalf("disabled response=%d body=%q audits=%#v", response.Code, response.Body.String(), store.Audits)
 	}
 }

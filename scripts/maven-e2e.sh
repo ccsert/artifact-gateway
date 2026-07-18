@@ -44,6 +44,12 @@ workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 repository_url="http://host.docker.internal:${GATEWAY_HTTP_PORT}/maven/${GITEA_FIXTURE_ORG}"
 coordinate="${GITEA_MAVEN_GROUP}:${GITEA_MAVEN_ARTIFACT}:${GITEA_MAVEN_VERSION}"
+maven_path="${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/${GITEA_MAVEN_VERSION}"
+
+for artifact in "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.pom" "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar" "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar.sha1" "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar.sha256" "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar.md5"; do
+  curl --silent --show-error --fail --user "contract-e2e:${GATEWAY_RESOLVER_TOKEN}" "$repository_url/$maven_path/$artifact" >/dev/null
+done
+curl --silent --show-error --fail --user "contract-e2e:${GATEWAY_RESOLVER_TOKEN}" "$repository_url/${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/maven-metadata.xml" >/dev/null
 
 cat >"$workdir/settings.xml" <<EOF
 <settings><servers><server><id>gateway</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server></servers><profiles><profile><id>gateway</id><repositories><repository><id>gateway</id><url>${repository_url}</url></repository></repositories></profile></profiles><activeProfiles><activeProfile>gateway</activeProfile></activeProfiles></settings>
