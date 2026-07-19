@@ -3,8 +3,7 @@
 
 import argparse
 import http.server
-import os
-import posixpath
+import pathlib
 import urllib.parse
 
 
@@ -17,8 +16,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
     def translate_path(self, path):
-        path = posixpath.normpath(urllib.parse.unquote(path).lstrip("/"))
-        return os.path.join(self.root, path)
+        root = pathlib.Path(self.root).resolve()
+        parts = pathlib.PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(path).path)).parts
+        candidate = root.joinpath(*(part for part in parts if part != "/"))
+        try:
+            candidate.resolve().relative_to(root)
+        except ValueError:
+            return str(root / ".invalid-path")
+        return str(candidate)
 
     def send_response(self, code, message=None):
         self._status = code
@@ -30,7 +35,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         finally:
             if self.log_file and hasattr(self, "_status"):
                 with open(self.log_file, "a", encoding="utf-8") as output:
-                    output.write(f"{self.command} {self.path} {self._status}\n")
+                    output.write(f"{self.command} {self._request_path} {self._status}\n")
 
     def do_GET(self):
         self._serve_controlled()
@@ -39,6 +44,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._serve_controlled()
 
     def _serve_controlled(self):
+        self._request_path = self.path
         path = urllib.parse.urlparse(self.path).path
         for status in (429, 503):
             prefix = f"/retry/{status}/"
@@ -60,7 +66,7 @@ def main():
     parser.add_argument("--directory", required=True)
     parser.add_argument("--log", required=True)
     args = parser.parse_args()
-    Handler.root = os.path.abspath(args.directory)
+    Handler.root = str(pathlib.Path(args.directory).resolve())
     Handler.log_file = args.log
     with http.server.ThreadingHTTPServer(("0.0.0.0", args.port), Handler) as server:
         server.serve_forever()
