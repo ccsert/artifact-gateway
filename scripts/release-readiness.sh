@@ -25,11 +25,33 @@ gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
 original_resolver_token=$GATEWAY_RESOLVER_TOKEN
 rotated_resolver_token="release-readiness-${RANDOM}-${RANDOM}"
 token_rotated=false
+gateway_container=""
+gateway_configuration_restored=false
+
+gateway_env() {
+  local name=$1
+  docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$gateway_container" \
+    | sed -n "s/^${name}=//p"
+}
+
+capture_gateway_configuration() {
+  gateway_container=$(docker compose --env-file "$environment_file" -f compose.yml ps -q gateway)
+  test -n "$gateway_container" || { printf '%s\n' 'Release readiness requires a running Gateway.' >&2; exit 1; }
+  original_adapter_mode=$(gateway_env GATEWAY_ADAPTER_MODE)
+  original_gitea_username=$(gateway_env GATEWAY_GITEA_USERNAME)
+  original_gitea_token=$(gateway_env GATEWAY_GITEA_TOKEN)
+  original_maven_proxy_allowed_hosts=$(gateway_env GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS)
+}
 
 restore_gateway() {
   if [[ "$token_rotated" == true ]]; then
+    GATEWAY_ADAPTER_MODE="$original_adapter_mode" \
+    GATEWAY_GITEA_USERNAME="$original_gitea_username" \
+    GATEWAY_GITEA_TOKEN="$original_gitea_token" \
+    GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="$original_maven_proxy_allowed_hosts" \
     GATEWAY_RESOLVER_TOKEN="$original_resolver_token" \
-      docker compose --env-file "$environment_file" -f compose.yml up -d --wait gateway >/dev/null
+      docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway >/dev/null
+    gateway_configuration_restored=true
   fi
 }
 trap restore_gateway EXIT
@@ -60,6 +82,9 @@ wait_ready() {
 # controlled external Proxy paths. The Maven fixture also verifies an
 # unavailable upstream can still serve already cached content.
 make oci-e2e
+for client in podman oras; do
+  OCI_E2E_CLIENT="$client" ./scripts/oci-e2e.sh
+done
 # OCI E2E already seeded Gitea. Calling the script directly prevents Make from
 # re-seeding it and rotating the fixture token between the two client checks.
 ./scripts/maven-e2e.sh
@@ -108,6 +133,8 @@ old_oci_token=$(curl --silent --show-error --fail --user "release-readiness:${or
   "$gateway_url/auth/token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 test -n "$old_oci_token" || { printf '%s\n' 'Old OCI bearer token is empty.' >&2; exit 1; }
 
+capture_gateway_configuration
+
 token_rotated=true
 GATEWAY_RESOLVER_TOKEN="$rotated_resolver_token" \
   docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway >/dev/null
@@ -122,5 +149,9 @@ test -n "$new_oci_token" || { printf '%s\n' 'New OCI bearer token is empty.' >&2
 new_token_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $new_oci_token" "$gateway_url/v2/")
 [[ "$new_token_status" == 200 ]] || { printf 'New OCI bearer token returned HTTP %s\n' "$new_token_status" >&2; exit 1; }
+if [[ "${RELEASE_READINESS_FAIL_AFTER_TOKEN_ROTATION:-}" == 1 ]]; then
+  printf '%s\n' 'Injected release readiness failure after token rotation.' >&2
+  exit 1
+fi
 
 printf '%s\n' 'Release readiness passed: Gitea OCI, Maven/Gradle proxy cache, dependency recovery, cache maintenance view, and resolver-token rotation.'
