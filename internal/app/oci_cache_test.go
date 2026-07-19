@@ -23,6 +23,20 @@ type countingOCIClient struct {
 	delay   time.Duration
 }
 
+type rangeRecordingOCIStore struct {
+	*MemoryOCIObjectStore
+	offset int64
+	length int64
+	calls  int
+}
+
+func (s *rangeRecordingOCIStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
+	s.offset = offset
+	s.length = length
+	s.calls++
+	return s.MemoryOCIObjectStore.OpenRange(ctx, key, offset, length)
+}
+
 type renewingTestCoordinator struct {
 	mu       sync.Mutex
 	renewals int
@@ -182,6 +196,38 @@ func TestOCICacheStreamsLargeBlobAndServesCachedRange(t *testing.T) {
 	}
 	if got := client.Calls(); got != 1 {
 		t.Fatalf("cached range made upstream calls = %d", got)
+	}
+}
+
+func TestOCICacheUsesObjectStoreRangeReadForHighOffset(t *testing.T) {
+	content := bytes.Repeat([]byte("0123456789abcdef"), 256*1024) // 4 MiB
+	client := &countingOCIClient{content: content, status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	objectStore := &rangeRecordingOCIStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
+	cache := NewOCICache(objectStore, time.Hour, time.Minute, time.Minute, []string{"registry.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	path := "/v2/team/app/blobs/" + digestOf(content)
+
+	first := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	authorize(request, "resolver-secret")
+	handler.ServeHTTP(first, request)
+	if first.Code != http.StatusOK {
+		t.Fatalf("initial response = %d", first.Code)
+	}
+
+	const offset = 4*1024*1024 - 16
+	rangeRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	rangeRequest.Header.Set("Range", "bytes=4194288-4194303")
+	authorize(rangeRequest, "resolver-secret")
+	ranged := httptest.NewRecorder()
+	handler.ServeHTTP(ranged, rangeRequest)
+	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != string(content[offset:]) {
+		t.Fatalf("range = %d body length=%d", ranged.Code, ranged.Body.Len())
+	}
+	if objectStore.calls != 1 || objectStore.offset != offset || objectStore.length != 16 {
+		t.Fatalf("range reads = calls:%d offset:%d length:%d", objectStore.calls, objectStore.offset, objectStore.length)
 	}
 }
 
