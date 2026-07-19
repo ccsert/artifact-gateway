@@ -41,6 +41,7 @@ type OCIObjectStore interface {
 	OpenRange(context.Context, string, int64, int64) (io.ReadCloser, int64, error)
 	PutReader(context.Context, string, io.Reader, int64) error
 	PutVerifiedReader(context.Context, string, io.Reader, int64, string) error
+	SetVerifiedDigest(context.Context, string, string) error
 	Delete(context.Context, string) error
 	List(context.Context, string) ([]string, error)
 }
@@ -116,6 +117,8 @@ func (s *MemoryOCIObjectStore) PutReader(ctx context.Context, key string, value 
 func (s *MemoryOCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
 	return s.PutReader(ctx, key, value, size)
 }
+
+func (s *MemoryOCIObjectStore) SetVerifiedDigest(context.Context, string, string) error { return nil }
 
 func (s *MemoryOCIObjectStore) Delete(_ context.Context, key string) error {
 	s.mu.Lock()
@@ -242,6 +245,14 @@ func (s *S3OCIObjectStore) PutReader(ctx context.Context, key string, value io.R
 
 func (s *S3OCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
 	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream", UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}})
+	return err
+}
+
+func (s *S3OCIObjectStore) SetVerifiedDigest(ctx context.Context, key, digest string) error {
+	_, err := s.client.CopyObject(ctx,
+		minio.CopyDestOptions{Bucket: s.bucket, Object: key, ReplaceMetadata: true, UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}},
+		minio.CopySrcOptions{Bucket: s.bucket, Object: key},
+	)
 	return err
 }
 
@@ -403,11 +414,35 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
+	if info.Digest == "" {
+		if err := c.verifyAndMigrateObject(ctx, index); err != nil {
+			_ = c.removeIndex(ctx, key, encoded, index)
+			return CachedOCIContent{}, errOCICacheMiss
+		}
+		info.Digest = index.Digest
+	}
 	if info.Size != index.Size || info.Digest != index.Digest {
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: info.Size, store: c.store}, nil
+}
+
+func (c *OCICache) verifyAndMigrateObject(ctx context.Context, index cachedOCIIndex) error {
+	body, size, err := c.store.Open(ctx, index.Object)
+	if err != nil {
+		return err
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, body)
+	closeErr := body.Close()
+	if copyErr != nil || closeErr != nil {
+		return errors.Join(copyErr, closeErr)
+	}
+	if size != index.Size || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
+		return errors.New("OCI legacy cached object does not match index")
+	}
+	return c.store.SetVerifiedDigest(ctx, index.Object, index.Digest)
 }
 
 func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {

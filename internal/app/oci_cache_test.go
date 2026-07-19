@@ -31,6 +31,26 @@ type rangeRecordingOCIStore struct {
 	opens  int
 }
 
+type legacyMetadataOCIStore struct {
+	*MemoryOCIObjectStore
+	hideDigest bool
+	migrated   bool
+}
+
+func (s *legacyMetadataOCIStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
+	info, err := s.MemoryOCIObjectStore.Stat(ctx, key)
+	if s.hideDigest {
+		info.Digest = ""
+	}
+	return info, err
+}
+
+func (s *legacyMetadataOCIStore) SetVerifiedDigest(context.Context, string, string) error {
+	s.hideDigest = false
+	s.migrated = true
+	return nil
+}
+
 func (s *rangeRecordingOCIStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.opens++
 	return s.MemoryOCIObjectStore.Open(ctx, key)
@@ -280,6 +300,21 @@ func TestOCICacheRejectsSameSizeCorruptObjectForFullAndRangeReads(t *testing.T) 
 	handler.ServeHTTP(ranged, rangeRequest)
 	if ranged.Code == http.StatusPartialContent || ranged.Body.String() == string(corrupt[15:19]) {
 		t.Fatalf("corrupt range response = %d %q", ranged.Code, ranged.Body.String())
+	}
+}
+
+func TestOCICacheMigratesVerifiedLegacyObjectMetadata(t *testing.T) {
+	store := &legacyMetadataOCIStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
+	cache := NewOCICache(store, time.Hour, time.Hour, time.Hour, nil)
+	content := []byte("legacy cached content")
+	key := "oci/index/legacy.json"
+	if err := cache.Store(context.Background(), key, CachedOCIContent{Body: content, Digest: digestOf(content)}); err != nil {
+		t.Fatal(err)
+	}
+	store.hideDigest = true
+	loaded, err := cache.Load(context.Background(), key)
+	if err != nil || !store.migrated || loaded.Digest != digestOf(content) {
+		t.Fatalf("legacy load = %#v err=%v migrated=%t", loaded, err, store.migrated)
 	}
 }
 
