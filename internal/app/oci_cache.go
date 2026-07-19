@@ -308,11 +308,11 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 	}
 	var index cachedOCIIndex
 	if err := json.Unmarshal(encoded, &index); err != nil {
-		_ = c.removeIndex(ctx, key, cachedOCIIndex{})
+		_ = c.removeIndex(ctx, key, encoded, cachedOCIIndex{})
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	if !time.Now().UTC().Before(index.ExpiresAt) {
-		_ = c.removeIndex(ctx, key, index)
+		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	if index.Negative {
@@ -320,15 +320,14 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 	}
 	body, size, err := c.store.Open(ctx, index.Object)
 	if err != nil {
-		_ = c.removeIndex(ctx, key, index)
+		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	hash := sha256.New()
 	_, copyErr := io.Copy(hash, body)
 	closeErr := body.Close()
 	if copyErr != nil || closeErr != nil || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
-		_ = c.removeIndex(ctx, key, index)
-		_ = c.store.Delete(ctx, index.Object)
+		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: size, store: c.store}, nil
@@ -394,6 +393,7 @@ func (c *OCICache) storeContent(ctx context.Context, key string, content CachedO
 		return err
 	}
 	if err := c.store.Put(ctx, key, encoded); err != nil {
+		_ = c.markObjectForCollection(ctx, object)
 		return err
 	}
 	if previous.Object != "" && previous.Object != object {
@@ -437,13 +437,17 @@ func (c *OCICache) loadIndex(ctx context.Context, key string) cachedOCIIndex {
 	return index
 }
 
-func (c *OCICache) removeIndex(ctx context.Context, key string, index cachedOCIIndex) error {
+func (c *OCICache) removeIndex(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
-		return c.removeIndexLocked(workCtx, key, index)
+		return c.removeIndexLocked(workCtx, key, expected, index)
 	})
 }
 
-func (c *OCICache) removeIndexLocked(ctx context.Context, key string, index cachedOCIIndex) error {
+func (c *OCICache) removeIndexLocked(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
+	current, err := c.store.Get(ctx, key)
+	if err != nil || !bytes.Equal(current, expected) {
+		return err
+	}
 	if err := c.store.Delete(ctx, key); err != nil {
 		return err
 	}

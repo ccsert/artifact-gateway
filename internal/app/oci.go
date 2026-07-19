@@ -143,6 +143,12 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			}
 			fetched, fetchErr := h.fetchOCIContent(fetchCtx, request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
 			if fetchErr != nil {
+				var notFound *ociFetchError
+				if errors.As(fetchErr, &notFound) && notFound.status == http.StatusNotFound {
+					if cacheErr := h.Cache.StoreNegative(fetchCtx, cacheKey); cacheErr != nil {
+						return CachedOCIContent{}, cacheErr
+					}
+				}
 				return CachedOCIContent{}, fetchErr
 			}
 			if fetched.cacheable {
@@ -170,9 +176,6 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.Resolver.RecordOCIRequestFailure()
 		var fetchErr *ociFetchError
 		if errors.As(err, &fetchErr) {
-			if request.Method == http.MethodGet && h.Cache != nil && fetchErr.status == http.StatusNotFound {
-				_ = h.Cache.StoreNegative(request.Context(), cacheKey)
-			}
 			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
 			return
 		}
