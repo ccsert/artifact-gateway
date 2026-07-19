@@ -28,6 +28,38 @@ for name in GATEWAY_HTTP_PORT GATEWAY_ADMIN_TOKEN GATEWAY_RESOLVER_TOKEN GITEA_H
 done
 
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
+gateway_container=$(docker compose --env-file "$environment_file" -f compose.yml ps -q gateway)
+gateway_configuration_restored=false
+
+gateway_env() {
+  local name=$1
+  docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$gateway_container" \
+    | sed -n "s/^${name}=//p"
+}
+
+# The allowlist test restarts Gateway with a deliberately restricted setting.
+# Preserve the live configuration so this E2E does not become a deployment
+# mutation when it is run against an existing stack.
+if [[ -n "$gateway_container" ]]; then
+  original_adapter_mode=$(gateway_env GATEWAY_ADAPTER_MODE)
+  original_gitea_username=$(gateway_env GATEWAY_GITEA_USERNAME)
+  original_gitea_token=$(gateway_env GATEWAY_GITEA_TOKEN)
+  original_maven_proxy_allowed_hosts=$(gateway_env GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS)
+fi
+
+restore_gateway_configuration() {
+  if [[ -z "$gateway_container" || "$gateway_configuration_restored" == true ]]; then
+    return
+  fi
+
+  GATEWAY_ADAPTER_MODE="$original_adapter_mode" \
+  GATEWAY_GITEA_USERNAME="$original_gitea_username" \
+  GATEWAY_GITEA_TOKEN="$original_gitea_token" \
+  GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="$original_maven_proxy_allowed_hosts" \
+  docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway
+  gateway_configuration_restored=true
+}
+
 proxy_port=${GATEWAY_MAVEN_PROXY_PORT:-}
 if [[ -z "$proxy_port" ]]; then
   proxy_port=$(python3 -c 'import socket; listener = socket.socket(); listener.bind(("127.0.0.1", 0)); print(listener.getsockname()[1]); listener.close()')
@@ -44,8 +76,15 @@ proxy_endpoint="http://${proxy_host}"
 workdir=$(mktemp -d)
 proxy_pid=""
 cleanup() {
+  local exit_status=$?
   if [[ -n "$proxy_pid" ]]; then kill "$proxy_pid" 2>/dev/null || true; fi
+  if ! restore_gateway_configuration; then
+    printf '%s\n' 'Failed to restore the Gateway configuration after Maven E2E.' >&2
+    exit_status=1
+  fi
   rm -rf "$workdir"
+  trap - EXIT
+  exit "$exit_status"
 }
 trap cleanup EXIT
 proxy_log="$workdir/proxy.log"
@@ -195,6 +234,10 @@ GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
 GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="" \
 docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway
+if [[ "${MAVEN_E2E_FAIL_AFTER_ALLOWLIST_TIGHTENING:-}" == 1 ]]; then
+  printf '%s\n' 'Injected Maven E2E failure after allowlist tightening.' >&2
+  exit 1
+fi
 expect_request_status 403 "$gateway_url/maven/${proxy_group}/${maven_resource}"
 
 metrics=$(curl --silent --show-error --fail "$gateway_url/metrics")

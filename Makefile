@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e performance-readiness upgrade-readiness release-readiness up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness release-readiness up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e, performance-readiness, upgrade-readiness, release-readiness'
+	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, release-readiness'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -68,6 +68,9 @@ oci-e2e: gitea-fixture
 
 maven-e2e: gitea-fixture
 	@./scripts/maven-e2e.sh
+
+maven-e2e-cleanup-test: gitea-fixture
+	@./scripts/maven-e2e-cleanup-test.sh
 
 performance-readiness:
 	@./scripts/performance-readiness.sh

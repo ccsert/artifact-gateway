@@ -60,7 +60,9 @@ wait_ready() {
 # controlled external Proxy paths. The Maven fixture also verifies an
 # unavailable upstream can still serve already cached content.
 make oci-e2e
-make maven-e2e
+# OCI E2E already seeded Gitea. Calling the script directly prevents Make from
+# re-seeding it and rotating the fixture token between the two client checks.
+./scripts/maven-e2e.sh
 make performance-readiness
 make upgrade-readiness
 
