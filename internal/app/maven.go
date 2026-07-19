@@ -131,6 +131,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				return
 			}
 			if !h.Cache.ProxyAllowed(member.Endpoint) {
+				h.Metrics.mavenProxyDenied.Add(1)
 				continue
 			}
 			if !h.Cache.UpstreamAllowed(member.Endpoint) {
@@ -260,6 +261,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		if !h.cacheSourceAllowed(content, members) {
 			h.Cache.Invalidate(request.Context(), cacheKey)
 			h.Metrics.mavenCacheMiss.Add(1)
+			h.Metrics.mavenCacheInvalidated.Add(1)
 			return false
 		}
 		if auditErr := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditNotFound); auditErr != nil {
@@ -268,6 +270,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 			return true
 		}
 		h.Metrics.mavenCacheHit.Add(1)
+		h.Metrics.mavenNegativeHit.Add(1)
 		h.Metrics.failed.Add(1)
 		http.NotFound(w, request)
 		return true
@@ -279,6 +282,8 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 	if !h.cacheSourceAllowed(content, members) {
 		h.Cache.Invalidate(request.Context(), cacheKey)
 		h.Metrics.mavenCacheMiss.Add(1)
+		h.Metrics.mavenCacheInvalidated.Add(1)
+		h.Metrics.mavenProxyDenied.Add(1)
 		return false
 	}
 	if err := h.audit(request.Context(), groupName, artifactPath, content.Member, actor, repository.AuditResolved); err != nil {
@@ -307,12 +312,16 @@ func (h MavenHandler) fetchMavenWithRetry(ctx context.Context, method string, me
 		response, err := h.Client.FetchMaven(ctx, method, member, artifactPath, headers)
 		if err != nil {
 			lastErr = err
+			if attempt == 0 {
+				h.Metrics.mavenRetry.Add(1)
+			}
 			continue
 		}
 		if !retryableMavenStatus(response.StatusCode) || attempt == 1 {
 			return response, nil
 		}
 		_ = response.Body.Close()
+		h.Metrics.mavenRetry.Add(1)
 	}
 	return nil, lastErr
 }

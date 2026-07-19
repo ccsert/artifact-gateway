@@ -16,7 +16,7 @@ Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean 
 
 Run `make integration-test` to start an isolated PostgreSQL container, apply every migration, and exercise the OCI Group HTTP flow against the database. It removes the test containers and volume after a successful run; `make integration-down` removes them after a failed run.
 
-Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group. Run `make maven-e2e` to resolve the seeded Maven dependency through a Maven Hosted Group with both Maven and Gradle.
+Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group. Run `make maven-e2e` to resolve the seeded Maven dependency through a controlled Maven Proxy: Maven performs the first upstream read, Gradle resolves from the Gateway cache after the fixture upstream stops, and the fixture exercises retry, negative-cache, allowlist, invalidation, and metrics paths.
 
 ## OCI hosted reads
 

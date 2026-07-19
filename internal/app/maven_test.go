@@ -179,6 +179,9 @@ func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *
 	if _, err := cache.Load(context.Background(), cache.key("engineering", "com/example/library/1.0/library-1.0.pom")); err == nil {
 		t.Fatal("revoked cache was still readable")
 	}
+	if metrics.mavenCacheInvalidated.Load() != 1 {
+		t.Fatalf("cache invalidations = %d", metrics.mavenCacheInvalidated.Load())
+	}
 }
 
 func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
