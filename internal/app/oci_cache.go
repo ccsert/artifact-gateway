@@ -536,6 +536,20 @@ func (c *OCICache) StoreNegative(ctx context.Context, key string) error {
 	})
 }
 
+// Invalidate removes an index and schedules its digest object for collection.
+// It is used when an index no longer has enough provenance to serve safely.
+func (c *OCICache) Invalidate(ctx context.Context, key string) {
+	encoded, err := c.store.Get(ctx, key)
+	if err != nil {
+		return
+	}
+	var index cachedOCIIndex
+	if json.Unmarshal(encoded, &index) != nil {
+		return
+	}
+	_ = c.removeIndex(ctx, key, encoded, index)
+}
+
 func (c *OCICache) storeNegative(ctx context.Context, key string) error {
 	previous := c.loadIndex(ctx, key)
 	encoded, err := json.Marshal(cachedOCIIndex{Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})

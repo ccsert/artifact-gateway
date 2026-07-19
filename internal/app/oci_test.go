@@ -158,7 +158,8 @@ func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
 	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"registry.example"})
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	metrics := &Metrics{}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	first := httptest.NewRecorder()
@@ -174,6 +175,45 @@ func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
 	}
 	if len(store.Audits) != 2 || store.Audits[1].Outcome != repository.AuditProxyDenied {
 		t.Fatalf("audits = %#v", store.Audits)
+	}
+	if metrics.ociProxyDenied.Load() != 1 {
+		t.Fatalf("proxy denials = %d", metrics.ociProxyDenied.Load())
+	}
+}
+
+func TestOCICacheWithoutEndpointProvenanceIsRefetched(t *testing.T) {
+	content := []byte(`{"schemaVersion":2}`)
+	client := &countingOCIClient{content: content, status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	objects := NewMemoryOCIObjectStore()
+	cache := NewDefaultOCICache(objects, []string{"registry.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(request, "resolver-secret")
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request)
+	key := cache.key("team", "team/app", ociManifest, "latest")
+	encoded, err := objects.Get(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index cachedOCIIndex
+	if err := json.Unmarshal(encoded, &index); err != nil {
+		t.Fatal(err)
+	}
+	index.Endpoint = ""
+	encoded, err = json.Marshal(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := objects.Put(context.Background(), key, encoded); err != nil {
+		t.Fatal(err)
+	}
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, request)
+	if second.Code != http.StatusOK || client.Calls() != 2 {
+		t.Fatalf("response = %d calls=%d", second.Code, client.Calls())
 	}
 }
 

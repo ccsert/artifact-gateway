@@ -124,7 +124,11 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	if h.Cache != nil && !hasHostedMember {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
 		if cacheErr == nil {
-			if !h.cacheSourceAllowed(content, members) {
+			if content.Endpoint == "" {
+				h.Cache.Invalidate(request.Context(), cacheKey)
+				cacheErr = errOCICacheMiss
+			}
+			if cacheErr == nil && !h.cacheSourceAllowed(content, members) {
 				h.Resolver.Metrics.ociProxyDenied.Add(1)
 				if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, content.Member, principal.Actor, repository.AuditProxyDenied); err != nil {
 					writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
@@ -133,14 +137,16 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				writeOCIError(w, http.StatusForbidden, "DENIED", "upstream repository is not allowed")
 				return
 			}
-			h.Resolver.Metrics.ociCacheHit.Add(1)
-			h.Resolver.Metrics.recordCache(repositoryName, true)
-			if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, content.Member, principal.Actor); err != nil {
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+			if cacheErr == nil {
+				h.Resolver.Metrics.ociCacheHit.Add(1)
+				h.Resolver.Metrics.recordCache(repositoryName, true)
+				if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, content.Member, principal.Actor); err != nil {
+					writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+					return
+				}
+				serveCachedOCIContent(w, request, reference, content)
 				return
 			}
-			serveCachedOCIContent(w, request, reference, content)
-			return
 		}
 		if errors.Is(cacheErr, errOCICacheNegative) {
 			h.Resolver.Metrics.ociCacheHit.Add(1)
@@ -162,13 +168,17 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		content, err = h.Cache.Do(workCtx, cacheKey, func(fetchCtx context.Context) (CachedOCIContent, error) {
 			if !hasHostedMember {
 				if cached, loadErr := h.Cache.Load(fetchCtx, cacheKey); loadErr == nil {
-					if !h.cacheSourceAllowed(cached, members) {
+					if cached.Endpoint == "" {
+						h.Cache.Invalidate(fetchCtx, cacheKey)
+					} else if !h.cacheSourceAllowed(cached, members) {
+						h.Resolver.Metrics.ociProxyDenied.Add(1)
 						if auditErr := h.Resolver.RecordOCIFailure(fetchCtx, groupName, repositoryName, cached.Member, principal.Actor, repository.AuditProxyDenied); auditErr != nil {
 							return CachedOCIContent{}, auditErr
 						}
 						return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
+					} else {
+						return cached, nil
 					}
-					return cached, nil
 				}
 			}
 			fetched, fetchErr := h.fetchOCIContent(fetchCtx, request.Method, members, repositoryName, resource, reference, request.Header, groupName, principal.Actor, cacheKey)
@@ -241,18 +251,22 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		if member.Type == repository.MemberProxy && hostedAttempted && h.Cache != nil {
 			cached, cacheErr := h.Cache.Load(ctx, cacheKey)
 			if cacheErr == nil {
-				if !h.cacheSourceAllowed(cached, members) {
+				if cached.Endpoint == "" {
+					h.Cache.Invalidate(ctx, cacheKey)
+				} else if !h.cacheSourceAllowed(cached, members) {
+					h.Resolver.Metrics.ociProxyDenied.Add(1)
 					if auditErr := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, cached.Member, actor, repository.AuditProxyDenied); auditErr != nil {
 						return CachedOCIContent{}, auditErr
 					}
 					return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
+				} else {
+					h.Resolver.Metrics.ociCacheHit.Add(1)
+					h.Resolver.Metrics.recordCache(repositoryName, true)
+					if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, cached.Member, actor); err != nil {
+						return CachedOCIContent{}, err
+					}
+					return cached, nil
 				}
-				h.Resolver.Metrics.ociCacheHit.Add(1)
-				h.Resolver.Metrics.recordCache(repositoryName, true)
-				if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, cached.Member, actor); err != nil {
-					return CachedOCIContent{}, err
-				}
-				return cached, nil
 			}
 			if errors.Is(cacheErr, errOCICacheNegative) {
 				h.Resolver.Metrics.ociCacheHit.Add(1)
