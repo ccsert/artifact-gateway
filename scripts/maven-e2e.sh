@@ -96,7 +96,6 @@ create_group "$proxy_group" "$proxy_endpoint"
 
 repository_url="http://host.docker.internal:${GATEWAY_HTTP_PORT}/maven/${proxy_group}"
 coordinate="${GITEA_MAVEN_GROUP}:${GITEA_MAVEN_ARTIFACT}:${GITEA_MAVEN_VERSION}"
-latest_coordinate="${GITEA_MAVEN_GROUP}:${GITEA_MAVEN_ARTIFACT}:LATEST"
 maven_resource="${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/${GITEA_MAVEN_VERSION}/${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.pom"
 metadata_resource="${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/maven-metadata.xml"
 
@@ -122,11 +121,36 @@ expect_request_status 403 "$gateway_url/maven/${denied_group}/${maven_resource}"
 cat >"$workdir/settings.xml" <<EOF
 <settings><servers><server><id>gateway</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server><server><id>gateway-http</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server></servers><mirrors><mirror><id>gateway-http</id><mirrorOf>external:http:*</mirrorOf><url>${repository_url}</url></mirror></mirrors><profiles><profile><id>gateway</id><repositories><repository><id>gateway</id><url>${repository_url}</url></repository></repositories></profile></profiles><activeProfiles><activeProfile>gateway</activeProfile></activeProfiles></settings>
 EOF
+
+# Maven's stock dependency plugin is not part of the image and would be
+# downloaded from Central before the Gateway is contacted. Build a tiny local
+# plugin instead; its descriptor requests Maven's normal compile resolution.
+maven_plugin_repository="$workdir/maven-repository/gateway/fixture/maven-client-fixture/1.0.0"
+mkdir -p "$maven_plugin_repository"
+cp scripts/maven-client-fixture/plugin.xml "$maven_plugin_repository/plugin.xml"
+cat >"$maven_plugin_repository/maven-client-fixture-1.0.0.pom" <<'EOF'
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>gateway.fixture</groupId><artifactId>maven-client-fixture</artifactId><version>1.0.0</version><packaging>maven-plugin</packaging></project>
+EOF
+docker run --rm -v "$repo_root/scripts/maven-client-fixture:/fixture:ro" -v "$workdir:/work" \
+  --entrypoint sh maven:3.9-eclipse-temurin-21 -ec '
+    mkdir -p /work/classes/META-INF/maven
+    javac -cp "/usr/share/maven/lib/*" -d /work/classes /fixture/ResolveMojo.java
+    cp /fixture/plugin.xml /work/classes/META-INF/maven/plugin.xml
+    jar cf /work/maven-repository/gateway/fixture/maven-client-fixture/1.0.0/maven-client-fixture-1.0.0.jar -C /work/classes .
+  '
+cat >"$workdir/pom.xml" <<EOF
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>gateway.e2e</groupId><artifactId>gateway-client</artifactId><version>1.0.0</version><repositories><repository><id>gateway</id><url>${repository_url}</url></repository></repositories><dependencies><dependency><groupId>${GITEA_MAVEN_GROUP}</groupId><artifactId>${GITEA_MAVEN_ARTIFACT}</artifactId><version>LATEST</version></dependency></dependencies></project>
+EOF
 docker run --rm -v "$workdir:/work" -w /work maven:3.9-eclipse-temurin-21 \
-  mvn --batch-mode --settings settings.xml dependency:get -Dartifact="$latest_coordinate" >"$workdir/maven.log" 2>&1 || {
+  mvn --batch-mode --settings settings.xml -Dmaven.repo.local=/work/maven-repository \
+  gateway.fixture:maven-client-fixture:1.0.0:resolve-fixture >"$workdir/maven.log" 2>&1 || {
     cat "$workdir/maven.log" >&2
     exit 1
   }
+grep -Fq "Gateway fixture dependency resolution completed." "$workdir/maven.log" || {
+  cat "$workdir/maven.log" >&2
+  exit 1
+}
 
 # Maven resolved LATEST from upstream metadata. Read it again through the
 # Gateway to establish the metadata cache before the separate Gradle client.

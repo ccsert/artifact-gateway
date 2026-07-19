@@ -1,0 +1,32 @@
+<plugin>
+  <name>Gateway Maven client fixture</name>
+  <description>Local release-readiness client fixture.</description>
+  <groupId>gateway.fixture</groupId>
+  <artifactId>maven-client-fixture</artifactId>
+  <version>1.0.0</version>
+  <goalPrefix>gateway-fixture</goalPrefix>
+  <isolatedRealm>false</isolatedRealm>
+  <inheritedByDefault>true</inheritedByDefault>
+  <requiredJavaVersion>17</requiredJavaVersion>
+  <requiredMavenVersion>3.9.0</requiredMavenVersion>
+  <mojos>
+    <mojo>
+      <goal>resolve-fixture</goal>
+      <description>Resolve the project's compile dependencies.</description>
+      <requiresDependencyResolution>compile</requiresDependencyResolution>
+      <requiresDirectInvocation>false</requiresDirectInvocation>
+      <requiresProject>true</requiresProject>
+      <requiresReports>false</requiresReports>
+      <requiresOnline>false</requiresOnline>
+      <aggregator>false</aggregator>
+      <inheritedByDefault>true</inheritedByDefault>
+      <phase>validate</phase>
+      <implementation>com.artifactgateway.fixture.ResolveMojo</implementation>
+      <language>java</language>
+      <instantiationStrategy>per-lookup</instantiationStrategy>
+      <executionStrategy>once-per-session</executionStrategy>
+      <since>1.0.0</since>
+      <threadSafe>true</threadSafe>
+    </mojo>
+  </mojos>
+</plugin>
