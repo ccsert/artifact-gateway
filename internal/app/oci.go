@@ -124,6 +124,15 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	if h.Cache != nil && !hasHostedMember {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
 		if cacheErr == nil {
+			if !h.cacheSourceAllowed(content, members) {
+				h.Resolver.Metrics.ociProxyDenied.Add(1)
+				if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, content.Member, principal.Actor, repository.AuditProxyDenied); err != nil {
+					writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+					return
+				}
+				writeOCIError(w, http.StatusForbidden, "DENIED", "upstream repository is not allowed")
+				return
+			}
 			h.Resolver.Metrics.ociCacheHit.Add(1)
 			h.Resolver.Metrics.recordCache(repositoryName, true)
 			if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, content.Member, principal.Actor); err != nil {
@@ -153,6 +162,12 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		content, err = h.Cache.Do(workCtx, cacheKey, func(fetchCtx context.Context) (CachedOCIContent, error) {
 			if !hasHostedMember {
 				if cached, loadErr := h.Cache.Load(fetchCtx, cacheKey); loadErr == nil {
+					if !h.cacheSourceAllowed(cached, members) {
+						if auditErr := h.Resolver.RecordOCIFailure(fetchCtx, groupName, repositoryName, cached.Member, principal.Actor, repository.AuditProxyDenied); auditErr != nil {
+							return CachedOCIContent{}, auditErr
+						}
+						return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
+					}
 					return cached, nil
 				}
 			}
@@ -226,6 +241,12 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		if member.Type == repository.MemberProxy && hostedAttempted && h.Cache != nil {
 			cached, cacheErr := h.Cache.Load(ctx, cacheKey)
 			if cacheErr == nil {
+				if !h.cacheSourceAllowed(cached, members) {
+					if auditErr := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, cached.Member, actor, repository.AuditProxyDenied); auditErr != nil {
+						return CachedOCIContent{}, auditErr
+					}
+					return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
+				}
 				h.Resolver.Metrics.ociCacheHit.Add(1)
 				h.Resolver.Metrics.recordCache(repositoryName, true)
 				if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, cached.Member, actor); err != nil {
@@ -310,8 +331,12 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		}
 		content.ContentType = response.Header.Get("Content-Type")
 		content.Member = member.Name
+		content.Endpoint = member.Endpoint
 		content.cacheable = member.Type == repository.MemberProxy
 		return content, nil
+	}
+	if hadProxyDenied {
+		return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
 	}
 	if hadUpstreamFailure {
 		if digestInvalid {
@@ -322,10 +347,16 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		}
 		return CachedOCIContent{}, errOCIUpstreamOpen
 	}
-	if hadProxyDenied {
-		return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
-	}
 	return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
+}
+
+func (h OCIHandler) cacheSourceAllowed(content CachedOCIContent, members []repository.Member) bool {
+	for _, member := range members {
+		if member.Type == repository.MemberProxy && member.Name == content.Member && member.Endpoint == content.Endpoint {
+			return h.Cache.ProxyAllowed(member.Endpoint)
+		}
+	}
+	return false
 }
 
 func (h OCIHandler) authenticateProbe(w http.ResponseWriter, request *http.Request) {

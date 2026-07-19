@@ -365,7 +365,8 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 	authenticator.RepositoryReaders = map[string][]string{"maven": {"engineering/*"}}
 	objects := NewMemoryOCIObjectStore()
 	cache := NewDefaultMavenCache(objects, []string{strings.TrimPrefix(upstream.URL, "http://")}).WithQuota(NewCacheQuota(objects, map[string]int64{"engineering": 1}))
-	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: &Metrics{}, Cache: cache}
+	metrics := &Metrics{}
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: metrics, Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -375,6 +376,9 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 	}
 	if len(store.Audits) != 1 || store.Audits[0].Repository != "engineering" || store.Audits[0].Outcome != repository.AuditResolved {
 		t.Fatalf("audits = %#v", store.Audits)
+	}
+	if status := metrics.repository("engineering"); status.Requests != 1 || status.CacheMisses != 1 {
+		t.Fatalf("group metrics = %#v", status)
 	}
 }
 

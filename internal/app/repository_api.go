@@ -295,7 +295,7 @@ func (p Principal) CanReadRepository(repositoryName string, policyConfigured boo
 		return true
 	}
 	for _, pattern := range p.RepositoryPatterns {
-		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && (repositoryName == strings.TrimSuffix(pattern, "/*") || strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*"))) {
+		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*")) {
 			return true
 		}
 	}
@@ -304,6 +304,21 @@ func (p Principal) CanReadRepository(repositoryName string, policyConfigured boo
 
 func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
 	return principal.CanReadRepository(repositoryName, a.RepositoryReaders != nil)
+}
+
+// CanReadMavenRepository treats a Maven Group as its repository boundary.
+// `group/*` is accepted for compatibility with path-shaped grant policies,
+// without broadening OCI's wildcard semantics.
+func (a Authenticator) CanReadMavenRepository(principal Principal, groupName string) bool {
+	if a.CanReadRepository(principal, groupName) {
+		return true
+	}
+	for _, pattern := range principal.RepositoryPatterns {
+		if strings.TrimSuffix(pattern, "/*") == groupName && strings.HasSuffix(pattern, "/*") {
+			return true
+		}
+	}
+	return false
 }
 
 func (a Authenticator) IssueToken(actor string) string {

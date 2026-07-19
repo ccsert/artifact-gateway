@@ -152,6 +152,49 @@ func TestOCIDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
 	}
 }
 
+func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
+	content := []byte(`{"schemaVersion":2}`)
+	client := &countingOCIClient{content: content, status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"registry.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(request, "resolver-secret")
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request)
+	if first.Code != http.StatusOK || client.Calls() != 1 {
+		t.Fatalf("first response = %d calls=%d", first.Code, client.Calls())
+	}
+	cache.allowedProxyHost = map[string]struct{}{}
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, request)
+	if second.Code != http.StatusForbidden || client.Calls() != 1 {
+		t.Fatalf("revoked response = %d calls=%d", second.Code, client.Calls())
+	}
+	if len(store.Audits) != 2 || store.Audits[1].Outcome != repository.AuditProxyDenied {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
+func TestOCIDenylistedProxyOverridesEarlierUpstreamFailure(t *testing.T) {
+	client := &countingOCIClient{status: http.StatusInternalServerError}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "failing", Type: repository.MemberProxy, Endpoint: "https://allowed.example", Position: 0}, {Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 1}}})
+	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"allowed.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 2 || store.Audits[1].Outcome != repository.AuditProxyDenied {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
 func TestOCIHostedGroupServesTaggedManifest(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
 	digest := digestOf(manifest)

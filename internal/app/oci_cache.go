@@ -277,6 +277,7 @@ type cachedOCIIndex struct {
 	Repository  string    `json:"repository,omitempty"`
 	ContentType string    `json:"content_type,omitempty"`
 	Member      string    `json:"member,omitempty"`
+	Endpoint    string    `json:"endpoint,omitempty"`
 	Size        int64     `json:"size,omitempty"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Negative    bool      `json:"negative,omitempty"`
@@ -292,6 +293,7 @@ type CachedOCIContent struct {
 	Digest      string
 	ContentType string
 	Member      string
+	Endpoint    string
 	Repository  string
 	Object      string
 	Size        int64
@@ -433,7 +435,7 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: info.Size, store: c.store}, nil
+	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Object: index.Object, Size: info.Size, store: c.store}, nil
 }
 
 func (c *OCICache) verifyAndMigrateObject(ctx context.Context, index cachedOCIIndex) error {
@@ -514,7 +516,7 @@ func (c *OCICache) storeContentAdmitted(ctx context.Context, key string, content
 	} else if err := c.store.Put(ctx, object, content.Body); err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, Repository: content.Repository, ContentType: content.ContentType, Member: content.Member, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
+	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, Repository: content.Repository, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
 	if err != nil {
 		return err
 	}

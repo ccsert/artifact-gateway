@@ -77,7 +77,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	// details, not distinct repositories for authorization or operations.
 	repositoryName := groupName
 	h.Metrics.recordRequest(repositoryName)
-	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
+	if !h.Authenticator.CanReadMavenRepository(principal, repositoryName) {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
 			h.Metrics.failed.Add(1)
 			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -298,7 +298,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		if !h.cacheSourceAllowed(content, members) {
 			h.Cache.Invalidate(request.Context(), cacheKey)
 			h.Metrics.mavenCacheMiss.Add(1)
-			h.Metrics.recordCache(groupName+"/"+artifactPath, false)
+			h.Metrics.recordCache(groupName, false)
 			h.Metrics.mavenCacheInvalidated.Add(1)
 			return false
 		}
@@ -308,7 +308,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 			return true
 		}
 		h.Metrics.mavenCacheHit.Add(1)
-		h.Metrics.recordCache(groupName+"/"+artifactPath, true)
+		h.Metrics.recordCache(groupName, true)
 		h.Metrics.mavenNegativeHit.Add(1)
 		h.Metrics.failed.Add(1)
 		http.NotFound(w, request)
@@ -316,13 +316,13 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 	}
 	if err != nil {
 		h.Metrics.mavenCacheMiss.Add(1)
-		h.Metrics.recordCache(groupName+"/"+artifactPath, false)
+		h.Metrics.recordCache(groupName, false)
 		return false
 	}
 	if !h.cacheSourceAllowed(content, members) {
 		h.Cache.Invalidate(request.Context(), cacheKey)
 		h.Metrics.mavenCacheMiss.Add(1)
-		h.Metrics.recordCache(groupName+"/"+artifactPath, false)
+		h.Metrics.recordCache(groupName, false)
 		h.Metrics.mavenCacheInvalidated.Add(1)
 		h.Metrics.mavenProxyDenied.Add(1)
 		return false
@@ -333,7 +333,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		return true
 	}
 	h.Metrics.mavenCacheHit.Add(1)
-	h.Metrics.recordCache(groupName+"/"+artifactPath, true)
+	h.Metrics.recordCache(groupName, true)
 	h.Metrics.resolved.Add(1)
 	serveCachedMavenContent(w, request, artifactPath, content)
 	return true
