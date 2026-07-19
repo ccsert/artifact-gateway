@@ -26,9 +26,17 @@ assert_configuration_restored() {
 }
 
 before=$(configuration "$gateway_container")
+failure_output=$(mktemp)
+cleanup() { rm -f "$failure_output"; }
+trap cleanup EXIT
 
-if RELEASE_READINESS_FAIL_AFTER_TOKEN_ROTATION=1 ./scripts/release-readiness.sh; then
+if RELEASE_READINESS_FAIL_AFTER_TOKEN_ROTATION=1 ./scripts/release-readiness.sh >"$failure_output" 2>&1; then
   printf '%s\n' 'Injected release readiness failure unexpectedly succeeded.' >&2
+  exit 1
+fi
+if ! grep -Fqx 'Injected release readiness failure after token rotation.' "$failure_output"; then
+  printf '%s\n' 'Release readiness failed before the injected post-rotation failure.' >&2
+  cat "$failure_output" >&2
   exit 1
 fi
 assert_configuration_restored failed
