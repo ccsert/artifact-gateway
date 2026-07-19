@@ -143,6 +143,75 @@ func TestOCICacheServesVerifiedContentAndCoalescesConcurrentPulls(t *testing.T) 
 	}
 }
 
+func TestOCICacheStreamsLargeBlobAndServesCachedRange(t *testing.T) {
+	content := bytes.Repeat([]byte("0123456789abcdef"), 256*1024) // 4 MiB
+	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	path := "/v2/team/app/blobs/" + digestOf(content)
+
+	var wg sync.WaitGroup
+	for range 6 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			authorize(req, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != http.StatusOK || response.Body.Len() != len(content) {
+				t.Errorf("response = %d length=%d", response.Code, response.Body.Len())
+			}
+		}()
+	}
+	wg.Wait()
+	if got := client.Calls(); got != 1 {
+		t.Fatalf("upstream calls = %d, want 1", got)
+	}
+
+	client.status = http.StatusServiceUnavailable
+	rangeRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	rangeRequest.Header.Set("Range", "bytes=1048576-1048591")
+	authorize(rangeRequest, "resolver-secret")
+	ranged := httptest.NewRecorder()
+	handler.ServeHTTP(ranged, rangeRequest)
+	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != string(content[1048576:1048592]) || ranged.Header().Get("Content-Range") != "bytes 1048576-1048591/"+utoa(uint64(len(content))) {
+		t.Fatalf("range = %d headers=%v length=%d", ranged.Code, ranged.Header(), ranged.Body.Len())
+	}
+	if got := client.Calls(); got != 1 {
+		t.Fatalf("cached range made upstream calls = %d", got)
+	}
+}
+
+func TestOCIHostedSingleflightGivesEveryWaiterAnIndependentReader(t *testing.T) {
+	content := bytes.Repeat([]byte("hosted"), 1024)
+	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example", Position: 0}}})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: NewDefaultOCICache(NewMemoryOCIObjectStore(), nil)}
+
+	var wg sync.WaitGroup
+	for range 6 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+digestOf(content), nil)
+			authorize(req, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != http.StatusOK || response.Body.Len() != len(content) {
+				t.Errorf("response = %d length=%d", response.Code, response.Body.Len())
+			}
+		}()
+	}
+	wg.Wait()
+	if got := client.Calls(); got != 1 {
+		t.Fatalf("upstream calls = %d, want 1", got)
+	}
+}
+
 func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 	cache := NewOCICache(NewMemoryOCIObjectStore(), -time.Millisecond, time.Hour, time.Hour, []string{"trusted.example"})
 	key := cache.key("team", "team/app", ociManifest, "latest")

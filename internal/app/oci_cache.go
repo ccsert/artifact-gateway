@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,8 @@ const ociDistributedLockRenewInterval = ociDistributedLockLease / 3
 type OCIObjectStore interface {
 	Get(context.Context, string) ([]byte, error)
 	Put(context.Context, string, []byte) error
+	Open(context.Context, string) (io.ReadCloser, int64, error)
+	PutReader(context.Context, string, io.Reader, int64) error
 	Delete(context.Context, string) error
 	List(context.Context, string) ([]string, error)
 }
@@ -62,6 +66,22 @@ func (s *MemoryOCIObjectStore) Put(_ context.Context, key string, value []byte) 
 	defer s.mu.Unlock()
 	s.objects[key] = append([]byte(nil), value...)
 	return nil
+}
+
+func (s *MemoryOCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	value, err := s.Get(ctx, key)
+	if err != nil {
+		return nil, 0, err
+	}
+	return io.NopCloser(bytes.NewReader(value)), int64(len(value)), nil
+}
+
+func (s *MemoryOCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, _ int64) error {
+	data, err := io.ReadAll(value)
+	if err != nil {
+		return err
+	}
+	return s.Put(ctx, key, data)
 }
 
 func (s *MemoryOCIObjectStore) Delete(_ context.Context, key string) error {
@@ -121,7 +141,27 @@ func (s *S3OCIObjectStore) Get(ctx context.Context, key string) ([]byte, error) 
 }
 
 func (s *S3OCIObjectStore) Put(ctx context.Context, key string, value []byte) error {
-	_, err := s.client.PutObject(ctx, s.bucket, key, strings.NewReader(string(value)), int64(len(value)), minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	return s.PutReader(ctx, key, bytes.NewReader(value), int64(len(value)))
+}
+
+func (s *S3OCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, 0, err
+	}
+	info, err := object.Stat()
+	if err != nil {
+		_ = object.Close()
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, 0, errOCICacheMiss
+		}
+		return nil, 0, err
+	}
+	return object, info.Size, nil
+}
+
+func (s *S3OCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
+	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	return err
 }
 
@@ -145,6 +185,7 @@ type cachedOCIIndex struct {
 	Digest      string    `json:"digest,omitempty"`
 	ContentType string    `json:"content_type,omitempty"`
 	Member      string    `json:"member,omitempty"`
+	Size        int64     `json:"size,omitempty"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Negative    bool      `json:"negative,omitempty"`
 }
@@ -159,6 +200,10 @@ type CachedOCIContent struct {
 	Digest      string
 	ContentType string
 	Member      string
+	Object      string
+	Size        int64
+	tempPath    string
+	store       OCIObjectStore
 	cacheable   bool
 }
 
@@ -273,18 +318,20 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 	if index.Negative {
 		return CachedOCIContent{}, errOCICacheNegative
 	}
-	body, err := c.store.Get(ctx, index.Object)
+	body, size, err := c.store.Open(ctx, index.Object)
 	if err != nil {
 		_ = c.removeIndex(ctx, key, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	sum := sha256.Sum256(body)
-	if "sha256:"+hex.EncodeToString(sum[:]) != index.Digest {
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, body)
+	closeErr := body.Close()
+	if copyErr != nil || closeErr != nil || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
 		_ = c.removeIndex(ctx, key, index)
 		_ = c.store.Delete(ctx, index.Object)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	return CachedOCIContent{Body: body, Digest: index.Digest, ContentType: index.ContentType, Member: index.Member}, nil
+	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: size, store: c.store}, nil
 }
 
 func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {
@@ -293,14 +340,56 @@ func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIConte
 	})
 }
 
+// Stage stores a verified response without publishing an index. It is used for
+// coalesced Hosted responses: waiters need an independent reader, but Hosted
+// content must not become eligible for Proxy fallback cache reads.
+func (c *OCICache) Stage(ctx context.Context, content CachedOCIContent) (CachedOCIContent, error) {
+	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
+	if content.tempPath == "" {
+		return CachedOCIContent{}, errors.New("OCI staged content has no reader")
+	}
+	file, err := os.Open(content.tempPath)
+	if err != nil {
+		return CachedOCIContent{}, err
+	}
+	err = c.store.PutReader(ctx, object, file, content.Size)
+	closeErr := file.Close()
+	if err != nil {
+		return CachedOCIContent{}, err
+	}
+	if closeErr != nil {
+		return CachedOCIContent{}, closeErr
+	}
+	if err := c.markObjectForCollection(ctx, object); err != nil {
+		return CachedOCIContent{}, err
+	}
+	return CachedOCIContent{Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, Object: object, Size: content.Size, store: c.store}, nil
+}
+
 func (c *OCICache) storeContent(ctx context.Context, key string, content CachedOCIContent) error {
 	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
 	previous := c.loadIndex(ctx, key)
+	if content.Size == 0 && content.tempPath == "" {
+		content.Size = int64(len(content.Body))
+	}
 	// Publish the index only after its immutable, digest-addressed object exists.
-	if err := c.store.Put(ctx, object, content.Body); err != nil {
+	if content.tempPath != "" {
+		file, err := os.Open(content.tempPath)
+		if err != nil {
+			return err
+		}
+		err = c.store.PutReader(ctx, object, file, content.Size)
+		closeErr := file.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	} else if err := c.store.Put(ctx, object, content.Body); err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, ExpiresAt: time.Now().UTC().Add(c.ttl)})
+	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
 	if err != nil {
 		return err
 	}

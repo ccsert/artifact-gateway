@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -147,8 +147,19 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			}
 			if fetched.cacheable {
 				if cacheErr := h.Cache.Store(fetchCtx, cacheKey, fetched); cacheErr != nil {
+					fetched.cleanup()
 					return CachedOCIContent{}, cacheErr
 				}
+				fetched.cleanup()
+				return h.Cache.Load(fetchCtx, cacheKey)
+			}
+			if hasHostedMember && fetched.tempPath != "" {
+				staged, stageErr := h.Cache.Stage(fetchCtx, fetched)
+				fetched.cleanup()
+				if stageErr != nil {
+					return CachedOCIContent{}, stageErr
+				}
+				return staged, nil
 			}
 			return fetched, nil
 		})
@@ -168,6 +179,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
 		return
 	}
+	defer content.cleanup()
 	serveCachedOCIContent(w, request, reference, content)
 }
 
@@ -257,12 +269,16 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			continue
 		}
 		if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, member.Name, actor); err != nil {
+			content.cleanup()
 			return CachedOCIContent{}, err
 		}
 		if h.Cache != nil {
 			h.Cache.RecordUpstreamSuccess(ctx, member.Endpoint)
 		}
-		return CachedOCIContent{Body: content, Digest: response.Header.Get("Docker-Content-Digest"), ContentType: response.Header.Get("Content-Type"), Member: member.Name, cacheable: member.Type == repository.MemberProxy}, nil
+		content.ContentType = response.Header.Get("Content-Type")
+		content.Member = member.Name
+		content.cacheable = member.Type == repository.MemberProxy
+		return content, nil
 	}
 	if hadUpstreamFailure {
 		if digestInvalid {
@@ -295,29 +311,47 @@ func parseOCIPath(path string) (repositoryName, resource, reference string, ok b
 	return "", "", "", false
 }
 
-func verifyOCIResponse(response *http.Response, reference string) ([]byte, error) {
+func verifyOCIResponse(response *http.Response, reference string) (CachedOCIContent, error) {
 	expectedDigest := response.Header.Get("Docker-Content-Digest")
 	if strings.HasPrefix(reference, "sha256:") && expectedDigest != reference {
-		return nil, errors.New("upstream digest header does not match requested digest")
+		return CachedOCIContent{}, errors.New("upstream digest header does not match requested digest")
 	}
 	if !strings.HasPrefix(expectedDigest, "sha256:") {
-		return nil, errors.New("upstream response does not include a sha256 digest")
+		return CachedOCIContent{}, errors.New("upstream response does not include a sha256 digest")
 	}
 	if response.Request.Method == http.MethodHead {
-		return nil, nil
+		if err := response.Body.Close(); err != nil {
+			return CachedOCIContent{}, err
+		}
+		return CachedOCIContent{Digest: expectedDigest}, nil
+	}
+	file, err := os.CreateTemp("", "artifact-gateway-oci-*")
+	if err != nil {
+		return CachedOCIContent{}, err
 	}
 	hash := sha256.New()
-	content, err := io.ReadAll(io.TeeReader(response.Body, hash))
+	size, err := io.Copy(io.MultiWriter(file, hash), response.Body)
+	closeResponseErr := response.Body.Close()
+	closeFileErr := file.Close()
 	if err != nil {
-		return nil, err
+		_ = os.Remove(file.Name())
+		return CachedOCIContent{}, err
 	}
-	if err := response.Body.Close(); err != nil {
-		return nil, err
+	if closeResponseErr != nil || closeFileErr != nil {
+		_ = os.Remove(file.Name())
+		return CachedOCIContent{}, errors.Join(closeResponseErr, closeFileErr)
 	}
 	if "sha256:"+hex.EncodeToString(hash.Sum(nil)) != expectedDigest {
-		return nil, errors.New("upstream body digest does not match requested digest")
+		_ = os.Remove(file.Name())
+		return CachedOCIContent{}, errors.New("upstream body digest does not match requested digest")
 	}
-	return content, nil
+	return CachedOCIContent{Digest: expectedDigest, Size: size, tempPath: file.Name()}, nil
+}
+
+func (content CachedOCIContent) cleanup() {
+	if content.tempPath != "" {
+		_ = os.Remove(content.tempPath)
+	}
 }
 
 func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, reference string, content CachedOCIContent) {
@@ -326,15 +360,114 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 	}
 	w.Header().Set("Docker-Content-Digest", content.Digest)
 	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
-	if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
-		http.ServeContent(w, request, reference, time.Time{}, bytes.NewReader(content.Body))
+	reader, size, err := content.open(request.Context())
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
 		return
 	}
-	w.Header().Set("Content-Length", utoa(uint64(len(content.Body))))
+	defer func() { _ = reader.Close() }()
+	if content.Size > 0 {
+		size = content.Size
+	}
+	if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
+		serveOCIRange(w, request, reader, size)
+		return
+	}
+	w.Header().Set("Content-Length", utoa(uint64(size)))
 	w.WriteHeader(http.StatusOK)
 	if request.Method != http.MethodHead {
-		_, _ = w.Write(content.Body)
+		_, _ = io.Copy(w, reader)
 	}
+}
+
+func (content CachedOCIContent) open(ctx context.Context) (io.ReadCloser, int64, error) {
+	if content.tempPath != "" {
+		file, err := os.Open(content.tempPath)
+		if err != nil {
+			return nil, 0, err
+		}
+		info, err := file.Stat()
+		if err != nil {
+			_ = file.Close()
+			return nil, 0, err
+		}
+		return file, info.Size(), nil
+	}
+	if content.Object != "" {
+		if content.store == nil {
+			return nil, 0, errors.New("cached object has no object store")
+		}
+		return content.store.Open(ctx, content.Object)
+	}
+	return io.NopCloser(strings.NewReader(string(content.Body))), int64(len(content.Body)), nil
+}
+
+func serveOCIRange(w http.ResponseWriter, request *http.Request, reader io.Reader, size int64) {
+	rangeHeader := strings.TrimPrefix(request.Header.Get("Range"), "bytes=")
+	parts := strings.SplitN(rangeHeader, "-", 2)
+	if len(parts) != 2 || strings.Contains(rangeHeader, ",") {
+		w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	start, end := int64(0), size-1
+	if parts[0] == "" {
+		suffix, err := parseOCIByte(parts[1])
+		if err != nil || suffix <= 0 {
+			w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		if suffix < size {
+			start = size - suffix
+		}
+	} else {
+		value, err := parseOCIByte(parts[0])
+		if err != nil || value >= size {
+			w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		start = value
+		if parts[1] != "" {
+			end, err = parseOCIByte(parts[1])
+			if err != nil || end < start {
+				w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
+				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			if end >= size {
+				end = size - 1
+			}
+		}
+	}
+	if _, err := io.CopyN(io.Discard, reader, start); err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
+		return
+	}
+	length := end - start + 1
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Range", "bytes "+utoa(uint64(start))+"-"+utoa(uint64(end))+"/"+utoa(uint64(size)))
+	w.Header().Set("Content-Length", utoa(uint64(length)))
+	w.WriteHeader(http.StatusPartialContent)
+	_, _ = io.CopyN(w, reader, length)
+}
+
+func parseOCIByte(value string) (int64, error) {
+	if value == "" {
+		return 0, errors.New("empty range")
+	}
+	var result int64
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return 0, errors.New("invalid range")
+		}
+		if result > (1<<63-1)/10 {
+			return 0, errors.New("range overflow")
+		}
+		result = result*10 + int64(char-'0')
+	}
+	return result, nil
 }
 
 func writeOCIChallenge(w http.ResponseWriter, request *http.Request) {
