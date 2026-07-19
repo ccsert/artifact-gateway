@@ -28,6 +28,12 @@ type rangeRecordingOCIStore struct {
 	offset int64
 	length int64
 	calls  int
+	opens  int
+}
+
+func (s *rangeRecordingOCIStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	s.opens++
+	return s.MemoryOCIObjectStore.Open(ctx, key)
 }
 
 func (s *rangeRecordingOCIStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
@@ -216,6 +222,7 @@ func TestOCICacheUsesObjectStoreRangeReadForHighOffset(t *testing.T) {
 	if first.Code != http.StatusOK {
 		t.Fatalf("initial response = %d", first.Code)
 	}
+	objectStore.opens = 0
 
 	const offset = 4*1024*1024 - 16
 	rangeRequest := httptest.NewRequest(http.MethodGet, path, nil)
@@ -226,8 +233,8 @@ func TestOCICacheUsesObjectStoreRangeReadForHighOffset(t *testing.T) {
 	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != string(content[offset:]) {
 		t.Fatalf("range = %d body length=%d", ranged.Code, ranged.Body.Len())
 	}
-	if objectStore.calls != 1 || objectStore.offset != offset || objectStore.length != 16 {
-		t.Fatalf("range reads = calls:%d offset:%d length:%d", objectStore.calls, objectStore.offset, objectStore.length)
+	if objectStore.calls != 1 || objectStore.offset != offset || objectStore.length != 16 || objectStore.opens != 0 {
+		t.Fatalf("range reads = calls:%d offset:%d length:%d full-opens:%d", objectStore.calls, objectStore.offset, objectStore.length, objectStore.opens)
 	}
 }
 

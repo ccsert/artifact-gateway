@@ -36,11 +36,18 @@ const ociDistributedLockRenewInterval = ociDistributedLockLease / 3
 type OCIObjectStore interface {
 	Get(context.Context, string) ([]byte, error)
 	Put(context.Context, string, []byte) error
+	Stat(context.Context, string) (OCIObjectInfo, error)
 	Open(context.Context, string) (io.ReadCloser, int64, error)
 	OpenRange(context.Context, string, int64, int64) (io.ReadCloser, int64, error)
 	PutReader(context.Context, string, io.Reader, int64) error
+	PutVerifiedReader(context.Context, string, io.Reader, int64, string) error
 	Delete(context.Context, string) error
 	List(context.Context, string) ([]string, error)
+}
+
+type OCIObjectInfo struct {
+	Size   int64
+	Digest string
 }
 
 type MemoryOCIObjectStore struct {
@@ -77,6 +84,15 @@ func (s *MemoryOCIObjectStore) Open(ctx context.Context, key string) (io.ReadClo
 	return io.NopCloser(bytes.NewReader(value)), int64(len(value)), nil
 }
 
+func (s *MemoryOCIObjectStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
+	value, err := s.Get(ctx, key)
+	if err != nil {
+		return OCIObjectInfo{}, err
+	}
+	sum := sha256.Sum256(value)
+	return OCIObjectInfo{Size: int64(len(value)), Digest: "sha256:" + hex.EncodeToString(sum[:])}, nil
+}
+
 func (s *MemoryOCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
 	value, err := s.Get(ctx, key)
 	if err != nil {
@@ -95,6 +111,10 @@ func (s *MemoryOCIObjectStore) PutReader(ctx context.Context, key string, value 
 		return err
 	}
 	return s.Put(ctx, key, data)
+}
+
+func (s *MemoryOCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
+	return s.PutReader(ctx, key, value, size)
 }
 
 func (s *MemoryOCIObjectStore) Delete(_ context.Context, key string) error {
@@ -173,6 +193,26 @@ func (s *S3OCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser,
 	return object, info.Size, nil
 }
 
+func (s *S3OCIObjectStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
+	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return OCIObjectInfo{}, errOCICacheMiss
+		}
+		return OCIObjectInfo{}, err
+	}
+	return OCIObjectInfo{Size: info.Size, Digest: ociObjectDigestMetadata(info.UserMetadata)}, nil
+}
+
+func ociObjectDigestMetadata(metadata map[string]string) string {
+	for key, value := range metadata {
+		if strings.EqualFold(key, "Artifact-Gateway-Sha256") || strings.EqualFold(key, "X-Amz-Meta-Artifact-Gateway-Sha256") {
+			return value
+		}
+	}
+	return ""
+}
+
 func (s *S3OCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
 	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
@@ -197,6 +237,11 @@ func (s *S3OCIObjectStore) OpenRange(ctx context.Context, key string, offset, le
 
 func (s *S3OCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
 	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	return err
+}
+
+func (s *S3OCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
+	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream", UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}})
 	return err
 }
 
@@ -353,34 +398,16 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 	if index.Negative {
 		return CachedOCIContent{}, errOCICacheNegative
 	}
-	size, err := c.verifyObject(ctx, index)
+	info, err := c.store.Stat(ctx, index.Object)
 	if err != nil {
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: size, store: c.store}, nil
-}
-
-// verifyObject streams the immutable object before serving it, so a cache
-// index never authorizes a same-size replacement with a different digest.
-func (c *OCICache) verifyObject(ctx context.Context, index cachedOCIIndex) (int64, error) {
-	body, size, err := c.store.Open(ctx, index.Object)
-	if err != nil {
-		return 0, err
+	if info.Size != index.Size || info.Digest != index.Digest {
+		_ = c.removeIndex(ctx, key, encoded, index)
+		return CachedOCIContent{}, errOCICacheMiss
 	}
-	hash := sha256.New()
-	written, copyErr := io.Copy(hash, body)
-	closeErr := body.Close()
-	if copyErr != nil || closeErr != nil {
-		return 0, errors.Join(copyErr, closeErr)
-	}
-	if written != size || (index.Size > 0 && size != index.Size) {
-		return 0, errors.New("OCI cached object size does not match index")
-	}
-	if "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
-		return 0, errors.New("OCI cached object digest does not match index")
-	}
-	return size, nil
+	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: info.Size, store: c.store}, nil
 }
 
 func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {
@@ -401,7 +428,7 @@ func (c *OCICache) Stage(ctx context.Context, content CachedOCIContent) (CachedO
 	if err != nil {
 		return CachedOCIContent{}, err
 	}
-	err = c.store.PutReader(ctx, object, file, content.Size)
+	err = c.store.PutVerifiedReader(ctx, object, file, content.Size, content.Digest)
 	closeErr := file.Close()
 	if err != nil {
 		return CachedOCIContent{}, err
@@ -427,7 +454,7 @@ func (c *OCICache) storeContent(ctx context.Context, key string, content CachedO
 		if err != nil {
 			return err
 		}
-		err = c.store.PutReader(ctx, object, file, content.Size)
+		err = c.store.PutVerifiedReader(ctx, object, file, content.Size, content.Digest)
 		closeErr := file.Close()
 		if err != nil {
 			return err

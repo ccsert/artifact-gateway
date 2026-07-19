@@ -367,21 +367,22 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 	}
 	w.Header().Set("Docker-Content-Digest", content.Digest)
 	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
-	reader, size, err := content.open(request.Context())
-	if err != nil {
-		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
-		return
-	}
-	if content.Size > 0 {
-		size = content.Size
-	}
 	if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
-		_ = reader.Close()
+		size := content.Size
+		if size == 0 {
+			reader, actualSize, err := content.open(request.Context())
+			if err != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
+				return
+			}
+			_ = reader.Close()
+			size = actualSize
+		}
 		start, end, ok := parseOCIRange(w, request, size)
 		if !ok {
 			return
 		}
-		reader, _, err = content.openRange(request.Context(), start, end-start+1)
+		reader, _, err := content.openRange(request.Context(), start, end-start+1)
 		if err != nil {
 			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
 			return
@@ -394,6 +395,14 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 		w.WriteHeader(http.StatusPartialContent)
 		_, _ = io.CopyN(w, reader, length)
 		return
+	}
+	reader, size, err := content.open(request.Context())
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
+		return
+	}
+	if content.Size > 0 {
+		size = content.Size
 	}
 	defer func() { _ = reader.Close() }()
 	w.Header().Set("Content-Length", utoa(uint64(size)))
