@@ -295,7 +295,7 @@ func (p Principal) CanReadRepository(repositoryName string, policyConfigured boo
 		return true
 	}
 	for _, pattern := range p.RepositoryPatterns {
-		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*")) {
+		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && (repositoryName == strings.TrimSuffix(pattern, "/*") || strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*"))) {
 			return true
 		}
 	}

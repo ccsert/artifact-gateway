@@ -73,7 +73,9 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.NotFound(w, request)
 		return
 	}
-	repositoryName := groupName + "/" + artifactPath
+	// A Maven Group is the repository boundary. Artifact paths are request
+	// details, not distinct repositories for authorization or operations.
+	repositoryName := groupName
 	h.Metrics.recordRequest(repositoryName)
 	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
@@ -137,6 +139,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	hadFailure := false
+	hadProxyDenied := false
 	var notFoundProxy repository.Member
 	for index, member := range members {
 		if member.Type == repository.MemberProxy && h.Cache != nil {
@@ -145,6 +148,12 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			}
 			if !h.Cache.ProxyAllowed(member.Endpoint) {
 				h.Metrics.mavenProxyDenied.Add(1)
+				hadProxyDenied = true
+				if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditProxyDenied); err != nil {
+					h.Metrics.failed.Add(1)
+					http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+					return
+				}
 				continue
 			}
 			if !h.Cache.UpstreamAllowed(member.Endpoint) {
@@ -269,6 +278,10 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	h.Metrics.failed.Add(1)
+	if hadProxyDenied {
+		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
+		return
+	}
 	if hadFailure {
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return
@@ -468,10 +481,10 @@ func (h MavenHandler) authenticate(request *http.Request) (Principal, bool) {
 }
 
 func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, memberName, actor string, outcome repository.AuditOutcome) error {
-	if err := h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: artifactPath, MemberName: memberName, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()}); err != nil {
+	if err := h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: groupName, MemberName: memberName, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()}); err != nil {
 		return err
 	}
-	h.Metrics.recordAudit(groupName+"/"+artifactPath, outcome)
+	h.Metrics.recordAudit(groupName, outcome)
 	return nil
 }
 

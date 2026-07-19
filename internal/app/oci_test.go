@@ -135,6 +135,23 @@ func TestOCIRejectsDigestMismatchAndSupportsHead(t *testing.T) {
 	}
 }
 
+func TestOCIDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
+	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"allowed.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: GiteaClient{}, Authenticator: testAuthenticator(), Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "DENIED") {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditProxyDenied || store.Audits[0].Repository != "team/app" {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
 func TestOCIHostedGroupServesTaggedManifest(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
 	digest := digestOf(manifest)

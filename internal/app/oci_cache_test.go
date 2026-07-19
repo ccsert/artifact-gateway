@@ -363,7 +363,7 @@ func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 	authorize(req, "resolver-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
-	if response.Code != http.StatusNotFound || client.Calls() != 0 {
+	if response.Code != http.StatusForbidden || client.Calls() != 0 {
 		t.Fatalf("untrusted proxy response = %d, calls = %d", response.Code, client.Calls())
 	}
 }
@@ -449,7 +449,7 @@ func TestOCICacheRecordsProxyWhitelistDenial(t *testing.T) {
 	authorize(req, "resolver-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
-	if response.Code != http.StatusNotFound || client.Calls() != 0 {
+	if response.Code != http.StatusForbidden || client.Calls() != 0 {
 		t.Fatalf("response = %d calls=%d", response.Code, client.Calls())
 	}
 	metricResponse := httptest.NewRecorder()

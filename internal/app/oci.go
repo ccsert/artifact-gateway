@@ -220,6 +220,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 	hadUpstreamFailure := false
 	lastUpstreamStatus := 0
 	digestInvalid := false
+	hadProxyDenied := false
 	hostedAttempted := false
 	for _, member := range members {
 		if member.Type == repository.MemberProxy && hostedAttempted && h.Cache != nil {
@@ -246,6 +247,10 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		}
 		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.ProxyAllowed(member.Endpoint) {
 			h.Resolver.Metrics.ociProxyDenied.Add(1)
+			hadProxyDenied = true
+			if err := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditProxyDenied); err != nil {
+				return CachedOCIContent{}, err
+			}
 			continue
 		}
 		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.UpstreamAllowed(ctx, member.Endpoint) {
@@ -316,6 +321,9 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			return CachedOCIContent{}, &ociFetchError{http.StatusBadGateway, "UNKNOWN", "upstream registry returned an error"}
 		}
 		return CachedOCIContent{}, errOCIUpstreamOpen
+	}
+	if hadProxyDenied {
+		return CachedOCIContent{}, &ociFetchError{http.StatusForbidden, "DENIED", "upstream repository is not allowed"}
 	}
 	return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
 }

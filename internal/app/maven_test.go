@@ -122,7 +122,7 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	r.SetBasicAuth("maven", "resolver-secret")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
-	if w.Code != http.StatusNotFound || client.Calls() != 1 {
+	if w.Code != http.StatusForbidden || client.Calls() != 1 {
 		t.Fatalf("revoked negative response=%d calls=%d", w.Code, client.Calls())
 	}
 	cache.allowedProxyHost = map[string]struct{}{"repo.example": {}}
@@ -131,7 +131,7 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	disallowedRequest.SetBasicAuth("maven", "resolver-secret")
 	disallowedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(disallowedResponse, disallowedRequest)
-	if disallowedResponse.Code != http.StatusNotFound || client.Calls() != 1 {
+	if disallowedResponse.Code != http.StatusForbidden || client.Calls() != 1 {
 		t.Fatalf("disallowed proxy response=%d calls=%d", disallowedResponse.Code, client.Calls())
 	}
 
@@ -173,7 +173,7 @@ func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *
 	cache.allowedProxyHost = map[string]struct{}{}
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusNotFound || client.Calls() != 2 {
+	if response.Code != http.StatusForbidden || client.Calls() != 2 {
 		t.Fatalf("revoked cached source response=%d calls=%d", response.Code, client.Calls())
 	}
 	if _, err := cache.Load(context.Background(), cache.key("engineering", "com/example/library/1.0/library-1.0.pom")); err == nil {
@@ -352,6 +352,44 @@ func TestMavenRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditAccessDenied || store.Audits[0].Actor != "maven" {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
+func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("artifact")) }))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: upstream.URL, Position: 0}}})
+	authenticator := testAuthenticator()
+	authenticator.RepositoryReaders = map[string][]string{"maven": {"engineering/*"}}
+	objects := NewMemoryOCIObjectStore()
+	cache := NewDefaultMavenCache(objects, []string{strings.TrimPrefix(upstream.URL, "http://")}).WithQuota(NewCacheQuota(objects, map[string]int64{"engineering": 1}))
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: &Metrics{}, Cache: cache}
+	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "artifact" {
+		t.Fatalf("response = %d %q", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Repository != "engineering" || store.Audits[0].Outcome != repository.AuditResolved {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
+func TestMavenDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{}, Metrics: &Metrics{}, Cache: NewDefaultMavenCache(NewMemoryOCIObjectStore(), []string{"allowed.example"})}
+	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditProxyDenied || store.Audits[0].Repository != "engineering" {
 		t.Fatalf("audits = %#v", store.Audits)
 	}
 }
