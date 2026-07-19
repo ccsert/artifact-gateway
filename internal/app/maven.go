@@ -74,6 +74,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	repositoryName := groupName + "/" + artifactPath
+	h.Metrics.recordRequest(repositoryName)
 	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
 			h.Metrics.failed.Add(1)
@@ -273,6 +274,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		if !h.cacheSourceAllowed(content, members) {
 			h.Cache.Invalidate(request.Context(), cacheKey)
 			h.Metrics.mavenCacheMiss.Add(1)
+			h.Metrics.recordCache(groupName+"/"+artifactPath, false)
 			h.Metrics.mavenCacheInvalidated.Add(1)
 			return false
 		}
@@ -282,6 +284,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 			return true
 		}
 		h.Metrics.mavenCacheHit.Add(1)
+		h.Metrics.recordCache(groupName+"/"+artifactPath, true)
 		h.Metrics.mavenNegativeHit.Add(1)
 		h.Metrics.failed.Add(1)
 		http.NotFound(w, request)
@@ -289,11 +292,13 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 	}
 	if err != nil {
 		h.Metrics.mavenCacheMiss.Add(1)
+		h.Metrics.recordCache(groupName+"/"+artifactPath, false)
 		return false
 	}
 	if !h.cacheSourceAllowed(content, members) {
 		h.Cache.Invalidate(request.Context(), cacheKey)
 		h.Metrics.mavenCacheMiss.Add(1)
+		h.Metrics.recordCache(groupName+"/"+artifactPath, false)
 		h.Metrics.mavenCacheInvalidated.Add(1)
 		h.Metrics.mavenProxyDenied.Add(1)
 		return false
@@ -304,6 +309,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 		return true
 	}
 	h.Metrics.mavenCacheHit.Add(1)
+	h.Metrics.recordCache(groupName+"/"+artifactPath, true)
 	h.Metrics.resolved.Add(1)
 	serveCachedMavenContent(w, request, artifactPath, content)
 	return true
@@ -451,7 +457,11 @@ func (h MavenHandler) authenticate(request *http.Request) (Principal, bool) {
 }
 
 func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, memberName, actor string, outcome repository.AuditOutcome) error {
-	return h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: artifactPath, MemberName: memberName, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()})
+	if err := h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: artifactPath, MemberName: memberName, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()}); err != nil {
+		return err
+	}
+	h.Metrics.recordAudit(groupName+"/"+artifactPath, outcome)
+	return nil
 }
 
 func parseMavenPath(path string) (groupName, artifactPath string, ok bool) {

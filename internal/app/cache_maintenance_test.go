@@ -78,3 +78,55 @@ func TestCacheOperationsRequiresAdminAndReturnsStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRepositoryOperationsReportsRepositoryMetrics(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objectStore := NewMemoryOCIObjectStore()
+	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, []string{"registry.example"})
+	client := &countingOCIClient{content: []byte(`{"schemaVersion":2}`), status: http.StatusOK}
+	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, nil, NewCacheMaintenance(objectStore, cache), client)
+
+	for range 2 {
+		request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+		authorize(request, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("artifact status = %d body=%s", response.Code, response.Body.String())
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/operations/repositories?repository=team/app", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("admin status = %d body=%s", response.Code, response.Body.String())
+	}
+	var status RepositoryOperationsStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Metrics.Requests != 2 || status.Metrics.CacheHits == 0 || status.Metrics.CacheMisses == 0 || status.HitRate <= 0 || status.GatewayCache.ObjectCount != 1 {
+		t.Fatalf("status = %#v", status)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/operations/repositories", nil)
+	authorize(request, "admin-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("missing repository status = %d", response.Code)
+	}
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/operations/repositories?repository=team/app", nil)
+	authorize(request, "resolver-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("resolver status = %d", response.Code)
+	}
+}

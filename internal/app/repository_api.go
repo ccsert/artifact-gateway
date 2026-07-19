@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -142,6 +143,7 @@ func (r Resolver) audit(ctx context.Context, groupName, repositoryName, memberNa
 	if err := r.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: repositoryName, MemberName: memberName, Outcome: outcome, Actor: actor, OccurredAt: time.Now().UTC()}); err != nil {
 		return fmt.Errorf("record resolver audit: %w", err)
 	}
+	r.Metrics.recordAudit(repositoryName, outcome)
 	return nil
 }
 
@@ -160,6 +162,65 @@ type Metrics struct {
 	mavenNegativeHit      atomic.Uint64
 	mavenProxyDenied      atomic.Uint64
 	mavenCacheInvalidated atomic.Uint64
+
+	mu           sync.RWMutex
+	repositories map[string]RepositoryMetrics
+}
+
+const maxRepositoryMetrics = 1000
+
+// RepositoryMetrics is the bounded, in-process operational view for one
+// repository. The gateway's audit log remains the durable request history.
+type RepositoryMetrics struct {
+	Requests       uint64 `json:"requests"`
+	UpstreamErrors uint64 `json:"upstream_errors"`
+	CacheHits      uint64 `json:"cache_hits"`
+	CacheMisses    uint64 `json:"cache_misses"`
+}
+
+func (m *Metrics) recordAudit(repositoryName string, outcome repository.AuditOutcome) {
+	m.updateRepository(repositoryName, func(metric *RepositoryMetrics) {
+		if outcome == repository.AuditUpstreamError {
+			metric.UpstreamErrors++
+		}
+	})
+}
+
+func (m *Metrics) recordRequest(repositoryName string) {
+	m.updateRepository(repositoryName, func(metric *RepositoryMetrics) { metric.Requests++ })
+}
+
+func (m *Metrics) recordCache(repositoryName string, hit bool) {
+	m.updateRepository(repositoryName, func(metric *RepositoryMetrics) {
+		if hit {
+			metric.CacheHits++
+		} else {
+			metric.CacheMisses++
+		}
+	})
+}
+
+func (m *Metrics) updateRepository(repositoryName string, update func(*RepositoryMetrics)) {
+	if repositoryName == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.repositories == nil {
+		m.repositories = make(map[string]RepositoryMetrics)
+	}
+	metric, exists := m.repositories[repositoryName]
+	if !exists && len(m.repositories) >= maxRepositoryMetrics {
+		return
+	}
+	update(&metric)
+	m.repositories[repositoryName] = metric
+}
+
+func (m *Metrics) repository(repositoryName string) RepositoryMetrics {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.repositories[repositoryName]
 }
 
 func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
@@ -317,6 +378,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
 		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
+		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
@@ -343,6 +405,48 @@ func (h cacheOperationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "unable to inspect cache")
 		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+type RepositoryOperationsStatus struct {
+	Repository   string                 `json:"repository"`
+	Metrics      RepositoryMetrics      `json:"metrics"`
+	HitRate      float64                `json:"hit_rate"`
+	GatewayCache CacheMaintenanceStatus `json:"gateway_cache"`
+}
+
+type repositoryOperationsHandler struct {
+	maintenance   *CacheMaintenance
+	metrics       *Metrics
+	authenticator Authenticator
+}
+
+func (h repositoryOperationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
+		return
+	}
+	if !principal.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	repositoryName := strings.TrimSpace(r.URL.Query().Get("repository"))
+	if repositoryName == "" {
+		writeError(w, http.StatusBadRequest, "invalid_repository", "repository is required")
+		return
+	}
+	cache, err := h.maintenance.Status(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "unable to inspect cache")
+		return
+	}
+	metrics := h.metrics.repository(repositoryName)
+	denominator := metrics.CacheHits + metrics.CacheMisses
+	status := RepositoryOperationsStatus{Repository: repositoryName, Metrics: metrics, GatewayCache: cache}
+	if denominator > 0 {
+		status.HitRate = float64(metrics.CacheHits) / float64(denominator)
 	}
 	writeJSON(w, http.StatusOK, status)
 }

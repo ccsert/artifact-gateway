@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -223,6 +224,23 @@ func TestMetricsReportResolverOutcomes(t *testing.T) {
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	if !strings.Contains(metrics.Body.String(), `outcome="resolved"} 1`) {
 		t.Fatalf("metrics = %s", metrics.Body.String())
+	}
+}
+
+func TestRepositoryMetricsUseCanonicalNamesAndBoundCardinality(t *testing.T) {
+	metrics := &Metrics{}
+	metrics.recordRequest("engineering/com/example/library/1.0/library-1.0.jar")
+	metrics.recordCache("engineering/com/example/library/1.0/library-1.0.jar", true)
+	metrics.recordAudit("engineering/com/example/library/1.0/library-1.0.jar", repository.AuditUpstreamError)
+	metric := metrics.repository("engineering/com/example/library/1.0/library-1.0.jar")
+	if metric.Requests != 1 || metric.CacheHits != 1 || metric.UpstreamErrors != 1 {
+		t.Fatalf("metric = %#v", metric)
+	}
+	for i := 0; i < maxRepositoryMetrics+1; i++ {
+		metrics.recordRequest(fmt.Sprintf("team/app-%d", i))
+	}
+	if len(metrics.repositories) != maxRepositoryMetrics {
+		t.Fatalf("repository metric count = %d", len(metrics.repositories))
 	}
 }
 

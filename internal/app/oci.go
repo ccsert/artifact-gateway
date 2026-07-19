@@ -86,6 +86,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
+	h.Resolver.Metrics.recordRequest(repositoryName)
 	groupName := strings.SplitN(repositoryName, "/", 2)[0]
 	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
 		if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, "", principal.Actor, repository.AuditAccessDenied); err != nil {
@@ -124,6 +125,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
 		if cacheErr == nil {
 			h.Resolver.Metrics.ociCacheHit.Add(1)
+			h.Resolver.Metrics.recordCache(repositoryName, true)
 			if err := h.Resolver.RecordOCIResolution(request.Context(), groupName, repositoryName, content.Member, principal.Actor); err != nil {
 				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
 				return
@@ -133,12 +135,14 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 		if errors.Is(cacheErr, errOCICacheNegative) {
 			h.Resolver.Metrics.ociCacheHit.Add(1)
+			h.Resolver.Metrics.recordCache(repositoryName, true)
 			h.Resolver.Metrics.ociNegativeHit.Add(1)
 			h.Resolver.RecordOCIRequestFailure()
 			writeOCIError(w, http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
 			return
 		}
 		h.Resolver.Metrics.ociCacheMiss.Add(1)
+		h.Resolver.Metrics.recordCache(repositoryName, false)
 	}
 	var content CachedOCIContent
 	if request.Method == http.MethodGet && h.Cache != nil {
@@ -217,6 +221,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			cached, cacheErr := h.Cache.Load(ctx, cacheKey)
 			if cacheErr == nil {
 				h.Resolver.Metrics.ociCacheHit.Add(1)
+				h.Resolver.Metrics.recordCache(repositoryName, true)
 				if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, cached.Member, actor); err != nil {
 					return CachedOCIContent{}, err
 				}
@@ -224,10 +229,12 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			}
 			if errors.Is(cacheErr, errOCICacheNegative) {
 				h.Resolver.Metrics.ociCacheHit.Add(1)
+				h.Resolver.Metrics.recordCache(repositoryName, true)
 				h.Resolver.Metrics.ociNegativeHit.Add(1)
 				return CachedOCIContent{}, &ociFetchError{http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry"}
 			}
 			h.Resolver.Metrics.ociCacheMiss.Add(1)
+			h.Resolver.Metrics.recordCache(repositoryName, false)
 		}
 		if member.Type == repository.MemberHosted {
 			hostedAttempted = true
