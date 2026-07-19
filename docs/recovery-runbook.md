@@ -13,7 +13,7 @@ the local stack started by `make up`. The scripts keep backups under
 ## Drill
 
 1. Record the UTC start time and run `scripts/backup-drill.sh`.
-2. Confirm both backup files pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
+2. Confirm the PostgreSQL dump and MinIO tar archive pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
 3. Make a reversible test change by creating a disposable Group or by fetching a
    Proxy artifact, then record the expected audit entry and cached object.
 4. Record the UTC recovery start time and run `scripts/restore-drill.sh <backup-dir>`.

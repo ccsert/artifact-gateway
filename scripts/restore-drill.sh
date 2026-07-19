@@ -7,8 +7,10 @@ shasum -a 256 --check "$backup_dir/SHA256SUMS"
 docker compose --env-file .env -f compose.yml stop gateway
 docker compose --env-file .env -f compose.yml exec -T postgres \
   pg_restore -U gateway -d gateway --clean --if-exists <"$backup_dir/gateway.dump"
-docker compose --env-file .env -f compose.yml exec -T minio \
-  sh -ec 'rm -rf /data/* && tar -C /data -xzf -' <"$backup_dir/minio-data.tar.gz"
+minio_container=$(docker compose --env-file .env -f compose.yml ps -q minio)
+test -n "$minio_container"
+docker compose --env-file .env -f compose.yml exec -T minio sh -ec 'rm -rf /data/*'
+docker cp - "$minio_container:/data" <"$backup_dir/minio-data.tar"
 docker compose --env-file .env -f compose.yml start gateway
 docker compose --env-file .env -f compose.yml exec -T gateway \
   wget -qO- http://localhost:8080/readyz >/dev/null
