@@ -26,7 +26,7 @@ original_resolver_token=$GATEWAY_RESOLVER_TOKEN
 rotated_resolver_token="release-readiness-${RANDOM}-${RANDOM}"
 token_rotated=false
 gateway_container=""
-gateway_configuration_restored=false
+gateway_configuration_captured=false
 
 gateway_env() {
   local name=$1
@@ -41,17 +41,19 @@ capture_gateway_configuration() {
   original_gitea_username=$(gateway_env GATEWAY_GITEA_USERNAME)
   original_gitea_token=$(gateway_env GATEWAY_GITEA_TOKEN)
   original_maven_proxy_allowed_hosts=$(gateway_env GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS)
+  original_resolver_token=$(gateway_env GATEWAY_RESOLVER_TOKEN)
+  test -n "$original_resolver_token" || { printf '%s\n' 'Running Gateway has no resolver token.' >&2; exit 1; }
+  gateway_configuration_captured=true
 }
 
 restore_gateway() {
-  if [[ "$token_rotated" == true ]]; then
+  if [[ "$gateway_configuration_captured" == true ]]; then
     GATEWAY_ADAPTER_MODE="$original_adapter_mode" \
     GATEWAY_GITEA_USERNAME="$original_gitea_username" \
     GATEWAY_GITEA_TOKEN="$original_gitea_token" \
     GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="$original_maven_proxy_allowed_hosts" \
     GATEWAY_RESOLVER_TOKEN="$original_resolver_token" \
       docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway >/dev/null
-    gateway_configuration_restored=true
   fi
 }
 trap restore_gateway EXIT
@@ -81,6 +83,7 @@ wait_ready() {
 # Standard Docker and Maven/Gradle clients exercise the Gitea Hosted and
 # controlled external Proxy paths. The Maven fixture also verifies an
 # unavailable upstream can still serve already cached content.
+capture_gateway_configuration
 make oci-e2e
 for client in oras; do
   GATEWAY_E2E_SKIP_BUILD=1 OCI_E2E_CLIENT="$client" ./scripts/oci-e2e.sh
@@ -132,8 +135,6 @@ after_successful_runs=$(sed -n 's/.*"successful_runs":\([0-9][0-9]*\).*/\1/p' <<
 old_oci_token=$(curl --silent --show-error --fail --user "release-readiness:${original_resolver_token}" \
   "$gateway_url/auth/token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 test -n "$old_oci_token" || { printf '%s\n' 'Old OCI bearer token is empty.' >&2; exit 1; }
-
-capture_gateway_configuration
 
 token_rotated=true
 GATEWAY_RESOLVER_TOKEN="$rotated_resolver_token" \
