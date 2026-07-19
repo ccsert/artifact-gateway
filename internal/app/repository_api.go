@@ -286,6 +286,14 @@ func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore
 }
 
 func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, ociClients ...OCIClient) http.Handler {
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, ociClients...)
+}
+
+func NewGatewayHandlerWithCacheMaintenance(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, maintenance, ociClients...)
+}
+
+func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -307,10 +315,36 @@ func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
+	if maintenance != nil {
+		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
+	}
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return mux
+}
+
+type cacheOperationsHandler struct {
+	maintenance   *CacheMaintenance
+	authenticator Authenticator
+}
+
+func (h cacheOperationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
+		return
+	}
+	if !principal.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	status, err := h.maintenance.Status(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "unable to inspect cache")
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 type auditAPIHandler struct {

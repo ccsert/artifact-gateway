@@ -25,6 +25,13 @@ resolver outcomes plus OCI and Maven cache and upstream counters. See
 [`docs/recovery-runbook.md`](docs/recovery-runbook.md) for the backup and
 restore drill procedure.
 
+`GET /api/v1/operations/cache` is an administrator-only operational view of
+OCI cache capacity and the asynchronous retention collector. It reports the
+number and size of digest objects, pending grace-period candidates, and the
+last cleanup result. The process runs cleanup every five minutes; object
+removal is delayed by the cache TTL grace period so active indexes remain
+readable.
+
 ## OCI hosted reads
 
 Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_TOKEN` to let the Gateway read a Gitea Container Registry Hosted member. Create a Group whose name is the leading OCI namespace and whose first member is `hosted` with the Gitea registry base URL as its endpoint. Clients pull `gateway-host:port/<group>/<image>:<tag>` after logging in with any username and `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway presents a standard Bearer challenge, forwards manifest/blob GET, HEAD, and Range requests, and uses the configured Gitea credentials upstream.

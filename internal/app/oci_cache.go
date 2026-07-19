@@ -511,7 +511,6 @@ func (c *OCICache) storeContent(ctx context.Context, key string, content CachedO
 	if previous.Object != "" && previous.Object != object {
 		_ = c.markObjectForCollection(ctx, previous.Object)
 	}
-	_ = c.collectGarbage(ctx)
 	return nil
 }
 
@@ -533,7 +532,6 @@ func (c *OCICache) storeNegative(ctx context.Context, key string) error {
 	if previous.Object != "" {
 		_ = c.markObjectForCollection(ctx, previous.Object)
 	}
-	_ = c.collectGarbage(ctx)
 	return nil
 }
 
@@ -566,7 +564,6 @@ func (c *OCICache) removeIndexLocked(ctx context.Context, key string, expected [
 	if index.Object != "" {
 		_ = c.markObjectForCollection(ctx, index.Object)
 	}
-	_ = c.collectGarbage(ctx)
 	return nil
 }
 

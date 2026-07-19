@@ -38,15 +38,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = store.Close() }()
+	ociCache := app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress))
+	maintenance := app.NewCacheMaintenance(objectStore, ociCache)
+	runtimeContext := signalContext()
+	maintenance.Start(runtimeContext, 5*time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
-		Handler: app.NewGatewayHandlerWithCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{
+		Handler: app.NewGatewayHandlerWithCacheMaintenance(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:        cfg.AdminToken,
 			ResolverToken:     cfg.ResolverToken,
 			AdminActor:        cfg.AdminActor,
 			ResolverActor:     cfg.ResolverActor,
 			RepositoryReaders: cfg.RepositoryReaders,
-		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)), app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -59,7 +63,7 @@ func main() {
 			slog.Error("gateway stopped", "error", err)
 			os.Exit(1)
 		}
-	case <-signalContext().Done():
+	case <-runtimeContext.Done():
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
