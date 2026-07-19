@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -94,7 +95,7 @@ func Load() (Config, error) {
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_OTEL_SAMPLING_RATIO")); raw != "" {
 		ratio, err := strconv.ParseFloat(raw, 64)
-		if err != nil || ratio < 0 || ratio > 1 {
+		if err != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 1 {
 			return Config{}, fmt.Errorf("GATEWAY_OTEL_SAMPLING_RATIO must be between 0 and 1")
 		}
 		cfg.OTELSamplingRatio = ratio

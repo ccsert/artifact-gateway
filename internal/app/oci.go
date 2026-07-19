@@ -157,7 +157,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	}
 	var content CachedOCIContent
 	if request.Method == http.MethodGet && h.Cache != nil {
-		workCtx, cancel := context.WithTimeout(context.Background(), ociSharedWorkTimeout)
+		workCtx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), ociSharedWorkTimeout)
 		defer cancel()
 		// The complete Hosted-first resolution, Proxy fallback, verification, and
 		// publication is one operation, including Hosted-first Groups.

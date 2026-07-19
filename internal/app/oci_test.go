@@ -105,10 +105,11 @@ func TestGatewayPropagatesTraceContextToOCIUpstream(t *testing.T) {
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	request.Header.Set("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || traceparent == "" {
+	if response.Code != http.StatusOK || !strings.Contains(traceparent, "0123456789abcdef0123456789abcdef") {
 		t.Fatalf("response=%d traceparent=%q", response.Code, traceparent)
 	}
 }

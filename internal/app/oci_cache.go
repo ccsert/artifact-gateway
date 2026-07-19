@@ -662,7 +662,11 @@ func (c *OCICache) withPublicationLock(ctx context.Context, work func(context.Co
 				continue
 			}
 		}
-		defer func() { _ = c.coordinator.Release(context.Background(), "oci-publication", owner) }()
+		defer func() {
+			releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = c.coordinator.Release(releaseCtx, "oci-publication", owner)
+		}()
 		workCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		renewalFailed := make(chan struct{})
@@ -704,7 +708,11 @@ func (c *OCICache) Do(ctx context.Context, key string, fetch func(context.Contex
 				return nil, err
 			}
 			if acquired {
-				defer func() { _ = c.coordinator.Release(context.Background(), key, owner) }()
+				defer func() {
+					releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+					defer cancel()
+					_ = c.coordinator.Release(releaseCtx, key, owner)
+				}()
 				workCtx, cancel := context.WithCancel(ctx)
 				defer cancel()
 				renewalFailed := make(chan struct{})

@@ -142,8 +142,10 @@ func TestLoadRejectsInvalidOTELSamplingRatio(t *testing.T) {
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
-	t.Setenv("GATEWAY_OTEL_SAMPLING_RATIO", "1.1")
-	if _, err := Load(); err == nil {
-		t.Fatal("Load() error = nil, want invalid sampling ratio")
+	for _, ratio := range []string{"1.1", "NaN"} {
+		t.Setenv("GATEWAY_OTEL_SAMPLING_RATIO", ratio)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() error = nil for sampling ratio %q", ratio)
+		}
 	}
 }
