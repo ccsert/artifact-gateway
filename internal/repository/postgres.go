@@ -94,6 +94,31 @@ func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) erro
 	return err
 }
 
+func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]AuditRecord, error) {
+	limit := query.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at
+		FROM resolver_audit_log
+		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
+		ORDER BY occurred_at DESC, id DESC
+		LIMIT $3`, query.GroupName, query.Repository, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var audits []AuditRecord
+	for rows.Next() {
+		var audit AuditRecord
+		if err := rows.Scan(&audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt); err != nil {
+			return nil, err
+		}
+		audits = append(audits, audit)
+	}
+	return audits, rows.Err()
+}
+
 func (s *PostgresStore) CreateMavenGroup(ctx context.Context, group Group) (Group, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

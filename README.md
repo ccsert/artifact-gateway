@@ -18,6 +18,13 @@ Run `make integration-test` to start an isolated PostgreSQL container, apply eve
 
 Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group. Run `make maven-e2e` to resolve the seeded Maven dependency through a controlled Maven Proxy: Maven performs the first upstream read, Gradle resolves from the Gateway cache after the fixture upstream stops, and the fixture exercises retry, negative-cache, allowlist, invalidation, and metrics paths.
 
+Administrators can query resolver audit entries using `GET /api/v1/audits` with
+an administrator bearer token. Optional `group`, `repository`, and `limit`
+parameters narrow the newest-first result set. The `/metrics` endpoint exposes
+resolver outcomes plus OCI and Maven cache and upstream counters. See
+[`docs/recovery-runbook.md`](docs/recovery-runbook.md) for the backup and
+restore drill procedure.
+
 ## OCI hosted reads
 
 Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_TOKEN` to let the Gateway read a Gitea Container Registry Hosted member. Create a Group whose name is the leading OCI namespace and whose first member is `hosted` with the Gitea registry base URL as its endpoint. Clients pull `gateway-host:port/<group>/<image>:<tag>` after logging in with any username and `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway presents a standard Bearer challenge, forwards manifest/blob GET, HEAD, and Range requests, and uses the configured Gitea credentials upstream.

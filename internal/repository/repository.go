@@ -55,11 +55,22 @@ type AuditRecord struct {
 	OccurredAt time.Time
 }
 
+type AuditQuery struct {
+	GroupName  string
+	Repository string
+	Limit      int
+}
+
 type Store interface {
 	CreateGroup(context.Context, Group) (Group, error)
 	GetGroup(context.Context, string) (Group, error)
 	DisableGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
+	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
+}
+
+type AuditStore interface {
+	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
 }
 
 // MavenStore keeps Maven Group configuration separate from OCI Groups.
@@ -125,6 +136,27 @@ func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
 	defer s.mu.Unlock()
 	s.Audits = append(s.Audits, record)
 	return nil
+}
+
+func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	records := make([]AuditRecord, 0, limit)
+	for i := len(s.Audits) - 1; i >= 0 && len(records) < limit; i-- {
+		record := s.Audits[i]
+		if query.GroupName != "" && record.GroupName != query.GroupName {
+			continue
+		}
+		if query.Repository != "" && record.Repository != query.Repository {
+			continue
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 func (s *MemoryStore) CreateMavenGroup(_ context.Context, group Group) (Group, error) {

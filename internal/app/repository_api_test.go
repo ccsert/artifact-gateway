@@ -122,6 +122,39 @@ func TestResolverTokenCannotManageGroups(t *testing.T) {
 	}
 }
 
+func TestAdminCanQueryRepositoryAudits(t *testing.T) {
+	store := repository.NewMemoryStore()
+	store.Audits = []repository.AuditRecord{
+		{GroupName: "engineering", Repository: "team/old", Actor: "alice", Outcome: repository.AuditResolved},
+		{GroupName: "engineering", Repository: "team/app", Actor: "bob", Outcome: repository.AuditUpstreamError},
+		{GroupName: "engineering", Repository: "team/app", Actor: "carol", Outcome: repository.AuditResolved},
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/audits?group=engineering&repository=team/app", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	var audits []repository.AuditRecord
+	if err := json.NewDecoder(response.Body).Decode(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if len(audits) != 2 || audits[0].Actor != "carol" || audits[1].Actor != "bob" {
+		t.Fatalf("audits = %#v", audits)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/audits?repository=team/app", nil)
+	authorize(request, "resolver-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("resolver status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestResolverFailsWhenAuditCannotBeRecorded(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})

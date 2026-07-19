@@ -282,10 +282,45 @@ func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/api/v1/oci/groups/", api)
 	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return mux
+}
+
+type auditAPIHandler struct {
+	store         repository.AuditStore
+	authenticator Authenticator
+}
+
+func (a auditAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	principal, ok := a.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
+		return
+	}
+	if !principal.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 500 {
+			writeError(w, http.StatusBadRequest, "invalid_limit", "limit must be between 1 and 500")
+			return
+		}
+		limit = parsed
+	}
+	audits, err := a.store.ListAudits(r.Context(), repository.AuditQuery{
+		GroupName: r.URL.Query().Get("group"), Repository: r.URL.Query().Get("repository"), Limit: limit,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "unable to query audits")
+		return
+	}
+	writeJSON(w, http.StatusOK, audits)
 }
 
 type mavenAPIHandler struct {

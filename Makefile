@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e up down test integration-test integration-down lint fmt build docker-build migrate
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e'
+	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -42,6 +42,12 @@ docker-build:
 
 migrate:
 	@docker compose --env-file .env -f compose.yml run --rm migrate
+
+backup-drill:
+	@./scripts/backup-drill.sh
+
+restore-drill:
+	@./scripts/restore-drill.sh "$(BACKUP_DIR)"
 
 gitea-up:
 	@./scripts/gitea-up.sh
