@@ -162,6 +162,7 @@ type Metrics struct {
 	mavenNegativeHit      atomic.Uint64
 	mavenProxyDenied      atomic.Uint64
 	mavenCacheInvalidated atomic.Uint64
+	cacheQuotaDenied      atomic.Uint64
 
 	mu           sync.RWMutex
 	repositories map[string]RepositoryMetrics
@@ -225,6 +226,7 @@ func (m *Metrics) repository(repositoryName string) RepositoryMetrics {
 
 func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_cache_quota_rejections_total counter\nartifact_gateway_cache_quota_rejections_total " + utoa(m.cacheQuotaDenied.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_resolver_requests_total counter\nartifact_gateway_resolver_requests_total{outcome=\"resolved\"} " + utoa(m.resolved.Load()) + "\nartifact_gateway_resolver_requests_total{outcome=\"failed\"} " + utoa(m.failed.Load()) + "\n# TYPE artifact_gateway_oci_cache_requests_total counter\nartifact_gateway_oci_cache_requests_total{outcome=\"hit\"} " + utoa(m.ociCacheHit.Load()) + "\nartifact_gateway_oci_cache_requests_total{outcome=\"miss\"} " + utoa(m.ociCacheMiss.Load()) + "\n# TYPE artifact_gateway_oci_upstream_circuit_open_total counter\nartifact_gateway_oci_upstream_circuit_open_total " + utoa(m.ociCircuitOpen.Load()) + "\n# TYPE artifact_gateway_oci_negative_cache_hits_total counter\nartifact_gateway_oci_negative_cache_hits_total " + utoa(m.ociNegativeHit.Load()) + "\n# TYPE artifact_gateway_oci_proxy_denied_total counter\nartifact_gateway_oci_proxy_denied_total " + utoa(m.ociProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_requests_total counter\nartifact_gateway_maven_cache_requests_total{outcome=\"hit\"} " + utoa(m.mavenCacheHit.Load()) + "\nartifact_gateway_maven_cache_requests_total{outcome=\"miss\"} " + utoa(m.mavenCacheMiss.Load()) + "\n# TYPE artifact_gateway_maven_upstream_circuit_open_total counter\nartifact_gateway_maven_upstream_circuit_open_total " + utoa(m.mavenCircuitOpen.Load()) + "\n# TYPE artifact_gateway_maven_upstream_retries_total counter\nartifact_gateway_maven_upstream_retries_total " + utoa(m.mavenRetry.Load()) + "\n# TYPE artifact_gateway_maven_negative_cache_hits_total counter\nartifact_gateway_maven_negative_cache_hits_total " + utoa(m.mavenNegativeHit.Load()) + "\n# TYPE artifact_gateway_maven_proxy_denied_total counter\nartifact_gateway_maven_proxy_denied_total " + utoa(m.mavenProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_invalidations_total counter\nartifact_gateway_maven_cache_invalidations_total " + utoa(m.mavenCacheInvalidated.Load()) + "\n"))
 }
 

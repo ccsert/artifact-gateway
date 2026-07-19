@@ -24,6 +24,8 @@ const defaultMavenProxyBreakerTTL = 30 * time.Second
 type cachedMavenIndex struct {
 	Object       string    `json:"object,omitempty"`
 	Digest       string    `json:"digest,omitempty"`
+	Repository   string    `json:"repository,omitempty"`
+	Size         int64     `json:"size,omitempty"`
 	ContentType  string    `json:"content_type,omitempty"`
 	ETag         string    `json:"etag,omitempty"`
 	LastModified string    `json:"last_modified,omitempty"`
@@ -40,6 +42,7 @@ type CachedMavenContent struct {
 	LastModified string
 	Member       string
 	Endpoint     string
+	Repository   string
 }
 
 // MavenCache stores complete upstream responses. Maven's metadata has a
@@ -54,6 +57,7 @@ type MavenCache struct {
 	allowedProxyHost map[string]struct{}
 	mu               sync.Mutex
 	openUntil        map[string]time.Time
+	quota            *CacheQuota
 }
 
 func NewMavenCache(store OCIObjectStore, componentTTL, metadataTTL, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *MavenCache {
@@ -68,6 +72,11 @@ func NewMavenCache(store OCIObjectStore, componentTTL, metadataTTL, negativeTTL,
 
 func NewDefaultMavenCache(store OCIObjectStore, allowedProxyHosts []string) *MavenCache {
 	return NewMavenCache(store, defaultMavenComponentCacheTTL, defaultMavenMetadataCacheTTL, defaultMavenNegativeCacheTTL, defaultMavenProxyBreakerTTL, allowedProxyHosts)
+}
+
+func (c *MavenCache) WithQuota(quota *CacheQuota) *MavenCache {
+	c.quota = quota
+	return c
 }
 
 func (c *MavenCache) key(group, artifactPath string) string {
@@ -103,6 +112,12 @@ func (c *MavenCache) Load(ctx context.Context, key string) (CachedMavenContent, 
 }
 
 func (c *MavenCache) Store(ctx context.Context, key, artifactPath string, content CachedMavenContent) error {
+	return c.quota.Admit(ctx, content.Repository, key, int64(len(content.Body)), func() error {
+		return c.storeAdmitted(ctx, key, artifactPath, content)
+	})
+}
+
+func (c *MavenCache) storeAdmitted(ctx context.Context, key, artifactPath string, content CachedMavenContent) error {
 	sum := sha256.Sum256(content.Body)
 	digest := hex.EncodeToString(sum[:])
 	object := "maven/objects/" + digest
@@ -113,7 +128,7 @@ func (c *MavenCache) Store(ctx context.Context, key, artifactPath string, conten
 	if isMavenMetadata(artifactPath) {
 		ttl = c.metadataTTL
 	}
-	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
+	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, Repository: content.Repository, Size: int64(len(content.Body)), ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
 	if err != nil {
 		return err
 	}

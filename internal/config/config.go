@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,7 @@ type Config struct {
 	AdminActor             string
 	ResolverActor          string
 	RepositoryReaders      map[string][]string
+	RepositoryCacheQuotas  map[string]int64
 	GiteaUsername          string
 	GiteaToken             string
 	OIDCIssuer             string
@@ -48,6 +50,7 @@ func Load() (Config, error) {
 		AdminActor:             value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
 		ResolverActor:          value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
 		RepositoryReaders:      repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
+		RepositoryCacheQuotas:  repositoryCacheQuotas(os.Getenv("GATEWAY_REPOSITORY_CACHE_QUOTAS")),
 		GiteaUsername:          os.Getenv("GATEWAY_GITEA_USERNAME"),
 		GiteaToken:             os.Getenv("GATEWAY_GITEA_TOKEN"),
 		OIDCIssuer:             strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
@@ -119,6 +122,21 @@ func repositoryReaders(raw string) map[string][]string {
 		}
 	}
 	return readers
+}
+
+func repositoryCacheQuotas(raw string) map[string]int64 {
+	quotas := make(map[string]int64)
+	for _, entry := range strings.Split(raw, ";") {
+		repository, limit, found := strings.Cut(strings.TrimSpace(entry), "=")
+		if !found || strings.TrimSpace(repository) == "" {
+			continue
+		}
+		bytes, err := strconv.ParseInt(strings.TrimSpace(limit), 10, 64)
+		if err == nil && bytes > 0 {
+			quotas[strings.TrimSpace(repository)] = bytes
+		}
+	}
+	return quotas
 }
 
 func value(name, fallback string) string {

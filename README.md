@@ -42,6 +42,13 @@ Create a Maven Group through `POST /api/v1/maven/groups` using the same member s
 
 Set `GATEWAY_REPOSITORY_READERS` to enforce repository-scoped reads. Its format is semicolon-separated actor grants: `actor=repository-pattern|repository-pattern`; a pattern ending in `/*` matches that repository prefix. For example, `ci=team/*;release=public/base` permits the `ci` identity to read all `team` repositories and `release` only `public/base`. The Bearer token subject and Maven Basic username are the actor. Leave it unset only for local development: when configured, unmatched identities are denied and the denial is recorded as `access_denied` in the audit log.
 
+Set `GATEWAY_REPOSITORY_CACHE_QUOTAS` to bound read-through cache retention per
+logical repository, using semicolon-separated byte limits such as
+`team/app=1073741824;engineering=536870912`. OCI entries use the OCI repository
+name and Maven entries use the configured Maven Group name. When a limit is
+full, the Gateway serves the verified upstream response but does not retain a
+new cache index; `/metrics` increments `artifact_gateway_cache_quota_rejections_total`.
+
 For production identity integration, set `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`. The Gateway validates HTTPS JWKS-backed RS256 bearer
 tokens and uses the OIDC `sub` claim as the repository authorization identity.

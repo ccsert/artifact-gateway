@@ -1,0 +1,80 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sync"
+	"time"
+)
+
+// ErrCacheQuotaExceeded means the upstream response is valid but must not be
+// retained because its logical repository has exhausted its cache budget.
+var ErrCacheQuotaExceeded = errors.New("repository cache quota exceeded")
+
+// CacheQuota coordinates admission across OCI and Maven indexes. Cache objects
+// are digest-addressed and shared, so usage is intentionally logical index
+// usage: one repository cannot consume another repository's quota.
+type CacheQuota struct {
+	store  OCIObjectStore
+	limits map[string]int64
+	mu     sync.Mutex
+}
+
+type cacheQuotaIndex struct {
+	Repository string    `json:"repository"`
+	Size       int64     `json:"size"`
+	Negative   bool      `json:"negative"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+func NewCacheQuota(store OCIObjectStore, limits map[string]int64) *CacheQuota {
+	if len(limits) == 0 {
+		return nil
+	}
+	return &CacheQuota{store: store, limits: limits}
+}
+
+func (q *CacheQuota) Admit(ctx context.Context, repository, replacingKey string, size int64, publish func() error) error {
+	if q == nil || repository == "" {
+		return publish()
+	}
+	limit, configured := q.limits[repository]
+	if !configured {
+		return publish()
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	used, err := q.usedLocked(ctx, repository, replacingKey)
+	if err != nil {
+		return err
+	}
+	if size > limit-used {
+		return ErrCacheQuotaExceeded
+	}
+	return publish()
+}
+
+func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string) (int64, error) {
+	var used int64
+	for _, prefix := range []string{"oci/index/", "maven/index/"} {
+		keys, err := q.store.List(ctx, prefix)
+		if err != nil {
+			return 0, err
+		}
+		for _, key := range keys {
+			if key == skipKey {
+				continue
+			}
+			encoded, err := q.store.Get(ctx, key)
+			if err != nil {
+				continue
+			}
+			var index cacheQuotaIndex
+			if json.Unmarshal(encoded, &index) == nil && !index.Negative && index.Repository == repository && index.Size > 0 && time.Now().UTC().Before(index.ExpiresAt) {
+				used += index.Size
+			}
+		}
+	}
+	return used, nil
+}

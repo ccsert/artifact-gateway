@@ -84,6 +84,13 @@ func TestRepositoryReadersParsesActorRepositoryPatterns(t *testing.T) {
 	}
 }
 
+func TestRepositoryCacheQuotasParsesPositiveByteLimits(t *testing.T) {
+	quotas := repositoryCacheQuotas("team/app=1024; engineering=2048; broken=no; zero=0")
+	if quotas["team/app"] != 1024 || quotas["engineering"] != 2048 || len(quotas) != 2 {
+		t.Fatalf("quotas = %#v", quotas)
+	}
+}
+
 func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
 	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")

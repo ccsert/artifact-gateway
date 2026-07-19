@@ -220,8 +220,19 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 					h.Cache.RecordUpstreamFailure(member.Endpoint)
 					continue
 				}
-				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint}
+				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint, Repository: groupName}
 				if err := h.Cache.Store(request.Context(), cacheKey, artifactPath, content); err != nil {
+					if errors.Is(err, ErrCacheQuotaExceeded) {
+						h.Metrics.cacheQuotaDenied.Add(1)
+						if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditResolved); err != nil {
+							h.Metrics.failed.Add(1)
+							http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+							return
+						}
+						h.Metrics.resolved.Add(1)
+						serveCachedMavenContent(w, request, artifactPath, content)
+						return
+					}
 					h.Metrics.failed.Add(1)
 					http.Error(w, "unable to cache Maven content", http.StatusInternalServerError)
 					return

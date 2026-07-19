@@ -38,7 +38,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = store.Close() }()
-	ociCache := app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress))
+	quota := app.NewCacheQuota(objectStore, cfg.RepositoryCacheQuotas)
+	ociCache := app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota)
 	maintenance := app.NewCacheMaintenance(objectStore, ociCache)
 	runtimeContext := signalContext()
 	maintenance.Start(runtimeContext, 5*time.Minute)
@@ -56,7 +57,7 @@ func main() {
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
 			}),
-		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -274,6 +274,7 @@ func (s *S3OCIObjectStore) List(ctx context.Context, prefix string) ([]string, e
 type cachedOCIIndex struct {
 	Object      string    `json:"object,omitempty"`
 	Digest      string    `json:"digest,omitempty"`
+	Repository  string    `json:"repository,omitempty"`
 	ContentType string    `json:"content_type,omitempty"`
 	Member      string    `json:"member,omitempty"`
 	Size        int64     `json:"size,omitempty"`
@@ -291,6 +292,7 @@ type CachedOCIContent struct {
 	Digest      string
 	ContentType string
 	Member      string
+	Repository  string
 	Object      string
 	Size        int64
 	tempPath    string
@@ -308,6 +310,7 @@ type OCICache struct {
 	mu               sync.Mutex
 	openUntil        map[string]time.Time
 	coordinator      OCICacheCoordinator
+	quota            *CacheQuota
 	lockLease        time.Duration
 	lockRenewEvery   time.Duration
 	gcGrace          time.Duration
@@ -384,6 +387,11 @@ func NewDefaultOCICache(store OCIObjectStore, allowedProxyHosts []string) *OCICa
 
 func (c *OCICache) WithCoordinator(coordinator OCICacheCoordinator) *OCICache {
 	c.coordinator = coordinator
+	return c
+}
+
+func (c *OCICache) WithQuota(quota *CacheQuota) *OCICache {
+	c.quota = quota
 	return c
 }
 
@@ -478,11 +486,17 @@ func (c *OCICache) Stage(ctx context.Context, content CachedOCIContent) (CachedO
 }
 
 func (c *OCICache) storeContent(ctx context.Context, key string, content CachedOCIContent) error {
-	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
-	previous := c.loadIndex(ctx, key)
 	if content.Size == 0 && content.tempPath == "" {
 		content.Size = int64(len(content.Body))
 	}
+	return c.quota.Admit(ctx, content.Repository, key, content.Size, func() error {
+		return c.storeContentAdmitted(ctx, key, content)
+	})
+}
+
+func (c *OCICache) storeContentAdmitted(ctx context.Context, key string, content CachedOCIContent) error {
+	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
+	previous := c.loadIndex(ctx, key)
 	// Publish the index only after its immutable, digest-addressed object exists.
 	if content.tempPath != "" {
 		file, err := os.Open(content.tempPath)
@@ -500,7 +514,7 @@ func (c *OCICache) storeContent(ctx context.Context, key string, content CachedO
 	} else if err := c.store.Put(ctx, object, content.Body); err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
+	encoded, err := json.Marshal(cachedOCIIndex{Object: object, Digest: content.Digest, Repository: content.Repository, ContentType: content.ContentType, Member: content.Member, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
 	if err != nil {
 		return err
 	}

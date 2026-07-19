@@ -167,7 +167,12 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				return CachedOCIContent{}, fetchErr
 			}
 			if fetched.cacheable {
+				fetched.Repository = repositoryName
 				if cacheErr := h.Cache.Store(fetchCtx, cacheKey, fetched); cacheErr != nil {
+					if errors.Is(cacheErr, ErrCacheQuotaExceeded) {
+						h.Resolver.Metrics.cacheQuotaDenied.Add(1)
+						return fetched, nil
+					}
 					fetched.cleanup()
 					return CachedOCIContent{}, cacheErr
 				}
