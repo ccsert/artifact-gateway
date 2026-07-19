@@ -11,6 +11,10 @@ import (
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestOCIHostedGroupServesManifestAndRange(t *testing.T) {
@@ -76,6 +80,36 @@ func TestOCIHostedGroupServesManifestAndRange(t *testing.T) {
 	handler.ServeHTTP(ranged, rangeRequest)
 	if ranged.Code != http.StatusPartialContent || ranged.Header().Get("Content-Range") != "bytes 0-3/"+utoa(uint64(len(manifest))) || ranged.Body.String() != string(manifest[:4]) {
 		t.Fatalf("range = %d headers=%v body=%q", ranged.Code, ranged.Header(), ranged.Body.String())
+	}
+}
+
+func TestGatewayPropagatesTraceContextToOCIUpstream(t *testing.T) {
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(provider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+		otel.SetTracerProvider(noop.NewTracerProvider())
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator())
+	})
+	content := []byte(`{"schemaVersion":2}`)
+	digest := digestOf(content)
+	traceparent := ""
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		traceparent = request.Header.Get("traceparent")
+		w.Header().Set("Docker-Content-Digest", digest)
+		_, _ = w.Write(content)
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || traceparent == "" {
+		t.Fatalf("response=%d traceparent=%q", response.Code, traceparent)
 	}
 }
 

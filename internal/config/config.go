@@ -31,6 +31,8 @@ type Config struct {
 	OIDCAudience           string
 	OIDCJWKSURL            string
 	OIDCAdminSubjects      []string
+	OTLPHTTPEndpoint       string
+	OTELSamplingRatio      float64
 }
 
 func Load() (Config, error) {
@@ -57,6 +59,8 @@ func Load() (Config, error) {
 		OIDCAudience:           strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
 		OIDCJWKSURL:            strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
 		OIDCAdminSubjects:      splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
+		OTLPHTTPEndpoint:       strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
+		OTELSamplingRatio:      1,
 	}
 
 	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
@@ -87,6 +91,13 @@ func Load() (Config, error) {
 		if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 			return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
 		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_OTEL_SAMPLING_RATIO")); raw != "" {
+		ratio, err := strconv.ParseFloat(raw, 64)
+		if err != nil || ratio < 0 || ratio > 1 {
+			return Config{}, fmt.Errorf("GATEWAY_OTEL_SAMPLING_RATIO must be between 0 and 1")
+		}
+		cfg.OTELSamplingRatio = ratio
 	}
 	return cfg, nil
 }

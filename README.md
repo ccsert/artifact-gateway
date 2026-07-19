@@ -56,6 +56,11 @@ tokens and uses the OIDC `sub` claim as the repository authorization identity.
 administrator subjects in `GATEWAY_OIDC_ADMIN_SUBJECTS`. Static admin and
 resolver tokens remain supported for local development and break-glass access.
 
+Set `GATEWAY_OTLP_HTTP_ENDPOINT` to export OpenTelemetry traces to an OTLP/HTTP
+collector and tune head sampling with `GATEWAY_OTEL_SAMPLING_RATIO` (`0` to
+`1`). Gateway request spans propagate W3C trace context to configured upstream
+OCI and Maven HTTP calls.
+
 ## Gitea development fixture
 
 The local Gitea fixture runs independently from the Gateway and exposes both package protocols through one HTTP address. It uses PostgreSQL and named Docker volumes; no repository data, password, or API token is checked in.

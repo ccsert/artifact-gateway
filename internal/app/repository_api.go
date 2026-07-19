@@ -408,7 +408,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
-	return mux
+	return tracedHTTPHandler(mux)
 }
 
 type cacheOperationsHandler struct {

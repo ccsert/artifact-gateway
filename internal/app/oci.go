@@ -49,11 +49,7 @@ func (c GiteaClient) Fetch(ctx context.Context, method string, member repository
 	if member.Type == repository.MemberHosted {
 		request.SetBasicAuth(c.Username, c.Token)
 	}
-	client := c.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
-	response, err := client.Do(request)
+	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("fetch Gitea OCI content: %w", err)
 	}
