@@ -44,6 +44,7 @@ const (
 	AuditGroupDisabled     AuditOutcome = "group_disabled"
 	AuditStorageError      AuditOutcome = "storage_error"
 	AuditUpstreamError     AuditOutcome = "upstream_error"
+	AuditAccessDenied      AuditOutcome = "access_denied"
 )
 
 type AuditRecord struct {

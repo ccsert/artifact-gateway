@@ -87,6 +87,15 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	groupName := strings.SplitN(repositoryName, "/", 2)[0]
+	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
+		if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, "", principal.Actor, repository.AuditAccessDenied); err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+			return
+		}
+		h.Resolver.RecordOCIRequestFailure()
+		writeOCIError(w, http.StatusForbidden, "DENIED", "requested access to the resource is denied")
+		return
+	}
 	members, err := h.Resolver.ResolveOCIMembers(request.Context(), groupName, repositoryName, principal.Actor)
 	if errors.Is(err, repository.ErrDisabled) {
 		writeOCIError(w, http.StatusForbidden, "DENIED", "requested access to the resource is denied")

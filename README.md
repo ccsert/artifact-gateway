@@ -33,6 +33,8 @@ Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_T
 
 Create a Maven Group through `POST /api/v1/maven/groups` using the same member schema as OCI. Maven clients use `http://gateway-host:port/maven/<group>` as the repository URL and HTTP Basic authentication with any username plus `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway serves POMs, JARs, checksum sidecars, and `maven-metadata.xml`; it tries Hosted members before Proxy members and records each upstream attempt in the resolver audit log. Set `GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS` to a comma-separated allowlist before enabling external Maven Proxy members. Proxy component files are cached for 15 minutes, version metadata for one minute, and cached misses for one minute.
 
+Set `GATEWAY_REPOSITORY_READERS` to enforce repository-scoped reads. Its format is semicolon-separated actor grants: `actor=repository-pattern|repository-pattern`; a pattern ending in `/*` matches that repository prefix. For example, `ci=team/*;release=public/base` permits the `ci` identity to read all `team` repositories and `release` only `public/base`. The Bearer token subject and Maven Basic username are the actor. Leave it unset only for local development: when configured, unmatched identities are denied and the denial is recorded as `access_denied` in the audit log.
+
 ## Gitea development fixture
 
 The local Gitea fixture runs independently from the Gateway and exposes both package protocols through one HTTP address. It uses PostgreSQL and named Docker volumes; no repository data, password, or API token is checked in.

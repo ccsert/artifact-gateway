@@ -122,6 +122,24 @@ func TestResolverTokenCannotManageGroups(t *testing.T) {
 	}
 }
 
+func TestRepositoryReadPermissionRejectsAndAuditsUnauthorizedOCIResolution(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})
+	authenticator := testAuthenticator()
+	authenticator.RepositoryReaders = map[string][]string{"build-agent": {"team/allowed/*"}}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/team/resolve?repository=team/denied/app", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"forbidden"`) {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditAccessDenied || store.Audits[0].Repository != "team/denied/app" {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
 func TestAdminCanQueryRepositoryAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	store.Audits = []repository.AuditRecord{

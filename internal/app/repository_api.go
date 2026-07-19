@@ -182,8 +182,9 @@ func utoa(value uint64) string {
 }
 
 type Principal struct {
-	Actor string
-	Admin bool
+	Actor              string
+	Admin              bool
+	RepositoryPatterns []string
 }
 
 type Authenticator struct {
@@ -191,6 +192,9 @@ type Authenticator struct {
 	ResolverToken string
 	AdminActor    string
 	ResolverActor string
+	// RepositoryReaders maps an actor to exact repository names or prefix
+	// patterns ending in /*. A nil map keeps the local-development default.
+	RepositoryReaders map[string][]string
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
@@ -203,12 +207,32 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		return Principal{Actor: a.AdminActor, Admin: true}, true
 	}
 	if tokenMatches(token, a.ResolverToken) {
-		return Principal{Actor: a.ResolverActor}, true
+		return a.principal(a.ResolverActor), true
 	}
 	if actor, ok := a.tokenActor(token); ok {
-		return Principal{Actor: actor}, true
+		return a.principal(actor), true
 	}
 	return Principal{}, false
+}
+
+func (a Authenticator) principal(actor string) Principal {
+	return Principal{Actor: actor, RepositoryPatterns: a.RepositoryReaders[actor]}
+}
+
+func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
+	if p.Admin || !policyConfigured {
+		return true
+	}
+	for _, pattern := range p.RepositoryPatterns {
+		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*")) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
+	return principal.CanReadRepository(repositoryName, a.RepositoryReaders != nil)
 }
 
 func (a Authenticator) IssueToken(actor string) string {
@@ -436,7 +460,7 @@ func (a apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 2 && parts[1] == "resolve" && r.Method == http.MethodGet {
-		a.resolve(w, r, parts[0], principal.Actor)
+		a.resolve(w, r, parts[0], principal)
 		return
 	}
 	writeError(w, http.StatusNotFound, "not_found", "resource not found")
@@ -497,14 +521,23 @@ func (a apiHandler) disable(w http.ResponseWriter, r *http.Request, name string)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-func (a apiHandler) resolve(w http.ResponseWriter, r *http.Request, name, actor string) {
+func (a apiHandler) resolve(w http.ResponseWriter, r *http.Request, name string, principal Principal) {
 	repositoryName := r.URL.Query().Get("repository")
 	if repositoryName == "" {
 		a.resolver.Metrics.failed.Add(1)
 		writeError(w, 400, "invalid_repository", "repository query parameter is required")
 		return
 	}
-	member, err := a.resolver.Resolve(r.Context(), name, repositoryName, actor)
+	if !a.authenticator.CanReadRepository(principal, repositoryName) {
+		if err := a.store.RecordAudit(r.Context(), repository.AuditRecord{GroupName: name, Repository: repositoryName, Outcome: repository.AuditAccessDenied, Actor: principal.Actor, OccurredAt: time.Now().UTC()}); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to record repository audit")
+			return
+		}
+		a.resolver.Metrics.failed.Add(1)
+		writeError(w, http.StatusForbidden, "forbidden", "repository read permission required")
+		return
+	}
+	member, err := a.resolver.Resolve(r.Context(), name, repositoryName, principal.Actor)
 	if errors.Is(err, repository.ErrDisabled) {
 		writeError(w, 409, "group_disabled", "group is disabled")
 		return

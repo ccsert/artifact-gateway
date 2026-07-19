@@ -339,6 +339,23 @@ func TestMavenFailsWhenAuditCannotBeRecorded(t *testing.T) {
 	}
 }
 
+func TestMavenRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
+	store := repository.NewMemoryStore()
+	authenticator := testAuthenticator()
+	authenticator.RepositoryReaders = map[string][]string{"maven": {"engineering/allowed/*"}}
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: &Metrics{}}
+	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/private/1.0/private-1.0.pom", nil)
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "repository read permission required") {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditAccessDenied || store.Audits[0].Actor != "maven" {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
 func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.T) {
 	hosted := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("If-None-Match") != `"cached"` {

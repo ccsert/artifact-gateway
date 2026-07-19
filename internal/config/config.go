@@ -22,6 +22,7 @@ type Config struct {
 	ResolverToken          string
 	AdminActor             string
 	ResolverActor          string
+	RepositoryReaders      map[string][]string
 	GiteaUsername          string
 	GiteaToken             string
 }
@@ -42,6 +43,7 @@ func Load() (Config, error) {
 		ResolverToken:          os.Getenv("GATEWAY_RESOLVER_TOKEN"),
 		AdminActor:             value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
 		ResolverActor:          value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
+		RepositoryReaders:      repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
 		GiteaUsername:          os.Getenv("GATEWAY_GITEA_USERNAME"),
 		GiteaToken:             os.Getenv("GATEWAY_GITEA_TOKEN"),
 	}
@@ -72,6 +74,29 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return values
+}
+
+// repositoryReaders parses semicolon-separated actor grants. Each grant is
+// actor=repository-pattern|repository-pattern, where a trailing /* matches a
+// repository prefix. An omitted variable retains the local-development
+// unrestricted resolver token behavior.
+func repositoryReaders(raw string) map[string][]string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	readers := make(map[string][]string)
+	for _, grant := range strings.Split(raw, ";") {
+		actor, patterns, found := strings.Cut(strings.TrimSpace(grant), "=")
+		if !found || strings.TrimSpace(actor) == "" {
+			continue
+		}
+		for _, pattern := range strings.Split(patterns, "|") {
+			if pattern = strings.TrimSpace(pattern); pattern != "" {
+				readers[strings.TrimSpace(actor)] = append(readers[strings.TrimSpace(actor)], pattern)
+			}
+		}
+	}
+	return readers
 }
 
 func value(name, fallback string) string {

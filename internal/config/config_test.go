@@ -73,3 +73,13 @@ func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {
 		t.Fatalf("error leaked database URL: %v", err)
 	}
 }
+
+func TestRepositoryReadersParsesActorRepositoryPatterns(t *testing.T) {
+	readers := repositoryReaders("ci=team/*|shared/base; release = releases/*")
+	if got := strings.Join(readers["ci"], ","); got != "team/*,shared/base" {
+		t.Fatalf("ci readers = %q", got)
+	}
+	if got := strings.Join(readers["release"], ","); got != "releases/*" {
+		t.Fatalf("release readers = %q", got)
+	}
+}

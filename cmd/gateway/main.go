@@ -41,10 +41,11 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{
-			AdminToken:    cfg.AdminToken,
-			ResolverToken: cfg.ResolverToken,
-			AdminActor:    cfg.AdminActor,
-			ResolverActor: cfg.ResolverActor,
+			AdminToken:        cfg.AdminToken,
+			ResolverToken:     cfg.ResolverToken,
+			AdminActor:        cfg.AdminActor,
+			ResolverActor:     cfg.ResolverActor,
+			RepositoryReaders: cfg.RepositoryReaders,
 		}, app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)), app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

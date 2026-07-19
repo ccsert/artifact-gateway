@@ -61,15 +61,27 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	actor, ok := h.authenticate(request)
+	principal, ok := h.authenticate(request)
 	if !ok {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	actor := principal.Actor
 	groupName, artifactPath, ok := parseMavenPath(request.URL.Path)
 	if !ok {
 		http.NotFound(w, request)
+		return
+	}
+	repositoryName := groupName + "/" + artifactPath
+	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
+		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
+			h.Metrics.failed.Add(1)
+			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+			return
+		}
+		h.Metrics.failed.Add(1)
+		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
 	group, err := h.Store.GetMavenGroup(request.Context(), groupName)
@@ -427,12 +439,15 @@ func (h MavenHandler) findConflict(ctx context.Context, groupName string, member
 	return "", nil
 }
 
-func (h MavenHandler) authenticate(request *http.Request) (string, bool) {
+func (h MavenHandler) authenticate(request *http.Request) (Principal, bool) {
 	if principal, ok := h.Authenticator.Authenticate(request.Header.Get("Authorization")); ok {
-		return principal.Actor, true
+		return principal, true
 	}
 	username, password, ok := request.BasicAuth()
-	return username, ok && username != "" && tokenMatches(password, h.Authenticator.ResolverToken)
+	if !ok || username == "" || !tokenMatches(password, h.Authenticator.ResolverToken) {
+		return Principal{}, false
+	}
+	return h.Authenticator.principal(username), true
 }
 
 func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, memberName, actor string, outcome repository.AuditOutcome) error {

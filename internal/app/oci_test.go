@@ -403,6 +403,23 @@ func TestOCIAuditsUpstreamTransportFailure(t *testing.T) {
 	}
 }
 
+func TestOCIRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
+	store := repository.NewMemoryStore()
+	authenticator := testAuthenticator()
+	authenticator.RepositoryReaders = map[string][]string{"alice": {"team/allowed/*"}}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, GiteaClient{})
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/private/manifests/latest", nil)
+	authorize(request, authenticator.IssueToken("alice"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "DENIED") {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditAccessDenied || store.Audits[0].Actor != "alice" || store.Audits[0].Repository != "team/private" {
+		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
 func TestOCIResolutionFailuresIncrementMetrics(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "disabled", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: "http://gitea", Position: 0}}})
