@@ -14,7 +14,10 @@ gate, and an isolated upgrade/rollback rehearsal. It then verifies object
 storage and PostgreSQL readiness failures, recovery after each dependency is
 restored, the administrator cache-maintenance view, and static resolver-token
 rotation. `scripts/release-readiness.sh` restores the configured resolver token
-before it exits, including after a failed check. Record the command output,
+and live adapter, Gitea, and Maven Proxy settings before it exits, including
+after a failed check. `make release-readiness-cleanup-test` exercises both the
+successful path and an injected post-rotation failure against a running
+Gateway. Record the command output,
 Git revision, operator, UTC start/end, and any deviation in the release record.
 
 ## Release Checklist
@@ -34,6 +37,9 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
       `internal/app/cache_maintenance_test.go`.
 - [ ] Resolver-token rotation rejects an OCI bearer token issued by the old
       token and permits a newly issued token.
+- [ ] `make release-readiness-cleanup-test` confirms that the complete gate
+      restores the live adapter, Gitea credentials, Maven Proxy allowlist, and
+      resolver token after both a successful run and a post-rotation failure.
 - [ ] The cached OCI manifest performance gate completes 50 requests at
       concurrency 10 with zero errors and p95 latency at or below one second.
       Override only with an approved release record using

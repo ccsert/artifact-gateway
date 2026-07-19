@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness release-readiness up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness release-readiness release-readiness-cleanup-test up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, release-readiness'
+	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, release-readiness, release-readiness-cleanup-test'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -80,3 +80,6 @@ upgrade-readiness:
 
 release-readiness:
 	@./scripts/release-readiness.sh
+
+release-readiness-cleanup-test: gitea-fixture
+	@./scripts/release-readiness-cleanup-test.sh
