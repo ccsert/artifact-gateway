@@ -24,4 +24,9 @@ gateway_container=$(docker compose --env-file "$environment_file" -f compose.yml
 after=$(configuration "$gateway_container")
 [[ "$after" == "$before" ]] || { printf '%s\n' 'Gateway configuration changed after failed Maven E2E.' >&2; exit 1; }
 
-printf '%s\n' 'Maven E2E cleanup test passed: failed allowlist probe restored Gateway configuration.'
+./scripts/maven-e2e.sh
+gateway_container=$(docker compose --env-file "$environment_file" -f compose.yml ps -q gateway)
+after=$(configuration "$gateway_container")
+[[ "$after" == "$before" ]] || { printf '%s\n' 'Gateway configuration changed after successful Maven E2E.' >&2; exit 1; }
+
+printf '%s\n' 'Maven E2E cleanup test passed: failed and successful runs restored Gateway configuration.'
