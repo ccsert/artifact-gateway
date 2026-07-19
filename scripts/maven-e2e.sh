@@ -9,10 +9,14 @@ if [[ ! -f .env || ! -f .gitea-fixture/connection.env ]]; then
   exit 1
 fi
 
+gateway_http_port_override=${GATEWAY_HTTP_PORT:-}
 # shellcheck disable=SC1091
 source .env
 # shellcheck disable=SC1091
 source .gitea-fixture/connection.env
+if [[ -n "$gateway_http_port_override" ]]; then
+  GATEWAY_HTTP_PORT=$gateway_http_port_override
+fi
 
 for name in GATEWAY_HTTP_PORT GATEWAY_ADMIN_TOKEN GATEWAY_RESOLVER_TOKEN GITEA_HTTP_PORT GITEA_FIXTURE_USERNAME GITEA_FIXTURE_TOKEN GITEA_FIXTURE_ORG GITEA_MAVEN_GROUP GITEA_MAVEN_ARTIFACT GITEA_MAVEN_VERSION; do
   if [[ -z "${!name:-}" ]]; then
@@ -22,7 +26,14 @@ for name in GATEWAY_HTTP_PORT GATEWAY_ADMIN_TOKEN GATEWAY_RESOLVER_TOKEN GITEA_H
 done
 
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
-proxy_port=${GATEWAY_MAVEN_PROXY_PORT:-18081}
+proxy_port=${GATEWAY_MAVEN_PROXY_PORT:-}
+if [[ -z "$proxy_port" ]]; then
+  proxy_port=$(python3 -c 'import socket; listener = socket.socket(); listener.bind(("127.0.0.1", 0)); print(listener.getsockname()[1]); listener.close()')
+fi
+if [[ "$proxy_port" == "$GATEWAY_HTTP_PORT" ]]; then
+  printf '%s\n' 'GATEWAY_MAVEN_PROXY_PORT must differ from GATEWAY_HTTP_PORT.' >&2
+  exit 1
+fi
 proxy_host="host.docker.internal:${proxy_port}"
 proxy_group="${GITEA_FIXTURE_ORG}-proxy"
 proxy_endpoint="http://${proxy_host}"
@@ -37,7 +48,14 @@ trap cleanup EXIT
 proxy_log="$workdir/proxy.log"
 python3 scripts/maven-proxy-fixture.py --port "$proxy_port" --directory .gitea-fixture/maven --log "$proxy_log" >/dev/null 2>&1 &
 proxy_pid=$!
-until curl --silent --show-error --fail "http://localhost:${proxy_port}/" >/dev/null; do sleep 1; done
+until curl --silent --show-error --fail "http://localhost:${proxy_port}/" >/dev/null; do
+  if ! kill -0 "$proxy_pid" 2>/dev/null; then
+    wait "$proxy_pid" || true
+    printf 'Maven proxy fixture failed to start on port %s\n' "$proxy_port" >&2
+    exit 1
+  fi
+  sleep 1
+done
 
 GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
