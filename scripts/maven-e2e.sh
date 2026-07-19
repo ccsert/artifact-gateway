@@ -99,11 +99,16 @@ until curl --silent --show-error --fail "http://localhost:${proxy_port}/" >/dev/
   sleep 1
 done
 
+compose_up=(up -d --wait)
+if [[ "${GATEWAY_E2E_SKIP_BUILD:-}" != 1 ]]; then
+  compose_up=(up -d --build --wait)
+fi
+
 GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
 GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="$proxy_host" \
-docker compose --env-file "$environment_file" -f compose.yml up -d --build --wait
+docker compose --env-file "$environment_file" -f compose.yml "${compose_up[@]}"
 
 create_group() {
   local name=$1 endpoint=$2 status payload

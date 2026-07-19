@@ -77,9 +77,11 @@ ready_status=$(curl --silent --show-error --output /dev/null --write-out '%{http
 # try to allocate a second Gitea on the fixture's published ports.
 COMPOSE_PROJECT_NAME="$upgrade_project" \
 GATEWAY_ENV_FILE="$upgrade_environment_file" \
+GATEWAY_E2E_SKIP_BUILD=1 \
 ./scripts/oci-e2e.sh
 COMPOSE_PROJECT_NAME="$upgrade_project" \
 GATEWAY_ENV_FILE="$upgrade_environment_file" \
+GATEWAY_E2E_SKIP_BUILD=1 \
 ./scripts/maven-e2e.sh
 
 # Roll back the binary/configuration while retaining the upgraded volumes. A

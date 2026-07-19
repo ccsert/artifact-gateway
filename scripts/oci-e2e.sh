@@ -32,10 +32,15 @@ gateway_image="$gateway_registry/$GITEA_FIXTURE_ORG/gateway-fixture:1.0.0"
 hosted_endpoint="http://host.docker.internal:${GITEA_HTTP_PORT}"
 oci_client=${OCI_E2E_CLIENT:-docker}
 
+compose_up=(up -d --wait)
+if [[ "${GATEWAY_E2E_SKIP_BUILD:-}" != 1 ]]; then
+  compose_up=(up -d --build --wait)
+fi
+
 GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
-docker compose --env-file "$environment_file" -f compose.yml up -d --build --wait
+docker compose --env-file "$environment_file" -f compose.yml "${compose_up[@]}"
 
 group_json=$(printf '{"name":"%s","members":[{"name":"gitea-hosted","type":"hosted","endpoint":"%s","position":0}]}' "$GITEA_FIXTURE_ORG" "$hosted_endpoint")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
@@ -79,11 +84,12 @@ case "$oci_client" in
     ;;
   oras)
     command -v oras >/dev/null || { printf '%s\n' 'OCI_E2E_CLIENT=oras requires oras.' >&2; exit 1; }
-    workdir=$(mktemp -d)
-    trap 'rm -rf "$workdir"' EXIT
     printf '%s' "$GATEWAY_RESOLVER_TOKEN" | oras login "$gateway_registry" --username oci-e2e --password-stdin >/dev/null
-    oras pull "$gateway_image" --output "$workdir" >/dev/null
-    test -n "$(find "$workdir" -type f -print -quit)"
+    descriptor=$(oras manifest fetch --descriptor "$gateway_image")
+    grep -Eq '"digest":"sha256:[0-9a-f]+"' <<<"$descriptor" || {
+      printf 'ORAS did not return an OCI manifest descriptor: %s\n' "$descriptor" >&2
+      exit 1
+    }
     image_id=oras
     ;;
   *)

@@ -22,8 +22,8 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 - [ ] `make test`, `make integration-test`, and `make release-readiness` pass.
 - [ ] The local Gitea fixture was freshly seeded and its minimal package token
       was used by the Gateway; no Gitea administrator token is used for reads.
-- [ ] OCI pull passes with Docker, Podman, and ORAS. `make release-readiness`
-      requires all three clients; install them on the validation workstation.
+- [ ] OCI pull passes with Docker and ORAS. `make release-readiness` requires
+      both clients; Podman compatibility is tracked separately from this MVP.
       Maven first-read uses Maven and cached resolution after upstream outage
       uses Gradle.
 - [ ] `/readyz` returns `503` while MinIO or PostgreSQL is stopped and `204`
@@ -67,7 +67,7 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 
 ```mermaid
 flowchart LR
-  clients[Docker / Podman / ORAS / Maven / Gradle] --> gateway[Artifact Gateway]
+  clients[Docker / ORAS / Maven / Gradle] --> gateway[Artifact Gateway]
   gateway --> auth[Static tokens or OIDC]
   gateway --> db[(PostgreSQL metadata and audit)]
   gateway --> redis[(Redis cache coordination)]

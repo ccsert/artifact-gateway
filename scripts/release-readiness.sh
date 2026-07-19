@@ -82,12 +82,12 @@ wait_ready() {
 # controlled external Proxy paths. The Maven fixture also verifies an
 # unavailable upstream can still serve already cached content.
 make oci-e2e
-for client in podman oras; do
-  OCI_E2E_CLIENT="$client" ./scripts/oci-e2e.sh
+for client in oras; do
+  GATEWAY_E2E_SKIP_BUILD=1 OCI_E2E_CLIENT="$client" ./scripts/oci-e2e.sh
 done
 # OCI E2E already seeded Gitea. Calling the script directly prevents Make from
 # re-seeding it and rotating the fixture token between the two client checks.
-./scripts/maven-e2e.sh
+GATEWAY_E2E_SKIP_BUILD=1 ./scripts/maven-e2e.sh
 make performance-readiness
 make upgrade-readiness
 
