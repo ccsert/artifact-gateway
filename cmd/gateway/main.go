@@ -50,6 +50,12 @@ func main() {
 			AdminActor:        cfg.AdminActor,
 			ResolverActor:     cfg.ResolverActor,
 			RepositoryReaders: cfg.RepositoryReaders,
+			OIDC: app.NewOIDCValidator(app.OIDCConfig{
+				Issuer:        cfg.OIDCIssuer,
+				Audience:      cfg.OIDCAudience,
+				JWKSURL:       cfg.OIDCJWKSURL,
+				AdminSubjects: cfg.OIDCAdminSubjects,
+			}),
 		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

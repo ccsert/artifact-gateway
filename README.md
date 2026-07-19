@@ -42,6 +42,13 @@ Create a Maven Group through `POST /api/v1/maven/groups` using the same member s
 
 Set `GATEWAY_REPOSITORY_READERS` to enforce repository-scoped reads. Its format is semicolon-separated actor grants: `actor=repository-pattern|repository-pattern`; a pattern ending in `/*` matches that repository prefix. For example, `ci=team/*;release=public/base` permits the `ci` identity to read all `team` repositories and `release` only `public/base`. The Bearer token subject and Maven Basic username are the actor. Leave it unset only for local development: when configured, unmatched identities are denied and the denial is recorded as `access_denied` in the audit log.
 
+For production identity integration, set `GATEWAY_OIDC_ISSUER` and
+`GATEWAY_OIDC_AUDIENCE`. The Gateway validates HTTPS JWKS-backed RS256 bearer
+tokens and uses the OIDC `sub` claim as the repository authorization identity.
+`GATEWAY_OIDC_JWKS_URL` defaults to `<issuer>/.well-known/jwks.json`; list
+administrator subjects in `GATEWAY_OIDC_ADMIN_SUBJECTS`. Static admin and
+resolver tokens remain supported for local development and break-glass access.
+
 ## Gitea development fixture
 
 The local Gitea fixture runs independently from the Gateway and exposes both package protocols through one HTTP address. It uses PostgreSQL and named Docker volumes; no repository data, password, or API token is checked in.

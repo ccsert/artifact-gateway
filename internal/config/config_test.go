@@ -83,3 +83,44 @@ func TestRepositoryReadersParsesActorRepositoryPatterns(t *testing.T) {
 		t.Fatalf("release readers = %q", got)
 	}
 }
+
+func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
+	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test/")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway")
+	t.Setenv("GATEWAY_OIDC_JWKS_URL", "")
+	t.Setenv("GATEWAY_OIDC_ADMIN_SUBJECTS", "ops-admin, release-admin ")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OIDCIssuer != "https://login.example.test" || cfg.OIDCJWKSURL != "https://login.example.test/.well-known/jwks.json" || strings.Join(cfg.OIDCAdminSubjects, ",") != "ops-admin,release-admin" {
+		t.Fatalf("OIDC config = %#v", cfg)
+	}
+}
+
+func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
+	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want error")
+	}
+}

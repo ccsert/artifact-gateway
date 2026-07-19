@@ -25,6 +25,10 @@ type Config struct {
 	RepositoryReaders      map[string][]string
 	GiteaUsername          string
 	GiteaToken             string
+	OIDCIssuer             string
+	OIDCAudience           string
+	OIDCJWKSURL            string
+	OIDCAdminSubjects      []string
 }
 
 func Load() (Config, error) {
@@ -46,6 +50,10 @@ func Load() (Config, error) {
 		RepositoryReaders:      repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
 		GiteaUsername:          os.Getenv("GATEWAY_GITEA_USERNAME"),
 		GiteaToken:             os.Getenv("GATEWAY_GITEA_TOKEN"),
+		OIDCIssuer:             strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
+		OIDCAudience:           strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
+		OIDCJWKSURL:            strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
+		OIDCAdminSubjects:      splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
 	}
 
 	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
@@ -62,6 +70,20 @@ func Load() (Config, error) {
 	}
 	if _, err := url.ParseRequestURI(cfg.S3Endpoint); err != nil {
 		return Config{}, fmt.Errorf("GATEWAY_S3_ENDPOINT is not a valid URL")
+	}
+	if cfg.OIDCIssuer != "" {
+		if cfg.OIDCAudience == "" {
+			return Config{}, fmt.Errorf("GATEWAY_OIDC_AUDIENCE is required when GATEWAY_OIDC_ISSUER is set")
+		}
+		if cfg.OIDCJWKSURL == "" {
+			cfg.OIDCJWKSURL = cfg.OIDCIssuer + "/.well-known/jwks.json"
+		}
+		if parsed, err := url.ParseRequestURI(cfg.OIDCIssuer); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return Config{}, fmt.Errorf("GATEWAY_OIDC_ISSUER must be an HTTPS URL")
+		}
+		if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
+		}
 	}
 	return cfg, nil
 }

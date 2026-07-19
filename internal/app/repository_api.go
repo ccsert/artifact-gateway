@@ -256,6 +256,7 @@ type Authenticator struct {
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
+	OIDC              *OIDCValidator
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
@@ -272,6 +273,13 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	if actor, ok := a.tokenActor(token); ok {
 		return a.principal(actor), true
+	}
+	if a.OIDC != nil {
+		if identity, ok := a.OIDC.Validate(context.Background(), token); ok {
+			principal := a.principal(identity.Subject)
+			principal.Admin = identity.Admin
+			return principal, true
+		}
 	}
 	return Principal{}, false
 }
