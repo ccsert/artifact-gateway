@@ -37,6 +37,7 @@ type OCIObjectStore interface {
 	Get(context.Context, string) ([]byte, error)
 	Put(context.Context, string, []byte) error
 	Open(context.Context, string) (io.ReadCloser, int64, error)
+	OpenRange(context.Context, string, int64, int64) (io.ReadCloser, int64, error)
 	PutReader(context.Context, string, io.Reader, int64) error
 	Delete(context.Context, string) error
 	List(context.Context, string) ([]string, error)
@@ -74,6 +75,18 @@ func (s *MemoryOCIObjectStore) Open(ctx context.Context, key string) (io.ReadClo
 		return nil, 0, err
 	}
 	return io.NopCloser(bytes.NewReader(value)), int64(len(value)), nil
+}
+
+func (s *MemoryOCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
+	value, err := s.Get(ctx, key)
+	if err != nil {
+		return nil, 0, err
+	}
+	size := int64(len(value))
+	if offset < 0 || length < 0 || offset > size || length > size-offset {
+		return nil, 0, errors.New("OCI object range is out of bounds")
+	}
+	return io.NopCloser(bytes.NewReader(value[offset : offset+length])), size, nil
 }
 
 func (s *MemoryOCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, _ int64) error {
@@ -155,6 +168,28 @@ func (s *S3OCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser,
 		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
 			return nil, 0, errOCICacheMiss
 		}
+		return nil, 0, err
+	}
+	return object, info.Size, nil
+}
+
+func (s *S3OCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
+	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, 0, errOCICacheMiss
+		}
+		return nil, 0, err
+	}
+	if offset < 0 || length < 0 || offset > info.Size || length > info.Size-offset {
+		return nil, 0, errors.New("OCI object range is out of bounds")
+	}
+	options := minio.GetObjectOptions{}
+	if err := options.SetRange(offset, offset+length-1); err != nil {
+		return nil, 0, err
+	}
+	object, err := s.client.GetObject(ctx, s.bucket, key, options)
+	if err != nil {
 		return nil, 0, err
 	}
 	return object, info.Size, nil
@@ -323,10 +358,8 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	hash := sha256.New()
-	_, copyErr := io.Copy(hash, body)
 	closeErr := body.Close()
-	if copyErr != nil || closeErr != nil || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
+	if closeErr != nil || (index.Size > 0 && size != index.Size) {
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}

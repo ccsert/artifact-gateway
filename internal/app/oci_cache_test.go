@@ -277,7 +277,8 @@ func TestOCICacheNegativeResultAndCircuitBreakerAvoidRepeatedProxyRequests(t *te
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
 	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{"registry.example"})
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	metrics := &Metrics{}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	for range 2 {
 		req := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/missing", nil)
 		authorize(req, "resolver-secret")
@@ -290,6 +291,11 @@ func TestOCICacheNegativeResultAndCircuitBreakerAvoidRepeatedProxyRequests(t *te
 	if got := client.Calls(); got != 1 {
 		t.Fatalf("negative cache upstream calls = %d, want 1", got)
 	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), "artifact_gateway_oci_negative_cache_hits_total 1") {
+		t.Fatalf("metrics = %s", metricResponse.Body.String())
+	}
 
 	cache.RecordUpstreamFailure(context.Background(), "https://registry.example")
 	if cache.UpstreamAllowed(context.Background(), "https://registry.example") {
@@ -297,5 +303,25 @@ func TestOCICacheNegativeResultAndCircuitBreakerAvoidRepeatedProxyRequests(t *te
 	}
 	if cache.ProxyAllowed("https://untrusted.example") {
 		t.Fatal("whitelist allowed untrusted proxy")
+	}
+}
+
+func TestOCICacheRecordsProxyWhitelistDenial(t *testing.T) {
+	client := &countingOCIClient{content: []byte(`{"schemaVersion":2}`), status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
+	metrics := &Metrics{}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{"trusted.example"})}
+	req := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	authorize(req, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusNotFound || client.Calls() != 0 {
+		t.Fatalf("response = %d calls=%d", response.Code, client.Calls())
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), "artifact_gateway_oci_proxy_denied_total 1") {
+		t.Fatalf("metrics = %s", metricResponse.Body.String())
 	}
 }
