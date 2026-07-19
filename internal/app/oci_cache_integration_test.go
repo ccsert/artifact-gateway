@@ -149,7 +149,7 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 	if _, err := repositoryStore.CreateGroup(context.Background(), repository.Group{Name: deniedGroup, Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.proxy-cache-e2e.test", Position: 0}}}); err != nil {
 		t.Fatal(err)
 	}
-	if response := integrationRequest(handlerA, http.MethodGet, "/v2/"+deniedGroup+"/app/manifests/latest", "", "resolver-secret"); response.Code != http.StatusNotFound {
+	if response := integrationRequest(handlerA, http.MethodGet, "/v2/"+deniedGroup+"/app/manifests/latest", "", "resolver-secret"); response.Code != http.StatusForbidden {
 		t.Fatalf("whitelist response = %d", response.Code)
 	}
 	if upstream.Calls("latest") != 1 {

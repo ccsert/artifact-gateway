@@ -403,6 +403,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
 		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
+		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
 	mux.Handle("/v2/", oci)
@@ -414,6 +415,24 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 type cacheOperationsHandler struct {
 	maintenance   *CacheMaintenance
 	authenticator Authenticator
+}
+
+type cacheCollectionHandler struct {
+	maintenance   *CacheMaintenance
+	authenticator Authenticator
+}
+
+func (h cacheCollectionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok || !principal.Admin {
+		http.Error(w, "administrator access required", http.StatusForbidden)
+		return
+	}
+	if err := h.maintenance.Run(r.Context()); err != nil {
+		http.Error(w, "cache collection failed", http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h cacheOperationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

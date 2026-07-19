@@ -31,6 +31,29 @@ func TestCacheMaintenanceReportsCapacityAndCleanupState(t *testing.T) {
 	}
 }
 
+func TestCacheCollectionRequiresAdministratorAndRunsCollector(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	maintenance := NewCacheMaintenance(store, NewDefaultOCICache(store, nil))
+	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator(), NewDefaultOCICache(store, nil), nil, maintenance)
+
+	denied := httptest.NewRecorder()
+	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/api/v1/operations/cache/collect", nil))
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("unauthenticated status = %d", denied.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/operations/cache/collect", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("collection status = %d: %s", response.Code, response.Body.String())
+	}
+	if status := maintenance.snapshot(); status.SuccessfulRuns != 1 || status.FailedRuns != 0 {
+		t.Fatalf("maintenance status = %#v", status)
+	}
+}
+
 func TestCacheMaintenanceSchedulerStopsWithContext(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	maintenance := NewCacheMaintenance(store, NewDefaultOCICache(store, nil))
