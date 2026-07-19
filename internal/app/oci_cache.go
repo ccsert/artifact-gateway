@@ -353,17 +353,34 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 	if index.Negative {
 		return CachedOCIContent{}, errOCICacheNegative
 	}
-	body, size, err := c.store.Open(ctx, index.Object)
+	size, err := c.verifyObject(ctx, index)
 	if err != nil {
 		_ = c.removeIndex(ctx, key, encoded, index)
 		return CachedOCIContent{}, errOCICacheMiss
 	}
-	closeErr := body.Close()
-	if closeErr != nil || (index.Size > 0 && size != index.Size) {
-		_ = c.removeIndex(ctx, key, encoded, index)
-		return CachedOCIContent{}, errOCICacheMiss
-	}
 	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Object: index.Object, Size: size, store: c.store}, nil
+}
+
+// verifyObject streams the immutable object before serving it, so a cache
+// index never authorizes a same-size replacement with a different digest.
+func (c *OCICache) verifyObject(ctx context.Context, index cachedOCIIndex) (int64, error) {
+	body, size, err := c.store.Open(ctx, index.Object)
+	if err != nil {
+		return 0, err
+	}
+	hash := sha256.New()
+	written, copyErr := io.Copy(hash, body)
+	closeErr := body.Close()
+	if copyErr != nil || closeErr != nil {
+		return 0, errors.Join(copyErr, closeErr)
+	}
+	if written != size || (index.Size > 0 && size != index.Size) {
+		return 0, errors.New("OCI cached object size does not match index")
+	}
+	if "sha256:"+hex.EncodeToString(hash.Sum(nil)) != index.Digest {
+		return 0, errors.New("OCI cached object digest does not match index")
+	}
+	return size, nil
 }
 
 func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {

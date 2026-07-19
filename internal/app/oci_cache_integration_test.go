@@ -205,4 +205,18 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 	if response := integrationRequest(handlerB, http.MethodGet, invalidPath, "", "resolver-secret"); response.Code != http.StatusOK || response.Body.String() != "valid" || upstream.Calls("invalid") != 2 {
 		t.Fatalf("digest recovery response = %d %q calls=%d", response.Code, response.Body.String(), upstream.Calls("invalid"))
 	}
+	upstream.mu.Lock()
+	upstream.responses["invalid"] = integrationOCIResponse{status: http.StatusServiceUnavailable}
+	upstream.mu.Unlock()
+	if response := integrationRequest(handlerA, http.MethodGet, invalidPath, "", "resolver-secret"); response.Code != http.StatusOK || response.Body.String() != "valid" || upstream.Calls("invalid") != 2 {
+		t.Fatalf("offline blob response = %d %q calls=%d", response.Code, response.Body.String(), upstream.Calls("invalid"))
+	}
+	rangeRequest := httptest.NewRequest(http.MethodGet, invalidPath, nil)
+	rangeRequest.Header.Set("Range", "bytes=1-3")
+	authorize(rangeRequest, "resolver-secret")
+	ranged := httptest.NewRecorder()
+	handlerA.ServeHTTP(ranged, rangeRequest)
+	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != "ali" || upstream.Calls("invalid") != 2 {
+		t.Fatalf("offline blob range = %d %q calls=%d", ranged.Code, ranged.Body.String(), upstream.Calls("invalid"))
+	}
 }

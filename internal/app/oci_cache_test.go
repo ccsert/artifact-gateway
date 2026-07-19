@@ -231,6 +231,51 @@ func TestOCICacheUsesObjectStoreRangeReadForHighOffset(t *testing.T) {
 	}
 }
 
+func TestOCICacheRejectsSameSizeCorruptObjectForFullAndRangeReads(t *testing.T) {
+	content := []byte("verified blob payload")
+	corrupt := []byte("tampered blob payload")
+	if len(content) != len(corrupt) {
+		t.Fatal("test fixture must preserve the object size")
+	}
+	client := &countingOCIClient{content: content, status: http.StatusOK}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
+	objectStore := NewMemoryOCIObjectStore()
+	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, []string{"registry.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
+	path := "/v2/team/app/blobs/" + digestOf(content)
+
+	initial := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	authorize(request, "resolver-secret")
+	handler.ServeHTTP(initial, request)
+	if initial.Code != http.StatusOK {
+		t.Fatalf("initial response = %d", initial.Code)
+	}
+	object := "oci/objects/" + strings.ReplaceAll(digestOf(content), ":", "/")
+	if err := objectStore.Put(context.Background(), object, corrupt); err != nil {
+		t.Fatal(err)
+	}
+	client.status = http.StatusServiceUnavailable
+
+	full := httptest.NewRecorder()
+	fullRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	authorize(fullRequest, "resolver-secret")
+	handler.ServeHTTP(full, fullRequest)
+	if full.Code == http.StatusOK || full.Body.String() == string(corrupt) {
+		t.Fatalf("corrupt full response = %d %q", full.Code, full.Body.String())
+	}
+
+	ranged := httptest.NewRecorder()
+	rangeRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	rangeRequest.Header.Set("Range", "bytes=15-18")
+	authorize(rangeRequest, "resolver-secret")
+	handler.ServeHTTP(ranged, rangeRequest)
+	if ranged.Code == http.StatusPartialContent || ranged.Body.String() == string(corrupt[15:19]) {
+		t.Fatalf("corrupt range response = %d %q", ranged.Code, ranged.Body.String())
+	}
+}
+
 func TestOCIHostedSingleflightGivesEveryWaiterAnIndependentReader(t *testing.T) {
 	content := bytes.Repeat([]byte("hosted"), 1024)
 	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
