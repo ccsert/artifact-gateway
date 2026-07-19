@@ -61,6 +61,8 @@ wait_ready() {
 # unavailable upstream can still serve already cached content.
 make oci-e2e
 make maven-e2e
+make performance-readiness
+make upgrade-readiness
 
 cache_status() {
   curl --silent --show-error --fail \

@@ -9,7 +9,8 @@ but does not require any production credentials.
 make release-readiness
 ```
 
-The command runs the OCI and Maven black-box clients, then verifies object
+The command runs the OCI and Maven black-box clients, an OCI cache performance
+gate, and an isolated upgrade/rollback rehearsal. It then verifies object
 storage and PostgreSQL readiness failures, recovery after each dependency is
 restored, the administrator cache-maintenance view, and static resolver-token
 rotation. `scripts/release-readiness.sh` restores the configured resolver token
@@ -34,6 +35,15 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
       `internal/app/cache_maintenance_test.go`.
 - [ ] Resolver-token rotation rejects an OCI bearer token issued by the old
       token and permits a newly issued token.
+- [ ] The cached OCI manifest performance gate completes 50 requests at
+      concurrency 10 with zero errors and p95 latency at or below one second.
+      Override only with an approved release record using
+      `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
+      `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
+- [ ] The upgrade gate deploys `GATEWAY_UPGRADE_FROM_REF` (default `0d1d3f8`)
+      into fresh isolated volumes, migrates it to the current checkout, repeats
+      OCI and Maven/Gradle client reads, then starts the prior revision against
+      those volumes and verifies the persisted OCI Group can still be read.
 - [ ] Back up PostgreSQL and MinIO with `make backup-drill`; rehearse restore
       using [the recovery runbook](recovery-runbook.md) before a production
       rollout.
@@ -51,6 +61,8 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 | OCI cache | Read-through, content-addressed S3 storage; cleanup every five minutes after TTL grace period |
 | Maven cache | Component files: 15 minutes; metadata and negative results: one minute |
 | Backup target | PostgreSQL metadata plus MinIO object data; 24-hour RPO, 30-minute RTO drill target |
+| OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
+| Upgrade gate | Previous revision `0d1d3f8`, isolated PostgreSQL/MinIO volumes, current migration, protocol regression, binary rollback |
 
 ## Architecture
 

@@ -11,10 +11,14 @@ if [[ ! -f "$environment_file" || ! -f .gitea-fixture/connection.env ]]; then
   exit 1
 fi
 
+gateway_http_port_override=${GATEWAY_HTTP_PORT:-}
 # shellcheck disable=SC1091
 source "$environment_file"
 # shellcheck disable=SC1091
 source .gitea-fixture/connection.env
+if [[ -n "$gateway_http_port_override" ]]; then
+  GATEWAY_HTTP_PORT=$gateway_http_port_override
+fi
 
 for name in GATEWAY_HTTP_PORT GATEWAY_ADMIN_TOKEN GATEWAY_RESOLVER_TOKEN GITEA_HTTP_PORT GITEA_FIXTURE_USERNAME GITEA_FIXTURE_TOKEN GITEA_FIXTURE_ORG; do
   if [[ -z "${!name:-}" ]]; then
