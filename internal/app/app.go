@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/jackc/pgx/v5"
 )
 
 type Checker interface {
@@ -23,7 +23,7 @@ type Dependencies struct {
 func NewDependencies(cfg config.Config) Dependencies {
 	return Dependencies{
 		checkers: []Checker{
-			tcpChecker{address: databaseAddress(cfg.DatabaseURL)},
+			postgresChecker{databaseURL: cfg.DatabaseURL},
 			tcpChecker{address: cfg.RedisAddress},
 			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
 		},
@@ -47,6 +47,17 @@ func (d Dependencies) ready(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type postgresChecker struct{ databaseURL string }
+
+func (p postgresChecker) Check(ctx context.Context) error {
+	connection, err := pgx.Connect(ctx, p.databaseURL)
+	if err != nil {
+		return err
+	}
+	defer connection.Close(ctx)
+	return connection.Ping(ctx)
 }
 
 type tcpChecker struct{ address string }
@@ -75,18 +86,6 @@ func (h httpChecker) Check(ctx context.Context) error {
 		return fmt.Errorf("health endpoint returned HTTP %d", response.StatusCode)
 	}
 	return nil
-}
-
-func databaseAddress(databaseURL string) string {
-	parsed, err := url.Parse(databaseURL)
-	if err != nil || parsed.Hostname() == "" {
-		return ""
-	}
-	port := parsed.Port()
-	if port == "" {
-		port = "5432"
-	}
-	return net.JoinHostPort(parsed.Hostname(), port)
 }
 
 func s3EndpointURL(endpoint string) string {

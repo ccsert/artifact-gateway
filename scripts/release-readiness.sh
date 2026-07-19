@@ -4,13 +4,15 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-if [[ ! -f .env ]]; then
+environment_file=${GATEWAY_ENV_FILE:-.env}
+
+if [[ ! -f "$environment_file" ]]; then
   printf '%s\n' 'Run requires a configured .env file.' >&2
   exit 1
 fi
 
 # shellcheck disable=SC1091
-source .env
+source "$environment_file"
 
 for name in GATEWAY_HTTP_PORT GATEWAY_ADMIN_TOKEN GATEWAY_RESOLVER_TOKEN; do
   if [[ -z "${!name:-}" ]]; then
@@ -27,7 +29,7 @@ token_rotated=false
 restore_gateway() {
   if [[ "$token_rotated" == true ]]; then
     GATEWAY_RESOLVER_TOKEN="$original_resolver_token" \
-      docker compose --env-file .env -f compose.yml up -d --wait gateway >/dev/null
+      docker compose --env-file "$environment_file" -f compose.yml up -d --wait gateway >/dev/null
   fi
 }
 trap restore_gateway EXIT
@@ -68,15 +70,15 @@ cache_status() {
 
 # Readiness must surface dependencies that make cache reads or metadata writes
 # unsafe, then recover once each dependency is restored.
-docker compose --env-file .env -f compose.yml stop minio >/dev/null
+docker compose --env-file "$environment_file" -f compose.yml stop minio >/dev/null
 wait_ready 503
-docker compose --env-file .env -f compose.yml start minio >/dev/null
+docker compose --env-file "$environment_file" -f compose.yml start minio >/dev/null
 wait_ready 204
 cache_status >/dev/null
 
-docker compose --env-file .env -f compose.yml stop postgres >/dev/null
+docker compose --env-file "$environment_file" -f compose.yml stop postgres >/dev/null
 wait_ready 503
-docker compose --env-file .env -f compose.yml start postgres >/dev/null
+docker compose --env-file "$environment_file" -f compose.yml start postgres >/dev/null
 wait_ready 204
 cache_status >/dev/null
 
@@ -84,37 +86,37 @@ cache_status >/dev/null
 # state. Its retention behavior is covered with deterministic time in Go tests.
 before_collection=$(cache_status)
 before_successful_runs=$(sed -n 's/.*"successful_runs":\([0-9][0-9]*\).*/\1/p' <<<"$before_collection")
-test -n "$before_successful_runs"
+test -n "$before_successful_runs" || { printf '%s\n' 'Cache status did not include successful_runs.' >&2; exit 1; }
 collect_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -X POST -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
   "$gateway_url/api/v1/operations/cache/collect")
-[[ "$collect_status" == 204 ]]
+[[ "$collect_status" == 204 ]] || { printf 'Cache collection returned HTTP %s\n' "$collect_status" >&2; exit 1; }
 cache_status=$(cache_status)
 for field in object_count bytes pending_candidates successful_runs failed_runs; do
-  grep -Eq "\"${field}\":[0-9]+" <<<"$cache_status"
+  grep -Eq "\"${field}\":[0-9]+" <<<"$cache_status" || { printf 'Cache status lacks numeric %s.\n' "$field" >&2; exit 1; }
 done
 after_successful_runs=$(sed -n 's/.*"successful_runs":\([0-9][0-9]*\).*/\1/p' <<<"$cache_status")
-[[ "$after_successful_runs" -eq $((before_successful_runs + 1)) ]]
+[[ "$after_successful_runs" -eq $((before_successful_runs + 1)) ]] || { printf 'Cache successful_runs did not increment: before=%s after=%s\n' "$before_successful_runs" "$after_successful_runs" >&2; exit 1; }
 
 # Static resolver-token rotation invalidates issued OCI bearer tokens because
 # their HMAC key changes. It is the MVP token-revocation procedure.
 old_oci_token=$(curl --silent --show-error --fail --user "release-readiness:${original_resolver_token}" \
-  "$gateway_url/auth/token" | sed -n 's/.*"token":"\\([^"]*\\)".*/\\1/p')
-test -n "$old_oci_token"
+  "$gateway_url/auth/token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+test -n "$old_oci_token" || { printf '%s\n' 'Old OCI bearer token is empty.' >&2; exit 1; }
 
 token_rotated=true
 GATEWAY_RESOLVER_TOKEN="$rotated_resolver_token" \
-  docker compose --env-file .env -f compose.yml up -d --force-recreate --wait gateway >/dev/null
+  docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway >/dev/null
 
 expect_status 401 "$gateway_url/v2/"
 old_token_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $old_oci_token" "$gateway_url/v2/")
-[[ "$old_token_status" == 401 ]]
+[[ "$old_token_status" == 401 ]] || { printf 'Old OCI bearer token returned HTTP %s\n' "$old_token_status" >&2; exit 1; }
 new_oci_token=$(curl --silent --show-error --fail --user "release-readiness:${rotated_resolver_token}" \
-  "$gateway_url/auth/token" | sed -n 's/.*"token":"\\([^"]*\\)".*/\\1/p')
-test -n "$new_oci_token"
+  "$gateway_url/auth/token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+test -n "$new_oci_token" || { printf '%s\n' 'New OCI bearer token is empty.' >&2; exit 1; }
 new_token_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $new_oci_token" "$gateway_url/v2/")
-[[ "$new_token_status" == 200 ]]
+[[ "$new_token_status" == 200 ]] || { printf 'New OCI bearer token returned HTTP %s\n' "$new_token_status" >&2; exit 1; }
 
 printf '%s\n' 'Release readiness passed: Gitea OCI, Maven/Gradle proxy cache, dependency recovery, cache maintenance view, and resolver-token rotation.'

@@ -41,6 +41,13 @@ func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
 	if len(dependencies.checkers) != 3 {
 		t.Fatalf("checker count = %d, want 3", len(dependencies.checkers))
 	}
+	databaseChecker, ok := dependencies.checkers[0].(postgresChecker)
+	if !ok {
+		t.Fatalf("database checker type = %T, want postgresChecker", dependencies.checkers[0])
+	}
+	if databaseChecker.databaseURL != "postgres://gateway:password@db:5432/gateway" {
+		t.Fatalf("database checker URL = %q", databaseChecker.databaseURL)
+	}
 	s3Checker, ok := dependencies.checkers[2].(httpChecker)
 	if !ok {
 		t.Fatalf("S3 checker type = %T, want httpChecker", dependencies.checkers[2])

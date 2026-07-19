@@ -4,13 +4,15 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-if [[ ! -f .env || ! -f .gitea-fixture/connection.env ]]; then
+environment_file=${GATEWAY_ENV_FILE:-.env}
+
+if [[ ! -f "$environment_file" || ! -f .gitea-fixture/connection.env ]]; then
   printf '%s\n' 'Run requires .env and the seeded Gitea fixture.' >&2
   exit 1
 fi
 
 # shellcheck disable=SC1091
-source .env
+source "$environment_file"
 # shellcheck disable=SC1091
 source .gitea-fixture/connection.env
 
@@ -29,7 +31,7 @@ oci_client=${OCI_E2E_CLIENT:-docker}
 GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
-docker compose --env-file .env -f compose.yml up -d --build --wait
+docker compose --env-file "$environment_file" -f compose.yml up -d --build --wait
 
 group_json=$(printf '{"name":"%s","members":[{"name":"gitea-hosted","type":"hosted","endpoint":"%s","position":0}]}' "$GITEA_FIXTURE_ORG" "$hosted_endpoint")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \

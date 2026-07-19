@@ -11,20 +11,22 @@ require() {
   fi
 }
 
-if [[ ! -f .env ]]; then
+environment_file=${GATEWAY_ENV_FILE:-.env}
+
+if [[ ! -f "$environment_file" ]]; then
   printf '%s\n' 'Missing .env. Copy .env.example, choose local-only credentials, then rerun.' >&2
   exit 1
 fi
 
 # shellcheck disable=SC1091
-source .env
+source "$environment_file"
 for name in GITEA_HTTP_PORT GITEA_ADMIN_USERNAME GITEA_ADMIN_PASSWORD GITEA_ADMIN_EMAIL GITEA_FIXTURE_USERNAME GITEA_FIXTURE_PASSWORD GITEA_FIXTURE_EMAIL GITEA_FIXTURE_ORG; do
   require "$name"
 done
 
 base_url="http://localhost:${GITEA_HTTP_PORT}"
 registry="localhost:${GITEA_HTTP_PORT}"
-compose=(docker compose --env-file .env -f compose.gitea.yml)
+compose=(docker compose --env-file "$environment_file" -f compose.gitea.yml)
 fixture_dir=.gitea-fixture
 maven_group=com/example/gatewayfixture
 maven_artifact=sample-library
@@ -86,6 +88,12 @@ upload_maven() {
   local filename
   local status
   filename=$(basename "$file")
+  status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    -u "$GITEA_FIXTURE_USERNAME:$GITEA_FIXTURE_PASSWORD" \
+    "$base_url/api/packages/$GITEA_FIXTURE_ORG/maven/$maven_path/$filename")
+  if [[ "$status" == 200 ]]; then
+    return
+  fi
   status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
     -u "$GITEA_FIXTURE_USERNAME:$GITEA_FIXTURE_PASSWORD" \
     --upload-file "$file" "$base_url/api/packages/$GITEA_FIXTURE_ORG/maven/$maven_path/$filename")

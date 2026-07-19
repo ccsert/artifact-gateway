@@ -4,14 +4,16 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-if [[ ! -f .env || ! -f .gitea-fixture/connection.env ]]; then
+environment_file=${GATEWAY_ENV_FILE:-.env}
+
+if [[ ! -f "$environment_file" || ! -f .gitea-fixture/connection.env ]]; then
   printf '%s\n' 'Run requires .env and the seeded Gitea fixture.' >&2
   exit 1
 fi
 
 gateway_http_port_override=${GATEWAY_HTTP_PORT:-}
 # shellcheck disable=SC1091
-source .env
+source "$environment_file"
 # shellcheck disable=SC1091
 source .gitea-fixture/connection.env
 if [[ -n "$gateway_http_port_override" ]]; then
@@ -35,7 +37,8 @@ if [[ "$proxy_port" == "$GATEWAY_HTTP_PORT" ]]; then
   exit 1
 fi
 proxy_host="host.docker.internal:${proxy_port}"
-proxy_group="${GITEA_FIXTURE_ORG}-proxy"
+run_id=${MAVEN_E2E_RUN_ID:-"$(date +%s)-${RANDOM}"}
+proxy_group="${GITEA_FIXTURE_ORG}-proxy-${run_id}"
 proxy_endpoint="http://${proxy_host}"
 
 workdir=$(mktemp -d)
@@ -61,7 +64,7 @@ GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
 GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="$proxy_host" \
-docker compose --env-file .env -f compose.yml up -d --build --wait
+docker compose --env-file "$environment_file" -f compose.yml up -d --build --wait
 
 create_group() {
   local name=$1 endpoint=$2 status payload
@@ -80,6 +83,15 @@ request_status() {
     --user "contract-e2e:${GATEWAY_RESOLVER_TOKEN}" "$1"
 }
 
+expect_request_status() {
+  local expected=$1 url=$2 actual
+  actual=$(request_status "$url")
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'Expected Maven request HTTP %s from %s, got %s\n' "$expected" "$url" "$actual" >&2
+    exit 1
+  fi
+}
+
 create_group "$proxy_group" "$proxy_endpoint"
 
 repository_url="http://host.docker.internal:${GATEWAY_HTTP_PORT}/maven/${proxy_group}"
@@ -89,34 +101,37 @@ maven_resource="${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/${GITEA_MAVEN_
 metadata_resource="${GITEA_MAVEN_GROUP//.//}/${GITEA_MAVEN_ARTIFACT}/maven-metadata.xml"
 
 for status in 429 503; do
-  retry_group="${GITEA_FIXTURE_ORG}-retry-${status}"
+  retry_group="${GITEA_FIXTURE_ORG}-retry-${status}-${run_id}"
   create_group "$retry_group" "${proxy_endpoint}/retry/${status}"
-  [[ $(request_status "$gateway_url/maven/${retry_group}/${maven_resource}") == 200 ]]
+  expect_request_status 200 "$gateway_url/maven/${retry_group}/${maven_resource}"
   [[ $(grep -c "GET /retry/${status}/${maven_resource} ${status}" "$proxy_log") == 1 ]]
   [[ $(grep -c "GET /retry/${status}/${maven_resource} 200" "$proxy_log") == 1 ]]
 done
 
-negative_group="${GITEA_FIXTURE_ORG}-negative"
+negative_group="${GITEA_FIXTURE_ORG}-negative-${run_id}"
 negative_resource="com/example/missing/1.0/missing-1.0.pom"
 create_group "$negative_group" "$proxy_endpoint"
-[[ $(request_status "$gateway_url/maven/${negative_group}/${negative_resource}") == 404 ]]
-[[ $(request_status "$gateway_url/maven/${negative_group}/${negative_resource}") == 404 ]]
+expect_request_status 404 "$gateway_url/maven/${negative_group}/${negative_resource}"
+expect_request_status 404 "$gateway_url/maven/${negative_group}/${negative_resource}"
 [[ $(grep -c "GET /${negative_resource} 404" "$proxy_log") == 1 ]]
 
-denied_group="${GITEA_FIXTURE_ORG}-denied"
+denied_group="${GITEA_FIXTURE_ORG}-denied-${run_id}"
 create_group "$denied_group" "http://untrusted.invalid"
-[[ $(request_status "$gateway_url/maven/${denied_group}/${maven_resource}") == 404 ]]
+expect_request_status 403 "$gateway_url/maven/${denied_group}/${maven_resource}"
 
 cat >"$workdir/settings.xml" <<EOF
-<settings><servers><server><id>gateway</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server></servers><profiles><profile><id>gateway</id><repositories><repository><id>gateway</id><url>${repository_url}</url></repository></repositories></profile></profiles><activeProfiles><activeProfile>gateway</activeProfile></activeProfiles></settings>
+<settings><servers><server><id>gateway</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server><server><id>gateway-http</id><username>maven-e2e</username><password>${GATEWAY_RESOLVER_TOKEN}</password></server></servers><mirrors><mirror><id>gateway-http</id><mirrorOf>external:http:*</mirrorOf><url>${repository_url}</url></mirror></mirrors><profiles><profile><id>gateway</id><repositories><repository><id>gateway</id><url>${repository_url}</url></repository></repositories></profile></profiles><activeProfiles><activeProfile>gateway</activeProfile></activeProfiles></settings>
 EOF
 docker run --rm -v "$workdir:/work" -w /work maven:3.9-eclipse-temurin-21 \
-  mvn --batch-mode --settings settings.xml dependency:get -Dartifact="$latest_coordinate" >/dev/null
+  mvn --batch-mode --settings settings.xml dependency:get -Dartifact="$latest_coordinate" >"$workdir/maven.log" 2>&1 || {
+    cat "$workdir/maven.log" >&2
+    exit 1
+  }
 
 # Maven resolved LATEST from upstream metadata. Read it again through the
 # Gateway to establish the metadata cache before the separate Gradle client.
-[[ $(request_status "$gateway_url/maven/${proxy_group}/${metadata_resource}") == 200 ]]
-[[ $(request_status "$gateway_url/maven/${proxy_group}/${metadata_resource}") == 200 ]]
+expect_request_status 200 "$gateway_url/maven/${proxy_group}/${metadata_resource}"
+expect_request_status 200 "$gateway_url/maven/${proxy_group}/${metadata_resource}"
 [[ $(grep -c "GET /${metadata_resource} 200" "$proxy_log") == 1 ]]
 
 # A separate Gradle client must resolve from the Gateway cache after the
@@ -129,13 +144,20 @@ cat >"$workdir/settings.gradle" <<'EOF'
 pluginManagement { repositories { gradlePluginPortal() } }
 EOF
 cat >"$workdir/build.gradle" <<EOF
-repositories { maven { url = uri('${repository_url}'); credentials { username = 'gradle-e2e'; password = '${GATEWAY_RESOLVER_TOKEN}' } } }
+repositories { maven { url = uri('${repository_url}'); allowInsecureProtocol = true; credentials { username = 'gradle-e2e'; password = '${GATEWAY_RESOLVER_TOKEN}' } } }
 configurations { resolve }
 dependencies { resolve '${GITEA_MAVEN_GROUP}:${GITEA_MAVEN_ARTIFACT}:1.+' }
 tasks.register('resolveDependencies') { doLast { configurations.resolve.files.each { println it } } }
 EOF
 docker run --rm -v "$workdir:/work" -w /work gradle:8.14-jdk21 \
-  gradle --no-daemon --quiet resolveDependencies | grep -Fq "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar"
+  gradle --no-daemon --quiet resolveDependencies >"$workdir/gradle.log" 2>&1 || {
+    cat "$workdir/gradle.log" >&2
+    exit 1
+  }
+grep -Fq "${GITEA_MAVEN_ARTIFACT}-${GITEA_MAVEN_VERSION}.jar" "$workdir/gradle.log" || {
+  cat "$workdir/gradle.log" >&2
+  exit 1
+}
 
 metrics=$(curl --silent --show-error --fail "$gateway_url/metrics")
 for sample in 'artifact_gateway_maven_cache_requests_total{outcome="hit"}' 'artifact_gateway_maven_cache_requests_total{outcome="miss"}' 'artifact_gateway_maven_upstream_retries_total' 'artifact_gateway_maven_negative_cache_hits_total' 'artifact_gateway_maven_proxy_denied_total'; do
@@ -148,8 +170,8 @@ GATEWAY_ADAPTER_MODE=gitea \
 GATEWAY_GITEA_USERNAME="$GITEA_FIXTURE_USERNAME" \
 GATEWAY_GITEA_TOKEN="$GITEA_FIXTURE_TOKEN" \
 GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS="" \
-docker compose --env-file .env -f compose.yml up -d --force-recreate --wait gateway
-[[ $(request_status "$gateway_url/maven/${proxy_group}/${maven_resource}") == 404 ]]
+docker compose --env-file "$environment_file" -f compose.yml up -d --force-recreate --wait gateway
+expect_request_status 403 "$gateway_url/maven/${proxy_group}/${maven_resource}"
 
 metrics=$(curl --silent --show-error --fail "$gateway_url/metrics")
 grep -F 'artifact_gateway_maven_cache_invalidations_total' <<<"$metrics" | awk '$NF > 0 { found=1 } END { exit !found }'
