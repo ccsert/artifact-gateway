@@ -96,6 +96,10 @@ func (r Resolver) Resolve(request Request) (int, string) {
 		audit(Member{}, 401, "access_denied", "bypass", 0)
 		return 401, "access_denied"
 	}
+	if !request.Authenticated && !anonymousReadOperation(request.Operation) {
+		audit(Member{}, 403, "access_denied", "bypass", 0)
+		return 403, "access_denied"
+	}
 	if request.Resource.value == "" {
 		audit(Member{}, 400, "upstream_error", "bypass", 0)
 		return 400, "upstream_error"
@@ -145,6 +149,15 @@ func (r Resolver) Resolve(request Request) (int, string) {
 	}
 	audit(Member{}, 404, "not_found", "miss", 0)
 	return 404, "not_found"
+}
+
+func anonymousReadOperation(operation string) bool {
+	switch strings.ToLower(operation) {
+	case "get", "head":
+		return true
+	default:
+		return false
+	}
 }
 
 func cacheOutcome(result FetchResult) string {
