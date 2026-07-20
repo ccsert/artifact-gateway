@@ -26,6 +26,7 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
+	t.Setenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS", "raw.example, mirror.example ")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -35,6 +36,9 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	}
 	if got := strings.Join(cfg.MavenProxyAllowedHosts, ","); got != "repo.example,mirror.example" {
 		t.Fatalf("MavenProxyAllowedHosts = %q", got)
+	}
+	if got := strings.Join(cfg.RawProxyAllowedHosts, ","); got != "raw.example,mirror.example" {
+		t.Fatalf("RawProxyAllowedHosts = %q", got)
 	}
 }
 

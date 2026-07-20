@@ -57,7 +57,7 @@ func main() {
 	maintenance.Start(runtimeContext, 5*time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
-		Handler: app.NewGatewayHandlerWithCacheMaintenance(dependencies, store, app.TestAdapter{}, app.Authenticator{
+		Handler: app.NewGatewayHandlerWithRawCache(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:        cfg.AdminToken,
 			ResolverToken:     cfg.ResolverToken,
 			AdminActor:        cfg.AdminActor,
@@ -69,7 +69,7 @@ func main() {
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
 			}),
-		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithQuota(quota), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

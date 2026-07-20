@@ -372,14 +372,18 @@ func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore
 }
 
 func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, ociClients...)
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, nil, ociClients...)
 }
 
 func NewGatewayHandlerWithCacheMaintenance(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, maintenance, ociClients...)
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, maintenance, ociClients...)
 }
 
-func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
+func NewGatewayHandlerWithRawCache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, maintenance, ociClients...)
+}
+
+func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -393,6 +397,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mavenClient := MavenClient(GiteaClient{})
 	if client, ok := ociClient.(MavenClient); ok {
 		mavenClient = client
+	}
+	rawClient := RawClient(GiteaClient{})
+	if client, ok := ociClient.(RawClient); ok {
+		rawClient = client
 	}
 	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
@@ -408,6 +416,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
+	mux.Handle("/raw/", RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return tracedHTTPHandler(mux)
 }
