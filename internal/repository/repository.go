@@ -22,15 +22,17 @@ const (
 )
 
 type Member struct {
-	Name     string     `json:"name"`
-	Type     MemberType `json:"type"`
-	Endpoint string     `json:"endpoint"`
-	Position int        `json:"position"`
+	Name      string     `json:"name"`
+	Type      MemberType `json:"type"`
+	Endpoint  string     `json:"endpoint"`
+	Position  int        `json:"position"`
+	Anonymous bool       `json:"anonymous"`
 }
 
 type Group struct {
 	Name      string    `json:"name"`
 	Enabled   bool      `json:"enabled"`
+	Anonymous bool      `json:"anonymous"`
 	Members   []Member  `json:"members"`
 	CreatedAt time.Time `json:"createdAt"`
 }
