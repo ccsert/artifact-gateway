@@ -72,11 +72,6 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusMethodNotAllowed, "UNSUPPORTED", "method not allowed")
 		return
 	}
-	principal, ok := h.Authenticator.Authenticate(request.Header.Get("Authorization"))
-	if !ok {
-		writeOCIChallenge(w, request)
-		return
-	}
 	repositoryName, resource, reference, ok := parseOCIPath(request.URL.Path)
 	if !ok {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
@@ -84,7 +79,19 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	}
 	h.Resolver.Metrics.recordRequest(repositoryName)
 	groupName := strings.SplitN(repositoryName, "/", 2)[0]
-	if !h.Authenticator.CanReadRepository(principal, repositoryName) {
+	principal, ok := h.Authenticator.Authenticate(request.Header.Get("Authorization"))
+	if !ok && h.anonymousOCIAllowed(request.Context(), groupName) {
+		principal = Principal{Actor: "anonymous"}
+		ok = true
+	}
+	if !ok {
+		writeOCIChallenge(w, request)
+		return
+	}
+	if principal.Actor == "anonymous" {
+		h.Resolver.Metrics.recordAnonymousRead()
+	}
+	if principal.Actor != "anonymous" && !h.Authenticator.CanReadRepository(principal, repositoryName) {
 		if err := h.Resolver.RecordOCIFailure(request.Context(), groupName, repositoryName, "", principal.Actor, repository.AuditAccessDenied); err != nil {
 			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
 			return

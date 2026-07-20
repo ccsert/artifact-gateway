@@ -57,23 +57,30 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	groupName, artifactPath, ok := parseMavenPath(request.URL.Path)
+	if !ok {
+		http.NotFound(w, request)
+		return
+	}
 	principal, ok := h.authenticate(request)
+	if !ok && h.anonymousMavenAllowed(request.Context(), groupName) {
+		principal = Principal{Actor: "anonymous"}
+		ok = true
+	}
 	if !ok {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
 	actor := principal.Actor
-	groupName, artifactPath, ok := parseMavenPath(request.URL.Path)
-	if !ok {
-		http.NotFound(w, request)
-		return
+	if actor == "anonymous" {
+		h.Metrics.recordAnonymousRead()
 	}
 	// A Maven Group is the repository boundary. Artifact paths are request
 	// details, not distinct repositories for authorization or operations.
 	repositoryName := groupName
 	h.Metrics.recordRequest(repositoryName)
-	if !h.Authenticator.CanReadMavenRepository(principal, repositoryName) {
+	if principal.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(principal, repositoryName) {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
 			h.Metrics.failed.Add(1)
 			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -108,7 +115,16 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "Maven group is disabled", http.StatusForbidden)
 		return
 	}
-	members := prioritizeHosted(group.Members)
+	members := group.Members
+	if actor == "anonymous" {
+		members = make([]repository.Member, 0, len(group.Members))
+		for _, member := range group.Members {
+			if member.Anonymous {
+				members = append(members, member)
+			}
+		}
+	}
+	members = prioritizeHosted(members)
 	if len(members) == 0 {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditNotFound); err != nil {
 			h.Metrics.failed.Add(1)
