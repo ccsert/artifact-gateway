@@ -206,6 +206,47 @@ func TestV2ResolverAllowsGrantedAuthenticatedMember(t *testing.T) {
 	}
 }
 
+func TestV2ResolverAnonymousRequestsAreReadOnly(t *testing.T) {
+	for _, operation := range []string{"PUT", "post", "DELETE", "options"} {
+		t.Run(operation, func(t *testing.T) {
+			audit := fakeAudit{}
+			r := v2contract.Resolver{
+				GroupAnonymous: true,
+				Members:        []v2contract.Member{{Name: "hosted", Type: v2contract.Hosted, Anonymous: true}},
+				Cache:          failingCache{t: t},
+				Source: fakeSourceFunc(func(v2contract.Member, v2contract.Request) v2contract.FetchResult {
+					t.Fatal("anonymous non-read request reached source")
+					return v2contract.FetchResult{}
+				}),
+				Auditor: &audit,
+			}
+			request := v2contract.Request{ID: "anonymous-non-read", Authenticated: false, Format: "raw", Group: "public", Resource: canonicalResource(t, "artifact"), Representation: "body", Operation: operation}
+			if status, outcome := r.Resolve(request); status != 403 || outcome != "access_denied" {
+				t.Fatalf("status=%d outcome=%s", status, outcome)
+			}
+			if len(audit) != 1 || audit[0].Actor != "anonymous" || audit[0].Status != 403 || audit[0].Outcome != "access_denied" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
+	}
+
+	for _, operation := range []string{"GET", "head"} {
+		t.Run(operation, func(t *testing.T) {
+			r := v2contract.Resolver{
+				GroupAnonymous: true,
+				Members:        []v2contract.Member{{Name: "hosted", Type: v2contract.Hosted, Anonymous: true}},
+				Cache:          fakeCache{},
+				Source:         fakeSource{"hosted": {Status: 200, Cacheable: true}},
+				Auditor:        &fakeAudit{},
+			}
+			request := v2contract.Request{ID: "anonymous-read", Format: "raw", Group: "public", Resource: canonicalResource(t, "artifact"), Representation: "body", Operation: operation}
+			if status, outcome := r.Resolve(request); status != 200 || outcome != "resolved" {
+				t.Fatalf("status=%d outcome=%s", status, outcome)
+			}
+		})
+	}
+}
+
 func TestV2RawAndConanContract(t *testing.T) {
 	for _, tc := range []struct {
 		path string
@@ -233,7 +274,7 @@ func TestV2ContractHasRequiredDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, clause := range []string{"CONTRACT: anonymous-default-deny", "CONTRACT: audit-fields", "CONTRACT: raw-path-normalization", "CONTRACT: raw-checksum", "CONTRACT: raw-proxy-allowlist", "CONTRACT: raw-cache", "CONTRACT: conan2-only", "CONTRACT: conan-coordinate", "CONTRACT: conan2-read-endpoints", "CONTRACT: conan-cache", "CONTRACT: conan-proxy-allowlist", "CONTRACT: fixtures-and-upgrade"} {
+	for _, clause := range []string{"CONTRACT: anonymous-default-deny", "CONTRACT: anonymous-read-methods", "CONTRACT: audit-fields", "CONTRACT: raw-path-normalization", "CONTRACT: raw-checksum", "CONTRACT: raw-proxy-allowlist", "CONTRACT: raw-cache", "CONTRACT: conan2-only", "CONTRACT: conan-coordinate", "CONTRACT: conan2-read-endpoints", "CONTRACT: conan-cache", "CONTRACT: conan-proxy-allowlist", "CONTRACT: fixtures-and-upgrade"} {
 		if !strings.Contains(string(document), clause) {
 			t.Errorf("missing %q", clause)
 		}
