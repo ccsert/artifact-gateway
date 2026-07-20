@@ -30,7 +30,7 @@ Every read begins denied. There is no global anonymous setting or format-wide by
 
 `CONTRACT: audit-fields`
 
-Each attempt records timestamp, request ID / trace ID, actor (`anonymous` when applicable), format, group, canonical repository or path, member, member type, upstream host, operation, HTTP status, outcome, cache disposition, and byte count. Audit records never contain authorization headers, tokens, Conan credentials, or unredacted upstream query secrets. Outcomes include `access_denied`, `not_found`, `proxy_denied`, `upstream_error`, `internal_preferred`, and `resolved`.
+Each attempt records timestamp, request ID / trace ID, actor (`anonymous` when applicable), format, group, canonical repository or path, representation, member, member type, upstream host, operation, HTTP status, outcome, cache disposition, and byte count. Audit records never contain authorization headers, tokens, Conan credentials, or unredacted upstream query secrets. Outcomes include `access_denied`, `not_found`, `proxy_denied`, `upstream_error`, `internal_preferred`, and `resolved`.
 
 ## Raw protocol
 

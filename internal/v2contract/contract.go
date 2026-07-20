@@ -2,8 +2,10 @@
 package v2contract
 
 import (
+	"net"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type MemberType string
@@ -19,11 +21,48 @@ type Member struct {
 	Anonymous, ProxyAllowed bool
 	Endpoint                string
 }
-type Audit struct{ Actor, Outcome, Member string }
-type Source interface{ Fetch(Member, string) int }
+type CanonicalResource struct{ value string }
+
+func NewCanonicalResource(path string) (CanonicalResource, bool) {
+	path, ok := CanonicalRawPath(path)
+	if !ok {
+		return CanonicalResource{}, false
+	}
+	return CanonicalResource{value: path}, true
+}
+
+func (r CanonicalResource) String() string { return r.value }
+
+type Request struct {
+	ID, Actor                                string
+	Authenticated                            bool
+	Format, Group, Representation, Operation string
+	Resource                                 CanonicalResource
+}
+type CacheKey struct {
+	Format, Group, Representation, Operation, Member, Endpoint string
+	Resource                                                   CanonicalResource
+}
+type FetchResult struct {
+	Status    int
+	Outcome   string
+	Cacheable bool
+	Bytes     int64
+}
+type Audit struct {
+	OccurredAt                                                                                  time.Time
+	RequestID                                                                                   string
+	Actor, Format, Group, Resource, Representation, Member, MemberType, UpstreamHost, Operation string
+	Status                                                                                      int
+	Outcome, CacheDisposition                                                                   string
+	Bytes                                                                                       int64
+}
+type Source interface {
+	Fetch(Member, Request) FetchResult
+}
 type Cache interface {
-	Load(Member, string) (int, bool)
-	Store(Member, string, int)
+	Load(CacheKey) (FetchResult, bool)
+	Store(CacheKey, FetchResult)
 }
 type Auditor interface{ Record(Audit) }
 type Resolver struct {
@@ -34,58 +73,89 @@ type Resolver struct {
 	Auditor        Auditor
 }
 
-func (r Resolver) Resolve(authenticated bool, path string) (int, string) {
+func (r Resolver) Resolve(request Request) (int, string) {
 	actor := "anonymous"
-	if authenticated {
-		actor = "user"
+	if request.Authenticated {
+		actor = request.Actor
+		if actor == "" {
+			actor = "user"
+		}
 	}
-	audit := func(outcome, member string) { r.Auditor.Record(Audit{Actor: actor, Outcome: outcome, Member: member}) }
-	if !authenticated && !r.GroupAnonymous {
-		audit("access_denied", "")
+	audit := func(member Member, status int, outcome, disposition string, bytes int64) {
+		r.Auditor.Record(Audit{
+			OccurredAt: time.Now().UTC(), RequestID: request.ID, Actor: actor, Format: request.Format, Group: request.Group, Resource: request.Resource.String(), Representation: request.Representation,
+			Member: member.Name, MemberType: string(member.Type), UpstreamHost: endpointHost(member.Endpoint),
+			Operation: request.Operation, Status: status, Outcome: outcome, CacheDisposition: disposition, Bytes: bytes,
+		})
+	}
+	if !request.Authenticated && !r.GroupAnonymous {
+		audit(Member{}, 401, "access_denied", "bypass", 0)
 		return 401, "access_denied"
+	}
+	if request.Resource.value == "" {
+		audit(Member{}, 400, "upstream_error", "bypass", 0)
+		return 400, "upstream_error"
 	}
 	for _, kind := range []MemberType{Hosted, Proxy} {
 		for _, member := range r.Members {
 			if member.Type != kind {
 				continue
 			}
-			if !authenticated && !member.Anonymous {
-				audit("access_denied", member.Name)
+			if !request.Authenticated && !member.Anonymous {
+				audit(member, 401, "access_denied", "bypass", 0)
 				return 401, "access_denied"
 			}
 			if kind == Proxy && !member.ProxyAllowed {
-				audit("proxy_denied", member.Name)
+				audit(member, 403, "proxy_denied", "bypass", 0)
 				continue
 			}
-			if status, ok := r.Cache.Load(member, path); ok {
-				audit(cacheOutcome(status), member.Name)
-				if status == 200 {
-					return 200, "resolved"
+			key := CacheKey{Format: request.Format, Group: request.Group, Resource: request.Resource, Representation: request.Representation, Operation: request.Operation, Member: member.Name, Endpoint: member.Endpoint}
+			if result, ok := r.Cache.Load(key); ok {
+				audit(member, result.Status, cacheOutcome(result), "hit", result.Bytes)
+				if result.Status >= 200 && result.Status < 300 {
+					return result.Status, "resolved"
 				}
 				continue
 			}
-			status := r.Source.Fetch(member, path)
-			if status == 200 || status == 404 {
-				r.Cache.Store(member, path, status)
+			result := r.Source.Fetch(member, request)
+			if result.Status >= 200 && result.Status < 300 || result.Status == 404 {
+				if result.Cacheable {
+					r.Cache.Store(key, result)
+				}
 			}
-			if status == 200 {
-				audit("resolved", member.Name)
-				return 200, "resolved"
+			if result.Status >= 200 && result.Status < 300 {
+				audit(member, result.Status, "resolved", "miss", result.Bytes)
+				return result.Status, "resolved"
 			}
-			if status == 404 {
-				audit("not_found", member.Name)
+			if result.Status == 404 {
+				audit(member, 404, "not_found", "miss", 0)
+				continue
 			}
+			audit(member, result.Status, "upstream_error", "bypass", 0)
+			return result.Status, "upstream_error"
 		}
 	}
-	audit("not_found", "")
+	audit(Member{}, 404, "not_found", "miss", 0)
 	return 404, "not_found"
 }
 
-func cacheOutcome(status int) string {
-	if status == 404 {
+func cacheOutcome(result FetchResult) string {
+	if result.Status == 404 {
 		return "not_found"
 	}
 	return "resolved"
+}
+
+func endpointHost(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(u.Host)
+	if err == nil {
+		return host
+	}
+	return u.Host
 }
 
 func CanonicalRawPath(path string) (string, bool) {
