@@ -64,12 +64,16 @@ type Cache interface {
 	Load(CacheKey) (FetchResult, bool)
 	Store(CacheKey, FetchResult)
 }
+type Authorizer interface {
+	Allowed(Member, Request) bool
+}
 type Auditor interface{ Record(Audit) }
 type Resolver struct {
 	GroupAnonymous bool
 	Members        []Member
 	Source         Source
 	Cache          Cache
+	Authorizer     Authorizer
 	Auditor        Auditor
 }
 
@@ -100,6 +104,10 @@ func (r Resolver) Resolve(request Request) (int, string) {
 		for _, member := range r.Members {
 			if member.Type != kind {
 				continue
+			}
+			if request.Authenticated && (r.Authorizer == nil || !r.Authorizer.Allowed(member, request)) {
+				audit(member, 403, "access_denied", "bypass", 0)
+				return 403, "access_denied"
 			}
 			if !request.Authenticated && !member.Anonymous {
 				audit(member, 401, "access_denied", "bypass", 0)

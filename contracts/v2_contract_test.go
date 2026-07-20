@@ -32,6 +32,22 @@ type fakeAudit []v2contract.Audit
 
 func (f *fakeAudit) Record(a v2contract.Audit) { *f = append(*f, a) }
 
+type fakeAuthorizer func(v2contract.Member, v2contract.Request) bool
+
+func (f fakeAuthorizer) Allowed(member v2contract.Member, request v2contract.Request) bool {
+	return f(member, request)
+}
+
+type failingCache struct{ t *testing.T }
+
+func (c failingCache) Load(v2contract.CacheKey) (v2contract.FetchResult, bool) {
+	c.t.Fatal("unauthorized request reached cache")
+	return v2contract.FetchResult{}, false
+}
+func (c failingCache) Store(v2contract.CacheKey, v2contract.FetchResult) {
+	c.t.Fatal("unauthorized request stored cache")
+}
+
 func canonicalResource(t *testing.T, path string) v2contract.CanonicalResource {
 	t.Helper()
 	resource, ok := v2contract.NewCanonicalResource(path)
@@ -133,6 +149,60 @@ func TestV2ResolverCacheAndUpstreamErrorContract(t *testing.T) {
 	request.Resource = v2contract.CanonicalResource{}
 	if got, _ := r.Resolve(request); got != 400 || len(cache) != 0 || audit[len(audit)-1].Outcome != "upstream_error" {
 		t.Fatalf("missing canonical resource reached resolver: status=%d cache=%d audit=%#v", got, len(cache), audit)
+	}
+}
+
+func TestV2ResolverRejectsUngrantedAuthenticatedMemberBeforeCacheOrSource(t *testing.T) {
+	for _, member := range []v2contract.Member{
+		{Name: "hosted", Type: v2contract.Hosted, Endpoint: "https://hosted.example"},
+		{Name: "proxy", Type: v2contract.Proxy, Endpoint: "https://proxy.example", ProxyAllowed: true},
+	} {
+		t.Run(string(member.Type), func(t *testing.T) {
+			audit := fakeAudit{}
+			grantCalls := 0
+			r := v2contract.Resolver{
+				GroupAnonymous: true,
+				Members:        []v2contract.Member{member},
+				Cache:          failingCache{t: t},
+				Source: fakeSourceFunc(func(v2contract.Member, v2contract.Request) v2contract.FetchResult {
+					t.Fatal("unauthorized request reached source")
+					return v2contract.FetchResult{}
+				}),
+				Authorizer: fakeAuthorizer(func(got v2contract.Member, request v2contract.Request) bool {
+					grantCalls++
+					return false
+				}),
+				Auditor: &audit,
+			}
+			request := v2contract.Request{ID: "denied-request", Actor: "alice", Authenticated: true, Format: "raw", Group: "private", Resource: canonicalResource(t, "artifact"), Representation: "body", Operation: "get"}
+			if status, outcome := r.Resolve(request); status != 403 || outcome != "access_denied" || grantCalls != 1 {
+				t.Fatalf("status=%d outcome=%s grant calls=%d", status, outcome, grantCalls)
+			}
+			last := audit[len(audit)-1]
+			if last.Actor != "alice" || last.Member != member.Name || last.Status != 403 || last.Outcome != "access_denied" || last.CacheDisposition != "bypass" {
+				t.Fatalf("denial audit=%#v", last)
+			}
+		})
+	}
+}
+
+func TestV2ResolverAllowsGrantedAuthenticatedMember(t *testing.T) {
+	member := v2contract.Member{Name: "hosted", Type: v2contract.Hosted, Endpoint: "https://hosted.example"}
+	audit := fakeAudit{}
+	r := v2contract.Resolver{
+		Members:    []v2contract.Member{member},
+		Cache:      fakeCache{},
+		Source:     fakeSource{"hosted": {Status: 200, Cacheable: true}},
+		Authorizer: fakeAuthorizer(func(v2contract.Member, v2contract.Request) bool { return true }),
+		Auditor:    &audit,
+	}
+	request := v2contract.Request{ID: "granted-request", Actor: "alice", Authenticated: true, Format: "raw", Group: "private", Resource: canonicalResource(t, "artifact"), Representation: "body", Operation: "get"}
+	if status, outcome := r.Resolve(request); status != 200 || outcome != "resolved" {
+		t.Fatalf("status=%d outcome=%s", status, outcome)
+	}
+	last := audit[len(audit)-1]
+	if last.Actor != "alice" || last.Member != "hosted" || last.Outcome != "resolved" || last.Status != 200 {
+		t.Fatalf("resolution audit=%#v", last)
 	}
 }
 
