@@ -39,6 +39,10 @@ last cleanup result. The process runs cleanup every five minutes; object
 removal is delayed by the cache TTL grace period so active indexes remain
 readable.
 
+The V2 contract for resource-scoped anonymous reads plus Raw and Conan 2 is
+in [`docs/v2-contract.md`](docs/v2-contract.md). New format work must follow
+that contract before adding routes, migrations, or client fixtures.
+
 ## OCI hosted reads
 
 Set `GATEWAY_ADAPTER_MODE=gitea`, `GATEWAY_GITEA_USERNAME`, and `GATEWAY_GITEA_TOKEN` to let the Gateway read a Gitea Container Registry Hosted member. Create a Group whose name is the leading OCI namespace and whose first member is `hosted` with the Gitea registry base URL as its endpoint. Clients pull `gateway-host:port/<group>/<image>:<tag>` after logging in with any username and `GATEWAY_RESOLVER_TOKEN` as the password. The Gateway presents a standard Bearer challenge, forwards manifest/blob GET, HEAD, and Range requests, and uses the configured Gitea credentials upstream.
