@@ -57,7 +57,7 @@ func (q *CacheQuota) Admit(ctx context.Context, repository, replacingKey string,
 
 func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string) (int64, error) {
 	var used int64
-	for _, prefix := range []string{"oci/index/", "maven/index/"} {
+	for _, prefix := range []string{"oci/index/", "maven/index/", "raw/index/"} {
 		keys, err := q.store.List(ctx, prefix)
 		if err != nil {
 			return 0, err

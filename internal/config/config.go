@@ -19,6 +19,7 @@ type Config struct {
 	S3SecretKey            string
 	OCIProxyAllowedHosts   []string
 	MavenProxyAllowedHosts []string
+	RawProxyAllowedHosts   []string
 	AdapterMode            string
 	AdminToken             string
 	ResolverToken          string
@@ -47,6 +48,7 @@ func Load() (Config, error) {
 		S3SecretKey:            os.Getenv("GATEWAY_S3_SECRET_KEY"),
 		OCIProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
 		MavenProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
+		RawProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
 		AdapterMode:            value("GATEWAY_ADAPTER_MODE", "test"),
 		AdminToken:             os.Getenv("GATEWAY_ADMIN_TOKEN"),
 		ResolverToken:          os.Getenv("GATEWAY_RESOLVER_TOKEN"),
