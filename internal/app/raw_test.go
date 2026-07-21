@@ -51,7 +51,7 @@ func TestRawHostedFirstCacheAndRange(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local", Position: 0},
-		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1},
+		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1, AllowedHosts: []string{"proxy.example"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -135,11 +135,10 @@ func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 	if w.Code != http.StatusForbidden || len(client.Calls()) != 0 {
 		t.Fatalf("denial=%d calls=%v", w.Code, client.Calls())
 	}
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "cached", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example"}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "cached", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}}})
 	client.responses["proxy"] = http.StatusNotFound
 	for range 2 {
 		w = httptest.NewRecorder()
-		h.Cache.allowed = map[string]struct{}{"proxy.example": {}}
 		h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/cached/missing"))
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("negative=%d", w.Code)
@@ -212,7 +211,7 @@ func TestRawStandardHTTPClientE2E(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local", Position: 0},
-		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1},
+		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1, AllowedHosts: []string{"proxy.example"}},
 	}})
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "outage", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusNotFound, "proxy": http.StatusOK}, body: []byte("artifact")}

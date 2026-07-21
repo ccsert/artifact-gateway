@@ -38,7 +38,7 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, er
 		return Group{}, err
 	}
 	for _, member := range group.Members {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO oci_group_members (group_name, name, member_type, endpoint, position, anonymous) VALUES ($1,$2,$3,$4,$5,$6)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO oci_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,$7)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 	}
@@ -56,14 +56,14 @@ func (s *PostgresStore) GetGroup(ctx context.Context, name string) (Group, error
 		}
 		return Group{}, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous FROM oci_group_members WHERE group_name=$1 ORDER BY position`, name)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, allowed_hosts FROM oci_group_members WHERE group_name=$1 ORDER BY position`, name)
 	if err != nil {
 		return Group{}, err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous); err != nil {
+		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 		group.Members = append(group.Members, member)

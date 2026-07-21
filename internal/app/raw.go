@@ -264,7 +264,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		if member.Type == repository.MemberProxy && (h.Cache == nil || !h.Cache.ProxyAllowed(member.Endpoint)) {
+		if member.Type == repository.MemberProxy && !rawProxyAllowed(member) {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditProxyDenied)
 			hadProxyDenied = true
 			continue
@@ -331,6 +331,22 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)
 	http.NotFound(w, r)
+}
+
+func rawProxyAllowed(member repository.Member) bool {
+	u, err := url.Parse(member.Endpoint)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
+		return false
+	}
+	if ip := net.ParseIP(u.Hostname()); ip != nil && privateAddress(ip) {
+		return false
+	}
+	for _, host := range member.AllowedHosts {
+		if strings.EqualFold(strings.TrimSpace(host), u.Hostname()) {
+			return true
+		}
+	}
+	return false
 }
 func (h RawHandler) audit(ctx context.Context, group, path, member, actor string, outcome repository.AuditOutcome) {
 	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: group, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()})

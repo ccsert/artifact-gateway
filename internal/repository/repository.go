@@ -22,11 +22,12 @@ const (
 )
 
 type Member struct {
-	Name      string     `json:"name"`
-	Type      MemberType `json:"type"`
-	Endpoint  string     `json:"endpoint"`
-	Position  int        `json:"position"`
-	Anonymous bool       `json:"anonymous"`
+	Name         string     `json:"name"`
+	Type         MemberType `json:"type"`
+	Endpoint     string     `json:"endpoint"`
+	Position     int        `json:"position"`
+	Anonymous    bool       `json:"anonymous"`
+	AllowedHosts []string   `json:"allowedHosts,omitempty"`
 }
 
 type Group struct {
