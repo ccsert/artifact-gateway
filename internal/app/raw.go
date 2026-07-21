@@ -152,6 +152,39 @@ func (c *RawCache) StoreNegative(ctx context.Context, key string, member reposit
 	}
 	return c.store.Put(ctx, key, b)
 }
+func (c *RawCache) Invalidate(ctx context.Context, key string) { _ = c.store.Delete(ctx, key) }
+func (c *RawCache) CollectGarbage(ctx context.Context) error {
+	keys, err := c.store.List(ctx, "raw/index/")
+	if err != nil {
+		return err
+	}
+	referenced := map[string]bool{}
+	now := time.Now().UTC()
+	for _, key := range keys {
+		encoded, err := c.store.Get(ctx, key)
+		if err != nil {
+			continue
+		}
+		var index rawIndex
+		if json.Unmarshal(encoded, &index) != nil || !now.Before(index.ExpiresAt) {
+			_ = c.store.Delete(ctx, key)
+			continue
+		}
+		if index.Object != "" {
+			referenced[index.Object] = true
+		}
+	}
+	objects, err := c.store.List(ctx, "raw/objects/")
+	if err != nil {
+		return err
+	}
+	for _, object := range objects {
+		if !referenced[object] {
+			_ = c.store.Delete(ctx, object)
+		}
+	}
+	return nil
+}
 func (c *RawCache) ProxyAllowed(endpoint string) bool {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.User != nil {

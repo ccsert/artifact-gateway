@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -368,5 +369,48 @@ func TestRawFetchesCanonicalRepresentationAndBoundsObjectSize(t *testing.T) {
 	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/oversize/release/app.txt"))
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("oversize response=%d", w.Code)
+	}
+}
+
+func TestRawCacheCollectorKeepsLiveReferences(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewRawCache(store, time.Hour, time.Hour, nil)
+	live := cache.key("g", "live", "m", "https://host")
+	expired := cache.key("g", "expired", "m", "https://host")
+	if err := cache.Store(context.Background(), live, RawContent{Body: []byte("live"), Repository: "g"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Store(context.Background(), expired, RawContent{Body: []byte("expired"), Repository: "g"}); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := store.Get(context.Background(), expired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index rawIndex
+	if err := json.Unmarshal(encoded, &index); err != nil {
+		t.Fatal(err)
+	}
+	index.ExpiresAt = time.Now().UTC().Add(-time.Second)
+	encoded, _ = json.Marshal(index)
+	if err := store.Put(context.Background(), expired, encoded); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.CollectGarbage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Load(context.Background(), live); err != nil {
+		t.Fatalf("live cache = %v", err)
+	}
+	if _, err := cache.Load(context.Background(), expired); err == nil {
+		t.Fatal("expired index remained readable")
+	}
+	cache.Invalidate(context.Background(), live)
+	if err := cache.CollectGarbage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	objects, err := store.List(context.Background(), "raw/objects/")
+	if err != nil || len(objects) != 0 {
+		t.Fatalf("objects=%v err=%v", objects, err)
 	}
 }

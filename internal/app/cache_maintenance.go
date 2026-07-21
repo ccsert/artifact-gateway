@@ -13,6 +13,7 @@ import (
 type CacheMaintenance struct {
 	store OCIObjectStore
 	oci   *OCICache
+	raw   *RawCache
 
 	mu     sync.RWMutex
 	status CacheMaintenanceStatus
@@ -31,6 +32,9 @@ type CacheMaintenanceStatus struct {
 
 func NewCacheMaintenance(store OCIObjectStore, oci *OCICache) *CacheMaintenance {
 	return &CacheMaintenance{store: store, oci: oci}
+}
+func NewCacheMaintenanceWithRaw(store OCIObjectStore, oci *OCICache, raw *RawCache) *CacheMaintenance {
+	return &CacheMaintenance{store: store, oci: oci, raw: raw}
 }
 
 func (m *CacheMaintenance) Status(ctx context.Context) (CacheMaintenanceStatus, error) {
@@ -63,6 +67,9 @@ func (m *CacheMaintenance) Run(ctx context.Context) error {
 	m.mu.Unlock()
 
 	err := m.oci.CollectGarbage(ctx)
+	if err == nil && m.raw != nil {
+		err = m.raw.CollectGarbage(ctx)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status.LastCompletedAt = time.Now().UTC()
