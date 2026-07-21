@@ -165,6 +165,27 @@ func TestRawProxyPolicyRejectsPrivateAddresses(t *testing.T) {
 	}
 }
 
+func TestRawProxyRejectsTLSOverrideWithoutDialing(t *testing.T) {
+	var tlsDials int
+	withRawProxyNetwork(t, func(_ context.Context, _ string, name string) ([]net.IP, error) {
+		if name != "example.com" {
+			t.Fatalf("lookup = %q", name)
+		}
+		return []net.IP{net.ParseIP("203.0.113.9")}, nil
+	}, func(context.Context, string, string) (net.Conn, error) {
+		t.Fatal("pinned DialContext must not run after TLS override rejection")
+		return nil, nil
+	})
+	client := &http.Client{Transport: &http.Transport{DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
+		tlsDials++
+		return nil, errors.New("unexpected TLS dial")
+	}}}
+	_, err := (GiteaClient{HTTPClient: client}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "artifact", nil)
+	if err == nil || !strings.Contains(err.Error(), "must not override TLS dialing") || tlsDials != 0 {
+		t.Fatalf("err = %v, TLS dials = %d", err, tlsDials)
+	}
+}
+
 func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 	var upstreamCalls int
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +201,7 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 
 	host, port := rawTLSServerAddress(t, upstream.URL)
 	withRawProxyNetwork(t, func(_ context.Context, network, name string) ([]net.IP, error) {
-		if network != "ip" || name != "trusted.example" {
+		if network != "ip" || name != "example.com" {
 			t.Fatalf("lookup = %s %s", network, name)
 		}
 		return []net.IP{net.ParseIP("203.0.113.7")}, nil
@@ -191,16 +212,17 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
 	})
 
-	endpoint := "https://trusted.example:" + port
+	endpoint := "https://example.com:" + port
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"trusted.example"}}}})
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"trusted.example"})
-	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: rawTestTLSClient(t, upstream)}, Metrics: &Metrics{}, Cache: cache})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}, Anonymous: true}}})
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
+	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
-	request := func(authorization string) *http.Response {
+	request := func(group, authorization string) *http.Response {
 		t.Helper()
-		r, err := http.NewRequest(http.MethodGet, gateway.URL+"/raw/downloads/release/app.txt", nil)
+		r, err := http.NewRequest(http.MethodGet, gateway.URL+"/raw/"+group+"/release/app.txt", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,7 +237,7 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 	}
 
 	for range 2 {
-		response := request("Bearer resolver-secret")
+		response := request("downloads", "Bearer resolver-secret")
 		body, _ := io.ReadAll(response.Body)
 		_ = response.Body.Close()
 		if response.StatusCode != http.StatusOK || string(body) != "proxy-artifact" {
@@ -225,10 +247,16 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 	if upstreamCalls != 1 {
 		t.Fatalf("upstream calls = %d, want cache hit", upstreamCalls)
 	}
-	response := request("")
+	response := request("downloads", "")
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusUnauthorized || upstreamCalls != 1 {
 		t.Fatalf("anonymous response = %d, upstream calls = %d", response.StatusCode, upstreamCalls)
+	}
+	response = request("public", "")
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || string(body) != "proxy-artifact" || upstreamCalls != 2 {
+		t.Fatalf("public anonymous response = %d %q, upstream calls = %d", response.StatusCode, body, upstreamCalls)
 	}
 }
 
@@ -243,7 +271,7 @@ func TestRawProxyTLSRejectsPrivateResolutionAndUnsafeRedirectsWithoutCaching(t *
 		case "/cross":
 			http.Redirect(w, r, redirectTarget.URL, http.StatusFound)
 		case "/downgrade":
-			http.Redirect(w, r, "http://trusted.example/insecure", http.StatusFound)
+			http.Redirect(w, r, "http://example.com/insecure", http.StatusFound)
 		case "/private":
 			http.Redirect(w, r, "https://127.0.0.1/private", http.StatusFound)
 		case "/failure":
@@ -255,27 +283,32 @@ func TestRawProxyTLSRejectsPrivateResolutionAndUnsafeRedirectsWithoutCaching(t *
 	defer upstream.Close()
 
 	host, port := rawTLSServerAddress(t, upstream.URL)
+	var dialAttempts int
 	withRawProxyNetwork(t, func(_ context.Context, _ string, name string) ([]net.IP, error) {
 		if name == "private.example" {
 			return []net.IP{net.ParseIP("127.0.0.1")}, nil
 		}
 		return []net.IP{net.ParseIP("203.0.113.8")}, nil
 	}, func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialAttempts++
 		if address != net.JoinHostPort("203.0.113.8", port) {
 			t.Fatalf("unexpected dial %q", address)
 		}
 		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
 	})
 
-	if err := safeRawProxyEndpoint(context.Background(), "https://private.example"); err == nil {
+	if _, err := (GiteaClient{}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://private.example", AllowedHosts: []string{"private.example"}}, "artifact", nil); err == nil {
 		t.Fatal("private DNS answer was accepted")
 	}
-	endpoint := "https://trusted.example:" + port
+	if dialAttempts != 0 {
+		t.Fatalf("private DNS answer reached dialer %d times", dialAttempts)
+	}
+	endpoint := "https://example.com:" + port
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "redirects", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"trusted.example"}}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "redirects", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "blocked", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"other.example"}}}})
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"trusted.example"})
-	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: rawTestTLSClient(t, upstream)}, Metrics: &Metrics{}, Cache: cache})
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
+	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
 	for _, path := range []string{"cross", "downgrade", "private", "failure"} {
@@ -320,20 +353,6 @@ func rawTLSServerAddress(t *testing.T, rawURL string) (string, string) {
 		t.Fatal(err)
 	}
 	return host, port
-}
-
-func rawTestTLSClient(t *testing.T, server *httptest.Server) *http.Client {
-	t.Helper()
-	client := server.Client()
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok || transport.TLSClientConfig == nil {
-		t.Fatal("TLS test server did not provide an HTTP transport")
-	}
-	copy := *client
-	copy.Transport = transport.Clone()
-	copy.Transport.(*http.Transport).TLSClientConfig = transport.TLSClientConfig.Clone()
-	copy.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true // Test endpoint uses a synthetic hostname.
-	return &copy
 }
 
 func withRawProxyNetwork(t *testing.T, lookup func(context.Context, string, string) ([]net.IP, error), dial func(context.Context, string, string) (net.Conn, error)) {

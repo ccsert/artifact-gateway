@@ -244,6 +244,9 @@ func rawProxyHTTPClient(client *http.Client, hostname, port string, ips []net.IP
 	if !ok {
 		return nil, errors.New("Raw proxy HTTP client must use *http.Transport")
 	}
+	if base.DialTLSContext != nil || base.DialTLS != nil {
+		return nil, errors.New("Raw proxy HTTP client must not override TLS dialing")
+	}
 	copy := *client
 	pinnedTransport := base.Clone()
 	pinnedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
