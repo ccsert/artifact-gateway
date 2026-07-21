@@ -80,6 +80,99 @@ func TestRawHostedFirstCacheAndRange(t *testing.T) {
 	}
 }
 
+func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)})
+	defer server.Close()
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/raw/downloads/release/app.txt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer resolver-secret")
+	request.Header.Set("Range", "bytes=0-1,3-4")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("multipart range status = %d", response.StatusCode)
+	}
+}
+
+func TestRawCacheUsesPersistedGroupQuota(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
+	first := cache.key("downloads", "one", "hosted", "http://gitea.local")
+	if err := cache.Store(context.Background(), first, RawContent{Body: []byte("1234"), Repository: "downloads", CacheQuotaBytes: 5}); err != nil {
+		t.Fatal(err)
+	}
+	second := cache.key("downloads", "two", "hosted", "http://gitea.local")
+	if err := cache.Store(context.Background(), second, RawContent{Body: []byte("23"), Repository: "downloads", CacheQuotaBytes: 5}); !errors.Is(err, ErrCacheQuotaExceeded) {
+		t.Fatalf("second cache store = %v, want quota rejection", err)
+	}
+}
+
+func TestRawCacheLoadsLegacyIndex(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewRawCache(store, time.Hour, time.Hour, nil)
+	key := cache.key("downloads", "artifact", "hosted", "http://gitea.local")
+	body := []byte("artifact")
+	sum := sha256.Sum256(body)
+	digest := hex.EncodeToString(sum[:])
+	object := "raw/objects/" + digest
+	if err := store.Put(context.Background(), object, body); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := json.Marshal(struct {
+		Object, Digest, ContentType, Member, Endpoint, Repository string
+		Size                                                      int64
+		ExpiresAt                                                 time.Time
+	}{Object: object, Digest: digest, ContentType: "text/plain", Member: "hosted", Endpoint: "http://gitea.local", Repository: "downloads", Size: int64(len(body)), ExpiresAt: time.Now().UTC().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(context.Background(), key, legacy); err != nil {
+		t.Fatal(err)
+	}
+	content, err := cache.Load(context.Background(), key)
+	if err != nil || string(content.Body) != "artifact" {
+		t.Fatalf("legacy cache load content=%q err=%v", content.Body, err)
+	}
+}
+
+func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	quota := NewCacheQuota(store, nil)
+	ociCache := NewDefaultOCICache(store, nil)
+	ociKey := ociCache.key("downloads", "downloads", ociManifest, "latest")
+	if err := ociCache.Store(context.Background(), ociKey, CachedOCIContent{Body: []byte("12345"), Digest: digestOf([]byte("12345")), Repository: "downloads"}); err != nil {
+		t.Fatal(err)
+	}
+	rawCache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(quota)
+	key := rawCache.key("downloads", "artifact", "hosted", "http://gitea.local")
+	if err := rawCache.Store(context.Background(), key, RawContent{Body: []byte("12345"), Repository: "downloads", CacheQuotaBytes: 5}); err != nil {
+		t.Fatalf("same-named OCI cache consumed Raw quota: %v", err)
+	}
+
+	groups := repository.NewMemoryStore()
+	_, err := groups.CreateRawGroup(context.Background(), repository.Group{Name: "limited", CacheQuotaBytes: 1, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := &Metrics{}
+	handler := RawHandler{Store: groups, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("two")}, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(NewMemoryOCIObjectStore(), nil))}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/limited/artifact"))
+	if response.Code != http.StatusOK || metrics.cacheQuotaDenied.Load() != 1 {
+		t.Fatalf("quota rejection response=%d metric=%d", response.Code, metrics.cacheQuotaDenied.Load())
+	}
+}
+
 func TestRawRejectsUnsafePathsAndUnauthorizedRequests(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})

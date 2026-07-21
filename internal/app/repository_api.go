@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
 )
 
 type Adapter interface {
@@ -424,8 +425,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/api/v1/oci/groups/", api)
 	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
-	mux.Handle("/api/v1/raw/groups", rawAPIHandler{store: store, authenticator: authenticator})
-	mux.Handle("/api/v1/raw/groups/", rawAPIHandler{store: store, authenticator: authenticator})
+	rawAPI := rawAPIHandler{store: store, authenticator: authenticator, cache: rawCache}
+	mux.Handle("/api/v1/raw/groups", rawAPI)
+	mux.Handle("/api/v1/raw/groups/", rawAPI)
+	mux.Handle("POST /api/v1/raw/cache/invalidate", rawCacheInvalidationHandler{store: store, authenticator: authenticator, cache: rawCache})
 	mux.Handle("/api/v1/conan/groups", conanAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/conan/groups/", conanAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
@@ -572,6 +575,7 @@ type conanAPIHandler struct {
 type rawAPIHandler struct {
 	store         repository.RawStore
 	authenticator Authenticator
+	cache         *RawCache
 }
 
 func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -592,7 +596,7 @@ func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
 			return
 		}
-		if err := validateGroup(g); err != nil {
+		if err := validateRawGroup(g); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
@@ -636,6 +640,72 @@ func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeError(w, http.StatusNotFound, "not_found", "resource not found")
+}
+
+type rawCacheInvalidationHandler struct {
+	store         repository.RawStore
+	authenticator Authenticator
+	cache         *RawCache
+}
+
+type rawInvalidationRequest struct {
+	Group    string `json:"group"`
+	Path     string `json:"path"`
+	Member   string `json:"member,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
+func (h rawCacheInvalidationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok || !p.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	if h.cache == nil {
+		writeError(w, http.StatusServiceUnavailable, "cache_unavailable", "Raw cache is not configured")
+		return
+	}
+	defer func() { _ = r.Body.Close() }()
+	var request rawInvalidationRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
+		return
+	}
+	if !validRawGroupName(request.Group) {
+		writeError(w, http.StatusBadRequest, "invalid_group", "group must be a non-reserved DNS label")
+		return
+	}
+	resource, valid := v2contract.NewCanonicalResource(request.Path)
+	if !valid || resource.String() != request.Path {
+		writeError(w, http.StatusBadRequest, "invalid_path", "path must be canonical")
+		return
+	}
+	if request.Member == "" || request.Endpoint == "" {
+		writeError(w, http.StatusBadRequest, "invalid_member", "member and endpoint are required")
+		return
+	}
+	group, err := h.store.GetRawGroup(r.Context(), request.Group)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "unable to read group")
+		return
+	}
+	matched := false
+	for _, member := range group.Members {
+		if member.Name != request.Member || member.Endpoint != request.Endpoint {
+			continue
+		}
+		h.cache.Invalidate(r.Context(), h.cache.key(request.Group, resource.String(), member.Name, member.Endpoint))
+		matched = true
+	}
+	if !matched {
+		writeError(w, http.StatusNotFound, "not_found", "member not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -933,6 +1003,44 @@ func validateGroup(group repository.Group) error {
 		}
 	}
 	return nil
+}
+
+func validateRawGroup(group repository.Group) error {
+	if err := validateGroup(group); err != nil {
+		return err
+	}
+	if !validRawGroupName(group.Name) {
+		return errors.New("name must be a non-reserved DNS label")
+	}
+	if group.CacheQuotaBytes <= 0 {
+		return errors.New("cacheQuotaBytes must be a positive integer")
+	}
+	for _, member := range group.Members {
+		if member.Type == repository.MemberProxy && len(member.AllowedHosts) == 0 {
+			return errors.New("proxy members require a non-empty allowlist")
+		}
+	}
+	return nil
+}
+
+func validRawGroupName(name string) bool {
+	if len(name) == 0 || len(name) > 63 || rawReservedGroupNames[name] {
+		return false
+	}
+	if name[0] == '-' || name[len(name)-1] == '-' {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+var rawReservedGroupNames = map[string]bool{
+	"api": true, "metrics": true, "livez": true, "readyz": true, "operations": true,
+	"v2": true, "maven": true, "raw": true, "conan": true,
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

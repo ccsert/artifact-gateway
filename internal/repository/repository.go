@@ -31,11 +31,12 @@ type Member struct {
 }
 
 type Group struct {
-	Name      string    `json:"name"`
-	Enabled   bool      `json:"enabled"`
-	Anonymous bool      `json:"anonymous"`
-	Members   []Member  `json:"members"`
-	CreatedAt time.Time `json:"createdAt"`
+	Name            string    `json:"name"`
+	Enabled         bool      `json:"enabled"`
+	Anonymous       bool      `json:"anonymous"`
+	CacheQuotaBytes int64     `json:"cacheQuotaBytes,omitempty"`
+	Members         []Member  `json:"members"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 type AuditOutcome string

@@ -98,7 +98,7 @@ func (s *PostgresStore) CreateRawGroup(ctx context.Context, group Group) (Group,
 	}
 	defer func() { _ = tx.Rollback() }()
 	normalizeGroup(&group)
-	err = tx.QueryRowContext(ctx, `INSERT INTO raw_groups (name,enabled,anonymous) VALUES ($1,true,$2) RETURNING created_at`, group.Name, group.Anonymous).Scan(&group.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO raw_groups (name,enabled,anonymous,cache_quota_bytes) VALUES ($1,true,$2,$3) RETURNING created_at`, group.Name, group.Anonymous, group.CacheQuotaBytes).Scan(&group.CreatedAt)
 	if err != nil {
 		if isUnique(err) {
 			return Group{}, ErrNameExists
@@ -117,7 +117,7 @@ func (s *PostgresStore) CreateRawGroup(ctx context.Context, group Group) (Group,
 }
 func (s *PostgresStore) GetRawGroup(ctx context.Context, name string) (Group, error) {
 	var g Group
-	if err := s.db.QueryRowContext(ctx, `SELECT name,enabled,anonymous,created_at FROM raw_groups WHERE name=$1`, name).Scan(&g.Name, &g.Enabled, &g.Anonymous, &g.CreatedAt); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT name,enabled,anonymous,cache_quota_bytes,created_at FROM raw_groups WHERE name=$1`, name).Scan(&g.Name, &g.Enabled, &g.Anonymous, &g.CacheQuotaBytes, &g.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Group{}, ErrNotFound
 		}

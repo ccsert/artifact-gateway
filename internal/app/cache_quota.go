@@ -29,9 +29,6 @@ type cacheQuotaIndex struct {
 }
 
 func NewCacheQuota(store OCIObjectStore, limits map[string]int64) *CacheQuota {
-	if len(limits) == 0 {
-		return nil
-	}
 	return &CacheQuota{store: store, limits: limits}
 }
 
@@ -43,9 +40,22 @@ func (q *CacheQuota) Admit(ctx context.Context, repository, replacingKey string,
 	if !configured {
 		return publish()
 	}
+	return q.admit(ctx, repository, replacingKey, size, limit, publish)
+}
+
+// AdmitWithLimit admits an entry against a durable group-level limit. It is
+// used by Raw because its cache budget belongs to the group configuration.
+func (q *CacheQuota) AdmitWithLimit(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
+	if q == nil || repository == "" || limit <= 0 {
+		return publish()
+	}
+	return q.admitRaw(ctx, repository, replacingKey, size, limit, publish)
+}
+
+func (q *CacheQuota) admit(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	used, err := q.usedLocked(ctx, repository, replacingKey)
+	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"oci/index/", "maven/index/", "raw/index/"})
 	if err != nil {
 		return err
 	}
@@ -55,9 +65,22 @@ func (q *CacheQuota) Admit(ctx context.Context, repository, replacingKey string,
 	return publish()
 }
 
-func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string) (int64, error) {
+func (q *CacheQuota) admitRaw(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"raw/index/"})
+	if err != nil {
+		return err
+	}
+	if size > limit-used {
+		return ErrCacheQuotaExceeded
+	}
+	return publish()
+}
+
+func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string, prefixes []string) (int64, error) {
 	var used int64
-	for _, prefix := range []string{"oci/index/", "maven/index/", "raw/index/"} {
+	for _, prefix := range prefixes {
 		keys, err := q.store.List(ctx, prefix)
 		if err != nil {
 			return 0, err

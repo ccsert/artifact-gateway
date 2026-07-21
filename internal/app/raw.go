@@ -78,15 +78,46 @@ func (c GiteaClient) FetchRaw(ctx context.Context, method string, member reposit
 }
 
 type rawIndex struct {
-	Object, Digest, ContentType, Member, Endpoint, Repository string
-	Size                                                      int64
-	ExpiresAt                                                 time.Time
-	Negative                                                  bool
+	Object      string    `json:"object"`
+	Digest      string    `json:"digest"`
+	ContentType string    `json:"content_type"`
+	Member      string    `json:"member"`
+	Endpoint    string    `json:"endpoint"`
+	Repository  string    `json:"repository"`
+	Size        int64     `json:"size"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Negative    bool      `json:"negative"`
+}
+
+// UnmarshalJSON accepts indexes written before Raw adopted stable JSON names.
+// Those indexes used Go's field name for ExpiresAt, which differs from the
+// snake_case cache quota representation.
+func (i *rawIndex) UnmarshalJSON(data []byte) error {
+	type encodedRawIndex rawIndex
+	var decoded encodedRawIndex
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded.ExpiresAt.IsZero() {
+		var legacy struct {
+			Object, Digest, ContentType, Member, Endpoint, Repository string
+			Size                                                      int64
+			ExpiresAt                                                 time.Time
+			Negative                                                  bool
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		decoded = encodedRawIndex(legacy)
+	}
+	*i = rawIndex(decoded)
+	return nil
 }
 
 type RawContent struct {
 	Body                                              []byte
 	Digest, ContentType, Member, Endpoint, Repository string
+	CacheQuotaBytes                                   int64
 }
 
 type RawCache struct {
@@ -160,7 +191,7 @@ func (c *RawCache) Store(ctx context.Context, key string, content RawContent) er
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		return c.quota.Admit(workCtx, content.Repository, key, int64(len(content.Body)), func() error {
+		return c.quota.AdmitWithLimit(workCtx, content.Repository, key, int64(len(content.Body)), content.CacheQuotaBytes, func() error {
 			sum := sha256.Sum256(content.Body)
 			digest := hex.EncodeToString(sum[:])
 			object := "raw/objects/" + digest
@@ -508,7 +539,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: rawCacheDisposition(h.Cache), Method: r.Method})
 			continue
 		}
-		content := RawContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group}
+		content := RawContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group, CacheQuotaBytes: g.CacheQuotaBytes}
 		if content.ContentType == "" {
 			content.ContentType = "application/octet-stream"
 		}
@@ -522,7 +553,11 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if h.Cache != nil {
-			if err := h.Cache.Store(r.Context(), key, content); err != nil && !errors.Is(err, ErrCacheQuotaExceeded) {
+			if err := h.Cache.Store(r.Context(), key, content); errors.Is(err, ErrCacheQuotaExceeded) {
+				if h.Metrics != nil {
+					h.Metrics.cacheQuotaDenied.Add(1)
+				}
+			} else if err != nil {
 				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusInternalServerError, CacheDisposition: "bypass", Method: r.Method})
 				http.Error(w, "unable to cache Raw content", http.StatusInternalServerError)
 				return
@@ -672,6 +707,10 @@ func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent)
 		return statusWriter.result()
 	}
 	if r.Header.Get("Range") != "" {
+		if strings.Contains(r.Header.Get("Range"), ",") {
+			statusWriter.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return statusWriter.result()
+		}
 		http.ServeContent(statusWriter, r, name, time.Time{}, bytes.NewReader(c.Body))
 		return statusWriter.result()
 	}

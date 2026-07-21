@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -109,6 +110,80 @@ func TestAPIRejectsUnauthenticatedAndInvalidGroup(t *testing.T) {
 	handler.ServeHTTP(invalid, request)
 	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), `"code":"invalid_group"`) {
 		t.Fatalf("invalid = %d %s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objectStore := NewMemoryOCIObjectStore()
+	rawCache := NewRawCache(objectStore, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(objectStore, nil))
+	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), nil, rawCache, nil)
+
+	for _, payload := range []string{
+		`{"name":"Raw","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
+		`{"name":"api","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
+		`{"name":"downloads","cacheQuotaBytes":5,"members":[{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":0}]}`,
+		`{"name":"downloads","cacheQuotaBytes":0,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/raw/groups", strings.NewReader(payload))
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid Raw group status=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+
+	group := `{"name":"downloads","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0},{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":1,"allowedHosts":["proxy.example"]}]}`
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/raw/groups", strings.NewReader(group))
+	authorize(request, "admin-secret")
+	created := httptest.NewRecorder()
+	handler.ServeHTTP(created, request)
+	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"cacheQuotaBytes":5`) {
+		t.Fatalf("Raw group creation=%d %s", created.Code, created.Body.String())
+	}
+	hostedKey := rawCache.key("downloads", "release/app.txt", "hosted", "http://gitea")
+	proxyKey := rawCache.key("downloads", "release/app.txt", "proxy", "https://proxy.example")
+	otherKey := rawCache.key("downloads", "release/other.txt", "hosted", "http://gitea")
+	for _, key := range []string{hostedKey, proxyKey, otherKey} {
+		if err := rawCache.Store(context.Background(), key, RawContent{Body: []byte(key), Repository: "downloads", CacheQuotaBytes: 10000}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	invalidate := httptest.NewRequest(http.MethodPost, "/api/v1/raw/cache/invalidate", strings.NewReader(`{"group":"downloads","path":"release/app.txt","member":"proxy","endpoint":"https://proxy.example"}`))
+	authorize(invalidate, "admin-secret")
+	invalidated := httptest.NewRecorder()
+	handler.ServeHTTP(invalidated, invalidate)
+	if invalidated.Code != http.StatusNoContent {
+		t.Fatalf("invalidation=%d %s", invalidated.Code, invalidated.Body.String())
+	}
+	if _, err := rawCache.Load(context.Background(), proxyKey); err == nil {
+		t.Fatalf("proxy cache after invalidation = %v", err)
+	}
+	if _, err := rawCache.Load(context.Background(), hostedKey); err != nil {
+		t.Fatalf("hosted cache was invalidated: %v", err)
+	}
+	if _, err := rawCache.Load(context.Background(), otherKey); err != nil {
+		t.Fatalf("unrelated Raw cache was invalidated: %v", err)
+	}
+	missingMember := httptest.NewRequest(http.MethodPost, "/api/v1/raw/cache/invalidate", strings.NewReader(`{"group":"downloads","path":"release/app.txt"}`))
+	authorize(missingMember, "admin-secret")
+	missingMemberResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingMemberResponse, missingMember)
+	if missingMemberResponse.Code != http.StatusBadRequest {
+		t.Fatalf("memberless invalidation=%d %s", missingMemberResponse.Code, missingMemberResponse.Body.String())
+	}
+	for _, payload := range []string{
+		`{"group":"downloads","path":"release/%2e%2e/private","member":"proxy","endpoint":"https://proxy.example"}`,
+		`{"group":"downloads","path":"release/app.txt","member":"missing","endpoint":"https://proxy.example"}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/raw/cache/invalidate", strings.NewReader(payload))
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest && response.Code != http.StatusNotFound {
+			t.Fatalf("invalid invalidation=%d %s", response.Code, response.Body.String())
+		}
 	}
 }
 
