@@ -112,8 +112,8 @@ type ConanHandler struct {
 func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if group, ok := parseConanPing(r.Method, r.URL.Path); ok {
 		if h.anonymousConanAllowed(r.Context(), group) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"capabilities":["revisions"]}`))
+			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
@@ -385,15 +385,22 @@ func validConanMetadata(path string, body []byte) bool {
 		return true
 	}
 	var revisions []struct {
-		Revision string      `json:"revision"`
-		Time     json.Number `json:"time"`
+		Revision string          `json:"revision"`
+		Time     json.RawMessage `json:"time"`
 	}
 	if json.Unmarshal(data.Revisions, &revisions) != nil {
 		return false
 	}
 	for _, revision := range revisions {
-		if !validConanSegment(revision.Revision) {
+		if !validConanSegment(revision.Revision) || len(revision.Time) == 0 {
 			return false
+		}
+		var numeric json.Number
+		if json.Unmarshal(revision.Time, &numeric) != nil {
+			var timestamp string
+			if json.Unmarshal(revision.Time, &timestamp) != nil || timestamp == "" {
+				return false
+			}
 		}
 	}
 	return true

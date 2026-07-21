@@ -224,6 +224,55 @@ func TestConan2ClientListsRevisionThroughGateway(t *testing.T) {
 	run("list", "pkg/1.0@user/stable#*", "-r=gateway")
 }
 
+func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
+	conan := os.Getenv("CONAN_BINARY")
+	if conan == "" {
+		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
+	}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: newConanDownloadClient(), Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	server := httptest.NewServer(h)
+	defer server.Close()
+	home := t.TempDir()
+	run := func(args ...string) {
+		command := exec.Command(conan, args...)
+		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("conan %v: %v\n%s", args, err, output)
+		}
+	}
+	run("remote", "add", "--force", "gateway", server.URL+"/conan/central")
+	run("download", "pkg/1.0@user/stable#rrev", "-r=gateway")
+}
+
+type conanDownloadClient struct{ files map[string][]byte }
+
+func newConanDownloadClient() *conanDownloadClient {
+	return &conanDownloadClient{files: map[string][]byte{"conanfile.py": []byte("from conan import ConanFile\nclass Pkg(ConanFile):\n    name = 'pkg'\n    version = '1.0'\n"), "conanmanifest.txt": []byte("manifest\n")}}
+}
+func (c *conanDownloadClient) FetchConan(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
+	if strings.HasSuffix(path, "/revisions") {
+		return conanJSON(`{"revisions":[{"revision":"rrev","time":"2024-01-01T00:00:00Z"}]}`), nil
+	}
+	if strings.HasSuffix(path, "/files") {
+		files := make([]string, 0, len(c.files))
+		for name, body := range c.files {
+			sum := sha256.Sum256(body)
+			files = append(files, fmt.Sprintf(`%q:{"sha256":%q,"size":%d}`, name, hex.EncodeToString(sum[:]), len(body)))
+		}
+		return conanJSON(`{"files":{` + strings.Join(files, ",") + `}}`), nil
+	}
+	name := path[strings.LastIndex(path, "/")+1:]
+	if body, ok := c.files[name]; ok {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+	}
+	return &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(""))}, nil
+}
+func conanJSON(body string) *http.Response {
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}
+}
+
 type conanAnonymousClient struct{ member string }
 
 func (c *conanAnonymousClient) FetchConan(_ context.Context, _ string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
