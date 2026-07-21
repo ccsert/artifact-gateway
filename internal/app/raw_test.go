@@ -166,7 +166,6 @@ func TestRawProxyPolicyRejectsPrivateAddresses(t *testing.T) {
 }
 
 func TestRawProxyRejectsTLSOverrideWithoutDialing(t *testing.T) {
-	var tlsDials int
 	withRawProxyNetwork(t, func(_ context.Context, _ string, name string) ([]net.IP, error) {
 		if name != "example.com" {
 			t.Fatalf("lookup = %q", name)
@@ -176,13 +175,31 @@ func TestRawProxyRejectsTLSOverrideWithoutDialing(t *testing.T) {
 		t.Fatal("pinned DialContext must not run after TLS override rejection")
 		return nil, nil
 	})
-	client := &http.Client{Transport: &http.Transport{DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
-		tlsDials++
-		return nil, errors.New("unexpected TLS dial")
-	}}}
-	_, err := (GiteaClient{HTTPClient: client}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "artifact", nil)
-	if err == nil || !strings.Contains(err.Error(), "must not override TLS dialing") || tlsDials != 0 {
-		t.Fatalf("err = %v, TLS dials = %d", err, tlsDials)
+	for _, test := range []struct {
+		name      string
+		transport func(*bool) *http.Transport
+	}{
+		{"DialTLSContext", func(called *bool) *http.Transport {
+			return &http.Transport{DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
+				*called = true
+				return nil, errors.New("unexpected TLS dial")
+			}}
+		}},
+		{"DialTLS", func(called *bool) *http.Transport {
+			return &http.Transport{DialTLS: func(string, string) (net.Conn, error) {
+				*called = true
+				return nil, errors.New("unexpected TLS dial")
+			}}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called := false
+			client := &http.Client{Transport: test.transport(&called)}
+			_, err := (GiteaClient{HTTPClient: client}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "artifact", nil)
+			if err == nil || !strings.Contains(err.Error(), "must not override TLS dialing") || called {
+				t.Fatalf("err = %v, TLS dial called = %t", err, called)
+			}
+		})
 	}
 }
 
