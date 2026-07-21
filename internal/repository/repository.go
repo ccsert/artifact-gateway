@@ -52,12 +52,15 @@ const (
 )
 
 type AuditRecord struct {
-	GroupName  string
-	Repository string
-	MemberName string
-	Outcome    AuditOutcome
-	Actor      string
-	OccurredAt time.Time
+	GroupName                                                                               string
+	Repository                                                                              string
+	MemberName                                                                              string
+	Outcome                                                                                 AuditOutcome
+	Actor                                                                                   string
+	OccurredAt                                                                              time.Time
+	Format, Resource, Representation, MemberType, UpstreamHost, Operation, CacheDisposition string
+	Status                                                                                  int
+	Bytes                                                                                   int64
 }
 
 type AuditQuery struct {
