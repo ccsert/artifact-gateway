@@ -100,6 +100,31 @@ func TestRawRejectsUnsafePathsAndUnauthorizedRequests(t *testing.T) {
 	}
 }
 
+func TestRawAnonymousPolicyRequiresPublicGroupAndMember(t *testing.T) {
+	store := repository.NewMemoryStore()
+	for _, group := range []repository.Group{
+		{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}},
+		{Name: "member-private", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},
+		{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}},
+	} {
+		if _, err := store.CreateGroup(context.Background(), group); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	for group, want := range map[string]int{"private": http.StatusUnauthorized, "member-private": http.StatusUnauthorized, "public": http.StatusOK} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/raw/"+group+"/artifact", nil))
+		if w.Code != want {
+			t.Errorf("%s: got %d want %d", group, w.Code, want)
+		}
+	}
+	if len(store.Audits) == 0 || store.Audits[len(store.Audits)-1].Actor != "anonymous" || store.Audits[len(store.Audits)-1].Outcome != repository.AuditResolved {
+		t.Fatalf("anonymous audit=%#v", store.Audits)
+	}
+}
+
 func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "http://blocked.example"}}})

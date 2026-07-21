@@ -33,3 +33,19 @@ func (h MavenHandler) anonymousMavenAllowed(ctx context.Context, groupName strin
 	}
 	return false
 }
+
+func (h RawHandler) anonymousRawAllowed(ctx context.Context, groupName string) bool {
+	if h.Store == nil {
+		return false
+	}
+	group, err := h.Store.GetGroup(ctx, groupName)
+	if err != nil || !group.Enabled || !group.Anonymous {
+		return false
+	}
+	for _, member := range group.Members {
+		if member.Anonymous {
+			return true
+		}
+	}
+	return false
+}
