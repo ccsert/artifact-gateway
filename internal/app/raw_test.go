@@ -88,19 +88,23 @@ func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
 	}
 	server := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)})
 	defer server.Close()
-	request, err := http.NewRequest(http.MethodGet, server.URL+"/raw/downloads/release/app.txt", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Authorization", "Bearer resolver-secret")
-	request.Header.Set("Range", "bytes=0-1,3-4")
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-		t.Fatalf("multipart range status = %d", response.StatusCode)
+	for _, values := range [][]string{{"bytes=0-1,3-4"}, {"bytes=0-1", "bytes=3-4"}} {
+		request, err := http.NewRequest(http.MethodGet, server.URL+"/raw/downloads/release/app.txt", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer resolver-secret")
+		for _, value := range values {
+			request.Header.Add("Range", value)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+			t.Fatalf("multipart ranges %v status = %d", values, response.StatusCode)
+		}
 	}
 }
 
@@ -142,6 +146,27 @@ func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 	content, err := cache.Load(context.Background(), key)
 	if err != nil || string(content.Body) != "artifact" {
 		t.Fatalf("legacy cache load content=%q err=%v", content.Body, err)
+	}
+}
+
+func TestRawCacheQuotaCountsLegacyIndex(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
+	key := cache.key("downloads", "existing", "hosted", "http://gitea.local")
+	legacy, err := json.Marshal(struct {
+		Repository string
+		Size       int64
+		ExpiresAt  time.Time
+	}{Repository: "downloads", Size: 5, ExpiresAt: time.Now().UTC().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(context.Background(), key, legacy); err != nil {
+		t.Fatal(err)
+	}
+	newKey := cache.key("downloads", "new", "hosted", "http://gitea.local")
+	if err := cache.Store(context.Background(), newKey, RawContent{Body: []byte("x"), Repository: "downloads", CacheQuotaBytes: 5}); !errors.Is(err, ErrCacheQuotaExceeded) {
+		t.Fatalf("legacy quota admission = %v, want quota rejection", err)
 	}
 }
 

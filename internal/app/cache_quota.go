@@ -28,6 +28,30 @@ type cacheQuotaIndex struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
+// UnmarshalJSON retains quota accounting for Raw indexes written before the
+// index schema used snake_case field names.
+func (i *cacheQuotaIndex) UnmarshalJSON(data []byte) error {
+	type encodedCacheQuotaIndex cacheQuotaIndex
+	var decoded encodedCacheQuotaIndex
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded.ExpiresAt.IsZero() {
+		var legacy struct {
+			Repository string
+			Size       int64
+			Negative   bool
+			ExpiresAt  time.Time
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		decoded = encodedCacheQuotaIndex(legacy)
+	}
+	*i = cacheQuotaIndex(decoded)
+	return nil
+}
+
 func NewCacheQuota(store OCIObjectStore, limits map[string]int64) *CacheQuota {
 	return &CacheQuota{store: store, limits: limits}
 }

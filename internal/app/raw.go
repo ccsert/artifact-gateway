@@ -706,8 +706,8 @@ func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent)
 		statusWriter.WriteHeader(http.StatusNotModified)
 		return statusWriter.result()
 	}
-	if r.Header.Get("Range") != "" {
-		if strings.Contains(r.Header.Get("Range"), ",") {
+	if ranges := r.Header.Values("Range"); len(ranges) > 0 {
+		if len(ranges) != 1 || strings.Contains(ranges[0], ",") {
 			statusWriter.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			return statusWriter.result()
 		}
