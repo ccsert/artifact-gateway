@@ -24,6 +24,11 @@ import (
 var errRawCacheMiss = errors.New("raw cache miss")
 var errRawCacheNegative = errors.New("raw negative cache hit")
 
+var rawProxyLookupIP = net.DefaultResolver.LookupIP
+var rawProxyDialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+	return (&net.Dialer{}).DialContext(ctx, network, address)
+}
+
 const defaultRawCacheTTL = 15 * time.Minute
 const defaultRawNegativeCacheTTL = time.Minute
 const defaultRawMaxObjectBytes = int64(1 << 30)
@@ -33,8 +38,14 @@ type RawClient interface {
 }
 
 func (c GiteaClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+	client := c.HTTPClient
 	if member.Type == repository.MemberProxy {
-		if err := safeRawProxyEndpoint(ctx, member.Endpoint); err != nil {
+		u, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+		client, err = rawProxyHTTPClient(client, u.Hostname(), u.Port(), ips)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -53,7 +64,7 @@ func (c GiteaClient) FetchRaw(ctx context.Context, method string, member reposit
 	if member.Type == repository.MemberHosted {
 		r.SetBasicAuth(c.Username, c.Token)
 	}
-	client := tracedHTTPClient(c.HTTPClient)
+	client = tracedHTTPClient(client)
 	// Never follow upstream redirects: a redirect can otherwise bypass the
 	// configured proxy host allowlist (and may disclose hosted credentials).
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -198,20 +209,63 @@ func (c *RawCache) ProxyAllowed(endpoint string) bool {
 }
 
 func safeRawProxyEndpoint(ctx context.Context, endpoint string) error {
+	_, _, err := resolveRawProxyEndpoint(ctx, endpoint)
+	return err
+}
+
+func resolveRawProxyEndpoint(ctx context.Context, endpoint string) (*url.URL, []net.IP, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
-		return errors.New("Raw proxy endpoint is not a valid HTTPS URL")
+		return nil, nil, errors.New("Raw proxy endpoint is not a valid HTTPS URL")
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", u.Hostname())
+	ips, err := rawProxyLookupIP(ctx, "ip", u.Hostname())
 	if err != nil || len(ips) == 0 {
-		return fmt.Errorf("resolve Raw proxy endpoint: %w", err)
+		return nil, nil, fmt.Errorf("resolve Raw proxy endpoint: %w", err)
 	}
 	for _, ip := range ips {
 		if privateAddress(ip) {
-			return errors.New("Raw proxy endpoint resolves to a private address")
+			return nil, nil, errors.New("Raw proxy endpoint resolves to a private address")
 		}
 	}
-	return nil
+	return u, ips, nil
+}
+
+// rawProxyHTTPClient pins the TCP connection to the address that passed the
+// private-network check, preventing a second DNS resolution from rebinding it.
+func rawProxyHTTPClient(client *http.Client, hostname, port string, ips []net.IP) (*http.Client, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	base, ok := transport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("Raw proxy HTTP client must use *http.Transport")
+	}
+	copy := *client
+	pinnedTransport := base.Clone()
+	pinnedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		requestHost, requestPort, err := net.SplitHostPort(address)
+		if err != nil || !strings.EqualFold(requestHost, hostname) {
+			return nil, errors.New("Raw proxy dial target changed")
+		}
+		if port != "" {
+			requestPort = port
+		}
+		var lastErr error
+		for _, ip := range ips {
+			connection, err := rawProxyDialContext(ctx, network, net.JoinHostPort(ip.String(), requestPort))
+			if err == nil {
+				return connection, nil
+			}
+			lastErr = err
+		}
+		return nil, lastErr
+	}
+	copy.Transport = pinnedTransport
+	return &copy, nil
 }
 
 func privateAddress(ip net.IP) bool {
