@@ -215,13 +215,14 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 	}
 	client := &rawFixtureClient{responses: map[string]int{"gitea": http.StatusOK, "proxy": http.StatusNotFound, "hosted-miss": http.StatusNotFound, "proxy-ok": http.StatusOK, "offline": http.StatusServiceUnavailable}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
-	request := func(method, path string) {
+	request := func(method, path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, rawRequest(method, path))
+		return w
 	}
 	last := func() repository.AuditRecord { return store.Audits[len(store.Audits)-1] }
 
-	request(http.MethodGet, "/raw/hosted/release/app.txt")
+	resolvedResponse := request(http.MethodGet, "/raw/hosted/release/app.txt")
 	resolved := last()
 	if resolved.Format != "raw" || resolved.Resource != "release/app.txt" || resolved.Representation != "body" || resolved.MemberName != "gitea" || resolved.MemberType != "hosted" || resolved.UpstreamHost != "gitea.example" || resolved.Operation != "get" || resolved.Status != http.StatusOK || resolved.CacheDisposition != "miss" || resolved.Bytes != 8 {
 		t.Fatalf("resolved audit=%#v", resolved)
@@ -229,15 +230,21 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 
 	request(http.MethodHead, "/raw/hosted/release/app.txt")
 	head := last()
-	if head.Operation != "head" || head.Status != http.StatusOK || head.CacheDisposition != "hit" || head.Bytes != 8 {
+	if head.Operation != "head" || head.Status != http.StatusOK || head.CacheDisposition != "hit" || head.Bytes != 0 {
 		t.Fatalf("HEAD audit=%#v", head)
 	}
 	rangeRequest := rawRequest(http.MethodGet, "/raw/hosted/release/app.txt")
 	rangeRequest.Header.Set("Range", "bytes=0-1")
 	h.ServeHTTP(httptest.NewRecorder(), rangeRequest)
 	rangeAudit := last()
-	if rangeAudit.Status != http.StatusPartialContent || rangeAudit.CacheDisposition != "hit" || rangeAudit.Bytes != 8 {
+	if rangeAudit.Status != http.StatusPartialContent || rangeAudit.CacheDisposition != "hit" || rangeAudit.Bytes != 2 {
 		t.Fatalf("range audit=%#v", rangeAudit)
+	}
+	conditional := rawRequest(http.MethodGet, "/raw/hosted/release/app.txt")
+	conditional.Header.Set("If-None-Match", resolvedResponse.Header().Get("ETag"))
+	h.ServeHTTP(httptest.NewRecorder(), conditional)
+	if conditionalAudit := last(); conditionalAudit.Status != http.StatusNotModified || conditionalAudit.Bytes != 0 || conditionalAudit.CacheDisposition != "hit" {
+		t.Fatalf("conditional audit=%#v", conditionalAudit)
 	}
 
 	request(http.MethodGet, "/raw/negative/missing")
@@ -261,7 +268,7 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 
 	request(http.MethodGet, "/raw/outage/artifact")
 	outage := last()
-	if outage.Outcome != repository.AuditUpstreamError || outage.MemberName != "offline" || outage.Status != http.StatusServiceUnavailable || outage.CacheDisposition != "bypass" {
+	if outage.Outcome != repository.AuditUpstreamError || outage.MemberName != "offline" || outage.Status != http.StatusBadGateway || outage.CacheDisposition != "bypass" {
 		t.Fatalf("upstream-error audit=%#v", outage)
 	}
 
@@ -282,7 +289,7 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 	invalidRange.Header.Set("Range", "bytes=99-100")
 	invalidRangeResponse := httptest.NewRecorder()
 	h.ServeHTTP(invalidRangeResponse, invalidRange)
-	if invalidRangeResponse.Code != http.StatusRequestedRangeNotSatisfiable || last().Status != http.StatusRequestedRangeNotSatisfiable || last().CacheDisposition != "hit" {
+	if invalidRangeResponse.Code != http.StatusRequestedRangeNotSatisfiable || last().Status != http.StatusRequestedRangeNotSatisfiable || last().CacheDisposition != "hit" || last().Bytes != 0 {
 		t.Fatalf("invalid-range response=%d audit=%#v", invalidRangeResponse.Code, last())
 	}
 }

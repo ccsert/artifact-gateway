@@ -302,8 +302,8 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			key = h.Cache.key(group, path, member.Name, member.Endpoint)
 			content, cacheErr := h.Cache.Load(r.Context(), key)
 			if cacheErr == nil {
-				status := serveRaw(w, r, path, content)
-				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: status, CacheDisposition: "hit", Bytes: int64(len(content.Body)), Method: r.Method})
+				served := serveRaw(w, r, path, content)
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: "hit", Bytes: served.Bytes, Method: r.Method})
 				return
 			}
 			if errors.Is(cacheErr, errRawCacheNegative) {
@@ -336,7 +336,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
-			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: response.StatusCode, CacheDisposition: "bypass", Method: r.Method})
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 			hadUpstreamFailure = true
 			continue
 		}
@@ -367,8 +367,8 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		status := serveRaw(w, r, path, content)
-		h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: status, CacheDisposition: rawCacheDisposition(h.Cache), Bytes: int64(len(content.Body)), Method: r.Method})
+		served := serveRaw(w, r, path, content)
+		h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: rawCacheDisposition(h.Cache), Bytes: served.Bytes, Method: r.Method})
 		return
 	}
 	if hadUpstreamFailure {
@@ -466,6 +466,7 @@ func validChecksum(path string, b []byte) bool {
 type rawStatusWriter struct {
 	http.ResponseWriter
 	status int
+	bytes  int64
 }
 
 func (w *rawStatusWriter) WriteHeader(status int) {
@@ -477,10 +478,28 @@ func (w *rawStatusWriter) Write(body []byte) (int, error) {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
 	}
-	return w.ResponseWriter.Write(body)
+	n, err := w.ResponseWriter.Write(body)
+	w.bytes += int64(n)
+	return n, err
 }
 
-func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent) int {
+type rawServeResult struct {
+	Status int
+	Bytes  int64
+}
+
+func (w *rawStatusWriter) result() rawServeResult {
+	status := w.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return rawServeResult{Status: status}
+	}
+	return rawServeResult{Status: status, Bytes: w.bytes}
+}
+
+func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent) rawServeResult {
 	statusWriter := &rawStatusWriter{ResponseWriter: w}
 	w.Header().Set("Content-Type", c.ContentType)
 	etag := `"sha256-` + c.Digest + `"`
@@ -489,16 +508,16 @@ func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent)
 	w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(digest))
 	if r.Header.Get("If-None-Match") == etag {
 		statusWriter.WriteHeader(http.StatusNotModified)
-		return statusWriter.status
+		return statusWriter.result()
 	}
 	if r.Header.Get("Range") != "" {
 		http.ServeContent(statusWriter, r, name, time.Time{}, bytes.NewReader(c.Body))
-		return statusWriter.status
+		return statusWriter.result()
 	}
 	w.Header().Set("Content-Length", utoa(uint64(len(c.Body))))
 	statusWriter.WriteHeader(http.StatusOK)
 	if r.Method != http.MethodHead {
 		_, _ = statusWriter.Write(c.Body)
 	}
-	return statusWriter.status
+	return statusWriter.result()
 }
