@@ -295,6 +295,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	hadUpstreamFailure := false
 	hadProxyDenied := false
+	var lastNegative *repository.Member
 	for _, member := range prioritizeHosted(members) {
 		key := ""
 		if h.Cache != nil {
@@ -307,6 +308,8 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(cacheErr, errRawCacheNegative) {
 				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
+				negativeMember := member
+				lastNegative = &negativeMember
 				continue
 			}
 		}
@@ -376,7 +379,11 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
 		return
 	}
-	h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: rawCacheDisposition(h.Cache), Method: r.Method})
+	if lastNegative != nil {
+		h.audit(r.Context(), group, path, rawAuditEvent{Member: *lastNegative, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
+	} else {
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: rawCacheDisposition(h.Cache), Method: r.Method})
+	}
 	http.NotFound(w, r)
 }
 

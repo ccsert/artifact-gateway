@@ -104,7 +104,9 @@ func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]Aud
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at, format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes
+	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at,
+		COALESCE(format, ''), COALESCE(resource, ''), COALESCE(representation, ''), COALESCE(member_type, ''), COALESCE(upstream_host, ''), COALESCE(operation, ''),
+		COALESCE(http_status, 0), COALESCE(cache_disposition, ''), COALESCE(bytes, 0)
 		FROM resolver_audit_log
 		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
 		ORDER BY occurred_at DESC, id DESC

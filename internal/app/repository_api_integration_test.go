@@ -146,6 +146,33 @@ func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 	}
 }
 
+func TestPostgresLegacyAuditsRemainQueryable(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO resolver_audit_log (group_name, repository, member_name, outcome, actor) VALUES ($1,$2,$3,$4,$5)`, "legacy-audit", "legacy-repository", "legacy-member", repository.AuditResolved, "legacy-actor"); err != nil {
+		t.Fatal(err)
+	}
+	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{GroupName: "legacy-audit"})
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("ListAudits err=%v audits=%#v", err, audits)
+	}
+	if audit := audits[0]; audit.Actor != "legacy-actor" || audit.Outcome != repository.AuditResolved || audit.Format != "" || audit.Resource != "" || audit.Representation != "" || audit.MemberType != "" || audit.UpstreamHost != "" || audit.Operation != "" || audit.Status != 0 || audit.CacheDisposition != "" || audit.Bytes != 0 {
+		t.Fatalf("legacy audit=%#v", audit)
+	}
+}
+
 func integrationRequest(handler http.Handler, method, target, body, token string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	authorize(request, token)

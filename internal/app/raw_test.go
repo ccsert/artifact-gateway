@@ -241,9 +241,8 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 	}
 
 	request(http.MethodGet, "/raw/negative/missing")
-	beforeNegativeHit := len(store.Audits)
 	request(http.MethodGet, "/raw/negative/missing")
-	negative := store.Audits[beforeNegativeHit]
+	negative := last()
 	if negative.Outcome != repository.AuditNotFound || negative.MemberName != "proxy" || negative.MemberType != "proxy" || negative.UpstreamHost != "proxy.example" || negative.Status != http.StatusNotFound || negative.CacheDisposition != "hit" || negative.Bytes != 0 {
 		t.Fatalf("negative-cache audit=%#v", negative)
 	}
