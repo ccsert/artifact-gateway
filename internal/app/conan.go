@@ -113,12 +113,16 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, authenticated := h.Authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !authenticated && h.anonymousConanAllowed(r.Context(), group) {
+		p = Principal{Actor: "anonymous"}
+		authenticated = true
+	}
 	if !authenticated {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	if !h.Authenticator.CanReadMavenRepository(p, group) {
+	if p.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(p, group) {
 		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
@@ -131,6 +135,9 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.Metrics != nil {
 		h.Metrics.recordRequest(group)
+		if p.Actor == "anonymous" {
+			h.Metrics.recordAnonymousRead()
+		}
 	}
 	content, status, err := h.resolve(r.Context(), g, path, kind, r.Header, p.Actor)
 	if err != nil {
@@ -163,7 +170,16 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 	}
 	hadFailure, denied := false, false
-	for _, member := range prioritizeHosted(group.Members) {
+	members := group.Members
+	if actor == "anonymous" {
+		members = make([]repository.Member, 0, len(group.Members))
+		for _, member := range group.Members {
+			if member.Anonymous {
+				members = append(members, member)
+			}
+		}
+	}
+	for _, member := range prioritizeHosted(members) {
 		if member.Type == repository.MemberProxy && (h.Cache == nil || !h.Cache.proxyAllowed(member.Endpoint)) {
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditProxyDenied)
 			denied = true

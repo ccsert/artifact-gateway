@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -152,4 +153,39 @@ func TestConanRejectsMalformedAndUnsupportedRoutes(t *testing.T) {
 			t.Fatalf("accepted %s", path)
 		}
 	}
+}
+
+func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
+	store := repository.NewMemoryStore()
+	for _, group := range []repository.Group{
+		{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}},
+		{Name: "partial", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},
+		{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "private", Type: repository.MemberHosted}, {Name: "public", Type: repository.MemberHosted, Anonymous: true}}},
+	} {
+		if _, err := store.CreateConanGroup(context.Background(), group); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := &conanAnonymousClient{}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	path := "/conan/v2/%s/conans/pkg/1.0/user/stable/revisions"
+	for _, group := range []string{"private", "partial"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, fmt.Sprintf(path, group), nil))
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("%s status=%d", group, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, fmt.Sprintf(path, "public"), nil))
+	if w.Code != http.StatusOK || client.member != "public" {
+		t.Fatalf("response=%d member=%q", w.Code, client.member)
+	}
+}
+
+type conanAnonymousClient struct{ member string }
+
+func (c *conanAnonymousClient) FetchConan(_ context.Context, _ string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
+	c.member = member.Name
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"revisions":[{"revision":"rrev","time":1}]}`))}, nil
 }

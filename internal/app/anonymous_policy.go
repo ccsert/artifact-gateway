@@ -49,3 +49,19 @@ func (h RawHandler) anonymousRawAllowed(ctx context.Context, groupName string) b
 	}
 	return false
 }
+
+func (h ConanHandler) anonymousConanAllowed(ctx context.Context, groupName string) bool {
+	if h.Store == nil {
+		return false
+	}
+	group, err := h.Store.GetConanGroup(ctx, groupName)
+	if err != nil || !group.Enabled || !group.Anonymous {
+		return false
+	}
+	for _, member := range group.Members {
+		if member.Anonymous {
+			return true
+		}
+	}
+	return false
+}
