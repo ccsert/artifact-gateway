@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -38,7 +39,7 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, er
 		return Group{}, err
 	}
 	for _, member := range group.Members {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO oci_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,$7)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO oci_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::text[], '{}'::text[]))`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 	}
@@ -56,14 +57,18 @@ func (s *PostgresStore) GetGroup(ctx context.Context, name string) (Group, error
 		}
 		return Group{}, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, allowed_hosts FROM oci_group_members WHERE group_name=$1 ORDER BY position`, name)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, array_to_json(allowed_hosts) FROM oci_group_members WHERE group_name=$1 ORDER BY position`, name)
 	if err != nil {
 		return Group{}, err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &member.AllowedHosts); err != nil {
+		var allowedHosts []byte
+		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &allowedHosts); err != nil {
+			return Group{}, err
+		}
+		if err := json.Unmarshal(allowedHosts, &member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 		group.Members = append(group.Members, member)
@@ -99,7 +104,7 @@ func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]Aud
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at
+	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at, format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes
 		FROM resolver_audit_log
 		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
 		ORDER BY occurred_at DESC, id DESC
@@ -111,7 +116,7 @@ func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]Aud
 	var audits []AuditRecord
 	for rows.Next() {
 		var audit AuditRecord
-		if err := rows.Scan(&audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt); err != nil {
+		if err := rows.Scan(&audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt, &audit.Format, &audit.Resource, &audit.Representation, &audit.MemberType, &audit.UpstreamHost, &audit.Operation, &audit.Status, &audit.CacheDisposition, &audit.Bytes); err != nil {
 			return nil, err
 		}
 		audits = append(audits, audit)

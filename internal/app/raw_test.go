@@ -121,7 +121,11 @@ func TestRawAnonymousPolicyRequiresPublicGroupAndMember(t *testing.T) {
 			t.Errorf("%s: got %d want %d", group, w.Code, want)
 		}
 	}
-	if len(store.Audits) == 0 || store.Audits[len(store.Audits)-1].Actor != "anonymous" || store.Audits[len(store.Audits)-1].Outcome != repository.AuditResolved {
+	var anonymousResolved bool
+	for _, audit := range store.Audits {
+		anonymousResolved = anonymousResolved || audit.GroupName == "public" && audit.Actor == "anonymous" && audit.Outcome == repository.AuditResolved
+	}
+	if !anonymousResolved {
 		t.Fatalf("anonymous audit=%#v", store.Audits)
 	}
 }
@@ -193,6 +197,94 @@ func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.sha256"))
 	if w.Code != http.StatusOK {
 		t.Fatalf("valid sidecar = %d", w.Code)
+	}
+}
+
+func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
+	store := repository.NewMemoryStore()
+	for _, group := range []repository.Group{
+		{Name: "hosted", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: "https://gitea.example:8443"}}},
+		{Name: "negative", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}}},
+		{Name: "fallback", Members: []repository.Member{{Name: "hosted-miss", Type: repository.MemberHosted, Endpoint: "https://hosted.example", Position: 0}, {Name: "proxy-ok", Type: repository.MemberProxy, Endpoint: "https://proxy-ok.example", Position: 1, AllowedHosts: []string{"proxy-ok.example"}}}},
+		{Name: "blocked", Members: []repository.Member{{Name: "blocked-proxy", Type: repository.MemberProxy, Endpoint: "https://user:secret@blocked.example"}}},
+		{Name: "outage", Members: []repository.Member{{Name: "offline", Type: repository.MemberHosted, Endpoint: "https://offline.example"}}},
+	} {
+		if _, err := store.CreateGroup(context.Background(), group); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := &rawFixtureClient{responses: map[string]int{"gitea": http.StatusOK, "proxy": http.StatusNotFound, "hosted-miss": http.StatusNotFound, "proxy-ok": http.StatusOK, "offline": http.StatusServiceUnavailable}, body: []byte("artifact")}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	request := func(method, path string) {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, rawRequest(method, path))
+	}
+	last := func() repository.AuditRecord { return store.Audits[len(store.Audits)-1] }
+
+	request(http.MethodGet, "/raw/hosted/release/app.txt")
+	resolved := last()
+	if resolved.Format != "raw" || resolved.Resource != "release/app.txt" || resolved.Representation != "body" || resolved.MemberName != "gitea" || resolved.MemberType != "hosted" || resolved.UpstreamHost != "gitea.example" || resolved.Operation != "get" || resolved.Status != http.StatusOK || resolved.CacheDisposition != "miss" || resolved.Bytes != 8 {
+		t.Fatalf("resolved audit=%#v", resolved)
+	}
+
+	request(http.MethodHead, "/raw/hosted/release/app.txt")
+	head := last()
+	if head.Operation != "head" || head.Status != http.StatusOK || head.CacheDisposition != "hit" || head.Bytes != 8 {
+		t.Fatalf("HEAD audit=%#v", head)
+	}
+	rangeRequest := rawRequest(http.MethodGet, "/raw/hosted/release/app.txt")
+	rangeRequest.Header.Set("Range", "bytes=0-1")
+	h.ServeHTTP(httptest.NewRecorder(), rangeRequest)
+	rangeAudit := last()
+	if rangeAudit.Status != http.StatusPartialContent || rangeAudit.CacheDisposition != "hit" || rangeAudit.Bytes != 8 {
+		t.Fatalf("range audit=%#v", rangeAudit)
+	}
+
+	request(http.MethodGet, "/raw/negative/missing")
+	beforeNegativeHit := len(store.Audits)
+	request(http.MethodGet, "/raw/negative/missing")
+	negative := store.Audits[beforeNegativeHit]
+	if negative.Outcome != repository.AuditNotFound || negative.MemberName != "proxy" || negative.MemberType != "proxy" || negative.UpstreamHost != "proxy.example" || negative.Status != http.StatusNotFound || negative.CacheDisposition != "hit" || negative.Bytes != 0 {
+		t.Fatalf("negative-cache audit=%#v", negative)
+	}
+
+	request(http.MethodGet, "/raw/fallback/artifact")
+	fallback := last()
+	if fallback.Outcome != repository.AuditResolved || fallback.MemberName != "proxy-ok" || fallback.MemberType != "proxy" || fallback.UpstreamHost != "proxy-ok.example" || fallback.Status != http.StatusOK || fallback.CacheDisposition != "miss" || fallback.Bytes != 8 {
+		t.Fatalf("group fallback audit=%#v", fallback)
+	}
+
+	request(http.MethodGet, "/raw/blocked/artifact")
+	blocked := last()
+	if blocked.Outcome != repository.AuditProxyDenied || blocked.MemberName != "blocked-proxy" || blocked.UpstreamHost != "blocked.example" || blocked.Status != http.StatusForbidden || blocked.CacheDisposition != "bypass" {
+		t.Fatalf("proxy-denied audit=%#v", blocked)
+	}
+
+	request(http.MethodGet, "/raw/outage/artifact")
+	outage := last()
+	if outage.Outcome != repository.AuditUpstreamError || outage.MemberName != "offline" || outage.Status != http.StatusServiceUnavailable || outage.CacheDisposition != "bypass" {
+		t.Fatalf("upstream-error audit=%#v", outage)
+	}
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/raw/hosted/release/app.txt", nil))
+	denied := last()
+	if denied.Actor != "anonymous" || denied.Outcome != repository.AuditAccessDenied || denied.Status != http.StatusUnauthorized || denied.Format != "raw" || denied.Resource != "release/app.txt" || denied.Operation != "get" || denied.CacheDisposition != "bypass" {
+		t.Fatalf("authentication-denied audit=%#v", denied)
+	}
+
+	methodDenied := httptest.NewRecorder()
+	h.ServeHTTP(methodDenied, rawRequest(http.MethodPost, "/raw/hosted/release/app.txt"))
+	if methodDenied.Code != http.StatusMethodNotAllowed || last().Actor != "build-agent" || last().Status != http.StatusMethodNotAllowed || last().Operation != "post" {
+		t.Fatalf("method-denied response=%d audit=%#v", methodDenied.Code, last())
+	}
+
+	invalidRange := rawRequest(http.MethodGet, "/raw/hosted/release/app.txt")
+	invalidRange.Header.Set("Range", "bytes=99-100")
+	invalidRangeResponse := httptest.NewRecorder()
+	h.ServeHTTP(invalidRangeResponse, invalidRange)
+	if invalidRangeResponse.Code != http.StatusRequestedRangeNotSatisfiable || last().Status != http.StatusRequestedRangeNotSatisfiable || last().CacheDisposition != "hit" {
+		t.Fatalf("invalid-range response=%d audit=%#v", invalidRangeResponse.Code, last())
 	}
 }
 

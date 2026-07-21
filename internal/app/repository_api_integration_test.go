@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -93,6 +94,55 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	if conflictCount != 1 || resolvedCount != 1 {
 		t.Fatalf("Maven audit counts = conflict:%d resolved:%d", conflictCount, resolvedCount)
+	}
+}
+
+func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	if _, err := store.CreateGroup(context.Background(), repository.Group{Name: "raw-audit", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example:8443"}}}); err != nil {
+		t.Fatal(err)
+	}
+	handler := RawHandler{
+		Store:         store,
+		Authenticator: testAuthenticator(),
+		Client:        &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")},
+		Cache:         NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil),
+	}
+	response := integrationRequest(handler, http.MethodGet, "/raw/raw-audit/release/app.txt", "", "resolver-secret")
+	if response.Code != http.StatusOK {
+		t.Fatalf("Raw response = %d %s", response.Code, response.Body.String())
+	}
+
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var format, resource, representation, memberType, upstreamHost, operation, disposition string
+	var status int
+	var bytes int64
+	err = db.QueryRowContext(context.Background(), `SELECT format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes
+		FROM resolver_audit_log WHERE group_name=$1 ORDER BY id DESC LIMIT 1`, "raw-audit").Scan(&format, &resource, &representation, &memberType, &upstreamHost, &operation, &status, &disposition, &bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format != "raw" || resource != "release/app.txt" || representation != "body" || memberType != "hosted" || upstreamHost != "gitea.example" || operation != "get" || status != http.StatusOK || disposition != "miss" || bytes != 8 {
+		t.Fatalf("Raw audit fields = format=%q resource=%q representation=%q member_type=%q upstream_host=%q operation=%q status=%d disposition=%q bytes=%d", format, resource, representation, memberType, upstreamHost, operation, status, disposition, bytes)
+	}
+	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{GroupName: "raw-audit"})
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("ListAudits err=%v audits=%#v", err, audits)
+	}
+	if audit := audits[0]; audit.Format != "raw" || audit.Resource != "release/app.txt" || audit.Representation != "body" || audit.MemberType != "hosted" || audit.UpstreamHost != "gitea.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "miss" || audit.Bytes != 8 {
+		t.Fatalf("ListAudits Raw fields=%#v", audit)
 	}
 }
 

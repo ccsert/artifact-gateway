@@ -226,11 +226,17 @@ type RawHandler struct {
 	Cache         *RawCache
 }
 
+type rawAuditEvent struct {
+	Member           repository.Member
+	Actor            string
+	Outcome          repository.AuditOutcome
+	Status           int
+	CacheDisposition string
+	Bytes            int64
+	Method           string
+}
+
 func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if strings.HasSuffix(r.URL.EscapedPath(), "/") {
 		http.NotFound(w, r)
 		return
@@ -240,12 +246,18 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid raw path", http.StatusBadRequest)
 		return
 	}
-	p, ok := h.Authenticator.Authenticate(r.Header.Get("Authorization"))
-	if !ok && h.anonymousRawAllowed(r.Context(), group) {
-		p = Principal{Actor: "anonymous"}
-		ok = true
+	p, authenticated := h.Authenticator.Authenticate(r.Header.Get("Authorization"))
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: rawAuditActor(p, authenticated), Outcome: repository.AuditAccessDenied, Status: http.StatusMethodNotAllowed, CacheDisposition: "bypass", Method: r.Method})
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-	if !ok {
+	if !authenticated && h.anonymousRawAllowed(r.Context(), group) {
+		p = Principal{Actor: "anonymous"}
+		authenticated = true
+	}
+	if !authenticated {
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: "anonymous", Outcome: repository.AuditAccessDenied, Status: http.StatusUnauthorized, CacheDisposition: "bypass", Method: r.Method})
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Raw"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
@@ -257,18 +269,18 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, group) {
-		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
 	g, err := h.Store.GetGroup(r.Context(), group)
 	if err != nil {
-		h.audit(r.Context(), group, path, "", p.Actor, auditOutcome(err))
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: auditOutcome(err), Status: http.StatusNotFound, CacheDisposition: "bypass", Method: r.Method})
 		http.NotFound(w, r)
 		return
 	}
 	if !g.Enabled {
-		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditGroupDisabled)
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditGroupDisabled, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 		http.Error(w, "Raw group is disabled", http.StatusForbidden)
 		return
 	}
@@ -289,22 +301,23 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			key = h.Cache.key(group, path, member.Name, member.Endpoint)
 			content, cacheErr := h.Cache.Load(r.Context(), key)
 			if cacheErr == nil {
-				h.audit(r.Context(), group, path, content.Member, p.Actor, repository.AuditResolved)
-				serveRaw(w, r, path, content)
+				status := serveRaw(w, r, path, content)
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: status, CacheDisposition: "hit", Bytes: int64(len(content.Body)), Method: r.Method})
 				return
 			}
 			if errors.Is(cacheErr, errRawCacheNegative) {
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
 				continue
 			}
 		}
 		if member.Type == repository.MemberProxy && !rawProxyAllowed(member) {
-			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditProxyDenied)
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditProxyDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 			hadProxyDenied = true
 			continue
 		}
 		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, nil)
 		if fetchErr != nil {
-			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 			hadUpstreamFailure = true
 			continue
 		}
@@ -315,12 +328,12 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		_ = response.Body.Close()
 		if int64(len(body)) > limit {
-			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 			hadUpstreamFailure = true
 			continue
 		}
 		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
-			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: response.StatusCode, CacheDisposition: "bypass", Method: r.Method})
 			hadUpstreamFailure = true
 			continue
 		}
@@ -328,7 +341,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if h.Cache != nil {
 				_ = h.Cache.StoreNegative(r.Context(), key, member)
 			}
-			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditNotFound)
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: rawCacheDisposition(h.Cache), Method: r.Method})
 			continue
 		}
 		content := RawContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group}
@@ -339,19 +352,20 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		content.Digest = hex.EncodeToString(sum[:])
 		if strings.HasSuffix(path, ".sha256") || strings.HasSuffix(path, ".sha512") {
 			if !validChecksum(path, body) {
-				h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 				http.Error(w, "invalid checksum sidecar", http.StatusBadGateway)
 				return
 			}
 		}
 		if h.Cache != nil {
 			if err := h.Cache.Store(r.Context(), key, content); err != nil && !errors.Is(err, ErrCacheQuotaExceeded) {
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusInternalServerError, CacheDisposition: "bypass", Method: r.Method})
 				http.Error(w, "unable to cache Raw content", http.StatusInternalServerError)
 				return
 			}
 		}
-		h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditResolved)
-		serveRaw(w, r, path, content)
+		status := serveRaw(w, r, path, content)
+		h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: status, CacheDisposition: rawCacheDisposition(h.Cache), Bytes: int64(len(content.Body)), Method: r.Method})
 		return
 	}
 	if hadUpstreamFailure {
@@ -362,8 +376,15 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
 		return
 	}
-	h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)
+	h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: rawCacheDisposition(h.Cache), Method: r.Method})
 	http.NotFound(w, r)
+}
+
+func rawAuditActor(principal Principal, authenticated bool) string {
+	if authenticated && principal.Actor != "" {
+		return principal.Actor
+	}
+	return "anonymous"
 }
 
 func rawProxyAllowed(member repository.Member) bool {
@@ -381,9 +402,28 @@ func rawProxyAllowed(member repository.Member) bool {
 	}
 	return false
 }
-func (h RawHandler) audit(ctx context.Context, group, path, member, actor string, outcome repository.AuditOutcome) {
-	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: group, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC()})
+func (h RawHandler) audit(ctx context.Context, group, path string, event rawAuditEvent) {
+	if event.Actor == "" {
+		event.Actor = "anonymous"
+	}
+	upstreamHost := ""
+	if endpoint, err := url.Parse(event.Member.Endpoint); err == nil {
+		upstreamHost = endpoint.Hostname()
+	}
+	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{
+		GroupName: group, Repository: group, MemberName: event.Member.Name, Actor: event.Actor, Outcome: event.Outcome, OccurredAt: time.Now().UTC(),
+		Format: "raw", Resource: path, Representation: "body", MemberType: string(event.Member.Type), UpstreamHost: upstreamHost,
+		Operation: strings.ToLower(event.Method), Status: event.Status, CacheDisposition: event.CacheDisposition, Bytes: event.Bytes,
+	})
 }
+
+func rawCacheDisposition(cache *RawCache) string {
+	if cache == nil {
+		return "bypass"
+	}
+	return "miss"
+}
+
 func parseRawPath(path string) (string, string, bool) {
 	const prefix = "/raw/"
 	if !strings.HasPrefix(path, prefix) {
@@ -415,23 +455,43 @@ func validChecksum(path string, b []byte) bool {
 	}
 	return true
 }
-func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent) {
+
+type rawStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *rawStatusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *rawStatusWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func serveRaw(w http.ResponseWriter, r *http.Request, name string, c RawContent) int {
+	statusWriter := &rawStatusWriter{ResponseWriter: w}
 	w.Header().Set("Content-Type", c.ContentType)
 	etag := `"sha256-` + c.Digest + `"`
 	w.Header().Set("ETag", etag)
 	digest, _ := hex.DecodeString(c.Digest)
 	w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(digest))
 	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
+		statusWriter.WriteHeader(http.StatusNotModified)
+		return statusWriter.status
 	}
 	if r.Header.Get("Range") != "" {
-		http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(c.Body))
-		return
+		http.ServeContent(statusWriter, r, name, time.Time{}, bytes.NewReader(c.Body))
+		return statusWriter.status
 	}
 	w.Header().Set("Content-Length", utoa(uint64(len(c.Body))))
-	w.WriteHeader(http.StatusOK)
+	statusWriter.WriteHeader(http.StatusOK)
 	if r.Method != http.MethodHead {
-		_, _ = w.Write(c.Body)
+		_, _ = statusWriter.Write(c.Body)
 	}
+	return statusWriter.status
 }
