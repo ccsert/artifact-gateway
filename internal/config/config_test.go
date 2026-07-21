@@ -27,6 +27,7 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS", "raw.example, mirror.example ")
+	t.Setenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES", "12345")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -39,6 +40,9 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	}
 	if got := strings.Join(cfg.RawProxyAllowedHosts, ","); got != "raw.example,mirror.example" {
 		t.Fatalf("RawProxyAllowedHosts = %q", got)
+	}
+	if cfg.RawCacheMaxObjectBytes != 12345 {
+		t.Fatalf("RawCacheMaxObjectBytes = %d", cfg.RawCacheMaxObjectBytes)
 	}
 }
 

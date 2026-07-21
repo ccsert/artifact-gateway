@@ -26,6 +26,7 @@ var errRawCacheNegative = errors.New("raw negative cache hit")
 
 const defaultRawCacheTTL = 15 * time.Minute
 const defaultRawNegativeCacheTTL = time.Minute
+const defaultRawMaxObjectBytes = int64(1 << 30)
 
 type RawClient interface {
 	FetchRaw(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
@@ -47,11 +48,8 @@ func (c GiteaClient) FetchRaw(ctx context.Context, method string, member reposit
 	if err != nil {
 		return nil, fmt.Errorf("create Raw request: %w", err)
 	}
-	for _, name := range []string{"Accept", "Range"} {
-		if v := headers.Get(name); v != "" {
-			r.Header.Set(name, v)
-		}
-	}
+	// Raw has one cached file representation. Range and content negotiation are
+	// applied locally after the complete canonical representation is fetched.
 	if member.Type == repository.MemberHosted {
 		r.SetBasicAuth(c.Username, c.Token)
 	}
@@ -77,6 +75,7 @@ type RawContent struct {
 type RawCache struct {
 	store            OCIObjectStore
 	ttl, negativeTTL time.Duration
+	maxObjectBytes   int64
 	allowed          map[string]struct{}
 	quota            *CacheQuota
 	mu               sync.Mutex
@@ -89,12 +88,18 @@ func NewRawCache(store OCIObjectStore, ttl, negativeTTL time.Duration, hosts []s
 			allowed[host] = struct{}{}
 		}
 	}
-	return &RawCache{store: store, ttl: ttl, negativeTTL: negativeTTL, allowed: allowed}
+	return &RawCache{store: store, ttl: ttl, negativeTTL: negativeTTL, maxObjectBytes: defaultRawMaxObjectBytes, allowed: allowed}
 }
 func NewDefaultRawCache(store OCIObjectStore, hosts []string) *RawCache {
 	return NewRawCache(store, defaultRawCacheTTL, defaultRawNegativeCacheTTL, hosts)
 }
 func (c *RawCache) WithQuota(quota *CacheQuota) *RawCache { c.quota = quota; return c }
+func (c *RawCache) WithMaxObjectBytes(limit int64) *RawCache {
+	if limit > 0 {
+		c.maxObjectBytes = limit
+	}
+	return c
+}
 func (c *RawCache) key(group, path, member, endpoint string) string {
 	sum := sha256.Sum256([]byte(group + "\x00" + path + "\x00" + member + "\x00" + endpoint))
 	return "raw/index/" + hex.EncodeToString(sum[:]) + ".json"
@@ -248,14 +253,23 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			hadProxyDenied = true
 			continue
 		}
-		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, r.Header)
+		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, nil)
 		if fetchErr != nil {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
 			hadUpstreamFailure = true
 			continue
 		}
-		body, readErr := io.ReadAll(response.Body)
+		limit := defaultRawMaxObjectBytes
+		if h.Cache != nil && h.Cache.maxObjectBytes > 0 {
+			limit = h.Cache.maxObjectBytes
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		_ = response.Body.Close()
+		if int64(len(body)) > limit {
+			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			hadUpstreamFailure = true
+			continue
+		}
 		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
 			hadUpstreamFailure = true

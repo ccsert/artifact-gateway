@@ -69,7 +69,7 @@ func main() {
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
 			}),
-		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithQuota(quota), app.NewConanCache(cfg.ConanProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes), app.NewConanCache(cfg.ConanProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

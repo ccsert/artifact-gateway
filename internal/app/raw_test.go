@@ -314,3 +314,35 @@ func TestRawHostedStandardHTTPClientE2E(t *testing.T) {
 		t.Fatalf("hosted cache response=%d upstream calls=%d", response.StatusCode, upstreamCalls)
 	}
 }
+
+func TestRawFetchesCanonicalRepresentationAndBoundsObjectSize(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithMaxObjectBytes(8)
+	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
+	r := rawRequest(http.MethodGet, "/raw/downloads/release/app.txt")
+	r.Header.Set("Range", "bytes=0-1")
+	r.Header.Set("Accept", "application/not-cached")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusPartialContent || w.Body.String() != "ar" {
+		t.Fatalf("range response=%d body=%q", w.Code, w.Body.String())
+	}
+
+	client.body = []byte("different")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+	if w.Code != http.StatusOK || w.Body.String() != "artifact" || len(client.Calls()) != 1 {
+		t.Fatalf("cached response=%d body=%q calls=%v", w.Code, w.Body.String(), client.Calls())
+	}
+
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "oversize", Members: []repository.Member{{Name: "large", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	client.responses["large"] = http.StatusOK
+	client.body = []byte("too-large")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/oversize/release/app.txt"))
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("oversize response=%d", w.Code)
+	}
+}

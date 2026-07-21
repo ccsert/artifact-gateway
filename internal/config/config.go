@@ -20,6 +20,7 @@ type Config struct {
 	OCIProxyAllowedHosts   []string
 	MavenProxyAllowedHosts []string
 	RawProxyAllowedHosts   []string
+	RawCacheMaxObjectBytes int64
 	ConanProxyAllowedHosts []string
 	AdapterMode            string
 	AdminToken             string
@@ -50,6 +51,7 @@ func Load() (Config, error) {
 		OCIProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
 		MavenProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
 		RawProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
+		RawCacheMaxObjectBytes: 1 << 30,
 		ConanProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_CONAN_PROXY_ALLOWED_HOSTS")),
 		AdapterMode:            value("GATEWAY_ADAPTER_MODE", "test"),
 		AdminToken:             os.Getenv("GATEWAY_ADMIN_TOKEN"),
@@ -103,6 +105,13 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("GATEWAY_OTEL_SAMPLING_RATIO must be between 0 and 1")
 		}
 		cfg.OTELSamplingRatio = ratio
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES")); raw != "" {
+		bytes, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || bytes <= 0 {
+			return Config{}, fmt.Errorf("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES must be a positive integer")
+		}
+		cfg.RawCacheMaxObjectBytes = bytes
 	}
 	return cfg, nil
 }
