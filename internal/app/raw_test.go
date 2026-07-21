@@ -125,6 +125,15 @@ func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 	}
 }
 
+func TestRawProxyPolicyRejectsPrivateAddresses(t *testing.T) {
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"127.0.0.1", "::1"})
+	for _, endpoint := range []string{"http://proxy.example", "https://user:secret@proxy.example", "https://127.0.0.1", "https://[::1]"} {
+		if cache.ProxyAllowed(endpoint) {
+			t.Fatalf("proxy endpoint %q was allowed", endpoint)
+		}
+	}
+}
+
 func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
@@ -255,5 +264,53 @@ func TestRawStandardHTTPClientE2E(t *testing.T) {
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusBadGateway {
 		t.Fatalf("upstream status=%d", response.StatusCode)
+	}
+}
+
+func TestRawHostedStandardHTTPClientE2E(t *testing.T) {
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		user, password, ok := r.BasicAuth()
+		if !ok || user != "gitea" || password != "gitea-token" {
+			http.Error(w, "missing hosted credentials", http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path != "/release/app.txt" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("hosted-artifact"))
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "hosted", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{Username: "gitea", Token: "gitea-token"}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	gateway := httptest.NewServer(handler)
+	defer gateway.Close()
+
+	request, err := http.NewRequest(http.MethodGet, gateway.URL+"/raw/hosted/release/app.txt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer resolver-secret")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || string(body) != "hosted-artifact" || response.Header.Get("Content-Length") != "15" {
+		t.Fatalf("hosted response=%d headers=%v body=%q", response.StatusCode, response.Header, body)
+	}
+
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || upstreamCalls != 1 {
+		t.Fatalf("hosted cache response=%d upstream calls=%d", response.StatusCode, upstreamCalls)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,6 +32,11 @@ type RawClient interface {
 }
 
 func (c GiteaClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+	if member.Type == repository.MemberProxy {
+		if err := safeRawProxyEndpoint(ctx, member.Endpoint); err != nil {
+			return nil, err
+		}
+	}
 	u, err := url.Parse(member.Endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("parse Raw endpoint: %w", err)
@@ -146,8 +152,32 @@ func (c *RawCache) ProxyAllowed(endpoint string) bool {
 	if err != nil || u.Scheme != "https" || u.User != nil {
 		return false
 	}
+	if ip := net.ParseIP(u.Hostname()); ip != nil && privateAddress(ip) {
+		return false
+	}
 	_, ok := c.allowed[strings.ToLower(u.Hostname())]
 	return ok
+}
+
+func safeRawProxyEndpoint(ctx context.Context, endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
+		return errors.New("Raw proxy endpoint is not a valid HTTPS URL")
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", u.Hostname())
+	if err != nil || len(ips) == 0 {
+		return fmt.Errorf("resolve Raw proxy endpoint: %w", err)
+	}
+	for _, ip := range ips {
+		if privateAddress(ip) {
+			return errors.New("Raw proxy endpoint resolves to a private address")
+		}
+	}
+	return nil
+}
+
+func privateAddress(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
 }
 
 type RawHandler struct {
@@ -226,7 +256,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		body, readErr := io.ReadAll(response.Body)
 		_ = response.Body.Close()
-		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound {
+		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
 			hadUpstreamFailure = true
 			continue
@@ -261,12 +291,12 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		serveRaw(w, r, path, content)
 		return
 	}
-	if hadProxyDenied {
-		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
-		return
-	}
 	if hadUpstreamFailure {
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+		return
+	}
+	if hadProxyDenied {
+		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
 		return
 	}
 	h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)
