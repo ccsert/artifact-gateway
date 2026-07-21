@@ -135,6 +135,11 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if kind == "package_search" {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+		return
+	}
 	if p.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(p, group) {
 		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository read permission required", http.StatusForbidden)
@@ -311,6 +316,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		return
 	}
 	if len(rest) >= 7 && rest[4] == "revisions" {
+		if len(rest) == 7 && rest[6] == "search" {
+			path = strings.Join(rest, "/")
+			kind = "package_search"
+			ok = true
+			return
+		}
 		if len(rest) == 7 && rest[6] == "files" {
 			path = strings.Join(rest, "/")
 			kind = "metadata"

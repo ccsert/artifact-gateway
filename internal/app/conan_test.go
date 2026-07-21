@@ -231,29 +231,38 @@ func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
 	}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: newConanDownloadClient(), Cache: NewConanCache(nil), Metrics: &Metrics{}}
-	server := httptest.NewServer(h)
+	client := newConanDownloadClient()
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	var gatewayPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gatewayPaths = append(gatewayPaths, r.URL.Path)
+		h.ServeHTTP(w, r)
+	}))
 	defer server.Close()
 	home := t.TempDir()
 	run := func(args ...string) {
 		command := exec.Command(conan, args...)
 		command.Env = append(os.Environ(), "CONAN_HOME="+home)
 		if output, err := command.CombinedOutput(); err != nil {
-			t.Fatalf("conan %v: %v\n%s", args, err, output)
+			t.Fatalf("conan %v: %v\n%s\ngateway=%v upstream=%v", args, err, output, gatewayPaths, client.paths)
 		}
 	}
 	run("remote", "add", "--force", "gateway", server.URL+"/conan/central")
-	run("download", "pkg/1.0@user/stable#rrev", "-r=gateway")
+	run("download", "pkg/1.0@user/stable#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "-r=gateway")
 }
 
-type conanDownloadClient struct{ files map[string][]byte }
+type conanDownloadClient struct {
+	files map[string][]byte
+	paths []string
+}
 
 func newConanDownloadClient() *conanDownloadClient {
 	return &conanDownloadClient{files: map[string][]byte{"conanfile.py": []byte("from conan import ConanFile\nclass Pkg(ConanFile):\n    name = 'pkg'\n    version = '1.0'\n"), "conanmanifest.txt": []byte("manifest\n")}}
 }
 func (c *conanDownloadClient) FetchConan(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
+	c.paths = append(c.paths, path)
 	if strings.HasSuffix(path, "/revisions") {
-		return conanJSON(`{"revisions":[{"revision":"rrev","time":"2024-01-01T00:00:00Z"}]}`), nil
+		return conanJSON(`{"revisions":[{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":"2024-01-01T00:00:00Z"}]}`), nil
 	}
 	if strings.HasSuffix(path, "/files") {
 		files := make([]string, 0, len(c.files))
