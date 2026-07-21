@@ -435,6 +435,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
 	mux.Handle("/raw/", RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache})
 	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
+	mux.Handle("/conan/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return tracedHTTPHandler(mux)
 }

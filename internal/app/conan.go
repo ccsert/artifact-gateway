@@ -50,10 +50,10 @@ func (c GiteaClient) FetchConan(ctx context.Context, method string, member repos
 }
 
 type conanCacheEntry struct {
-	body                []byte
-	contentType, member string
-	status              int
-	expires             time.Time
+	body                          []byte
+	contentType, member, endpoint string
+	status                        int
+	expires                       time.Time
 }
 type ConanCache struct {
 	mu      sync.Mutex
@@ -86,6 +86,9 @@ func (c *ConanCache) store(key string, e conanCacheEntry, ttl time.Duration) {
 	e.expires = time.Now().UTC().Add(ttl)
 	c.entries[key] = e
 }
+func (c *ConanCache) key(group, path string, member repository.Member) string {
+	return group + "\x00" + path + "\x00" + member.Name + "\x00" + member.Endpoint
+}
 func (c *ConanCache) proxyAllowed(endpoint string) bool {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
@@ -107,6 +110,16 @@ type ConanHandler struct {
 }
 
 func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if group, ok := parseConanPing(r.Method, r.URL.Path); ok {
+		if h.anonymousConanAllowed(r.Context(), group) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"capabilities":["revisions"]}`))
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
 	group, path, kind, file, ok := parseConanPath(r.Method, r.URL.EscapedPath())
 	if !ok {
 		http.NotFound(w, r)
@@ -149,7 +162,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if file != "" && h.Cache != nil {
-		h.Cache.store(group+"\x00"+path, content, 15*time.Minute)
+		h.Cache.store(h.Cache.key(group, path, repository.Member{Name: content.member, Endpoint: content.endpoint}), content, 15*time.Minute)
 	}
 	w.Header().Set("Content-Type", content.contentType)
 	w.Header().Set("Content-Length", fmt.Sprint(len(content.body)))
@@ -160,15 +173,6 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path, kind string, headers http.Header, actor string) (conanCacheEntry, int, error) {
 	metadata := kind == "metadata"
-	key := group.Name + "\x00" + path
-	if h.Cache != nil {
-		if e, ok := h.Cache.load(key); ok {
-			if e.status == http.StatusNotFound {
-				return conanCacheEntry{}, http.StatusNotFound, errors.New("Conan resource not found")
-			}
-			return e, http.StatusOK, nil
-		}
-	}
 	hadFailure, denied := false, false
 	members := group.Members
 	if actor == "anonymous" {
@@ -180,6 +184,18 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 	}
 	for _, member := range prioritizeHosted(members) {
+		key := ""
+		if h.Cache != nil {
+			key = h.Cache.key(group.Name, path, member)
+			if e, ok := h.Cache.load(key); ok {
+				if e.status == http.StatusNotFound {
+					h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditNotFound)
+					continue
+				}
+				h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditResolved)
+				return e, http.StatusOK, nil
+			}
+		}
 		if member.Type == repository.MemberProxy && (h.Cache == nil || !h.Cache.proxyAllowed(member.Endpoint)) {
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditProxyDenied)
 			denied = true
@@ -199,6 +215,9 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			continue
 		}
 		if response.StatusCode == http.StatusNotFound {
+			if h.Cache != nil {
+				h.Cache.store(key, conanCacheEntry{status: http.StatusNotFound, member: member.Name, endpoint: member.Endpoint}, time.Minute)
+			}
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditNotFound)
 			continue
 		}
@@ -210,7 +229,7 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditUpstreamError)
 			return conanCacheEntry{}, http.StatusBadGateway, errors.New("invalid Conan metadata")
 		}
-		e := conanCacheEntry{body: body, contentType: response.Header.Get("Content-Type"), member: member.Name, status: response.StatusCode}
+		e := conanCacheEntry{body: body, contentType: response.Header.Get("Content-Type"), member: member.Name, endpoint: member.Endpoint, status: response.StatusCode}
 		if e.contentType == "" {
 			if metadata {
 				e.contentType = "application/json"
@@ -227,9 +246,6 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 		h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditResolved)
 		return e, http.StatusOK, nil
-	}
-	if h.Cache != nil && !hadFailure {
-		h.Cache.store(key, conanCacheEntry{status: http.StatusNotFound}, time.Minute)
 	}
 	if hadFailure {
 		return conanCacheEntry{}, http.StatusBadGateway, errors.New("upstream repository unavailable")
@@ -268,16 +284,22 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(raw, "/"), "/")
-	if len(parts) < 8 || parts[0] != "conan" || parts[1] != "v2" || parts[3] != "conans" {
+	if len(parts) < 8 || parts[0] != "conan" {
 		return
 	}
-	for _, part := range parts[2:] {
+	var rest []string
+	if parts[1] == "v2" && parts[3] == "conans" {
+		group, rest = parts[2], parts[4:]
+	} else if parts[2] == "v2" && parts[3] == "conans" {
+		group, rest = parts[1], parts[4:]
+	} else {
+		return
+	}
+	for _, part := range append([]string{group}, rest...) {
 		if !validConanSegment(part) {
 			return
 		}
 	}
-	group = parts[2]
-	rest := parts[4:]
 	if len(rest) < 5 {
 		return
 	}
@@ -323,6 +345,15 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		}
 	}
 	return
+}
+func parseConanPing(method, path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return func() (string, bool) {
+		if method == http.MethodGet && len(parts) == 4 && parts[0] == "conan" && parts[2] == "v1" && parts[3] == "ping" && validConanSegment(parts[1]) {
+			return parts[1], true
+		}
+		return "", false
+	}()
 }
 func validConanSegment(s string) bool {
 	decoded, err := url.PathUnescape(s)

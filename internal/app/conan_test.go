@@ -8,9 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -181,6 +184,44 @@ func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
 	if w.Code != http.StatusOK || client.member != "public" {
 		t.Fatalf("response=%d member=%q", w.Code, client.member)
 	}
+}
+
+func TestConanAnonymousReadDoesNotUsePrivateMemberCache(t *testing.T) {
+	store := repository.NewMemoryStore()
+	private := repository.Member{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example"}
+	public := repository.Member{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Anonymous: true}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{private, public}})
+	cache := NewConanCache(nil)
+	path := "pkg/1.0/user/stable/revisions"
+	cache.store(cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[{"revision":"private","time":1}]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, time.Minute)
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: cache, Metrics: &Metrics{}}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/conan/v2/central/conans/"+path, nil))
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "private") {
+		t.Fatalf("response=%d body=%q", w.Code, w.Body.String())
+	}
+}
+
+func TestConan2ClientListsRevisionThroughGateway(t *testing.T) {
+	conan := os.Getenv("CONAN_BINARY")
+	if conan == "" {
+		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
+	}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	server := httptest.NewServer(h)
+	defer server.Close()
+	home := t.TempDir()
+	run := func(args ...string) {
+		command := exec.Command(conan, args...)
+		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("conan %v: %v\n%s", args, err, output)
+		}
+	}
+	run("remote", "add", "--force", "gateway", server.URL+"/conan/central")
+	run("list", "pkg/1.0@user/stable#*", "-r=gateway")
 }
 
 type conanAnonymousClient struct{ member string }

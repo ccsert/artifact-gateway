@@ -56,7 +56,7 @@ Set `GATEWAY_REPOSITORY_READERS` to enforce repository-scoped reads. Its format 
 ## Conan 2 reads
 
 Create a Conan Group with `POST /api/v1/conan/groups`; the remote URL is
-`http://gateway-host:port/conan/v2/<group>`. The Gateway serves only Conan 2
+`http://gateway-host:port/conan/<group>` (the Conan client appends `/v2`). The Gateway also retains the contract route `/conan/v2/<group>/conans/...`. The Gateway serves only Conan 2
 revision and file endpoints, requires the same Basic or Bearer resolver
 credentials as Maven, validates recipe/package files against their `sha256`
 metadata before caching, and never forwards client credentials upstream.
