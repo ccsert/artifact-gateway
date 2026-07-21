@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,6 +28,34 @@ type integrationOCIResponse struct {
 	status  int
 	content []byte
 	digest  string
+}
+
+// rawPublicationGateStore pauses a Raw index write after its object has been
+// staged, making the store/collector race deterministic across cache instances.
+type rawPublicationGateStore struct {
+	OCIObjectStore
+	indexKey     string
+	objectStored chan struct{}
+	allowIndex   chan struct{}
+	once         sync.Once
+}
+
+func (s *rawPublicationGateStore) Put(ctx context.Context, key string, value []byte) error {
+	if strings.HasPrefix(key, "raw/objects/") {
+		if err := s.OCIObjectStore.Put(ctx, key, value); err != nil {
+			return err
+		}
+		s.once.Do(func() { close(s.objectStored) })
+		return nil
+	}
+	if key == s.indexKey {
+		select {
+		case <-s.allowIndex:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.OCIObjectStore.Put(ctx, key, value)
 }
 
 func (c *integrationOCIUpstream) ServeHTTP(w http.ResponseWriter, request *http.Request) {
@@ -218,5 +247,68 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 	handlerA.ServeHTTP(ranged, rangeRequest)
 	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != "ali" || upstream.Calls("invalid") != 2 {
 		t.Fatalf("offline blob range = %d %q calls=%d", ranged.Code, ranged.Body.String(), upstream.Calls("invalid"))
+	}
+}
+
+func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
+	redisAddress := os.Getenv("TEST_REDIS_ADDRESS")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if redisAddress == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("Redis and S3 integration environment is required")
+	}
+
+	const bucket = "oci-cache-integration"
+	storeA, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := storeA.EnsureBucket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	storeB, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unique := fmt.Sprintf("raw-publication-%d", time.Now().UnixNano())
+	indexKey := NewDefaultRawCache(storeA, nil).key(unique, "artifact", "proxy", "https://proxy.example")
+	gatedStore := &rawPublicationGateStore{
+		OCIObjectStore: storeA,
+		indexKey:       indexKey,
+		objectStored:   make(chan struct{}),
+		allowIndex:     make(chan struct{}),
+	}
+	cacheA := NewDefaultRawCache(gatedStore, nil).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
+	cacheB := NewDefaultRawCache(storeB, nil).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
+	content := RawContent{Body: []byte(unique), Repository: unique}
+
+	stored := make(chan error, 1)
+	go func() { stored <- cacheA.Store(context.Background(), indexKey, content) }()
+	select {
+	case <-gatedStore.objectStored:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Raw object was not staged")
+	}
+
+	collected := make(chan error, 1)
+	go func() { collected <- cacheB.CollectGarbage(context.Background()) }()
+	select {
+	case err := <-collected:
+		t.Fatalf("collector completed before index publication: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(gatedStore.allowIndex)
+	if err := <-stored; err != nil {
+		t.Fatalf("store Raw content: %v", err)
+	}
+	if err := <-collected; err != nil {
+		t.Fatalf("collect Raw cache: %v", err)
+	}
+	loaded, err := cacheB.Load(context.Background(), indexKey)
+	if err != nil || string(loaded.Body) != string(content.Body) {
+		t.Fatalf("final Raw cache content = %q, err = %v", loaded.Body, err)
 	}
 }

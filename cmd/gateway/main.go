@@ -52,7 +52,7 @@ func main() {
 	defer func() { _ = store.Close() }()
 	quota := app.NewCacheQuota(objectStore, cfg.RepositoryCacheQuotas)
 	ociCache := app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota)
-	rawCache := app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes)
+	rawCache := app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes)
 	maintenance := app.NewCacheMaintenanceWithRaw(objectStore, ociCache, rawCache)
 	runtimeContext := signalContext()
 	maintenance.Start(runtimeContext, 5*time.Minute)

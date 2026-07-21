@@ -32,6 +32,8 @@ var rawProxyDialContext = func(ctx context.Context, network, address string) (ne
 const defaultRawCacheTTL = 15 * time.Minute
 const defaultRawNegativeCacheTTL = time.Minute
 const defaultRawMaxObjectBytes = int64(1 << 30)
+const rawDistributedLockLease = 35 * time.Second
+const rawDistributedLockRenewInterval = rawDistributedLockLease / 3
 
 type RawClient interface {
 	FetchRaw(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
@@ -94,6 +96,10 @@ type RawCache struct {
 	allowed          map[string]struct{}
 	quota            *CacheQuota
 	mu               sync.Mutex
+	coordinator      OCICacheCoordinator
+	lockLease        time.Duration
+	lockRenewEvery   time.Duration
+	publicationMu    sync.Mutex
 }
 
 func NewRawCache(store OCIObjectStore, ttl, negativeTTL time.Duration, hosts []string) *RawCache {
@@ -103,12 +109,16 @@ func NewRawCache(store OCIObjectStore, ttl, negativeTTL time.Duration, hosts []s
 			allowed[host] = struct{}{}
 		}
 	}
-	return &RawCache{store: store, ttl: ttl, negativeTTL: negativeTTL, maxObjectBytes: defaultRawMaxObjectBytes, allowed: allowed}
+	return &RawCache{store: store, ttl: ttl, negativeTTL: negativeTTL, maxObjectBytes: defaultRawMaxObjectBytes, allowed: allowed, lockLease: rawDistributedLockLease, lockRenewEvery: rawDistributedLockRenewInterval}
 }
 func NewDefaultRawCache(store OCIObjectStore, hosts []string) *RawCache {
 	return NewRawCache(store, defaultRawCacheTTL, defaultRawNegativeCacheTTL, hosts)
 }
 func (c *RawCache) WithQuota(quota *CacheQuota) *RawCache { c.quota = quota; return c }
+func (c *RawCache) WithCoordinator(coordinator OCICacheCoordinator) *RawCache {
+	c.coordinator = coordinator
+	return c
+}
 func (c *RawCache) WithMaxObjectBytes(limit int64) *RawCache {
 	if limit > 0 {
 		c.maxObjectBytes = limit
@@ -126,7 +136,7 @@ func (c *RawCache) Load(ctx context.Context, key string) (RawContent, error) {
 	}
 	var index rawIndex
 	if json.Unmarshal(b, &index) != nil || !time.Now().UTC().Before(index.ExpiresAt) {
-		_ = c.store.Delete(ctx, key)
+		c.removeIndex(ctx, key, b)
 		return RawContent{}, errRawCacheMiss
 	}
 	if index.Negative {
@@ -134,81 +144,156 @@ func (c *RawCache) Load(ctx context.Context, key string) (RawContent, error) {
 	}
 	body, err := c.store.Get(ctx, index.Object)
 	if err != nil {
-		_ = c.store.Delete(ctx, key)
+		c.removeIndex(ctx, key, b)
 		return RawContent{}, errRawCacheMiss
 	}
 	sum := sha256.Sum256(body)
 	if hex.EncodeToString(sum[:]) != index.Digest {
-		_ = c.store.Delete(ctx, key)
-		_ = c.store.Delete(ctx, index.Object)
+		// Raw objects are content-addressed and can have multiple live indexes.
+		// Leave cleanup to the coordinated collector after removing this bad index.
+		c.removeIndex(ctx, key, b)
 		return RawContent{}, errRawCacheMiss
 	}
 	return RawContent{Body: body, Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Repository: index.Repository}, nil
 }
 func (c *RawCache) Store(ctx context.Context, key string, content RawContent) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.quota.Admit(ctx, content.Repository, key, int64(len(content.Body)), func() error {
-		sum := sha256.Sum256(content.Body)
-		digest := hex.EncodeToString(sum[:])
-		object := "raw/objects/" + digest
-		if err := c.store.Put(ctx, object, content.Body); err != nil {
-			return err
-		}
-		b, err := json.Marshal(rawIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Size: int64(len(content.Body)), ExpiresAt: time.Now().UTC().Add(c.ttl)})
-		if err != nil {
-			return err
-		}
-		return c.store.Put(ctx, key, b)
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.quota.Admit(workCtx, content.Repository, key, int64(len(content.Body)), func() error {
+			sum := sha256.Sum256(content.Body)
+			digest := hex.EncodeToString(sum[:])
+			object := "raw/objects/" + digest
+			if err := c.store.Put(workCtx, object, content.Body); err != nil {
+				return err
+			}
+			b, err := json.Marshal(rawIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Size: int64(len(content.Body)), ExpiresAt: time.Now().UTC().Add(c.ttl)})
+			if err != nil {
+				return err
+			}
+			return c.store.Put(workCtx, key, b)
+		})
 	})
 }
 func (c *RawCache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	b, err := json.Marshal(rawIndex{Member: member.Name, Endpoint: member.Endpoint, Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
-	if err != nil {
-		return err
-	}
-	return c.store.Put(ctx, key, b)
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		b, err := json.Marshal(rawIndex{Member: member.Name, Endpoint: member.Endpoint, Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
+		if err != nil {
+			return err
+		}
+		return c.store.Put(workCtx, key, b)
+	})
 }
 func (c *RawCache) Invalidate(ctx context.Context, key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_ = c.store.Delete(ctx, key)
+	c.removeIndex(ctx, key, nil)
+}
+
+func (c *RawCache) removeIndex(ctx context.Context, key string, expected []byte) {
+	_ = c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if expected != nil {
+			current, err := c.store.Get(workCtx, key)
+			if err != nil || !bytes.Equal(current, expected) {
+				return err
+			}
+		}
+		return c.store.Delete(workCtx, key)
+	})
 }
 func (c *RawCache) CollectGarbage(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	keys, err := c.store.List(ctx, "raw/index/")
-	if err != nil {
-		return err
-	}
-	referenced := map[string]bool{}
-	now := time.Now().UTC()
-	for _, key := range keys {
-		encoded, err := c.store.Get(ctx, key)
+	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		keys, err := c.store.List(workCtx, "raw/index/")
 		if err != nil {
-			continue
+			return err
 		}
-		var index rawIndex
-		if json.Unmarshal(encoded, &index) != nil || !now.Before(index.ExpiresAt) {
-			_ = c.store.Delete(ctx, key)
-			continue
+		referenced := map[string]bool{}
+		now := time.Now().UTC()
+		for _, key := range keys {
+			encoded, err := c.store.Get(workCtx, key)
+			if err != nil {
+				continue
+			}
+			var index rawIndex
+			if json.Unmarshal(encoded, &index) != nil || !now.Before(index.ExpiresAt) {
+				_ = c.store.Delete(workCtx, key)
+				continue
+			}
+			if index.Object != "" {
+				referenced[index.Object] = true
+			}
 		}
-		if index.Object != "" {
-			referenced[index.Object] = true
+		objects, err := c.store.List(workCtx, "raw/objects/")
+		if err != nil {
+			return err
+		}
+		for _, object := range objects {
+			if !referenced[object] {
+				_ = c.store.Delete(workCtx, object)
+			}
+		}
+		return nil
+	})
+}
+
+func (c *RawCache) withPublicationLock(ctx context.Context, work func(context.Context) error) error {
+	c.publicationMu.Lock()
+	defer c.publicationMu.Unlock()
+	if c.coordinator == nil {
+		return work(ctx)
+	}
+	for {
+		owner, acquired, err := c.coordinator.Acquire(ctx, "raw-publication", c.lockLease)
+		if err != nil {
+			return err
+		}
+		if !acquired {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(20 * time.Millisecond):
+				continue
+			}
+		}
+		defer func() {
+			releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = c.coordinator.Release(releaseCtx, "raw-publication", owner)
+		}()
+		workCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		renewalFailed := make(chan struct{})
+		go c.renewRawLock(workCtx, "raw-publication", owner, renewalFailed, cancel)
+		err = work(workCtx)
+		select {
+		case <-renewalFailed:
+			return errors.New("Raw distributed publication lock renewal failed")
+		default:
+			return err
 		}
 	}
-	objects, err := c.store.List(ctx, "raw/objects/")
-	if err != nil {
-		return err
-	}
-	for _, object := range objects {
-		if !referenced[object] {
-			_ = c.store.Delete(ctx, object)
+}
+
+func (c *RawCache) renewRawLock(ctx context.Context, key, owner string, failed chan<- struct{}, cancel context.CancelFunc) {
+	ticker := time.NewTicker(c.lockRenewEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ok, err := c.coordinator.Renew(ctx, key, owner, c.lockLease)
+			if err != nil || !ok {
+				close(failed)
+				cancel()
+				return
+			}
 		}
 	}
-	return nil
 }
 func (c *RawCache) ProxyAllowed(endpoint string) bool {
 	u, err := url.Parse(endpoint)

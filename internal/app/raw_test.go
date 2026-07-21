@@ -762,3 +762,37 @@ func TestRawCacheCollectorKeepsLiveReferences(t *testing.T) {
 		t.Fatalf("objects=%v err=%v", objects, err)
 	}
 }
+
+func TestRawCacheInvalidationKeepsObjectsReferencedByOtherIndexes(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cacheA := NewRawCache(store, time.Hour, time.Hour, nil)
+	cacheB := NewRawCache(store, time.Hour, time.Hour, nil)
+	liveKey := cacheA.key("g", "live", "m", "https://host")
+	badKey := cacheB.key("g", "bad", "m", "https://host")
+	content := RawContent{Body: []byte("shared"), Repository: "g"}
+	if err := cacheA.Store(context.Background(), liveKey, content); err != nil {
+		t.Fatal(err)
+	}
+	liveEncoded, err := store.Get(context.Background(), liveKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var live rawIndex
+	if err := json.Unmarshal(liveEncoded, &live); err != nil {
+		t.Fatal(err)
+	}
+	badEncoded, err := json.Marshal(rawIndex{Object: live.Object, Digest: "not-the-object-digest", ExpiresAt: time.Now().UTC().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(context.Background(), badKey, badEncoded); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cacheB.Load(context.Background(), badKey); !errors.Is(err, errRawCacheMiss) {
+		t.Fatalf("bad cache load = %v", err)
+	}
+	loaded, err := cacheA.Load(context.Background(), liveKey)
+	if err != nil || string(loaded.Body) != "shared" {
+		t.Fatalf("live cache after invalidation = %q, err = %v", loaded.Body, err)
+	}
+}
