@@ -361,6 +361,7 @@ func tokenMatches(value, expected string) bool {
 type GatewayStore interface {
 	repository.Store
 	repository.MavenStore
+	repository.ConanStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -372,18 +373,22 @@ func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore
 }
 
 func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, nil, ociClients...)
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, NewConanCache(nil), nil, ociClients...)
 }
 
 func NewGatewayHandlerWithCacheMaintenance(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, maintenance, ociClients...)
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, NewConanCache(nil), maintenance, ociClients...)
 }
 
 func NewGatewayHandlerWithRawCache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, maintenance, ociClients...)
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, NewConanCache(nil), maintenance, ociClients...)
 }
 
-func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
+func NewGatewayHandlerWithFormatCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
+	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, conanCache, maintenance, ociClients...)
+}
+
+func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -402,12 +407,18 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := ociClient.(RawClient); ok {
 		rawClient = client
 	}
+	conanClient := ConanClient(GiteaClient{})
+	if client, ok := ociClient.(ConanClient); ok {
+		conanClient = client
+	}
 	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
 	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v1/conan/groups", conanAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v1/conan/groups/", conanAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
 		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
@@ -417,6 +428,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/v2/", oci)
 	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
 	mux.Handle("/raw/", RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache})
+	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return tracedHTTPHandler(mux)
 }
@@ -541,6 +553,79 @@ func (a auditAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type mavenAPIHandler struct {
 	store         repository.MavenStore
 	authenticator Authenticator
+}
+
+type conanAPIHandler struct {
+	store         repository.ConanStore
+	authenticator Authenticator
+}
+
+func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p, ok := a.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token required")
+		return
+	}
+	if !p.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/conan/groups")
+	if path == "" || path == "/" {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+		var group repository.Group
+		if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
+			return
+		}
+		if err := validateGroup(group); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
+		created, err := a.store.CreateConanGroup(r.Context(), group)
+		if errors.Is(err, repository.ErrNameExists) {
+			writeError(w, http.StatusConflict, "group_exists", "group name already exists")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to create group")
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+		return
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 1 && r.Method == http.MethodGet {
+		group, err := a.store.GetConanGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to read group")
+			return
+		}
+		writeJSON(w, http.StatusOK, group)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "disable" && r.Method == http.MethodPost {
+		err := a.store.DisableConanGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to disable group")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeError(w, http.StatusNotFound, "not_found", "resource not found")
 }
 
 func (a mavenAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

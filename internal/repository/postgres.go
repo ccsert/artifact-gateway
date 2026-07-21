@@ -182,6 +182,67 @@ func (s *PostgresStore) DisableMavenGroup(ctx context.Context, name string) erro
 	return nil
 }
 
+func (s *PostgresStore) CreateConanGroup(ctx context.Context, group Group) (Group, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Group{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	normalizeGroup(&group)
+	err = tx.QueryRowContext(ctx, `INSERT INTO conan_groups (name, enabled) VALUES ($1, true) RETURNING created_at`, group.Name).Scan(&group.CreatedAt)
+	if err != nil {
+		if isUnique(err) {
+			return Group{}, ErrNameExists
+		}
+		return Group{}, err
+	}
+	for _, member := range group.Members {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO conan_group_members (group_name, name, member_type, endpoint, position) VALUES ($1,$2,$3,$4,$5)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position); err != nil {
+			return Group{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Group{}, err
+	}
+	return group, nil
+}
+func (s *PostgresStore) GetConanGroup(ctx context.Context, name string) (Group, error) {
+	var group Group
+	if err := s.db.QueryRowContext(ctx, `SELECT name, enabled, created_at FROM conan_groups WHERE name=$1`, name).Scan(&group.Name, &group.Enabled, &group.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Group{}, ErrNotFound
+		}
+		return Group{}, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position FROM conan_group_members WHERE group_name=$1 ORDER BY position`, name)
+	if err != nil {
+		return Group{}, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var member Member
+		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position); err != nil {
+			return Group{}, err
+		}
+		group.Members = append(group.Members, member)
+	}
+	return group, rows.Err()
+}
+func (s *PostgresStore) DisableConanGroup(ctx context.Context, name string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE conan_groups SET enabled=false WHERE name=$1`, name)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func isUnique(err error) bool {
 	var postgresError *pgconn.PgError
 	return errors.As(err, &postgresError) && postgresError.Code == "23505"

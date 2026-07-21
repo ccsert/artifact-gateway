@@ -20,6 +20,7 @@ type Config struct {
 	OCIProxyAllowedHosts   []string
 	MavenProxyAllowedHosts []string
 	RawProxyAllowedHosts   []string
+	ConanProxyAllowedHosts []string
 	AdapterMode            string
 	AdminToken             string
 	ResolverToken          string
@@ -49,6 +50,7 @@ func Load() (Config, error) {
 		OCIProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
 		MavenProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
 		RawProxyAllowedHosts:   splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
+		ConanProxyAllowedHosts: splitCSV(os.Getenv("GATEWAY_CONAN_PROXY_ALLOWED_HOSTS")),
 		AdapterMode:            value("GATEWAY_ADAPTER_MODE", "test"),
 		AdminToken:             os.Getenv("GATEWAY_ADMIN_TOKEN"),
 		ResolverToken:          os.Getenv("GATEWAY_RESOLVER_TOKEN"),

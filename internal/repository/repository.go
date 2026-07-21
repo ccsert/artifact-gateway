@@ -83,15 +83,60 @@ type MavenStore interface {
 	RecordAudit(context.Context, AuditRecord) error
 }
 
+// ConanStore deliberately uses a separate Group namespace from OCI because a
+// Conan Group is a distinct format and authorization boundary.
+type ConanStore interface {
+	CreateConanGroup(context.Context, Group) (Group, error)
+	GetConanGroup(context.Context, string) (Group, error)
+	DisableConanGroup(context.Context, string) error
+	RecordAudit(context.Context, AuditRecord) error
+}
+
 type MemoryStore struct {
 	mu          sync.RWMutex
 	groups      map[string]Group
 	mavenGroups map[string]Group
+	conanGroups map[string]Group
 	Audits      []AuditRecord
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), conanGroups: make(map[string]Group)}
+}
+
+func (s *MemoryStore) CreateConanGroup(ctx context.Context, group Group) (Group, error) {
+	return s.createConanGroup(ctx, group)
+}
+func (s *MemoryStore) createConanGroup(_ context.Context, group Group) (Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.conanGroups[group.Name]; exists {
+		return Group{}, ErrNameExists
+	}
+	group.CreatedAt = time.Now().UTC()
+	normalizeGroup(&group)
+	s.conanGroups[group.Name] = group
+	return group, nil
+}
+func (s *MemoryStore) GetConanGroup(_ context.Context, name string) (Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	group, exists := s.conanGroups[name]
+	if !exists {
+		return Group{}, ErrNotFound
+	}
+	return group, nil
+}
+func (s *MemoryStore) DisableConanGroup(_ context.Context, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group, exists := s.conanGroups[name]
+	if !exists {
+		return ErrNotFound
+	}
+	group.Enabled = false
+	s.conanGroups[name] = group
+	return nil
 }
 
 func (s *MemoryStore) CreateGroup(_ context.Context, group Group) (Group, error) {
