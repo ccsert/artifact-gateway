@@ -91,6 +91,67 @@ func (s *PostgresStore) DisableGroup(ctx context.Context, name string) error {
 	return nil
 }
 
+func (s *PostgresStore) CreateRawGroup(ctx context.Context, group Group) (Group, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Group{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	normalizeGroup(&group)
+	err = tx.QueryRowContext(ctx, `INSERT INTO raw_groups (name,enabled,anonymous) VALUES ($1,true,$2) RETURNING created_at`, group.Name, group.Anonymous).Scan(&group.CreatedAt)
+	if err != nil {
+		if isUnique(err) {
+			return Group{}, ErrNameExists
+		}
+		return Group{}, err
+	}
+	for _, m := range group.Members {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO raw_group_members (group_name,name,member_type,endpoint,position,anonymous,allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,$7)`, group.Name, m.Name, m.Type, m.Endpoint, m.Position, m.Anonymous, m.AllowedHosts); err != nil {
+			return Group{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Group{}, err
+	}
+	return group, nil
+}
+func (s *PostgresStore) GetRawGroup(ctx context.Context, name string) (Group, error) {
+	var g Group
+	if err := s.db.QueryRowContext(ctx, `SELECT name,enabled,anonymous,created_at FROM raw_groups WHERE name=$1`, name).Scan(&g.Name, &g.Enabled, &g.Anonymous, &g.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Group{}, ErrNotFound
+		}
+		return Group{}, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT name,member_type,endpoint,position,anonymous,allowed_hosts FROM raw_group_members WHERE group_name=$1 ORDER BY position`, name)
+	if err != nil {
+		return Group{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var m Member
+		if err := rows.Scan(&m.Name, &m.Type, &m.Endpoint, &m.Position, &m.Anonymous, &m.AllowedHosts); err != nil {
+			return Group{}, err
+		}
+		g.Members = append(g.Members, m)
+	}
+	return g, rows.Err()
+}
+func (s *PostgresStore) DisableRawGroup(ctx context.Context, name string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE raw_groups SET enabled=false WHERE name=$1`, name)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) error {
 	if audit.OccurredAt.IsZero() {
 		audit.OccurredAt = time.Now().UTC()

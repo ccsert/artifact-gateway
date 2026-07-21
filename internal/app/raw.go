@@ -53,8 +53,12 @@ func (c GiteaClient) FetchRaw(ctx context.Context, method string, member reposit
 	if err != nil {
 		return nil, fmt.Errorf("parse Raw endpoint: %w", err)
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/" + path
-	u.RawPath = ""
+	decodedPath, err := url.PathUnescape(path)
+	if err != nil {
+		return nil, fmt.Errorf("decode Raw path: %w", err)
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + decodedPath
+	u.RawPath = strings.TrimRight(u.EscapedPath(), "/") + "/" + path
 	r, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create Raw request: %w", err)
@@ -142,6 +146,8 @@ func (c *RawCache) Load(ctx context.Context, key string) (RawContent, error) {
 	return RawContent{Body: body, Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Repository: index.Repository}, nil
 }
 func (c *RawCache) Store(ctx context.Context, key string, content RawContent) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.quota.Admit(ctx, content.Repository, key, int64(len(content.Body)), func() error {
 		sum := sha256.Sum256(content.Body)
 		digest := hex.EncodeToString(sum[:])
@@ -157,14 +163,22 @@ func (c *RawCache) Store(ctx context.Context, key string, content RawContent) er
 	})
 }
 func (c *RawCache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	b, err := json.Marshal(rawIndex{Member: member.Name, Endpoint: member.Endpoint, Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
 		return err
 	}
 	return c.store.Put(ctx, key, b)
 }
-func (c *RawCache) Invalidate(ctx context.Context, key string) { _ = c.store.Delete(ctx, key) }
+func (c *RawCache) Invalidate(ctx context.Context, key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_ = c.store.Delete(ctx, key)
+}
 func (c *RawCache) CollectGarbage(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	keys, err := c.store.List(ctx, "raw/index/")
 	if err != nil {
 		return err
@@ -276,7 +290,7 @@ func privateAddress(ip net.IP) bool {
 }
 
 type RawHandler struct {
-	Store         repository.Store
+	Store         repository.RawStore
 	Authenticator Authenticator
 	Client        RawClient
 	Metrics       *Metrics
@@ -325,12 +339,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.Metrics.recordAnonymousRead()
 		}
 	}
-	if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, group) {
-		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
-		http.Error(w, "repository read permission required", http.StatusForbidden)
-		return
-	}
-	g, err := h.Store.GetGroup(r.Context(), group)
+	g, err := h.Store.GetRawGroup(r.Context(), group)
 	if err != nil {
 		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: auditOutcome(err), Status: http.StatusNotFound, CacheDisposition: "bypass", Method: r.Method})
 		http.NotFound(w, r)
@@ -339,6 +348,11 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !g.Enabled {
 		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditGroupDisabled, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 		http.Error(w, "Raw group is disabled", http.StatusForbidden)
+		return
+	}
+	if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, group) {
+		h.audit(r.Context(), group, path, rawAuditEvent{Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
+		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
 	members := g.Members
@@ -354,6 +368,11 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hadProxyDenied := false
 	var lastNegative *repository.Member
 	for _, member := range prioritizeHosted(members) {
+		if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, member.Name) {
+			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
+			http.Error(w, "repository read permission required", http.StatusForbidden)
+			return
+		}
 		key := ""
 		if h.Cache != nil {
 			key = h.Cache.key(group, path, member.Name, member.Endpoint)

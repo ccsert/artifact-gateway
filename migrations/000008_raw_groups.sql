@@ -1,0 +1,3 @@
+-- +goose Up
+CREATE TABLE IF NOT EXISTS raw_groups (name TEXT PRIMARY KEY, enabled BOOLEAN NOT NULL DEFAULT true, anonymous BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS raw_group_members (group_name TEXT NOT NULL REFERENCES raw_groups(name) ON DELETE CASCADE, name TEXT NOT NULL, member_type TEXT NOT NULL CHECK (member_type IN ('hosted','proxy')), endpoint TEXT NOT NULL, position INTEGER NOT NULL CHECK (position >= 0), anonymous BOOLEAN NOT NULL DEFAULT false, allowed_hosts TEXT[] NOT NULL DEFAULT '{}', PRIMARY KEY (group_name,position), UNIQUE(group_name,name));

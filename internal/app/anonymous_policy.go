@@ -38,7 +38,7 @@ func (h RawHandler) anonymousRawAllowed(ctx context.Context, groupName string) b
 	if h.Store == nil {
 		return false
 	}
-	group, err := h.Store.GetGroup(ctx, groupName)
+	group, err := h.Store.GetRawGroup(ctx, groupName)
 	if err != nil || !group.Enabled || !group.Anonymous {
 		return false
 	}

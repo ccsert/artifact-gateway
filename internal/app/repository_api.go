@@ -367,6 +367,7 @@ func tokenMatches(value, expected string) bool {
 type GatewayStore interface {
 	repository.Store
 	repository.MavenStore
+	repository.RawStore
 	repository.ConanStore
 }
 
@@ -423,6 +424,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/api/v1/oci/groups/", api)
 	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v1/raw/groups", rawAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v1/raw/groups/", rawAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/conan/groups", conanAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("/api/v1/conan/groups/", conanAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
@@ -565,6 +568,74 @@ type mavenAPIHandler struct {
 type conanAPIHandler struct {
 	store         repository.ConanStore
 	authenticator Authenticator
+}
+type rawAPIHandler struct {
+	store         repository.RawStore
+	authenticator Authenticator
+}
+
+func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p, ok := a.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok || !p.Admin {
+		writeError(w, http.StatusForbidden, "forbidden", "administrator permission required")
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/raw/groups")
+	if path == "" || path == "/" {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		defer r.Body.Close()
+		var g repository.Group
+		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
+			return
+		}
+		if err := validateGroup(g); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
+		created, err := a.store.CreateRawGroup(r.Context(), g)
+		if errors.Is(err, repository.ErrNameExists) {
+			writeError(w, http.StatusConflict, "group_exists", "group name already exists")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to create group")
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+		return
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 1 && r.Method == http.MethodGet {
+		g, err := a.store.GetRawGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to read group")
+			return
+		}
+		writeJSON(w, http.StatusOK, g)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "disable" && r.Method == http.MethodPost {
+		err := a.store.DisableRawGroup(r.Context(), parts[0])
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "group not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "unable to disable group")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeError(w, http.StatusNotFound, "not_found", "resource not found")
 }
 
 func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
