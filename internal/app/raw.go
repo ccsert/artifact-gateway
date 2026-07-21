@@ -173,6 +173,10 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, ok := h.Authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok && h.anonymousRawAllowed(r.Context(), group) {
+		p = Principal{Actor: "anonymous"}
+		ok = true
+	}
 	if !ok {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Raw"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -180,8 +184,11 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.Metrics != nil {
 		h.Metrics.recordRequest(group)
+		if p.Actor == "anonymous" {
+			h.Metrics.recordAnonymousRead()
+		}
 	}
-	if !h.Authenticator.CanReadRepository(p, group) {
+	if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, group) {
 		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
@@ -197,7 +204,16 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Raw group is disabled", http.StatusForbidden)
 		return
 	}
-	for _, member := range prioritizeHosted(g.Members) {
+	members := g.Members
+	if p.Actor == "anonymous" {
+		members = make([]repository.Member, 0, len(g.Members))
+		for _, member := range g.Members {
+			if member.Anonymous {
+				members = append(members, member)
+			}
+		}
+	}
+	for _, member := range prioritizeHosted(members) {
 		key := ""
 		if h.Cache != nil {
 			key = h.Cache.key(group, path, member.Name, member.Endpoint)
