@@ -116,7 +116,11 @@ func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 		Client:        &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")},
 		Cache:         NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil),
 	}
-	response := integrationRequest(handler, http.MethodGet, "/raw/raw-audit/release/app.txt", "", "resolver-secret")
+	request := httptest.NewRequest(http.MethodGet, "/raw/raw-audit/release/app.txt", nil)
+	authorize(request, "resolver-secret")
+	request.Header.Set("X-Request-ID", "postgres-raw-request")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("Raw response = %d %s", response.Code, response.Body.String())
 	}
@@ -126,22 +130,22 @@ func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	var format, resource, representation, memberType, upstreamHost, operation, disposition string
+	var format, resource, representation, memberType, upstreamHost, operation, disposition, requestID, traceID string
 	var status int
 	var bytes int64
-	err = db.QueryRowContext(context.Background(), `SELECT format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes
-		FROM resolver_audit_log WHERE group_name=$1 ORDER BY id DESC LIMIT 1`, "raw-audit").Scan(&format, &resource, &representation, &memberType, &upstreamHost, &operation, &status, &disposition, &bytes)
+	err = db.QueryRowContext(context.Background(), `SELECT format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes, request_id, trace_id
+		FROM resolver_audit_log WHERE group_name=$1 ORDER BY id DESC LIMIT 1`, "raw-audit").Scan(&format, &resource, &representation, &memberType, &upstreamHost, &operation, &status, &disposition, &bytes, &requestID, &traceID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if format != "raw" || resource != "release/app.txt" || representation != "body" || memberType != "hosted" || upstreamHost != "gitea.example" || operation != "get" || status != http.StatusOK || disposition != "miss" || bytes != 8 {
-		t.Fatalf("Raw audit fields = format=%q resource=%q representation=%q member_type=%q upstream_host=%q operation=%q status=%d disposition=%q bytes=%d", format, resource, representation, memberType, upstreamHost, operation, status, disposition, bytes)
+	if format != "raw" || resource != "release/app.txt" || representation != "body" || memberType != "hosted" || upstreamHost != "gitea.example" || operation != "get" || status != http.StatusOK || disposition != "miss" || bytes != 8 || requestID != "postgres-raw-request" || len(traceID) != 32 {
+		t.Fatalf("Raw audit fields = format=%q resource=%q representation=%q member_type=%q upstream_host=%q operation=%q status=%d disposition=%q bytes=%d request_id=%q trace_id=%q", format, resource, representation, memberType, upstreamHost, operation, status, disposition, bytes, requestID, traceID)
 	}
 	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{GroupName: "raw-audit"})
 	if err != nil || len(audits) != 1 {
 		t.Fatalf("ListAudits err=%v audits=%#v", err, audits)
 	}
-	if audit := audits[0]; audit.Format != "raw" || audit.Resource != "release/app.txt" || audit.Representation != "body" || audit.MemberType != "hosted" || audit.UpstreamHost != "gitea.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "miss" || audit.Bytes != 8 {
+	if audit := audits[0]; audit.Format != "raw" || audit.Resource != "release/app.txt" || audit.Representation != "body" || audit.MemberType != "hosted" || audit.UpstreamHost != "gitea.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "miss" || audit.Bytes != 8 || audit.RequestID != "postgres-raw-request" || len(audit.TraceID) != 32 {
 		t.Fatalf("ListAudits Raw fields=%#v", audit)
 	}
 }

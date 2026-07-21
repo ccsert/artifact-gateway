@@ -19,6 +19,8 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var errRawCacheMiss = errors.New("raw cache miss")
@@ -421,15 +423,22 @@ type rawAuditEvent struct {
 	CacheDisposition string
 	Bytes            int64
 	Method           string
+	ChecksumFailure  bool
 }
 
 func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(withRawAuditCorrelation(r.Context(), r.Header.Get("X-Request-ID")))
+	if h.Metrics != nil {
+		h.Metrics.recordRawRequest(r.Method)
+	}
 	if strings.HasSuffix(r.URL.EscapedPath(), "/") {
+		h.audit(r.Context(), "", "", rawAuditEvent{Actor: "anonymous", Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "bypass", Method: r.Method})
 		http.NotFound(w, r)
 		return
 	}
 	group, path, ok := parseRawPath(r.URL.EscapedPath())
 	if !ok {
+		h.audit(r.Context(), "", "", rawAuditEvent{Actor: "anonymous", Outcome: repository.AuditStorageError, Status: http.StatusBadRequest, CacheDisposition: "bypass", Method: r.Method})
 		http.Error(w, "invalid raw path", http.StatusBadRequest)
 		return
 	}
@@ -494,15 +503,24 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			key = h.Cache.key(group, path, member.Name, member.Endpoint)
 			content, cacheErr := h.Cache.Load(r.Context(), key)
 			if cacheErr == nil {
+				if h.Metrics != nil {
+					h.Metrics.recordRawCacheHit()
+				}
 				served := serveRaw(w, r, path, content)
 				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: "hit", Bytes: served.Bytes, Method: r.Method})
 				return
 			}
 			if errors.Is(cacheErr, errRawCacheNegative) {
+				if h.Metrics != nil {
+					h.Metrics.recordRawNegativeCacheHit()
+				}
 				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
 				negativeMember := member
 				lastNegative = &negativeMember
 				continue
+			}
+			if h.Metrics != nil {
+				h.Metrics.recordRawCacheMiss()
 			}
 		}
 		if member.Type == repository.MemberProxy && !rawProxyAllowed(member) {
@@ -547,7 +565,7 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		content.Digest = hex.EncodeToString(sum[:])
 		if strings.HasSuffix(path, ".sha256") || strings.HasSuffix(path, ".sha512") {
 			if !validChecksum(path, body) {
-				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method, ChecksumFailure: true})
 				http.Error(w, "invalid checksum sidecar", http.StatusBadGateway)
 				return
 			}
@@ -617,7 +635,52 @@ func (h RawHandler) audit(ctx context.Context, group, path string, event rawAudi
 		GroupName: group, Repository: group, MemberName: event.Member.Name, Actor: event.Actor, Outcome: event.Outcome, OccurredAt: time.Now().UTC(),
 		Format: "raw", Resource: path, Representation: "body", MemberType: string(event.Member.Type), UpstreamHost: upstreamHost,
 		Operation: strings.ToLower(event.Method), Status: event.Status, CacheDisposition: event.CacheDisposition, Bytes: event.Bytes,
+		RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx),
 	})
+	if h.Metrics != nil {
+		h.Metrics.recordRawAudit(event.Outcome, event.Bytes, event.ChecksumFailure)
+	}
+}
+
+type rawAuditCorrelation struct{ requestID, traceID string }
+type rawAuditCorrelationKey struct{}
+
+func withRawAuditCorrelation(ctx context.Context, headerRequestID string) context.Context {
+	requestID := safeRawCorrelationID(headerRequestID)
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
+	traceID := trace.SpanContextFromContext(ctx).TraceID().String()
+	if traceID == "00000000000000000000000000000000" || traceID == "" {
+		traceID = strings.ReplaceAll(uuid.NewString(), "-", "")
+	}
+	return context.WithValue(ctx, rawAuditCorrelationKey{}, rawAuditCorrelation{requestID: requestID, traceID: traceID})
+}
+
+func safeRawCorrelationID(value string) string {
+	if len(value) == 0 || len(value) > 128 {
+		return ""
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return ""
+		}
+	}
+	return value
+}
+
+func rawAuditRequestID(ctx context.Context) string {
+	if correlation, ok := ctx.Value(rawAuditCorrelationKey{}).(rawAuditCorrelation); ok {
+		return correlation.requestID
+	}
+	return uuid.NewString()
+}
+
+func rawAuditTraceID(ctx context.Context) string {
+	if correlation, ok := ctx.Value(rawAuditCorrelationKey{}).(rawAuditCorrelation); ok {
+		return correlation.traceID
+	}
+	return strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 func rawCacheDisposition(cache *RawCache) string {

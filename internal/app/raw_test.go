@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type rawFixtureClient struct {
@@ -625,6 +626,81 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 	h.ServeHTTP(invalidRangeResponse, invalidRange)
 	if invalidRangeResponse.Code != http.StatusRequestedRangeNotSatisfiable || last().Status != http.StatusRequestedRangeNotSatisfiable || last().CacheDisposition != "hit" || last().Bytes != 0 {
 		t.Fatalf("invalid-range response=%d audit=%#v", invalidRangeResponse.Code, last())
+	}
+}
+
+func TestRawAuditsCorrelationAndExportsMetrics(t *testing.T) {
+	store := repository.NewMemoryStore()
+	for _, group := range []repository.Group{
+		{Name: "hosted", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example"}}},
+		{Name: "negative", Members: []repository.Member{{Name: "negative", Type: repository.MemberHosted, Endpoint: "https://negative.example"}}},
+		{Name: "blocked", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example"}}},
+		{Name: "outage", Members: []repository.Member{{Name: "outage", Type: repository.MemberHosted, Endpoint: "https://outage.example"}}},
+	} {
+		if _, err := store.CreateRawGroup(context.Background(), group); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := &rawFixtureClient{responses: map[string]int{
+		"hosted": http.StatusOK, "negative": http.StatusNotFound, "outage": http.StatusBadGateway,
+	}, body: []byte("artifact")}
+	metrics := &Metrics{}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+
+	traceID := trace.TraceID{1}
+	spanID := trace.SpanID{1}
+	request := rawRequest(http.MethodGet, "/raw/hosted/release/app.txt?access_token=do-not-record")
+	request.Header.Set("X-Request-ID", "request-42")
+	request = request.WithContext(trace.ContextWithSpanContext(request.Context(), trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled})))
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/hosted/release/app.txt"))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/raw/hosted/release/app.txt", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodPost, "/raw/hosted/release/app.txt"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/negative/missing"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/negative/missing"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/blocked/artifact"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/outage/artifact"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/hosted/release/app.sha256"))
+	handler.ServeHTTP(httptest.NewRecorder(), rawRequest(http.MethodGet, "/raw/hosted/%2e%2e/secret?token=do-not-record"))
+
+	if len(store.Audits) == 0 {
+		t.Fatal("no Raw audit records")
+	}
+	for _, audit := range store.Audits {
+		if audit.RequestID == "" || audit.TraceID == "" {
+			t.Fatalf("missing correlation fields: %#v", audit)
+		}
+		if strings.Contains(audit.Resource, "token") || strings.Contains(audit.Resource, "secret") {
+			t.Fatalf("audit resource exposes request secret: %#v", audit)
+		}
+	}
+	first := store.Audits[0]
+	if first.RequestID != "request-42" || first.TraceID != traceID.String() {
+		t.Fatalf("propagated correlation = %#v", first)
+	}
+	last := store.Audits[len(store.Audits)-1]
+	if last.Status != http.StatusBadRequest || last.Resource != "" {
+		t.Fatalf("malformed request audit = %#v", last)
+	}
+	if metrics.rawGetRequests.Load() != 9 || metrics.rawOtherRequests.Load() != 1 || metrics.rawAuthorizationDenied.Load() != 2 || metrics.rawCacheHit.Load() != 1 || metrics.rawCacheMiss.Load() != 5 || metrics.rawNegativeHit.Load() != 1 || metrics.rawProxyDenied.Load() != 1 || metrics.rawChecksumFailure.Load() != 1 || metrics.rawUpstreamFailure.Load() != 1 || metrics.rawResponseBytes.Load() != 16 {
+		t.Fatalf("Raw metrics = %#v", metrics)
+	}
+	response := httptest.NewRecorder()
+	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, want := range []string{
+		"artifact_gateway_raw_requests_total{method=\"get\"} 9",
+		"artifact_gateway_raw_authorization_denials_total 2",
+		"artifact_gateway_raw_cache_requests_total{outcome=\"hit\"} 1",
+		"artifact_gateway_raw_cache_requests_total{outcome=\"miss\"} 5",
+		"artifact_gateway_raw_negative_cache_hits_total 1",
+		"artifact_gateway_raw_proxy_denied_total 1",
+		"artifact_gateway_raw_checksum_failures_total 1",
+		"artifact_gateway_raw_upstream_failures_total 1",
+		"artifact_gateway_raw_response_bytes_total 16",
+	} {
+		if !strings.Contains(response.Body.String(), want) {
+			t.Fatalf("metrics missing %q:\n%s", want, response.Body.String())
+		}
 	}
 }
 
