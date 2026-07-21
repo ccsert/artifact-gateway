@@ -197,6 +197,8 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Raw group is disabled", http.StatusForbidden)
 		return
 	}
+	hadUpstreamFailure := false
+	hadProxyDenied := false
 	for _, member := range prioritizeHosted(g.Members) {
 		key := ""
 		if h.Cache != nil {
@@ -213,17 +215,20 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if member.Type == repository.MemberProxy && (h.Cache == nil || !h.Cache.ProxyAllowed(member.Endpoint)) {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditProxyDenied)
+			hadProxyDenied = true
 			continue
 		}
 		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, r.Header)
 		if fetchErr != nil {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			hadUpstreamFailure = true
 			continue
 		}
 		body, readErr := io.ReadAll(response.Body)
 		_ = response.Body.Close()
 		if readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound {
 			h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditUpstreamError)
+			hadUpstreamFailure = true
 			continue
 		}
 		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
@@ -254,6 +259,14 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		h.audit(r.Context(), group, path, member.Name, p.Actor, repository.AuditResolved)
 		serveRaw(w, r, path, content)
+		return
+	}
+	if hadProxyDenied {
+		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
+		return
+	}
+	if hadUpstreamFailure {
+		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return
 	}
 	h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)

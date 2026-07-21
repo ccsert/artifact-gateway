@@ -107,7 +107,7 @@ func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"blocked.example"})}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/a"))
-	if w.Code != http.StatusNotFound || len(client.Calls()) != 0 {
+	if w.Code != http.StatusForbidden || len(client.Calls()) != 0 {
 		t.Fatalf("denial=%d calls=%v", w.Code, client.Calls())
 	}
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "cached", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example"}}})
@@ -171,5 +171,89 @@ func TestGatewayRoutesRawRequests(t *testing.T) {
 	handler.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
 	if w.Code != http.StatusOK || w.Body.String() != "artifact" {
 		t.Fatalf("route = %d %q", w.Code, w.Body.String())
+	}
+}
+
+func TestRawStandardHTTPClientE2E(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
+		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local", Position: 0},
+		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1},
+	}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "outage", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusNotFound, "proxy": http.StatusOK}, body: []byte("artifact")}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	do := func(method, path string, headers http.Header) *http.Response {
+		t.Helper()
+		r, err := http.NewRequest(method, server.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for name, values := range headers {
+			r.Header[name] = values
+		}
+		response, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	authorized := http.Header{"Authorization": []string{"Bearer resolver-secret"}}
+
+	response := do(http.MethodGet, "/raw/downloads/release/app.txt", authorized)
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || string(body) != "artifact" || response.Header.Get("Content-Type") != "text/plain" || response.Header.Get("Content-Length") != "8" {
+		t.Fatalf("GET status=%d headers=%v body=%q", response.StatusCode, response.Header, body)
+	}
+	if got := client.Calls(); len(got) != 2 || got[0] != "hosted" || got[1] != "proxy" {
+		t.Fatalf("resolution calls=%v", got)
+	}
+
+	response = do(http.MethodHead, "/raw/downloads/release/app.txt", authorized)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Length") != "8" {
+		t.Fatalf("HEAD status=%d headers=%v", response.StatusCode, response.Header)
+	}
+	rangeHeaders := authorized.Clone()
+	rangeHeaders.Set("Range", "bytes=1-3")
+	response = do(http.MethodGet, "/raw/downloads/release/app.txt", rangeHeaders)
+	body, _ = io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusPartialContent || string(body) != "rti" {
+		t.Fatalf("range status=%d body=%q", response.StatusCode, body)
+	}
+	if got := client.Calls(); len(got) != 2 {
+		t.Fatalf("cache did not isolate upstream: calls=%v", got)
+	}
+
+	response = do(http.MethodGet, "/raw/downloads/release/app.txt", http.Header{})
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous status=%d", response.StatusCode)
+	}
+
+	deniedHandler := RawHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"reader": {"other"}}}, Client: client, Metrics: &Metrics{}, Cache: handler.Cache}
+	denied := httptest.NewServer(deniedHandler)
+	defer denied.Close()
+	r, _ := http.NewRequest(http.MethodGet, denied.URL+"/raw/downloads/release/app.txt", nil)
+	r.Header.Set("Authorization", "Bearer resolver-secret")
+	response, err := http.DefaultClient.Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("permission status=%d", response.StatusCode)
+	}
+
+	client.responses["hosted"] = http.StatusBadGateway
+	response = do(http.MethodGet, "/raw/outage/release/app.txt", authorized)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusBadGateway {
+		t.Fatalf("upstream status=%d", response.StatusCode)
 	}
 }
