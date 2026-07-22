@@ -439,7 +439,7 @@ func TestConanSuccessfulHandshakesWriteResolvedAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "authenticated", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(nil)}
 
 	for _, test := range []struct {
 		name, path, actor string
