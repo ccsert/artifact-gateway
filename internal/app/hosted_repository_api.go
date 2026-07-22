@@ -1,12 +1,16 @@
 package app
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -31,6 +35,11 @@ type repositoryPage struct {
 	NextPageToken string                        `json:"nextPageToken,omitempty"`
 }
 
+type repositoryPageCursor struct {
+	Endpoint, ID string
+	ExpiresAt    int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
 	if !ok || !principal.Admin {
@@ -43,7 +52,7 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 		case http.MethodGet:
 			h.list(w, r)
 		case http.MethodPost:
-			h.create(w, r)
+			h.create(w, r, principal)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -64,7 +73,12 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request) {
+func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" || len(key) > 128 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
+		return
+	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	var request createHostedRepositoryRequest
@@ -72,9 +86,15 @@ func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name and format must be valid")
 		return
 	}
-	repo, err := h.store.CreateHostedRepository(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format})
+	payload, _ := json.Marshal(request)
+	digest := sha256.Sum256(payload)
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
+		return
+	}
 	if errors.Is(err, repository.ErrNameExists) {
-		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "repository name already exists")
+		writeHostedProblem(w, http.StatusConflict, "version_conflict", "repository name already exists")
 		return
 	}
 	if err != nil {
@@ -82,6 +102,8 @@ func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	// Returning the same documented response on a successful replay makes a
+	// lost client response safe to retry without introducing another outcome.
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(repo)
 }
@@ -90,13 +112,18 @@ func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request)
 	pageSize := 50
 	if raw := r.URL.Query().Get("pageSize"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 100 {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "pageSize must be between 1 and 100")
+		if err != nil || parsed < 1 || parsed > 200 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
 			return
 		}
 		pageSize = parsed
 	}
-	items, next, err := h.store.ListHostedRepositories(r.Context(), pageSize, r.URL.Query().Get("pageToken"))
+	after, err := h.decodeCursor(r.URL.Query().Get("pageToken"))
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+		return
+	}
+	items, next, err := h.store.ListHostedRepositories(r.Context(), pageSize, after)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
 		return
@@ -106,7 +133,39 @@ func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(repositoryPage{Items: items, NextPageToken: next})
+	nextToken := ""
+	if next != "" {
+		nextToken = h.encodeCursor(next)
+	}
+	_ = json.NewEncoder(w).Encode(repositoryPage{Items: items, NextPageToken: nextToken})
+}
+
+func (h hostedRepositoryAPIHandler) encodeCursor(id string) string {
+	payload, _ := json.Marshal(repositoryPageCursor{Endpoint: "repositories", ID: id, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeCursor(token string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor repositoryPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "repositories" || cursor.ID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.ID, nil
 }
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {

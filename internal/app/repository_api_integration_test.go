@@ -28,7 +28,11 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
-	hostedCreated := integrationRequest(handler, http.MethodPost, "/api/v2/repositories", `{"name":"releases","format":"maven"}`, "admin-secret")
+	hostedRequest := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"releases","format":"maven"}`))
+	authorize(hostedRequest, "admin-secret")
+	hostedRequest.Header.Set("Idempotency-Key", "integration-releases")
+	hostedCreated := httptest.NewRecorder()
+	handler.ServeHTTP(hostedCreated, hostedRequest)
 	if hostedCreated.Code != http.StatusCreated {
 		t.Fatalf("create Hosted repository = %d %s", hostedCreated.Code, hostedCreated.Body.String())
 	}
@@ -38,6 +42,15 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	if hosted.State != repository.RepositoryActive || hosted.Version != "1" {
 		t.Fatalf("created Hosted repository = %#v", hosted)
+	}
+	replayRequest := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"releases","format":"maven"}`))
+	authorize(replayRequest, "admin-secret")
+	replayRequest.Header.Set("Idempotency-Key", "integration-releases")
+	replayed := httptest.NewRecorder()
+	handler.ServeHTTP(replayed, replayRequest)
+	var replay repository.HostedRepository
+	if replayed.Code != http.StatusCreated || json.NewDecoder(replayed.Body).Decode(&replay) != nil || replay.ID != hosted.ID {
+		t.Fatalf("replay Hosted repository = %d %s", replayed.Code, replayed.Body.String())
 	}
 	hostedDisabled := integrationRequest(handler, http.MethodDelete, "/api/v2/repositories/"+hosted.ID, "", "admin-secret")
 	if hostedDisabled.Code != http.StatusAccepted {
@@ -76,6 +89,13 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	if hostedState != string(repository.RepositoryDeleting) {
 		t.Fatalf("Hosted repository state = %q", hostedState)
+	}
+	nativeRead := httptest.NewRequest(http.MethodGet, "/maven/releases/com/example/library/1.0/library-1.0.pom", nil)
+	authorize(nativeRead, "resolver-secret")
+	nativeReadResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nativeReadResponse, nativeRead)
+	if nativeReadResponse.Code != http.StatusForbidden {
+		t.Fatalf("disabled Native Hosted read = %d %s", nativeReadResponse.Code, nativeReadResponse.Body.String())
 	}
 	var actor, outcome, member string
 	if err := db.QueryRowContext(context.Background(), `SELECT actor, outcome, member_name FROM resolver_audit_log WHERE group_name=$1`, "engineering").Scan(&actor, &outcome, &member); err != nil {

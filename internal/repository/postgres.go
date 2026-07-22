@@ -35,8 +35,52 @@ func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedR
 	return repo, nil
 }
 
+func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return HostedRepository{}, false, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM hosted_repository_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at <= now()`, actor, "/repositories", key); err != nil {
+		return HostedRepository{}, false, err
+	}
+	var storedPayload, repositoryID string
+	err = tx.QueryRowContext(ctx, `SELECT payload_hash, repository_id::text FROM hosted_repository_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at > now() FOR UPDATE`, actor, "/repositories", key).Scan(&storedPayload, &repositoryID)
+	if err == nil {
+		if storedPayload != payload {
+			return HostedRepository{}, false, ErrIdempotencyConflict
+		}
+		err = tx.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE id::text=$1`, repositoryID).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+		if err != nil {
+			return HostedRepository{}, false, err
+		}
+		if err = tx.Commit(); err != nil {
+			return HostedRepository{}, false, err
+		}
+		return repo, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return HostedRepository{}, false, err
+	}
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, state, version) VALUES ($1,$2,$3,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	if isUnique(err) {
+		return HostedRepository{}, false, ErrNameExists
+	}
+	if err != nil {
+		return HostedRepository{}, false, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO hosted_repository_idempotency (actor, target, key, payload_hash, repository_id, expires_at) VALUES ($1,$2,$3,$4,$5,now() + interval '24 hours')`, actor, "/repositories", key, payload, repo.ID)
+	if err != nil {
+		return HostedRepository{}, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return HostedRepository{}, false, err
+	}
+	return repo, false, nil
+}
+
 func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, after string) ([]HostedRepository, string, error) {
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	if after != "" {
@@ -48,7 +92,7 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 			return nil, "", ErrNotFound
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE ($1 = '' OR created_at > COALESCE((SELECT created_at FROM hosted_repositories WHERE id::text = $1), 'epoch'::timestamptz)) ORDER BY created_at, id LIMIT $2`, after, limit+1)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE ($1 = '' OR id::text > $1) ORDER BY id LIMIT $2`, after, limit+1)
 	if err != nil {
 		return nil, "", err
 	}
@@ -70,6 +114,18 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 		items = items[:limit]
 	}
 	return items, next, nil
+}
+
+func (s *PostgresStore) GetHostedRepositoryByName(ctx context.Context, name string) (HostedRepository, error) {
+	var repo HostedRepository
+	err := s.db.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE name=$1`, name).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HostedRepository{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return repo, nil
 }
 
 func (s *PostgresStore) GetHostedRepository(ctx context.Context, id string) (HostedRepository, error) {

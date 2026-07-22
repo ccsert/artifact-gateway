@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("group not found")
-	ErrDisabled   = errors.New("group is disabled")
-	ErrNameExists = errors.New("group name already exists")
+	ErrNotFound            = errors.New("group not found")
+	ErrDisabled            = errors.New("group is disabled")
+	ErrNameExists          = errors.New("group name already exists")
+	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
 )
 
 // Format is the immutable protocol family served by a Native Hosted
@@ -44,8 +45,10 @@ type HostedRepository struct {
 // adapter must check State before it permits a read or write.
 type HostedRepositoryStore interface {
 	CreateHostedRepository(context.Context, HostedRepository) (HostedRepository, error)
+	CreateHostedRepositoryIdempotently(context.Context, HostedRepository, string, string, string) (HostedRepository, bool, error)
 	ListHostedRepositories(context.Context, int, string) ([]HostedRepository, string, error)
 	GetHostedRepository(context.Context, string) (HostedRepository, error)
+	GetHostedRepositoryByName(context.Context, string) (HostedRepository, error)
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
 }
 
@@ -150,10 +153,16 @@ type MemoryStore struct {
 	conanGroups        map[string]Group
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
+	idempotencyRecords map[string]idempotencyRecord
+}
+
+type idempotencyRecord struct {
+	payload, repositoryID string
+	expiresAt             time.Time
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord)}
 }
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {
@@ -171,6 +180,27 @@ func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepos
 	return repo, nil
 }
 
+func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordKey := actor + "\x00/repositories\x00" + key
+	if record, ok := s.idempotencyRecords[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.payload != payload {
+			return HostedRepository{}, false, ErrIdempotencyConflict
+		}
+		return s.hostedRepositories[record.repositoryID], true, nil
+	}
+	for _, existing := range s.hostedRepositories {
+		if existing.Name == repo.Name {
+			return HostedRepository{}, false, ErrNameExists
+		}
+	}
+	repo.State, repo.Version, repo.CreatedAt = RepositoryActive, "1", time.Now().UTC()
+	s.hostedRepositories[repo.ID] = repo
+	s.idempotencyRecords[recordKey] = idempotencyRecord{payload: payload, repositoryID: repo.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return repo, false, nil
+}
+
 func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after string) ([]HostedRepository, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -181,7 +211,7 @@ func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after
 	for _, repo := range s.hostedRepositories {
 		items = append(items, repo)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.Before(items[j].CreatedAt) })
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	start := 0
 	if after != "" {
 		found := false
@@ -219,11 +249,22 @@ func (s *MemoryStore) GetHostedRepository(_ context.Context, id string) (HostedR
 	return repo, nil
 }
 
+func (s *MemoryStore) GetHostedRepositoryByName(_ context.Context, name string) (HostedRepository, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, repo := range s.hostedRepositories {
+		if repo.Name == name {
+			return repo, nil
+		}
+	}
+	return HostedRepository{}, ErrNotFound
+}
+
 func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (HostedRepository, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	repo, ok := s.hostedRepositories[id]
-	if !ok {
+	if !ok || repo.State != RepositoryActive {
 		return HostedRepository{}, ErrNotFound
 	}
 	repo.State = RepositoryDeleting

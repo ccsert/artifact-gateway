@@ -542,9 +542,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
-	mux.Handle("/v2/", oci)
-	mux.Handle("/maven/", MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache})
-	mux.Handle("/raw/", RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache})
+	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: oci})
+	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}})
+	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}})
 	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.Handle("/conan/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)
