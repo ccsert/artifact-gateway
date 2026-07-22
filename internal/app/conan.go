@@ -300,6 +300,21 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.Metrics != nil {
 		h.Metrics.recordConanRequest(r.Method)
 	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if group, path, ok := conanReadGroupAndPath(r.URL.EscapedPath()); ok {
+			principal, authenticated := h.authenticate(r)
+			actor := principal.Actor
+			if !authenticated {
+				actor = "anonymous"
+				if h.Metrics != nil {
+					h.Metrics.recordAnonymousRead()
+				}
+			}
+			h.audit(withConanAuditStatus(r.Context(), http.StatusMethodNotAllowed), group, path, "", actor, repository.AuditAccessDenied)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	}
 	if group, ok := parseConanPing(r.Method, r.URL.Path); ok {
 		if h.anonymousConanAllowed(r.Context(), group) {
 			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
@@ -730,6 +745,20 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		}
 	}
 	return
+}
+
+func conanReadGroupAndPath(raw string) (group, path string, ok bool) {
+	parts := strings.Split(strings.Trim(raw, "/"), "/")
+	if len(parts) < 5 || parts[0] != "conan" {
+		return "", "", false
+	}
+	if parts[1] == "v2" && parts[3] == "conans" {
+		return parts[2], strings.Join(parts[4:], "/"), validConanSegment(parts[2])
+	}
+	if parts[2] == "v2" && parts[3] == "conans" {
+		return parts[1], strings.Join(parts[4:], "/"), validConanSegment(parts[1])
+	}
+	return "", "", false
 }
 func malformedConanPath(raw string) bool {
 	parts := strings.Split(strings.Trim(raw, "/"), "/")

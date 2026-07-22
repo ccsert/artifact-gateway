@@ -107,7 +107,7 @@ func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	if _, err := store.CreateGroup(context.Background(), repository.Group{Name: "raw-audit", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example:8443"}}}); err != nil {
+	if _, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "raw-audit", CacheQuotaBytes: 1 << 30, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example:8443"}}}); err != nil {
 		t.Fatal(err)
 	}
 	handler := RawHandler{
@@ -174,6 +174,67 @@ func TestPostgresLegacyAuditsRemainQueryable(t *testing.T) {
 	}
 	if audit := audits[0]; audit.Actor != "legacy-actor" || audit.Outcome != repository.AuditResolved || audit.Format != "" || audit.Resource != "" || audit.Representation != "" || audit.MemberType != "" || audit.UpstreamHost != "" || audit.Operation != "" || audit.Status != 0 || audit.CacheDisposition != "" || audit.Bytes != 0 {
 		t.Fatalf("legacy audit=%#v", audit)
+	}
+}
+
+func TestPostgresAnonymousMigrationPreservesLegacyOCIAndMavenRows(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, statement := range []string{
+		`DELETE FROM resolver_audit_log WHERE group_name IN ('legacy-policy-oci', 'legacy-policy-maven')`,
+		`DELETE FROM oci_groups WHERE name='legacy-policy-oci'`,
+		`DELETE FROM maven_groups WHERE name='legacy-policy-maven'`,
+	} {
+		if _, err := db.ExecContext(context.Background(), statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// These inserts and queries deliberately use the pre-policy column lists.
+	// They model a populated database and the previous application binary.
+	for _, statement := range []string{
+		`INSERT INTO oci_groups (name, enabled) VALUES ('legacy-policy-oci', true)`,
+		`INSERT INTO oci_group_members (group_name, name, member_type, endpoint, position) VALUES ('legacy-policy-oci', 'hosted', 'hosted', 'https://oci.example', 0)`,
+		`INSERT INTO maven_groups (name, enabled) VALUES ('legacy-policy-maven', true)`,
+		`INSERT INTO maven_group_members (group_name, name, member_type, endpoint, position) VALUES ('legacy-policy-maven', 'hosted', 'hosted', 'https://maven.example', 0)`,
+		`INSERT INTO resolver_audit_log (group_name, repository, member_name, outcome, actor) VALUES ('legacy-policy-oci', 'team/app', 'hosted', 'resolved', 'legacy-reader')`,
+	} {
+		if _, err := db.ExecContext(context.Background(), statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, query := range []string{
+		`SELECT name, enabled, created_at FROM oci_groups WHERE name='legacy-policy-oci'`,
+		`SELECT name, enabled, created_at FROM maven_groups WHERE name='legacy-policy-maven'`,
+		`SELECT group_name, repository, member_name, outcome, actor, occurred_at FROM resolver_audit_log WHERE actor='legacy-reader'`,
+	} {
+		if err := db.QueryRowContext(context.Background(), query).Err(); err != nil {
+			t.Fatalf("legacy query failed: %s: %v", query, err)
+		}
+	}
+	oci, err := store.GetGroup(context.Background(), "legacy-policy-oci")
+	if err != nil || oci.Anonymous || len(oci.Members) != 1 || oci.Members[0].Anonymous {
+		t.Fatalf("OCI compatibility group=%#v err=%v", oci, err)
+	}
+	maven, err := store.GetMavenGroup(context.Background(), "legacy-policy-maven")
+	if err != nil || maven.Anonymous || len(maven.Members) != 1 || maven.Members[0].Anonymous {
+		t.Fatalf("Maven compatibility group=%#v err=%v", maven, err)
+	}
+	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{GroupName: "legacy-policy-oci"})
+	if err != nil || len(audits) != 1 || audits[0].Actor != "legacy-reader" || audits[0].Outcome != repository.AuditResolved {
+		t.Fatalf("legacy audit compatibility audits=%#v err=%v", audits, err)
 	}
 }
 

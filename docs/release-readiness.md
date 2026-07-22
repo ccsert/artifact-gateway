@@ -108,3 +108,20 @@ flowchart LR
    together from the same backup set.
 5. Rotate any potentially exposed resolver, administrator, Gitea, or object
    storage credentials and record the incident and final validation result.
+
+## V2 Anonymous Policy Operations
+
+Anonymous reads are disabled by default. Enable one only after an owner has
+approved both switches: set `anonymous: true` on the format Group and on every
+member Repository that may serve unauthenticated `GET`/`HEAD`. A false member
+switch narrows the Group and keeps that member's cache and upstream inaccessible
+to anonymous requests. Verify the change with an unauthenticated read, the
+`actor=anonymous` audit record, and `artifact_gateway_anonymous_reads_total`.
+
+To roll back public access, first set the affected member switches to false,
+then the Group switch to false and confirm unauthenticated reads receive the
+format challenge. Deploy the prior application only after that policy rollback.
+The schema migration is additive and forward-only: do not drop its columns.
+If a corrective schema change is required, ship a forward compensating migration
+and verify old OCI/Maven reads plus existing audit queries before restoring
+traffic.

@@ -53,13 +53,20 @@ type MavenHandler struct {
 }
 
 func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet && request.Method != http.MethodHead {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	groupName, artifactPath, ok := parseMavenPath(request.URL.Path)
 	if !ok {
 		http.NotFound(w, request)
+		return
+	}
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		if _, authenticated := h.authenticate(request); !authenticated {
+			if err := h.auditAnonymousDenied(request.Context(), groupName, artifactPath, request.Method, http.StatusMethodNotAllowed); err != nil {
+				h.Metrics.failed.Add(1)
+				http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+				return
+			}
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	principal, ok := h.authenticate(request)
@@ -68,6 +75,11 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		ok = true
 	}
 	if !ok {
+		if err := h.auditAnonymousDenied(request.Context(), groupName, artifactPath, request.Method, http.StatusUnauthorized); err != nil {
+			h.Metrics.failed.Add(1)
+			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
@@ -497,6 +509,19 @@ func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, member
 		return err
 	}
 	h.Metrics.recordAudit(groupName, outcome)
+	return nil
+}
+
+func (h MavenHandler) auditAnonymousDenied(ctx context.Context, groupName, artifactPath, method string, status int) error {
+	if err := h.Store.RecordAudit(ctx, repository.AuditRecord{
+		GroupName: groupName, Repository: groupName, Actor: "anonymous", Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "maven", Resource: artifactPath, Representation: "body", Operation: strings.ToLower(method), Status: status, CacheDisposition: "bypass",
+	}); err != nil {
+		return err
+	}
+	h.Metrics.recordAudit(groupName, repository.AuditAccessDenied)
+	h.Metrics.recordAnonymousRead()
+	h.Metrics.failed.Add(1)
 	return nil
 }
 

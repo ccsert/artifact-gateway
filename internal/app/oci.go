@@ -68,23 +68,33 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		h.authenticateProbe(w, request)
 		return
 	}
-	if request.Method != http.MethodGet && request.Method != http.MethodHead {
-		writeOCIError(w, http.StatusMethodNotAllowed, "UNSUPPORTED", "method not allowed")
-		return
-	}
 	repositoryName, resource, reference, ok := parseOCIPath(request.URL.Path)
 	if !ok {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
-	h.Resolver.Metrics.recordRequest(repositoryName)
 	groupName := strings.SplitN(repositoryName, "/", 2)[0]
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		if _, authenticated := h.Authenticator.Authenticate(request.Header.Get("Authorization")); !authenticated {
+			if err := h.Resolver.RecordOCIAnonymousDenied(request.Context(), groupName, repositoryName, resource, request.Method, http.StatusMethodNotAllowed); err != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+				return
+			}
+		}
+		writeOCIError(w, http.StatusMethodNotAllowed, "UNSUPPORTED", "method not allowed")
+		return
+	}
+	h.Resolver.Metrics.recordRequest(repositoryName)
 	principal, ok := h.Authenticator.Authenticate(request.Header.Get("Authorization"))
 	if !ok && h.anonymousOCIAllowed(request.Context(), groupName) {
 		principal = Principal{Actor: "anonymous"}
 		ok = true
 	}
 	if !ok {
+		if err := h.Resolver.RecordOCIAnonymousDenied(request.Context(), groupName, repositoryName, resource, request.Method, http.StatusUnauthorized); err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to record repository audit")
+			return
+		}
 		writeOCIChallenge(w, request)
 		return
 	}

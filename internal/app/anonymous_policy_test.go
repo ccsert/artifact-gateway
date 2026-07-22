@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -31,5 +34,50 @@ func TestAnonymousPolicyRequiresGroupAndMember(t *testing.T) {
 		if got := h.anonymousOCIAllowed(context.Background(), tc.group); got != tc.want {
 			t.Errorf("group %s: got %v want %v", tc.group, got, tc.want)
 		}
+	}
+}
+
+func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
+	store := repository.NewMemoryStore()
+	metrics := &Metrics{}
+	if _, err := store.CreateGroup(context.Background(), repository.Group{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateMavenGroup(context.Background(), repository.Group{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateConanGroup(context.Background(), repository.Group{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	oci := OCIHandler{Resolver: Resolver{Store: store, Metrics: metrics}, Authenticator: testAuthenticator()}
+	maven := MavenHandler{Store: store, Authenticator: testAuthenticator(), Metrics: metrics}
+	conan := ConanHandler{Store: store, Authenticator: testAuthenticator(), Metrics: metrics}
+	requests := []struct {
+		handler http.Handler
+		method  string
+		path    string
+		status  int
+		format  string
+	}{
+		{oci, http.MethodGet, "/v2/private/app/manifests/latest", http.StatusUnauthorized, "oci"},
+		{oci, http.MethodPost, "/v2/private/app/manifests/latest", http.StatusMethodNotAllowed, "oci"},
+		{maven, http.MethodGet, "/maven/private/com/example/app.pom", http.StatusUnauthorized, "maven"},
+		{maven, http.MethodPost, "/maven/private/com/example/app.pom", http.StatusMethodNotAllowed, "maven"},
+		{conan, http.MethodPost, "/conan/v2/private/conans/pkg/1.0/u/c/revisions", http.StatusMethodNotAllowed, "conan"},
+	}
+	for _, tc := range requests {
+		response := httptest.NewRecorder()
+		tc.handler.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, nil))
+		if response.Code != tc.status {
+			t.Fatalf("%s %s status=%d want=%d", tc.method, tc.path, response.Code, tc.status)
+		}
+		last := store.Audits[len(store.Audits)-1]
+		if last.Actor != "anonymous" || last.Outcome != repository.AuditAccessDenied || last.Format != tc.format || last.Operation != strings.ToLower(tc.method) || last.Status != tc.status || last.CacheDisposition != "bypass" {
+			t.Fatalf("%s %s audit=%#v", tc.method, tc.path, last)
+		}
+	}
+	if got, want := metrics.anonymousReads.Load(), uint64(len(requests)); got != want {
+		t.Fatalf("anonymous reads=%d want=%d", got, want)
 	}
 }

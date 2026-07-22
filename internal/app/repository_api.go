@@ -95,6 +95,19 @@ func (r Resolver) RecordOCIRequestFailure() {
 	r.Metrics.failed.Add(1)
 }
 
+func (r Resolver) RecordOCIAnonymousDenied(ctx context.Context, groupName, repositoryName, resource, method string, status int) error {
+	if err := r.Store.RecordAudit(ctx, repository.AuditRecord{
+		GroupName: groupName, Repository: repositoryName, Actor: "anonymous", Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "oci", Resource: resource, Representation: resource, Operation: strings.ToLower(method), Status: status, CacheDisposition: "bypass",
+	}); err != nil {
+		return fmt.Errorf("record OCI anonymous denial: %w", err)
+	}
+	r.Metrics.recordAudit(repositoryName, repository.AuditAccessDenied)
+	r.Metrics.recordAnonymousRead()
+	r.Metrics.failed.Add(1)
+	return nil
+}
+
 func (r Resolver) resolve(ctx context.Context, groupName, repositoryName, actor string, eligible func(repository.Member) bool) (repository.Member, error) {
 	resolved := false
 	defer func() {
