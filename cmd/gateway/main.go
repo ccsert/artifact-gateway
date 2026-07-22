@@ -53,7 +53,8 @@ func main() {
 	quota := app.NewCacheQuota(objectStore, cfg.RepositoryCacheQuotas)
 	ociCache := app.NewDefaultOCICache(objectStore, cfg.OCIProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota)
 	rawCache := app.NewDefaultRawCache(objectStore, cfg.RawProxyAllowedHosts).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes)
-	maintenance := app.NewCacheMaintenanceWithRaw(objectStore, ociCache, rawCache)
+	conanCache := app.NewDefaultConanCache(objectStore, nil).WithCoordinator(app.NewRedisOCICacheCoordinator(cfg.RedisAddress)).WithQuota(quota).WithMaxObjectBytes(cfg.ConanCacheMaxObjectBytes)
+	maintenance := app.NewCacheMaintenanceWithRaw(objectStore, ociCache, rawCache).WithConan(conanCache)
 	runtimeContext := signalContext()
 	maintenance.Start(runtimeContext, 5*time.Minute)
 	server := &http.Server{
@@ -70,7 +71,7 @@ func main() {
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
 			}),
-		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), rawCache, app.NewConanCache(cfg.ConanProxyAllowedHosts), maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
+		}, ociCache, app.NewDefaultMavenCache(objectStore, cfg.MavenProxyAllowedHosts).WithQuota(quota), rawCache, conanCache, maintenance, app.GiteaClient{Username: cfg.GiteaUsername, Token: cfg.GiteaToken}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

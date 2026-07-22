@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 func TestCacheQuotaRejectsNewEntryButAllowsReplacement(t *testing.T) {
@@ -40,5 +42,38 @@ func TestCacheQuotaIgnoresExpiredIndexes(t *testing.T) {
 	called := false
 	if err := quota.Admit(context.Background(), "engineering", "maven/index/new.json", 5, func() error { called = true; return nil }); err != nil || !called {
 		t.Fatalf("admission err=%v called=%t", err, called)
+	}
+}
+
+func TestConanCacheQuotaAndMemberEndpointIsolation(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewDefaultConanCache(store, nil).WithQuota(NewCacheQuota(store, nil))
+	first := repository.Member{Name: "hosted", Endpoint: "https://one.example"}
+	second := repository.Member{Name: "hosted", Endpoint: "https://two.example"}
+	if err := cache.store(context.Background(), cache.key("central", "pkg/1", first), conanCacheEntry{body: []byte("12345"), member: first.Name, endpoint: first.Endpoint}, "central", 5, time.Hour, "central", "pkg/1", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.store(context.Background(), cache.key("central", "pkg/1", second), conanCacheEntry{body: []byte("x"), member: second.Name, endpoint: second.Endpoint}, "central", 5, time.Hour); !errors.Is(err, ErrCacheQuotaExceeded) {
+		t.Fatalf("quota error=%v", err)
+	}
+	cache.Invalidate(context.Background(), "central", "pkg/1", first)
+	if _, ok := cache.load(context.Background(), cache.key("central", "pkg/1", first)); ok {
+		t.Fatal("first endpoint was not invalidated")
+	}
+}
+
+func TestConanCacheCollectsExpiredIndexesAndObjects(t *testing.T) {
+	store := NewMemoryOCIObjectStore()
+	cache := NewDefaultConanCache(store, nil)
+	member := repository.Member{Name: "hosted", Endpoint: "https://hosted.example"}
+	if err := cache.store(context.Background(), cache.key("central", "pkg/1", member), conanCacheEntry{body: []byte("expired"), member: member.Name, endpoint: member.Endpoint}, "central", 1024, -time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.CollectGarbage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	objects, err := store.List(context.Background(), "conan/objects/")
+	if err != nil || len(objects) != 0 {
+		t.Fatalf("objects=%v err=%v", objects, err)
 	}
 }

@@ -102,6 +102,22 @@ func (q *CacheQuota) admitRaw(ctx context.Context, repository, replacingKey stri
 	return publish()
 }
 
+func (q *CacheQuota) AdmitConanWithLimit(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
+	if q == nil || repository == "" || limit <= 0 {
+		return publish()
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"conan/index/"})
+	if err != nil {
+		return err
+	}
+	if size > limit-used {
+		return ErrCacheQuotaExceeded
+	}
+	return publish()
+}
+
 func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string, prefixes []string) (int64, error) {
 	var used int64
 	for _, prefix := range prefixes {

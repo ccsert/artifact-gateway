@@ -61,7 +61,7 @@ revision and file endpoints, requires the same Basic or Bearer resolver
 credentials as Maven, validates recipe/package files against their `sha256`
 metadata before caching, and never forwards client credentials upstream.
 Hosted members are always tried before Proxy members. Proxy members must use
-HTTPS and their host must be listed in `GATEWAY_CONAN_PROXY_ALLOWED_HOSTS`.
+HTTPS and declare a non-empty exact `allowedHosts` list on that Proxy member.
 Conan 1, uploads, deletes, copies, and search are intentionally unsupported.
 
 Set `GATEWAY_REPOSITORY_CACHE_QUOTAS` to bound read-through cache retention per

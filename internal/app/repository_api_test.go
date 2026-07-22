@@ -187,6 +187,68 @@ func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 	}
 }
 
+func TestConanCacheInvalidationTargetsMemberAndEndpoint(t *testing.T) {
+	store := repository.NewMemoryStore()
+	first := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://one.example", Position: 0}
+	second := repository.Member{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://two.example", Position: 1}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{first, second}})
+	cache := NewConanCache(nil)
+	path := "pkg/1.0/user/stable/revisions"
+	for _, member := range []repository.Member{first, second} {
+		if err := cache.store(context.Background(), cache.key("central", path, member), conanCacheEntry{body: []byte(member.Name), member: member.Name, endpoint: member.Endpoint}, "central", 1024, time.Hour, "central", path, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := conanCacheInvalidationHandler{store: store, authenticator: testAuthenticator(), cache: cache}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/conan/cache/invalidate", strings.NewReader(`{"group":"central","path":"pkg/1.0/user/stable/revisions","member":"proxy","endpoint":"https://two.example"}`))
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, ok := cache.load(context.Background(), cache.key("central", path, first)); !ok {
+		t.Fatal("unrelated member was invalidated")
+	}
+	if _, ok := cache.load(context.Background(), cache.key("central", path, second)); ok {
+		t.Fatal("target member was not invalidated")
+	}
+}
+
+func TestConanGroupAPIRequiresProxyAllowlistAndDefaultsQuota(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objects, nil), nil, nil, NewConanCache(nil), nil)
+	for _, test := range []struct {
+		name, body string
+		want       int
+	}{
+		{"legacy-default", `{"name":"central","members":[{"name":"hosted","type":"hosted","endpoint":"https://hosted.example","position":0}]}`, http.StatusCreated},
+		{"missing-proxy-allowlist", `{"name":"blocked","members":[{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":0}]}`, http.StatusBadRequest},
+		{"member-allowlist", `{"name":"proxy","cacheQuotaBytes":7,"members":[{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":0,"allowedHosts":["proxy.example"]}]}`, http.StatusCreated},
+		{"uppercase-name", `{"name":"Metrics","members":[{"name":"hosted","type":"hosted","endpoint":"https://hosted.example","position":0}]}`, http.StatusBadRequest},
+		{"reserved-name", `{"name":"conan","members":[{"name":"hosted","type":"hosted","endpoint":"https://hosted.example","position":0}]}`, http.StatusBadRequest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/conan/groups", strings.NewReader(test.body))
+			authorize(r, "admin-secret")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != test.want {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+	group, err := store.GetConanGroup(context.Background(), "central")
+	if err != nil || group.CacheQuotaBytes != 1<<30 {
+		t.Fatalf("group=%#v err=%v", group, err)
+	}
+	group, err = store.GetConanGroup(context.Background(), "proxy")
+	if err != nil || len(group.Members[0].AllowedHosts) != 1 || group.Members[0].AllowedHosts[0] != "proxy.example" {
+		t.Fatalf("group=%#v err=%v", group, err)
+	}
+}
+
 func TestResolverTokenCannotManageGroups(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"test://available","position":0}]}`))

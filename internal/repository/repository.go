@@ -162,6 +162,9 @@ func (s *MemoryStore) createConanGroup(_ context.Context, group Group) (Group, e
 		return Group{}, ErrNameExists
 	}
 	group.CreatedAt = time.Now().UTC()
+	if group.CacheQuotaBytes == 0 {
+		group.CacheQuotaBytes = 1 << 30
+	}
 	normalizeGroup(&group)
 	s.conanGroups[group.Name] = group
 	return group, nil

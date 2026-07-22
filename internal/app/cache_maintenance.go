@@ -14,6 +14,7 @@ type CacheMaintenance struct {
 	store OCIObjectStore
 	oci   *OCICache
 	raw   *RawCache
+	conan *ConanCache
 
 	mu     sync.RWMutex
 	status CacheMaintenanceStatus
@@ -36,6 +37,7 @@ func NewCacheMaintenance(store OCIObjectStore, oci *OCICache) *CacheMaintenance 
 func NewCacheMaintenanceWithRaw(store OCIObjectStore, oci *OCICache, raw *RawCache) *CacheMaintenance {
 	return &CacheMaintenance{store: store, oci: oci, raw: raw}
 }
+func (m *CacheMaintenance) WithConan(conan *ConanCache) *CacheMaintenance { m.conan = conan; return m }
 
 func (m *CacheMaintenance) Status(ctx context.Context) (CacheMaintenanceStatus, error) {
 	status := m.snapshot()
@@ -69,6 +71,9 @@ func (m *CacheMaintenance) Run(ctx context.Context) error {
 	err := m.oci.CollectGarbage(ctx)
 	if err == nil && m.raw != nil {
 		err = m.raw.CollectGarbage(ctx)
+	}
+	if err == nil && m.conan != nil {
+		err = m.conan.CollectGarbage(ctx)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

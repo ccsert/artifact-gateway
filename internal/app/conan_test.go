@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -80,6 +81,38 @@ func TestConanChecksumMismatchIsNotCached(t *testing.T) {
 	}
 }
 
+func TestConanAuditFieldsAndMetricsCoverCacheLifecycle(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	metrics := &Metrics{}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAcceptClient{}, Cache: NewConanCache(nil), Metrics: metrics}
+	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	for range 2 {
+		r := conanRequest(path)
+		r.Header.Set("X-Request-ID", "conan-audit-request")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d", w.Code)
+		}
+	}
+	if len(store.Audits) < 2 {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.OccurredAt.IsZero() || audit.Format != "conan" || audit.Resource != "pkg/1.0/user/stable/revisions" || audit.Representation != "" || audit.MemberType != "hosted" || audit.UpstreamHost != "gitea.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "hit" || audit.Bytes == 0 || audit.RequestID != "conan-audit-request" || len(audit.TraceID) != 32 {
+		t.Fatalf("audit=%#v", audit)
+	}
+	metricsResponse := httptest.NewRecorder()
+	metrics.Handler(metricsResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, line := range []string{"artifact_gateway_conan_requests_total{method=\"get\"} 2", "artifact_gateway_conan_cache_requests_total{outcome=\"hit\"} 1", "artifact_gateway_conan_cache_requests_total{outcome=\"miss\"} 1", "artifact_gateway_conan_response_bytes_total"} {
+		if !strings.Contains(metricsResponse.Body.String(), line) {
+			t.Fatalf("missing metric %q in %s", line, metricsResponse.Body.String())
+		}
+	}
+}
+
 type conanChecksumClient struct{ fileCalls int }
 
 func (c *conanChecksumClient) FetchConan(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
@@ -100,7 +133,7 @@ func TestConanHostedPrecedesProxyAndCachesNotFound(t *testing.T) {
 	}))
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 9}, {Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}}})
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 9, AllowedHosts: []string{"proxy.example"}}, {Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}}})
 	// Use a fixture client for Proxy to avoid requiring TLS while still proving
 	// resolution order and the configured allowlist contract.
 	client := conanFixtureClient{hostedURL: hosted.URL, proxyURL: proxy.URL}
@@ -131,6 +164,66 @@ func TestConanHostedPrecedesProxyAndCachesNotFound(t *testing.T) {
 	}
 }
 
+func TestConanCacheSeparatesAcceptRepresentations(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	client := &conanAcceptClient{}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}
+	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	for _, accept := range []string{"application/a", "application/b", "application/a"} {
+		r := conanRequest(path)
+		r.Header.Set("Accept", accept)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), accept) {
+			t.Fatalf("accept=%s status=%d body=%s", accept, w.Code, w.Body.String())
+		}
+	}
+	if client.calls != 2 {
+		t.Fatalf("upstream calls=%d", client.calls)
+	}
+}
+
+type conanAcceptClient struct{ calls int }
+
+func (c *conanAcceptClient) FetchConan(_ context.Context, _ string, _ repository.Member, _ string, headers http.Header) (*http.Response, error) {
+	c.calls++
+	accept := headers.Get("Accept")
+	return conanJSON(`{"revisions":[{"revision":"rrev","time":1}],"representation":"` + accept + `"}`), nil
+}
+
+func TestConanRejectsOversizeMetadataAndArtifactWithoutCaching(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	objects := NewMemoryOCIObjectStore()
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanOversizeClient{}, Cache: NewDefaultConanCache(objects, nil).WithMaxObjectBytes(200)}
+	for _, path := range []string{
+		"/conan/v2/central/conans/pkg/1.0/user/stable/revisions",
+		"/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py",
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, conanRequest(path))
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("path=%s status=%d", path, w.Code)
+		}
+	}
+	keys, err := objects.List(context.Background(), "conan/")
+	if err != nil || len(keys) != 0 {
+		t.Fatalf("keys=%v err=%v", keys, err)
+	}
+}
+
+type conanOversizeClient struct{}
+
+func (conanOversizeClient) FetchConan(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
+	if strings.HasSuffix(path, "/files") {
+		return conanJSON(`{"files":{"conanfile.py":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":10}}}`), nil
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", 300))), Header: http.Header{}}, nil
+}
+
 type conanFixtureClient struct {
 	hostedURL, proxyURL string
 	calls               int
@@ -159,6 +252,113 @@ func TestConanRejectsMalformedAndUnsupportedRoutes(t *testing.T) {
 			t.Fatalf("accepted %s", path)
 		}
 	}
+}
+
+func TestConanRejectsStringRevisionTimeWithoutCaching(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	objects := NewMemoryOCIObjectStore()
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":"tomorrow"}]}`}, Cache: NewDefaultConanCache(objects, nil)}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	keys, err := objects.List(context.Background(), "conan/")
+	if err != nil || len(keys) != 0 {
+		t.Fatalf("keys=%v err=%v", keys, err)
+	}
+}
+
+func TestConanRejectsQuotedNumericRevisionTime(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":"1"}]}`}, Cache: NewConanCache(nil)}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
+func TestConanAuditsNonSuccessUpstreamStatus(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusFound}, Cache: NewConanCache(nil)}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", w.Code)
+	}
+	if len(store.Audits) == 0 || store.Audits[len(store.Audits)-1].Outcome != repository.AuditUpstreamError || store.Audits[len(store.Audits)-1].Status != http.StatusFound {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+}
+
+func TestConanAuditRetainsSuccessfulUpstreamStatusAcrossCacheHit(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusCreated, body: `{"revisions":[{"revision":"abc","time":1}]}`}, Cache: NewConanCache(nil)}
+	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	for range 2 {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, conanRequest(path))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d", w.Code)
+		}
+	}
+	if len(store.Audits) != 2 {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	for _, audit := range store.Audits {
+		if audit.Status != http.StatusCreated {
+			t.Fatalf("audit=%#v", audit)
+		}
+	}
+	if store.Audits[1].CacheDisposition != "hit" {
+		t.Fatalf("cache disposition=%q", store.Audits[1].CacheDisposition)
+	}
+}
+
+func TestConanSearchRouteDoesNotReachUpstream(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	client := &conanAcceptClient{}
+	w := httptest.NewRecorder()
+	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/search"))
+	if w.Code != http.StatusNotFound || client.calls != 0 {
+		t.Fatalf("status=%d calls=%d", w.Code, client.calls)
+	}
+	if len(store.Audits) == 0 || store.Audits[len(store.Audits)-1].Outcome != repository.AuditNotFound {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+}
+
+func TestConanMalformedRouteReturnsBadRequestAndAudits(t *testing.T) {
+	store := repository.NewMemoryStore()
+	client := &conanAcceptClient{}
+	w := httptest.NewRecorder()
+	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/files/a%2fb"))
+	if w.Code != http.StatusBadRequest || client.calls != 0 {
+		t.Fatalf("status=%d calls=%d", w.Code, client.calls)
+	}
+	if len(store.Audits) == 0 || store.Audits[len(store.Audits)-1].Outcome != repository.AuditUpstreamError || store.Audits[len(store.Audits)-1].Status != http.StatusBadRequest {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+}
+
+type conanStatusClient struct {
+	status int
+	body   string
+}
+
+func (c conanStatusClient) FetchConan(_ context.Context, _ string, _ repository.Member, _ string, _ http.Header) (*http.Response, error) {
+	return &http.Response{StatusCode: c.status, Body: io.NopCloser(strings.NewReader(c.body)), Header: http.Header{}}, nil
 }
 
 func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
@@ -196,12 +396,121 @@ func TestConanAnonymousReadDoesNotUsePrivateMemberCache(t *testing.T) {
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{private, public}})
 	cache := NewConanCache(nil)
 	path := "pkg/1.0/user/stable/revisions"
-	cache.store(cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[{"revision":"private","time":1}]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, time.Minute)
+	if err := cache.store(context.Background(), cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[{"revision":"private","time":1}]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, "central", 1024, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: cache, Metrics: &Metrics{}}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/conan/v2/central/conans/"+path, nil))
 	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "private") {
 		t.Fatalf("response=%d body=%q", w.Code, w.Body.String())
+	}
+}
+
+func TestConanAuthenticatedReadChecksMemberAuthorizationBeforeCache(t *testing.T) {
+	store := repository.NewMemoryStore()
+	private := repository.Member{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example", Position: 0}
+	public := repository.Member{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Position: 1}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{private, public}})
+	cache := NewConanCache(nil)
+	path := "pkg/1.0/user/stable/revisions"
+	if err := cache.store(context.Background(), cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, "central", 1024, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	auth := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"build-agent": {"central", "public"}}}
+	w := httptest.NewRecorder()
+	ConanHandler{Store: store, Authenticator: auth, Client: &conanAnonymousClient{}, Cache: cache}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/"+path))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T) {
+	var calls, lookups, dials atomic.Int32
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.URL.Path != "/conans/pkg/1.0/user/stable/revisions" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"revisions":[{"revision":"rrev","time":1}]}`))
+	}))
+	defer upstream.Close()
+	host, port := rawTLSServerAddress(t, upstream.URL)
+	withRawProxyNetwork(t, func(_ context.Context, network, name string) ([]net.IP, error) {
+		if lookups.Add(1) > 1 {
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		}
+		if network != "ip" || name != "example.com" {
+			t.Fatalf("lookup=%s %s", network, name)
+		}
+		return []net.IP{net.ParseIP("203.0.113.11")}, nil
+	}, func(ctx context.Context, network, address string) (net.Conn, error) {
+		dials.Add(1)
+		if address != net.JoinHostPort("203.0.113.11", port) {
+			t.Fatalf("unverified dial=%q", address)
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
+	})
+	store := repository.NewMemoryStore()
+	endpoint := "https://example.com:" + port
+	member := repository.Member{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
+	objects := NewMemoryOCIObjectStore()
+	first := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
+	second := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
+	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	for _, handler := range []ConanHandler{first, second} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, conanRequest(path))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+	}
+	if calls.Load() != 1 || lookups.Load() != 1 || dials.Load() != 1 {
+		t.Fatalf("calls=%d lookups=%d dials=%d", calls.Load(), lookups.Load(), dials.Load())
+	}
+}
+
+func TestConanProxyRedirectIsNotFollowed(t *testing.T) {
+	var redirected atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Add(1) }))
+	defer target.Close()
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, http.StatusFound) }))
+	defer upstream.Close()
+	host, port := rawTLSServerAddress(t, upstream.URL)
+	withRawProxyNetwork(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("203.0.113.12")}, nil
+	}, func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address != net.JoinHostPort("203.0.113.12", port) {
+			t.Fatalf("dial=%q", address)
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
+	})
+	response, err := (GiteaClient{HTTPClient: upstream.Client()}).FetchConan(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com:" + port}, "pkg/1.0/user/stable/revisions", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusFound || redirected.Load() != 0 {
+		t.Fatalf("status=%d redirected=%d", response.StatusCode, redirected.Load())
+	}
+}
+
+func TestConanProxyAllowlistIsolatedPerMember(t *testing.T) {
+	store := repository.NewMemoryStore()
+	endpoint := "https://shared.example"
+	allowed := repository.Member{Name: "allowed", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"shared.example"}}
+	denied := repository.Member{Name: "denied", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"other.example"}}
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "allowed-group", Members: []repository.Member{allowed}})
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "denied-group", Members: []repository.Member{denied}})
+	client := &conanAnonymousClient{}
+	for group, want := range map[string]int{"allowed-group": http.StatusOK, "denied-group": http.StatusForbidden} {
+		w := httptest.NewRecorder()
+		ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache([]string{"shared.example"})}.ServeHTTP(w, conanRequest("/conan/v2/"+group+"/conans/pkg/1.0/user/stable/revisions"))
+		if w.Code != want {
+			t.Fatalf("%s status=%d", group, w.Code)
+		}
 	}
 }
 
@@ -299,7 +608,7 @@ func (c *conanPackageClient) FetchConan(ctx context.Context, method string, memb
 	c.paths = append(c.paths, path)
 	if strings.Contains(path, "/packages/package-id/") {
 		if strings.HasSuffix(path, "/revisions") {
-			return conanJSON(`{"revisions":[{"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","time":"2024-01-01T00:00:00Z"}]}`), nil
+			return conanJSON(`{"revisions":[{"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","time":1}]}`), nil
 		}
 		if strings.HasSuffix(path, "/files") {
 			return conanFilesJSON(c.packageFiles), nil
@@ -334,7 +643,7 @@ func (c *conanDownloadClient) FetchConan(_ context.Context, _ string, _ reposito
 		return conanJSON(`{}`), nil
 	}
 	if strings.HasSuffix(path, "/revisions") {
-		return conanJSON(`{"revisions":[{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":"2024-01-01T00:00:00Z"}]}`), nil
+		return conanJSON(`{"revisions":[{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":1}]}`), nil
 	}
 	if strings.HasSuffix(path, "/files") {
 		files := make([]string, 0, len(c.files))

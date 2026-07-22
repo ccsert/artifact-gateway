@@ -260,8 +260,11 @@ func (s *PostgresStore) CreateConanGroup(ctx context.Context, group Group) (Grou
 		return Group{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if group.CacheQuotaBytes == 0 {
+		group.CacheQuotaBytes = 1 << 30
+	}
 	normalizeGroup(&group)
-	err = tx.QueryRowContext(ctx, `INSERT INTO conan_groups (name, enabled, anonymous) VALUES ($1, true, $2) RETURNING created_at`, group.Name, group.Anonymous).Scan(&group.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO conan_groups (name, enabled, anonymous, cache_quota_bytes) VALUES ($1, true, $2, $3) RETURNING created_at`, group.Name, group.Anonymous, group.CacheQuotaBytes).Scan(&group.CreatedAt)
 	if err != nil {
 		if isUnique(err) {
 			return Group{}, ErrNameExists
@@ -269,7 +272,7 @@ func (s *PostgresStore) CreateConanGroup(ctx context.Context, group Group) (Grou
 		return Group{}, err
 	}
 	for _, member := range group.Members {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO conan_group_members (group_name, name, member_type, endpoint, position, anonymous) VALUES ($1,$2,$3,$4,$5,$6)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO conan_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::text[], '{}'::text[]))`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 	}
@@ -280,20 +283,24 @@ func (s *PostgresStore) CreateConanGroup(ctx context.Context, group Group) (Grou
 }
 func (s *PostgresStore) GetConanGroup(ctx context.Context, name string) (Group, error) {
 	var group Group
-	if err := s.db.QueryRowContext(ctx, `SELECT name, enabled, anonymous, created_at FROM conan_groups WHERE name=$1`, name).Scan(&group.Name, &group.Enabled, &group.Anonymous, &group.CreatedAt); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT name, enabled, anonymous, cache_quota_bytes, created_at FROM conan_groups WHERE name=$1`, name).Scan(&group.Name, &group.Enabled, &group.Anonymous, &group.CacheQuotaBytes, &group.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Group{}, ErrNotFound
 		}
 		return Group{}, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous FROM conan_group_members WHERE group_name=$1 ORDER BY position`, name)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, array_to_json(allowed_hosts) FROM conan_group_members WHERE group_name=$1 ORDER BY position`, name)
 	if err != nil {
 		return Group{}, err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous); err != nil {
+		var allowedHosts []byte
+		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &allowedHosts); err != nil {
+			return Group{}, err
+		}
+		if err := json.Unmarshal(allowedHosts, &member.AllowedHosts); err != nil {
 			return Group{}, err
 		}
 		group.Members = append(group.Members, member)
