@@ -135,11 +135,6 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	if kind == "package_search" {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{}`))
-		return
-	}
 	if p.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(p, group) {
 		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository read permission required", http.StatusForbidden)

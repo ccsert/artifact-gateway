@@ -1,6 +1,9 @@
 package app
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -251,6 +254,72 @@ func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
 	run("download", "pkg/1.0@user/stable#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "-r=gateway")
 }
 
+func TestConan2ClientDownloadsRevisionedPackageThroughGateway(t *testing.T) {
+	conan := os.Getenv("CONAN_BINARY")
+	if conan == "" {
+		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
+	}
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
+	client := newConanPackageClient()
+	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}})
+	defer server.Close()
+	home := t.TempDir()
+	command := exec.Command(conan, "download", "pkg/1.0@user/stable#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:package-id#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "-r=gateway")
+	command.Env = append(os.Environ(), "CONAN_HOME="+home)
+	add := exec.Command(conan, "remote", "add", "--force", "gateway", server.URL+"/conan/central")
+	add.Env = command.Env
+	if output, err := add.CombinedOutput(); err != nil {
+		t.Fatalf("add remote: %v\n%s", err, output)
+	}
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("download package: %v\n%s\npaths=%v", err, output, client.paths)
+	}
+}
+
+type conanPackageClient struct {
+	*conanDownloadClient
+	packageFiles map[string][]byte
+}
+
+func newConanPackageClient() *conanPackageClient {
+	return &conanPackageClient{conanDownloadClient: newConanDownloadClient(), packageFiles: map[string][]byte{"conan_package.tgz": conanPackageArchive(), "conaninfo.txt": []byte("[settings]\n"), "conanmanifest.txt": []byte("manifest\n")}}
+}
+func conanPackageArchive() []byte {
+	var output bytes.Buffer
+	gzipWriter := gzip.NewWriter(&output)
+	tarWriter := tar.NewWriter(gzipWriter)
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "package.txt", Mode: 0644, Size: int64(len("package binary"))})
+	_, _ = tarWriter.Write([]byte("package binary"))
+	_ = tarWriter.Close()
+	_ = gzipWriter.Close()
+	return output.Bytes()
+}
+func (c *conanPackageClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+	c.paths = append(c.paths, path)
+	if strings.Contains(path, "/packages/package-id/") {
+		if strings.HasSuffix(path, "/revisions") {
+			return conanJSON(`{"revisions":[{"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","time":"2024-01-01T00:00:00Z"}]}`), nil
+		}
+		if strings.HasSuffix(path, "/files") {
+			return conanFilesJSON(c.packageFiles), nil
+		}
+		name := path[strings.LastIndex(path, "/")+1:]
+		if body, ok := c.packageFiles[name]; ok {
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+		}
+	}
+	return c.conanDownloadClient.FetchConan(ctx, method, member, path, headers)
+}
+func conanFilesJSON(files map[string][]byte) *http.Response {
+	values := make([]string, 0, len(files))
+	for name, body := range files {
+		sum := sha256.Sum256(body)
+		values = append(values, fmt.Sprintf(`%q:{"sha256":%q,"size":%d}`, name, hex.EncodeToString(sum[:]), len(body)))
+	}
+	return conanJSON(`{"files":{` + strings.Join(values, ",") + `}}`)
+}
+
 type conanDownloadClient struct {
 	files map[string][]byte
 	paths []string
@@ -261,6 +330,9 @@ func newConanDownloadClient() *conanDownloadClient {
 }
 func (c *conanDownloadClient) FetchConan(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
 	c.paths = append(c.paths, path)
+	if strings.HasSuffix(path, "/search") {
+		return conanJSON(`{}`), nil
+	}
 	if strings.HasSuffix(path, "/revisions") {
 		return conanJSON(`{"revisions":[{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":"2024-01-01T00:00:00Z"}]}`), nil
 	}
