@@ -24,6 +24,78 @@ func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
 
 func (s *PostgresStore) Close() error { return s.db.Close() }
 
+func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
+	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, state, version) VALUES ($1,$2,$3,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	if isUnique(err) {
+		return HostedRepository{}, ErrNameExists
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return repo, nil
+}
+
+func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, after string) ([]HostedRepository, string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if after != "" {
+		var exists bool
+		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, after).Scan(&exists); err != nil {
+			return nil, "", err
+		}
+		if !exists {
+			return nil, "", ErrNotFound
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE ($1 = '' OR created_at > COALESCE((SELECT created_at FROM hosted_repositories WHERE id::text = $1), 'epoch'::timestamptz)) ORDER BY created_at, id LIMIT $2`, after, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	items := make([]HostedRepository, 0, limit)
+	for rows.Next() {
+		var repo HostedRepository
+		if err := rows.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		items = append(items, repo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(items) > limit {
+		next = items[limit-1].ID
+		items = items[:limit]
+	}
+	return items, next, nil
+}
+
+func (s *PostgresStore) GetHostedRepository(ctx context.Context, id string) (HostedRepository, error) {
+	var repo HostedRepository
+	err := s.db.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE id::text=$1`, id).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HostedRepository{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return repo, nil
+}
+
+func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) (HostedRepository, error) {
+	var repo HostedRepository
+	err := s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET state='deleting', version=version+1 WHERE id::text=$1 AND state='active' RETURNING id::text, name, format, state, version::text, created_at`, id).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HostedRepository{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return repo, nil
+}
+
 func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

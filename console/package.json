@@ -1,0 +1,28 @@
+{
+  "name": "artifact-gateway-console",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "generate:api": "openapi-ts -f hey-api.config.ts",
+    "check:api": "npm run generate:api && git diff --exit-code -- src/client",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@hey-api/client-fetch": "^0.13.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.72.0",
+    "@playwright/test": "^1.55.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.1.0"
+  }
+}

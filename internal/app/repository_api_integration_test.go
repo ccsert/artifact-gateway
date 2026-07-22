@@ -28,6 +28,21 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	hostedCreated := integrationRequest(handler, http.MethodPost, "/api/v2/repositories", `{"name":"releases","format":"maven"}`, "admin-secret")
+	if hostedCreated.Code != http.StatusCreated {
+		t.Fatalf("create Hosted repository = %d %s", hostedCreated.Code, hostedCreated.Body.String())
+	}
+	var hosted repository.HostedRepository
+	if err := json.NewDecoder(hostedCreated.Body).Decode(&hosted); err != nil {
+		t.Fatal(err)
+	}
+	if hosted.State != repository.RepositoryActive || hosted.Version != "1" {
+		t.Fatalf("created Hosted repository = %#v", hosted)
+	}
+	hostedDisabled := integrationRequest(handler, http.MethodDelete, "/api/v2/repositories/"+hosted.ID, "", "admin-secret")
+	if hostedDisabled.Code != http.StatusAccepted {
+		t.Fatalf("disable Hosted repository = %d %s", hostedDisabled.Code, hostedDisabled.Body.String())
+	}
 
 	group := `{"name":"engineering","members":[{"name":"proxy","type":"proxy","endpoint":"test://available","position":1},{"name":"hosted","type":"hosted","endpoint":"test://unavailable","position":0}]}`
 	created := integrationRequest(handler, http.MethodPost, "/api/v1/oci/groups", group, "admin-secret")
@@ -55,6 +70,13 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
+	var hostedState string
+	if err := db.QueryRowContext(context.Background(), `SELECT state FROM hosted_repositories WHERE id=$1`, hosted.ID).Scan(&hostedState); err != nil {
+		t.Fatal(err)
+	}
+	if hostedState != string(repository.RepositoryDeleting) {
+		t.Fatalf("Hosted repository state = %q", hostedState)
+	}
 	var actor, outcome, member string
 	if err := db.QueryRowContext(context.Background(), `SELECT actor, outcome, member_name FROM resolver_audit_log WHERE group_name=$1`, "engineering").Scan(&actor, &outcome, &member); err != nil {
 		t.Fatal(err)

@@ -470,6 +470,7 @@ type GatewayStore interface {
 	repository.MavenStore
 	repository.RawStore
 	repository.ConanStore
+	repository.HostedRepositoryStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -532,6 +533,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	conanAPI := conanAPIHandler{store: store, authenticator: authenticator}
 	mux.Handle("/api/v1/conan/groups", conanAPI)
 	mux.Handle("/api/v1/conan/groups/", conanAPI)
+	mux.Handle("/api/v2/repositories", hostedRepositoryAPIHandler{store: store, authenticator: authenticator})
+	mux.Handle("/api/v2/repositories/", hostedRepositoryAPIHandler{store: store, authenticator: authenticator})
 	mux.Handle("POST /api/v1/conan/cache/invalidate", conanCacheInvalidationHandler{store: store, authenticator: authenticator, cache: conanCache})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {

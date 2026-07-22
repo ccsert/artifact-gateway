@@ -4,10 +4,22 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
 
 help:
 	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
+
+console-build:
+	@cd console && npm run build
+
+console-typecheck:
+	@cd console && npm run typecheck
+
+console-api-check:
+	@cd console && npm run check:api
+
+console-e2e:
+	@cd console && npm run e2e
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait

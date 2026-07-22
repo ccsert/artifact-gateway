@@ -14,6 +14,41 @@ var (
 	ErrNameExists = errors.New("group name already exists")
 )
 
+// Format is the immutable protocol family served by a Native Hosted
+// Repository. It deliberately remains distinct from the legacy Group model.
+type Format string
+
+const (
+	FormatRaw   Format = "raw"
+	FormatOCI   Format = "oci"
+	FormatMaven Format = "maven"
+)
+
+type RepositoryState string
+
+const (
+	RepositoryActive   RepositoryState = "active"
+	RepositoryDeleting RepositoryState = "deleting"
+)
+
+type HostedRepository struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Format    Format          `json:"format"`
+	State     RepositoryState `json:"state"`
+	Version   string          `json:"version"`
+	CreatedAt time.Time       `json:"-"`
+}
+
+// HostedRepositoryStore owns V3 Native Hosted configuration. Every protocol
+// adapter must check State before it permits a read or write.
+type HostedRepositoryStore interface {
+	CreateHostedRepository(context.Context, HostedRepository) (HostedRepository, error)
+	ListHostedRepositories(context.Context, int, string) ([]HostedRepository, string, error)
+	GetHostedRepository(context.Context, string) (HostedRepository, error)
+	DisableHostedRepository(context.Context, string) (HostedRepository, error)
+}
+
 type MemberType string
 
 const (
@@ -108,16 +143,93 @@ type ConanStore interface {
 }
 
 type MemoryStore struct {
-	mu          sync.RWMutex
-	groups      map[string]Group
-	mavenGroups map[string]Group
-	rawGroups   map[string]Group
-	conanGroups map[string]Group
-	Audits      []AuditRecord
+	mu                 sync.RWMutex
+	groups             map[string]Group
+	mavenGroups        map[string]Group
+	rawGroups          map[string]Group
+	conanGroups        map[string]Group
+	Audits             []AuditRecord
+	hostedRepositories map[string]HostedRepository
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository)}
+}
+
+func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.hostedRepositories {
+		if existing.Name == repo.Name {
+			return HostedRepository{}, ErrNameExists
+		}
+	}
+	repo.State = RepositoryActive
+	repo.Version = "1"
+	repo.CreatedAt = time.Now().UTC()
+	s.hostedRepositories[repo.ID] = repo
+	return repo, nil
+}
+
+func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after string) ([]HostedRepository, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	items := make([]HostedRepository, 0, len(s.hostedRepositories))
+	for _, repo := range s.hostedRepositories {
+		items = append(items, repo)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.Before(items[j].CreatedAt) })
+	start := 0
+	if after != "" {
+		found := false
+		for i, repo := range items {
+			if repo.ID == after {
+				start = i + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, "", ErrNotFound
+		}
+	}
+	end := start + limit
+	next := ""
+	if end < len(items) {
+		next = items[end-1].ID
+	} else if start > len(items) {
+		start = len(items)
+		end = start
+	} else {
+		end = len(items)
+	}
+	return items[start:end], next, nil
+}
+
+func (s *MemoryStore) GetHostedRepository(_ context.Context, id string) (HostedRepository, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	repo, ok := s.hostedRepositories[id]
+	if !ok {
+		return HostedRepository{}, ErrNotFound
+	}
+	return repo, nil
+}
+
+func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (HostedRepository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	repo, ok := s.hostedRepositories[id]
+	if !ok {
+		return HostedRepository{}, ErrNotFound
+	}
+	repo.State = RepositoryDeleting
+	repo.Version = "2"
+	s.hostedRepositories[id] = repo
+	return repo, nil
 }
 
 func (s *MemoryStore) CreateRawGroup(_ context.Context, group Group) (Group, error) {
