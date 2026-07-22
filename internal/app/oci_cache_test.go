@@ -95,6 +95,12 @@ func (c *renewingTestCoordinator) Renewals() int {
 	return c.renewals
 }
 
+func (c *renewingTestCoordinator) SetFail() {
+	c.mu.Lock()
+	c.fail = true
+	c.mu.Unlock()
+}
+
 func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 	coordinator := &renewingTestCoordinator{}
 	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), nil).WithCoordinator(coordinator)
@@ -113,7 +119,7 @@ func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 		t.Fatalf("content=%q err=%v renewals=%d", content.Body, err, coordinator.Renewals())
 	}
 
-	coordinator.fail = true
+	coordinator.SetFail()
 	_, err = cache.Do(context.Background(), "lost-owner", func(ctx context.Context) (CachedOCIContent, error) {
 		<-ctx.Done()
 		return CachedOCIContent{}, ctx.Err()
