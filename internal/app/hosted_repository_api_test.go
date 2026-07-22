@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,5 +154,18 @@ func TestNativeRepositoryGuardDeniesAnonymousAndDisabledProtocols(t *testing.T) 
 		if disabled.Code != http.StatusForbidden {
 			t.Fatalf("%s disabled=%d", format, disabled.Code)
 		}
+	}
+}
+
+func TestMemoryHostedRepositoryHonorsPageSize200(t *testing.T) {
+	store := repository.NewMemoryStore()
+	for i := 0; i < 201; i++ {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: fmt.Sprintf("repo-%03d", i), Format: repository.FormatRaw}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, next, err := store.ListHostedRepositories(context.Background(), 200, "")
+	if err != nil || len(items) != 200 || next == "" {
+		t.Fatalf("items=%d next=%q err=%v", len(items), next, err)
 	}
 }

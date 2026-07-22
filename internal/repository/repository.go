@@ -204,7 +204,7 @@ func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo
 func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after string) ([]HostedRepository, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	items := make([]HostedRepository, 0, len(s.hostedRepositories))
