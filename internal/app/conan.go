@@ -706,7 +706,9 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		}
 		if len(rest) == 9 && rest[6] == "packages" && rest[8] == "latest" {
 			path = strings.Join(rest, "/")
-			kind = "latest"
+			// Conan 2 uses this to select an omitted package revision. It is
+			// metadata, so it must be validated and use the metadata TTL.
+			kind = "metadata"
 			ok = true
 			return
 		}
@@ -750,7 +752,7 @@ func parseConanPing(method, path string) (string, bool) {
 func parseConanAuthenticate(method, path string) (string, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	return func() (string, bool) {
-		if (method == http.MethodGet || method == http.MethodPost || method == http.MethodPut) && len(parts) == 5 && parts[0] == "conan" && (parts[2] == "v1" || parts[2] == "v2") && parts[3] == "users" && parts[4] == "authenticate" && validConanSegment(parts[1]) {
+		if method == http.MethodGet && len(parts) == 5 && parts[0] == "conan" && parts[2] == "v2" && parts[3] == "users" && parts[4] == "authenticate" && validConanSegment(parts[1]) {
 			return parts[1], true
 		}
 		return "", false

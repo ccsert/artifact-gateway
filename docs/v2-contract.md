@@ -62,7 +62,7 @@ Raw successful file bodies are read-through cached for 15 minutes by default, su
 
 V2 supports Conan 2 read resolution only, for a Conan 2.x client using v2 REST. Conan 1, uploads, recipe/package revision deletion, remote-to-remote copying, search/index enrichment beyond read endpoints, and server-side recipe generation are out of scope.
 
-Conan routes use `/conan/v2/<group>/conans/...`; the remote URL MUST include the group. Authentication follows the same resource policy. The client gets the normal protocol challenge when anonymous access is disabled; credentials are never forwarded to a Proxy.
+Conan routes use `/conan/v2/<group>/conans/...`; the remote URL MUST include the group. The sole protocol exception is the Conan 2 Basic-login handshake `GET /conan/<group>/v2/users/authenticate`; it follows the same resource policy and is not a general user API. Conan 1 authentication and non-GET authentication methods return `404`. The client gets the normal protocol challenge when anonymous access is disabled; credentials are never forwarded to a Proxy.
 
 `CONTRACT: conan-coordinate`
 
@@ -79,6 +79,7 @@ The Gateway supports only these Conan 2 read endpoints, all `GET` or `HEAD` unde
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files` | JSON object with `files`, a map from filename to an object containing lowercase-hex `sha256` and non-negative numeric `size`. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files/{filename}` | Raw recipe file; verify against the corresponding files metadata entry before caching. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions` | JSON object with `revisions`, using the same revision shape. |
+| `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/latest` | JSON object with selected `revision` and RFC3339 `time`; required only to resolve an omitted `prev`, and cached as metadata. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions/{prev}/files` | JSON object with `files`, using the same file metadata shape. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions/{prev}/files/{filename}` | Raw package file; verify against the corresponding files metadata entry before caching. |
 
