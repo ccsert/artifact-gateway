@@ -246,6 +246,12 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 		s.mavenAssets[k] = a
 	}
 	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	for _, existing := range s.mavenArtifacts {
+		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+			artifact = existing
+			break
+		}
+	}
 	s.mavenArtifacts[id] = artifact
 	session.State = "committed"
 	s.mavenSessions[id] = session

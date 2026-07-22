@@ -225,7 +225,7 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 		}
 	}
 	a := MavenArtifact{ID: id, RepositoryID: v.RepositoryID, Coordinate: v.Coordinate, Digest: v.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
-	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') RETURNING created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') ON CONFLICT (repository_id,coordinate) DO UPDATE SET coordinate=EXCLUDED.coordinate RETURNING id::text, digest, state, created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.ID, &a.Digest, &a.State, &a.CreatedAt)
 	if err != nil {
 		return MavenArtifact{}, err
 	}

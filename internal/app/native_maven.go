@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -221,6 +222,10 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 	writeNativeMavenJSON(w, 200, a)
 }
 func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPut {
+		h.deploy(w, r)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -249,6 +254,10 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	}
 	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, strings.Join(parts[1:], "/"))
 	if err != nil {
+		if strings.HasSuffix(strings.Join(parts[1:], "/"), "maven-metadata.xml") {
+			h.metadata(w, r, repo, strings.Join(parts[1:], "/"), user)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -263,6 +272,111 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body)
 	}
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
+}
+
+// deploy accepts Maven's ordinary HTTP PUT layout. Each asset is independently
+// committed, while the shared coordinate becomes visible only after its bytes
+// and generated checksum sidecars have been validated.
+func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
+	user, pass, ok := r.BasicAuth()
+	if !ok || user == "" || !tokenMatches(pass, h.authenticator.ResolverToken) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repository/maven/"), "/")
+	if len(parts) < 5 {
+		http.NotFound(w, r)
+		return
+	}
+	repo, err := h.store.GetHostedRepositoryByName(r.Context(), parts[0])
+	if err != nil || repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
+		http.NotFound(w, r)
+		return
+	}
+	if !h.authenticator.CanReadMavenRepository(h.authenticator.principal(user), repo.Name) {
+		http.Error(w, "repository write permission required", http.StatusForbidden)
+		return
+	}
+	path := parts[1:]
+	version, artifact := path[len(path)-2], path[len(path)-3]
+	group := strings.Join(path[:len(path)-3], ".")
+	name := path[len(path)-1]
+	if group == "" || artifact == "" || version == "" || strings.HasSuffix(name, "maven-metadata.xml") {
+		http.Error(w, "invalid Maven asset path", 400)
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+	if err != nil {
+		http.Error(w, "read Maven asset", 400)
+		return
+	}
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	s := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: group + ":" + artifact + ":" + version, PomObject: name, State: "open", Objects: []repository.MavenDeclaredObject{{Name: name, Digest: digest, Size: int64(len(body))}}, ExpiresAt: time.Now().Add(time.Hour)}
+	if _, err = h.store.CreateMavenPublishSession(r.Context(), s); err != nil {
+		http.Error(w, "create Maven publish session", 500)
+		return
+	}
+	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
+	if err = h.objects.Put(r.Context(), key, body); err != nil || h.store.MarkMavenPublishObject(r.Context(), s.ID, name, key) != nil {
+		http.Error(w, "stage Maven asset", 500)
+		return
+	}
+	base := mavenCoordinatePath(s.Coordinate)
+	assets := []repository.MavenAsset{{RepositoryID: repo.ID, Path: base + "/" + name, ObjectKey: key, Digest: digest, Size: int64(len(body))}}
+	for _, c := range generatedMavenChecksums(body) {
+		ck := "native/maven/sha256/" + c.digest
+		if err = h.objects.Put(r.Context(), ck, []byte(c.body)); err != nil {
+			http.Error(w, "generate Maven checksum", 500)
+			return
+		}
+		assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + name + c.extension, ObjectKey: ck, Digest: "sha256:" + c.digest, Size: int64(len(c.body))})
+	}
+	if _, err = h.store.CommitMavenPublishSession(r.Context(), s.ID, assets); err != nil && !errors.Is(err, repository.ErrNameExists) {
+		http.Error(w, "commit Maven asset", 422)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, actor string) {
+	items, err := h.store.ListMavenArtifacts(r.Context(), repo.ID)
+	if err != nil {
+		http.Error(w, "metadata unavailable", 503)
+		return
+	}
+	prefix := strings.TrimSuffix(path, "/maven-metadata.xml")
+	versions := []string{}
+	for _, a := range items {
+		base := mavenCoordinatePath(a.Coordinate)
+		if strings.HasPrefix(base, prefix) {
+			p := strings.Split(a.Coordinate, ":")
+			if len(p) >= 3 {
+				versions = append(versions, p[2])
+			}
+		}
+	}
+	if len(versions) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	sort.Strings(versions)
+	p := strings.Split(prefix, "/")
+	group := strings.Join(p[:len(p)-1], ".")
+	artifact := p[len(p)-1]
+	body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><versioning><latest>" + versions[len(versions)-1] + "</latest><release>" + versions[len(versions)-1] + "</release><versions>" + strings.Join(func() []string {
+		v := make([]string, len(versions))
+		for i, x := range versions {
+			v[i] = "<version>" + x + "</version>"
+		}
+		return v
+	}(), "") + "</versions></versioning></metadata>")
+	w.Header().Set("Content-Type", "application/xml")
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(body)
+	}
+	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
 }
 func validMavenCoordinate(s string) bool {
 	p := strings.Split(s, ":")

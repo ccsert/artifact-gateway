@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -77,4 +78,34 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	if checksum.Code != http.StatusOK || checksum.Body.String() != hex.EncodeToString(sum[:])+"\n" {
 		t.Fatalf("checksum=%d %q", checksum.Code, checksum.Body.String())
 	}
+}
+
+func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	for _, asset := range []string{"widget-1.2.0.pom", "widget-1.2.0.jar"} {
+		r := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/"+asset, bytes.NewBufferString(asset))
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("PUT %s=%d %s", asset, w.Code, w.Body.String())
+		}
+	}
+	get := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/org/example/widget/1.2.0/widget-1.2.0.jar", nil)
+	get.SetBasicAuth("maven", "resolver-secret")
+	out := httptest.NewRecorder()
+	h.ServeHTTP(out, get)
+	if out.Code != 200 || out.Body.String() != "widget-1.2.0.jar" {
+		t.Fatalf("asset=%d %q", out.Code, out.Body.String())
+	}
+	metadata := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/org/example/widget/maven-metadata.xml", nil)
+	metadata.SetBasicAuth("maven", "resolver-secret")
+	out = httptest.NewRecorder()
+	h.ServeHTTP(out, metadata)
+	if out.Code != 200 || !strings.Contains(out.Body.String(), "<version>1.2.0</version>") {
+		t.Fatalf("metadata=%d %s", out.Code, out.Body.String())
+	}
+	_ = repo
 }
