@@ -10,8 +10,8 @@ but does not require any production credentials.
 make release-readiness
 ```
 
-The command runs Docker/ORAS OCI, Maven/Gradle, Raw HTTP, and real Conan 2
-black-box clients, an OCI cache performance gate, and an isolated
+The command runs Docker/ORAS OCI, Maven/Gradle, a curl-driven live Gateway Raw
+HTTP fixture, and real Conan 2 black-box clients, an OCI cache performance gate, and an isolated
 upgrade/rollback rehearsal. It then verifies object storage and PostgreSQL
 readiness failures, recovery after each dependency is restored, the
 administrator cache-maintenance view, and static resolver-token rotation.
@@ -30,8 +30,9 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 - [ ] OCI pull passes with Docker and ORAS. `make release-readiness` requires
       both clients; Podman compatibility is tracked separately. Maven first
       read uses Maven and cached resolution after upstream outage uses Gradle.
-      Raw HTTP covers authenticated GET/HEAD/range, cache, anonymous denial,
-      repository denial, and upstream failure. Conan 2.21.0 covers the v2
+      Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
+      denial, canonical-path rejection, negative cache, Proxy allowlist denial,
+      source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
       handshake, revisioned recipe/package downloads, cache, checksum failure,
       anonymous policy, and Proxy allowlist denial.
 - [ ] `/readyz` returns `503` while MinIO or PostgreSQL is stopped and `204`
@@ -57,9 +58,10 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
       V2 migrations are additive: verify Raw/Conan Group policy, cache, and
       audit rows remain present after upgrade; a rollback binary must not need
       V2 rows to serve existing OCI Groups.
-- [ ] Back up PostgreSQL and MinIO with `make backup-drill`; rehearse restore
-      using [the recovery runbook](recovery-runbook.md) before a production
-      rollout.
+- [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
+      against isolated volumes, verifies restored Raw cache content, Conan
+      Group state, and both V2 audit formats. Run `make backup-drill` against
+      the release environment only after the isolated rehearsal passes.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
       allowlists, repository-reader grants, quotas, and OIDC issuer/audience.
 

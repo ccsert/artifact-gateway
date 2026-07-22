@@ -97,6 +97,7 @@ make raw-e2e
 make conan-e2e
 make performance-readiness
 make upgrade-readiness
+make backup-restore-readiness
 
 cache_status() {
   curl --silent --show-error --fail \
