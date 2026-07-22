@@ -52,6 +52,35 @@ type HostedRepositoryStore interface {
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
 }
 
+// NativeMavenStore contains only committed Maven metadata. Object bytes live in
+// the object store; staging rows never participate in protocol reads.
+type NativeMavenStore interface {
+	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
+	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
+	MarkMavenPublishObject(context.Context, string, string, string) error
+	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
+	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
+	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+}
+
+type MavenDeclaredObject struct {
+	Name, Digest string
+	Size         int64
+}
+type MavenPublishSession struct {
+	ID, RepositoryID, Coordinate, PomObject, State string
+	Objects                                        []MavenDeclaredObject
+	ExpiresAt                                      time.Time
+}
+type MavenAsset struct {
+	RepositoryID, Path, ObjectKey, Digest string
+	Size                                  int64
+}
+type MavenArtifact struct {
+	ID, RepositoryID, Coordinate, Digest, State string
+	CreatedAt                                   time.Time
+}
+
 type MemberType string
 
 const (
@@ -154,6 +183,10 @@ type MemoryStore struct {
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
 	idempotencyRecords map[string]idempotencyRecord
+	mavenSessions      map[string]MavenPublishSession
+	mavenUploads       map[string]map[string]string
+	mavenAssets        map[string]MavenAsset
+	mavenArtifacts     map[string]MavenArtifact
 }
 
 type idempotencyRecord struct {
@@ -162,7 +195,81 @@ type idempotencyRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact)}
+}
+
+func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mavenSessions[session.ID] = session
+	s.mavenUploads[session.ID] = map[string]string{}
+	return session, nil
+}
+func (s *MemoryStore) GetMavenPublishSession(_ context.Context, id string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.mavenSessions[id]
+	if !ok {
+		return MavenPublishSession{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.mavenSessions[id]; !ok {
+		return ErrNotFound
+	}
+	s.mavenUploads[id][name] = key
+	return nil
+}
+func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.mavenSessions[id]
+	if !ok {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	for _, o := range session.Objects {
+		if s.mavenUploads[id][o.Name] == "" {
+			return MavenArtifact{}, ErrDisabled
+		}
+	}
+	for _, a := range assets {
+		k := a.RepositoryID + "\x00" + a.Path
+		if _, exists := s.mavenAssets[k]; exists {
+			return MavenArtifact{}, ErrNameExists
+		}
+		s.mavenAssets[k] = a
+	}
+	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	s.mavenArtifacts[id] = artifact
+	session.State = "committed"
+	s.mavenSessions[id] = session
+	return artifact, nil
+}
+func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string) (MavenAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.mavenAssets[repositoryID+"\x00"+path]
+	if !ok {
+		return MavenAsset{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string) ([]MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []MavenArtifact{}
+	for _, a := range s.mavenArtifacts {
+		if a.RepositoryID == repositoryID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
 }
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {

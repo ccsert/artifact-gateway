@@ -159,6 +159,109 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 	return repo, nil
 }
 
+func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPublishSession) (MavenPublishSession, error) {
+	objects, _ := json.Marshal(v.Objects)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects)
+	return v, err
+}
+func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (MavenPublishSession, error) {
+	var v MavenPublishSession
+	var objects []byte
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	if err == nil {
+		err = json.Unmarshal(objects, &v.Objects)
+	}
+	return v, err
+}
+func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, key string) error {
+	result, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_uploads (session_id,object_name,object_key) VALUES ($1,$2,$3) ON CONFLICT (session_id,object_name) DO UPDATE SET object_key=EXCLUDED.object_key`, id, name, key)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer tx.Rollback()
+	var v MavenPublishSession
+	var objects []byte
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if v.State != "open" || time.Now().After(v.ExpiresAt) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	if err = json.Unmarshal(objects, &v.Objects); err != nil {
+		return MavenArtifact{}, err
+	}
+	var uploaded int
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_publish_uploads WHERE session_id=$1`, id).Scan(&uploaded); err != nil {
+		return MavenArtifact{}, err
+	}
+	if uploaded != len(v.Objects) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	for _, a := range assets {
+		_, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, a.RepositoryID, a.Path, a.ObjectKey, a.Digest, a.Size)
+		if isUnique(err) {
+			return MavenArtifact{}, ErrNameExists
+		}
+		if err != nil {
+			return MavenArtifact{}, err
+		}
+	}
+	a := MavenArtifact{ID: id, RepositoryID: v.RepositoryID, Coordinate: v.Coordinate, Digest: v.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') RETURNING created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.CreatedAt)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE id=$1`, id); err != nil {
+		return MavenArtifact{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return MavenArtifact{}, err
+	}
+	return a, nil
+}
+func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) (MavenAsset, error) {
+	var a MavenAsset
+	err := s.db.QueryRowContext(ctx, `SELECT repository_id::text,path,object_key,digest,size FROM native_maven_assets WHERE repository_id::text=$1 AND path=$2`, repoID, path).Scan(&a.RepositoryID, &a.Path, &a.ObjectKey, &a.Digest, &a.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrNotFound
+	}
+	return a, err
+}
+func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) ([]MavenArtifact, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 ORDER BY created_at DESC`, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MavenArtifact{}
+	for rows.Next() {
+		var a MavenArtifact
+		if err := rows.Scan(&a.ID, &a.RepositoryID, &a.Coordinate, &a.Digest, &a.State, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

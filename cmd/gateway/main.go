@@ -44,6 +44,7 @@ func main() {
 		slog.Error("ensure OCI cache bucket", "error", err)
 		os.Exit(1)
 	}
+	dependencies.NativeMavenObjectStore = objectStore
 	store, err := repository.NewPostgresStore(cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("open repository store", "error", err)
