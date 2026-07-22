@@ -56,13 +56,16 @@ Set `GATEWAY_REPOSITORY_READERS` to enforce repository-scoped reads. Its format 
 ## Conan 2 reads
 
 Create a Conan Group with `POST /api/v1/conan/groups`; the remote URL is
-`http://gateway-host:port/conan/<group>` (the Conan client appends `/v2`). The Gateway also retains the contract route `/conan/v2/<group>/conans/...`. The Gateway serves only Conan 2
-revision and file endpoints, requires the same Basic or Bearer resolver
+`http://gateway-host:port/conan/<group>` (the Conan client appends `/v2`). The Gateway also retains the contract route `/conan/v2/<group>/conans/...`. The Gateway serves Conan 2 revision and file endpoints plus the revision-scoped package search needed by client downloads, requires the same Basic or Bearer resolver
 credentials as Maven, validates recipe/package files against their `sha256`
 metadata before caching, and never forwards client credentials upstream.
+Run `make conan-e2e` to exercise the real Conan 2.21.0 client fixture in the
+fixed Go container, including revisioned recipe/package downloads and
+Hosted/Proxy cache resolution.
 Hosted members are always tried before Proxy members. Proxy members must use
 HTTPS and declare a non-empty exact `allowedHosts` list on that Proxy member.
-Conan 1, uploads, deletes, copies, and search are intentionally unsupported.
+Conan 1, uploads, deletes, copies, and search beyond the revision-scoped
+download handshake are intentionally unsupported.
 
 Set `GATEWAY_REPOSITORY_CACHE_QUOTAS` to bound read-through cache retention per
 logical repository, using semicolon-separated byte limits such as

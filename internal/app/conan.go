@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -305,9 +306,54 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		principal, authenticated := h.authenticate(r)
+		configured, err := h.Store.GetConanGroup(r.Context(), group)
+		if err != nil || !configured.Enabled {
+			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, "", "", principal.Actor, auditOutcome(err))
+			http.NotFound(w, r)
+			return
+		}
+		if authenticated && h.Authenticator.CanReadMavenRepository(principal, group) {
+			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
-		h.audit(withConanAuditStatus(r.Context(), http.StatusUnauthorized), group, "", "", "anonymous", repository.AuditAccessDenied)
+		actor := "anonymous"
+		status := http.StatusUnauthorized
+		if authenticated {
+			actor = principal.Actor
+			status = http.StatusForbidden
+		}
+		h.audit(withConanAuditStatus(r.Context(), status), group, "", "", actor, repository.AuditAccessDenied)
+		if authenticated {
+			http.Error(w, "repository read permission required", status)
+			return
+		}
 		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if group, ok := parseConanAuthenticate(r.Method, r.URL.Path); ok {
+		principal, authenticated := h.authenticate(r)
+		configured, err := h.Store.GetConanGroup(r.Context(), group)
+		if err != nil || !configured.Enabled {
+			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, "", "", principal.Actor, auditOutcome(err))
+			http.NotFound(w, r)
+			return
+		}
+		if !authenticated {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
+			h.audit(withConanAuditStatus(r.Context(), http.StatusUnauthorized), group, "", "", "anonymous", repository.AuditAccessDenied)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !h.Authenticator.CanReadMavenRepository(principal, group) {
+			h.audit(withConanAuditStatus(r.Context(), http.StatusForbidden), group, "", "", principal.Actor, repository.AuditAccessDenied)
+			http.Error(w, "repository read permission required", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"user_name":` + strconv.Quote(principal.Actor) + `}`))
 		return
 	}
 	group, path, kind, file, ok := parseConanPath(r.Method, r.URL.EscapedPath())
@@ -321,7 +367,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	p, authenticated := h.Authenticator.Authenticate(r.Header.Get("Authorization"))
+	p, authenticated := h.authenticate(r)
 	if !authenticated && h.anonymousConanAllowed(r.Context(), group) {
 		p = Principal{Actor: "anonymous"}
 		authenticated = true
@@ -380,6 +426,17 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		servedBytes = int64(n)
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), content.cacheDisposition), content.status), servedBytes), group, path, content.member, p.Actor, repository.AuditResolved)
+}
+
+func (h ConanHandler) authenticate(request *http.Request) (Principal, bool) {
+	if principal, ok := h.Authenticator.Authenticate(request.Header.Get("Authorization")); ok {
+		return principal, true
+	}
+	username, password, ok := request.BasicAuth()
+	if !ok || username == "" || !tokenMatches(password, h.Authenticator.ResolverToken) {
+		return Principal{}, false
+	}
+	return h.Authenticator.principal(username), true
 }
 
 func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path, kind string, headers http.Header, principal Principal) (conanCacheEntry, int, error) {
@@ -621,7 +678,13 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		ok = true
 		return
 	}
-	if len(rest) >= 7 && rest[4] == "revisions" {
+	if len(rest) >= 6 && rest[4] == "revisions" {
+		if len(rest) == 7 && rest[6] == "search" {
+			path = strings.Join(rest, "/")
+			kind = "metadata"
+			ok = true
+			return
+		}
 		if len(rest) == 7 && rest[6] == "files" {
 			path = strings.Join(rest, "/")
 			kind = "metadata"
@@ -638,6 +701,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		if len(rest) == 9 && rest[6] == "packages" && rest[8] == "revisions" {
 			path = strings.Join(rest, "/")
 			kind = "metadata"
+			ok = true
+			return
+		}
+		if len(rest) == 9 && rest[6] == "packages" && rest[8] == "latest" {
+			path = strings.Join(rest, "/")
+			kind = "latest"
 			ok = true
 			return
 		}
@@ -678,11 +747,37 @@ func parseConanPing(method, path string) (string, bool) {
 		return "", false
 	}()
 }
+func parseConanAuthenticate(method, path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return func() (string, bool) {
+		if (method == http.MethodGet || method == http.MethodPost || method == http.MethodPut) && len(parts) == 5 && parts[0] == "conan" && (parts[2] == "v1" || parts[2] == "v2") && parts[3] == "users" && parts[4] == "authenticate" && validConanSegment(parts[1]) {
+			return parts[1], true
+		}
+		return "", false
+	}()
+}
 func validConanSegment(s string) bool {
 	decoded, err := url.PathUnescape(s)
 	return err == nil && decoded != "" && decoded != "." && decoded != ".." && !strings.ContainsAny(decoded, "/\\\x00#") && !strings.Contains(strings.ToLower(s), "%2f") && !strings.Contains(strings.ToLower(s), "%23")
 }
 func validConanMetadata(path string, body []byte) bool {
+	if strings.HasSuffix(path, "/latest") {
+		var latest struct {
+			Revision string `json:"revision"`
+			Time     string `json:"time"`
+		}
+		if json.Unmarshal(body, &latest) != nil || !validConanSegment(latest.Revision) {
+			return false
+		}
+		_, err := time.Parse(time.RFC3339, latest.Time)
+		return err == nil
+	}
+	if strings.HasSuffix(path, "/search") {
+		var search struct {
+			Packages map[string]json.RawMessage `json:"packages"`
+		}
+		return json.Unmarshal(body, &search) == nil && search.Packages != nil
+	}
 	var data struct {
 		Revisions json.RawMessage `json:"revisions"`
 		Files     map[string]struct {
@@ -719,7 +814,14 @@ func validConanMetadata(path string, body []byte) bool {
 			return false
 		}
 		if revision.Time[0] == '"' {
-			return false
+			var timestamp string
+			if json.Unmarshal(revision.Time, &timestamp) != nil || timestamp == "" {
+				return false
+			}
+			if _, err := time.Parse(time.RFC3339, timestamp); err != nil {
+				return false
+			}
+			continue
 		}
 		var numeric json.Number
 		if json.Unmarshal(revision.Time, &numeric) != nil {

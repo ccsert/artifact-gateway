@@ -74,14 +74,15 @@ The Gateway supports only these Conan 2 read endpoints, all `GET` or `HEAD` unde
 
 | Endpoint suffix | Response contract |
 | --- | --- |
-| `/{name}/{version}/{user}/{channel}/revisions` | JSON object with `revisions`, an array of objects containing string `revision` and numeric `time`. |
+| `/{name}/{version}/{user}/{channel}/revisions` | JSON object with `revisions`, an array of objects containing string `revision` and numeric or RFC3339-string `time`. |
+| `/{name}/{version}/{user}/{channel}/revisions/{rrev}/search` | JSON object with a `packages` object; required only for the Conan 2 download handshake. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files` | JSON object with `files`, a map from filename to an object containing lowercase-hex `sha256` and non-negative numeric `size`. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files/{filename}` | Raw recipe file; verify against the corresponding files metadata entry before caching. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions` | JSON object with `revisions`, using the same revision shape. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions/{prev}/files` | JSON object with `files`, using the same file metadata shape. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions/{prev}/files/{filename}` | Raw package file; verify against the corresponding files metadata entry before caching. |
 
-Every `{name}`, `{version}`, `{user}`, `{channel}`, `{rrev}`, `{package_id}`, `{prev}`, and `{filename}` occupies exactly one path segment. Decode each segment once; reject empty values, `.`, `..`, `/`, `\\`, NUL, `%2f` in any case, and raw or percent-encoded `#`. Coordinates are never reconstructed into `#`-delimited paths. File-list `filename` keys use the same rules and no slash, so a metadata response cannot name a file outside its requested coordinate. Unsupported methods or endpoint shapes return the Conan protocol's `404` response and audit `not_found`; malformed segment or metadata shape returns `400` and audit `upstream_error`.
+Every `{name}`, `{version}`, `{user}`, `{channel}`, `{rrev}`, `{package_id}`, `{prev}`, and `{filename}` occupies exactly one path segment. Decode each segment once; reject empty values, `.`, `..`, `/`, `\\`, NUL, `%2f` in any case, and raw or percent-encoded `#`. Coordinates are never reconstructed into `#`-delimited paths. File-list `filename` keys use the same rules and no slash, so a metadata response cannot name a file outside its requested coordinate. Unsupported methods or endpoint shapes return the Conan protocol's `404` response and audit `not_found`; malformed segment or metadata shape returns `400` and audit `upstream_error`. The revision-scoped `search` endpoint does not broaden general search or index support.
 
 Recipe metadata, package metadata, and download URLs resolve Hosted-first. Recipe manifests, package manifests, and artifacts are verified against Conan metadata checksums before caching. A mismatch returns `502`, records `upstream_error`, and is never served or cached.
 
