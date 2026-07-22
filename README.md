@@ -19,10 +19,11 @@ Run `make integration-test` to start an isolated PostgreSQL container, apply eve
 Run `make oci-e2e` after configuring `.env` to seed the local Gitea fixture, start Gateway in Gitea mode, and use Docker to log in and pull the fixture image through a Hosted Group. Run `make maven-e2e` to resolve the seeded Maven dependency through a controlled Maven Proxy: Maven performs the first upstream read, Gradle resolves from the Gateway cache after the fixture upstream stops, and the fixture exercises retry, negative-cache, allowlist, invalidation, and metrics paths.
 `make maven-e2e-cleanup-test` injects a failure after the allowlist-tightening restart and verifies the original Gateway configuration is restored.
 
-Run `make release-readiness` for the MVP release gate. It runs both real-client
-E2E paths and validates dependency recovery, cache-maintenance visibility, and
-resolver-token rotation. The full checklist, operating policy, architecture,
-known limits, and rollback procedure are in
+Run `make release-readiness` for the V2 release gate. It runs Docker/ORAS,
+Maven/Gradle, Raw HTTP, and Conan 2 client fixtures and validates dependency
+recovery, cache-maintenance visibility, upgrade/rollback, and resolver-token
+rotation. The full checklist, operating policy, architecture, known limits,
+and rollback procedure are in
 [`docs/release-readiness.md`](docs/release-readiness.md).
 
 Administrators can query resolver audit entries using `GET /api/v1/audits` with

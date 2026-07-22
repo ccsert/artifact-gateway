@@ -1,6 +1,7 @@
-# MVP Release Readiness
+# V2 Release Readiness
 
-This document is the release gate for Artifact Gateway's OCI and Maven MVP.
+This document is the release gate for Artifact Gateway's OCI, Maven, Raw, and
+Conan 2 read paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`. It uses the real local Gitea fixture seeded from `busybox:1.36`,
 but does not require any production credentials.
@@ -9,13 +10,14 @@ but does not require any production credentials.
 make release-readiness
 ```
 
-The command runs the OCI and Maven black-box clients, an OCI cache performance
-gate, and an isolated upgrade/rollback rehearsal. It then verifies object
-storage and PostgreSQL readiness failures, recovery after each dependency is
-restored, the administrator cache-maintenance view, and static resolver-token
-rotation. `scripts/release-readiness.sh` restores the configured resolver token
-and live adapter, Gitea, and Maven Proxy settings before it exits, including
-after a failed check. `make release-readiness-cleanup-test` exercises both the
+The command runs Docker/ORAS OCI, Maven/Gradle, Raw HTTP, and real Conan 2
+black-box clients, an OCI cache performance gate, and an isolated
+upgrade/rollback rehearsal. It then verifies object storage and PostgreSQL
+readiness failures, recovery after each dependency is restored, the
+administrator cache-maintenance view, and static resolver-token rotation.
+`scripts/release-readiness.sh` restores the configured resolver token and live
+adapter, Gitea, and Maven Proxy settings before it exits, including after a
+failed check. `make release-readiness-cleanup-test` exercises both the
 successful path and an injected post-rotation failure against a running
 Gateway. Record the command output,
 Git revision, operator, UTC start/end, and any deviation in the release record.
@@ -26,9 +28,12 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 - [ ] The local Gitea fixture was freshly seeded and its minimal package token
       was used by the Gateway; no Gitea administrator token is used for reads.
 - [ ] OCI pull passes with Docker and ORAS. `make release-readiness` requires
-      both clients; Podman compatibility is tracked separately from this MVP.
-      Maven first-read uses Maven and cached resolution after upstream outage
-      uses Gradle.
+      both clients; Podman compatibility is tracked separately. Maven first
+      read uses Maven and cached resolution after upstream outage uses Gradle.
+      Raw HTTP covers authenticated GET/HEAD/range, cache, anonymous denial,
+      repository denial, and upstream failure. Conan 2.21.0 covers the v2
+      handshake, revisioned recipe/package downloads, cache, checksum failure,
+      anonymous policy, and Proxy allowlist denial.
 - [ ] `/readyz` returns `503` while MinIO or PostgreSQL is stopped and `204`
       after each is restored.
 - [ ] Cache collection is administrator-only and a release run triggers one
@@ -49,6 +54,9 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
       into fresh isolated volumes, migrates it to the current checkout, repeats
       OCI and Maven/Gradle client reads, then starts the prior revision against
       those volumes and verifies the persisted OCI Group can still be read.
+      V2 migrations are additive: verify Raw/Conan Group policy, cache, and
+      audit rows remain present after upgrade; a rollback binary must not need
+      V2 rows to serve existing OCI Groups.
 - [ ] Back up PostgreSQL and MinIO with `make backup-drill`; rehearse restore
       using [the recovery runbook](recovery-runbook.md) before a production
       rollout.
@@ -85,8 +93,12 @@ flowchart LR
 
 ## Known Limitations
 
-- The MVP supports only OCI and Maven read paths. Publishing, replication,
-  deletion workflows, and other package formats are out of scope.
+- V2 supports OCI, Maven, Raw, and Conan 2 read paths. Publishing, replication,
+  deletion workflows, directory listing, and package formats beyond those four
+  are out of scope.
+- Raw uses HTTP GET/HEAD only, supports a single byte range, and does not
+  generate or reconcile checksum sidecars. Conan supports only Conan 2 v2 REST
+  reads; Conan 1, uploads, deletes, copies, and general search are unsupported.
 - Static-token rotation revokes issued Gateway bearer tokens only after the
   Gateway is restarted. OIDC token revocation is governed by token expiry and
   the identity provider; JWKS refresh is cached for five minutes.
@@ -105,7 +117,9 @@ flowchart LR
    Maven read against a known artifact.
 4. If metadata or cache state is implicated, follow the restore drill in
    [the recovery runbook](recovery-runbook.md), restoring PostgreSQL and MinIO
-   together from the same backup set.
+   together from the same backup set. Confirm an OCI/Maven read and, where V2
+   state was affected, a Raw GET and Conan 2 revision read before reopening
+   traffic.
 5. Rotate any potentially exposed resolver, administrator, Gitea, or object
    storage credentials and record the incident and final validation result.
 
@@ -123,5 +137,5 @@ then the Group switch to false and confirm unauthenticated reads receive the
 format challenge. Deploy the prior application only after that policy rollback.
 The schema migration is additive and forward-only: do not drop its columns.
 If a corrective schema change is required, ship a forward compensating migration
-and verify old OCI/Maven reads plus existing audit queries before restoring
-traffic.
+and verify old OCI/Maven reads, Raw/Conan policy denials, and existing audit
+queries before restoring traffic.

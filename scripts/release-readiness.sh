@@ -81,8 +81,10 @@ wait_ready() {
 }
 
 # Standard Docker and Maven/Gradle clients exercise the Gitea Hosted and
-# controlled external Proxy paths. The Maven fixture also verifies an
-# unavailable upstream can still serve already cached content.
+# controlled external Proxy paths. The Raw HTTP fixture verifies GET, HEAD,
+# range, cache, denial, and upstream failure behavior. The Conan 2 fixture
+# exercises the v2 REST handshake, revisioned recipe/package downloads,
+# anonymous policy, checksum, cache, and Proxy allowlist behavior.
 capture_gateway_configuration
 make oci-e2e
 for client in oras; do
@@ -91,6 +93,8 @@ done
 # OCI E2E already seeded Gitea. Calling the script directly prevents Make from
 # re-seeding it and rotating the fixture token between the two client checks.
 GATEWAY_E2E_SKIP_BUILD=1 ./scripts/maven-e2e.sh
+make raw-e2e
+make conan-e2e
 make performance-readiness
 make upgrade-readiness
 
@@ -155,4 +159,4 @@ if [[ "${RELEASE_READINESS_FAIL_AFTER_TOKEN_ROTATION:-}" == 1 ]]; then
   exit 1
 fi
 
-printf '%s\n' 'Release readiness passed: Gitea OCI, Maven/Gradle proxy cache, dependency recovery, cache maintenance view, and resolver-token rotation.'
+printf '%s\n' 'Release readiness passed: Docker/ORAS OCI, Maven/Gradle, Raw HTTP, Conan 2, dependency recovery, cache maintenance, upgrade/rollback, and resolver-token rotation.'
