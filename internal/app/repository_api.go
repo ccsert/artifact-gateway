@@ -103,7 +103,6 @@ func (r Resolver) RecordOCIAnonymousDenied(ctx context.Context, groupName, repos
 		return fmt.Errorf("record OCI anonymous denial: %w", err)
 	}
 	r.Metrics.recordAudit(repositoryName, repository.AuditAccessDenied)
-	r.Metrics.recordAnonymousRead()
 	r.Metrics.failed.Add(1)
 	return nil
 }

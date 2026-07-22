@@ -64,7 +64,7 @@ func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
 		{oci, http.MethodPost, "/v2/private/app/manifests/latest", http.StatusMethodNotAllowed, "oci"},
 		{maven, http.MethodGet, "/maven/private/com/example/app.pom", http.StatusUnauthorized, "maven"},
 		{maven, http.MethodPost, "/maven/private/com/example/app.pom", http.StatusMethodNotAllowed, "maven"},
-		{conan, http.MethodPost, "/conan/v2/private/conans/pkg/1.0/u/c/revisions", http.StatusMethodNotAllowed, "conan"},
+		{conan, http.MethodPost, "/conan/v2/private/conans/pkg/1.0/u/c/revisions", http.StatusNotFound, "conan"},
 	}
 	for _, tc := range requests {
 		response := httptest.NewRecorder()
@@ -73,11 +73,15 @@ func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
 			t.Fatalf("%s %s status=%d want=%d", tc.method, tc.path, response.Code, tc.status)
 		}
 		last := store.Audits[len(store.Audits)-1]
-		if last.Actor != "anonymous" || last.Outcome != repository.AuditAccessDenied || last.Format != tc.format || last.Operation != strings.ToLower(tc.method) || last.Status != tc.status || last.CacheDisposition != "bypass" {
+		outcome := repository.AuditAccessDenied
+		if tc.format == "conan" {
+			outcome = repository.AuditNotFound
+		}
+		if last.Actor != "anonymous" || last.Outcome != outcome || last.Format != tc.format || last.Operation != strings.ToLower(tc.method) || last.Status != tc.status || last.CacheDisposition != "bypass" {
 			t.Fatalf("%s %s audit=%#v", tc.method, tc.path, last)
 		}
 	}
-	if got, want := metrics.anonymousReads.Load(), uint64(len(requests)); got != want {
-		t.Fatalf("anonymous reads=%d want=%d", got, want)
+	if got := metrics.anonymousReads.Load(); got != 0 {
+		t.Fatalf("anonymous reads=%d want=0", got)
 	}
 }

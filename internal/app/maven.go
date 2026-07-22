@@ -520,7 +520,6 @@ func (h MavenHandler) auditAnonymousDenied(ctx context.Context, groupName, artif
 		return err
 	}
 	h.Metrics.recordAudit(groupName, repository.AuditAccessDenied)
-	h.Metrics.recordAnonymousRead()
 	h.Metrics.failed.Add(1)
 	return nil
 }

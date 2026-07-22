@@ -302,16 +302,8 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		if group, path, ok := conanReadGroupAndPath(r.URL.EscapedPath()); ok {
-			principal, authenticated := h.authenticate(r)
-			actor := principal.Actor
-			if !authenticated {
-				actor = "anonymous"
-				if h.Metrics != nil {
-					h.Metrics.recordAnonymousRead()
-				}
-			}
-			h.audit(withConanAuditStatus(r.Context(), http.StatusMethodNotAllowed), group, path, "", actor, repository.AuditAccessDenied)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, path, "", "anonymous", repository.AuditNotFound)
+			http.NotFound(w, r)
 			return
 		}
 	}
