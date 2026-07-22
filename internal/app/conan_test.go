@@ -435,6 +435,37 @@ func TestConanAuthenticationHandshakeIsConan2GETOnly(t *testing.T) {
 	}
 }
 
+func TestConanSuccessfulHandshakesWriteResolvedAudits(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
+	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "authenticated", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}})
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}}
+
+	for _, test := range []struct {
+		name, path, actor string
+	}{
+		{"anonymous ping", "/conan/public/v1/ping", "anonymous"},
+		{"authenticated ping", "/conan/authenticated/v1/ping", "conan"},
+		{"authenticated login", "/conan/authenticated/v2/users/authenticate", "conan"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			if test.actor != "anonymous" {
+				request.SetBasicAuth("conan", "resolver-secret")
+			}
+			response := httptest.NewRecorder()
+			h.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			audit := store.Audits[len(store.Audits)-1]
+			if audit.GroupName == "" || audit.Actor != test.actor || audit.Outcome != repository.AuditResolved || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "bypass" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
+	}
+}
+
 func TestConanRejectsStringRevisionTimeWithoutCaching(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}

@@ -206,7 +206,7 @@ func ConanReadEndpoint(method, path string) bool {
 		}
 	}
 	rest := parts[5:]
-	return matches(rest, "revisions") || matches(rest, "revisions", "*", "files") || matches(rest, "revisions", "*", "files", "*") || matches(rest, "revisions", "*", "packages", "*", "revisions") || matches(rest, "revisions", "*", "packages", "*", "revisions", "*", "files") || matches(rest, "revisions", "*", "packages", "*", "revisions", "*", "files", "*")
+	return matches(rest, "revisions") || matches(rest, "revisions", "*", "search") || matches(rest, "revisions", "*", "files") || matches(rest, "revisions", "*", "files", "*") || matches(rest, "revisions", "*", "packages", "*", "revisions") || matches(rest, "revisions", "*", "packages", "*", "latest") || matches(rest, "revisions", "*", "packages", "*", "revisions", "*", "files") || matches(rest, "revisions", "*", "packages", "*", "revisions", "*", "files", "*")
 }
 func matches(got []string, want ...string) bool {
 	if len(got) != len(want) {

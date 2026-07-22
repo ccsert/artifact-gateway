@@ -303,6 +303,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if group, ok := parseConanPing(r.Method, r.URL.Path); ok {
 		if h.anonymousConanAllowed(r.Context(), group) {
 			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
+			h.audit(withConanAuditStatus(r.Context(), http.StatusOK), group, "", "", "anonymous", repository.AuditResolved)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -315,6 +316,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if authenticated && h.Authenticator.CanReadMavenRepository(principal, group) {
 			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
+			h.audit(withConanAuditStatus(r.Context(), http.StatusOK), group, "", "", principal.Actor, repository.AuditResolved)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -353,6 +355,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		h.audit(withConanAuditStatus(r.Context(), http.StatusOK), group, "", "", principal.Actor, repository.AuditResolved)
 		_, _ = w.Write([]byte(`{"user_name":` + strconv.Quote(principal.Actor) + `}`))
 		return
 	}
