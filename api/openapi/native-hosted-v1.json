@@ -1,0 +1,1458 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Artifact Gateway Native Hosted Management API",
+    "version": "1.0.0",
+    "description": "Frozen contract for the planned Native Hosted Platform V3."
+  },
+  "servers": [
+    {
+      "url": "https://gateway.example.com/api/v2"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/repositories": {
+      "get": {
+        "operationId": "listRepositories",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createRepository",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRepository"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Repository"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getRepository",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Repository"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteRepository",
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Deletion"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}/members": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GroupId"
+        }
+      ],
+      "get": {
+        "operationId": "listGroupMembers",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MemberList"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceGroupMembers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberList"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MemberList"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-gateway-memberConstraints": [
+          "repositoryId_unique",
+          "position_contiguous_from_zero",
+          "repository_format_matches_group"
+        ]
+      }
+    },
+    "/repositories/{repositoryId}/grants": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listGrants",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GrantList"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceGrants",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantList"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GrantList"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/retention-policy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getRetentionPolicy",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RetentionPolicy"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceRetentionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RetentionPolicy"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/groups": {
+      "get": {
+        "operationId": "listGroups",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GroupList"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGroup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroup"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Group"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/groups/{groupId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GroupId"
+        }
+      ],
+      "get": {
+        "operationId": "getGroup",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Group"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceGroup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Group"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Group"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroup",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/raw/{repository}/content/{path}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "name": "path",
+          "in": "path",
+          "required": true,
+          "allowReserved": true,
+          "description": "Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readRawContent",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "x-gateway-catchAll": "path",
+      "x-gateway-visibility": "committed_only"
+    },
+    "/v2/{name}/manifests/{reference}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OCIName"
+        },
+        {
+          "$ref": "#/components/parameters/OCIReference"
+        }
+      ],
+      "get": {
+        "operationId": "readOCIManifest",
+        "security": [
+          {
+            "ociBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OCIManifest"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "x-gateway-visibility": "committed_only"
+    },
+    "/v2/{name}/blobs/{digest}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OCIName"
+        },
+        {
+          "$ref": "#/components/parameters/Digest"
+        }
+      ],
+      "get": {
+        "operationId": "readOCIBlob",
+        "security": [
+          {
+            "ociBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "x-gateway-visibility": "committed_only"
+    },
+    "/repository/maven/{repository}/{assetPath}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "name": "assetPath",
+          "in": "path",
+          "required": true,
+          "allowReserved": true,
+          "description": "Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readMavenAsset",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "x-gateway-catchAll": "assetPath",
+      "x-gateway-visibility": "committed_only"
+    },
+    "/repositories/{repositoryId}/publish-sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "createPublishSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePublishSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/PublishSession"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/publish-sessions/{sessionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "operationId": "getPublishSession",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PublishSession"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/publish-sessions/{sessionId}/objects/{objectName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        },
+        {
+          "name": "objectName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[^/]+$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "uploadPublishObject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Verified and staged"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/publish-sessions/{sessionId}:commit": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "operationId": "commitPublishSession",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Artifact"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/artifacts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listArtifacts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ArtifactList"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/artifacts/{artifactId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "name": "artifactId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getArtifact",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Artifact"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteArtifact",
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Deletion"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "protocolBasicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      },
+      "protocolBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Gateway resolver token"
+      },
+      "ociBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "OCI Registry token"
+      }
+    },
+    "parameters": {
+      "RepositoryId": {
+        "name": "repositoryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "GroupId": {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "SessionId": {
+        "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "RepositoryName": {
+        "name": "repository",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+        }
+      },
+      "OCIName": {
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "allowReserved": true,
+        "description": "OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "OCIReference": {
+        "name": "reference",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}|sha256:[a-f0-9]{64})$"
+        }
+      },
+      "Digest": {
+        "name": "digest",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "PageSize": {
+        "name": "pageSize",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
+      },
+      "PageToken": {
+        "name": "pageToken",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "Problem response",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "BinaryObject": {
+        "description": "Committed immutable protocol object",
+        "content": {
+          "application/octet-stream": {
+            "schema": {
+              "type": "string",
+              "contentEncoding": "binary"
+            }
+          }
+        }
+      },
+      "OCIManifest": {
+        "description": "Committed OCI manifest, returned with Docker-Content-Digest",
+        "headers": {
+          "Docker-Content-Digest": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          }
+        },
+        "content": {
+          "application/vnd.oci.image.manifest.v1+json": {
+            "schema": {
+              "type": "object"
+            }
+          },
+          "application/vnd.oci.image.index.v1+json": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "BasicUnauthorized": {
+        "description": "Raw or Maven Basic authentication required when anonymous read policy is disabled",
+        "headers": {
+          "WWW-Authenticate": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^Basic "
+            }
+          }
+        }
+      },
+      "OCIUnauthorized": {
+        "description": "OCI Bearer authentication challenge",
+        "headers": {
+          "WWW-Authenticate": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^Bearer "
+            }
+          }
+        }
+      },
+      "ProtocolNotFound": {
+        "description": "No committed object is addressable at this protocol path"
+      },
+      "Repository": {
+        "description": "Repository",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Repository"
+            }
+          }
+        }
+      },
+      "RepositoryList": {
+        "description": "Repository page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryPage"
+            }
+          }
+        }
+      },
+      "Group": {
+        "description": "Group",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Group"
+            }
+          }
+        }
+      },
+      "GroupList": {
+        "description": "Group page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GroupPage"
+            }
+          }
+        }
+      },
+      "MemberList": {
+        "description": "Members",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MemberList"
+            }
+          }
+        }
+      },
+      "GrantList": {
+        "description": "Grants",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GrantList"
+            }
+          }
+        }
+      },
+      "RetentionPolicy": {
+        "description": "Retention policy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RetentionPolicy"
+            }
+          }
+        }
+      },
+      "PublishSession": {
+        "description": "Publish session",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PublishSession"
+            }
+          }
+        }
+      },
+      "Artifact": {
+        "description": "Artifact",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Artifact"
+            }
+          }
+        }
+      },
+      "ArtifactList": {
+        "description": "Artifact page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ArtifactPage"
+            }
+          }
+        }
+      },
+      "Deletion": {
+        "description": "Accepted deletion",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Deletion"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Format": {
+        "type": "string",
+        "enum": [
+          "raw",
+          "oci",
+          "maven"
+        ]
+      },
+      "Repository": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "format",
+          "state",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deleting",
+              "deleted"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateRepository": {
+        "type": "object",
+        "required": [
+          "name",
+          "format"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          }
+        }
+      },
+      "Group": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "format",
+          "members",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "members": {
+            "$ref": "#/components/schemas/MemberList"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateGroup": {
+        "type": "object",
+        "required": [
+          "name",
+          "format",
+          "members"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "members": {
+            "$ref": "#/components/schemas/MemberList"
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "position"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MemberList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Member"
+        }
+      },
+      "Grant": {
+        "type": "object",
+        "required": [
+          "principal",
+          "scopes"
+        ],
+        "properties": {
+          "principal": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "repositories:read",
+                "repositories:write",
+                "repositories:admin"
+              ]
+            }
+          }
+        }
+      },
+      "GrantList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Grant"
+        }
+      },
+      "RetentionPolicy": {
+        "type": "object",
+        "required": [
+          "version",
+          "keepDays",
+          "minimumVersions"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "keepDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minimumVersions": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "CreatePublishSession": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CreateRawPublishSession"
+          },
+          {
+            "$ref": "#/components/schemas/CreateOCIPublishSession"
+          },
+          {
+            "$ref": "#/components/schemas/CreateMavenPublishSession"
+          }
+        ]
+      },
+      "CreateRawPublishSession": {
+        "type": "object",
+        "required": [
+          "format",
+          "coordinate",
+          "objects"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "raw"
+          },
+          "coordinate": {
+            "type": "string",
+            "description": "Canonical multi-segment Raw path."
+          },
+          "objects": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/DeclaredObject"
+            }
+          }
+        }
+      },
+      "CreateOCIPublishSession": {
+        "type": "object",
+        "required": [
+          "format",
+          "manifestDigest",
+          "objects"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "oci"
+          },
+          "manifestDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "tag": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$"
+          },
+          "objects": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/DeclaredObject"
+            }
+          }
+        }
+      },
+      "CreateMavenPublishSession": {
+        "type": "object",
+        "required": [
+          "format",
+          "coordinate",
+          "pomObject",
+          "objects"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "maven"
+          },
+          "coordinate": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+)?)?$"
+          },
+          "pomObject": {
+            "type": "string",
+            "pattern": "^[^/]+$"
+          },
+          "objects": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/DeclaredObject"
+            }
+          }
+        }
+      },
+      "DeclaredObject": {
+        "type": "object",
+        "required": [
+          "name",
+          "digest",
+          "size"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[^/]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "PublishSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "repositoryId",
+          "coordinate",
+          "state",
+          "expiresAt",
+          "objects"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "committed",
+              "aborted",
+              "expired"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeclaredObject"
+            }
+          }
+        }
+      },
+      "Artifact": {
+        "type": "object",
+        "required": [
+          "id",
+          "coordinate",
+          "digest",
+          "createdAt",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "deleted"
+            ]
+          }
+        }
+      },
+      "Deletion": {
+        "type": "object",
+        "required": [
+          "id",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "const": "pending"
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "message",
+          "requestId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_page_token",
+              "access_denied",
+              "not_found",
+              "version_conflict",
+              "idempotency_conflict",
+              "coordinate_exists",
+              "session_closed",
+              "digest_mismatch",
+              "retention_protected",
+              "internal_error"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "RepositoryPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Repository"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
+      "GroupPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
+      "ArtifactPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Artifact"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

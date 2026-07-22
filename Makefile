@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait
@@ -18,6 +18,12 @@ down:
 test:
 	@python3 -m unittest scripts/maven_proxy_fixture_test.py
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./...
+
+api-contract:
+	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./contracts
+
+api-change-check:
+	@./scripts/api-change-check.sh
 
 integration-test: integration-down
 	@docker compose -f compose.integration.yml up -d --wait postgres redis minio-ready
