@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -110,6 +111,107 @@ func TestConanAuditFieldsAndMetricsCoverCacheLifecycle(t *testing.T) {
 		if !strings.Contains(metricsResponse.Body.String(), line) {
 			t.Fatalf("missing metric %q in %s", line, metricsResponse.Body.String())
 		}
+	}
+	wantBytes := uint64(len(`{"revisions":[{"revision":"rrev","time":1}],"representation":""}`) * 2)
+	if got := metrics.conanResponseBytes.Load(); got != wantBytes {
+		t.Fatalf("Conan response bytes=%d, want exactly served bytes %d", got, wantBytes)
+	}
+}
+
+type conanPublicationCoordinator struct {
+	mu   sync.Mutex
+	held bool
+}
+
+func (c *conanPublicationCoordinator) Acquire(context.Context, string, time.Duration) (string, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.held {
+		return "", false, nil
+	}
+	c.held = true
+	return "owner", true, nil
+}
+func (c *conanPublicationCoordinator) Renew(context.Context, string, string, time.Duration) (bool, error) {
+	return true, nil
+}
+func (c *conanPublicationCoordinator) Release(context.Context, string, string) error {
+	c.mu.Lock()
+	c.held = false
+	c.mu.Unlock()
+	return nil
+}
+func (c *conanPublicationCoordinator) CircuitOpen(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (c *conanPublicationCoordinator) OpenCircuit(context.Context, string, time.Duration) error {
+	return nil
+}
+func (c *conanPublicationCoordinator) CloseCircuit(context.Context, string) error { return nil }
+
+type conanInvalidationGateStore struct {
+	OCIObjectStore
+	listStarted chan struct{}
+	allowList   chan struct{}
+	once        sync.Once
+}
+
+func (s *conanInvalidationGateStore) List(ctx context.Context, prefix string) ([]string, error) {
+	if prefix == "conan/index/" {
+		s.once.Do(func() { close(s.listStarted) })
+		select {
+		case <-s.allowList:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return s.OCIObjectStore.List(ctx, prefix)
+}
+
+func TestConanInvalidationSharesPublicationLockAcrossInstances(t *testing.T) {
+	base := NewMemoryOCIObjectStore()
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	seed := NewDefaultConanCache(base, nil)
+	key := seed.key("central", "pkg/1.0/user/stable/revisions", member, "application/json")
+	if err := seed.store(context.Background(), key, conanCacheEntry{body: []byte(`{"revisions":[]}`), contentType: "application/json", member: member.Name, endpoint: member.Endpoint, status: http.StatusOK}, "central", 0, time.Minute, "central", "pkg/1.0/user/stable/revisions", "application/json"); err != nil {
+		t.Fatal(err)
+	}
+	store := &conanInvalidationGateStore{OCIObjectStore: base, listStarted: make(chan struct{}), allowList: make(chan struct{})}
+	coordinator := &conanPublicationCoordinator{}
+	cacheA := NewDefaultConanCache(store, nil).WithCoordinator(coordinator)
+	cacheB := NewDefaultConanCache(store, nil).WithCoordinator(coordinator)
+
+	invalidated := make(chan struct{})
+	go func() {
+		cacheA.Invalidate(context.Background(), "central", "pkg/1.0/user/stable/revisions", member)
+		close(invalidated)
+	}()
+	select {
+	case <-store.listStarted:
+	case <-time.After(time.Second):
+		t.Fatal("invalidation did not begin its index scan")
+	}
+
+	published := make(chan error, 1)
+	go func() {
+		published <- cacheB.store(context.Background(), cacheB.key("central", "pkg/1.0/user/stable/revisions", member, "text/plain"), conanCacheEntry{body: []byte("fresh"), contentType: "text/plain", member: member.Name, endpoint: member.Endpoint, status: http.StatusOK}, "central", 0, time.Minute, "central", "pkg/1.0/user/stable/revisions", "text/plain")
+	}()
+	select {
+	case err := <-published:
+		t.Fatalf("publication escaped concurrent invalidation: %v", err)
+	case <-time.After(75 * time.Millisecond):
+	}
+	close(store.allowList)
+	select {
+	case <-invalidated:
+	case <-time.After(time.Second):
+		t.Fatal("invalidation did not complete")
+	}
+	if err := <-published; err != nil {
+		t.Fatalf("publish after invalidation: %v", err)
+	}
+	if _, ok := cacheB.load(context.Background(), cacheB.key("central", "pkg/1.0/user/stable/revisions", member, "text/plain")); !ok {
+		t.Fatal("post-invalidation publication was not readable")
 	}
 }
 

@@ -284,12 +284,6 @@ func (m *Metrics) recordConanAudit(outcome repository.AuditOutcome, bytes int64,
 func (m *Metrics) recordConanCacheHit()         { m.conanCacheHit.Add(1) }
 func (m *Metrics) recordConanCacheMiss()        { m.conanCacheMiss.Add(1) }
 func (m *Metrics) recordConanNegativeCacheHit() { m.conanNegativeHit.Add(1) }
-func (m *Metrics) recordConanResponseBytes(bytes int64) {
-	if bytes > 0 {
-		m.conanResponseBytes.Add(uint64(bytes))
-	}
-}
-
 func (m *Metrics) recordCache(repositoryName string, hit bool) {
 	m.updateRepository(repositoryName, func(metric *RepositoryMetrics) {
 		if hit {

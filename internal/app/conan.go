@@ -161,22 +161,25 @@ func (c *ConanCache) key(group, path string, member repository.Member, represent
 	return "conan/index/" + hex.EncodeToString(sum[:]) + ".json"
 }
 func (c *ConanCache) Invalidate(ctx context.Context, group, path string, member repository.Member) {
-	// Remove indexes written before representation was recorded in their value.
-	_ = c.objectStore.Delete(ctx, c.key(group, path, member))
-	keys, err := c.objectStore.List(ctx, "conan/index/")
-	if err != nil {
-		return
-	}
-	for _, key := range keys {
-		encoded, err := c.objectStore.Get(ctx, key)
+	_ = c.withPublicationLock(ctx, func(workCtx context.Context) error {
+		// Remove indexes written before representation was recorded in their value.
+		_ = c.objectStore.Delete(workCtx, c.key(group, path, member))
+		keys, err := c.objectStore.List(workCtx, "conan/index/")
 		if err != nil {
-			continue
+			return err
 		}
-		var index conanCacheIndex
-		if json.Unmarshal(encoded, &index) == nil && index.Group == group && index.Path == path && index.Member == member.Name && index.Endpoint == member.Endpoint {
-			_ = c.objectStore.Delete(ctx, key)
+		for _, key := range keys {
+			encoded, err := c.objectStore.Get(workCtx, key)
+			if err != nil {
+				continue
+			}
+			var index conanCacheIndex
+			if json.Unmarshal(encoded, &index) == nil && index.Group == group && index.Path == path && index.Member == member.Name && index.Endpoint == member.Endpoint {
+				_ = c.objectStore.Delete(workCtx, key)
+			}
 		}
-	}
+		return nil
+	})
 }
 func (c *ConanCache) CollectGarbage(ctx context.Context) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error { return c.collectGarbage(workCtx) })
@@ -375,9 +378,6 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		n, _ := w.Write(content.body)
 		servedBytes = int64(n)
-		if h.Metrics != nil {
-			h.Metrics.recordConanResponseBytes(servedBytes)
-		}
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), content.cacheDisposition), content.status), servedBytes), group, path, content.member, p.Actor, repository.AuditResolved)
 }
@@ -586,7 +586,7 @@ func (h ConanHandler) audit(ctx context.Context, group, path, member, actor stri
 	bytes := state.bytes
 	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: path, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: "conan", Resource: path, Representation: state.representation, MemberType: string(selected.Type), UpstreamHost: upstreamHost, Operation: state.method, Status: status, CacheDisposition: state.cacheDisposition, Bytes: bytes, RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx)})
 	if h.Metrics != nil {
-		h.Metrics.recordConanAudit(outcome, 0, state.checksumFailure)
+		h.Metrics.recordConanAudit(outcome, state.bytes, state.checksumFailure)
 	}
 }
 
