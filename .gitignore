@@ -1,6 +1,11 @@
 .env
 .gitea-fixture/
 .DS_Store
+.agent_context/
+.multica/
+*.log
+.release-validation.env
+scripts/__pycache__/
 console/node_modules/
 console/dist/
 console/test-results/
