@@ -78,22 +78,25 @@ range=$(curl --silent --show-error -H 'Range: bytes=4-10' "$gateway_url/raw/$gro
 expect_status 401 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$gateway_url/raw/$private_group/release/app.txt")" 'Raw anonymous denial'
 expect_status 400 "$(authenticated_status "$gateway_url/raw/$group/release/%2Funsafe")" 'Raw encoded slash rejection'
 expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw first missing request'
-expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw negative cache request'
-expect_status 403 "$(authenticated_status "$gateway_url/raw/$denied_group/release/app.txt")" 'Raw Proxy allowlist denial'
 
-# The first response was cached by the running Gateway. Removing the upstream
-# proves the next read is a cache hit rather than an accidental source retry.
+# Removing the source after the first 404 proves the next 404 is a negative
+# cache hit. The same outage also proves the earlier successful read is served
+# from the positive cache rather than retried upstream.
 kill "$fixture_pid"
 wait "$fixture_pid" 2>/dev/null || true
 fixture_pid=""
+expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw negative cache request after upstream shutdown'
 response=$(curl --silent --show-error "$gateway_url/raw/$group/release/app.txt")
 [[ "$response" == 'raw release artifact' ]] || { printf 'Raw cached GET returned %q after upstream shutdown\n' "$response" >&2; exit 1; }
+expect_status 403 "$(authenticated_status "$gateway_url/raw/$denied_group/release/app.txt")" 'Raw Proxy allowlist denial'
 
 audits=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v1/audits?group=$group")
 grep -Eq '"Format":"raw"' <<<"$audits" || { printf '%s\n' 'Raw audit format was not recorded.' >&2; exit 1; }
 grep -Eq '"Actor":"anonymous"' <<<"$audits" || { printf '%s\n' 'Raw anonymous audit actor was not recorded.' >&2; exit 1; }
 grep -Eq '"CacheDisposition":"hit"' <<<"$audits" || { printf '%s\n' 'Raw cache-hit audit was not recorded.' >&2; exit 1; }
+grep -Eq '"Outcome":"not_found".*"CacheDisposition":"hit"' <<<"$audits" || { printf '%s\n' 'Raw negative-cache audit hit was not recorded.' >&2; exit 1; }
 metrics=$(curl --silent --show-error --fail "$gateway_url/metrics")
 grep -Eq 'artifact_gateway_raw_cache_requests_total\{outcome="hit"\} [1-9]' <<<"$metrics" || { printf '%s\n' 'Raw cache-hit metric did not increment.' >&2; exit 1; }
+grep -Eq 'artifact_gateway_raw_negative_cache_hits_total [1-9]' <<<"$metrics" || { printf '%s\n' 'Raw negative-cache metric did not increment.' >&2; exit 1; }
 
 printf '%s\n' 'Raw HTTP E2E passed: live Gateway GET/HEAD/range, anonymous policy, canonical rejection, negative cache, allowlist denial, cache recovery, audit, and metrics.'
