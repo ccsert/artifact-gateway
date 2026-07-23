@@ -56,6 +56,7 @@ type HostedRepositoryStore interface {
 // the object store; staging rows never participate in protocol reads.
 type NativeMavenStore interface {
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
+	CreateMavenPublishSessionIdempotently(context.Context, MavenPublishSession, string, string, string, string) (MavenPublishSession, bool, error)
 	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
 	MarkMavenPublishObject(context.Context, string, string, string) error
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
@@ -187,6 +188,7 @@ type MemoryStore struct {
 	mavenUploads       map[string]map[string]string
 	mavenAssets        map[string]MavenAsset
 	mavenArtifacts     map[string]MavenArtifact
+	mavenSessionKeys   map[string]idempotencyRecord
 }
 
 type idempotencyRecord struct {
@@ -195,7 +197,7 @@ type idempotencyRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -204,6 +206,21 @@ func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session Maven
 	s.mavenSessions[session.ID] = session
 	s.mavenUploads[session.ID] = map[string]string{}
 	return session, nil
+}
+func (s *MemoryStore) CreateMavenPublishSessionIdempotently(ctx context.Context, session MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordKey := actor + "\x00" + target + "\x00" + key
+	if record, ok := s.mavenSessionKeys[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.payload != payload {
+			return MavenPublishSession{}, false, ErrIdempotencyConflict
+		}
+		return s.mavenSessions[record.repositoryID], true, nil
+	}
+	s.mavenSessions[session.ID] = session
+	s.mavenUploads[session.ID] = map[string]string{}
+	s.mavenSessionKeys[recordKey] = idempotencyRecord{payload: payload, repositoryID: session.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return session, false, nil
 }
 func (s *MemoryStore) GetMavenPublishSession(_ context.Context, id string) (MavenPublishSession, error) {
 	s.mu.RLock()

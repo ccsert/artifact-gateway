@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -33,6 +34,7 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(pom))}}})
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	authorize(request, "admin-secret")
+	request.Header.Set("Idempotency-Key", "native-maven-invisible")
 	created := httptest.NewRecorder()
 	h.ServeHTTP(created, request)
 	if created.Code != http.StatusCreated {
@@ -108,4 +110,56 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 		t.Fatalf("metadata=%d %s", out.Code, out.Body.String())
 	}
 	_ = repo
+}
+
+func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "idempotent", Format: repository.FormatMaven})
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	object := []byte("pom")
+	sum := sha256.Sum256(object)
+	body := nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(object))}}}
+	encoded, _ := json.Marshal(body)
+	create := func(value []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewReader(value))
+		authorize(r, "admin-secret")
+		r.Header.Set("Idempotency-Key", "retry-key")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	first, replay := create(encoded), create(encoded)
+	if first.Code != http.StatusCreated || replay.Code != http.StatusCreated || first.Body.String() != replay.Body.String() {
+		t.Fatalf("replay first=%d %q replay=%d %q", first.Code, first.Body.String(), replay.Code, replay.Body.String())
+	}
+	body.Coordinate = "org.example:widget:2.0.0"
+	different, _ := json.Marshal(body)
+	if conflict := create(different); conflict.Code != http.StatusConflict {
+		t.Fatalf("conflict=%d %s", conflict.Code, conflict.Body.String())
+	}
+}
+
+func TestNativeMavenAllowsAnonymousReadsOnlyWhenNoGrantPolicyExists(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "anonymous", Format: repository.FormatMaven})
+	objects := NewMemoryOCIObjectStore()
+	asset := []byte("jar")
+	sum := sha256.Sum256(asset)
+	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
+	_ = objects.Put(context.Background(), key, asset)
+	store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "session", RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)})
+	_ = store.MarkMavenPublishObject(context.Background(), "session", "widget-1.0.0.jar", key)
+	_, _ = store.CommitMavenPublishSession(context.Background(), "session", []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}})
+	open := newNativeMavenHandler(store, objects, Authenticator{})
+	w := httptest.NewRecorder()
+	open.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("anonymous read=%d", w.Code)
+	}
+	closed := newNativeMavenHandler(store, objects, Authenticator{RepositoryReaders: map[string][]string{}})
+	w = httptest.NewRecorder()
+	closed.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
+	if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") == "" {
+		t.Fatalf("grant policy read=%d headers=%v", w.Code, w.Header())
+	}
 }

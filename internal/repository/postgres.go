@@ -164,6 +164,39 @@ func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPu
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects)
 	return v, err
 }
+func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Context, v MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenPublishSession{}, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var existingID, existingPayload string
+	err = tx.QueryRowContext(ctx, `SELECT session_id::text,payload_hash FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at > now() FOR UPDATE`, actor, target, key).Scan(&existingID, &existingPayload)
+	if err == nil {
+		if existingPayload != payload {
+			return MavenPublishSession{}, false, ErrIdempotencyConflict
+		}
+		if err := tx.Commit(); err != nil {
+			return MavenPublishSession{}, false, err
+		}
+		existing, err := s.GetMavenPublishSession(ctx, existingID)
+		return existing, true, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return MavenPublishSession{}, false, err
+	}
+	objects, _ := json.Marshal(v.Objects)
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
+		return MavenPublishSession{}, false, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours')`, actor, target, key, payload, v.ID); err != nil {
+		return MavenPublishSession{}, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return MavenPublishSession{}, false, err
+	}
+	return v, false, nil
+}
 func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (MavenPublishSession, error) {
 	var v MavenPublishSession
 	var objects []byte

@@ -86,7 +86,8 @@ func (h nativeMavenHandler) admin(r *http.Request) (Principal, bool) {
 	return p, ok && p.Admin
 }
 func (h nativeMavenHandler) create(w http.ResponseWriter, r *http.Request, repoID string) {
-	if _, ok := h.admin(r); !ok {
+	principal, ok := h.admin(r)
+	if !ok {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
 		return
 	}
@@ -112,8 +113,20 @@ func (h nativeMavenHandler) create(w http.ResponseWriter, r *http.Request, repoI
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pomObject must be declared")
 		return
 	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" || len(key) > 128 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
+		return
+	}
+	payload, _ := json.Marshal(body)
+	digest := sha256.Sum256(payload)
 	s := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: body.Coordinate, PomObject: body.PomObject, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)}
-	if _, err := h.store.CreateMavenPublishSession(r.Context(), s); err != nil {
+	s, _, err = h.store.CreateMavenPublishSessionIdempotently(r.Context(), s, principal.Actor, "repositories/"+repo.ID+"/publish-sessions", key, hex.EncodeToString(digest[:]))
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
+		return
+	}
+	if err != nil {
 		writeHostedProblem(w, 500, "internal_error", "create publish session failed")
 		return
 	}
@@ -176,7 +189,13 @@ func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, n
 		return
 	}
 	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
-	if err := h.objects.Put(r.Context(), key, data); err != nil || h.store.MarkMavenPublishObject(r.Context(), id, name, key) != nil {
+	// Persist the staging intent before object bytes. A failed write is then
+	// invisible to readers and remains discoverable for recovery/collection.
+	if err := h.store.MarkMavenPublishObject(r.Context(), id, name, key); err != nil {
+		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
+		return
+	}
+	if err := h.objects.Put(r.Context(), key, data); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
 		return
 	}
@@ -195,6 +214,12 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 	base := mavenCoordinatePath(s.Coordinate)
 	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
 	for _, o := range s.Objects {
+		key := "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:")
+		info, statErr := h.objects.Stat(r.Context(), key)
+		if statErr != nil || info.Size != o.Size || info.Digest != o.Digest {
+			writeHostedProblem(w, 422, "digest_mismatch", "staged Maven object is unavailable or has changed")
+			return
+		}
 		assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name, ObjectKey: "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:"), Digest: o.Digest, Size: o.Size})
 		body, err := h.objects.Get(r.Context(), "native/maven/sha256/"+strings.TrimPrefix(o.Digest, "sha256:"))
 		if err != nil {
@@ -232,9 +257,15 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, ok := h.protocolPrincipal(r)
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
+		// A nil reader policy is the explicit default-open repository policy.
+		// Once grants are configured, anonymous clients receive a Basic challenge.
+		if h.authenticator.RepositoryReaders == nil {
+			principal = Principal{Actor: "anonymous"}
+		} else {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 	user := principal.Actor
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repository/maven/"), "/")
@@ -295,6 +326,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.authenticator.CanReadMavenRepository(principal, repo.Name) {
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
@@ -302,7 +334,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	version, artifact := path[len(path)-2], path[len(path)-3]
 	group := strings.Join(path[:len(path)-3], ".")
 	name := path[len(path)-1]
-	if group == "" || artifact == "" || version == "" || strings.HasSuffix(name, "maven-metadata.xml") {
+	if group == "" || artifact == "" || version == "" {
 		http.Error(w, "invalid Maven asset path", 400)
 		return
 	}
@@ -337,6 +369,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "commit Maven asset", 422)
 		return
 	}
+	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(path, "/"), Operation: "put", Status: http.StatusCreated, Bytes: int64(len(body))})
 	w.WriteHeader(http.StatusCreated)
 }
 
