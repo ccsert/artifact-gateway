@@ -62,6 +62,8 @@ type NativeMavenStore interface {
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
+	DeleteClaimedMavenObjectIntent(context.Context, string) error
 }
 
 type MavenDeclaredObject struct {
@@ -81,6 +83,7 @@ type MavenArtifact struct {
 	ID, RepositoryID, Coordinate, Digest, State string
 	CreatedAt                                   time.Time
 }
+type MavenObjectIntent struct{ ObjectKey string }
 
 type MemberType string
 
@@ -189,6 +192,7 @@ type MemoryStore struct {
 	mavenAssets        map[string]MavenAsset
 	mavenArtifacts     map[string]MavenArtifact
 	mavenSessionKeys   map[string]idempotencyRecord
+	mavenObjectIntents map[string]time.Time
 }
 
 type idempotencyRecord struct {
@@ -197,7 +201,7 @@ type idempotencyRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]time.Time)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -293,6 +297,13 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 		}
 	}
 	return out, nil
+}
+func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
+	return nil, nil
+}
+func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key string) error {
+	delete(s.mavenObjectIntents, key)
+	return nil
 }
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {

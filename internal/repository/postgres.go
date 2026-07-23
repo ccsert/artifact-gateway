@@ -345,6 +345,33 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	}
 	return out, rows.Err()
 }
+func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
+	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT object_key FROM native_maven_object_intents i WHERE i.created_at <= $1 AND i.claimed_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) ORDER BY i.created_at FOR UPDATE SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MavenObjectIntent{}
+	for rows.Next() {
+		var v MavenObjectIntent
+		if err := rows.Scan(&v.ObjectKey); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (s *PostgresStore) DeleteClaimedMavenObjectIntent(ctx context.Context, key string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM native_maven_object_intents i WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 
 func (s *PostgresStore) CreateGroup(ctx context.Context, group Group) (Group, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
