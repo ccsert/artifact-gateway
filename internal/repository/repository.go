@@ -57,7 +57,9 @@ type HostedRepositoryStore interface {
 type NativeMavenStore interface {
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
 	FindOpenMavenPublishSession(context.Context, string, string) (MavenPublishSession, error)
+	FindMavenPublishSession(context.Context, string, string) (MavenPublishSession, error)
 	AppendMavenPublishObject(context.Context, string, MavenDeclaredObject) error
+	SetMavenPublishPom(context.Context, string, string) error
 	CreateMavenPublishSessionIdempotently(context.Context, MavenPublishSession, string, string, string, string) (MavenPublishSession, bool, error)
 	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
 	MarkMavenPublishObject(context.Context, string, string, string) error
@@ -247,6 +249,21 @@ func (s *MemoryStore) FindOpenMavenPublishSession(_ context.Context, repoID, coo
 	}
 	return MavenPublishSession{}, ErrNotFound
 }
+func (s *MemoryStore) FindMavenPublishSession(_ context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.State == "open" {
+			return v, nil
+		}
+	}
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate {
+			return v, nil
+		}
+	}
+	return MavenPublishSession{}, ErrNotFound
+}
 func (s *MemoryStore) AppendMavenPublishObject(_ context.Context, id string, object MavenDeclaredObject) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -256,10 +273,24 @@ func (s *MemoryStore) AppendMavenPublishObject(_ context.Context, id string, obj
 	}
 	for _, o := range v.Objects {
 		if o.Name == object.Name {
+			if o.Digest != object.Digest || o.Size != object.Size {
+				return ErrNameExists
+			}
 			return nil
 		}
 	}
 	v.Objects = append(v.Objects, object)
+	s.mavenSessions[id] = v
+	return nil
+}
+func (s *MemoryStore) SetMavenPublishPom(_ context.Context, id, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.mavenSessions[id]
+	if !ok || v.State != "open" {
+		return ErrNotFound
+	}
+	v.PomObject = name
 	s.mavenSessions[id] = v
 	return nil
 }
@@ -287,6 +318,11 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 			return MavenArtifact{}, ErrDisabled
 		}
 	}
+	for _, existing := range s.mavenArtifacts {
+		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+			return MavenArtifact{}, ErrNameExists
+		}
+	}
 	for _, a := range assets {
 		k := a.RepositoryID + "\x00" + a.Path
 		if _, exists := s.mavenAssets[k]; exists {
@@ -295,12 +331,6 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 		s.mavenAssets[k] = a
 	}
 	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
-	for _, existing := range s.mavenArtifacts {
-		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
-			artifact = existing
-			break
-		}
-	}
 	s.mavenArtifacts[id] = artifact
 	session.State = "committed"
 	s.mavenSessions[id] = session

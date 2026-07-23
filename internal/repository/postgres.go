@@ -242,6 +242,18 @@ func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID,
 	}
 	return v, json.Unmarshal(raw, &v.Objects)
 }
+func (s *PostgresStore) FindMavenPublishSession(ctx context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	var v MavenPublishSession
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 ORDER BY CASE state WHEN 'open' THEN 0 ELSE 1 END, expires_at DESC LIMIT 1`, repoID, coordinate).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	if err != nil {
+		return v, err
+	}
+	return v, json.Unmarshal(raw, &v.Objects)
+}
 func (s *PostgresStore) AppendMavenPublishObject(ctx context.Context, id string, object MavenDeclaredObject) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -261,6 +273,9 @@ func (s *PostgresStore) AppendMavenPublishObject(ctx context.Context, id string,
 	}
 	for _, o := range objects {
 		if o.Name == object.Name {
+			if o.Digest != object.Digest || o.Size != object.Size {
+				return ErrNameExists
+			}
 			return tx.Commit()
 		}
 	}
@@ -270,6 +285,16 @@ func (s *PostgresStore) AppendMavenPublishObject(ctx context.Context, id string,
 		return err
 	}
 	return tx.Commit()
+}
+func (s *PostgresStore) SetMavenPublishPom(ctx context.Context, id, name string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET pom_object=$2 WHERE id::text=$1 AND state='open'`, id, name)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, key string) error {
 	var raw []byte
@@ -350,7 +375,10 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 		}
 	}
 	a := MavenArtifact{ID: id, RepositoryID: v.RepositoryID, Coordinate: v.Coordinate, Digest: v.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
-	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') ON CONFLICT (repository_id,coordinate) DO UPDATE SET coordinate=EXCLUDED.coordinate RETURNING id::text, digest, state, created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.ID, &a.Digest, &a.State, &a.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') ON CONFLICT (repository_id,coordinate) DO NOTHING RETURNING id::text, digest, state, created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.ID, &a.Digest, &a.State, &a.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNameExists
+	}
 	if err != nil {
 		return MavenArtifact{}, err
 	}

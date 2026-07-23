@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
@@ -36,8 +38,16 @@ type nativeMavenSessionRequest struct {
 	Objects                       []repository.MavenDeclaredObject
 }
 
+type nativeMavenCoordinateCommitRequest struct {
+	ExpectedAssetNames []string `json:"expectedAssetNames"`
+}
+
 func (h nativeMavenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/repository/maven/") {
+		if repositoryName, coordinate, ok := mavenCoordinateCommitPath(r.URL.Path); ok && r.Method == http.MethodPost {
+			h.coordinateCommit(w, r, repositoryName, coordinate)
+			return
+		}
 		h.read(w, r)
 		return
 	}
@@ -211,40 +221,44 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 		writeHostedProblem(w, 409, "session_closed", "publish session is closed")
 		return
 	}
-	base := mavenCoordinatePath(s.Coordinate)
-	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
-	for _, o := range s.Objects {
-		key := "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:")
-		info, statErr := h.objects.Stat(r.Context(), key)
-		if statErr != nil || info.Size != o.Size || info.Digest != o.Digest {
-			writeHostedProblem(w, 422, "digest_mismatch", "staged Maven object is unavailable or has changed")
-			return
-		}
-		assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name, ObjectKey: "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:"), Digest: o.Digest, Size: o.Size})
-		body, err := h.objects.Get(r.Context(), "native/maven/sha256/"+strings.TrimPrefix(o.Digest, "sha256:"))
-		if err != nil {
-			writeHostedProblem(w, 500, "internal_error", "staged Maven object is unavailable")
-			return
-		}
-		for _, checksum := range generatedMavenChecksums(body) {
-			key := "native/maven/sha256/" + checksum.digest
-			if err := h.objects.Put(r.Context(), key, []byte(checksum.body)); err != nil {
-				writeHostedProblem(w, 500, "internal_error", "generate Maven checksum failed")
-				return
-			}
-			assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name + checksum.extension, ObjectKey: key, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
-		}
-	}
-	a, err := h.store.CommitMavenPublishSession(r.Context(), id, assets)
+	a, err := h.promote(r.Context(), s)
 	if errors.Is(err, repository.ErrNameExists) {
 		writeHostedProblem(w, 409, "coordinate_exists", "Maven coordinate already exists")
 		return
 	}
 	if err != nil {
-		writeHostedProblem(w, 422, "session_closed", "all declared objects must be uploaded before commit")
+		writeHostedProblem(w, 422, "invalid_publish_session", err.Error())
 		return
 	}
 	writeNativeMavenJSON(w, 200, a)
+}
+
+func (h nativeMavenHandler) promote(ctx context.Context, s repository.MavenPublishSession) (repository.MavenArtifact, error) {
+	if err := h.validatePOM(ctx, s); err != nil {
+		return repository.MavenArtifact{}, err
+	}
+	base := mavenCoordinatePath(s.Coordinate)
+	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
+	for _, o := range s.Objects {
+		key := "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:")
+		info, statErr := h.objects.Stat(ctx, key)
+		if statErr != nil || info.Size != o.Size || info.Digest != o.Digest {
+			return repository.MavenArtifact{}, errors.New("staged Maven object is unavailable or has changed")
+		}
+		assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name, ObjectKey: "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:"), Digest: o.Digest, Size: o.Size})
+		body, err := h.objects.Get(ctx, "native/maven/sha256/"+strings.TrimPrefix(o.Digest, "sha256:"))
+		if err != nil {
+			return repository.MavenArtifact{}, errors.New("staged Maven object is unavailable")
+		}
+		for _, checksum := range generatedMavenChecksums(body) {
+			key := "native/maven/sha256/" + checksum.digest
+			if err := h.objects.Put(ctx, key, []byte(checksum.body)); err != nil {
+				return repository.MavenArtifact{}, err
+			}
+			assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name + checksum.extension, ObjectKey: key, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
+		}
+	}
+	return h.store.CommitMavenPublishSession(ctx, s.ID, assets)
 }
 func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
@@ -299,9 +313,118 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
 }
 
-// deploy accepts Maven's ordinary HTTP PUT layout. Each asset is independently
-// committed, while the shared coordinate becomes visible only after its bytes
-// and generated checksum sidecars have been validated.
+func mavenCoordinateCommitPath(path string) (repositoryName, coordinate string, ok bool) {
+	parts := strings.Split(strings.TrimPrefix(path, "/repository/maven/"), "/")
+	if len(parts) != 3 || parts[0] == "" || parts[1] != "coordinates" || !strings.HasSuffix(parts[2], ":commit") {
+		return "", "", false
+	}
+	coordinate = strings.TrimSuffix(parts[2], ":commit")
+	return parts[0], coordinate, validMavenCoordinate(coordinate)
+}
+
+func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Request, repositoryName, coordinate string) {
+	principal, ok := h.protocolPrincipal(r)
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("Idempotency-Key")) == "" {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required")
+		return
+	}
+	repo, err := h.store.GetHostedRepositoryByName(r.Context(), repositoryName)
+	if err != nil || repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
+		http.NotFound(w, r)
+		return
+	}
+	if !h.authenticator.CanWriteMavenRepository(principal, repo.Name) {
+		http.Error(w, "repository write permission required", http.StatusForbidden)
+		return
+	}
+	var body nativeMavenCoordinateCommitRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&body) != nil || !validExpectedMavenAssetNames(body.ExpectedAssetNames) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "expectedAssetNames must be a non-empty unique set of filenames")
+		return
+	}
+	s, err := h.store.FindMavenPublishSession(r.Context(), repo.ID, coordinate)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven coordinate has no staged publish session")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Maven publish session failed")
+		return
+	}
+	if !sameMavenAssetNames(body.ExpectedAssetNames, s.Objects) {
+		writeHostedProblem(w, http.StatusConflict, "expected_assets_conflict", "expectedAssetNames do not match staged Maven assets")
+		return
+	}
+	if s.State == "committed" {
+		artifacts, listErr := h.store.ListMavenArtifacts(r.Context(), repo.ID)
+		if listErr != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load committed Maven coordinate failed")
+			return
+		}
+		for _, artifact := range artifacts {
+			if artifact.Coordinate == coordinate {
+				writeNativeMavenJSON(w, http.StatusOK, artifact)
+				return
+			}
+		}
+		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "Maven coordinate is already committed")
+		return
+	}
+	if s.State != "open" || time.Now().After(s.ExpiresAt) {
+		writeHostedProblem(w, http.StatusConflict, "session_closed", "Maven publish session is closed")
+		return
+	}
+	artifact, err := h.promote(r.Context(), s)
+	if errors.Is(err, repository.ErrNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "Maven coordinate already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publish_session", err.Error())
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, artifact)
+}
+
+func validExpectedMavenAssetNames(names []string) bool {
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if name == "" || strings.Contains(name, "/") {
+			return false
+		}
+		if _, exists := seen[name]; exists {
+			return false
+		}
+		seen[name] = struct{}{}
+	}
+	return len(names) > 0
+}
+
+func sameMavenAssetNames(expected []string, objects []repository.MavenDeclaredObject) bool {
+	if len(expected) != len(objects) {
+		return false
+	}
+	actual := make(map[string]struct{}, len(objects))
+	for _, object := range objects {
+		actual[object.Name] = struct{}{}
+	}
+	for _, name := range expected {
+		if _, exists := actual[name]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+// deploy accepts Maven's ordinary HTTP PUT layout and only stages server-derived
+// object facts. A coordinate is visible exclusively through coordinateCommit.
 func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.protocolPrincipal(r)
 	if !ok {
@@ -347,54 +470,79 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}
 	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate)
 	if errors.Is(err, repository.ErrNotFound) {
-		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, PomObject: name, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
+		pomObject := ""
+		if strings.HasSuffix(name, ".pom") {
+			pomObject = name
+		}
+		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
 		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
 	} else if err == nil {
 		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
 	}
 	if err != nil {
+		if errors.Is(err, repository.ErrNameExists) {
+			writeHostedProblem(w, http.StatusConflict, "asset_conflict", "Maven asset was already staged with different bytes")
+			return
+		}
 		http.Error(w, "create Maven publish session", 500)
 		return
+	}
+	if strings.HasSuffix(name, ".pom") {
+		if err = h.store.SetMavenPublishPom(r.Context(), s.ID, name); err != nil {
+			http.Error(w, "stage Maven POM", http.StatusInternalServerError)
+			return
+		}
 	}
 	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
 	if err = h.objects.Put(r.Context(), key, body); err != nil || h.store.MarkMavenPublishObject(r.Context(), s.ID, name, key) != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
-	if r.Header.Get("X-Gateway-Publish-Complete") != "true" {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	s, err = h.store.GetMavenPublishSession(r.Context(), s.ID)
-	if err != nil {
-		http.Error(w, "load Maven publish session", 500)
-		return
-	}
-	base := mavenCoordinatePath(s.Coordinate)
-	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
-	for _, object := range s.Objects {
-		objectKey := "native/maven/sha256/" + strings.TrimPrefix(object.Digest, "sha256:")
-		objectBody, getErr := h.objects.Get(r.Context(), objectKey)
-		if getErr != nil {
-			http.Error(w, "staged Maven object unavailable", 422)
-			return
-		}
-		assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + object.Name, ObjectKey: objectKey, Digest: object.Digest, Size: object.Size})
-		for _, c := range generatedMavenChecksums(objectBody) {
-			ck := "native/maven/sha256/" + c.digest
-			if err = h.objects.Put(r.Context(), ck, []byte(c.body)); err != nil {
-				http.Error(w, "generate Maven checksum", 500)
-				return
-			}
-			assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + object.Name + c.extension, ObjectKey: ck, Digest: "sha256:" + c.digest, Size: int64(len(c.body))})
-		}
-	}
-	if _, err = h.store.CommitMavenPublishSession(r.Context(), s.ID, assets); err != nil && !errors.Is(err, repository.ErrNameExists) {
-		http.Error(w, "commit Maven asset", 422)
-		return
-	}
-	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(path, "/"), Operation: "put", Status: http.StatusCreated, Bytes: int64(len(body))})
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenPublishSession) error {
+	parts := strings.Split(s.Coordinate, ":")
+	if len(parts) != 3 || s.PomObject != parts[1]+"-"+parts[2]+".pom" {
+		return errors.New("staged POM does not match Maven coordinate")
+	}
+	var pom repository.MavenDeclaredObject
+	found := false
+	for _, object := range s.Objects {
+		if object.Name == s.PomObject {
+			pom, found = object, true
+			break
+		}
+	}
+	if !found {
+		return errors.New("staged Maven coordinate has no POM")
+	}
+	body, err := h.objects.Get(ctx, "native/maven/sha256/"+strings.TrimPrefix(pom.Digest, "sha256:"))
+	if err != nil {
+		return errors.New("staged POM is unavailable")
+	}
+	var project struct {
+		GroupID    string `xml:"groupId"`
+		ArtifactID string `xml:"artifactId"`
+		Version    string `xml:"version"`
+		Parent     struct {
+			GroupID string `xml:"groupId"`
+			Version string `xml:"version"`
+		} `xml:"parent"`
+	}
+	if err := xml.Unmarshal(body, &project); err != nil {
+		return errors.New("staged POM is invalid XML")
+	}
+	if project.GroupID == "" {
+		project.GroupID = project.Parent.GroupID
+	}
+	if project.Version == "" {
+		project.Version = project.Parent.Version
+	}
+	if project.GroupID != parts[0] || project.ArtifactID != parts[1] || project.Version != parts[2] {
+		return errors.New("staged POM identity does not match Maven coordinate")
+	}
+	return nil
 }
 
 func (h nativeMavenHandler) protocolPrincipal(r *http.Request) (Principal, bool) {

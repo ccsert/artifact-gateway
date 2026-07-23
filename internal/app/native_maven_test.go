@@ -25,7 +25,7 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	}
 	objects := NewMemoryOCIObjectStore()
 	h := newNativeMavenHandler(store, objects, testAuthenticator())
-	pom := []byte("<project><version>1.0.0</version></project>")
+	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project>")
 	sum := sha256.Sum256(pom)
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewBufferString(`{"format":"maven","coordinate":"org.example:widget:1.0.0","pomObject":"widget-1.0.0.pom","objects":[{"name":"widget-1.0.0.pom","digest":"sha256:`+hex.EncodeToString(sum[:])+`","size":`+"42"+`}]} `))
 	// The exact request body length is derived below to avoid coupling the test
@@ -86,19 +86,17 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
 	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
-	for index, asset := range []string{"widget-1.2.0.pom", "widget-1.2.0.jar"} {
-		r := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/"+asset, bytes.NewBufferString(asset))
+	assets := map[string]string{
+		"widget-1.2.0.pom": "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>",
+		"widget-1.2.0.jar": "jar bytes",
+	}
+	for asset, content := range assets {
+		r := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/"+asset, bytes.NewBufferString(content))
 		r.SetBasicAuth("maven", "resolver-secret")
-		if index == 1 {
-			r.Header.Set("X-Gateway-Publish-Complete", "true")
-		}
+		r.Header.Set("X-Gateway-Publish-Complete", "true")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		want := http.StatusAccepted
-		if index == 1 {
-			want = http.StatusCreated
-		}
-		if w.Code != want {
+		if w.Code != http.StatusCreated {
 			t.Fatalf("PUT %s=%d %s", asset, w.Code, w.Body.String())
 		}
 	}
@@ -106,7 +104,29 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	get.SetBasicAuth("maven", "resolver-secret")
 	out := httptest.NewRecorder()
 	h.ServeHTTP(out, get)
-	if out.Code != 200 || out.Body.String() != "widget-1.2.0.jar" {
+	if out.Code != http.StatusNotFound {
+		t.Fatalf("staged asset=%d %q", out.Code, out.Body.String())
+	}
+	commit := func(expected string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/repository/maven/deploys/coordinates/org.example:widget:1.2.0:commit", strings.NewReader(expected))
+		r.SetBasicAuth("maven", "resolver-secret")
+		r.Header.Set("Idempotency-Key", "coordinate-commit")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom"]}`); result.Code != http.StatusConflict {
+		t.Fatalf("incomplete expected assets=%d %s", result.Code, result.Body.String())
+	}
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom","widget-1.2.0.jar"]}`); result.Code != http.StatusOK {
+		t.Fatalf("commit=%d %s", result.Code, result.Body.String())
+	}
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.jar","widget-1.2.0.pom"]}`); result.Code != http.StatusOK {
+		t.Fatalf("idempotent commit=%d %s", result.Code, result.Body.String())
+	}
+	out = httptest.NewRecorder()
+	h.ServeHTTP(out, get)
+	if out.Code != http.StatusOK || out.Body.String() != assets["widget-1.2.0.jar"] {
 		t.Fatalf("asset=%d %q", out.Code, out.Body.String())
 	}
 	metadata := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/org/example/widget/maven-metadata.xml", nil)
