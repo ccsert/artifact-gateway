@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,7 +157,7 @@ func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", Publisher: "alice", PomObject: "widget-1.0.0.pom", State: "expired", ExpiresAt: time.Now().Add(-time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:claim-fence", Size: 1}}}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", Publisher: "alice", PomObject: "widget-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(-time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:claim-fence", Size: 1}}}
 	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +184,213 @@ func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	}
 	if len(claimed) != 0 {
 		t.Fatalf("collector claimed an intent behind commit session lock: %#v", claimed)
+	}
+}
+
+func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-lifecycle-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Concurrent first use must yield one session and one replay, then an expired
+	// idempotency key can create a fresh session after the original is closed.
+	newSession := func(id string) repository.MavenPublishSession {
+		return repository.MavenPublishSession{ID: id, RepositoryID: repo.ID, Coordinate: "org.example:concurrent:1.0.0", Publisher: "admin", PomObject: "concurrent-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "concurrent-1.0.0.pom", Digest: "sha256:concurrent", Size: 1}}}
+	}
+	type createResult struct {
+		session  repository.MavenPublishSession
+		replayed bool
+		err      error
+	}
+	results := make(chan createResult, 2)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			session, replayed, createErr := store.CreateMavenPublishSessionIdempotently(ctx, newSession(uuid.NewString()), "admin", "repositories/"+repo.ID+"/publish-sessions", "concurrent-key", "same-payload")
+			results <- createResult{session, replayed, createErr}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	var created []createResult
+	for result := range results {
+		if result.err != nil {
+			t.Fatalf("concurrent session create: %v", result.err)
+		}
+		created = append(created, result)
+	}
+	if len(created) != 2 || created[0].session.ID != created[1].session.ID || created[0].replayed == created[1].replayed {
+		t.Fatalf("concurrent results=%#v", created)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='expired' WHERE id=$1`, created[0].session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_idempotency SET expires_at=now()-interval '1 second' WHERE actor='admin' AND target=$1 AND key='concurrent-key'`, "repositories/"+repo.ID+"/publish-sessions"); err != nil {
+		t.Fatal(err)
+	}
+	fresh, replayed, err := store.CreateMavenPublishSessionIdempotently(ctx, newSession(uuid.NewString()), "admin", "repositories/"+repo.ID+"/publish-sessions", "concurrent-key", "same-payload")
+	if err != nil || replayed || fresh.ID == created[0].session.ID {
+		t.Fatalf("expired idempotency retry session=%#v replayed=%t err=%v", fresh, replayed, err)
+	}
+
+	// Two publishers can stage the same coordinate, but the commit transaction
+	// must make exactly one coordinate and its asset path visible.
+	commitCoordinate := "org.example:commit-race:1.0.0"
+	commitPath := "org/example/commit-race/1.0.0/commit-race-1.0.0.pom"
+	commitResults := make(chan error, 2)
+	commitStart := make(chan struct{})
+	for i := range 2 {
+		session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: commitCoordinate, Publisher: fmt.Sprintf("publisher-%d", i), PomObject: "commit-race-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "commit-race-1.0.0.pom", Digest: fmt.Sprintf("sha256:commit-race-%d", i), Size: 1}}}
+		if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+		key := "native/maven/sha256/commit-race-" + uuid.NewString()
+		if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, key); err != nil {
+			t.Fatal(err)
+		}
+		go func(session repository.MavenPublishSession, key string) {
+			<-commitStart
+			_, commitErr := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: commitPath, ObjectKey: key, Digest: session.Objects[0].Digest, Size: 1}})
+			commitResults <- commitErr
+		}(session, key)
+	}
+	close(commitStart)
+	var committed, rejected int
+	for range 2 {
+		if commitErr := <-commitResults; commitErr == nil {
+			committed++
+		} else if commitErr == repository.ErrNameExists {
+			rejected++
+		} else {
+			t.Fatalf("concurrent commit error=%v", commitErr)
+		}
+	}
+	if committed != 1 || rejected != 1 {
+		t.Fatalf("concurrent commit outcomes committed=%d rejected=%d", committed, rejected)
+	}
+
+	// A bad staged checksum must create neither upload metadata nor bytes. A
+	// later retry can replace a lost staged object and commit its references.
+	objects := NewMemoryOCIObjectStore()
+	handler := newNativeMavenHandler(store, objects, testAuthenticator())
+	pom := []byte("<project><groupId>org.example</groupId><artifactId>recovery</artifactId><version>1.0.0</version></project>")
+	jar := []byte("recovery jar")
+	digest := func(body []byte) string { sum := sha256.Sum256(body); return "sha256:" + fmt.Sprintf("%x", sum) }
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:recovery:1.0.0", Publisher: "admin", PomObject: "recovery-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "recovery-1.0.0.pom", Digest: digest(pom), Size: int64(len(pom))}, {Name: "recovery-1.0.0.jar", Digest: digest(jar), Size: int64(len(jar))}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	upload := func(name string, body []byte) int {
+		r := httptest.NewRequest(http.MethodPut, "/api/v2/publish-sessions/"+session.ID+"/objects/"+name, strings.NewReader(string(body)))
+		r.Header.Set("Authorization", "Bearer admin-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Code
+	}
+	if status := upload("recovery-1.0.0.jar", []byte("wrong bytes")); status != http.StatusUnprocessableEntity {
+		t.Fatalf("bad checksum status=%d", status)
+	}
+	var uploads int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_publish_uploads WHERE session_id=$1`, session.ID).Scan(&uploads); err != nil || uploads != 0 {
+		t.Fatalf("bad checksum uploads=%d err=%v", uploads, err)
+	}
+	if status := upload("recovery-1.0.0.pom", pom); status != http.StatusNoContent {
+		t.Fatalf("stage pom=%d", status)
+	}
+	if status := upload("recovery-1.0.0.jar", jar); status != http.StatusNoContent {
+		t.Fatalf("stage jar=%d", status)
+	}
+	jarKey := "native/maven/sha256/" + strings.TrimPrefix(digest(jar), "sha256:")
+	if err = objects.Delete(ctx, jarKey); err != nil {
+		t.Fatal(err)
+	}
+	commit := func() int {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/"+session.ID+":commit", nil)
+		r.Header.Set("Authorization", "Bearer admin-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Code
+	}
+	if status := commit(); status != http.StatusUnprocessableEntity {
+		t.Fatalf("lost staged object commit=%d", status)
+	}
+	if status := upload("recovery-1.0.0.jar", jar); status != http.StatusNoContent {
+		t.Fatalf("recovery stage jar=%d", status)
+	}
+	if status := commit(); status != http.StatusOK {
+		t.Fatalf("recovered commit=%d", status)
+	}
+	var assets, references int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_assets WHERE repository_id=$1`, repo.ID).Scan(&assets); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE repository_id=$1`, repo.ID).Scan(&references); err != nil || assets == 0 || references != assets {
+		t.Fatalf("asset/reference counts assets=%d references=%d err=%v", assets, references, err)
+	}
+
+	// After the 24-hour grace period, claims skip a row locked by a commit and
+	// retain an already claimed intent when a reference appears before deletion.
+	stale := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:stale:1.0.0", Publisher: "collector", PomObject: "stale-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(-25 * time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "stale-1.0.0.pom", Digest: "sha256:stale", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, stale); err != nil {
+		t.Fatal(err)
+	}
+	staleKey := "native/maven/sha256/stale-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, stale.ID, stale.Objects[0].Name, staleKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, staleKey); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = lock.ExecContext(ctx, `SELECT 1 FROM native_maven_publish_sessions WHERE id=$1 FOR UPDATE`, stale.ID); err != nil {
+		lock.Rollback()
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(-24*time.Hour), 10)
+	if err != nil || len(claimed) != 0 {
+		lock.Rollback()
+		t.Fatalf("locked stale claim=%#v err=%v", claimed, err)
+	}
+	if err = lock.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(-24*time.Hour), 10)
+	if err != nil || len(claimed) != 1 || claimed[0].ObjectKey != staleKey {
+		t.Fatalf("grace-period claim=%#v err=%v", claimed, err)
+	}
+	if _, err = db.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2)`, staleKey, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DeleteClaimedMavenObjectIntent(ctx, staleKey); err != repository.ErrNotFound {
+		t.Fatalf("reference recheck delete=%v", err)
+	}
+	var retained int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_intents WHERE object_key=$1`, staleKey).Scan(&retained); err != nil || retained != 1 {
+		t.Fatalf("referenced intent retained=%d err=%v", retained, err)
 	}
 }
 

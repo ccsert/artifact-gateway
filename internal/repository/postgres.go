@@ -44,7 +44,9 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	// Row locks cannot serialize the first use of a key because no row exists
 	// yet. A transaction-scoped advisory lock covers that gap without holding a
 	// process-local mutex across gateway instances.
-	lockKey := actor + "\x00/repositories\x00" + key
+	// PostgreSQL text parameters reject NUL bytes. Prefix the variable parts
+	// with their lengths so distinct actor/key pairs cannot share a lock key.
+	lockKey := fmt.Sprintf("%d:%s%d:%s", len(actor), actor, len(key), key)
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
 		return HostedRepository{}, false, err
 	}
