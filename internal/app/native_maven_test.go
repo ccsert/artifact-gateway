@@ -42,6 +42,10 @@ func (s failingPutObjectStore) Put(context.Context, string, []byte) error {
 	return errors.New("object store unavailable")
 }
 
+func (s failingPutObjectStore) PutVerifiedReader(context.Context, string, io.Reader, int64, string) error {
+	return errors.New("object store unavailable")
+}
+
 type failOnceMavenCommitStore struct {
 	*repository.MemoryStore
 	fail bool

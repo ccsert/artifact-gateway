@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
@@ -205,7 +206,7 @@ func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, n
 		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
 		return
 	}
-	if err := h.objects.Put(r.Context(), key, data); err != nil {
+	if err := h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
 		return
 	}
@@ -252,7 +253,7 @@ func (h nativeMavenHandler) promote(ctx context.Context, s repository.MavenPubli
 		}
 		for _, checksum := range generatedMavenChecksums(body) {
 			key := "native/maven/sha256/" + checksum.digest
-			if err := h.objects.Put(ctx, key, []byte(checksum.body)); err != nil {
+			if err := h.objects.PutVerifiedReader(ctx, key, strings.NewReader(checksum.body), int64(len(checksum.body)), "sha256:"+checksum.digest); err != nil {
 				return repository.MavenArtifact{}, err
 			}
 			assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name + checksum.extension, ObjectKey: key, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
@@ -550,7 +551,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
-	if err = h.objects.Put(r.Context(), key, body); err != nil {
+	if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}

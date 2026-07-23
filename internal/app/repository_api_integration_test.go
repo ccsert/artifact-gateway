@@ -724,6 +724,119 @@ func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
 	}
 }
 
+func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	s3AccessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	s3SecretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || s3AccessKey == "" || s3SecretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "native-maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-retry-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newNativeMavenHandler(store, objects, Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.SetBasicAuth("maven", "resolver-secret")
+		if method == http.MethodPost {
+			r.Header.Set("Idempotency-Key", "postgres-promotion-retry")
+			r.Header.Set("Content-Type", "application/json")
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	const version = "1.0.0"
+	pom := "<project><groupId>org.example</groupId><artifactId>promotion-retry</artifactId><version>1.0.0</version></project>"
+	jar := "postgres-backed jar"
+	for name, body := range map[string]string{"promotion-retry-1.0.0.pom": pom, "promotion-retry-1.0.0.jar": jar} {
+		if response := request(http.MethodPut, "/repository/maven/"+repo.Name+"/org/example/promotion-retry/"+version+"/"+name, body); response.Code != http.StatusCreated {
+			t.Fatalf("stage %s = %d %s", name, response.Code, response.Body.String())
+		}
+	}
+	jarSum := sha256.Sum256([]byte(jar))
+	jarKey := "native/maven/sha256/" + fmt.Sprintf("%x", jarSum[:])
+	if _, err = objects.Stat(ctx, jarKey); err != nil {
+		t.Fatalf("S3 object must exist before PostgreSQL promotion: %v", err)
+	}
+
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	failpoint := "native_maven_promotion_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	trigger := failpoint + "_trigger"
+	if _, err = db.ExecContext(ctx, fmt.Sprintf(`CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected native Maven promotion failure'; END; $$`, failpoint)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON native_maven_assets FOR EACH ROW EXECUTE FUNCTION %s()`, trigger, failpoint)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TRIGGER IF EXISTS %s ON native_maven_assets`, trigger))
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP FUNCTION IF EXISTS %s()`, failpoint))
+	}()
+
+	commitPath := "/repository/maven/" + repo.Name + "/coordinates/org.example:promotion-retry:" + version + ":commit"
+	commitBody := `{"expectedAssetNames":["promotion-retry-1.0.0.pom","promotion-retry-1.0.0.jar"]}`
+	if response := request(http.MethodPost, commitPath, commitBody); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("injected PostgreSQL promotion failure = %d %s", response.Code, response.Body.String())
+	}
+	for _, path := range []string{
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.pom",
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.jar",
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.jar.sha256",
+		"org/example/promotion-retry/maven-metadata.xml",
+	} {
+		if response := request(http.MethodGet, "/repository/maven/"+repo.Name+"/"+path, ""); response.Code != http.StatusNotFound {
+			t.Fatalf("failed promotion read %s = %d, want 404", path, response.Code)
+		}
+	}
+	var assets, references int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_assets WHERE repository_id=$1`, repo.ID).Scan(&assets); err != nil || assets != 0 {
+		t.Fatalf("rolled back PostgreSQL assets=%d err=%v", assets, err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE repository_id=$1`, repo.ID).Scan(&references); err != nil || references != 0 {
+		t.Fatalf("rolled back PostgreSQL references=%d err=%v", references, err)
+	}
+	if _, err = db.ExecContext(ctx, fmt.Sprintf(`DROP TRIGGER %s ON native_maven_assets`, trigger)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, fmt.Sprintf(`DROP FUNCTION %s()`, failpoint)); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(http.MethodPost, commitPath, commitBody); response.Code != http.StatusOK {
+		t.Fatalf("commit retry after PostgreSQL recovery = %d %s", response.Code, response.Body.String())
+	}
+	for _, path := range []string{
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.pom",
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.jar",
+		"org/example/promotion-retry/1.0.0/promotion-retry-1.0.0.jar.sha256",
+		"org/example/promotion-retry/maven-metadata.xml",
+	} {
+		if response := request(http.MethodGet, "/repository/maven/"+repo.Name+"/"+path, ""); response.Code != http.StatusOK {
+			t.Fatalf("retried promotion read %s = %d, want 200", path, response.Code)
+		}
+	}
+}
+
 func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
