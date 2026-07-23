@@ -194,8 +194,24 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
 		return MavenPublishSession{}, false, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours') ON CONFLICT (actor,target,key) DO NOTHING`, actor, target, key, payload, v.ID); err != nil {
+	result, err := tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours') ON CONFLICT (actor,target,key) DO NOTHING`, actor, target, key, payload, v.ID)
+	if err != nil {
 		return MavenPublishSession{}, false, err
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		// A concurrent creator won. Its committed record is now authoritative;
+		// discard our staged session along with this transaction and replay it.
+		if err = tx.QueryRowContext(ctx, `SELECT session_id::text,payload_hash FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 FOR UPDATE`, actor, target, key).Scan(&existingID, &existingPayload); err != nil {
+			return MavenPublishSession{}, false, err
+		}
+		if existingPayload != payload {
+			return MavenPublishSession{}, false, ErrIdempotencyConflict
+		}
+		if err = tx.Rollback(); err != nil {
+			return MavenPublishSession{}, false, err
+		}
+		existing, getErr := s.GetMavenPublishSession(ctx, existingID)
+		return existing, true, getErr
 	}
 	if err = tx.Commit(); err != nil {
 		return MavenPublishSession{}, false, err
