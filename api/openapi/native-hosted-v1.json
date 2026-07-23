@@ -481,8 +481,52 @@
           }
         }
       },
+      "put": {
+        "operationId": "stageMavenProtocolAsset",
+        "description": "Standard Maven/Gradle deploy upload. The Gateway derives coordinate and verified object facts from this request and stages it only. Client checksum sidecars are assertions and client metadata is a compatibility no-op; the Gateway generates both from committed coordinates.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Staged or idempotently replayed; not readable until coordinate commit"},
+          "401": {"$ref": "#/components/responses/BasicUnauthorized"},
+          "409": {"$ref": "#/components/responses/Problem"},
+          "422": {"$ref": "#/components/responses/Problem"}
+        },
+        "security": [{"protocolBasicAuth": []}, {"protocolBearerAuth": []}]
+      },
       "x-gateway-catchAll": "assetPath",
-      "x-gateway-visibility": "committed_only"
+      "x-gateway-visibility": "committed_only",
+      "x-gateway-publication": "stage_only_until_explicit_coordinate_commit"
+    },
+    "/repository/maven/{repository}/coordinates/{coordinate}:commit": {
+      "servers": [{"url": "https://gateway.example.com"}],
+      "post": {
+        "operationId": "commitMavenCoordinate",
+        "description": "Called by the Gateway Maven/Gradle publisher extension after normal deploy uploads. It is the only Maven coordinate visibility signal; request ordering, client checksums, client metadata, and quiet time are never completion signals.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/RepositoryName"},
+          {"name": "coordinate", "in": "path", "required": true, "allowReserved": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$"}}
+        ],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CommitMavenCoordinate"}}}},
+        "responses": {
+          "200": {"$ref": "#/components/responses/Artifact"},
+          "409": {"$ref": "#/components/responses/Problem"},
+          "422": {"$ref": "#/components/responses/Problem"}
+        },
+        "security": [{"protocolBasicAuth": []}, {"protocolBearerAuth": []}]
+      },
+      "x-gateway-visibility-transition": "single_postgres_transaction",
+      "x-gateway-client-authority": "asset_names_only"
     },
     "/repositories/{repositoryId}/publish-sessions": {
       "parameters": [
@@ -1238,6 +1282,20 @@
             "items": {
               "$ref": "#/components/schemas/DeclaredObject"
             }
+          }
+        }
+      },
+      "CommitMavenCoordinate": {
+        "type": "object",
+        "description": "Expected names detect incomplete upload only. Digest, size, checksum, metadata, object keys, and visibility are derived and controlled by the Gateway.",
+        "required": ["expectedAssetNames"],
+        "additionalProperties": false,
+        "properties": {
+          "expectedAssetNames": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[^/]+$"}
           }
         }
       },
