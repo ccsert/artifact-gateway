@@ -343,8 +343,16 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
-	s := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: group + ":" + artifact + ":" + version, PomObject: name, State: "open", Objects: []repository.MavenDeclaredObject{{Name: name, Digest: digest, Size: int64(len(body))}}, ExpiresAt: time.Now().Add(time.Hour)}
-	if _, err = h.store.CreateMavenPublishSession(r.Context(), s); err != nil {
+	coordinate := group + ":" + artifact + ":" + version
+	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}
+	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate)
+	if errors.Is(err, repository.ErrNotFound) {
+		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, PomObject: name, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
+		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
+	} else if err == nil {
+		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
+	}
+	if err != nil {
 		http.Error(w, "create Maven publish session", 500)
 		return
 	}
@@ -353,15 +361,33 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
+	if r.Header.Get("X-Gateway-Publish-Complete") != "true" {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	s, err = h.store.GetMavenPublishSession(r.Context(), s.ID)
+	if err != nil {
+		http.Error(w, "load Maven publish session", 500)
+		return
+	}
 	base := mavenCoordinatePath(s.Coordinate)
-	assets := []repository.MavenAsset{{RepositoryID: repo.ID, Path: base + "/" + name, ObjectKey: key, Digest: digest, Size: int64(len(body))}}
-	for _, c := range generatedMavenChecksums(body) {
-		ck := "native/maven/sha256/" + c.digest
-		if err = h.objects.Put(r.Context(), ck, []byte(c.body)); err != nil {
-			http.Error(w, "generate Maven checksum", 500)
+	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
+	for _, object := range s.Objects {
+		objectKey := "native/maven/sha256/" + strings.TrimPrefix(object.Digest, "sha256:")
+		objectBody, getErr := h.objects.Get(r.Context(), objectKey)
+		if getErr != nil {
+			http.Error(w, "staged Maven object unavailable", 422)
 			return
 		}
-		assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + name + c.extension, ObjectKey: ck, Digest: "sha256:" + c.digest, Size: int64(len(c.body))})
+		assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + object.Name, ObjectKey: objectKey, Digest: object.Digest, Size: object.Size})
+		for _, c := range generatedMavenChecksums(objectBody) {
+			ck := "native/maven/sha256/" + c.digest
+			if err = h.objects.Put(r.Context(), ck, []byte(c.body)); err != nil {
+				http.Error(w, "generate Maven checksum", 500)
+				return
+			}
+			assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + object.Name + c.extension, ObjectKey: ck, Digest: "sha256:" + c.digest, Size: int64(len(c.body))})
+		}
 	}
 	if _, err = h.store.CommitMavenPublishSession(r.Context(), s.ID, assets); err != nil && !errors.Is(err, repository.ErrNameExists) {
 		http.Error(w, "commit Maven asset", 422)

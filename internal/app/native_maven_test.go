@@ -86,12 +86,19 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
 	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
-	for _, asset := range []string{"widget-1.2.0.pom", "widget-1.2.0.jar"} {
+	for index, asset := range []string{"widget-1.2.0.pom", "widget-1.2.0.jar"} {
 		r := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/"+asset, bytes.NewBufferString(asset))
 		r.SetBasicAuth("maven", "resolver-secret")
+		if index == 1 {
+			r.Header.Set("X-Gateway-Publish-Complete", "true")
+		}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		if w.Code != http.StatusCreated {
+		want := http.StatusAccepted
+		if index == 1 {
+			want = http.StatusCreated
+		}
+		if w.Code != want {
 			t.Fatalf("PUT %s=%d %s", asset, w.Code, w.Body.String())
 		}
 	}
