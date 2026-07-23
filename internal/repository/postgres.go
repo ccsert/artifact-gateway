@@ -231,6 +231,30 @@ func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (
 	return v, err
 }
 func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, key string) error {
+	var raw []byte
+	if err := s.db.QueryRowContext(ctx, `SELECT objects FROM native_maven_publish_sessions WHERE id::text=$1 AND state='open'`, id).Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	var objects []MavenDeclaredObject
+	if err := json.Unmarshal(raw, &objects); err != nil {
+		return err
+	}
+	var declared *MavenDeclaredObject
+	for i := range objects {
+		if objects[i].Name == name {
+			declared = &objects[i]
+			break
+		}
+	}
+	if declared == nil {
+		return ErrNotFound
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, key, id, declared.Digest, declared.Size); err != nil {
+		return err
+	}
 	result, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_uploads (session_id,object_name,object_key) VALUES ($1,$2,$3) ON CONFLICT (session_id,object_name) DO UPDATE SET object_key=EXCLUDED.object_key`, id, name, key)
 	if err != nil {
 		return err
@@ -270,11 +294,17 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 		return MavenArtifact{}, ErrDisabled
 	}
 	for _, a := range assets {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, id, a.Digest, a.Size); err != nil {
+			return MavenArtifact{}, err
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, a.RepositoryID, a.Path, a.ObjectKey, a.Digest, a.Size)
 		if isUnique(err) {
 			return MavenArtifact{}, ErrNameExists
 		}
 		if err != nil {
+			return MavenArtifact{}, err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, a.RepositoryID); err != nil {
 			return MavenArtifact{}, err
 		}
 	}
