@@ -42,6 +42,19 @@ func (s failingPutObjectStore) Put(context.Context, string, []byte) error {
 	return errors.New("object store unavailable")
 }
 
+type failOnceMavenCommitStore struct {
+	*repository.MemoryStore
+	fail bool
+}
+
+func (s *failOnceMavenCommitStore) CommitMavenPublishSession(ctx context.Context, id string, assets []repository.MavenAsset) (repository.MavenArtifact, error) {
+	if s.fail {
+		s.fail = false
+		return repository.MavenArtifact{}, errors.New("postgres promotion unavailable")
+	}
+	return s.MemoryStore.CommitMavenPublishSession(ctx, id, assets)
+}
+
 func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
@@ -227,8 +240,8 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 		t.Fatalf("partial coordinate commit = %d, want 409", code)
 	}
 	put(release, "widget-1.2.3.jar", "release jar")
-	if code, _ := status(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.3/widget-1.2.3.jar.sha256", "client sidecar", nil); code != http.StatusBadRequest {
-		t.Fatalf("client sidecar = %d, want 400", code)
+	if code, _ := status(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.3/widget-1.2.3.jar.sha256", "client sidecar", nil); code != http.StatusCreated {
+		t.Fatalf("client sidecar compatibility upload = %d, want 201", code)
 	}
 	if code, _ := read("org/example/widget/1.2.3/widget-1.2.3.jar"); code != http.StatusNotFound {
 		t.Fatalf("uncommitted JAR read = %d, want 404", code)
@@ -320,6 +333,83 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("failed upload coordinate read = %d, want 404", response.StatusCode)
 	}
+}
+
+func TestNativeMavenProtocolCommitRetryAfterControlPlaneFailure(t *testing.T) {
+	base := repository.NewMemoryStore()
+	repo, err := base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &failOnceMavenCommitStore{MemoryStore: base, fail: true}
+	objects := NewMemoryOCIObjectStore()
+	server := httptest.NewServer(newNativeMavenHandler(store, objects, testAuthenticator()))
+	defer server.Close()
+
+	request := func(method, path, body string) *http.Response {
+		t.Helper()
+		r, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.SetBasicAuth("maven", "resolver-secret")
+		if method == http.MethodPost {
+			r.Header.Set("Idempotency-Key", "retry-after-promotion-failure")
+			r.Header.Set("Content-Type", "application/json")
+		}
+		response, err := server.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	status := func(method, path, body string) int {
+		t.Helper()
+		response := request(method, path, body)
+		defer response.Body.Close()
+		return response.StatusCode
+	}
+	const version = "4.0.0"
+	pom := "<project><groupId>org.example</groupId><artifactId>retry</artifactId><version>" + version + "</version></project>"
+	jar := "retry jar"
+	for name, body := range map[string]string{"retry-4.0.0.pom": pom, "retry-4.0.0.jar": jar} {
+		if code := status(http.MethodPut, "/repository/maven/deploys/org/example/retry/"+version+"/"+name, body); code != http.StatusCreated {
+			t.Fatalf("stage %s = %d", name, code)
+		}
+	}
+	jarDigest := sha256.Sum256([]byte(jar))
+	if _, err := objects.Get(context.Background(), "native/maven/sha256/"+hex.EncodeToString(jarDigest[:])); err != nil {
+		t.Fatalf("S3 object missing before promotion: %v", err)
+	}
+	commitPath := "/repository/maven/deploys/coordinates/org.example:retry:" + version + ":commit"
+	commitBody := `{"expectedAssetNames":["retry-4.0.0.pom","retry-4.0.0.jar"]}`
+	if code := status(http.MethodPost, commitPath, commitBody); code != http.StatusUnprocessableEntity {
+		t.Fatalf("first commit = %d, want 422", code)
+	}
+	for _, path := range []string{
+		"org/example/retry/4.0.0/retry-4.0.0.pom",
+		"org/example/retry/4.0.0/retry-4.0.0.jar",
+		"org/example/retry/4.0.0/retry-4.0.0.jar.sha256",
+		"org/example/retry/maven-metadata.xml",
+	} {
+		if code := status(http.MethodGet, "/repository/maven/deploys/"+path, ""); code != http.StatusNotFound {
+			t.Fatalf("failed promotion read %s = %d, want 404", path, code)
+		}
+	}
+	if code := status(http.MethodPost, commitPath, commitBody); code != http.StatusOK {
+		t.Fatalf("commit retry = %d, want 200", code)
+	}
+	for _, path := range []string{
+		"org/example/retry/4.0.0/retry-4.0.0.pom",
+		"org/example/retry/4.0.0/retry-4.0.0.jar",
+		"org/example/retry/4.0.0/retry-4.0.0.jar.sha256",
+		"org/example/retry/maven-metadata.xml",
+	} {
+		if code := status(http.MethodGet, "/repository/maven/deploys/"+path, ""); code != http.StatusOK {
+			t.Fatalf("retried promotion read %s = %d, want 200", path, code)
+		}
+	}
+	_ = repo
 }
 
 func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testing.T) {
