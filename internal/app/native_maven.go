@@ -293,6 +293,12 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	}
 	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, strings.Join(parts[1:], "/"))
 	if err != nil {
+		if snapshotAsset, found := h.snapshotAsset(r.Context(), repo.ID, strings.Join(parts[1:], "/")); found {
+			asset = snapshotAsset
+			err = nil
+		}
+	}
+	if err != nil {
 		if strings.HasSuffix(strings.Join(parts[1:], "/"), "maven-metadata.xml") {
 			h.metadata(w, r, repo, strings.Join(parts[1:], "/"), user)
 			return
@@ -311,6 +317,39 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body)
 	}
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
+}
+
+// snapshotAsset resolves Maven's timestamped SNAPSHOT filenames to the
+// immutable SNAPSHOT coordinate that produced the generated metadata.
+func (h nativeMavenHandler) snapshotAsset(ctx context.Context, repositoryID, path string) (repository.MavenAsset, bool) {
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 {
+		return repository.MavenAsset{}, false
+	}
+	version, artifact, name := parts[len(parts)-2], parts[len(parts)-3], parts[len(parts)-1]
+	if !strings.HasSuffix(version, "-SNAPSHOT") {
+		return repository.MavenAsset{}, false
+	}
+	group := strings.Join(parts[:len(parts)-3], ".")
+	coordinate := group + ":" + artifact + ":" + version
+	items, err := h.store.ListMavenArtifacts(ctx, repositoryID)
+	if err != nil {
+		return repository.MavenAsset{}, false
+	}
+	for _, item := range items {
+		if item.Coordinate != coordinate {
+			continue
+		}
+		timestamped := strings.TrimSuffix(version, "-SNAPSHOT") + "-" + item.CreatedAt.UTC().Format("20060102.150405") + "-1"
+		prefix := artifact + "-" + timestamped
+		if !strings.HasPrefix(name, prefix) {
+			return repository.MavenAsset{}, false
+		}
+		logicalPath := strings.Join(append(parts[:len(parts)-1], artifact+"-"+version+strings.TrimPrefix(name, prefix)), "/")
+		asset, err := h.store.GetMavenAsset(ctx, repositoryID, logicalPath)
+		return asset, err == nil
+	}
+	return repository.MavenAsset{}, false
 }
 
 func mavenCoordinateCommitPath(path string) (repositoryName, coordinate string, ok bool) {
