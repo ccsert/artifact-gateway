@@ -56,6 +56,8 @@ type HostedRepositoryStore interface {
 // the object store; staging rows never participate in protocol reads.
 type NativeMavenStore interface {
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
+	FindOpenMavenPublishSession(context.Context, string, string) (MavenPublishSession, error)
+	AppendMavenPublishObject(context.Context, string, MavenDeclaredObject) error
 	CreateMavenPublishSessionIdempotently(context.Context, MavenPublishSession, string, string, string, string) (MavenPublishSession, bool, error)
 	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
 	MarkMavenPublishObject(context.Context, string, string, string) error
@@ -234,6 +236,32 @@ func (s *MemoryStore) GetMavenPublishSession(_ context.Context, id string) (Mave
 		return MavenPublishSession{}, ErrNotFound
 	}
 	return v, nil
+}
+func (s *MemoryStore) FindOpenMavenPublishSession(_ context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.State == "open" {
+			return v, nil
+		}
+	}
+	return MavenPublishSession{}, ErrNotFound
+}
+func (s *MemoryStore) AppendMavenPublishObject(_ context.Context, id string, object MavenDeclaredObject) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.mavenSessions[id]
+	if !ok || v.State != "open" {
+		return ErrNotFound
+	}
+	for _, o := range v.Objects {
+		if o.Name == object.Name {
+			return nil
+		}
+	}
+	v.Objects = append(v.Objects, object)
+	s.mavenSessions[id] = v
+	return nil
 }
 func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key string) error {
 	s.mu.Lock()

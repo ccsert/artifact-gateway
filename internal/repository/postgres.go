@@ -230,6 +230,47 @@ func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (
 	}
 	return v, err
 }
+func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	var v MavenPublishSession
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND state='open'`, repoID, coordinate).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	if err != nil {
+		return v, err
+	}
+	return v, json.Unmarshal(raw, &v.Objects)
+}
+func (s *PostgresStore) AppendMavenPublishObject(ctx context.Context, id string, object MavenDeclaredObject) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, `SELECT objects FROM native_maven_publish_sessions WHERE id::text=$1 AND state='open' FOR UPDATE`, id).Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	var objects []MavenDeclaredObject
+	if err = json.Unmarshal(raw, &objects); err != nil {
+		return err
+	}
+	for _, o := range objects {
+		if o.Name == object.Name {
+			return tx.Commit()
+		}
+	}
+	objects = append(objects, object)
+	raw, _ = json.Marshal(objects)
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET objects=$2 WHERE id::text=$1`, id, raw); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, key string) error {
 	var raw []byte
 	if err := s.db.QueryRowContext(ctx, `SELECT objects FROM native_maven_publish_sessions WHERE id::text=$1 AND state='open'`, id).Scan(&raw); err != nil {
