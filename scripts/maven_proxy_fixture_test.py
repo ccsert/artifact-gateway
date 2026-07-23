@@ -50,7 +50,12 @@ class MavenProxyFixtureTest(unittest.TestCase):
         first.exception.close()
         with urllib.request.urlopen(self.base_url + "/retry/429/artifact.pom") as response:
             self.assertEqual(response.status, 200)
-        self.assertIn("GET /retry/429/artifact.pom 200", self.log.read_text(encoding="utf-8"))
+        for _ in range(20):
+            if self.log.exists() and "GET /retry/429/artifact.pom 200" in self.log.read_text(encoding="utf-8"):
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("successful retry was not logged with its original request target")
 
     def test_path_traversal_is_not_served(self):
         with self.assertRaises(urllib.error.HTTPError) as response:

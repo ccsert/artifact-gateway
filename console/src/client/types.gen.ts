@@ -74,6 +74,13 @@ export type CreateMavenPublishSession = {
     objects: Array<DeclaredObject>;
 };
 
+/**
+ * Expected names detect incomplete upload only. Digest, size, checksum, metadata, object keys, and visibility are derived and controlled by the Gateway.
+ */
+export type CommitMavenCoordinate = {
+    expectedAssetNames: Array<string>;
+};
+
 export type DeclaredObject = {
     name: string;
     digest: string;
@@ -656,6 +663,78 @@ export type ReadMavenAssetResponses = {
 
 export type ReadMavenAssetResponse = ReadMavenAssetResponses[keyof ReadMavenAssetResponses];
 
+export type StageMavenProtocolAssetData = {
+    body: string;
+    path: {
+        repository: string;
+        /**
+         * Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.
+         */
+        assetPath: string;
+    };
+    query?: never;
+    url: '/repository/maven/{repository}/{assetPath}';
+};
+
+export type StageMavenProtocolAssetErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+    /**
+     * Problem response
+     */
+    409: Problem;
+    /**
+     * Problem response
+     */
+    422: Problem;
+};
+
+export type StageMavenProtocolAssetError = StageMavenProtocolAssetErrors[keyof StageMavenProtocolAssetErrors];
+
+export type StageMavenProtocolAssetResponses = {
+    /**
+     * Staged or idempotently replayed; not readable until coordinate commit
+     */
+    201: unknown;
+};
+
+export type CommitMavenCoordinateData = {
+    body: CommitMavenCoordinate;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        repository: string;
+        coordinate: string;
+    };
+    query?: never;
+    url: '/repository/maven/{repository}/coordinates/{coordinate}:commit';
+};
+
+export type CommitMavenCoordinateErrors = {
+    /**
+     * Problem response
+     */
+    409: Problem;
+    /**
+     * Problem response
+     */
+    422: Problem;
+};
+
+export type CommitMavenCoordinateError = CommitMavenCoordinateErrors[keyof CommitMavenCoordinateErrors];
+
+export type CommitMavenCoordinateResponses = {
+    /**
+     * Artifact
+     */
+    200: Artifact;
+};
+
+export type CommitMavenCoordinateResponse = CommitMavenCoordinateResponses[keyof CommitMavenCoordinateResponses];
+
 export type CreatePublishSessionData = {
     body: CreatePublishSession;
     headers: {
@@ -836,5 +915,5 @@ export type GetArtifactResponses = {
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
 export type ClientOptions = {
-    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
+    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
 };
