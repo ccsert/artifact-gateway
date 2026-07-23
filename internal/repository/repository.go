@@ -337,6 +337,9 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 		if s.mavenUploads[id][o.Name] == "" {
 			return MavenArtifact{}, ErrDisabled
 		}
+		if intent := s.mavenObjectIntents[s.mavenUploads[id][o.Name]]; !intent.claimedAt.IsZero() {
+			return MavenArtifact{}, ErrDisabled
+		}
 	}
 	for _, existing := range s.mavenArtifacts {
 		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {

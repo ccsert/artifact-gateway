@@ -371,6 +371,13 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 	if uploaded != len(v.Objects) {
 		return MavenArtifact{}, ErrDisabled
 	}
+	var claimed bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_intents WHERE session_id=$1 AND claimed_at IS NOT NULL)`, id).Scan(&claimed); err != nil {
+		return MavenArtifact{}, err
+	}
+	if claimed {
+		return MavenArtifact{}, ErrDisabled
+	}
 	for _, a := range assets {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, id, a.Digest, a.Size); err != nil {
 			return MavenArtifact{}, err
