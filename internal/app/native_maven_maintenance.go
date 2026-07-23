@@ -25,6 +25,17 @@ func (m NativeMavenMaintenance) Collect(ctx context.Context) error {
 		return err
 	}
 	for _, intent := range intents {
+		referenced, err := m.Store.MavenObjectIntentHasReference(ctx, intent.ObjectKey)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			// A committed reference wins over this collector claim. The commit path
+			// fences claimed intents, so no promotion can pass this point after the
+			// recheck and before object deletion.
+			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey)
+			continue
+		}
 		if err := m.Objects.Delete(ctx, intent.ObjectKey); err != nil {
 			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey)
 			return err

@@ -384,6 +384,13 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, id, a.Digest, a.Size); err != nil {
 			return MavenArtifact{}, err
 		}
+		var intentClaimed bool
+		if err = tx.QueryRowContext(ctx, `SELECT claimed_at IS NOT NULL FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, a.ObjectKey).Scan(&intentClaimed); err != nil {
+			return MavenArtifact{}, err
+		}
+		if intentClaimed {
+			return MavenArtifact{}, ErrDisabled
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, a.RepositoryID, a.Path, a.ObjectKey, a.Digest, a.Size)
 		if isUnique(err) {
 			return MavenArtifact{}, ErrNameExists
@@ -450,6 +457,11 @@ func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, befo
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+func (s *PostgresStore) MavenObjectIntentHasReference(ctx context.Context, key string) (bool, error) {
+	var referenced bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_references WHERE object_key=$1)`, key).Scan(&referenced)
+	return referenced, err
 }
 func (s *PostgresStore) ReleaseClaimedMavenObjectIntent(ctx context.Context, key string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET claimed_at=NULL WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)

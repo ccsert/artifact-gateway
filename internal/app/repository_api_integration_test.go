@@ -20,6 +20,25 @@ import (
 	"github.com/google/uuid"
 )
 
+type referenceAfterClaimStore struct {
+	repository.NativeMavenStore
+	db           *sql.DB
+	repositoryID string
+}
+
+func (s referenceAfterClaimStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]repository.MavenObjectIntent, error) {
+	intents, err := s.NativeMavenStore.ClaimExpiredMavenObjectIntents(ctx, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	for _, intent := range intents {
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2)`, intent.ObjectKey, s.repositoryID); err != nil {
+			return nil, err
+		}
+	}
+	return intents, nil
+}
+
 func TestPostgresHTTPIntegration(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -184,6 +203,57 @@ func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	}
 	if len(claimed) != 0 {
 		t.Fatalf("collector claimed an intent behind commit session lock: %#v", claimed)
+	}
+}
+
+func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "claim-reference-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:claim-reference:1.0.0", Publisher: "collector", PomObject: "claim-reference-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(-25 * time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "claim-reference-1.0.0.pom", Digest: "sha256:claim-reference", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	key := "native/maven/sha256/claim-reference-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, key); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
+		t.Fatal(err)
+	}
+	maintenance := NativeMavenMaintenance{Store: referenceAfterClaimStore{NativeMavenStore: store, db: db, repositoryID: repo.ID}, Objects: objects, Now: func() time.Time { return time.Now() }}
+	if err = maintenance.Collect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = objects.Get(ctx, key); err != nil {
+		t.Fatalf("referenced object was deleted: %v", err)
+	}
+	var intents, references int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&intents); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE object_key=$1`, key).Scan(&references); err != nil || intents != 1 || references != 1 {
+		t.Fatalf("retained intent/reference intents=%d references=%d err=%v", intents, references, err)
 	}
 }
 

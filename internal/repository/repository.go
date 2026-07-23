@@ -68,6 +68,7 @@ type NativeMavenStore interface {
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
+	MavenObjectIntentHasReference(context.Context, string) (bool, error)
 	DeleteClaimedMavenObjectIntent(context.Context, string) error
 	ReleaseClaimedMavenObjectIntent(context.Context, string) error
 }
@@ -199,6 +200,7 @@ type MemoryStore struct {
 	mavenArtifacts     map[string]MavenArtifact
 	mavenSessionKeys   map[string]idempotencyRecord
 	mavenObjectIntents map[string]mavenObjectIntent
+	mavenObjectRefs    map[string]bool
 }
 
 type mavenObjectIntent struct{ createdAt, claimedAt time.Time }
@@ -209,7 +211,7 @@ type idempotencyRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -347,11 +349,15 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 		}
 	}
 	for _, a := range assets {
+		if intent := s.mavenObjectIntents[a.ObjectKey]; !intent.claimedAt.IsZero() {
+			return MavenArtifact{}, ErrDisabled
+		}
 		k := a.RepositoryID + "\x00" + a.Path
 		if _, exists := s.mavenAssets[k]; exists {
 			return MavenArtifact{}, ErrNameExists
 		}
 		s.mavenAssets[k] = a
+		s.mavenObjectRefs[a.ObjectKey] = true
 	}
 	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
 	s.mavenArtifacts[id] = artifact
@@ -384,7 +390,7 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 	defer s.mu.Unlock()
 	claimed := make([]MavenObjectIntent, 0, limit)
 	for key, intent := range s.mavenObjectIntents {
-		if len(claimed) == limit || !intent.claimedAt.IsZero() || intent.createdAt.After(before) {
+		if len(claimed) == limit || !intent.claimedAt.IsZero() || intent.createdAt.After(before) || s.mavenObjectRefs[key] {
 			continue
 		}
 		liveSession := false
@@ -411,11 +417,16 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 	}
 	return claimed, nil
 }
+func (s *MemoryStore) MavenObjectIntentHasReference(_ context.Context, key string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mavenObjectRefs[key], nil
+}
 func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() {
+	if !ok || intent.claimedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
 	delete(s.mavenObjectIntents, key)
@@ -425,7 +436,7 @@ func (s *MemoryStore) ReleaseClaimedMavenObjectIntent(_ context.Context, key str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() {
+	if !ok || intent.claimedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
 	intent.claimedAt = time.Time{}
