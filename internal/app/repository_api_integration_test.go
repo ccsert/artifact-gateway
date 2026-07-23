@@ -47,11 +47,11 @@ type blockingMavenCommitStore struct {
 
 type failMavenTombstoneStore struct{ repository.NativeMavenStore }
 
-func (s failMavenTombstoneStore) DeleteClaimedMavenObjectIntent(context.Context, string) error {
+func (s failMavenTombstoneStore) DeleteClaimedMavenObjectIntent(context.Context, string, string) error {
 	return errors.New("tombstone write interrupted")
 }
 
-func (s failMavenTombstoneStore) ReleaseClaimedMavenObjectIntent(context.Context, string) error {
+func (s failMavenTombstoneStore) ReleaseClaimedMavenObjectIntent(context.Context, string, string) error {
 	return errors.New("claim release interrupted")
 }
 
@@ -362,6 +362,75 @@ func TestPostgresMavenCollectorRecoversClaimAfterTombstoneWriteFailure(t *testin
 	}
 }
 
+func TestPostgresMavenCollectorClaimTokenFencesOverlappingCollectors(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "claim-token-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := repository.MavenDeclaredObject{Name: "claim-token-1.0.0.pom", Digest: "sha256:claim-token", Size: 1}
+	stale := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:claim-token:1.0.0", Publisher: "stale", PomObject: declared.Name, State: "open", ExpiresAt: time.Now().Add(-25 * time.Hour), Objects: []repository.MavenDeclaredObject{declared}}
+	active := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:claim-token:1.0.0", Publisher: "active", PomObject: declared.Name, State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{declared}}
+	for _, session := range []repository.MavenPublishSession{stale, active} {
+		if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := "native/maven/sha256/claim-token-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, stale.ID, declared.Name, key); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, active.ID, declared.Name, key); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(-24*time.Hour), 1)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("first claim=%#v err=%v", first, err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=now()-interval '6 minutes' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(-24*time.Hour), 1)
+	if err != nil || len(second) != 1 || second[0].ClaimToken == first[0].ClaimToken {
+		t.Fatalf("second claim=%#v first=%#v err=%v", second, first, err)
+	}
+	if err = store.ReleaseClaimedMavenObjectIntent(ctx, key, first[0].ClaimToken); err != repository.ErrNotFound {
+		t.Fatalf("stale claimant released current lease: %v", err)
+	}
+	var currentToken string
+	if err = db.QueryRowContext(ctx, `SELECT claimed_token FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&currentToken); err != nil || currentToken != second[0].ClaimToken {
+		t.Fatalf("current token=%q want=%q err=%v", currentToken, second[0].ClaimToken, err)
+	}
+	_, err = store.CommitMavenPublishSession(ctx, active.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/claim-token/1.0.0/claim-token-1.0.0.pom", ObjectKey: key, Digest: declared.Digest, Size: 1}})
+	if err != repository.ErrDisabled {
+		t.Fatalf("promotion bypassed current deletion fence: %v", err)
+	}
+	if err = store.DeleteClaimedMavenObjectIntent(ctx, key, second[0].ClaimToken); err != nil {
+		t.Fatal(err)
+	}
+	var references int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE object_key=$1`, key).Scan(&references); err != nil || references != 0 {
+		t.Fatalf("fenced overlap references=%d err=%v", references, err)
+	}
+}
+
 func TestPostgresMavenCommitCannotReferenceObjectDuringBlockedDeletion(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -646,7 +715,7 @@ func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
 	if _, err = db.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2)`, staleKey, repo.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.DeleteClaimedMavenObjectIntent(ctx, staleKey); err != repository.ErrNotFound {
+	if err = store.DeleteClaimedMavenObjectIntent(ctx, staleKey, claimed[0].ClaimToken); err != repository.ErrNotFound {
 		t.Fatalf("reference recheck delete=%v", err)
 	}
 	var retained int

@@ -2,8 +2,11 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -71,8 +74,8 @@ type NativeMavenStore interface {
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)
-	DeleteClaimedMavenObjectIntent(context.Context, string) error
-	ReleaseClaimedMavenObjectIntent(context.Context, string) error
+	DeleteClaimedMavenObjectIntent(context.Context, string, string) error
+	ReleaseClaimedMavenObjectIntent(context.Context, string, string) error
 }
 
 type MavenDeclaredObject struct {
@@ -92,7 +95,7 @@ type MavenArtifact struct {
 	ID, RepositoryID, Coordinate, Digest, State string
 	CreatedAt                                   time.Time
 }
-type MavenObjectIntent struct{ ObjectKey string }
+type MavenObjectIntent struct{ ObjectKey, ClaimToken string }
 
 type MemberType string
 
@@ -205,7 +208,10 @@ type MemoryStore struct {
 	mavenObjectRefs    map[string]bool
 }
 
-type mavenObjectIntent struct{ createdAt, claimedAt, deletedAt time.Time }
+type mavenObjectIntent struct {
+	createdAt, claimedAt, deletedAt time.Time
+	claimToken                      string
+}
 
 type idempotencyRecord struct {
 	payload, repositoryID string
@@ -328,7 +334,7 @@ func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key st
 			return ErrDisabled
 		}
 		if !intent.deletedAt.IsZero() {
-			intent.claimedAt, intent.deletedAt, intent.createdAt = time.Time{}, time.Time{}, time.Now().UTC()
+			intent.claimedAt, intent.deletedAt, intent.createdAt, intent.claimToken = time.Time{}, time.Time{}, time.Now().UTC(), ""
 			s.mavenObjectIntents[key] = intent
 		}
 	} else {
@@ -424,9 +430,9 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 		if liveSession {
 			continue
 		}
-		intent.claimedAt = now
+		intent.claimedAt, intent.claimToken = now, newMavenObjectClaimToken()
 		s.mavenObjectIntents[key] = intent
-		claimed = append(claimed, MavenObjectIntent{ObjectKey: key})
+		claimed = append(claimed, MavenObjectIntent{ObjectKey: key, ClaimToken: intent.claimToken})
 	}
 	return claimed, nil
 }
@@ -435,27 +441,35 @@ func (s *MemoryStore) MavenObjectIntentHasReference(_ context.Context, key strin
 	defer s.mu.RUnlock()
 	return s.mavenObjectRefs[key], nil
 }
-func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key string) error {
+func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key, claimToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
+	if !ok || intent.claimedAt.IsZero() || intent.claimToken != claimToken || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
 	intent.deletedAt = time.Now().UTC()
 	s.mavenObjectIntents[key] = intent
 	return nil
 }
-func (s *MemoryStore) ReleaseClaimedMavenObjectIntent(_ context.Context, key string) error {
+func (s *MemoryStore) ReleaseClaimedMavenObjectIntent(_ context.Context, key, claimToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
+	if !ok || intent.claimedAt.IsZero() || intent.claimToken != claimToken || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
-	intent.claimedAt = time.Time{}
+	intent.claimedAt, intent.claimToken = time.Time{}, ""
 	s.mavenObjectIntents[key] = intent
 	return nil
+}
+
+func newMavenObjectClaimToken() string {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 10)
+	}
+	return hex.EncodeToString(value)
 }
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {

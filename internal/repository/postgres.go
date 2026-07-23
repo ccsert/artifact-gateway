@@ -348,7 +348,7 @@ func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, ke
 	} else if claimed && !deleted {
 		return ErrDisabled
 	} else if deleted {
-		if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents SET session_id=$2,digest=$3,size=$4,created_at=now(),claimed_at=NULL,deleted_at=NULL WHERE object_key=$1`, key, id, declared.Digest, declared.Size); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents SET session_id=$2,digest=$3,size=$4,created_at=now(),claimed_at=NULL,claimed_token=NULL,deleted_at=NULL WHERE object_key=$1`, key, id, declared.Digest, declared.Size); err != nil {
 			return err
 		}
 	}
@@ -460,7 +460,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	return out, rows.Err()
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates WHERE i.object_key=candidates.object_key RETURNING i.object_key, i.claimed_token`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, befo
 	out := []MavenObjectIntent{}
 	for rows.Next() {
 		var v MavenObjectIntent
-		if err := rows.Scan(&v.ObjectKey); err != nil {
+		if err := rows.Scan(&v.ObjectKey, &v.ClaimToken); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -480,8 +480,8 @@ func (s *PostgresStore) MavenObjectIntentHasReference(ctx context.Context, key s
 	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_references WHERE object_key=$1)`, key).Scan(&referenced)
 	return referenced, err
 }
-func (s *PostgresStore) ReleaseClaimedMavenObjectIntent(ctx context.Context, key string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET claimed_at=NULL WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)
+func (s *PostgresStore) ReleaseClaimedMavenObjectIntent(ctx context.Context, key, claimToken string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET claimed_at=NULL,claimed_token=NULL WHERE i.object_key=$1 AND i.claimed_token=$2 AND i.claimed_at IS NOT NULL AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key, claimToken)
 	if err != nil {
 		return err
 	}
@@ -490,8 +490,8 @@ func (s *PostgresStore) ReleaseClaimedMavenObjectIntent(ctx context.Context, key
 	}
 	return nil
 }
-func (s *PostgresStore) DeleteClaimedMavenObjectIntent(ctx context.Context, key string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET deleted_at=now() WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)
+func (s *PostgresStore) DeleteClaimedMavenObjectIntent(ctx context.Context, key, claimToken string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET deleted_at=now() WHERE i.object_key=$1 AND i.claimed_token=$2 AND i.claimed_at IS NOT NULL AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key, claimToken)
 	if err != nil {
 		return err
 	}

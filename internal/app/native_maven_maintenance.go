@@ -33,15 +33,15 @@ func (m NativeMavenMaintenance) Collect(ctx context.Context) error {
 			// A committed reference wins over this collector claim. The commit path
 			// fences claimed intents, so no promotion can pass this point after the
 			// recheck and before object deletion.
-			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey)
+			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
 			continue
 		}
 		if err := m.Objects.Delete(ctx, intent.ObjectKey); err != nil {
-			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey)
+			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
 			return err
 		}
-		if err := m.Store.DeleteClaimedMavenObjectIntent(ctx, intent.ObjectKey); err != nil {
-			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey)
+		if err := m.Store.DeleteClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken); err != nil {
+			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
 			return err
 		}
 	}
