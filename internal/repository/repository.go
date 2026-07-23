@@ -203,7 +203,7 @@ type MemoryStore struct {
 	mavenObjectRefs    map[string]bool
 }
 
-type mavenObjectIntent struct{ createdAt, claimedAt time.Time }
+type mavenObjectIntent struct{ createdAt, claimedAt, deletedAt time.Time }
 
 type idempotencyRecord struct {
 	payload, repositoryID string
@@ -321,8 +321,18 @@ func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key st
 	if _, ok := s.mavenSessions[id]; !ok {
 		return ErrNotFound
 	}
+	if intent, exists := s.mavenObjectIntents[key]; exists {
+		if !intent.claimedAt.IsZero() && intent.deletedAt.IsZero() {
+			return ErrDisabled
+		}
+		if !intent.deletedAt.IsZero() {
+			intent.claimedAt, intent.deletedAt, intent.createdAt = time.Time{}, time.Time{}, time.Now().UTC()
+			s.mavenObjectIntents[key] = intent
+		}
+	} else {
+		s.mavenObjectIntents[key] = mavenObjectIntent{createdAt: time.Now().UTC()}
+	}
 	s.mavenUploads[id][name] = key
-	s.mavenObjectIntents[key] = mavenObjectIntent{createdAt: time.Now().UTC()}
 	return nil
 }
 func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
@@ -349,7 +359,7 @@ func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, as
 		}
 	}
 	for _, a := range assets {
-		if intent := s.mavenObjectIntents[a.ObjectKey]; !intent.claimedAt.IsZero() {
+		if intent := s.mavenObjectIntents[a.ObjectKey]; !intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() {
 			return MavenArtifact{}, ErrDisabled
 		}
 		k := a.RepositoryID + "\x00" + a.Path
@@ -390,7 +400,7 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 	defer s.mu.Unlock()
 	claimed := make([]MavenObjectIntent, 0, limit)
 	for key, intent := range s.mavenObjectIntents {
-		if len(claimed) == limit || !intent.claimedAt.IsZero() || intent.createdAt.After(before) || s.mavenObjectRefs[key] {
+		if len(claimed) == limit || !intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || intent.createdAt.After(before) || s.mavenObjectRefs[key] {
 			continue
 		}
 		liveSession := false
@@ -426,17 +436,18 @@ func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() || s.mavenObjectRefs[key] {
+	if !ok || intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
-	delete(s.mavenObjectIntents, key)
+	intent.deletedAt = time.Now().UTC()
+	s.mavenObjectIntents[key] = intent
 	return nil
 }
 func (s *MemoryStore) ReleaseClaimedMavenObjectIntent(_ context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	intent, ok := s.mavenObjectIntents[key]
-	if !ok || intent.claimedAt.IsZero() || s.mavenObjectRefs[key] {
+	if !ok || intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || s.mavenObjectRefs[key] {
 		return ErrNotFound
 	}
 	intent.claimedAt = time.Time{}

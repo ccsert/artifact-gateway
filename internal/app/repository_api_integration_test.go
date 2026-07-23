@@ -26,6 +26,30 @@ type referenceAfterClaimStore struct {
 	repositoryID string
 }
 
+type blockingDeleteObjectStore struct {
+	*MemoryOCIObjectStore
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s blockingDeleteObjectStore) Delete(ctx context.Context, key string) error {
+	s.entered <- struct{}{}
+	<-s.release
+	return s.MemoryOCIObjectStore.Delete(ctx, key)
+}
+
+type blockingMavenCommitStore struct {
+	*repository.PostgresStore
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s blockingMavenCommitStore) CommitMavenPublishSession(ctx context.Context, id string, assets []repository.MavenAsset) (repository.MavenArtifact, error) {
+	s.entered <- struct{}{}
+	<-s.release
+	return s.PostgresStore.CommitMavenPublishSession(ctx, id, assets)
+}
+
 func (s referenceAfterClaimStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]repository.MavenObjectIntent, error) {
 	intents, err := s.NativeMavenStore.ClaimExpiredMavenObjectIntents(ctx, before, limit)
 	if err != nil {
@@ -254,6 +278,92 @@ func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T)
 	}
 	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE object_key=$1`, key).Scan(&references); err != nil || intents != 1 || references != 1 {
 		t.Fatalf("retained intent/reference intents=%d references=%d err=%v", intents, references, err)
+	}
+}
+
+func TestPostgresMavenCommitCannotReferenceObjectDuringBlockedDeletion(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "delete-fence-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pom := []byte("<project><groupId>org.example</groupId><artifactId>delete-fence</artifactId><version>1.0.0</version></project>")
+	sum := sha256.Sum256(pom)
+	digest := "sha256:" + fmt.Sprintf("%x", sum)
+	declared := repository.MavenDeclaredObject{Name: "delete-fence-1.0.0.pom", Digest: digest, Size: int64(len(pom))}
+	stale := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:delete-fence:1.0.0", Publisher: "stale", PomObject: declared.Name, State: "open", ExpiresAt: time.Now().Add(-25 * time.Hour), Objects: []repository.MavenDeclaredObject{declared}}
+	active := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:delete-fence:1.0.0", Publisher: "active", PomObject: declared.Name, State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{declared}}
+	for _, session := range []repository.MavenPublishSession{stale, active} {
+		if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
+	if err = store.MarkMavenPublishObject(ctx, stale.ID, declared.Name, key); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, active.ID, declared.Name, key); err != nil {
+		t.Fatal(err)
+	}
+	objects := blockingDeleteObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+	if err = objects.Put(ctx, key, pom); err != nil {
+		t.Fatal(err)
+	}
+	commitStore := blockingMavenCommitStore{PostgresStore: store, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	handler := newNativeMavenHandler(commitStore, objects, testAuthenticator())
+	commitResult := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/"+active.ID+":commit", nil)
+		r.Header.Set("Authorization", "Bearer admin-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		commitResult <- w
+	}()
+	<-commitStore.entered
+	maintenanceResult := make(chan error, 1)
+	go func() {
+		maintenanceResult <- NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now() }}.Collect(ctx)
+	}()
+	<-objects.entered
+	close(commitStore.release)
+	commit := <-commitResult
+	if commit.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("commit during deletion=%d %s", commit.Code, commit.Body.String())
+	}
+	close(objects.release)
+	if err = <-maintenanceResult; err != nil {
+		t.Fatal(err)
+	}
+	if _, err = objects.Get(ctx, key); err == nil {
+		t.Fatal("deleted object remained after a fenced commit")
+	}
+	var references, assets int
+	var deletedAt sql.NullTime
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE object_key=$1`, key).Scan(&references); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_assets WHERE repository_id=$1`, repo.ID).Scan(&assets); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT deleted_at FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&deletedAt); err != nil || !deletedAt.Valid || references != 0 || assets != 0 {
+		t.Fatalf("fenced deletion tombstone=%v references=%d assets=%d err=%v", deletedAt.Valid, references, assets, err)
 	}
 }
 
