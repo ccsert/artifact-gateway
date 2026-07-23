@@ -460,7 +460,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	return out, rows.Err()
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND i.claimed_at IS NULL AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
 	if err != nil {
 		return nil, err
 	}

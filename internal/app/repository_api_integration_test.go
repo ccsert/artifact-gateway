@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +43,16 @@ type blockingMavenCommitStore struct {
 	*repository.PostgresStore
 	entered chan struct{}
 	release chan struct{}
+}
+
+type failMavenTombstoneStore struct{ repository.NativeMavenStore }
+
+func (s failMavenTombstoneStore) DeleteClaimedMavenObjectIntent(context.Context, string) error {
+	return errors.New("tombstone write interrupted")
+}
+
+func (s failMavenTombstoneStore) ReleaseClaimedMavenObjectIntent(context.Context, string) error {
+	return errors.New("claim release interrupted")
 }
 
 func (s blockingMavenCommitStore) CommitMavenPublishSession(ctx context.Context, id string, assets []repository.MavenAsset) (repository.MavenArtifact, error) {
@@ -278,6 +289,76 @@ func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T)
 	}
 	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_object_references WHERE object_key=$1`, key).Scan(&references); err != nil || intents != 1 || references != 1 {
 		t.Fatalf("retained intent/reference intents=%d references=%d err=%v", intents, references, err)
+	}
+}
+
+func TestPostgresMavenCollectorRecoversClaimAfterTombstoneWriteFailure(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "collector-recovery-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:collector-recovery:1.0.0", Publisher: "collector", PomObject: "collector-recovery-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(-25 * time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "collector-recovery-1.0.0.pom", Digest: "sha256:collector-recovery", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	key := "native/maven/sha256/collector-recovery-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, key); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
+		t.Fatal(err)
+	}
+	failed := NativeMavenMaintenance{Store: failMavenTombstoneStore{NativeMavenStore: store}, Objects: objects, Now: func() time.Time { return time.Now() }}
+	if err = failed.Collect(ctx); err == nil {
+		t.Fatal("collector must report the interrupted tombstone write")
+	}
+	if _, err = objects.Get(ctx, key); err == nil {
+		t.Fatal("first collector must have deleted the staged object")
+	}
+	var claimedAt, deletedAt sql.NullTime
+	if err = db.QueryRowContext(ctx, `SELECT claimed_at, deleted_at FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&claimedAt, &deletedAt); err != nil || !claimedAt.Valid || deletedAt.Valid {
+		t.Fatalf("interrupted state claimed=%v deleted=%v err=%v", claimedAt.Valid, deletedAt.Valid, err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=now()-interval '6 minutes' WHERE object_key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	if err = (NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now() }}).Collect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT claimed_at, deleted_at FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&claimedAt, &deletedAt); err != nil || !claimedAt.Valid || !deletedAt.Valid {
+		t.Fatalf("recovered tombstone claimed=%v deleted=%v err=%v", claimedAt.Valid, deletedAt.Valid, err)
+	}
+	retry := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:collector-retry:1.0.0", Publisher: "retry", PomObject: "collector-recovery-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: session.Objects}
+	if _, err = store.CreateMavenPublishSession(ctx, retry); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, retry.ID, retry.PomObject, key); err != nil {
+		t.Fatalf("tombstoned object cannot be re-staged: %v", err)
+	}
+	if err = objects.Put(ctx, key, []byte("restaged")); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT claimed_at, deleted_at FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&claimedAt, &deletedAt); err != nil || claimedAt.Valid || deletedAt.Valid {
+		t.Fatalf("restaged intent claimed=%v deleted=%v err=%v", claimedAt.Valid, deletedAt.Valid, err)
 	}
 }
 

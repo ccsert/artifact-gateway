@@ -15,6 +15,8 @@ var (
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
 )
 
+const mavenObjectClaimLease = 5 * time.Minute
+
 // Format is the immutable protocol family served by a Native Hosted
 // Repository. It deliberately remains distinct from the legacy Group model.
 type Format string
@@ -398,9 +400,10 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now().UTC()
 	claimed := make([]MavenObjectIntent, 0, limit)
 	for key, intent := range s.mavenObjectIntents {
-		if len(claimed) == limit || !intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() || intent.createdAt.After(before) || s.mavenObjectRefs[key] {
+		if len(claimed) == limit || (!intent.claimedAt.IsZero() && now.Sub(intent.claimedAt) < mavenObjectClaimLease) || !intent.deletedAt.IsZero() || intent.createdAt.After(before) || s.mavenObjectRefs[key] {
 			continue
 		}
 		liveSession := false
@@ -421,7 +424,7 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 		if liveSession {
 			continue
 		}
-		intent.claimedAt = time.Now().UTC()
+		intent.claimedAt = now
 		s.mavenObjectIntents[key] = intent
 		claimed = append(claimed, MavenObjectIntent{ObjectKey: key})
 	}
