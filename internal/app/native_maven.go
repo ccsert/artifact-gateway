@@ -389,6 +389,31 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		return
 	}
 	prefix := strings.TrimSuffix(path, "/maven-metadata.xml")
+	parts := strings.Split(prefix, "/")
+	// Maven asks for a distinct version-level metadata document when resolving
+	// -SNAPSHOT. It contains the timestamp/build mapping rather than the list
+	// of artifact versions.
+	if len(parts) >= 3 && strings.HasSuffix(parts[len(parts)-1], "-SNAPSHOT") {
+		group := strings.Join(parts[:len(parts)-2], ".")
+		artifact, version := parts[len(parts)-2], parts[len(parts)-1]
+		coordinate := group + ":" + artifact + ":" + version
+		for _, item := range items {
+			if item.Coordinate != coordinate {
+				continue
+			}
+			timestamp := item.CreatedAt.UTC().Format("20060102.150405")
+			base := strings.TrimSuffix(version, "-SNAPSHOT") + "-" + timestamp + "-1"
+			body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><version>" + version + "</version><versioning><snapshot><timestamp>" + timestamp + "</timestamp><buildNumber>1</buildNumber></snapshot><snapshotVersions><snapshotVersion><extension>pom</extension><value>" + base + "</value><updated>" + strings.ReplaceAll(timestamp, ".", "") + "</updated></snapshotVersion><snapshotVersion><extension>jar</extension><value>" + base + "</value><updated>" + strings.ReplaceAll(timestamp, ".", "") + "</updated></snapshotVersion></snapshotVersions></versioning></metadata>")
+			w.Header().Set("Content-Type", "application/xml")
+			if r.Method == http.MethodGet {
+				_, _ = w.Write(body)
+			}
+			_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
 	versions := []string{}
 	for _, a := range items {
 		base := mavenCoordinatePath(a.Coordinate)
