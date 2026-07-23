@@ -139,7 +139,7 @@ func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testi
 	}
 }
 
-func TestNativeMavenAllowsAnonymousReadsOnlyWhenNoGrantPolicyExists(t *testing.T) {
+func TestNativeMavenRejectsAnonymousReads(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "anonymous", Format: repository.FormatMaven})
 	objects := NewMemoryOCIObjectStore()
@@ -153,13 +153,7 @@ func TestNativeMavenAllowsAnonymousReadsOnlyWhenNoGrantPolicyExists(t *testing.T
 	open := newNativeMavenHandler(store, objects, Authenticator{})
 	w := httptest.NewRecorder()
 	open.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
-	if w.Code != http.StatusOK {
-		t.Fatalf("anonymous read=%d", w.Code)
-	}
-	closed := newNativeMavenHandler(store, objects, Authenticator{RepositoryReaders: map[string][]string{}})
-	w = httptest.NewRecorder()
-	closed.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
 	if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") == "" {
-		t.Fatalf("grant policy read=%d headers=%v", w.Code, w.Header())
+		t.Fatalf("anonymous read=%d", w.Code)
 	}
 }

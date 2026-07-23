@@ -170,8 +170,13 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 		return MavenPublishSession{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// Remove an expired key under the same transaction before attempting the
+	// insert. This keeps the primary key reusable after its 24h replay window.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at <= now()`, actor, target, key); err != nil {
+		return MavenPublishSession{}, false, err
+	}
 	var existingID, existingPayload string
-	err = tx.QueryRowContext(ctx, `SELECT session_id::text,payload_hash FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at > now() FOR UPDATE`, actor, target, key).Scan(&existingID, &existingPayload)
+	err = tx.QueryRowContext(ctx, `SELECT session_id::text,payload_hash FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 FOR UPDATE`, actor, target, key).Scan(&existingID, &existingPayload)
 	if err == nil {
 		if existingPayload != payload {
 			return MavenPublishSession{}, false, ErrIdempotencyConflict
@@ -189,7 +194,7 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
 		return MavenPublishSession{}, false, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours')`, actor, target, key, payload, v.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours') ON CONFLICT (actor,target,key) DO NOTHING`, actor, target, key, payload, v.ID); err != nil {
 		return MavenPublishSession{}, false, err
 	}
 	if err = tx.Commit(); err != nil {

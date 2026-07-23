@@ -365,6 +365,9 @@ type Authenticator struct {
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
+	// RepositoryWriters is intentionally separate from readers: Maven deploy
+	// must never turn a download grant into publication authority.
+	RepositoryWriters map[string][]string
 	OIDC              *OIDCValidator
 }
 
@@ -422,6 +425,18 @@ func (a Authenticator) CanReadMavenRepository(principal Principal, groupName str
 	}
 	for _, pattern := range principal.RepositoryPatterns {
 		if strings.TrimSuffix(pattern, "/*") == groupName && strings.HasSuffix(pattern, "/*") {
+			return true
+		}
+	}
+	return false
+}
+
+func (a Authenticator) CanWriteMavenRepository(principal Principal, repositoryName string) bool {
+	if principal.Admin {
+		return true
+	}
+	for _, pattern := range a.RepositoryWriters[principal.Actor] {
+		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*")) {
 			return true
 		}
 	}

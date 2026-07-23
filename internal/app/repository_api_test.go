@@ -33,7 +33,7 @@ func (f failingGetStore) GetGroup(context.Context, string) (repository.Group, er
 }
 
 func testAuthenticator() Authenticator {
-	return Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", AdminActor: "alice", ResolverActor: "build-agent"}
+	return Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", AdminActor: "alice", ResolverActor: "build-agent", RepositoryWriters: map[string][]string{"build-agent": {"releases", "deploys"}, "maven": {"releases", "deploys"}}}
 }
 
 func authorize(request *http.Request, token string) {
