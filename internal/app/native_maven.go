@@ -130,7 +130,7 @@ func (h nativeMavenHandler) create(w http.ResponseWriter, r *http.Request, repoI
 	}
 	payload, _ := json.Marshal(body)
 	digest := sha256.Sum256(payload)
-	s := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: body.Coordinate, PomObject: body.PomObject, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	s := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: body.Coordinate, Publisher: principal.Actor, PomObject: body.PomObject, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	s, _, err = h.store.CreateMavenPublishSessionIdempotently(r.Context(), s, principal.Actor, "repositories/"+repo.ID+"/publish-sessions", key, hex.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
@@ -349,13 +349,22 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "expectedAssetNames must be a non-empty unique set of filenames")
 		return
 	}
-	s, err := h.store.FindMavenPublishSession(r.Context(), repo.ID, coordinate)
+	var s repository.MavenPublishSession
+	if principal.Admin {
+		s, err = h.store.FindAnyMavenPublishSession(r.Context(), repo.ID, coordinate)
+	} else {
+		s, err = h.store.FindMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven coordinate has no staged publish session")
 		return
 	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Maven publish session failed")
+		return
+	}
+	if s.Publisher != principal.Actor && !principal.Admin {
+		writeHostedProblem(w, http.StatusForbidden, "publisher_required", "only the session publisher may commit this Maven coordinate")
 		return
 	}
 	if !sameMavenAssetNames(body.ExpectedAssetNames, s.Objects) {
@@ -468,13 +477,13 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	coordinate := group + ":" + artifact + ":" + version
 	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}
-	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate)
+	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
 	if errors.Is(err, repository.ErrNotFound) {
 		pomObject := ""
 		if strings.HasSuffix(name, ".pom") {
 			pomObject = name
 		}
-		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
+		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: principal.Actor, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
 		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
 	} else if err == nil {
 		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
@@ -494,7 +503,11 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
-	if err = h.objects.Put(r.Context(), key, body); err != nil || h.store.MarkMavenPublishObject(r.Context(), s.ID, name, key) != nil {
+	if err = h.store.MarkMavenPublishObject(r.Context(), s.ID, name, key); err != nil {
+		http.Error(w, "stage Maven asset", 500)
+		return
+	}
+	if err = h.objects.Put(r.Context(), key, body); err != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}

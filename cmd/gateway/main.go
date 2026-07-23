@@ -58,6 +58,7 @@ func main() {
 	maintenance := app.NewCacheMaintenanceWithRaw(objectStore, ociCache, rawCache).WithConan(conanCache)
 	runtimeContext := signalContext()
 	maintenance.Start(runtimeContext, 5*time.Minute)
+	app.NativeMavenMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{

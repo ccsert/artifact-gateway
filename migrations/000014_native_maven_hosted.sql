@@ -1,6 +1,6 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS native_maven_publish_sessions (
-    id UUID PRIMARY KEY, repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
+    id UUID PRIMARY KEY, repository_id UUID NOT NULL REFERENCES hosted_repositories(id), publisher TEXT NOT NULL,
     coordinate TEXT NOT NULL, pom_object TEXT NOT NULL, state TEXT NOT NULL CHECK (state IN ('open','committed','aborted','expired')),
     expires_at TIMESTAMPTZ NOT NULL, objects JSONB NOT NULL
 );

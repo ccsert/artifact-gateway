@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,24 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type markFailMavenStore struct{ *repository.MemoryStore }
+
+func (s markFailMavenStore) MarkMavenPublishObject(context.Context, string, string, string) error {
+	return errors.New("database unavailable")
+}
+
+type failingDeleteObjectStore struct {
+	*MemoryOCIObjectStore
+	fail bool
+}
+
+func (s *failingDeleteObjectStore) Delete(ctx context.Context, key string) error {
+	if s.fail {
+		return errors.New("object store unavailable")
+	}
+	return s.MemoryOCIObjectStore.Delete(ctx, key)
+}
 
 func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) {
 	store := repository.NewMemoryStore()
@@ -182,5 +201,73 @@ func TestNativeMavenRejectsAnonymousReads(t *testing.T) {
 	open.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
 	if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") == "" {
 		t.Fatalf("anonymous read=%d", w.Code)
+	}
+}
+
+func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"alice": {"releases"}, "bob": {"releases"}}})
+	put := func(actor, name, body string) int {
+		r := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/"+name, strings.NewReader(body))
+		r.SetBasicAuth(actor, "resolver-secret")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project>"
+	if got := put("alice", "widget-1.0.0.pom", pom); got != http.StatusCreated {
+		t.Fatalf("alice stage pom=%d", got)
+	}
+	if got := put("bob", "widget-1.0.0.jar", "bob jar"); got != http.StatusCreated {
+		t.Fatalf("bob stage jar=%d", got)
+	}
+	commit := httptest.NewRequest(http.MethodPost, "/repository/maven/releases/coordinates/org.example:widget:1.0.0:commit", strings.NewReader(`{"expectedAssetNames":["widget-1.0.0.jar"]}`))
+	commit.SetBasicAuth("bob", "resolver-secret")
+	commit.Header.Set("Idempotency-Key", "bob-commit")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, commit)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("bob must not commit alice's POM, got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestNativeMavenProtocolStagesIntentBeforeObjectBytes(t *testing.T) {
+	base := repository.NewMemoryStore()
+	_, _ = base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
+	objects := NewMemoryOCIObjectStore()
+	h := newNativeMavenHandler(markFailMavenStore{base}, objects, testAuthenticator())
+	r := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", strings.NewReader("jar"))
+	r.SetBasicAuth("maven", "resolver-secret")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("stage failure=%d", w.Code)
+	}
+	sum := sha256.Sum256([]byte("jar"))
+	if _, err := objects.Get(context.Background(), "native/maven/sha256/"+hex.EncodeToString(sum[:])); err == nil {
+		t.Fatal("object bytes were written although durable staging intent failed")
+	}
+}
+
+func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := &failingDeleteObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), fail: true}
+	key := "native/maven/sha256/deadbeef"
+	_ = objects.Put(context.Background(), key, []byte("staged"))
+	_, _ = store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "expired", RepositoryID: "repo", Coordinate: "org.example:widget:1.0.0", Publisher: "alice", State: "open", ExpiresAt: time.Now().Add(-time.Hour)})
+	if err := store.MarkMavenPublishObject(context.Background(), "expired", "widget-1.0.0.jar", key); err != nil {
+		t.Fatal(err)
+	}
+	maintenance := NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	if err := maintenance.Collect(context.Background()); err == nil {
+		t.Fatal("collector must report failed object deletion")
+	}
+	objects.fail = false
+	if err := maintenance.Collect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := objects.Get(context.Background(), key); err == nil {
+		t.Fatal("collector did not retry the retained intent")
 	}
 }

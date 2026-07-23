@@ -161,7 +161,7 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 
 func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPublishSession) (MavenPublishSession, error) {
 	objects, _ := json.Marshal(v.Objects)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, v.ID, v.RepositoryID, v.Coordinate, v.Publisher, v.PomObject, v.State, v.ExpiresAt, objects)
 	return v, err
 }
 func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Context, v MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
@@ -191,7 +191,7 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 		return MavenPublishSession{}, false, err
 	}
 	objects, _ := json.Marshal(v.Objects)
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Coordinate, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, v.ID, v.RepositoryID, v.Coordinate, v.Publisher, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
 		return MavenPublishSession{}, false, err
 	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours') ON CONFLICT (actor,target,key) DO NOTHING`, actor, target, key, payload, v.ID)
@@ -221,7 +221,7 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (MavenPublishSession, error) {
 	var v MavenPublishSession
 	var objects []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -230,10 +230,10 @@ func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (
 	}
 	return v, err
 }
-func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
 	var v MavenPublishSession
 	var raw []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND state='open'`, repoID, coordinate).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 AND state='open'`, repoID, coordinate, publisher).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -242,10 +242,22 @@ func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID,
 	}
 	return v, json.Unmarshal(raw, &v.Objects)
 }
-func (s *PostgresStore) FindMavenPublishSession(ctx context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+func (s *PostgresStore) FindMavenPublishSession(ctx context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
 	var v MavenPublishSession
 	var raw []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 ORDER BY CASE state WHEN 'open' THEN 0 ELSE 1 END, expires_at DESC LIMIT 1`, repoID, coordinate).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 ORDER BY CASE state WHEN 'open' THEN 0 ELSE 1 END, expires_at DESC LIMIT 1`, repoID, coordinate, publisher).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	if err != nil {
+		return v, err
+	}
+	return v, json.Unmarshal(raw, &v.Objects)
+}
+func (s *PostgresStore) FindAnyMavenPublishSession(ctx context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	var v MavenPublishSession
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 ORDER BY CASE state WHEN 'open' THEN 0 ELSE 1 END, expires_at DESC LIMIT 1`, repoID, coordinate).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -339,7 +351,7 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 	defer tx.Rollback()
 	var v MavenPublishSession
 	var objects []byte
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -415,7 +427,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	return out, rows.Err()
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT object_key FROM native_maven_object_intents i WHERE i.created_at <= $1 AND i.claimed_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) ORDER BY i.created_at FOR UPDATE SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH claimed AS (SELECT object_key FROM native_maven_object_intents i WHERE i.created_at <= $1 AND i.claimed_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT EXISTS (SELECT 1 FROM native_maven_publish_sessions s WHERE s.id=i.session_id AND s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now() FROM claimed WHERE i.object_key=claimed.object_key RETURNING i.object_key`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +441,16 @@ func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, befo
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+func (s *PostgresStore) ReleaseClaimedMavenObjectIntent(ctx context.Context, key string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_maven_object_intents i SET claimed_at=NULL WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 func (s *PostgresStore) DeleteClaimedMavenObjectIntent(ctx context.Context, key string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM native_maven_object_intents i WHERE i.object_key=$1 AND i.claimed_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key)`, key)
