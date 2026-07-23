@@ -230,13 +230,13 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	user, pass, ok := r.BasicAuth()
-	if !ok || user == "" || !tokenMatches(pass, h.authenticator.ResolverToken) {
+	principal, ok := h.protocolPrincipal(r)
+	if !ok {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	principal := h.authenticator.principal(user)
+	user := principal.Actor
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repository/maven/"), "/")
 	if len(parts) < 2 || parts[0] == "" {
 		http.NotFound(w, r)
@@ -278,8 +278,8 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 // committed, while the shared coordinate becomes visible only after its bytes
 // and generated checksum sidecars have been validated.
 func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
-	user, pass, ok := r.BasicAuth()
-	if !ok || user == "" || !tokenMatches(pass, h.authenticator.ResolverToken) {
+	principal, ok := h.protocolPrincipal(r)
+	if !ok {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -294,7 +294,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authenticator.CanReadMavenRepository(h.authenticator.principal(user), repo.Name) {
+	if !h.authenticator.CanReadMavenRepository(principal, repo.Name) {
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
@@ -338,6 +338,17 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (h nativeMavenHandler) protocolPrincipal(r *http.Request) (Principal, bool) {
+	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
+		return principal, true
+	}
+	user, pass, ok := r.BasicAuth()
+	if !ok || user == "" || !tokenMatches(pass, h.authenticator.ResolverToken) {
+		return Principal{}, false
+	}
+	return h.authenticator.principal(user), true
 }
 
 func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, actor string) {
