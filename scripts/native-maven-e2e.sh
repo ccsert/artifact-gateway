@@ -28,7 +28,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-LISTEN_ADDR="127.0.0.1:${port}" go run ./cmd/native-maven-fixture >"$workdir/gateway.log" 2>&1 &
+go build -o "$workdir/native-maven-fixture" ./cmd/native-maven-fixture
+LISTEN_ADDR="127.0.0.1:${port}" "$workdir/native-maven-fixture" >"$workdir/gateway.log" 2>&1 &
 fixture_pid=$!
 until curl --silent --show-error --fail "$gateway_url/livez" >/dev/null; do
   if ! kill -0 "$fixture_pid" 2>/dev/null; then

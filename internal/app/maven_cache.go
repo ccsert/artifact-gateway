@@ -57,6 +57,7 @@ type MavenCache struct {
 	allowedProxyHost map[string]struct{}
 	mu               sync.Mutex
 	openUntil        map[string]time.Time
+	coordinator      OCICacheCoordinator
 	quota            *CacheQuota
 }
 
@@ -76,6 +77,11 @@ func NewDefaultMavenCache(store OCIObjectStore, allowedProxyHosts []string) *Mav
 
 func (c *MavenCache) WithQuota(quota *CacheQuota) *MavenCache {
 	c.quota = quota
+	return c
+}
+
+func (c *MavenCache) WithCoordinator(coordinator OCICacheCoordinator) *MavenCache {
+	c.coordinator = coordinator
 	return c
 }
 
@@ -154,20 +160,32 @@ func (c *MavenCache) ProxyAllowed(endpoint string) bool {
 	return ok
 }
 
-func (c *MavenCache) UpstreamAllowed(endpoint string) bool {
+func (c *MavenCache) UpstreamAllowed(ctx context.Context, endpoint string) bool {
+	if c.coordinator != nil {
+		open, err := c.coordinator.CircuitOpen(ctx, endpoint)
+		if err == nil && open {
+			return false
+		}
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	until := c.openUntil[endpoint]
 	return until.IsZero() || !time.Now().UTC().Before(until)
 }
 
-func (c *MavenCache) RecordUpstreamFailure(endpoint string) {
+func (c *MavenCache) RecordUpstreamFailure(ctx context.Context, endpoint string) {
+	if c.coordinator != nil {
+		_ = c.coordinator.OpenCircuit(ctx, endpoint, c.breakerTTL)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.openUntil[endpoint] = time.Now().UTC().Add(c.breakerTTL)
 }
 
-func (c *MavenCache) RecordUpstreamSuccess(endpoint string) {
+func (c *MavenCache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
+	if c.coordinator != nil {
+		_ = c.coordinator.CloseCircuit(ctx, endpoint)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.openUntil, endpoint)

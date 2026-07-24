@@ -25,20 +25,18 @@ type OCIClient interface {
 	Fetch(context.Context, string, repository.Member, string, string, string, http.Header) (*http.Response, error)
 }
 
-type GiteaClient struct {
-	HTTPClient *http.Client
-	Username   string
-	Token      string
-}
+// UpstreamClient is used only by legacy Group reads. Native Hosted repositories
+// are served from PostgreSQL metadata and the object store.
+type UpstreamClient struct{ HTTPClient *http.Client }
 
-func (c GiteaClient) Fetch(ctx context.Context, method string, member repository.Member, repositoryName, resource, reference string, headers http.Header) (*http.Response, error) {
+func (c UpstreamClient) Fetch(ctx context.Context, method string, member repository.Member, repositoryName, resource, reference string, headers http.Header) (*http.Response, error) {
 	endpoint, err := url.Parse(strings.TrimRight(member.Endpoint, "/") + "/v2/" + repositoryName + "/" + resource + "/" + reference)
 	if err != nil {
-		return nil, fmt.Errorf("parse Gitea OCI endpoint: %w", err)
+		return nil, fmt.Errorf("parse OCI upstream endpoint: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("create Gitea OCI request: %w", err)
+		return nil, fmt.Errorf("create OCI upstream request: %w", err)
 	}
 	if accept := headers.Get("Accept"); accept != "" {
 		request.Header.Set("Accept", accept)
@@ -46,12 +44,9 @@ func (c GiteaClient) Fetch(ctx context.Context, method string, member repository
 	if rangeHeader := headers.Get("Range"); rangeHeader != "" {
 		request.Header.Set("Range", rangeHeader)
 	}
-	if member.Type == repository.MemberHosted {
-		request.SetBasicAuth(c.Username, c.Token)
-	}
 	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("fetch Gitea OCI content: %w", err)
+		return nil, fmt.Errorf("fetch OCI upstream content: %w", err)
 	}
 	return response, nil
 }

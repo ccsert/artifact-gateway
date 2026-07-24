@@ -51,7 +51,7 @@ func TestConanHostedRecipeAndPackageFilesAreChecksumVerifiedAndCached(t *testing
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/packages/package-id/revisions/prev/files/package.tgz"
 	for range 2 {
 		w := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestConanChecksumMismatchIsNotCached(t *testing.T) {
 
 func TestConanAuditFieldsAndMetricsCoverCacheLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
-	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	metrics := &Metrics{}
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAcceptClient{}, Cache: NewConanCache(nil), Metrics: metrics}
@@ -104,7 +104,7 @@ func TestConanAuditFieldsAndMetricsCoverCacheLifecycle(t *testing.T) {
 		t.Fatalf("audits=%#v", store.Audits)
 	}
 	audit := store.Audits[len(store.Audits)-1]
-	if audit.OccurredAt.IsZero() || audit.Format != "conan" || audit.Resource != "pkg/1.0/user/stable/revisions" || audit.Representation != "" || audit.MemberType != "hosted" || audit.UpstreamHost != "gitea.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "hit" || audit.Bytes == 0 || audit.RequestID != "conan-audit-request" || len(audit.TraceID) != 32 {
+	if audit.OccurredAt.IsZero() || audit.Format != "conan" || audit.Resource != "pkg/1.0/user/stable/revisions" || audit.Representation != "" || audit.MemberType != "hosted" || audit.UpstreamHost != "legacy.example" || audit.Operation != "get" || audit.Status != http.StatusOK || audit.CacheDisposition != "hit" || audit.Bytes == 0 || audit.RequestID != "conan-audit-request" || len(audit.TraceID) != 32 {
 		t.Fatalf("audit=%#v", audit)
 	}
 	metricsResponse := httptest.NewRecorder()
@@ -172,7 +172,7 @@ func (s *conanInvalidationGateStore) List(ctx context.Context, prefix string) ([
 
 func TestConanInvalidationSharesPublicationLockAcrossInstances(t *testing.T) {
 	base := NewMemoryOCIObjectStore()
-	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	seed := NewDefaultConanCache(base, nil)
 	key := seed.key("central", "pkg/1.0/user/stable/revisions", member, "application/json")
 	if err := seed.store(context.Background(), key, conanCacheEntry{body: []byte(`{"revisions":[]}`), contentType: "application/json", member: member.Name, endpoint: member.Endpoint, status: http.StatusOK}, "central", 0, time.Minute, "central", "pkg/1.0/user/stable/revisions", "application/json"); err != nil {
@@ -497,7 +497,7 @@ func TestConanRejectsQuotedNumericRevisionTime(t *testing.T) {
 
 func TestConanAuditsNonSuccessUpstreamStatus(t *testing.T) {
 	store := repository.NewMemoryStore()
-	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusFound}, Cache: NewConanCache(nil)}
 	w := httptest.NewRecorder()
@@ -512,7 +512,7 @@ func TestConanAuditsNonSuccessUpstreamStatus(t *testing.T) {
 
 func TestConanAuditRetainsSuccessfulUpstreamStatusAcrossCacheHit(t *testing.T) {
 	store := repository.NewMemoryStore()
-	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://gitea.example"}
+	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusCreated, body: `{"revisions":[{"revision":"abc","time":1}]}`}, Cache: NewConanCache(nil)}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
@@ -721,8 +721,8 @@ func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T)
 	member := repository.Member{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	objects := NewMemoryOCIObjectStore()
-	first := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
-	second := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
+	first := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
+	second := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	for _, handler := range []ConanHandler{first, second} {
 		w := httptest.NewRecorder()
@@ -751,7 +751,7 @@ func TestConanProxyRedirectIsNotFollowed(t *testing.T) {
 		}
 		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
 	})
-	response, err := (GiteaClient{HTTPClient: upstream.Client()}).FetchConan(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com:" + port}, "pkg/1.0/user/stable/revisions", nil)
+	response, err := (UpstreamClient{HTTPClient: upstream.Client()}).FetchConan(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com:" + port}, "pkg/1.0/user/stable/revisions", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1082,7 +1082,7 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "allowed", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "denied", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"other.example"}}}})
-	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Cache: NewConanCache(nil), Metrics: &Metrics{}})
+	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewConanCache(nil), Metrics: &Metrics{}})
 	defer server.Close()
 	home := t.TempDir()
 	run := func(args ...string) {

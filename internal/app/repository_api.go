@@ -487,6 +487,8 @@ type GatewayStore interface {
 	repository.ConanStore
 	repository.HostedRepositoryStore
 	repository.NativeMavenStore
+	repository.NativeOCIStore
+	repository.NativeRawStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -520,23 +522,25 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	metrics := &Metrics{}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
 	api := apiHandler{store: store, resolver: resolver, authenticator: authenticator}
-	ociClient := OCIClient(GiteaClient{})
+	ociClient := OCIClient(UpstreamClient{})
 	if len(ociClients) > 0 {
 		ociClient = ociClients[0]
 	}
-	mavenClient := MavenClient(GiteaClient{})
+	mavenClient := MavenClient(UpstreamClient{})
 	if client, ok := ociClient.(MavenClient); ok {
 		mavenClient = client
 	}
-	rawClient := RawClient(GiteaClient{})
+	rawClient := RawClient(UpstreamClient{})
 	if client, ok := ociClient.(RawClient); ok {
 		rawClient = client
 	}
-	conanClient := ConanClient(GiteaClient{})
+	conanClient := ConanClient(UpstreamClient{})
 	if client, ok := ociClient.(ConanClient); ok {
 		conanClient = client
 	}
 	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator, Cache: cache}
+	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator)
+	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -564,10 +568,20 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
-	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: oci})
+	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if nativeOCI.ServeHTTP(w, r) {
+			return
+		}
+		oci.ServeHTTP(w, r)
+	})})
 	mux.Handle("/repository/maven/", nativeMaven)
 	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}})
-	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}})
+	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if nativeRaw.ServeHTTP(w, r) {
+			return
+		}
+		RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
+	})})
 	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.Handle("/conan/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
 	mux.HandleFunc("GET /auth/token", oci.Token)

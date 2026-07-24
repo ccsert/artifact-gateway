@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -159,6 +160,380 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 		return HostedRepository{}, err
 	}
 	return repo, nil
+}
+
+func (s *PostgresStore) CreateOCIUpload(ctx context.Context, v OCIUpload) (OCIUpload, error) {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_uploads (id,repository_id,name,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Name, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
+	return v, err
+}
+func (s *PostgresStore) StageOCIObjectIntent(ctx context.Context, intent OCIObjectIntent) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_object_intents (object_key,digest,size) VALUES ($1,$2,$3) ON CONFLICT (object_key) DO NOTHING`, intent.ObjectKey, intent.Digest, intent.Size)
+	return err
+}
+
+// LockOCIUpload holds a PostgreSQL session advisory lock, rather than a
+// transaction lock, because the protected operation also includes MinIO I/O.
+// The caller must invoke the returned release function exactly once.
+func (s *PostgresStore) LockOCIUpload(ctx context.Context, id string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-oci-upload:"+id); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-oci-upload:"+id)
+		_ = conn.Close()
+	}, nil
+}
+
+// LockOCIObject serializes object publication with object-intent collection
+// across gateway instances. The interval includes object-store I/O.
+func (s *PostgresStore) LockOCIObject(ctx context.Context, objectKey string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-oci-object:"+objectKey); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-oci-object:"+objectKey)
+		_ = conn.Close()
+	}, nil
+}
+func (s *PostgresStore) GetOCIUpload(ctx context.Context, id string) (OCIUpload, error) {
+	var v OCIUpload
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,name,object_key,byte_offset,state,expires_at FROM native_oci_uploads WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Name, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIUpload{}, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) UpdateOCIUpload(ctx context.Context, id string, offset int64) (OCIUpload, error) {
+	var v OCIUpload
+	err := s.db.QueryRowContext(ctx, `UPDATE native_oci_uploads SET byte_offset=$2 WHERE id::text=$1 AND state='open' AND expires_at > now() RETURNING id::text,repository_id::text,name,object_key,byte_offset,state,expires_at`, id, offset).Scan(&v.ID, &v.RepositoryID, &v.Name, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIUpload{}, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) CompleteOCIUpload(ctx context.Context, id string, blob OCIBlob) (OCIBlob, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OCIBlob{}, err
+	}
+	defer tx.Rollback()
+	var repositoryID string
+	err = tx.QueryRowContext(ctx, `SELECT repository_id::text FROM native_oci_uploads WHERE id::text=$1 AND state='open' AND expires_at > now() FOR UPDATE`, id).Scan(&repositoryID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIBlob{}, ErrNotFound
+	}
+	if err != nil {
+		return OCIBlob{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_blobs (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO NOTHING`, blob.Digest, blob.ObjectKey, blob.Size); err != nil {
+		return OCIBlob{}, err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT digest,object_key,size FROM native_oci_blobs WHERE digest=$1`, blob.Digest).Scan(&blob.Digest, &blob.ObjectKey, &blob.Size); err != nil {
+		return OCIBlob{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_repository_blobs (repository_id,digest) VALUES ($1,$2) ON CONFLICT DO NOTHING`, repositoryID, blob.Digest); err != nil {
+		return OCIBlob{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL`, blob.ObjectKey); err != nil {
+		return OCIBlob{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_uploads SET state='completed' WHERE id::text=$1`, id); err != nil {
+		return OCIBlob{}, err
+	}
+	return blob, tx.Commit()
+}
+func (s *PostgresStore) ExpireOCIUploads(ctx context.Context, before time.Time, limit int) ([]OCIUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `WITH candidates AS (
+        SELECT id FROM native_oci_uploads
+        WHERE state='open' AND expires_at < $1
+        ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT $2
+    ) UPDATE native_oci_uploads u SET state='expired'
+    FROM candidates c WHERE u.id=c.id
+    RETURNING u.id::text,u.repository_id::text,u.name,u.object_key,u.byte_offset,u.state,u.expires_at,u.collected_at`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var uploads []OCIUpload
+	for rows.Next() {
+		var upload OCIUpload
+		if err = rows.Scan(&upload.ID, &upload.RepositoryID, &upload.Name, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &upload.CollectedAt); err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, upload)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return uploads, tx.Commit()
+}
+func (s *PostgresStore) ListUncollectedOCIUploads(ctx context.Context, limit int) ([]OCIUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,name,object_key,byte_offset,state,expires_at,collected_at FROM native_oci_uploads WHERE state='expired' AND collected_at IS NULL ORDER BY expires_at LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var uploads []OCIUpload
+	for rows.Next() {
+		var upload OCIUpload
+		if err = rows.Scan(&upload.ID, &upload.RepositoryID, &upload.Name, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &upload.CollectedAt); err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, upload)
+	}
+	return uploads, rows.Err()
+}
+func (s *PostgresStore) MarkOCIUploadCollected(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_oci_uploads SET collected_at=now() WHERE id::text=$1 AND state='expired' AND collected_at IS NULL`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+func (s *PostgresStore) ListUnclaimedOCIObjectIntents(ctx context.Context, before time.Time, limit int) ([]OCIObjectIntent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT object_key,digest,size,created_at,claimed_at,collected_at FROM native_oci_object_intents WHERE created_at < $1 AND claimed_at IS NULL AND collected_at IS NULL ORDER BY created_at LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var intents []OCIObjectIntent
+	for rows.Next() {
+		var intent OCIObjectIntent
+		if err = rows.Scan(&intent.ObjectKey, &intent.Digest, &intent.Size, &intent.CreatedAt, &intent.ClaimedAt, &intent.CollectedAt); err != nil {
+			return nil, err
+		}
+		intents = append(intents, intent)
+	}
+	return intents, rows.Err()
+}
+func (s *PostgresStore) OCIObjectIntentIsUnclaimed(ctx context.Context, objectKey string) (bool, error) {
+	var unclaimed bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_oci_object_intents WHERE object_key=$1 AND claimed_at IS NULL AND collected_at IS NULL)`, objectKey).Scan(&unclaimed)
+	return unclaimed, err
+}
+func (s *PostgresStore) MarkOCIObjectIntentCollected(ctx context.Context, objectKey string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_oci_object_intents SET collected_at=now() WHERE object_key=$1 AND claimed_at IS NULL AND collected_at IS NULL`, objectKey)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+func (s *PostgresStore) MountOCIBlob(ctx context.Context, repositoryID, digest string) (OCIBlob, error) {
+	var v OCIBlob
+	err := s.db.QueryRowContext(ctx, `SELECT digest,object_key,size FROM native_oci_blobs WHERE digest=$1`, digest).Scan(&v.Digest, &v.ObjectKey, &v.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	if err != nil {
+		return v, err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO native_oci_repository_blobs (repository_id,digest) VALUES ($1,$2) ON CONFLICT DO NOTHING`, repositoryID, digest)
+	return v, err
+}
+func (s *PostgresStore) MountOCIBlobFrom(ctx context.Context, repositoryID, sourceRepositoryID, digest string) (OCIBlob, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OCIBlob{}, err
+	}
+	defer tx.Rollback()
+	var v OCIBlob
+	err = tx.QueryRowContext(ctx, `SELECT b.digest,b.object_key,b.size
+        FROM native_oci_blobs b
+        JOIN native_oci_repository_blobs source ON source.digest=b.digest
+        WHERE source.repository_id::text=$1 AND b.digest=$2
+        FOR SHARE`, sourceRepositoryID, digest).Scan(&v.Digest, &v.ObjectKey, &v.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIBlob{}, ErrNotFound
+	}
+	if err != nil {
+		return OCIBlob{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_repository_blobs (repository_id,digest) VALUES ($1,$2) ON CONFLICT DO NOTHING`, repositoryID, digest); err != nil {
+		return OCIBlob{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return OCIBlob{}, err
+	}
+	return v, nil
+}
+func (s *PostgresStore) GetOCIBlob(ctx context.Context, repositoryID, digest string) (OCIBlob, error) {
+	var v OCIBlob
+	err := s.db.QueryRowContext(ctx, `SELECT b.digest,b.object_key,b.size FROM native_oci_blobs b JOIN native_oci_repository_blobs rb ON rb.digest=b.digest WHERE rb.repository_id::text=$1 AND b.digest=$2`, repositoryID, digest).Scan(&v.Digest, &v.ObjectKey, &v.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) PutOCIManifest(ctx context.Context, v OCIManifest, reference string) (OCIManifest, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return v, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (repository_id,name,digest) DO NOTHING`, v.RepositoryID, v.Name, v.Digest, v.ObjectKey, v.MediaType, v.Size); err != nil {
+		return v, err
+	}
+	if !strings.HasPrefix(reference, "sha256:") {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_tags (repository_id,name,tag,digest) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,name,tag) DO UPDATE SET digest=EXCLUDED.digest,updated_at=now()`, v.RepositoryID, v.Name, reference, v.Digest); err != nil {
+			return v, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL`, v.ObjectKey); err != nil {
+		return v, err
+	}
+	return v, tx.Commit()
+}
+func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, reference string) (OCIManifest, error) {
+	var v OCIManifest
+	query := `SELECT repository_id::text,name,digest,object_key,media_type,size FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`
+	args := []any{repositoryID, name, reference}
+	if !strings.HasPrefix(reference, "sha256:") {
+		query = `SELECT m.repository_id::text,m.name,m.digest,m.object_key,m.media_type,m.size FROM native_oci_tags t JOIN native_oci_manifests m ON (m.repository_id=t.repository_id AND m.name=t.name AND m.digest=t.digest) WHERE t.repository_id::text=$1 AND t.name=$2 AND t.tag=$3`
+	}
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&v.RepositoryID, &v.Name, &v.Digest, &v.ObjectKey, &v.MediaType, &v.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, name, digest string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_oci_tags WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=NULL,collected_at=NULL,created_at=now() WHERE object_key=(SELECT object_key FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3)`, repositoryID, name, digest); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
+func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return v, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO UPDATE SET collected_at=NULL`, v.Digest, v.ObjectKey, v.Size); err != nil {
+		return v, err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT object_key,size FROM native_raw_objects WHERE digest=$1`, v.Digest).Scan(&v.ObjectKey, &v.Size); err != nil {
+		return v, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO UPDATE SET digest=EXCLUDED.digest,content_type=EXCLUDED.content_type,updated_at=now()`, v.RepositoryID, v.Path, v.Digest, v.ContentType); err != nil {
+		return v, err
+	}
+	return v, tx.Commit()
+}
+func (s *PostgresStore) StageRawObject(ctx context.Context, object RawObject) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO UPDATE SET collected_at=NULL`, object.Digest, object.ObjectKey, object.Size)
+	return err
+}
+func (s *PostgresStore) LockRawObject(ctx context.Context, digest string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-raw-object:"+digest); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-raw-object:"+digest)
+		_ = conn.Close()
+	}, nil
+}
+func (s *PostgresStore) GetRawAsset(ctx context.Context, repositoryID, path string) (RawAsset, error) {
+	var v RawAsset
+	err := s.db.QueryRowContext(ctx, `SELECT a.repository_id::text,a.path,a.digest,o.object_key,o.size,a.content_type FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest WHERE a.repository_id::text=$1 AND a.path=$2`, repositoryID, path).Scan(&v.RepositoryID, &v.Path, &v.Digest, &v.ObjectKey, &v.Size, &v.ContentType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) DeleteRawAsset(ctx context.Context, repositoryID, path string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM native_raw_assets WHERE repository_id::text=$1 AND path=$2`, repositoryID, path)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+func (s *PostgresStore) ListUnreferencedRawObjects(ctx context.Context, before time.Time, limit int) ([]RawObject, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT o.digest,o.object_key FROM native_raw_objects o WHERE o.created_at < $1 AND o.collected_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_raw_assets a WHERE a.digest=o.digest) ORDER BY o.created_at LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var objects []RawObject
+	for rows.Next() {
+		var object RawObject
+		if err = rows.Scan(&object.Digest, &object.ObjectKey); err != nil {
+			return nil, err
+		}
+		objects = append(objects, object)
+	}
+	return objects, rows.Err()
+}
+func (s *PostgresStore) RawObjectIsUnreferenced(ctx context.Context, digest string) (bool, error) {
+	var unreferenced bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_raw_objects o WHERE o.digest=$1 AND o.collected_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_raw_assets a WHERE a.digest=o.digest))`, digest).Scan(&unreferenced)
+	return unreferenced, err
+}
+func (s *PostgresStore) MarkRawObjectCollected(ctx context.Context, digest string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_raw_objects o SET collected_at=now() WHERE o.digest=$1 AND o.collected_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_raw_assets a WHERE a.digest=o.digest)`, digest)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPublishSession) (MavenPublishSession, error) {

@@ -49,9 +49,10 @@ PostgreSQL is authoritative for Repository, Group, member, principal grant,
 retention policy, publish session, artifact coordinate, object reference, and
 audit rows. S3-compatible storage holds immutable byte objects only, under a
 digest-addressed key (`native/sha256/<hex>`); object keys are never client input.
-Redis supplies short leases and idempotency coordination only. Loss of Redis
-must fail closed for the affected concurrent operation, never change durable
-truth.
+PostgreSQL supplies short-lived coordination through advisory locks and
+transactional idempotency records. A lost database connection releases its
+advisory locks and must fail closed for the affected concurrent operation,
+never change durable truth.
 
 Object upload precedes metadata promotion because PostgreSQL cannot join an S3
 transaction. The service first records a `staging` object intent in PostgreSQL,
@@ -199,7 +200,7 @@ commit; a failed PostgreSQL promotion leaves unreachable, retryable staged bytes
 Expiration or abort removes intents. The collector claims only unreferenced
 intents older than 24 hours with `FOR UPDATE SKIP LOCKED`, rechecks in the
 claiming transaction that no committed reference exists, then deletes the S3
-byte and finalizes the intent. Gitea is not consulted by this path.
+byte and finalizes the intent.
 
 ### CCS-44 implementation sequence
 
@@ -216,7 +217,7 @@ byte and finalizes the intent. Gitea is not consulted by this path.
 3. Ship the Maven extension and Gradle plugin with an opt-in repository flag.
    During migration, existing clients can upload to staging but cannot publish;
    enable atomic publication only after the extension is configured. Keep GET
-   resolution unchanged, so already committed Gitea or native coordinates remain
+   resolution unchanged, so already committed coordinates remain
    standard-client-readable.
 4. Add black-box Maven and Gradle fixtures for partial POM/JAR/sidecar failure,
    metadata/checksum retry, identical and conflicting commit retries, concurrent
@@ -226,27 +227,22 @@ byte and finalizes the intent. Gitea is not consulted by this path.
 
 Non-goals for CCS-44 are guessing a completion event for unmodified clients,
 making client metadata authoritative, cross-coordinate transactions, and a
-Gitea runtime fallback in the write path.
+runtime fallback in the write path.
 
 Raw accepts a canonical non-directory path and immutable byte digest. OCI
 accepts manifest publication by digest, then optional tag movement. Maven
 accepts a complete coordinate plus POM and component objects followed by the
 explicit Maven commit signal. Direct
 bucket access, arbitrary Maven metadata writes, OCI digest deletion,
-cross-repository copies, and Gitea package administration are non-goals.
+cross-repository copies, and external package administration are non-goals.
 
-## Gitea retirement boundary
+## Native hosted completion boundary
 
-`GiteaClient` remains an implementation of the V2 Hosted read adapter for the
-existing OCI/Maven Groups. Native Hosted handlers do not call it and do not
-read Gitea's database, object store, or package API. Migration is per
-Repository: create a native Repository in shadow-read mode, import and verify
-coordinates into native storage, compare protocol reads by digest, switch the
-Group member from the Gitea adapter to the native Repository in one membership
-transaction, retain Gitea read fallback for the defined rollback window, then
-remove the fallback. Gitea package deletion occurs only after the retention
-window and an operator-approved inventory match. No automatic reverse sync is
-provided.
+Native Hosted handlers use only PostgreSQL metadata and object-store bytes.
+They do not call an external Hosted adapter. Legacy Groups are confined to
+external Proxy reads and cannot become a fallback for a native repository.
+Repository deletion is logical metadata removal; object reclamation remains
+traceable until the retention collector verifies no committed reference exists.
 
 ## Executable contract
 

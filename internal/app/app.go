@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -21,13 +20,13 @@ type Dependencies struct {
 	// NativeMavenObjectStore is supplied by the runtime after S3 is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore OCIObjectStore
+	NativeOCIObjectStore   OCIObjectStore
 }
 
 func NewDependencies(cfg config.Config) Dependencies {
 	return Dependencies{
 		checkers: []Checker{
 			postgresChecker{databaseURL: cfg.DatabaseURL},
-			tcpChecker{address: cfg.RedisAddress},
 			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
 		},
 	}
@@ -61,16 +60,6 @@ func (p postgresChecker) Check(ctx context.Context) error {
 	}
 	defer connection.Close(ctx)
 	return connection.Ping(ctx)
-}
-
-type tcpChecker struct{ address string }
-
-func (t tcpChecker) Check(ctx context.Context) error {
-	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", t.address)
-	if err != nil {
-		return err
-	}
-	return connection.Close()
 }
 
 type httpChecker struct{ url string }

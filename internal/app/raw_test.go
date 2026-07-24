@@ -54,7 +54,7 @@ func rawRequest(method, path string) *http.Request {
 func TestRawHostedFirstCacheAndRange(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
-		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local", Position: 0},
+		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local", Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1, AllowedHosts: []string{"proxy.example"}},
 	}})
 	if err != nil {
@@ -83,7 +83,7 @@ func TestRawHostedFirstCacheAndRange(t *testing.T) {
 
 func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +112,11 @@ func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
 func TestRawCacheUsesPersistedGroupQuota(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
-	first := cache.key("downloads", "one", "hosted", "http://gitea.local")
+	first := cache.key("downloads", "one", "hosted", "http://legacy.local")
 	if err := cache.Store(context.Background(), first, RawContent{Body: []byte("1234"), Repository: "downloads", CacheQuotaBytes: 5}); err != nil {
 		t.Fatal(err)
 	}
-	second := cache.key("downloads", "two", "hosted", "http://gitea.local")
+	second := cache.key("downloads", "two", "hosted", "http://legacy.local")
 	if err := cache.Store(context.Background(), second, RawContent{Body: []byte("23"), Repository: "downloads", CacheQuotaBytes: 5}); !errors.Is(err, ErrCacheQuotaExceeded) {
 		t.Fatalf("second cache store = %v, want quota rejection", err)
 	}
@@ -125,7 +125,7 @@ func TestRawCacheUsesPersistedGroupQuota(t *testing.T) {
 func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil)
-	key := cache.key("downloads", "artifact", "hosted", "http://gitea.local")
+	key := cache.key("downloads", "artifact", "hosted", "http://legacy.local")
 	body := []byte("artifact")
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
@@ -137,7 +137,7 @@ func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 		Object, Digest, ContentType, Member, Endpoint, Repository string
 		Size                                                      int64
 		ExpiresAt                                                 time.Time
-	}{Object: object, Digest: digest, ContentType: "text/plain", Member: "hosted", Endpoint: "http://gitea.local", Repository: "downloads", Size: int64(len(body)), ExpiresAt: time.Now().UTC().Add(time.Hour)})
+	}{Object: object, Digest: digest, ContentType: "text/plain", Member: "hosted", Endpoint: "http://legacy.local", Repository: "downloads", Size: int64(len(body)), ExpiresAt: time.Now().UTC().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 func TestRawCacheQuotaCountsLegacyIndex(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
-	key := cache.key("downloads", "existing", "hosted", "http://gitea.local")
+	key := cache.key("downloads", "existing", "hosted", "http://legacy.local")
 	legacy, err := json.Marshal(struct {
 		Repository string
 		Size       int64
@@ -165,7 +165,7 @@ func TestRawCacheQuotaCountsLegacyIndex(t *testing.T) {
 	if err := store.Put(context.Background(), key, legacy); err != nil {
 		t.Fatal(err)
 	}
-	newKey := cache.key("downloads", "new", "hosted", "http://gitea.local")
+	newKey := cache.key("downloads", "new", "hosted", "http://legacy.local")
 	if err := cache.Store(context.Background(), newKey, RawContent{Body: []byte("x"), Repository: "downloads", CacheQuotaBytes: 5}); !errors.Is(err, ErrCacheQuotaExceeded) {
 		t.Fatalf("legacy quota admission = %v, want quota rejection", err)
 	}
@@ -180,13 +180,13 @@ func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawCache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(quota)
-	key := rawCache.key("downloads", "artifact", "hosted", "http://gitea.local")
+	key := rawCache.key("downloads", "artifact", "hosted", "http://legacy.local")
 	if err := rawCache.Store(context.Background(), key, RawContent{Body: []byte("12345"), Repository: "downloads", CacheQuotaBytes: 5}); err != nil {
 		t.Fatalf("same-named OCI cache consumed Raw quota: %v", err)
 	}
 
 	groups := repository.NewMemoryStore()
-	_, err := groups.CreateRawGroup(context.Background(), repository.Group{Name: "limited", CacheQuotaBytes: 1, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, err := groups.CreateRawGroup(context.Background(), repository.Group{Name: "limited", CacheQuotaBytes: 1, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
 
 func TestRawRejectsUnsafePathsAndUnauthorizedRequests(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}}, Metrics: &Metrics{}}
 	for _, path := range []string{"/raw/downloads/../secret", "/raw/downloads/%2e%2e/secret"} {
 		w := httptest.NewRecorder()
@@ -314,7 +314,7 @@ func TestRawProxyRejectsTLSOverrideWithoutDialing(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			called := false
 			client := &http.Client{Transport: test.transport(&called)}
-			_, err := (GiteaClient{HTTPClient: client}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "artifact", nil)
+			_, err := (UpstreamClient{HTTPClient: client}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "artifact", nil)
 			if err == nil || !strings.Contains(err.Error(), "must not override TLS dialing") || called {
 				t.Fatalf("err = %v, TLS dial called = %t", err, called)
 			}
@@ -353,7 +353,7 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}, Anonymous: true}}})
 	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
-	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
+	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
 	request := func(group, authorization string) *http.Response {
@@ -433,7 +433,7 @@ func TestRawProxyTLSRejectsPrivateResolutionAndUnsafeRedirectsWithoutCaching(t *
 		return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(host, port))
 	})
 
-	if _, err := (GiteaClient{}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://private.example", AllowedHosts: []string{"private.example"}}, "artifact", nil); err == nil {
+	if _, err := (UpstreamClient{}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://private.example", AllowedHosts: []string{"private.example"}}, "artifact", nil); err == nil {
 		t.Fatal("private DNS answer was accepted")
 	}
 	if dialAttempts != 0 {
@@ -444,7 +444,7 @@ func TestRawProxyTLSRejectsPrivateResolutionAndUnsafeRedirectsWithoutCaching(t *
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "redirects", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "blocked", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"other.example"}}}})
 	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
-	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
+	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
 	for _, path := range []string{"cross", "downgrade", "private", "failure"} {
@@ -500,7 +500,7 @@ func withRawProxyNetwork(t *testing.T, lookup func(context.Context, string, stri
 
 func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
 
@@ -538,7 +538,7 @@ func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 	store := repository.NewMemoryStore()
 	for _, group := range []repository.Group{
-		{Name: "hosted", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: "https://gitea.example:8443"}}},
+		{Name: "hosted", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: "https://legacy.example:8443"}}},
 		{Name: "negative", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}}},
 		{Name: "fallback", Members: []repository.Member{{Name: "hosted-miss", Type: repository.MemberHosted, Endpoint: "https://hosted.example", Position: 0}, {Name: "proxy-ok", Type: repository.MemberProxy, Endpoint: "https://proxy-ok.example", Position: 1, AllowedHosts: []string{"proxy-ok.example"}}}},
 		{Name: "blocked", Members: []repository.Member{{Name: "blocked-proxy", Type: repository.MemberProxy, Endpoint: "https://user:secret@blocked.example"}}},
@@ -548,7 +548,7 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	client := &rawFixtureClient{responses: map[string]int{"gitea": http.StatusOK, "proxy": http.StatusNotFound, "hosted-miss": http.StatusNotFound, "proxy-ok": http.StatusOK, "offline": http.StatusServiceUnavailable}, body: []byte("artifact")}
+	client := &rawFixtureClient{responses: map[string]int{"legacy": http.StatusOK, "proxy": http.StatusNotFound, "hosted-miss": http.StatusNotFound, "proxy-ok": http.StatusOK, "offline": http.StatusServiceUnavailable}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
 	request := func(method, path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
@@ -559,7 +559,7 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 
 	resolvedResponse := request(http.MethodGet, "/raw/hosted/release/app.txt")
 	resolved := last()
-	if resolved.Format != "raw" || resolved.Resource != "release/app.txt" || resolved.Representation != "body" || resolved.MemberName != "gitea" || resolved.MemberType != "hosted" || resolved.UpstreamHost != "gitea.example" || resolved.Operation != "get" || resolved.Status != http.StatusOK || resolved.CacheDisposition != "miss" || resolved.Bytes != 8 {
+	if resolved.Format != "raw" || resolved.Resource != "release/app.txt" || resolved.Representation != "body" || resolved.MemberName != "legacy" || resolved.MemberType != "hosted" || resolved.UpstreamHost != "legacy.example" || resolved.Operation != "get" || resolved.Status != http.StatusOK || resolved.CacheDisposition != "miss" || resolved.Bytes != 8 {
 		t.Fatalf("resolved audit=%#v", resolved)
 	}
 
@@ -706,7 +706,7 @@ func TestRawAuditsCorrelationAndExportsMetrics(t *testing.T) {
 
 func TestGatewayRoutesRawRequests(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
 	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil), nil, client)
 	w := httptest.NewRecorder()
@@ -734,7 +734,7 @@ func TestRawDoesNotExposeOCIGroupAndChecksMemberGrantBeforeCache(t *testing.T) {
 	}
 }
 
-func TestGiteaRawClientDecodesCanonicalPath(t *testing.T) {
+func TestLegacyRawClientDecodesCanonicalPath(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/a b" {
 			t.Fatalf("path=%q", r.URL.Path)
@@ -742,7 +742,7 @@ func TestGiteaRawClientDecodesCanonicalPath(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer upstream.Close()
-	client := GiteaClient{}
+	client := UpstreamClient{}
 	response, err := client.FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberHosted, Endpoint: upstream.URL}, "a%20b", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -753,10 +753,10 @@ func TestGiteaRawClientDecodesCanonicalPath(t *testing.T) {
 func TestRawStandardHTTPClientE2E(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
-		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local", Position: 0},
+		{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local", Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://proxy.example", Position: 1, AllowedHosts: []string{"proxy.example"}},
 	}})
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "outage", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "outage", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusNotFound, "proxy": http.StatusOK}, body: []byte("artifact")}
 	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})}
 	server := httptest.NewServer(handler)
@@ -834,15 +834,10 @@ func TestRawStandardHTTPClientE2E(t *testing.T) {
 	}
 }
 
-func TestRawHostedStandardHTTPClientE2E(t *testing.T) {
+func TestRawLegacyGroupStandardHTTPClientE2E(t *testing.T) {
 	var upstreamCalls int
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamCalls++
-		user, password, ok := r.BasicAuth()
-		if !ok || user != "gitea" || password != "gitea-token" {
-			http.Error(w, "missing hosted credentials", http.StatusUnauthorized)
-			return
-		}
 		if r.URL.Path != "/release/app.txt" {
 			http.NotFound(w, r)
 			return
@@ -852,8 +847,8 @@ func TestRawHostedStandardHTTPClientE2E(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "hosted", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{Username: "gitea", Token: "gitea-token"}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "hosted", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
 	gateway := httptest.NewServer(handler)
 	defer gateway.Close()
 
@@ -884,7 +879,7 @@ func TestRawHostedStandardHTTPClientE2E(t *testing.T) {
 
 func TestRawFetchesCanonicalRepresentationAndBoundsObjectSize(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithMaxObjectBytes(8)
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
@@ -904,7 +899,7 @@ func TestRawFetchesCanonicalRepresentationAndBoundsObjectSize(t *testing.T) {
 		t.Fatalf("cached response=%d body=%q calls=%v", w.Code, w.Body.String(), client.Calls())
 	}
 
-	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "oversize", Members: []repository.Member{{Name: "large", Type: repository.MemberHosted, Endpoint: "http://gitea.local"}}})
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "oversize", Members: []repository.Member{{Name: "large", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client.responses["large"] = http.StatusOK
 	client.body = []byte("too-large")
 	w = httptest.NewRecorder()

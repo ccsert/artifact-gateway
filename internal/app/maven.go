@@ -18,7 +18,7 @@ type MavenClient interface {
 	FetchMaven(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
 }
 
-func (c GiteaClient) FetchMaven(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
+func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
 	endpoint, err := url.Parse(member.Endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("parse Maven endpoint: %w", err)
@@ -33,9 +33,6 @@ func (c GiteaClient) FetchMaven(ctx context.Context, method string, member repos
 		if value := headers.Get(name); value != "" {
 			request.Header.Set(name, value)
 		}
-	}
-	if member.Type == repository.MemberHosted {
-		request.SetBasicAuth(c.Username, c.Token)
 	}
 	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
 	if err != nil {
@@ -180,10 +177,22 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				}
 				continue
 			}
-			if !h.Cache.UpstreamAllowed(member.Endpoint) {
+			if !h.Cache.UpstreamAllowed(request.Context(), member.Endpoint) {
 				h.Metrics.mavenCircuitOpen.Add(1)
 				hadFailure = true
 				continue
+			}
+			if h.Cache.coordinator != nil {
+				release, lockErr := acquireCacheRequestLock(request.Context(), h.Cache.coordinator, cacheKey)
+				if lockErr != nil {
+					h.Metrics.failed.Add(1)
+					http.Error(w, "unable to coordinate Maven cache fetch", http.StatusServiceUnavailable)
+					return
+				}
+				defer release()
+				if h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey) {
+					return
+				}
 			}
 		}
 		response, fetchErr := h.fetchMavenWithRetry(request.Context(), request.Method, member, artifactPath, request.Header)
@@ -195,7 +204,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			}
 			hadFailure = true
 			if member.Type == repository.MemberProxy && h.Cache != nil {
-				h.Cache.RecordUpstreamFailure(member.Endpoint)
+				h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
 			}
 			continue
 		}
@@ -239,18 +248,18 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			}
 			hadFailure = true
 			if member.Type == repository.MemberProxy && h.Cache != nil {
-				h.Cache.RecordUpstreamFailure(member.Endpoint)
+				h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
 			}
 			continue
 		}
 		if member.Type == repository.MemberProxy && h.Cache != nil {
-			h.Cache.RecordUpstreamSuccess(member.Endpoint)
+			h.Cache.RecordUpstreamSuccess(request.Context(), member.Endpoint)
 			if request.Method == http.MethodGet && request.Header.Get("Range") == "" {
 				body, readErr := io.ReadAll(response.Body)
 				_ = response.Body.Close()
 				if readErr != nil {
 					hadFailure = true
-					h.Cache.RecordUpstreamFailure(member.Endpoint)
+					h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
 					continue
 				}
 				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint, Repository: groupName}

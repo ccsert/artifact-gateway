@@ -1,13 +1,12 @@
 .DEFAULT_GOAL := help
 
-COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e native-maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e backup-restore-readiness up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, native-maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, backup-restore-readiness'
 
 console-build:
 	@cd console && npm run build
@@ -22,7 +21,7 @@ console-e2e:
 	@cd console && npm run e2e
 
 up:
-	@docker compose --env-file .env -f compose.yml up --build --wait
+	@docker compose --env-file .env -f compose.yml up --build --wait --remove-orphans
 
 down:
 	@docker compose --env-file .env -f compose.yml down
@@ -38,13 +37,13 @@ api-change-check:
 	@./scripts/api-change-check.sh
 
 integration-test: integration-down
-	@docker compose -f compose.integration.yml up -d --wait postgres redis minio-ready
+	@docker compose -f compose.integration.yml up -d --wait postgres minio-ready
 	@docker compose -f compose.integration.yml run --rm --no-deps migrate
 	@docker compose -f compose.integration.yml run --rm --no-deps test
 	@docker compose -f compose.integration.yml down -v
 
 integration-down:
-	@docker compose -f compose.integration.yml down -v
+	@docker compose -f compose.integration.yml down -v --remove-orphans
 
 lint:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run
@@ -67,49 +66,20 @@ backup-drill:
 restore-drill:
 	@./scripts/restore-drill.sh "$(BACKUP_DIR)"
 
-gitea-up:
-	@./scripts/gitea-up.sh
-
-gitea-down:
-	@$(COMPOSE) down
-
-gitea-reset:
-	@./scripts/gitea-reset.sh
-
-gitea-seed:
-	@./scripts/gitea-seed.sh
-
-gitea-fixture: gitea-up gitea-seed
-
-oci-e2e: gitea-fixture
-	@./scripts/oci-e2e.sh
-
 raw-e2e:
 	@./scripts/raw-e2e.sh
 
 conan-e2e:
 	@docker run --rm -v "$(CURDIR):/src" -v artifact-gateway-go-mod:/go/pkg/mod -w /src $(GO_IMAGE) sh -ec 'apk add --no-cache py3-pip >/dev/null && pip install --break-system-packages --no-cache-dir conan==2.21.0 >/dev/null && CONAN_BINARY="$$(command -v conan)" go test -v -count=1 -run "^TestConan2Client" ./internal/app'
 
-maven-e2e: gitea-fixture
-	@./scripts/maven-e2e.sh
-
 native-maven-e2e:
 	@./scripts/native-maven-e2e.sh
 
-maven-e2e-cleanup-test: gitea-fixture
-	@./scripts/maven-e2e-cleanup-test.sh
+native-oci-e2e:
+	@./scripts/native-oci-e2e.sh
 
-performance-readiness:
-	@./scripts/performance-readiness.sh
-
-upgrade-readiness:
-	@./scripts/upgrade-readiness.sh
+native-raw-e2e:
+	@./scripts/native-raw-e2e.sh
 
 backup-restore-readiness:
 	@./scripts/backup-restore-readiness.sh
-
-release-readiness:
-	@./scripts/release-readiness.sh
-
-release-readiness-cleanup-test: gitea-fixture
-	@./scripts/release-readiness-cleanup-test.sh

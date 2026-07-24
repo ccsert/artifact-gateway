@@ -136,7 +136,7 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	}
 
 	client.err = errors.New("temporary upstream failure")
-	cache.RecordUpstreamSuccess("https://repo.example")
+	cache.RecordUpstreamSuccess(context.Background(), "https://repo.example")
 	r = httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/live/1.0/live-1.0.pom", nil)
 	r.SetBasicAuth("maven", "resolver-secret")
 	w = httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *
 	}
 }
 
-func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
+func TestMavenLegacyGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 	files := map[string]string{
 		"/com/example/library/1.0/library-1.0.pom":        "<project/>",
 		"/com/example/library/1.0/library-1.0.jar":        "jar-content",
@@ -194,10 +194,6 @@ func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 		"/com/example/library/maven-metadata.xml":         "<metadata/>",
 	}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		username, password, ok := request.BasicAuth()
-		if !ok || username != "gitea" || password != "gitea-token" {
-			t.Fatal("missing Gitea credentials")
-		}
 		content, exists := files[request.URL.Path]
 		if !exists {
 			http.NotFound(w, request)
@@ -211,11 +207,11 @@ func TestMavenHostedGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, err := store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	_, err := store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	for path, want := range files {
 		request := httptest.NewRequest(http.MethodGet, "/maven/engineering"+path, nil)
 		request.SetBasicAuth("gradle", "resolver-secret")
@@ -248,7 +244,7 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 	defer hosted.Close()
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if _, _, ok := request.BasicAuth(); ok {
-			t.Fatal("proxy received Gitea credentials")
+			t.Fatal("proxy received Legacy credentials")
 		}
 		if request.URL.Path != "/com/example/library/2.0/library-2.0.pom" {
 			http.NotFound(w, request)
@@ -262,7 +258,7 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 		{Name: "proxy-first", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 0},
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -298,7 +294,7 @@ func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -314,7 +310,7 @@ func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
 func TestMavenGroupManagementAndPathValidation(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
-	create := httptest.NewRequest(http.MethodPost, "/api/v1/maven/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`))
+	create := httptest.NewRequest(http.MethodPost, "/api/v1/maven/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`))
 	authorize(create, "admin-secret")
 	created := httptest.NewRecorder()
 	handler.ServeHTTP(created, create)
@@ -329,7 +325,7 @@ func TestMavenGroupManagementAndPathValidation(t *testing.T) {
 func TestMavenFailsWhenAuditCannotBeRecorded(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})
-	handler := MavenHandler{Store: failingAuditStore{store}, Authenticator: testAuthenticator(), Client: GiteaClient{}, Metrics: &Metrics{}}
+	handler := MavenHandler{Store: failingAuditStore{store}, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -343,7 +339,7 @@ func TestMavenRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"maven": {"engineering/allowed/*"}}
-	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: &Metrics{}}
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: UpstreamClient{}, Metrics: &Metrics{}}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/private/1.0/private-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -366,7 +362,7 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 	objects := NewMemoryOCIObjectStore()
 	cache := NewDefaultMavenCache(objects, []string{strings.TrimPrefix(upstream.URL, "http://")}).WithQuota(NewCacheQuota(objects, map[string]int64{"engineering": 1}))
 	metrics := &Metrics{}
-	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: GiteaClient{}, Metrics: metrics, Cache: cache}
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: UpstreamClient{}, Metrics: metrics, Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -385,7 +381,7 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 func TestMavenDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
-	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: GiteaClient{}, Metrics: &Metrics{}, Cache: NewDefaultMavenCache(NewMemoryOCIObjectStore(), []string{"allowed.example"})}
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewDefaultMavenCache(NewMemoryOCIObjectStore(), []string{"allowed.example"})}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -416,7 +412,7 @@ func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}, {Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/maven-metadata.xml", nil)
 	request.Header.Set("If-None-Match", `"cached"`)
 	request.SetBasicAuth("maven", "resolver-secret")

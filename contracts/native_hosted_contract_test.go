@@ -255,7 +255,7 @@ func TestNativeHostedContractHasLifecycleAndRetirementDecisions(t *testing.T) {
 	doc := string(b)
 	for _, phrase := range []string{
 		"PostgreSQL is authoritative", "Object upload precedes metadata promotion", "orphan collector",
-		"Idempotency-Key", "pageToken", "Gitea retirement boundary", "shadow-read mode", "non-goals",
+		"Idempotency-Key", "pageToken", "Native hosted completion boundary", "non-goals",
 		"/groups/{groupId}/members", "gateway catch-all", "Docker-Content-Digest", "generated from committed coordinates",
 		"Maven and Gradle do not define a portable transaction-complete request", "Gateway never infers publication completion",
 		"The production flow retains standard Maven repository URLs and HTTP `PUT`", "expected-name list is an incompleteness assertion",

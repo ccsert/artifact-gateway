@@ -12,7 +12,6 @@ import (
 type Config struct {
 	ListenAddress            string
 	DatabaseURL              string
-	RedisAddress             string
 	S3Endpoint               string
 	S3Bucket                 string
 	S3AccessKey              string
@@ -22,15 +21,12 @@ type Config struct {
 	RawProxyAllowedHosts     []string
 	RawCacheMaxObjectBytes   int64
 	ConanCacheMaxObjectBytes int64
-	AdapterMode              string
 	AdminToken               string
 	ResolverToken            string
 	AdminActor               string
 	ResolverActor            string
 	RepositoryReaders        map[string][]string
 	RepositoryCacheQuotas    map[string]int64
-	GiteaUsername            string
-	GiteaToken               string
 	OIDCIssuer               string
 	OIDCAudience             string
 	OIDCJWKSURL              string
@@ -43,7 +39,6 @@ func Load() (Config, error) {
 	cfg := Config{
 		ListenAddress:            value("GATEWAY_LISTEN_ADDRESS", ":8080"),
 		DatabaseURL:              os.Getenv("GATEWAY_DATABASE_URL"),
-		RedisAddress:             os.Getenv("GATEWAY_REDIS_ADDRESS"),
 		S3Endpoint:               os.Getenv("GATEWAY_S3_ENDPOINT"),
 		S3Bucket:                 os.Getenv("GATEWAY_S3_BUCKET"),
 		S3AccessKey:              os.Getenv("GATEWAY_S3_ACCESS_KEY"),
@@ -53,15 +48,12 @@ func Load() (Config, error) {
 		RawProxyAllowedHosts:     splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
 		RawCacheMaxObjectBytes:   1 << 30,
 		ConanCacheMaxObjectBytes: 1 << 30,
-		AdapterMode:              value("GATEWAY_ADAPTER_MODE", "test"),
 		AdminToken:               os.Getenv("GATEWAY_ADMIN_TOKEN"),
 		ResolverToken:            os.Getenv("GATEWAY_RESOLVER_TOKEN"),
 		AdminActor:               value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
 		ResolverActor:            value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
 		RepositoryReaders:        repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
 		RepositoryCacheQuotas:    repositoryCacheQuotas(os.Getenv("GATEWAY_REPOSITORY_CACHE_QUOTAS")),
-		GiteaUsername:            os.Getenv("GATEWAY_GITEA_USERNAME"),
-		GiteaToken:               os.Getenv("GATEWAY_GITEA_TOKEN"),
 		OIDCIssuer:               strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
 		OIDCAudience:             strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
 		OIDCJWKSURL:              strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
@@ -70,14 +62,8 @@ func Load() (Config, error) {
 		OTELSamplingRatio:        1,
 	}
 
-	if cfg.AdapterMode != "test" && cfg.AdapterMode != "gitea" {
-		return Config{}, fmt.Errorf("GATEWAY_ADAPTER_MODE must be test or gitea")
-	}
-	if cfg.AdapterMode == "gitea" && (cfg.GiteaUsername == "" || cfg.GiteaToken == "") {
-		return Config{}, fmt.Errorf("GATEWAY_GITEA_USERNAME and GATEWAY_GITEA_TOKEN are required when GATEWAY_ADAPTER_MODE is gitea")
-	}
-	if cfg.DatabaseURL == "" || cfg.RedisAddress == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
-		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_REDIS_ADDRESS, GATEWAY_S3_ENDPOINT, GATEWAY_S3_BUCKET, GATEWAY_S3_ACCESS_KEY, GATEWAY_S3_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
+	if cfg.DatabaseURL == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
+		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_S3_ENDPOINT, GATEWAY_S3_BUCKET, GATEWAY_S3_ACCESS_KEY, GATEWAY_S3_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
 	}
 	if _, err := url.ParseRequestURI(cfg.DatabaseURL); err != nil {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL is not a valid URL")

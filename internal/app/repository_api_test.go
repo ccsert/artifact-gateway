@@ -43,7 +43,7 @@ func authorize(request *http.Request, token string) {
 func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, selectiveAdapter{available: map[string]bool{"proxy": true}}, testAuthenticator())
-	group := `{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0},{"name":"proxy","type":"proxy","endpoint":"https://registry.example","position":1}]}`
+	group := `{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0},{"name":"proxy","type":"proxy","endpoint":"https://registry.example","position":1}]}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", strings.NewReader(group))
 	authorize(request, "admin-secret")
 	created := httptest.NewRecorder()
@@ -120,10 +120,10 @@ func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), nil, rawCache, nil)
 
 	for _, payload := range []string{
-		`{"name":"Raw","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
-		`{"name":"api","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
+		`{"name":"Raw","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`,
+		`{"name":"api","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`,
 		`{"name":"downloads","cacheQuotaBytes":5,"members":[{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":0}]}`,
-		`{"name":"downloads","cacheQuotaBytes":0,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0}]}`,
+		`{"name":"downloads","cacheQuotaBytes":0,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`,
 	} {
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/raw/groups", strings.NewReader(payload))
 		authorize(request, "admin-secret")
@@ -134,7 +134,7 @@ func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 		}
 	}
 
-	group := `{"name":"downloads","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://gitea","position":0},{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":1,"allowedHosts":["proxy.example"]}]}`
+	group := `{"name":"downloads","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0},{"name":"proxy","type":"proxy","endpoint":"https://proxy.example","position":1,"allowedHosts":["proxy.example"]}]}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/raw/groups", strings.NewReader(group))
 	authorize(request, "admin-secret")
 	created := httptest.NewRecorder()
@@ -142,9 +142,9 @@ func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"cacheQuotaBytes":5`) {
 		t.Fatalf("Raw group creation=%d %s", created.Code, created.Body.String())
 	}
-	hostedKey := rawCache.key("downloads", "release/app.txt", "hosted", "http://gitea")
+	hostedKey := rawCache.key("downloads", "release/app.txt", "hosted", "http://legacy")
 	proxyKey := rawCache.key("downloads", "release/app.txt", "proxy", "https://proxy.example")
-	otherKey := rawCache.key("downloads", "release/other.txt", "hosted", "http://gitea")
+	otherKey := rawCache.key("downloads", "release/other.txt", "hosted", "http://legacy")
 	for _, key := range []string{hostedKey, proxyKey, otherKey} {
 		if err := rawCache.Store(context.Background(), key, RawContent{Body: []byte(key), Repository: "downloads", CacheQuotaBytes: 10000}); err != nil {
 			t.Fatal(err)
@@ -351,7 +351,7 @@ func TestResolverAuditsStorageFailureAccurately(t *testing.T) {
 
 func TestMetricsReportResolverOutcomes(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "http://gitea", Position: 0}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "http://legacy", Position: 0}}})
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil)

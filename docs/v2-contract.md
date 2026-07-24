@@ -7,7 +7,7 @@ Status: accepted for V2 planning. This is the source of truth for V2 format work
 | Term | Meaning |
 | --- | --- |
 | Repository | One addressable format endpoint and policy boundary, not a storage bucket. |
-| Hosted | Internal artifact-source member; V2 initially uses the Gitea Adapter. |
+| Hosted | Native PostgreSQL/object-store repository. |
 | Proxy | Member fetching one explicitly allowed external upstream. |
 | Group | Ordered read-only virtual repository over members of one format. |
 
@@ -113,12 +113,11 @@ Metrics use bounded labels only: `format`, `operation`, `outcome`, `cache_dispos
 
 ## Adapter boundary and compatibility matrix
 
-The format adapter owns route parsing, response shapes, conditional/range semantics, coordinate validation, and cache keys. The resolver owns Group ordering, policy invocation, audit recording, bounded metrics, and the Hosted-before-Proxy rule. The storage adapter owns internal Hosted reads only. Today, `GiteaClient` directly implements the OCI and Maven fetch-client interfaces and the handlers call it after resolver selection; it is not yet a general Gitea Adapter. V2 introduces a format-neutral Hosted adapter interface above those fetch clients, with a Gitea Hosted adapter as its first implementation. A Native Hosted Adapter is a future implementation of the same interface. Format adapters MUST call the resolver and Hosted/Proxy adapter interfaces, never `GiteaClient` directly.
+The format adapter owns route parsing, response shapes, conditional/range semantics, coordinate validation, and cache keys. The resolver owns Group ordering, policy invocation, audit recording, bounded metrics, and Proxy ordering. Native Hosted reads use PostgreSQL metadata and verified object-store bytes directly. Format adapters MUST not route native requests through an external upstream client.
 
 | Capability | OCI | Maven | Raw V2 | Conan 2 V2 |
 | --- | --- | --- | --- | --- |
-| Hosted through Gitea Adapter | supported | supported | planned | planned |
-| Native Hosted Adapter | future | future | future | future |
+| Native Hosted | supported | supported | supported | supported |
 | Proxy and read-through cache | supported | supported | specified | specified |
 | Anonymous reads | V2 policy migration | V2 policy migration | specified | specified |
 | Standard client fixture | ORAS/Docker | Maven/Gradle | curl + HTTP range fixture | Conan 2.x fixture |

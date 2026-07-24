@@ -7,7 +7,6 @@ import (
 
 func TestLoadRejectsIncompleteConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "")
 	t.Setenv("GATEWAY_S3_BUCKET", "")
 	if _, err := Load(); err == nil {
@@ -15,25 +14,20 @@ func TestLoadRejectsIncompleteConfiguration(t *testing.T) {
 	}
 }
 
-func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
+func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
 	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
 	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS", "raw.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES", "12345")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.AdapterMode != "test" {
-		t.Fatalf("AdapterMode = %q", cfg.AdapterMode)
 	}
 	if got := strings.Join(cfg.MavenProxyAllowedHosts, ","); got != "repo.example,mirror.example" {
 		t.Fatalf("MavenProxyAllowedHosts = %q", got)
@@ -46,27 +40,9 @@ func TestLoadAcceptsTestAdapterWithoutGiteaCredentials(t *testing.T) {
 	}
 }
 
-func TestLoadRequiresGiteaCredentialsForGiteaAdapter(t *testing.T) {
-	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
-	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
-	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	t.Setenv("GATEWAY_ADAPTER_MODE", "gitea")
-	t.Setenv("GATEWAY_GITEA_USERNAME", "")
-	t.Setenv("GATEWAY_GITEA_TOKEN", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("Load() error = nil, want error")
-	}
-}
-
 func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {
 	secret := "not-a-url-password"
 	t.Setenv("GATEWAY_DATABASE_URL", secret)
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
 	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
@@ -101,14 +77,12 @@ func TestRepositoryCacheQuotasParsesPositiveByteLimits(t *testing.T) {
 
 func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
 	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
 	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test/")
 	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway")
 	t.Setenv("GATEWAY_OIDC_JWKS_URL", "")
@@ -125,14 +99,12 @@ func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
 
 func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
 	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
 	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test")
 	t.Setenv("GATEWAY_OIDC_AUDIENCE", "")
 	if _, err := Load(); err == nil {
@@ -142,14 +114,12 @@ func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
 
 func TestLoadRejectsInvalidOTELSamplingRatio(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_REDIS_ADDRESS", "redis:6379")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
 	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
 	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	t.Setenv("GATEWAY_ADAPTER_MODE", "test")
 	for _, ratio := range []string{"1.1", "NaN"} {
 		t.Setenv("GATEWAY_OTEL_SAMPLING_RATIO", ratio)
 		if _, err := Load(); err == nil {
