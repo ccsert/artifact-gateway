@@ -1,0 +1,290 @@
+---
+x-gateway-protocol-overlay:
+  officialSpecification: https://distribution.github.io/distribution/spec/api/
+  gatewayDecision: Implement the supported Registry V2 upload, blob, manifest, and
+    tag routes; exclude catalog, referrers, and direct blob deletion.
+v2_name_blobs_uploads:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/OCIName"
+  post:
+    operationId: startOCIUpload
+    description: Starts a Registry V2 blob upload. mount and from request a cross-repository
+      mount when the source blob is available to the Gateway.
+    security:
+    - ociBearerAuth: []
+    parameters:
+    - name: mount
+      in: query
+      schema:
+        type: string
+        pattern: "^sha256:[a-f0-9]{64}$"
+    - name: from
+      in: query
+      schema:
+        type: string
+    responses:
+      '201':
+        description: Blob mounted
+        headers:
+          Location:
+            schema:
+              type: string
+          Docker-Content-Digest:
+            schema:
+              type: string
+              pattern: "^sha256:[a-f0-9]{64}$"
+      '202':
+        "$ref": "../components/responses.yaml#/OCIUploadAccepted"
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+v2_name_blobs_uploads_uuid:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/OCIName"
+  - name: uuid
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  get:
+    operationId: getOCIUploadStatus
+    security:
+    - ociBearerAuth: []
+    responses:
+      '204':
+        "$ref": "../components/responses.yaml#/OCIUploadAccepted"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/OCIError"
+  patch:
+    operationId: appendOCIUpload
+    security:
+    - ociBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '202':
+        "$ref": "../components/responses.yaml#/OCIUploadAccepted"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '416':
+        "$ref": "../components/responses.yaml#/OCIError"
+  put:
+    operationId: completeOCIUpload
+    security:
+    - ociBearerAuth: []
+    parameters:
+    - name: digest
+      in: query
+      required: true
+      schema:
+        type: string
+        pattern: "^sha256:[a-f0-9]{64}$"
+    requestBody:
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '201':
+        description: Blob completed
+        headers:
+          Location:
+            schema:
+              type: string
+          Docker-Content-Digest:
+            schema:
+              type: string
+              pattern: "^sha256:[a-f0-9]{64}$"
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '409':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '416':
+        "$ref": "../components/responses.yaml#/OCIError"
+  delete:
+    operationId: cancelOCIUpload
+    security:
+    - ociBearerAuth: []
+    responses:
+      '204':
+        description: Upload cancelled
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/OCIError"
+v2_name_blobs_digest:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/OCIName"
+  - "$ref": "../components/parameters.yaml#/Digest"
+  get:
+    operationId: readOCIBlob
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/BinaryObject"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  head:
+    operationId: headOCIBlob
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/BinaryObject"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  x-gateway-visibility: committed_only
+v2_name_manifests_reference:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/OCIName"
+  - "$ref": "../components/parameters.yaml#/OCIReference"
+  get:
+    operationId: readOCIManifest
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCIManifest"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '406':
+        "$ref": "../components/responses.yaml#/OCIError"
+  head:
+    operationId: headOCIManifest
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCIManifest"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '406':
+        "$ref": "../components/responses.yaml#/OCIError"
+  put:
+    operationId: putOCIManifest
+    security:
+    - ociBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/vnd.oci.image.manifest.v1+json:
+          schema:
+            type: object
+        application/vnd.oci.image.index.v1+json:
+          schema:
+            type: object
+    responses:
+      '201':
+        description: Manifest published
+        headers:
+          Location:
+            schema:
+              type: string
+          Docker-Content-Digest:
+            schema:
+              type: string
+              pattern: "^sha256:[a-f0-9]{64}$"
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '413':
+        "$ref": "../components/responses.yaml#/OCIError"
+  delete:
+    operationId: deleteOCIManifest
+    description: Deletes an OCI manifest by digest. Deleting by a mutable tag is not
+      supported.
+    security:
+    - ociBearerAuth: []
+    responses:
+      '202':
+        description: Manifest deleted
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/OCIError"
+  x-gateway-visibility: committed_only
+v2_name_tags_list:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/OCIName"
+  - name: n
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      default: 100
+  - name: last
+    in: query
+    schema:
+      type: string
+  get:
+    operationId: listOCITags
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCITagList"
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  head:
+    operationId: headOCITags
+    security:
+    - ociBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCITagList"
+      '400':
+        "$ref": "../components/responses.yaml#/OCIError"
+      '401':
+        "$ref": "../components/responses.yaml#/OCIUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  x-gateway-visibility: committed_only

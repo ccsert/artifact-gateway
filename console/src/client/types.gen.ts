@@ -271,54 +271,6 @@ export type GetRepositoryResponses = {
 
 export type GetRepositoryResponse = GetRepositoryResponses[keyof GetRepositoryResponses];
 
-export type ListGroupMembersData = {
-    body?: never;
-    path: {
-        groupId: string;
-    };
-    query?: never;
-    url: '/groups/{groupId}/members';
-};
-
-export type ListGroupMembersResponses = {
-    /**
-     * Members
-     */
-    200: MemberList;
-};
-
-export type ListGroupMembersResponse = ListGroupMembersResponses[keyof ListGroupMembersResponses];
-
-export type ReplaceGroupMembersData = {
-    body: MemberList;
-    headers: {
-        'If-Match': string;
-    };
-    path: {
-        groupId: string;
-    };
-    query?: never;
-    url: '/groups/{groupId}/members';
-};
-
-export type ReplaceGroupMembersErrors = {
-    /**
-     * Problem response
-     */
-    412: Problem;
-};
-
-export type ReplaceGroupMembersError = ReplaceGroupMembersErrors[keyof ReplaceGroupMembersErrors];
-
-export type ReplaceGroupMembersResponses = {
-    /**
-     * Members
-     */
-    200: MemberList;
-};
-
-export type ReplaceGroupMembersResponse = ReplaceGroupMembersResponses[keyof ReplaceGroupMembersResponses];
-
 export type ListGrantsData = {
     body?: never;
     path: {
@@ -527,6 +479,233 @@ export type ReplaceGroupResponses = {
 };
 
 export type ReplaceGroupResponse = ReplaceGroupResponses[keyof ReplaceGroupResponses];
+
+export type ListGroupMembersData = {
+    body?: never;
+    path: {
+        groupId: string;
+    };
+    query?: never;
+    url: '/groups/{groupId}/members';
+};
+
+export type ListGroupMembersResponses = {
+    /**
+     * Members
+     */
+    200: MemberList;
+};
+
+export type ListGroupMembersResponse = ListGroupMembersResponses[keyof ListGroupMembersResponses];
+
+export type ReplaceGroupMembersData = {
+    body: MemberList;
+    headers: {
+        'If-Match': string;
+    };
+    path: {
+        groupId: string;
+    };
+    query?: never;
+    url: '/groups/{groupId}/members';
+};
+
+export type ReplaceGroupMembersErrors = {
+    /**
+     * Problem response
+     */
+    412: Problem;
+};
+
+export type ReplaceGroupMembersError = ReplaceGroupMembersErrors[keyof ReplaceGroupMembersErrors];
+
+export type ReplaceGroupMembersResponses = {
+    /**
+     * Members
+     */
+    200: MemberList;
+};
+
+export type ReplaceGroupMembersResponse = ReplaceGroupMembersResponses[keyof ReplaceGroupMembersResponses];
+
+export type CreatePublishSessionData = {
+    body: CreatePublishSession;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/publish-sessions';
+};
+
+export type CreatePublishSessionErrors = {
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type CreatePublishSessionError = CreatePublishSessionErrors[keyof CreatePublishSessionErrors];
+
+export type CreatePublishSessionResponses = {
+    /**
+     * Publish session
+     */
+    201: PublishSession;
+};
+
+export type CreatePublishSessionResponse = CreatePublishSessionResponses[keyof CreatePublishSessionResponses];
+
+export type GetPublishSessionData = {
+    body?: never;
+    path: {
+        sessionId: string;
+    };
+    query?: never;
+    url: '/publish-sessions/{sessionId}';
+};
+
+export type GetPublishSessionErrors = {
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetPublishSessionError = GetPublishSessionErrors[keyof GetPublishSessionErrors];
+
+export type GetPublishSessionResponses = {
+    /**
+     * Publish session
+     */
+    200: PublishSession;
+};
+
+export type GetPublishSessionResponse = GetPublishSessionResponses[keyof GetPublishSessionResponses];
+
+export type UploadPublishObjectData = {
+    body: string;
+    path: {
+        sessionId: string;
+        objectName: string;
+    };
+    query?: never;
+    url: '/publish-sessions/{sessionId}/objects/{objectName}';
+};
+
+export type UploadPublishObjectErrors = {
+    /**
+     * Problem response
+     */
+    409: Problem;
+    /**
+     * Problem response
+     */
+    422: Problem;
+};
+
+export type UploadPublishObjectError = UploadPublishObjectErrors[keyof UploadPublishObjectErrors];
+
+export type UploadPublishObjectResponses = {
+    /**
+     * Verified and staged
+     */
+    204: void;
+};
+
+export type UploadPublishObjectResponse = UploadPublishObjectResponses[keyof UploadPublishObjectResponses];
+
+export type CommitPublishSessionData = {
+    body?: never;
+    path: {
+        sessionId: string;
+    };
+    query?: never;
+    url: '/publish-sessions/{sessionId}:commit';
+};
+
+export type CommitPublishSessionErrors = {
+    /**
+     * Problem response
+     */
+    409: Problem;
+    /**
+     * Problem response
+     */
+    422: Problem;
+};
+
+export type CommitPublishSessionError = CommitPublishSessionErrors[keyof CommitPublishSessionErrors];
+
+export type CommitPublishSessionResponses = {
+    /**
+     * Artifact
+     */
+    200: Artifact;
+};
+
+export type CommitPublishSessionResponse = CommitPublishSessionResponses[keyof CommitPublishSessionResponses];
+
+export type ListArtifactsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/artifacts';
+};
+
+export type ListArtifactsResponses = {
+    /**
+     * Artifact page
+     */
+    200: ArtifactPage;
+};
+
+export type ListArtifactsResponse = ListArtifactsResponses[keyof ListArtifactsResponses];
+
+export type DeleteArtifactData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/artifacts/{artifactId}';
+};
+
+export type DeleteArtifactResponses = {
+    /**
+     * Accepted deletion
+     */
+    202: Deletion;
+};
+
+export type DeleteArtifactResponse = DeleteArtifactResponses[keyof DeleteArtifactResponses];
+
+export type GetArtifactData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/artifacts/{artifactId}';
+};
+
+export type GetArtifactResponses = {
+    /**
+     * Artifact
+     */
+    200: Artifact;
+};
+
+export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
 export type DeleteRawHostedContentData = {
     body?: never;
@@ -853,6 +1032,72 @@ export type CompleteOciUploadResponses = {
     201: unknown;
 };
 
+export type ReadOciBlobData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        digest: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/{digest}';
+};
+
+export type ReadOciBlobErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type ReadOciBlobResponses = {
+    /**
+     * Committed immutable protocol object
+     */
+    200: Blob | File;
+};
+
+export type ReadOciBlobResponse = ReadOciBlobResponses[keyof ReadOciBlobResponses];
+
+export type HeadOciBlobData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        digest: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/{digest}';
+};
+
+export type HeadOciBlobErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type HeadOciBlobResponses = {
+    /**
+     * Committed immutable protocol object
+     */
+    200: Blob | File;
+};
+
+export type HeadOciBlobResponse = HeadOciBlobResponses[keyof HeadOciBlobResponses];
+
 export type DeleteOciManifestData = {
     body?: never;
     path: {
@@ -1010,72 +1255,6 @@ export type PutOciManifestResponses = {
      */
     201: unknown;
 };
-
-export type ReadOciBlobData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        digest: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/{digest}';
-};
-
-export type ReadOciBlobErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type ReadOciBlobResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type ReadOciBlobResponse = ReadOciBlobResponses[keyof ReadOciBlobResponses];
-
-export type HeadOciBlobData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        digest: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/{digest}';
-};
-
-export type HeadOciBlobErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type HeadOciBlobResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type HeadOciBlobResponse = HeadOciBlobResponses[keyof HeadOciBlobResponses];
 
 export type ListOciTagsData = {
     body?: never;
@@ -1263,185 +1442,6 @@ export type CommitMavenCoordinateResponses = {
 };
 
 export type CommitMavenCoordinateResponse = CommitMavenCoordinateResponses[keyof CommitMavenCoordinateResponses];
-
-export type CreatePublishSessionData = {
-    body: CreatePublishSession;
-    headers: {
-        'Idempotency-Key': string;
-    };
-    path: {
-        repositoryId: string;
-    };
-    query?: never;
-    url: '/repositories/{repositoryId}/publish-sessions';
-};
-
-export type CreatePublishSessionErrors = {
-    /**
-     * Problem response
-     */
-    409: Problem;
-};
-
-export type CreatePublishSessionError = CreatePublishSessionErrors[keyof CreatePublishSessionErrors];
-
-export type CreatePublishSessionResponses = {
-    /**
-     * Publish session
-     */
-    201: PublishSession;
-};
-
-export type CreatePublishSessionResponse = CreatePublishSessionResponses[keyof CreatePublishSessionResponses];
-
-export type GetPublishSessionData = {
-    body?: never;
-    path: {
-        sessionId: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}';
-};
-
-export type GetPublishSessionErrors = {
-    /**
-     * Problem response
-     */
-    404: Problem;
-};
-
-export type GetPublishSessionError = GetPublishSessionErrors[keyof GetPublishSessionErrors];
-
-export type GetPublishSessionResponses = {
-    /**
-     * Publish session
-     */
-    200: PublishSession;
-};
-
-export type GetPublishSessionResponse = GetPublishSessionResponses[keyof GetPublishSessionResponses];
-
-export type UploadPublishObjectData = {
-    body: string;
-    path: {
-        sessionId: string;
-        objectName: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}/objects/{objectName}';
-};
-
-export type UploadPublishObjectErrors = {
-    /**
-     * Problem response
-     */
-    409: Problem;
-    /**
-     * Problem response
-     */
-    422: Problem;
-};
-
-export type UploadPublishObjectError = UploadPublishObjectErrors[keyof UploadPublishObjectErrors];
-
-export type UploadPublishObjectResponses = {
-    /**
-     * Verified and staged
-     */
-    204: void;
-};
-
-export type UploadPublishObjectResponse = UploadPublishObjectResponses[keyof UploadPublishObjectResponses];
-
-export type CommitPublishSessionData = {
-    body?: never;
-    path: {
-        sessionId: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}:commit';
-};
-
-export type CommitPublishSessionErrors = {
-    /**
-     * Problem response
-     */
-    409: Problem;
-    /**
-     * Problem response
-     */
-    422: Problem;
-};
-
-export type CommitPublishSessionError = CommitPublishSessionErrors[keyof CommitPublishSessionErrors];
-
-export type CommitPublishSessionResponses = {
-    /**
-     * Artifact
-     */
-    200: Artifact;
-};
-
-export type CommitPublishSessionResponse = CommitPublishSessionResponses[keyof CommitPublishSessionResponses];
-
-export type ListArtifactsData = {
-    body?: never;
-    path: {
-        repositoryId: string;
-    };
-    query?: {
-        pageSize?: number;
-        pageToken?: string;
-    };
-    url: '/repositories/{repositoryId}/artifacts';
-};
-
-export type ListArtifactsResponses = {
-    /**
-     * Artifact page
-     */
-    200: ArtifactPage;
-};
-
-export type ListArtifactsResponse = ListArtifactsResponses[keyof ListArtifactsResponses];
-
-export type DeleteArtifactData = {
-    body?: never;
-    path: {
-        repositoryId: string;
-        artifactId: string;
-    };
-    query?: never;
-    url: '/repositories/{repositoryId}/artifacts/{artifactId}';
-};
-
-export type DeleteArtifactResponses = {
-    /**
-     * Accepted deletion
-     */
-    202: Deletion;
-};
-
-export type DeleteArtifactResponse = DeleteArtifactResponses[keyof DeleteArtifactResponses];
-
-export type GetArtifactData = {
-    body?: never;
-    path: {
-        repositoryId: string;
-        artifactId: string;
-    };
-    query?: never;
-    url: '/repositories/{repositoryId}/artifacts/{artifactId}';
-};
-
-export type GetArtifactResponses = {
-    /**
-     * Artifact
-     */
-    200: Artifact;
-};
-
-export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
 export type ClientOptions = {
     baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});

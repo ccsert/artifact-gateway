@@ -1,0 +1,6 @@
+---
+description: Conan 2 is a Gateway Group/Proxy read-through overlay. Native Hosted
+  write, delete, search, and lifecycle routes are intentionally absent from this OpenAPI
+  contract.
+officialSpecification: https://docs.conan.io/2/reference/commands/remote.html
+gatewayOverlay: docs/protocol-compatibility.md#conan

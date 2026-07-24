@@ -1,0 +1,82 @@
+---
+x-gateway-protocol-overlay:
+  officialSpecification: No protocol-wide Raw repository HTTP standard; this is a
+    Gateway overlay.
+  gatewayDecision: Use PUT, GET, HEAD, and DELETE at /raw/{repository}/{path}; path
+    is a catch-all.
+raw_repository_path:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: path
+    in: path
+    required: true
+    allowReserved: true
+    description: Canonical Raw path. This is a gateway catch-all parameter and may
+      contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded
+      segments are rejected.
+    schema:
+      type: string
+      minLength: 1
+  get:
+    operationId: readRawContent
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/BinaryObject"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  head:
+    operationId: headRawContent
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/BinaryObject"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  put:
+    operationId: putRawHostedContent
+    description: Standard Raw Hosted write. The request body is stored directly under
+      the canonical Raw path; no management publish session is used for Raw.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '201':
+        description: Stored and immediately addressable at this Raw path
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteRawHostedContent
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '204':
+        description: Deleted
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  x-gateway-catchAll: path
+  x-gateway-visibility: committed_only

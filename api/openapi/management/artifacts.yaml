@@ -1,0 +1,31 @@
+---
+repositories_repositoryId_artifacts:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listArtifacts
+    parameters:
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/ArtifactList"
+repositories_repositoryId_artifacts_artifactId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - name: artifactId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  get:
+    operationId: getArtifact
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Artifact"
+  delete:
+    operationId: deleteArtifact
+    responses:
+      '202':
+        "$ref": "../components/responses.yaml#/Deletion"

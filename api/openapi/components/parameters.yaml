@@ -1,0 +1,80 @@
+---
+RepositoryId:
+  name: repositoryId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+GroupId:
+  name: groupId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+SessionId:
+  name: sessionId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+RepositoryName:
+  name: repository
+  in: path
+  required: true
+  schema:
+    type: string
+    pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+OCIName:
+  name: name
+  in: path
+  required: true
+  allowReserved: true
+  description: OCI repository name. The gateway resolves slash-separated OCI names
+    without decoding encoded separators.
+  schema:
+    type: string
+    minLength: 1
+OCIReference:
+  name: reference
+  in: path
+  required: true
+  schema:
+    type: string
+    pattern: "^(?:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}|sha256:[a-f0-9]{64})$"
+Digest:
+  name: digest
+  in: path
+  required: true
+  schema:
+    type: string
+    pattern: "^sha256:[a-f0-9]{64}$"
+PageSize:
+  name: pageSize
+  in: query
+  schema:
+    type: integer
+    minimum: 1
+    maximum: 200
+    default: 50
+PageToken:
+  name: pageToken
+  in: query
+  schema:
+    type: string
+IdempotencyKey:
+  name: Idempotency-Key
+  in: header
+  required: true
+  schema:
+    type: string
+    minLength: 1
+    maxLength: 128
+IfMatch:
+  name: If-Match
+  in: header
+  required: true
+  schema:
+    type: string

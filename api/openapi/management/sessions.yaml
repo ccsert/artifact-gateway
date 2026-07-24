@@ -1,0 +1,66 @@
+---
+repositories_repositoryId_publish_sessions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createPublishSession
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreatePublishSession"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/PublishSession"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+publish_sessions_sessionId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  get:
+    operationId: getPublishSession
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/PublishSession"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+publish_sessions_sessionId_objects_objectName:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  - name: objectName
+    in: path
+    required: true
+    schema:
+      type: string
+      pattern: "^[^/]+$"
+  put:
+    operationId: uploadPublishObject
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '204':
+        description: Verified and staged
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+publish_sessions_sessionId_commit:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  post:
+    operationId: commitPublishSession
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Artifact"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
