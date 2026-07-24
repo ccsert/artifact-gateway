@@ -288,6 +288,54 @@ func TestPostgresConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
 	}
 }
 
+func TestPostgresLegacyGroupsPreserveManagedRepositoryBindings(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+
+	for _, tc := range []struct {
+		name   string
+		format repository.Format
+		create func(repository.Group) error
+		load   func(string) (repository.Group, error)
+	}{
+		{name: "oci", format: repository.FormatOCI, create: func(group repository.Group) error {
+			_, err := store.CreateGroup(context.Background(), group)
+			return err
+		}, load: func(name string) (repository.Group, error) { return store.GetGroup(context.Background(), name) }},
+		{name: "maven", format: repository.FormatMaven, create: func(group repository.Group) error {
+			_, err := store.CreateMavenGroup(context.Background(), group)
+			return err
+		}, load: func(name string) (repository.Group, error) { return store.GetMavenGroup(context.Background(), name) }},
+		{name: "raw", format: repository.FormatRaw, create: func(group repository.Group) error {
+			_, err := store.CreateRawGroup(context.Background(), group)
+			return err
+		}, load: func(name string) (repository.Group, error) { return store.GetRawGroup(context.Background(), name) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+			repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: tc.name + "-binding-" + suffix, Format: tc.format})
+			if err != nil {
+				t.Fatal(err)
+			}
+			groupName := tc.name + "-group-" + suffix
+			if err := tc.create(repository.Group{Name: groupName, Members: []repository.Member{{Name: "bound", Type: repository.MemberHosted, Endpoint: "https://" + tc.name + ".example", RepositoryID: repo.ID}}}); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := tc.load(groupName)
+			if err != nil || len(loaded.Members) != 1 || loaded.Members[0].RepositoryID != repo.ID {
+				t.Fatalf("loaded=%#v err=%v", loaded, err)
+			}
+		})
+	}
+}
+
 func TestPostgresAuditRetainsRepositoryGrantDecision(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
