@@ -25,6 +25,46 @@ type Adapter interface {
 	Available(context.Context, repository.Member, string) bool
 }
 
+// openAPIServeMux bridges OpenAPI's `{sessionId}:commit` template to the
+// standard library router, whose wildcard path segment must end with `}`.
+type openAPIServeMux struct {
+	mux       *http.ServeMux
+	authorize func(http.ResponseWriter, *http.Request) (Principal, bool)
+}
+
+func (m openAPIServeMux) guarded(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if m.authorize != nil {
+			if _, ok := m.authorize(w, r); !ok {
+				return
+			}
+		}
+		handler(w, r)
+	}
+}
+
+func (m openAPIServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	const commitPatternSuffix = "/publish-sessions/{sessionId}:commit"
+	if strings.HasSuffix(pattern, commitPatternSuffix) {
+		prefix := strings.TrimSuffix(pattern, "{sessionId}:commit")
+		m.mux.HandleFunc(prefix, m.guarded(func(w http.ResponseWriter, r *http.Request) {
+			sessionID := strings.TrimPrefix(r.URL.Path, strings.TrimPrefix(prefix, http.MethodPost+" "))
+			if sessionID == "" || strings.Contains(sessionID, "/") || !strings.HasSuffix(sessionID, ":commit") {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			r.SetPathValue("sessionId", strings.TrimSuffix(sessionID, ":commit"))
+			handler(w, r)
+		}))
+		return
+	}
+	m.mux.HandleFunc(pattern, m.guarded(handler))
+}
+
+func (m openAPIServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.mux.ServeHTTP(w, r)
+}
+
 type TestAdapter struct{}
 
 func (TestAdapter) Available(_ context.Context, member repository.Member, _ string) bool {
@@ -554,19 +594,19 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	conanAPI := conanAPIHandler{store: store, authenticator: authenticator}
 	mux.Handle("/api/v1/conan/groups", conanAPI)
 	mux.Handle("/api/v1/conan/groups/", conanAPI)
-	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositories}, adminopenapi.StdHTTPServerOptions{
-		BaseURL:    "/api/v2",
-		BaseRouter: mux,
-		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
-		},
-	})
 	nativeObjects := dependencies.NativeMavenObjectStore
 	if nativeObjects == nil {
 		nativeObjects = NewMemoryOCIObjectStore()
 	}
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator)
+	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven}, adminopenapi.StdHTTPServerOptions{
+		BaseURL:    "/api/v2",
+		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authorize},
+		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		},
+	})
 	mux.Handle("/api/v2/repositories/", nativeMaven)
 	mux.Handle("/api/v2/publish-sessions/", nativeMaven)
 	mux.Handle("POST /api/v1/conan/cache/invalidate", conanCacheInvalidationHandler{store: store, authenticator: authenticator, cache: conanCache})

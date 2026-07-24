@@ -13,6 +13,16 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
+  "/repositories/{repositoryId}/publish-sessions":
+    "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
+  "/repositories/{repositoryId}/artifacts":
+    "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/publish-sessions/{sessionId}":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
+  "/publish-sessions/{sessionId}/objects/{objectName}":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_objects_objectName"
+  "/publish-sessions/{sessionId}:commit":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_commit"
 components:
   schemas:
     Format:

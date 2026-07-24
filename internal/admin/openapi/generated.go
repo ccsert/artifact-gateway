@@ -11,11 +11,46 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ArtifactState.
+const (
+	ArtifactStateDeleted ArtifactState = "deleted"
+	ArtifactStateVisible ArtifactState = "visible"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactState enum.
+func (e ArtifactState) Valid() bool {
+	switch e {
+	case ArtifactStateDeleted:
+		return true
+	case ArtifactStateVisible:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateMavenPublishSessionFormat.
+const (
+	CreateMavenPublishSessionFormatMaven CreateMavenPublishSessionFormat = "maven"
+)
+
+// Valid indicates whether the value is a known member of the CreateMavenPublishSessionFormat enum.
+func (e CreateMavenPublishSessionFormat) Valid() bool {
+	switch e {
+	case CreateMavenPublishSessionFormatMaven:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for DeletionState.
 const (
@@ -34,19 +69,19 @@ func (e DeletionState) Valid() bool {
 
 // Defines values for Format.
 const (
-	Maven Format = "maven"
-	Oci   Format = "oci"
-	Raw   Format = "raw"
+	FormatMaven Format = "maven"
+	FormatOci   Format = "oci"
+	FormatRaw   Format = "raw"
 )
 
 // Valid indicates whether the value is a known member of the Format enum.
 func (e Format) Valid() bool {
 	switch e {
-	case Maven:
+	case FormatMaven:
 		return true
-	case Oci:
+	case FormatOci:
 		return true
-	case Raw:
+	case FormatRaw:
 		return true
 	default:
 		return false
@@ -98,31 +133,96 @@ func (e ProblemCode) Valid() bool {
 	}
 }
 
-// Defines values for RepositoryState.
+// Defines values for PublishSessionState.
 const (
-	Active   RepositoryState = "active"
-	Deleted  RepositoryState = "deleted"
-	Deleting RepositoryState = "deleting"
+	Aborted   PublishSessionState = "aborted"
+	Committed PublishSessionState = "committed"
+	Expired   PublishSessionState = "expired"
+	Open      PublishSessionState = "open"
 )
 
-// Valid indicates whether the value is a known member of the RepositoryState enum.
-func (e RepositoryState) Valid() bool {
+// Valid indicates whether the value is a known member of the PublishSessionState enum.
+func (e PublishSessionState) Valid() bool {
 	switch e {
-	case Active:
+	case Aborted:
 		return true
-	case Deleted:
+	case Committed:
 		return true
-	case Deleting:
+	case Expired:
+		return true
+	case Open:
 		return true
 	default:
 		return false
 	}
 }
 
+// Defines values for RepositoryState.
+const (
+	RepositoryStateActive   RepositoryState = "active"
+	RepositoryStateDeleted  RepositoryState = "deleted"
+	RepositoryStateDeleting RepositoryState = "deleting"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryState enum.
+func (e RepositoryState) Valid() bool {
+	switch e {
+	case RepositoryStateActive:
+		return true
+	case RepositoryStateDeleted:
+		return true
+	case RepositoryStateDeleting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Artifact defines model for Artifact.
+type Artifact struct {
+	Coordinate string             `json:"coordinate"`
+	CreatedAt  time.Time          `json:"createdAt"`
+	Digest     string             `json:"digest"`
+	Id         openapi_types.UUID `json:"id"`
+	State      ArtifactState      `json:"state"`
+}
+
+// ArtifactState defines model for Artifact.State.
+type ArtifactState string
+
+// ArtifactPage defines model for ArtifactPage.
+type ArtifactPage struct {
+	Items         []Artifact `json:"items"`
+	NextPageToken *string    `json:"nextPageToken,omitempty"`
+}
+
+// CreateMavenPublishSession defines model for CreateMavenPublishSession.
+type CreateMavenPublishSession struct {
+	Coordinate string                          `json:"coordinate"`
+	Format     CreateMavenPublishSessionFormat `json:"format"`
+	Objects    []DeclaredObject                `json:"objects"`
+	PomObject  string                          `json:"pomObject"`
+}
+
+// CreateMavenPublishSessionFormat defines model for CreateMavenPublishSession.Format.
+type CreateMavenPublishSessionFormat string
+
+// CreatePublishSession Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes.
+type CreatePublishSession struct {
+	union json.RawMessage
+}
+
 // CreateRepository defines model for CreateRepository.
 type CreateRepository struct {
 	Format Format `json:"format"`
 	Name   string `json:"name"`
+}
+
+// DeclaredObject defines model for DeclaredObject.
+type DeclaredObject struct {
+	Digest string `json:"digest"`
+	Name   string `json:"name"`
+	Size   int    `json:"size"`
 }
 
 // Deletion defines model for Deletion.
@@ -149,6 +249,19 @@ type Problem struct {
 
 // ProblemCode defines model for Problem.Code.
 type ProblemCode string
+
+// PublishSession defines model for PublishSession.
+type PublishSession struct {
+	Coordinate   string              `json:"coordinate"`
+	ExpiresAt    time.Time           `json:"expiresAt"`
+	Id           openapi_types.UUID  `json:"id"`
+	Objects      []DeclaredObject    `json:"objects"`
+	RepositoryId openapi_types.UUID  `json:"repositoryId"`
+	State        PublishSessionState `json:"state"`
+}
+
+// PublishSessionState defines model for PublishSession.State.
+type PublishSessionState string
 
 // Repository defines model for Repository.
 type Repository struct {
@@ -180,6 +293,12 @@ type PageToken = string
 // RepositoryId defines model for RepositoryId.
 type RepositoryId = openapi_types.UUID
 
+// SessionId defines model for SessionId.
+type SessionId = openapi_types.UUID
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList = ArtifactPage
+
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
 
@@ -194,11 +313,70 @@ type CreateRepositoryParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// ListArtifactsParams defines parameters for ListArtifacts.
+type ListArtifactsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreatePublishSessionParams defines parameters for CreatePublishSession.
+type CreatePublishSessionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
+// CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
+type CreatePublishSessionJSONRequestBody = CreatePublishSession
+
+// AsCreateMavenPublishSession returns the union data inside the CreatePublishSession as a CreateMavenPublishSession
+func (t CreatePublishSession) AsCreateMavenPublishSession() (CreateMavenPublishSession, error) {
+	var body CreateMavenPublishSession
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromCreateMavenPublishSession overwrites any union data inside the CreatePublishSession as the provided CreateMavenPublishSession
+func (t *CreatePublishSession) FromCreateMavenPublishSession(v CreateMavenPublishSession) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeCreateMavenPublishSession performs a merge with any union data inside the CreatePublishSession, using the provided CreateMavenPublishSession
+func (t *CreatePublishSession) MergeCreateMavenPublishSession(v CreateMavenPublishSession) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t CreatePublishSession) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *CreatePublishSession) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /publish-sessions/{sessionId})
+	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
+
+	// (PUT /publish-sessions/{sessionId}/objects/{objectName})
+	UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionId SessionId, objectName string)
+
+	// (POST /publish-sessions/{sessionId}:commit)
+	CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
 
 	// (GET /repositories)
 	ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams)
@@ -211,6 +389,12 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId})
 	GetRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /repositories/{repositoryId}/artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams)
+
+	// (POST /repositories/{repositoryId}/publish-sessions)
+	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -221,6 +405,93 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetPublishSession operation middleware
+func (siw *ServerInterfaceWrapper) GetPublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPublishSession(w, r, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadPublishObject operation middleware
+func (siw *ServerInterfaceWrapper) UploadPublishObject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "objectName" -------------
+	var objectName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "objectName", r.PathValue("objectName"), &objectName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadPublishObject(w, r, sessionId, objectName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitPublishSession operation middleware
+func (siw *ServerInterfaceWrapper) CommitPublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitPublishSession(w, r, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListRepositories operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
@@ -365,6 +636,115 @@ func (siw *ServerInterfaceWrapper) GetRepository(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifacts(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePublishSession operation middleware
+func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePublishSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePublishSession(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -485,21 +865,170 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 
 	return m
 }
+
+type ArtifactJSONResponse Artifact
+
+type ArtifactListJSONResponse ArtifactPage
 
 type DeletionJSONResponse Deletion
 
 type ProblemApplicationProblemPlusJSONResponse Problem
 
+type PublishSessionJSONResponse PublishSession
+
 type RepositoryJSONResponse Repository
 
 type RepositoryListJSONResponse RepositoryPage
+
+type GetPublishSessionRequestObject struct {
+	SessionId SessionId `json:"sessionId"`
+}
+
+type GetPublishSessionResponseObject interface {
+	VisitGetPublishSessionResponse(w http.ResponseWriter) error
+}
+
+type GetPublishSession200JSONResponse struct{ PublishSessionJSONResponse }
+
+func (response GetPublishSession200JSONResponse) VisitGetPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPublishSession404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetPublishSession404ApplicationProblemPlusJSONResponse) VisitGetPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadPublishObjectRequestObject struct {
+	SessionId  SessionId `json:"sessionId"`
+	ObjectName string    `json:"objectName"`
+	Body       io.Reader
+}
+
+type UploadPublishObjectResponseObject interface {
+	VisitUploadPublishObjectResponse(w http.ResponseWriter) error
+}
+
+type UploadPublishObject204Response struct {
+}
+
+func (response UploadPublishObject204Response) VisitUploadPublishObjectResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UploadPublishObject409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadPublishObject409ApplicationProblemPlusJSONResponse) VisitUploadPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadPublishObject422ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadPublishObject422ApplicationProblemPlusJSONResponse) VisitUploadPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitPublishSessionRequestObject struct {
+	SessionId SessionId `json:"sessionId"`
+}
+
+type CommitPublishSessionResponseObject interface {
+	VisitCommitPublishSessionResponse(w http.ResponseWriter) error
+}
+
+type CommitPublishSession200JSONResponse struct{ ArtifactJSONResponse }
+
+func (response CommitPublishSession200JSONResponse) VisitCommitPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitPublishSession409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CommitPublishSession409ApplicationProblemPlusJSONResponse) VisitCommitPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitPublishSession422ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitPublishSession422ApplicationProblemPlusJSONResponse) VisitCommitPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListRepositoriesRequestObject struct {
 	Params ListRepositoriesParams
@@ -668,8 +1197,80 @@ func (response GetRepository404ApplicationProblemPlusJSONResponse) VisitGetRepos
 	return err
 }
 
+type ListArtifactsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListArtifactsParams
+}
+
+type ListArtifactsResponseObject interface {
+	VisitListArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifacts200JSONResponse struct{ ArtifactListJSONResponse }
+
+func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublishSessionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       CreatePublishSessionParams
+	Body         *CreatePublishSessionJSONRequestBody
+}
+
+type CreatePublishSessionResponseObject interface {
+	VisitCreatePublishSessionResponse(w http.ResponseWriter) error
+}
+
+type CreatePublishSession201JSONResponse struct{ PublishSessionJSONResponse }
+
+func (response CreatePublishSession201JSONResponse) VisitCreatePublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublishSession409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitCreatePublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+
+	// (GET /publish-sessions/{sessionId})
+	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
+
+	// (PUT /publish-sessions/{sessionId}/objects/{objectName})
+	UploadPublishObject(ctx context.Context, request UploadPublishObjectRequestObject) (UploadPublishObjectResponseObject, error)
+
+	// (POST /publish-sessions/{sessionId}:commit)
+	CommitPublishSession(ctx context.Context, request CommitPublishSessionRequestObject) (CommitPublishSessionResponseObject, error)
 
 	// (GET /repositories)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -682,6 +1283,12 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId})
 	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/artifacts)
+	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/publish-sessions)
+	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -721,6 +1328,87 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetPublishSession operation middleware
+func (sh *strictHandler) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId) {
+	var request GetPublishSessionRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPublishSession(ctx, request.(GetPublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPublishSessionResponseObject); ok {
+		if err := validResponse.VisitGetPublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadPublishObject operation middleware
+func (sh *strictHandler) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionId SessionId, objectName string) {
+	var request UploadPublishObjectRequestObject
+
+	request.SessionId = sessionId
+	request.ObjectName = objectName
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadPublishObject(ctx, request.(UploadPublishObjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadPublishObject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadPublishObjectResponseObject); ok {
+		if err := validResponse.VisitUploadPublishObjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CommitPublishSession operation middleware
+func (sh *strictHandler) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId) {
+	var request CommitPublishSessionRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CommitPublishSession(ctx, request.(CommitPublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CommitPublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CommitPublishSessionResponseObject); ok {
+		if err := validResponse.VisitCommitPublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListRepositories operation middleware
@@ -827,6 +1515,67 @@ func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListArtifacts operation middleware
+func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams) {
+	var request ListArtifactsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifacts(ctx, request.(ListArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
+		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePublishSession operation middleware
+func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams) {
+	var request CreatePublishSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreatePublishSessionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePublishSession(ctx, request.(CreatePublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
+		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

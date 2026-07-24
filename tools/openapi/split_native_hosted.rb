@@ -118,5 +118,13 @@ management_document["paths"] = paths.select { |name, _| name.start_with?("/repos
 write_yaml(File.join(output, "management.yaml"), management_document)
 
 runtime_document = root_document.dup
-runtime_document["paths"] = paths.slice("/repositories", "/repositories/{repositoryId}")
+runtime_document["paths"] = paths.slice(
+  "/repositories",
+  "/repositories/{repositoryId}",
+  "/repositories/{repositoryId}/publish-sessions",
+  "/repositories/{repositoryId}/artifacts",
+  "/publish-sessions/{sessionId}",
+  "/publish-sessions/{sessionId}/objects/{objectName}",
+  "/publish-sessions/{sessionId}:commit"
+)
 write_yaml(File.join(output, "management-runtime.yaml"), runtime_document)

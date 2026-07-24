@@ -79,6 +79,10 @@ func (h nativeMavenHandler) artifacts(w http.ResponseWriter, r *http.Request, re
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
 		return
 	}
+	h.listArtifacts(w, r, repoID)
+}
+
+func (h nativeMavenHandler) listArtifacts(w http.ResponseWriter, r *http.Request, repoID string) {
 	repo, err := h.store.GetHostedRepository(r.Context(), repoID)
 	if err != nil || repo.Format != repository.FormatMaven {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
@@ -102,6 +106,10 @@ func (h nativeMavenHandler) create(w http.ResponseWriter, r *http.Request, repoI
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
 		return
 	}
+	h.createWithIdempotencyKey(w, r, principal, repoID, r.Header.Get("Idempotency-Key"))
+}
+
+func (h nativeMavenHandler) createWithIdempotencyKey(w http.ResponseWriter, r *http.Request, principal Principal, repoID, key string) {
 	repo, err := h.store.GetHostedRepository(r.Context(), repoID)
 	if err != nil || repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
@@ -124,7 +132,7 @@ func (h nativeMavenHandler) create(w http.ResponseWriter, r *http.Request, repoI
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pomObject must be declared")
 		return
 	}
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	key = strings.TrimSpace(key)
 	if key == "" || len(key) > 128 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
 		return
@@ -162,15 +170,19 @@ func (h nativeMavenHandler) session(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		s, err := h.store.GetMavenPublishSession(r.Context(), id)
-		if err != nil {
-			writeHostedProblem(w, 404, "not_found", "publish session not found")
-			return
-		}
-		writeNativeMavenJSON(w, 200, s)
+		h.getSession(w, r, id)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (h nativeMavenHandler) getSession(w http.ResponseWriter, r *http.Request, id string) {
+	s, err := h.store.GetMavenPublishSession(r.Context(), id)
+	if err != nil {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "publish session not found")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, s)
 }
 func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, name string) {
 	s, err := h.store.GetMavenPublishSession(r.Context(), id)

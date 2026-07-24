@@ -85,7 +85,10 @@ func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Req
 // generatedRepositoryAPIAdapter keeps authorization and domain behavior in the
 // existing handler while the generated OpenAPI wrapper owns route and parameter
 // binding for the active repository-management surface.
-type generatedRepositoryAPIAdapter struct{ hostedRepositoryAPIHandler }
+type generatedRepositoryAPIAdapter struct {
+	hostedRepositoryAPIHandler
+	sessions nativeMavenHandler
+}
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
 
@@ -111,6 +114,44 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 	if _, ok := h.authorize(w, r); ok {
 		h.get(w, r, id.String())
 	}
+}
+
+func (h generatedRepositoryAPIAdapter) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreatePublishSessionParams) {
+	h.withSessionAdmin(w, r, func(principal Principal) {
+		h.sessions.createWithIdempotencyKey(w, r, principal, repositoryID.String(), string(params.IdempotencyKey))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.listArtifacts(w, r, repositoryID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.getSession(w, r, sessionID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.upload(w, r, sessionID.String(), objectName)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.commit(w, r, sessionID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) withSessionAdmin(w http.ResponseWriter, r *http.Request, operation func(Principal)) {
+	if principal, ok := h.sessions.admin(r); ok {
+		operation(principal)
+		return
+	}
+	writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
 }
 
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {

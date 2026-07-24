@@ -55,6 +55,11 @@ func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing
 	if denied.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous status=%d", denied.Code)
 	}
+	anonymousInvalidSession := httptest.NewRecorder()
+	handler.ServeHTTP(anonymousInvalidSession, httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/not-a-uuid:commit", nil))
+	if anonymousInvalidSession.Code != http.StatusUnauthorized || !strings.Contains(anonymousInvalidSession.Body.String(), `"code":"access_denied"`) {
+		t.Fatalf("anonymous invalid session=%d body=%s", anonymousInvalidSession.Code, anonymousInvalidSession.Body.String())
+	}
 	bad := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"Bad Name","format":"npm"}`))
 	authorize(bad, "admin-secret")
 	response := httptest.NewRecorder()
@@ -75,6 +80,27 @@ func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing
 	handler.ServeHTTP(invalidIDResponse, invalidID)
 	if invalidIDResponse.Code != http.StatusBadRequest || !strings.Contains(invalidIDResponse.Body.String(), `"code":"invalid_request"`) {
 		t.Fatalf("invalid id=%d body=%s", invalidIDResponse.Code, invalidIDResponse.Body.String())
+	}
+	invalidArtifactRepositoryID := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/not-a-uuid/artifacts", nil)
+	authorize(invalidArtifactRepositoryID, "admin-secret")
+	invalidArtifactRepositoryIDResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidArtifactRepositoryIDResponse, invalidArtifactRepositoryID)
+	if invalidArtifactRepositoryIDResponse.Code != http.StatusBadRequest || !strings.Contains(invalidArtifactRepositoryIDResponse.Body.String(), `"code":"invalid_request"`) {
+		t.Fatalf("invalid artifact repository id=%d body=%s", invalidArtifactRepositoryIDResponse.Code, invalidArtifactRepositoryIDResponse.Body.String())
+	}
+	invalidSessionID := httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/not-a-uuid:commit", nil)
+	authorize(invalidSessionID, "admin-secret")
+	invalidSessionIDResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidSessionIDResponse, invalidSessionID)
+	if invalidSessionIDResponse.Code != http.StatusBadRequest || !strings.Contains(invalidSessionIDResponse.Body.String(), `"code":"invalid_request"`) {
+		t.Fatalf("invalid session id=%d body=%s", invalidSessionIDResponse.Code, invalidSessionIDResponse.Body.String())
+	}
+	nonCommitSessionPost := httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/"+uuid.NewString(), nil)
+	authorize(nonCommitSessionPost, "admin-secret")
+	nonCommitSessionPostResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nonCommitSessionPostResponse, nonCommitSessionPost)
+	if nonCommitSessionPostResponse.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("non-commit session post=%d body=%s", nonCommitSessionPostResponse.Code, nonCommitSessionPostResponse.Body.String())
 	}
 }
 

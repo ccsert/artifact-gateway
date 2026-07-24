@@ -43,10 +43,12 @@ test suite accepts generated output.
 
 Management APIs are conventional resource routes. `oapi-codegen` generates
 request/response types plus standard and strict server interfaces for the active
-repository-management boundary. The runtime uses the generated standard HTTP
-server wrapper so path, query, and idempotency-header binding follows the
-contract, while handwritten code retains authorization, transactions, and
-domain decisions. The strict interface is generated alongside it as the typed
+repository, Maven publish-session, and Maven artifact-list boundaries. The
+runtime uses the generated standard HTTP server wrapper so path, query, and
+idempotency-header binding follows the contract, while handwritten code retains
+authorization, transactions, and domain decisions. The `:commit` session route
+uses a small standard-library routing bridge because its path parameter has a
+literal suffix. The strict interface is generated alongside it as the typed
 extension point for later management route migrations.
 
 Protocol APIs are not handler-generated. OCI Registry V2, Raw, Maven, and
