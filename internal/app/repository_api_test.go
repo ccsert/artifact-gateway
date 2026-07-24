@@ -448,3 +448,41 @@ func TestMetricsCountDisabledAndMissingGroupsAsFailures(t *testing.T) {
 		t.Fatalf("metrics = %s", metrics.Body.String())
 	}
 }
+
+func TestGroupMemberRepositoryBindingsRequireMatchingFormat(t *testing.T) {
+	store := repository.NewMemoryStore()
+	oci, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-target", Name: "oci-target", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maven, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "maven-target", Name: "maven-target", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-target", Name: "raw-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, repositoryID string
+		format             repository.Format
+	}{
+		{name: "OCI", repositoryID: oci.ID, format: repository.FormatOCI},
+		{name: "Maven", repositoryID: maven.ID, format: repository.FormatMaven},
+		{name: "Raw", repositoryID: raw.ID, format: repository.FormatRaw},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			group := repository.Group{Members: []repository.Member{{RepositoryID: test.repositoryID}}}
+			if err := validateGroupRepositoryBindings(context.Background(), store, group, test.format); err != nil {
+				t.Fatal(err)
+			}
+			group.Members[0].RepositoryID = "missing"
+			if err := validateGroupRepositoryBindings(context.Background(), store, group, test.format); err == nil {
+				t.Fatal("missing repository binding was accepted")
+			}
+		})
+	}
+	if err := validateGroupRepositoryBindings(context.Background(), store, repository.Group{Members: []repository.Member{{RepositoryID: raw.ID}}}, repository.FormatMaven); err == nil {
+		t.Fatal("format-mismatched repository binding was accepted")
+	}
+}

@@ -65,3 +65,28 @@ func TestMemoryConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
 		t.Fatalf("loaded=%#v err=%v", loaded, err)
 	}
 }
+
+func TestMemoryStorePreservesLegacyGroupMemberRepositoryBindings(t *testing.T) {
+	store := NewMemoryStore()
+	groups := []struct {
+		name   string
+		create func(context.Context, Group) (Group, error)
+		get    func(context.Context, string) (Group, error)
+	}{
+		{name: "oci", create: store.CreateGroup, get: store.GetGroup},
+		{name: "maven", create: store.CreateMavenGroup, get: store.GetMavenGroup},
+		{name: "raw", create: store.CreateRawGroup, get: store.GetRawGroup},
+	}
+	for _, test := range groups {
+		t.Run(test.name, func(t *testing.T) {
+			created, err := test.create(context.Background(), Group{Name: test.name, Members: []Member{{Name: "member", Type: MemberHosted, Endpoint: "https://example.invalid", RepositoryID: "repository-id"}}})
+			if err != nil || len(created.Members) != 1 || created.Members[0].RepositoryID != "repository-id" {
+				t.Fatalf("created=%#v err=%v", created, err)
+			}
+			loaded, err := test.get(context.Background(), test.name)
+			if err != nil || len(loaded.Members) != 1 || loaded.Members[0].RepositoryID != "repository-id" {
+				t.Fatalf("loaded=%#v err=%v", loaded, err)
+			}
+		})
+	}
+}

@@ -2,7 +2,7 @@
 title: Group 成员 grants 绑定与执行
 label: wayfinder:task
 state: open
-assignee:
+assignee: codex
 depends_on:
   - 07-group-member-authorization
 ---

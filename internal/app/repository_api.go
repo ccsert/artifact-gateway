@@ -618,7 +618,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.HandleFunc("GET /readyz", dependencies.ready)
 	metrics := &Metrics{}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
-	api := apiHandler{store: store, resolver: resolver, authenticator: authenticator}
+	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	ociClient := OCIClient(UpstreamClient{})
 	if len(ociClients) > 0 {
 		ociClient = ociClients[0]
@@ -641,9 +641,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
-	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, authenticator: authenticator})
-	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, authenticator: authenticator})
-	rawAPI := rawAPIHandler{store: store, authenticator: authenticator, cache: rawCache}
+	mux.Handle("/api/v1/maven/groups", mavenAPIHandler{store: store, repositories: store, authenticator: authenticator})
+	mux.Handle("/api/v1/maven/groups/", mavenAPIHandler{store: store, repositories: store, authenticator: authenticator})
+	rawAPI := rawAPIHandler{store: store, repositories: store, authenticator: authenticator, cache: rawCache}
 	mux.Handle("/api/v1/raw/groups", rawAPI)
 	mux.Handle("/api/v1/raw/groups/", rawAPI)
 	mux.Handle("POST /api/v1/raw/cache/invalidate", rawCacheInvalidationHandler{store: store, authenticator: authenticator, cache: rawCache})
@@ -812,6 +812,7 @@ func (a auditAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type mavenAPIHandler struct {
 	store         repository.MavenStore
+	repositories  repository.HostedRepositoryStore
 	authenticator Authenticator
 }
 
@@ -870,6 +871,7 @@ func (h conanCacheInvalidationHandler) ServeHTTP(w http.ResponseWriter, r *http.
 
 type rawAPIHandler struct {
 	store         repository.RawStore
+	repositories  repository.HostedRepositoryStore
 	authenticator Authenticator
 	cache         *RawCache
 }
@@ -893,6 +895,10 @@ func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := validateRawGroup(g); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
+		if err := validateGroupRepositoryBindings(r.Context(), a.repositories, g, repository.FormatRaw); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
@@ -1030,7 +1036,7 @@ func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
-		if err := validateConanGroupRepositoryBindings(r.Context(), a.store, group); err != nil {
+		if err := validateGroupRepositoryBindings(r.Context(), a.store, group, repository.FormatConan); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
@@ -1102,6 +1108,10 @@ func (a mavenAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
+		if err := validateGroupRepositoryBindings(r.Context(), a.repositories, group, repository.FormatMaven); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
 		created, err := a.store.CreateMavenGroup(r.Context(), group)
 		if errors.Is(err, repository.ErrNameExists) {
 			writeError(w, http.StatusConflict, "group_exists", "group name already exists")
@@ -1146,6 +1156,7 @@ func (a mavenAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type apiHandler struct {
 	store         repository.Store
+	repositories  repository.HostedRepositoryStore
 	resolver      Resolver
 	authenticator Authenticator
 }
@@ -1206,6 +1217,10 @@ func (a apiHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validateGroup(group); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+		return
+	}
+	if err := validateGroupRepositoryBindings(r.Context(), a.repositories, group, repository.FormatOCI); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 		return
 	}
@@ -1341,14 +1356,17 @@ func validateConanGroup(group repository.Group) error {
 	return nil
 }
 
-func validateConanGroupRepositoryBindings(ctx context.Context, store repository.HostedRepositoryStore, group repository.Group) error {
+func validateGroupRepositoryBindings(ctx context.Context, store repository.HostedRepositoryStore, group repository.Group, format repository.Format) error {
+	if store == nil {
+		return errors.New("repository binding validation is unavailable")
+	}
 	for _, member := range group.Members {
 		if member.RepositoryID == "" {
 			continue
 		}
 		repo, err := store.GetHostedRepository(ctx, member.RepositoryID)
-		if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
-			return errors.New("member repositoryId must reference an active Conan repository")
+		if err != nil || repo.Format != format || repo.State != repository.RepositoryActive {
+			return fmt.Errorf("member repositoryId must reference an active %s repository", format)
 		}
 	}
 	return nil
