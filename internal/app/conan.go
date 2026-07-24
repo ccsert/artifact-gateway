@@ -479,18 +479,21 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		if h.Cache != nil {
 			key = h.Cache.key(group.Name, path, member, representation)
 			if e, ok := h.Cache.load(ctx, key); ok {
-				if e.status == http.StatusNotFound {
+				if !conanCacheSourceMatches(e, member) {
+					h.Cache.Invalidate(ctx, group.Name, path, member)
+				} else if e.status == http.StatusNotFound {
 					if h.Metrics != nil {
 						h.Metrics.recordConanNegativeCacheHit()
 					}
 					h.audit(withConanAuditDisposition(ctx, "hit"), group.Name, path, member.Name, actor, repository.AuditNotFound)
 					continue
+				} else {
+					if h.Metrics != nil {
+						h.Metrics.recordConanCacheHit()
+					}
+					e.cacheDisposition = "hit"
+					return e, http.StatusOK, nil
 				}
-				if h.Metrics != nil {
-					h.Metrics.recordConanCacheHit()
-				}
-				e.cacheDisposition = "hit"
-				return e, http.StatusOK, nil
 			}
 			if h.Metrics != nil {
 				h.Metrics.recordConanCacheMiss()
@@ -508,18 +511,21 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			}
 			defer release()
 			if e, ok := h.Cache.load(ctx, key); ok {
-				if e.status == http.StatusNotFound {
+				if !conanCacheSourceMatches(e, member) {
+					h.Cache.Invalidate(ctx, group.Name, path, member)
+				} else if e.status == http.StatusNotFound {
 					if h.Metrics != nil {
 						h.Metrics.recordConanNegativeCacheHit()
 					}
 					h.audit(withConanAuditDisposition(ctx, "hit"), group.Name, path, member.Name, actor, repository.AuditNotFound)
 					continue
+				} else {
+					if h.Metrics != nil {
+						h.Metrics.recordConanCacheHit()
+					}
+					e.cacheDisposition = "hit"
+					return e, http.StatusOK, nil
 				}
-				if h.Metrics != nil {
-					h.Metrics.recordConanCacheHit()
-				}
-				e.cacheDisposition = "hit"
-				return e, http.StatusOK, nil
 			}
 		}
 		response, err := h.Client.FetchConan(ctx, http.MethodGet, member, path, headers)
@@ -605,17 +611,11 @@ func (h ConanHandler) canReadConanGroup(ctx context.Context, principal Principal
 }
 
 func (h ConanHandler) managedConanMemberDecision(ctx context.Context, principal Principal, member repository.Member) (AuthorizationDecision, bool) {
-	if member.RepositoryID == "" {
-		return AuthorizationDecision{}, false
-	}
-	if h.Repositories == nil {
-		return AuthorizationDecision{Source: "repository_grants", Reason: "repository_lookup_unavailable"}, true
-	}
-	repo, err := h.Repositories.GetHostedRepository(ctx, member.RepositoryID)
-	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
-		return AuthorizationDecision{Source: "repository_grants", Reason: "repository_lookup_failed"}, true
-	}
-	return h.Authorizer.ManagedDecision(ctx, principal, repo, RepositoryRead)
+	return ManagedGroupMemberDecision(ctx, h.Repositories, h.Authorizer, principal, member, repository.FormatConan)
+}
+
+func conanCacheSourceMatches(entry conanCacheEntry, member repository.Member) bool {
+	return entry.member == member.Name && entry.endpoint == member.Endpoint
 }
 func conanRepresentation(headers http.Header) string { return strings.TrimSpace(headers.Get("Accept")) }
 
