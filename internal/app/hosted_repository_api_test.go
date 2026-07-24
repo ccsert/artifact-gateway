@@ -155,6 +155,51 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "scoped-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}},
+		{Principal: "writer", Scopes: []string{"repositories:write"}},
+		{Principal: "manager", Scopes: []string{"repositories:admin"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(method, path, actor, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		authorize(r, authenticator.IssueToken(actor))
+		if method == http.MethodPut {
+			r.Header.Set("If-Match", "2")
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := request(http.MethodGet, "/api/v2/repositories/"+repo.ID, "reader", ""); response.Code != http.StatusOK {
+		t.Fatalf("reader get=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/retention-policy", "reader", ""); response.Code != http.StatusOK {
+		t.Fatalf("reader policy=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", "reader", `[]`); response.Code != http.StatusForbidden {
+		t.Fatalf("reader grants=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/grants", "manager", ""); response.Code != http.StatusOK {
+		t.Fatalf("manager grants=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "reader", ""); response.Code != http.StatusForbidden {
+		t.Fatalf("reader delete=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusAccepted {
+		t.Fatalf("writer delete=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "retention-target", Format: repository.FormatMaven})

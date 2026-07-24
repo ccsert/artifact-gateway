@@ -74,9 +74,18 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 }
 
 func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	principal, ok := h.authenticate(w, r)
 	if !ok || !principal.Admin {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+		return Principal{}, false
+	}
+	return principal, true
+}
+
+func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
 		return Principal{}, false
 	}
 	return principal, true
@@ -91,6 +100,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	authorizer        RepositoryAuthorizer
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -108,60 +118,54 @@ func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r
 }
 
 func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
-	if _, ok := h.authorize(w, r); ok {
+	h.withRepositoryScope(w, r, id.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.disable(w, r, id.String())
-	}
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
-	if _, ok := h.authorize(w, r); ok {
+	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.get(w, r, id.String())
-	}
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list grants failed")
-		return
-	}
-	w.Header().Set("ETag", set.Version)
-	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+		set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list grants failed")
+			return
+		}
+		w.Header().Set("ETag", set.Version)
+		writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	var grants []repository.RepositoryGrant
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principals and valid scopes")
-		return
-	}
-	set, err := h.grants.ReplaceRepositoryGrants(r.Context(), repositoryID.String(), grants, string(params.IfMatch))
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if errors.Is(err, repository.ErrVersionConflict) {
-		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace grants failed")
-		return
-	}
-	w.Header().Set("ETag", set.Version)
-	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+		var grants []repository.RepositoryGrant
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principals and valid scopes")
+			return
+		}
+		set, err := h.grants.ReplaceRepositoryGrants(r.Context(), repositoryID.String(), grants, string(params.IfMatch))
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace grants failed")
+			return
+		}
+		w.Header().Set("ETag", set.Version)
+		writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	})
 }
 
 func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
@@ -184,46 +188,40 @@ func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
 }
 
 func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repositoryID.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
-		return
-	}
-	writeNativeMavenJSON(w, http.StatusOK, policy)
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
+		policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repositoryID.String())
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, policy)
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceRetentionPolicyParams) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	var policy repository.RepositoryRetentionPolicy
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&policy); err != nil || policy.Version == "" || policy.KeepDays < 1 || policy.MinimumVersions < 1 {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, keepDays, and minimumVersions must be valid")
-		return
-	}
-	updated, err := h.retentionPolicies.ReplaceRepositoryRetentionPolicy(r.Context(), repositoryID.String(), policy, string(params.IfMatch))
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if errors.Is(err, repository.ErrVersionConflict) {
-		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace retention policy failed")
-		return
-	}
-	writeNativeMavenJSON(w, http.StatusOK, updated)
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+		var policy repository.RepositoryRetentionPolicy
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&policy); err != nil || policy.Version == "" || policy.KeepDays < 1 || policy.MinimumVersions < 1 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, keepDays, and minimumVersions must be valid")
+			return
+		}
+		updated, err := h.retentionPolicies.ReplaceRepositoryRetentionPolicy(r.Context(), repositoryID.String(), policy, string(params.IfMatch))
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace retention policy failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, updated)
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
@@ -414,53 +412,100 @@ func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group r
 }
 
 func (h generatedRepositoryAPIAdapter) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreatePublishSessionParams) {
-	h.withSessionAdmin(w, r, func(principal Principal) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, _ repository.HostedRepository) {
 		h.sessions.createWithIdempotencyKey(w, r, principal, repositoryID.String(), string(params.IdempotencyKey))
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.listArtifacts(w, r, repositoryID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.deleteArtifact(w, r, repositoryID.String(), artifactID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryRead, func(Principal) {
 		h.sessions.getSession(w, r, sessionID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal) {
 		h.sessions.upload(w, r, sessionID.String(), objectName)
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
-	h.withSessionAdmin(w, r, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal) {
 		h.sessions.commit(w, r, sessionID.String())
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) withSessionAdmin(w http.ResponseWriter, r *http.Request, operation func(Principal)) {
-	if principal, ok := h.sessions.admin(r); ok {
-		operation(principal)
+func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter, r *http.Request, repositoryID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
-	writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return
+	}
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		return
+	}
+	handler(principal, repo)
+}
+
+func (h generatedRepositoryAPIAdapter) withSessionScope(w http.ResponseWriter, r *http.Request, sessionID string, operation RepositoryOperation, handler func(Principal)) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
+	}
+	session, err := h.sessions.store.GetMavenPublishSession(r.Context(), sessionID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "publish session not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get publish session failed")
+		return
+	}
+	h.withRepositoryScopeForPrincipal(w, r, principal, session.RepositoryID, operation, handler)
+}
+
+func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.ResponseWriter, r *http.Request, principal Principal, repositoryID string, operation RepositoryOperation, handler func(Principal)) {
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return
+	}
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		return
+	}
+	handler(principal)
 }
 
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {

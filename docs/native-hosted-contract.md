@@ -93,12 +93,15 @@ No API exposes direct object keys.
 
 ## Authorization, errors, pagination, and compatibility
 
-Management endpoints require a bearer access token. `repositories:read` permits
-list/get; `repositories:write` permits repository, member, policy, publish, and
-deletion changes; `repositories:admin` permits grants and retention changes.
-Repository grants can narrow those scopes. Raw/OCI/Maven protocol reads and
-writes use their protocol authentication contracts, but must resolve to the
-same principal and Repository authorization policy.
+Management endpoints require a bearer access token. Global repository listing,
+Repository creation, and Hosted Group lifecycle remain administrator-only.
+For an identified Repository, `repositories:read` permits Repository detail,
+retention-policy reads, Maven session/artifact reads; `repositories:write`
+permits Repository disablement and Maven publication/artifact deletion; and
+`repositories:admin` permits grant and retention-policy replacement. Scope
+inheritance is `admin -> write -> read`. Raw/OCI/Maven protocol reads and
+writes use their protocol authentication contracts, but resolve to the same
+principal and Repository authorization policy.
 
 Management API operations are Bearer-only. Protocol read operations override
 that global management security declaration: Raw and Maven accept HTTP Basic

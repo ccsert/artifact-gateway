@@ -603,9 +603,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator)
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
-		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authorize},
+		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticate},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 		},
