@@ -63,7 +63,7 @@ production-backed `/api/v2` handler:
 | Repositories | Generated | Hosted repositories have UUID identity, lifecycle state, and idempotent creation. |
 | Maven publish sessions | Generated | The existing session service supplies authorization, staged-object validation, and transactional commit. |
 | Maven artifact list | Generated | The existing committed-artifact store supplies the list response. |
-| Artifact detail and deletion | Deferred | `NativeMavenStore` has no lookup-by-artifact-ID or deletion/tombstone operation. |
+| Artifact detail and deletion | Generated | Maven artifacts support UUID detail and idempotent logical deletion; tombstoning removes resolvable asset metadata while the orphan collector retains responsibility for byte reclamation. |
 | Groups | Generated | V2 groups are a separate UUID-based aggregate over active Hosted Repositories; V1 OCI, Maven, Raw, and Conan groups remain protocol-specific and unchanged. |
 | Grants | Generated | Repository grant sets are versioned with `ETag`/`If-Match` and persist principal-to-scope mappings. |
 | Retention policies | Generated | Policies have a default `keepDays=30`/`minimumVersions=1`, versioned `If-Match` replacement, and Memory/Postgres persistence. Automatic deletion remains deferred until each format has a safe tombstone lifecycle. |

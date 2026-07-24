@@ -1162,7 +1162,7 @@ func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) 
 	return a, err
 }
 func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) ([]MavenArtifact, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 ORDER BY created_at DESC`, repoID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' ORDER BY created_at DESC`, repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -1176,6 +1176,47 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+func (s *PostgresStore) GetMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	var artifact MavenArtifact
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	return artifact, err
+}
+func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer tx.Rollback()
+	var artifact MavenArtifact
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if artifact.State == "deleted" {
+		return artifact, tx.Commit()
+	}
+	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_assets WHERE repository_id::text=$1 AND left(path, length($2))=$2`, repositoryID, prefix); err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_object_references r WHERE NOT EXISTS (SELECT 1 FROM native_maven_assets a WHERE a.object_key=r.object_key)`); err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_artifacts SET state='deleted' WHERE id::text=$1`, artifactID); err != nil {
+		return MavenArtifact{}, err
+	}
+	artifact.State = "deleted"
+	if err = tx.Commit(); err != nil {
+		return MavenArtifact{}, err
+	}
+	return artifact, nil
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates WHERE i.object_key=candidates.object_key RETURNING i.object_key, i.claimed_token`, before, limit)

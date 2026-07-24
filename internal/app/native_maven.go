@@ -96,6 +96,40 @@ func (h nativeMavenHandler) listArtifacts(w http.ResponseWriter, r *http.Request
 	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (h nativeMavenHandler) getArtifact(w http.ResponseWriter, r *http.Request, repoID, artifactID string) {
+	repo, err := h.store.GetHostedRepository(r.Context(), repoID)
+	if err != nil || repo.Format != repository.FormatMaven {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
+		return
+	}
+	artifact, err := h.store.GetMavenArtifact(r.Context(), repo.ID, artifactID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven artifact not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get Maven artifact failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, artifact)
+}
+
+func (h nativeMavenHandler) deleteArtifact(w http.ResponseWriter, r *http.Request, repoID, artifactID string) {
+	repo, err := h.store.GetHostedRepository(r.Context(), repoID)
+	if err != nil || repo.Format != repository.FormatMaven {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
+		return
+	}
+	if _, err = h.store.TombstoneMavenArtifact(r.Context(), repo.ID, artifactID); errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven artifact not found")
+		return
+	} else if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete Maven artifact failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusAccepted, map[string]string{"id": artifactID, "state": "pending"})
+}
+
 func (h nativeMavenHandler) admin(r *http.Request) (Principal, bool) {
 	p, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
 	return p, ok && p.Admin

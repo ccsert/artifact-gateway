@@ -425,6 +425,18 @@ func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *h
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.deleteArtifact(w, r, repositoryID.String(), artifactID.String())
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
 	h.withSessionAdmin(w, r, func(Principal) {
 		h.sessions.getSession(w, r, sessionID.String())

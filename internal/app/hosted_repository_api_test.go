@@ -195,6 +195,69 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	}
 }
 
+func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "artifact-target", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const key = "native/maven/sha256/artifact-target"
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 3}}}
+	if _, err = store.CreateMavenPublishSession(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(context.Background(), session.ID, session.Objects[0].Name, key); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(context.Background(), session.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: session.Objects[0].Digest, Size: 3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	detail := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts/"+artifact.ID, nil)
+	authorize(detail, "admin-secret")
+	detailed := httptest.NewRecorder()
+	handler.ServeHTTP(detailed, detail)
+	if detailed.Code != http.StatusOK || !strings.Contains(detailed.Body.String(), `"state":"visible"`) {
+		t.Fatalf("detail=%d body=%s", detailed.Code, detailed.Body.String())
+	}
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+repo.ID+"/artifacts/"+artifact.ID, nil)
+	authorize(deleteRequest, "admin-secret")
+	deleted := httptest.NewRecorder()
+	handler.ServeHTTP(deleted, deleteRequest)
+	if deleted.Code != http.StatusAccepted || !strings.Contains(deleted.Body.String(), `"state":"pending"`) {
+		t.Fatalf("delete=%d body=%s", deleted.Code, deleted.Body.String())
+	}
+	repeated := httptest.NewRecorder()
+	repeatRequest := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+repo.ID+"/artifacts/"+artifact.ID, nil)
+	authorize(repeatRequest, "admin-secret")
+	handler.ServeHTTP(repeated, repeatRequest)
+	if repeated.Code != http.StatusAccepted {
+		t.Fatalf("repeat delete=%d body=%s", repeated.Code, repeated.Body.String())
+	}
+	list := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts", nil)
+	authorize(list, "admin-secret")
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || strings.Contains(listed.Body.String(), artifact.ID) {
+		t.Fatalf("list=%d body=%s", listed.Code, listed.Body.String())
+	}
+	protocolRead := httptest.NewRequest(http.MethodGet, "/repository/maven/artifact-target/org/example/widget/1.0.0/widget-1.0.0.jar", nil)
+	protocolRead.SetBasicAuth("maven", "resolver-secret")
+	protocolResponse := httptest.NewRecorder()
+	handler.ServeHTTP(protocolResponse, protocolRead)
+	if protocolResponse.Code != http.StatusNotFound {
+		t.Fatalf("protocol read=%d body=%s", protocolResponse.Code, protocolResponse.Body.String())
+	}
+	detailAfterDelete := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts/"+artifact.ID, nil)
+	authorize(detailAfterDelete, "admin-secret")
+	detailedAfterDelete := httptest.NewRecorder()
+	handler.ServeHTTP(detailedAfterDelete, detailAfterDelete)
+	if detailedAfterDelete.Code != http.StatusOK || !strings.Contains(detailedAfterDelete.Body.String(), `"state":"deleted"`) {
+		t.Fatalf("detail after delete=%d body=%s", detailedAfterDelete.Code, detailedAfterDelete.Body.String())
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()

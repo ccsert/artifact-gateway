@@ -540,6 +540,12 @@ type ServerInterface interface {
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams)
 
+	// (DELETE /repositories/{repositoryId}/artifacts/{artifactId})
+	DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
+
+	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
+	GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
+
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
@@ -1127,6 +1133,76 @@ func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactId" -------------
+	var artifactId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactId", r.PathValue("artifactId"), &artifactId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArtifact(w, r, repositoryId, artifactId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactId" -------------
+	var artifactId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactId", r.PathValue("artifactId"), &artifactId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, repositoryId, artifactId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListGrants operation middleware
 func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Request) {
 
@@ -1476,6 +1552,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
@@ -2045,6 +2123,52 @@ func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.R
 	return err
 }
 
+type DeleteArtifactRequestObject struct {
+	RepositoryId RepositoryId       `json:"repositoryId"`
+	ArtifactId   openapi_types.UUID `json:"artifactId"`
+}
+
+type DeleteArtifactResponseObject interface {
+	VisitDeleteArtifactResponse(w http.ResponseWriter) error
+}
+
+type DeleteArtifact202JSONResponse struct{ DeletionJSONResponse }
+
+func (response DeleteArtifact202JSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactRequestObject struct {
+	RepositoryId RepositoryId       `json:"repositoryId"`
+	ArtifactId   openapi_types.UUID `json:"artifactId"`
+}
+
+type GetArtifactResponseObject interface {
+	VisitGetArtifactResponse(w http.ResponseWriter) error
+}
+
+type GetArtifact200JSONResponse struct{ ArtifactJSONResponse }
+
+func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListGrantsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -2258,6 +2382,12 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+
+	// (DELETE /repositories/{repositoryId}/artifacts/{artifactId})
+	DeleteArtifact(ctx context.Context, request DeleteArtifactRequestObject) (DeleteArtifactResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
+	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(ctx context.Context, request ListGrantsRequestObject) (ListGrantsResponseObject, error)
@@ -2731,6 +2861,60 @@ func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
 		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteArtifact operation middleware
+func (sh *strictHandler) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID) {
+	var request DeleteArtifactRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ArtifactId = artifactId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteArtifact(ctx, request.(DeleteArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteArtifactResponseObject); ok {
+		if err := validResponse.VisitDeleteArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifact operation middleware
+func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID) {
+	var request GetArtifactRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ArtifactId = artifactId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifact(ctx, request.(GetArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
+		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

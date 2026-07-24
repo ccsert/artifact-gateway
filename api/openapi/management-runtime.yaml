@@ -27,6 +27,8 @@ paths:
     "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
   "/repositories/{repositoryId}/artifacts":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/repositories/{repositoryId}/artifacts/{artifactId}":
+    "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/publish-sessions/{sessionId}":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
   "/publish-sessions/{sessionId}/objects/{objectName}":

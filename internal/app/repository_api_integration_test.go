@@ -147,6 +147,36 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	if retentionReplaced.Code != http.StatusOK || !strings.Contains(retentionReplaced.Body.String(), `"version":"2"`) {
 		t.Fatalf("replace repository retention policy = %d body=%s", retentionReplaced.Code, retentionReplaced.Body.String())
 	}
+	artifactSession := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: hosted.ID, Coordinate: "org.example:integration:1.0.0", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "integration-1.0.0.jar", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 3}}}
+	if _, err = store.CreateMavenPublishSession(context.Background(), artifactSession); err != nil {
+		t.Fatal(err)
+	}
+	artifactKey := "native/maven/sha256/integration-" + artifactSession.ID
+	if err = store.MarkMavenPublishObject(context.Background(), artifactSession.ID, "integration-1.0.0.jar", artifactKey); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(context.Background(), artifactSession.ID, []repository.MavenAsset{{RepositoryID: hosted.ID, Path: "org/example/integration/1.0.0/integration-1.0.0.jar", ObjectKey: artifactKey, Digest: artifactSession.Objects[0].Digest, Size: 3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactDelete := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+hosted.ID+"/artifacts/"+artifact.ID, nil)
+	authorize(artifactDelete, "admin-secret")
+	artifactDeleted := httptest.NewRecorder()
+	handler.ServeHTTP(artifactDeleted, artifactDelete)
+	if artifactDeleted.Code != http.StatusAccepted {
+		t.Fatalf("delete Maven artifact = %d %s", artifactDeleted.Code, artifactDeleted.Body.String())
+	}
+	tombstoned, err := store.GetMavenArtifact(context.Background(), hosted.ID, artifact.ID)
+	if err != nil || tombstoned.State != "deleted" {
+		t.Fatalf("tombstone Maven artifact = %#v err=%v", tombstoned, err)
+	}
+	claimed, err := store.ClaimExpiredMavenObjectIntents(context.Background(), time.Now().Add(time.Hour), 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ObjectKey != artifactKey {
+		t.Fatalf("claim tombstoned Maven artifact object = %#v err=%v", claimed, err)
+	}
+	if err = store.DeleteClaimedMavenObjectIntent(context.Background(), claimed[0].ObjectKey, claimed[0].ClaimToken); err != nil {
+		t.Fatal(err)
+	}
 	hostedDisabled := integrationRequest(handler, http.MethodDelete, "/api/v2/repositories/"+hosted.ID, "", "admin-secret")
 	if hostedDisabled.Code != http.StatusAccepted {
 		t.Fatalf("disable Hosted repository = %d %s", hostedDisabled.Code, hostedDisabled.Body.String())

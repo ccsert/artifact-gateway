@@ -124,6 +124,8 @@ type NativeMavenStore interface {
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
+	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)
 	DeleteClaimedMavenObjectIntent(context.Context, string, string) error
@@ -214,8 +216,12 @@ type MavenAsset struct {
 	Size                                  int64
 }
 type MavenArtifact struct {
-	ID, RepositoryID, Coordinate, Digest, State string
-	CreatedAt                                   time.Time
+	ID           string    `json:"id"`
+	RepositoryID string    `json:"repositoryId"`
+	Coordinate   string    `json:"coordinate"`
+	Digest       string    `json:"digest"`
+	State        string    `json:"state"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 type MavenObjectIntent struct{ ObjectKey, ClaimToken string }
 
@@ -920,11 +926,59 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 	defer s.mu.RUnlock()
 	out := []MavenArtifact{}
 	for _, a := range s.mavenArtifacts {
-		if a.RepositoryID == repositoryID {
+		if a.RepositoryID == repositoryID && a.State == "visible" {
 			out = append(out, a)
 		}
 	}
 	return out, nil
+}
+
+func (s *MemoryStore) GetMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	artifact, ok := s.mavenArtifacts[artifactID]
+	if !ok || artifact.RepositoryID != repositoryID {
+		return MavenArtifact{}, ErrNotFound
+	}
+	return artifact, nil
+}
+
+func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	artifact, ok := s.mavenArtifacts[artifactID]
+	if !ok || artifact.RepositoryID != repositoryID {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if artifact.State == "deleted" {
+		return artifact, nil
+	}
+	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
+	for key, asset := range s.mavenAssets {
+		if asset.RepositoryID == repositoryID && strings.HasPrefix(asset.Path, prefix) {
+			delete(s.mavenAssets, key)
+		}
+	}
+	for key := range s.mavenObjectRefs {
+		stillReferenced := false
+		for _, asset := range s.mavenAssets {
+			if asset.ObjectKey == key {
+				stillReferenced = true
+				break
+			}
+		}
+		if !stillReferenced {
+			delete(s.mavenObjectRefs, key)
+		}
+	}
+	artifact.State = "deleted"
+	s.mavenArtifacts[artifactID] = artifact
+	return artifact, nil
+}
+
+func mavenArtifactPathPrefix(coordinate string) string {
+	parts := strings.Split(coordinate, ":")
+	return strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/"
 }
 func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	s.mu.Lock()
