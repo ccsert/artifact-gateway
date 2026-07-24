@@ -32,5 +32,5 @@ tracker: local-markdown
 
 ## Fog
 
-- 全局 Repository 列表是否应对 scoped principal 过滤，以及没有任何可见资源时应返回
-  空列表还是保持管理面管理员入口，取决于管理面可见性契约工作票的决定。
+- 管理面可见性与操作授权的最终边界取决于“Repository 列表 scoped visibility”结论；
+  例如是否应让 read-only grant 看到 repository metadata，仍需与管理 API 契约一起确认。
