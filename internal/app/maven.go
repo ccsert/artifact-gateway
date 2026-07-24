@@ -43,6 +43,8 @@ func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member re
 
 type MavenHandler struct {
 	Store         repository.MavenStore
+	Repositories  repository.HostedRepositoryStore
+	Authorizer    RepositoryAuthorizer
 	Authenticator Authenticator
 	Client        MavenClient
 	Metrics       *Metrics
@@ -134,7 +136,21 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	members = prioritizeHosted(members)
+	var hadAuthorizationDenied bool
+	if actor != "anonymous" {
+		members, hadAuthorizationDenied, err = h.authorizedMavenMembers(request.Context(), groupName, artifactPath, actor, principal, members)
+		if err != nil {
+			h.Metrics.failed.Add(1)
+			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+			return
+		}
+	}
 	if len(members) == 0 {
+		if hadAuthorizationDenied {
+			h.Metrics.failed.Add(1)
+			http.Error(w, "repository read permission required", http.StatusForbidden)
+			return
+		}
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditNotFound); err != nil {
 			h.Metrics.failed.Add(1)
 			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
@@ -323,6 +339,25 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		_ = h.Cache.StoreNegative(request.Context(), cacheKey, notFoundProxy)
 	}
 	http.NotFound(w, request)
+}
+
+// authorizedMavenMembers removes only explicitly bound members whose managed
+// grant set denies the principal. Unbound legacy members retain Group policy.
+func (h MavenHandler) authorizedMavenMembers(ctx context.Context, groupName, artifactPath, actor string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {
+	eligible := make([]repository.Member, 0, len(members))
+	hadDenied := false
+	for _, member := range members {
+		decision, managed := ManagedGroupMemberDecision(ctx, h.Repositories, h.Authorizer, principal, member, repository.FormatMaven)
+		if managed && !decision.Allowed {
+			if err := h.auditAuthorizationDenied(ctx, groupName, artifactPath, member.Name, actor, decision); err != nil {
+				return nil, false, err
+			}
+			hadDenied = true
+			continue
+		}
+		eligible = append(eligible, member)
+	}
+	return eligible, hadDenied, nil
 }
 
 func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Request, groupName, artifactPath, actor string, members []repository.Member, cacheKey string) bool {
@@ -518,6 +553,19 @@ func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, member
 		return err
 	}
 	h.Metrics.recordAudit(groupName, outcome)
+	return nil
+}
+
+func (h MavenHandler) auditAuthorizationDenied(ctx context.Context, groupName, artifactPath, memberName, actor string, decision AuthorizationDecision) error {
+	if err := h.Store.RecordAudit(ctx, repository.AuditRecord{
+		GroupName: groupName, Repository: groupName, MemberName: memberName, Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "maven", Resource: artifactPath, Representation: "body", Operation: strings.ToLower(http.MethodGet), Status: http.StatusForbidden, CacheDisposition: "bypass",
+		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
+	}); err != nil {
+		return err
+	}
+	h.Metrics.recordAudit(groupName, repository.AuditAccessDenied)
+	h.Metrics.recordRepositoryAuthorizationDenied("maven", decision.Source, decision.Reason)
 	return nil
 }
 

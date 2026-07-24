@@ -18,16 +18,18 @@ import (
 type countingMavenClient struct {
 	mu       sync.Mutex
 	calls    int
+	members  []string
 	status   int
 	statuses []int
 	body     []byte
 	err      error
 }
 
-func (c *countingMavenClient) FetchMaven(_ context.Context, method string, _ repository.Member, _ string, _ http.Header) (*http.Response, error) {
+func (c *countingMavenClient) FetchMaven(_ context.Context, method string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls++
+	c.members = append(c.members, member.Name)
 	if c.err != nil {
 		return nil, c.err
 	}
@@ -39,6 +41,12 @@ func (c *countingMavenClient) FetchMaven(_ context.Context, method string, _ rep
 }
 
 func (c *countingMavenClient) Calls() int { c.mu.Lock(); defer c.mu.Unlock(); return c.calls }
+
+func (c *countingMavenClient) Members() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.members...)
+}
 
 func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
 	store := repository.NewMemoryStore()
@@ -349,6 +357,65 @@ func TestMavenRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 	}
 	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditAccessDenied || store.Audits[0].Actor != "maven" {
 		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
+func TestMavenUsesManagedGrantsForBoundMembersAndCachedSources(t *testing.T) {
+	store := repository.NewMemoryStore()
+	deniedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "maven-denied", Name: "maven-denied", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "maven-allowed", Name: "maven-allowed", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), deniedRepository.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), allowedRepository.ID, []repository.RepositoryGrant{{Principal: "maven", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{
+		{Name: "denied", Type: repository.MemberHosted, Endpoint: "https://denied.example", Position: 0, RepositoryID: deniedRepository.ID},
+		{Name: "allowed", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 1, RepositoryID: allowedRepository.ID},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {"engineering"}}}
+	client := &countingMavenClient{status: http.StatusOK, body: []byte("artifact")}
+	metrics := &Metrics{}
+	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	handler := MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Metrics: metrics, Cache: cache}
+	request := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.jar", nil)
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := request(); response.Code != http.StatusOK || strings.Join(client.Members(), ",") != "allowed" {
+		t.Fatalf("response=%d members=%v", response.Code, client.Members())
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), allowedRepository.ID, nil, "2"); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(); response.Code != http.StatusForbidden || client.Calls() != 1 {
+		t.Fatalf("cached response=%d calls=%d", response.Code, client.Calls())
+	}
+	var foundDeniedAudit bool
+	for _, audit := range store.Audits {
+		if audit.MemberName == "denied" && audit.AuthorizationSource == "repository_grants" && audit.AuthorizationReason == "scope_not_granted" {
+			foundDeniedAudit = true
+		}
+	}
+	if !foundDeniedAudit {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="maven",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 3`) {
+		t.Fatalf("authorization metrics=%s", metricResponse.Body.String())
 	}
 }
 

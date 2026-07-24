@@ -734,6 +734,88 @@ func TestRawDoesNotExposeOCIGroupAndChecksMemberGrantBeforeCache(t *testing.T) {
 	}
 }
 
+func TestRawUsesManagedGrantsForBoundMembers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	deniedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-denied", Name: "raw-denied", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-allowed", Name: "raw-allowed", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), deniedRepository.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), allowedRepository.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
+		{Name: "denied", Type: repository.MemberHosted, Endpoint: "https://denied.example", Position: 0, RepositoryID: deniedRepository.ID},
+		{Name: "allowed", Type: repository.MemberHosted, Endpoint: "https://allowed.example", Position: 1, RepositoryID: allowedRepository.ID},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}
+	client := &rawFixtureClient{responses: map[string]int{"denied": http.StatusOK, "allowed": http.StatusOK}, body: []byte("artifact")}
+	metrics := &Metrics{}
+	handler := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+	if w.Code != http.StatusOK || w.Body.String() != "artifact" || strings.Join(client.Calls(), ",") != "allowed" {
+		t.Fatalf("response=%d body=%q calls=%v", w.Code, w.Body.String(), client.Calls())
+	}
+	var foundDeniedAudit bool
+	for _, audit := range store.Audits {
+		if audit.MemberName == "denied" && audit.Outcome == repository.AuditAccessDenied && audit.AuthorizationSource == "repository_grants" && audit.AuthorizationReason == "scope_not_granted" {
+			foundDeniedAudit = true
+		}
+	}
+	if !foundDeniedAudit {
+		t.Fatalf("missing managed denial audit: %#v", store.Audits)
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+		t.Fatalf("authorization metrics=%s", metricResponse.Body.String())
+	}
+}
+
+func TestRawBoundGrantDenialDoesNotServeCachedSource(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-cached", Name: "raw-cached", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	member := repository.Member{Name: "cached", Type: repository.MemberHosted, Endpoint: "https://cached.example", RepositoryID: repo.ID}
+	if _, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{member}}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}
+	client := &rawFixtureClient{responses: map[string]int{"cached": http.StatusOK}, body: []byte("artifact")}
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)
+	handler := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Cache: cache}
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+	if first.Code != http.StatusOK || len(client.Calls()) != 1 {
+		t.Fatalf("first response=%d calls=%v", first.Code, client.Calls())
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, nil, "2"); err != nil {
+		t.Fatal(err)
+	}
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+	if second.Code != http.StatusForbidden || len(client.Calls()) != 1 {
+		t.Fatalf("cached grant denial response=%d calls=%v", second.Code, client.Calls())
+	}
+}
+
 func TestLegacyRawClientDecodesCanonicalPath(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/a b" {

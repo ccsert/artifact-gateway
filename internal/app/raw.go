@@ -406,6 +406,8 @@ func privateAddress(ip net.IP) bool {
 
 type RawHandler struct {
 	Store         repository.RawStore
+	Repositories  repository.HostedRepositoryStore
+	Authorizer    RepositoryAuthorizer
 	Authenticator Authenticator
 	Client        RawClient
 	Metrics       *Metrics
@@ -413,14 +415,15 @@ type RawHandler struct {
 }
 
 type rawAuditEvent struct {
-	Member           repository.Member
-	Actor            string
-	Outcome          repository.AuditOutcome
-	Status           int
-	CacheDisposition string
-	Bytes            int64
-	Method           string
-	ChecksumFailure  bool
+	Member                                   repository.Member
+	Actor                                    string
+	Outcome                                  repository.AuditOutcome
+	Status                                   int
+	CacheDisposition                         string
+	Bytes                                    int64
+	Method                                   string
+	ChecksumFailure                          bool
+	AuthorizationSource, AuthorizationReason string
 }
 
 func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -488,9 +491,21 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	hadUpstreamFailure := false
 	hadProxyDenied := false
+	hadAuthorizationDenied := false
 	var lastNegative *repository.Member
 	for _, member := range prioritizeHosted(members) {
-		if p.Actor != "anonymous" && !h.Authenticator.CanReadRepository(p, member.Name) {
+		managedMember := false
+		if p.Actor != "anonymous" {
+			if decision, managed := ManagedGroupMemberDecision(r.Context(), h.Repositories, h.Authorizer, p, member, repository.FormatRaw); managed {
+				managedMember = true
+				if !decision.Allowed {
+					h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+					hadAuthorizationDenied = true
+					continue
+				}
+			}
+		}
+		if p.Actor != "anonymous" && !managedMember && !h.Authenticator.CanReadRepository(p, member.Name) {
 			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 			http.Error(w, "repository read permission required", http.StatusForbidden)
 			return
@@ -616,6 +631,10 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
 		return
 	}
+	if hadAuthorizationDenied {
+		http.Error(w, "repository read permission required", http.StatusForbidden)
+		return
+	}
 	if lastNegative != nil {
 		h.audit(r.Context(), group, path, rawAuditEvent{Member: *lastNegative, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
 	} else {
@@ -658,10 +677,12 @@ func (h RawHandler) audit(ctx context.Context, group, path string, event rawAudi
 		GroupName: group, Repository: group, MemberName: event.Member.Name, Actor: event.Actor, Outcome: event.Outcome, OccurredAt: time.Now().UTC(),
 		Format: "raw", Resource: path, Representation: "body", MemberType: string(event.Member.Type), UpstreamHost: upstreamHost,
 		Operation: strings.ToLower(event.Method), Status: event.Status, CacheDisposition: event.CacheDisposition, Bytes: event.Bytes,
+		AuthorizationSource: event.AuthorizationSource, AuthorizationReason: event.AuthorizationReason,
 		RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx),
 	})
 	if h.Metrics != nil {
 		h.Metrics.recordRawAudit(event.Outcome, event.Bytes, event.ChecksumFailure)
+		h.Metrics.recordRepositoryAuthorizationDenied("raw", event.AuthorizationSource, event.AuthorizationReason)
 	}
 }
 
