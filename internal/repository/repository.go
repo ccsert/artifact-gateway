@@ -17,6 +17,7 @@ var (
 	ErrDisabled            = errors.New("group is disabled")
 	ErrNameExists          = errors.New("group name already exists")
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
+	ErrVersionConflict     = errors.New("resource version conflicts with current state")
 )
 
 const mavenObjectClaimLease = 5 * time.Minute
@@ -56,6 +57,30 @@ type HostedRepositoryStore interface {
 	GetHostedRepository(context.Context, string) (HostedRepository, error)
 	GetHostedRepositoryByName(context.Context, string) (HostedRepository, error)
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
+}
+
+// HostedGroup is the V2 management aggregate. It is intentionally separate
+// from the protocol-specific V1 group types below.
+type HostedGroup struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Format  Format        `json:"format"`
+	Members []GroupMember `json:"members"`
+	Version string        `json:"version"`
+}
+
+type GroupMember struct {
+	RepositoryID string `json:"repositoryId"`
+	Position     int    `json:"position"`
+}
+
+type HostedGroupStore interface {
+	CreateHostedGroupIdempotently(context.Context, HostedGroup, string, string, string) (HostedGroup, bool, error)
+	ListHostedGroups(context.Context, int, string) ([]HostedGroup, string, error)
+	GetHostedGroup(context.Context, string) (HostedGroup, error)
+	ReplaceHostedGroup(context.Context, HostedGroup, string) (HostedGroup, error)
+	ReplaceHostedGroupMembers(context.Context, string, []GroupMember, string) (HostedGroup, error)
+	DeleteHostedGroup(context.Context, string) error
 }
 
 // NativeMavenStore contains only committed Maven metadata. Object bytes live in
@@ -269,6 +294,7 @@ type MemoryStore struct {
 	conanGroups        map[string]Group
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
+	hostedGroups       map[string]HostedGroup
 	idempotencyRecords map[string]idempotencyRecord
 	mavenSessions      map[string]MavenPublishSession
 	mavenUploads       map[string]map[string]string
@@ -688,7 +714,7 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -1047,6 +1073,130 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 	repo.Version = "2"
 	s.hostedRepositories[id] = repo
 	return repo, nil
+}
+
+func cloneHostedGroup(group HostedGroup) HostedGroup {
+	group.Members = append([]GroupMember(nil), group.Members...)
+	return group
+}
+
+func nextHostedGroupVersion(version string) string {
+	current, err := strconv.ParseInt(version, 10, 64)
+	if err != nil || current < 1 {
+		return "1"
+	}
+	return strconv.FormatInt(current+1, 10)
+}
+
+func (s *MemoryStore) CreateHostedGroupIdempotently(_ context.Context, group HostedGroup, actor, key, payload string) (HostedGroup, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordKey := actor + "\x00/groups\x00" + key
+	if record, ok := s.idempotencyRecords[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.payload != payload {
+			return HostedGroup{}, false, ErrIdempotencyConflict
+		}
+		return cloneHostedGroup(s.hostedGroups[record.repositoryID]), true, nil
+	}
+	for _, existing := range s.hostedGroups {
+		if existing.Name == group.Name {
+			return HostedGroup{}, false, ErrNameExists
+		}
+	}
+	group.Version = "1"
+	group.Members = append([]GroupMember(nil), group.Members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	s.hostedGroups[group.ID] = group
+	s.idempotencyRecords[recordKey] = idempotencyRecord{payload: payload, repositoryID: group.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return cloneHostedGroup(group), false, nil
+}
+
+func (s *MemoryStore) ListHostedGroups(_ context.Context, limit int, after string) ([]HostedGroup, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	items := make([]HostedGroup, 0, len(s.hostedGroups))
+	for _, group := range s.hostedGroups {
+		items = append(items, cloneHostedGroup(group))
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	start := 0
+	if after != "" {
+		found := false
+		for i, group := range items {
+			if group.ID == after {
+				start, found = i+1, true
+				break
+			}
+		}
+		if !found {
+			return nil, "", ErrNotFound
+		}
+	}
+	end := start + limit
+	next := ""
+	if end < len(items) {
+		next = items[end-1].ID
+	} else {
+		end = len(items)
+	}
+	return items[start:end], next, nil
+}
+
+func (s *MemoryStore) GetHostedGroup(_ context.Context, id string) (HostedGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	group, ok := s.hostedGroups[id]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) ReplaceHostedGroup(_ context.Context, group HostedGroup, expectedVersion string) (HostedGroup, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, ok := s.hostedGroups[group.ID]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	if stored.Version != expectedVersion {
+		return HostedGroup{}, ErrVersionConflict
+	}
+	group.Version = nextHostedGroupVersion(stored.Version)
+	group.Members = append([]GroupMember(nil), group.Members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	s.hostedGroups[group.ID] = group
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) ReplaceHostedGroupMembers(_ context.Context, id string, members []GroupMember, expectedVersion string) (HostedGroup, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group, ok := s.hostedGroups[id]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	if group.Version != expectedVersion {
+		return HostedGroup{}, ErrVersionConflict
+	}
+	group.Members = append([]GroupMember(nil), members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	group.Version = nextHostedGroupVersion(group.Version)
+	s.hostedGroups[id] = group
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) DeleteHostedGroup(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedGroups[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.hostedGroups, id)
+	return nil
 }
 
 func (s *MemoryStore) CreateRawGroup(_ context.Context, group Group) (Group, error) {

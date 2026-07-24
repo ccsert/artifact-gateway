@@ -13,6 +13,12 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
+  "/groups":
+    "$ref": "./management/groups.yaml#/groups"
+  "/groups/{groupId}":
+    "$ref": "./management/groups.yaml#/groups_groupId"
+  "/groups/{groupId}/members":
+    "$ref": "./management/groups.yaml#/groups_groupId_members"
   "/repositories/{repositoryId}/publish-sessions":
     "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
   "/repositories/{repositoryId}/artifacts":

@@ -48,6 +48,73 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestHostedGroupManagementLifecycle(t *testing.T) {
+	store := repository.NewMemoryStore()
+	first, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-first", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-second", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-other", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	create := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"maven-group","format":"maven","members":[{"repositoryId":"`+second.ID+`","position":1},{"repositoryId":"`+first.ID+`","position":0}]}`))
+	authorize(create, "admin-secret")
+	create.Header.Set("Idempotency-Key", "group-create")
+	created := httptest.NewRecorder()
+	handler.ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create=%d body=%s", created.Code, created.Body.String())
+	}
+	var group repository.HostedGroup
+	if err := json.NewDecoder(created.Body).Decode(&group); err != nil || group.Version != "1" || len(group.Members) != 2 || group.Members[0].RepositoryID != first.ID {
+		t.Fatalf("group=%#v err=%v", group, err)
+	}
+	get := httptest.NewRequest(http.MethodGet, "/api/v2/groups/"+group.ID, nil)
+	authorize(get, "admin-secret")
+	got := httptest.NewRecorder()
+	handler.ServeHTTP(got, get)
+	if got.Code != http.StatusOK {
+		t.Fatalf("get=%d body=%s", got.Code, got.Body.String())
+	}
+	replace := httptest.NewRequest(http.MethodPut, "/api/v2/groups/"+group.ID+"/members", strings.NewReader(`[{"repositoryId":"`+second.ID+`","position":0}]`))
+	authorize(replace, "admin-secret")
+	replace.Header.Set("If-Match", "1")
+	replaced := httptest.NewRecorder()
+	handler.ServeHTTP(replaced, replace)
+	if replaced.Code != http.StatusOK || !strings.Contains(replaced.Body.String(), `"version":"2"`) {
+		t.Fatalf("replace=%d body=%s", replaced.Code, replaced.Body.String())
+	}
+	stale := httptest.NewRequest(http.MethodPut, "/api/v2/groups/"+group.ID+"/members", strings.NewReader(`[{"repositoryId":"`+first.ID+`","position":0}]`))
+	authorize(stale, "admin-secret")
+	stale.Header.Set("If-Match", "1")
+	staleResult := httptest.NewRecorder()
+	handler.ServeHTTP(staleResult, stale)
+	if staleResult.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale=%d body=%s", staleResult.Code, staleResult.Body.String())
+	}
+	mismatch := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"invalid-group","format":"maven","members":[{"repositoryId":"`+other.ID+`","position":0}]}`))
+	authorize(mismatch, "admin-secret")
+	mismatch.Header.Set("Idempotency-Key", "invalid-group")
+	mismatchResult := httptest.NewRecorder()
+	handler.ServeHTTP(mismatchResult, mismatch)
+	if mismatchResult.Code != http.StatusBadRequest {
+		t.Fatalf("mismatch=%d body=%s", mismatchResult.Code, mismatchResult.Body.String())
+	}
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v2/groups/"+group.ID, nil)
+	authorize(deleteRequest, "admin-secret")
+	deleted := httptest.NewRecorder()
+	handler.ServeHTTP(deleted, deleteRequest)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete=%d body=%s", deleted.Code, deleted.Body.String())
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()

@@ -23,3 +23,26 @@ func TestMemoryMavenCommitRejectsCollectorClaim(t *testing.T) {
 		t.Fatalf("commit must be fenced after collector claim, err=%v", err)
 	}
 }
+
+func TestMemoryHostedGroupVersionAndIdempotency(t *testing.T) {
+	store := NewMemoryStore()
+	group := HostedGroup{ID: "group-1", Name: "releases", Format: FormatMaven, Members: []GroupMember{{RepositoryID: "repo-2", Position: 1}, {RepositoryID: "repo-1", Position: 0}}}
+	created, replayed, err := store.CreateHostedGroupIdempotently(context.Background(), group, "admin", "create-key", "payload")
+	if err != nil || replayed || created.Version != "1" || created.Members[0].RepositoryID != "repo-1" {
+		t.Fatalf("created=%#v replayed=%t err=%v", created, replayed, err)
+	}
+	if _, replayed, err = store.CreateHostedGroupIdempotently(context.Background(), HostedGroup{ID: "other"}, "admin", "create-key", "payload"); err != nil || !replayed {
+		t.Fatalf("replay=%t err=%v", replayed, err)
+	}
+	if _, _, err = store.CreateHostedGroupIdempotently(context.Background(), HostedGroup{ID: "other"}, "admin", "create-key", "different"); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("conflict err=%v", err)
+	}
+	created.Members = []GroupMember{{RepositoryID: "repo-3", Position: 0}}
+	replaced, err := store.ReplaceHostedGroup(context.Background(), created, "1")
+	if err != nil || replaced.Version != "2" {
+		t.Fatalf("replaced=%#v err=%v", replaced, err)
+	}
+	if _, err = store.ReplaceHostedGroupMembers(context.Background(), created.ID, nil, "1"); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("stale replace err=%v", err)
+	}
+}

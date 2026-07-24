@@ -64,7 +64,7 @@ production-backed `/api/v2` handler:
 | Maven publish sessions | Generated | The existing session service supplies authorization, staged-object validation, and transactional commit. |
 | Maven artifact list | Generated | The existing committed-artifact store supplies the list response. |
 | Artifact detail and deletion | Deferred | `NativeMavenStore` has no lookup-by-artifact-ID or deletion/tombstone operation. |
-| Groups | Deferred | V1 OCI, Maven, Raw, and Conan groups are protocol-specific, name-addressed models; they do not satisfy the contract's UUID repository references, version token, or replacement semantics. |
+| Groups | Generated | V2 groups are a separate UUID-based aggregate over active Hosted Repositories; V1 OCI, Maven, Raw, and Conan groups remain protocol-specific and unchanged. |
 | Grants | Deferred | No repository-grant aggregate or persistence contract exists. |
 | Retention policies | Deferred | No retention-policy aggregate, optimistic-concurrency token, or execution lifecycle exists. |
 

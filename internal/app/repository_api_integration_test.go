@@ -111,6 +111,26 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	if replayed.Code != http.StatusCreated || json.NewDecoder(replayed.Body).Decode(&replay) != nil || replay.ID != hosted.ID {
 		t.Fatalf("replay Hosted repository = %d %s", replayed.Code, replayed.Body.String())
 	}
+	groupCreate := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"release-group","format":"maven","members":[{"repositoryId":"`+hosted.ID+`","position":0}]}`))
+	authorize(groupCreate, "admin-secret")
+	groupCreate.Header.Set("Idempotency-Key", "integration-release-group")
+	groupCreated := httptest.NewRecorder()
+	handler.ServeHTTP(groupCreated, groupCreate)
+	if groupCreated.Code != http.StatusCreated {
+		t.Fatalf("create Hosted group = %d %s", groupCreated.Code, groupCreated.Body.String())
+	}
+	var hostedGroup repository.HostedGroup
+	if err := json.NewDecoder(groupCreated.Body).Decode(&hostedGroup); err != nil || hostedGroup.Version != "1" {
+		t.Fatalf("created Hosted group = %#v err=%v", hostedGroup, err)
+	}
+	groupReplace := httptest.NewRequest(http.MethodPut, "/api/v2/groups/"+hostedGroup.ID+"/members", strings.NewReader(`[{"repositoryId":"`+hosted.ID+`","position":0}]`))
+	authorize(groupReplace, "admin-secret")
+	groupReplace.Header.Set("If-Match", "1")
+	groupReplaced := httptest.NewRecorder()
+	handler.ServeHTTP(groupReplaced, groupReplace)
+	if groupReplaced.Code != http.StatusOK || !strings.Contains(groupReplaced.Body.String(), `"version":"2"`) {
+		t.Fatalf("replace Hosted group = %d %s", groupReplaced.Code, groupReplaced.Body.String())
+	}
 	hostedDisabled := integrationRequest(handler, http.MethodDelete, "/api/v2/repositories/"+hosted.ID, "", "admin-secret")
 	if hostedDisabled.Code != http.StatusAccepted {
 		t.Fatalf("disable Hosted repository = %d %s", hostedDisabled.Code, hostedDisabled.Body.String())

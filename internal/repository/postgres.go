@@ -162,6 +162,196 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 	return repo, nil
 }
 
+func scanHostedGroupMembers(ctx context.Context, query interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, group *HostedGroup) error {
+	rows, err := query.QueryContext(ctx, `SELECT repository_id::text, position FROM hosted_group_members WHERE group_id::text=$1 ORDER BY position`, group.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	group.Members = nil
+	for rows.Next() {
+		var member GroupMember
+		if err := rows.Scan(&member.RepositoryID, &member.Position); err != nil {
+			return err
+		}
+		group.Members = append(group.Members, member)
+	}
+	return rows.Err()
+}
+
+func (s *PostgresStore) getHostedGroup(ctx context.Context, query interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, id string) (HostedGroup, error) {
+	var group HostedGroup
+	err := query.QueryRowContext(ctx, `SELECT id::text, name, format, version::text FROM hosted_groups WHERE id::text=$1`, id).Scan(&group.ID, &group.Name, &group.Format, &group.Version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HostedGroup{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedGroup{}, err
+	}
+	if err := scanHostedGroupMembers(ctx, query, &group); err != nil {
+		return HostedGroup{}, err
+	}
+	return group, nil
+}
+
+func (s *PostgresStore) CreateHostedGroupIdempotently(ctx context.Context, group HostedGroup, actor, key, payload string) (HostedGroup, bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return HostedGroup{}, false, err
+	}
+	defer tx.Rollback()
+	lockKey := fmt.Sprintf("hosted-group:%d:%s%d:%s", len(actor), actor, len(key), key)
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return HostedGroup{}, false, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM hosted_group_idempotency WHERE actor=$1 AND key=$2 AND expires_at <= now()`, actor, key); err != nil {
+		return HostedGroup{}, false, err
+	}
+	var storedPayload, groupID string
+	err = tx.QueryRowContext(ctx, `SELECT payload_hash, group_id::text FROM hosted_group_idempotency WHERE actor=$1 AND key=$2 FOR UPDATE`, actor, key).Scan(&storedPayload, &groupID)
+	if err == nil {
+		if storedPayload != payload {
+			return HostedGroup{}, false, ErrIdempotencyConflict
+		}
+		group, err = s.getHostedGroup(ctx, tx, groupID)
+		if err != nil {
+			return HostedGroup{}, false, err
+		}
+		if err = tx.Commit(); err != nil {
+			return HostedGroup{}, false, err
+		}
+		return group, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return HostedGroup{}, false, err
+	}
+	if err = tx.QueryRowContext(ctx, `INSERT INTO hosted_groups (id,name,format,version) VALUES ($1,$2,$3,1) RETURNING version::text`, group.ID, group.Name, group.Format).Scan(&group.Version); err != nil {
+		if isUnique(err) {
+			return HostedGroup{}, false, ErrNameExists
+		}
+		return HostedGroup{}, false, err
+	}
+	for _, member := range group.Members {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO hosted_group_members (group_id,repository_id,position) VALUES ($1,$2,$3)`, group.ID, member.RepositoryID, member.Position); err != nil {
+			if isUnique(err) {
+				return HostedGroup{}, false, ErrNameExists
+			}
+			return HostedGroup{}, false, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO hosted_group_idempotency (actor,key,payload_hash,group_id,expires_at) VALUES ($1,$2,$3,$4,now() + interval '24 hours')`, actor, key, payload, group.ID); err != nil {
+		return HostedGroup{}, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return HostedGroup{}, false, err
+	}
+	return group, false, nil
+}
+
+func (s *PostgresStore) ListHostedGroups(ctx context.Context, limit int, after string) ([]HostedGroup, string, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, version::text FROM hosted_groups WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`, after, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	groups := make([]HostedGroup, 0, limit)
+	for rows.Next() {
+		var group HostedGroup
+		if err := rows.Scan(&group.ID, &group.Name, &group.Format, &group.Version); err != nil {
+			return nil, "", err
+		}
+		if err := scanHostedGroupMembers(ctx, s.db, &group); err != nil {
+			return nil, "", err
+		}
+		groups = append(groups, group)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(groups) > limit {
+		next = groups[limit-1].ID
+		groups = groups[:limit]
+	}
+	return groups, next, nil
+}
+
+func (s *PostgresStore) GetHostedGroup(ctx context.Context, id string) (HostedGroup, error) {
+	return s.getHostedGroup(ctx, s.db, id)
+}
+
+func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string, format Format, members []GroupMember, expectedVersion string, replaceMetadata bool) (HostedGroup, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return HostedGroup{}, err
+	}
+	defer tx.Rollback()
+	query := `UPDATE hosted_groups SET version=version+1`
+	args := []any{id, expectedVersion}
+	if replaceMetadata {
+		query += `, name=$3, format=$4`
+		args = []any{id, expectedVersion, name, format}
+	}
+	query += ` WHERE id::text=$1 AND version::text=$2 RETURNING id::text,name,format,version::text`
+	var group HostedGroup
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&group.ID, &group.Name, &group.Format, &group.Version)
+	if errors.Is(err, sql.ErrNoRows) {
+		if _, getErr := s.getHostedGroup(ctx, tx, id); errors.Is(getErr, ErrNotFound) {
+			return HostedGroup{}, ErrNotFound
+		}
+		return HostedGroup{}, ErrVersionConflict
+	}
+	if err != nil {
+		return HostedGroup{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM hosted_group_members WHERE group_id::text=$1`, id); err != nil {
+		return HostedGroup{}, err
+	}
+	for _, member := range members {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO hosted_group_members (group_id,repository_id,position) VALUES ($1,$2,$3)`, id, member.RepositoryID, member.Position); err != nil {
+			return HostedGroup{}, err
+		}
+	}
+	group.Members = append([]GroupMember(nil), members...)
+	if err = tx.Commit(); err != nil {
+		return HostedGroup{}, err
+	}
+	return group, nil
+}
+
+func (s *PostgresStore) ReplaceHostedGroup(ctx context.Context, group HostedGroup, expectedVersion string) (HostedGroup, error) {
+	return s.replaceHostedGroup(ctx, group.ID, group.Name, group.Format, group.Members, expectedVersion, true)
+}
+func (s *PostgresStore) ReplaceHostedGroupMembers(ctx context.Context, id string, members []GroupMember, expectedVersion string) (HostedGroup, error) {
+	current, err := s.GetHostedGroup(ctx, id)
+	if err != nil {
+		return HostedGroup{}, err
+	}
+	return s.replaceHostedGroup(ctx, id, current.Name, current.Format, members, expectedVersion, false)
+}
+func (s *PostgresStore) DeleteHostedGroup(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM hosted_groups WHERE id::text=$1`, id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) CreateOCIUpload(ctx context.Context, v OCIUpload) (OCIUpload, error) {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_uploads (id,repository_id,name,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Name, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
 	return v, err
