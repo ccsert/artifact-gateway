@@ -462,6 +462,48 @@ func TestNativeMavenRejectsAnonymousReads(t *testing.T) {
 	}
 }
 
+func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "maven", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	asset := []byte("jar")
+	sum := sha256.Sum256(asset)
+	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
+	if err := objects.Put(context.Background(), key, asset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "session", RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(context.Background(), "session", "widget-1.0.0.jar", key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CommitMavenPublishSession(context.Background(), "session", []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}); err != nil {
+		t.Fatal(err)
+	}
+	h := newNativeMavenHandler(store, objects, testAuthenticator())
+	get := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", nil)
+	get.SetBasicAuth("maven", "resolver-secret")
+	got := httptest.NewRecorder()
+	h.ServeHTTP(got, get)
+	if got.Code != http.StatusOK || got.Body.String() != "jar" {
+		t.Fatalf("read=%d body=%s", got.Code, got.Body.String())
+	}
+	put := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", strings.NewReader("replacement"))
+	put.SetBasicAuth("maven", "resolver-secret")
+	denied := httptest.NewRecorder()
+	h.ServeHTTP(denied, put)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("write=%d body=%s", denied.Code, denied.Body.String())
+	}
+}
+
 func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})

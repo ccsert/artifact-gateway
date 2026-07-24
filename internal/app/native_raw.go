@@ -16,17 +16,25 @@ import (
 // nativeRawHandler serves V3 Raw repositories directly from the object store.
 // Unlike Raw Groups, it never consults an upstream member or cache index.
 type nativeRawHandler struct {
-	store   repository.NativeRawStore
-	repos   repository.HostedRepositoryStore
-	objects OCIObjectStore
-	auth    Authenticator
+	store      repository.NativeRawStore
+	repos      repository.HostedRepositoryStore
+	objects    OCIObjectStore
+	auth       Authenticator
+	authorizer RepositoryAuthorizer
 }
 
 func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeRawHandler {
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth}
+	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{
+		Grants: store,
+		Legacy: auth,
+		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+			// Native Raw historically admitted every authenticated principal.
+			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
+		},
+	}}
 }
 
 func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
@@ -42,7 +50,17 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		http.NotFound(w, r)
 		return true
 	}
-	if _, ok := h.auth.Authenticate(r.Header.Get("Authorization")); !ok {
+	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return true
+	}
+	operation := RepositoryWrite
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		operation = RepositoryRead
+	}
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return true

@@ -65,6 +65,40 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	}
 }
 
+func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	adminPut := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/app.txt", strings.NewReader("native raw artifact"))
+	authorize(adminPut, "admin-secret")
+	adminPutResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminPutResponse, adminPut)
+	if adminPutResponse.Code != http.StatusCreated {
+		t.Fatalf("admin put=%d body=%s", adminPutResponse.Code, adminPutResponse.Body.String())
+	}
+	readerGet := httptest.NewRequest(http.MethodGet, "/raw/downloads/releases/app.txt", nil)
+	authorize(readerGet, authenticator.IssueToken("reader"))
+	readerGetResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerGetResponse, readerGet)
+	if readerGetResponse.Code != http.StatusOK || readerGetResponse.Body.String() != "native raw artifact" {
+		t.Fatalf("reader get=%d body=%s", readerGetResponse.Code, readerGetResponse.Body.String())
+	}
+	readerPut := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/denied.txt", strings.NewReader("denied"))
+	authorize(readerPut, authenticator.IssueToken("reader"))
+	readerPutResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerPutResponse, readerPut)
+	if readerPutResponse.Code != http.StatusUnauthorized || readerPutResponse.Header().Get("WWW-Authenticate") == "" {
+		t.Fatalf("reader put=%d headers=%v", readerPutResponse.Code, readerPutResponse.Header())
+	}
+}
+
 func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})

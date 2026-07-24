@@ -22,17 +22,25 @@ import (
 // claims paths whose first component is a V3 OCI hosted repository; all other
 // V2 paths retain the legacy group/proxy behaviour while it is being removed.
 type nativeOCIHandler struct {
-	store   repository.NativeOCIStore
-	repos   repository.HostedRepositoryStore
-	objects OCIObjectStore
-	auth    Authenticator
+	store      repository.NativeOCIStore
+	repos      repository.HostedRepositoryStore
+	objects    OCIObjectStore
+	auth       Authenticator
+	authorizer RepositoryAuthorizer
 }
 
 func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeOCIHandler {
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth}
+	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{
+		Grants: store,
+		Legacy: auth,
+		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+			// Native OCI historically admitted every authenticated principal.
+			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
+		},
+	}}
 }
 
 func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
@@ -57,7 +65,10 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		writeOCIChallenge(w, r)
 		return true
 	}
-	_ = p
+	if !h.authorizer.Authorize(r.Context(), p, repo, nativeOCIOperation(resource, r.Method)).Allowed {
+		writeOCIChallenge(w, r)
+		return true
+	}
 	switch resource {
 	case "blob":
 		h.blob(w, r, repo, imageName, reference)
@@ -73,6 +84,18 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 	return true
+}
+
+func nativeOCIOperation(resource, method string) RepositoryOperation {
+	switch resource {
+	case "blob", "tags":
+		return RepositoryRead
+	case "manifest":
+		if method == http.MethodGet || method == http.MethodHead {
+			return RepositoryRead
+		}
+	}
+	return RepositoryWrite
 }
 
 func parseNativeOCIPath(path string) (name, resource, reference, uploadID string, ok bool) {
@@ -117,7 +140,8 @@ func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 		}
 		if sourceRoot, sourceName, found := strings.Cut(r.URL.Query().Get("from"), "/"); found && sourceRoot != "" && sourceName != "" {
 			source, err := h.repos.GetHostedRepositoryByName(r.Context(), sourceRoot)
-			if err == nil && source.Format == repository.FormatOCI && source.State == repository.RepositoryActive {
+			principal, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
+			if err == nil && authenticated && source.Format == repository.FormatOCI && source.State == repository.RepositoryActive && h.authorizer.Authorize(r.Context(), principal, source, RepositoryRead).Allowed {
 				blob, err := h.store.MountOCIBlobFrom(r.Context(), repo.ID, source.ID, digest)
 				if err == nil {
 					w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/blobs/"+blob.Digest)

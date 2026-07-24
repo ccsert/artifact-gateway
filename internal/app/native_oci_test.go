@@ -105,6 +105,50 @@ func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 	}
 }
 
+func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	start := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
+	authorize(start, "admin-secret")
+	started := httptest.NewRecorder()
+	handler.ServeHTTP(started, start)
+	if started.Code != http.StatusAccepted {
+		t.Fatalf("admin start=%d body=%s", started.Code, started.Body.String())
+	}
+	blob := []byte("native hosted blob")
+	sum := sha256.Sum256(blob)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	complete := httptest.NewRequest(http.MethodPut, started.Header().Get("Location")+"?digest="+digest, bytes.NewReader(blob))
+	authorize(complete, "admin-secret")
+	completed := httptest.NewRecorder()
+	handler.ServeHTTP(completed, complete)
+	if completed.Code != http.StatusCreated {
+		t.Fatalf("admin complete=%d body=%s", completed.Code, completed.Body.String())
+	}
+	readerGet := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+digest, nil)
+	authorize(readerGet, authenticator.IssueToken("reader"))
+	readerGetResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerGetResponse, readerGet)
+	if readerGetResponse.Code != http.StatusOK || !bytes.Equal(readerGetResponse.Body.Bytes(), blob) {
+		t.Fatalf("reader get=%d body=%s", readerGetResponse.Code, readerGetResponse.Body.String())
+	}
+	readerStart := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
+	authorize(readerStart, authenticator.IssueToken("reader"))
+	readerStartResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerStartResponse, readerStart)
+	if readerStartResponse.Code != http.StatusUnauthorized || readerStartResponse.Header().Get("WWW-Authenticate") == "" {
+		t.Fatalf("reader start=%d headers=%v", readerStartResponse.Code, readerStartResponse.Header())
+	}
+}
+
 func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})

@@ -27,11 +27,28 @@ type nativeMavenHandler struct {
 	store         GatewayStore
 	objects       OCIObjectStore
 	authenticator Authenticator
+	authorizer    RepositoryAuthorizer
 	management    hostedRepositoryAPIHandler
 }
 
 func newNativeMavenHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeMavenHandler {
-	return nativeMavenHandler{store: store, objects: objects, authenticator: auth, management: hostedRepositoryAPIHandler{store: store, authenticator: auth}}
+	return nativeMavenHandler{store: store, objects: objects, authenticator: auth, authorizer: RepositoryAuthorizer{
+		Grants: store,
+		Legacy: auth,
+		LegacyFallback: func(principal Principal, target repository.HostedRepository, operation RepositoryOperation) AuthorizationDecision {
+			switch operation {
+			case RepositoryRead:
+				if auth.CanReadMavenRepository(principal, target.Name) {
+					return AuthorizationDecision{Allowed: true, Source: "legacy_static", Reason: "read_pattern_granted"}
+				}
+			case RepositoryWrite:
+				if auth.CanWriteMavenRepository(principal, target.Name) {
+					return AuthorizationDecision{Allowed: true, Source: "legacy_static", Reason: "write_pattern_granted"}
+				}
+			}
+			return AuthorizationDecision{Source: "legacy_static", Reason: "scope_not_granted"}
+		},
+	}, management: hostedRepositoryAPIHandler{store: store, authenticator: auth}}
 }
 
 type nativeMavenSessionRequest struct {
@@ -333,7 +350,7 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authenticator.CanReadMavenRepository(principal, repo.Name) {
+	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead).Allowed {
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
@@ -424,7 +441,7 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authenticator.CanWriteMavenRepository(principal, repo.Name) {
+	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite).Allowed {
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
@@ -537,7 +554,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authenticator.CanWriteMavenRepository(principal, repo.Name) {
+	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite).Allowed {
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
