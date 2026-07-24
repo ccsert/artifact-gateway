@@ -34,4 +34,5 @@ tracker: local-markdown
 
 ## Fog
 
-- 当前没有已知但尚未成形的授权决策；后续变更应从完整实现与发布前验证中发现新的问题。
+- `make lint` 当前报告 27 条既有静态检查问题；需在最终 CI 门禁前将其清零，并确认修复不改变
+  Repository grants 的协议与审计语义。
