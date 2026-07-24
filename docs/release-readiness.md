@@ -34,6 +34,9 @@ deviation in the release record.
       collection, verifies the successful-run count, and records its state.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
+- [ ] Maven retention maintenance runs outside request handling, preserves the
+      configured newest versions per module, and tombstones only expired excess
+      coordinates before the Maven orphan collector reclaims bytes.
 - [ ] Resolver-token rotation rejects an OCI bearer token issued by the old
       token and permits a newly issued token.
 - [ ] The cached OCI manifest performance gate completes 50 requests at
