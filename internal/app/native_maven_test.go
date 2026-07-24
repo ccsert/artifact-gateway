@@ -487,7 +487,8 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if _, err := store.CommitMavenPublishSession(context.Background(), "session", []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}); err != nil {
 		t.Fatal(err)
 	}
-	h := newNativeMavenHandler(store, objects, testAuthenticator())
+	metrics := &Metrics{}
+	h := newNativeMavenHandler(store, objects, testAuthenticator()).withMetrics(metrics)
 	get := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", nil)
 	get.SetBasicAuth("maven", "resolver-secret")
 	got := httptest.NewRecorder()
@@ -508,6 +509,11 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	audit := store.Audits[len(store.Audits)-1]
 	if audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "maven" {
 		t.Fatalf("audit=%#v", audit)
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="maven",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+		t.Fatalf("Maven authorization metric=%s", metricResponse.Body.String())
 	}
 }
 

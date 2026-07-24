@@ -21,6 +21,8 @@ tracker: local-markdown
   retention、Maven 会话和 artifact 路由按 read/write/admin scope 执行授权。
 - [拒绝决策审计](tickets/04-audit-decision-persistence.md) — 已实现待发布：审计记录
   保存有界的授权来源和原因，并通过 Memory/Postgres round-trip 验证。
+- [有界授权拒绝指标](tickets/05-bounded-authorization-metrics.md) — 已实现：grant
+  拒绝按固定 format、来源和原因计数，不包含 actor、Repository、路径或 endpoint 标签。
 
 ## Fog
 
@@ -28,5 +30,3 @@ tracker: local-markdown
   不泄漏成员存在性的前提下继续安全回退；先由成员级授权工作票验证。
 - 全局 Repository 列表是否应对 scoped principal 过滤，以及没有任何可见资源时应返回
   空列表还是保持管理面管理员入口，取决于管理面可见性契约工作票的决定。
-- 指标名称与已有 `/metrics` 兼容方式、仪表盘查询和告警阈值需要在指标工作票中依据现有
-  Prometheus 输出定稿。

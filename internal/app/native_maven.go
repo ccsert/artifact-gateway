@@ -29,6 +29,18 @@ type nativeMavenHandler struct {
 	authenticator Authenticator
 	authorizer    RepositoryAuthorizer
 	management    hostedRepositoryAPIHandler
+	metrics       *Metrics
+}
+
+func (h nativeMavenHandler) withMetrics(metrics *Metrics) nativeMavenHandler {
+	h.metrics = metrics
+	return h
+}
+
+func (h nativeMavenHandler) recordAuthorizationDenial(decision AuthorizationDecision) {
+	if h.metrics != nil {
+		h.metrics.recordRepositoryAuthorizationDenied("maven", decision.Source, decision.Reason)
+	}
 }
 
 func newNativeMavenHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeMavenHandler {
@@ -351,6 +363,7 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
+		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
@@ -442,6 +455,7 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
+		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: coordinate, Operation: "commit", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
@@ -556,6 +570,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
+		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return

@@ -718,6 +718,9 @@ func (h ConanHandler) audit(ctx context.Context, group, path, member, actor stri
 	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: path, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: "conan", Resource: path, Representation: state.representation, MemberType: string(selected.Type), UpstreamHost: upstreamHost, Operation: state.method, Status: status, CacheDisposition: state.cacheDisposition, Bytes: bytes, AuthorizationSource: state.authorizationSource, AuthorizationReason: state.authorizationReason, RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx)})
 	if h.Metrics != nil {
 		h.Metrics.recordConanAudit(outcome, state.bytes, state.checksumFailure)
+		if outcome == repository.AuditAccessDenied {
+			h.Metrics.recordRepositoryAuthorizationDenied("conan", state.authorizationSource, state.authorizationReason)
+		}
 	}
 }
 

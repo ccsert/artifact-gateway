@@ -102,6 +102,7 @@ type generatedRepositoryAPIAdapter struct {
 	retentionPolicies repository.RepositoryRetentionPolicyStore
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
+	metrics           *Metrics
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -512,6 +513,9 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.Re
 }
 
 func (h generatedRepositoryAPIAdapter) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.metrics != nil {
+		h.metrics.recordRepositoryAuthorizationDenied("management", decision.Source, decision.Reason)
+	}
 	if h.audit == nil {
 		return
 	}

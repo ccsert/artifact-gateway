@@ -28,6 +28,12 @@ type nativeOCIHandler struct {
 	auth       Authenticator
 	authorizer RepositoryAuthorizer
 	audit      repository.Store
+	metrics    *Metrics
+}
+
+func (h nativeOCIHandler) withMetrics(metrics *Metrics) nativeOCIHandler {
+	h.metrics = metrics
+	return h
 }
 
 func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeOCIHandler {
@@ -90,6 +96,9 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 }
 
 func (h nativeOCIHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.metrics != nil {
+		h.metrics.recordRepositoryAuthorizationDenied("oci", decision.Source, decision.Reason)
+	}
 	if h.audit == nil {
 		return
 	}

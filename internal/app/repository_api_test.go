@@ -40,6 +40,33 @@ func authorize(request *http.Request, token string) {
 	request.Header.Set("Authorization", "Bearer "+token)
 }
 
+func TestRepositoryAuthorizationMetricsUseOnlyBoundedGrantLabels(t *testing.T) {
+	metrics := &Metrics{}
+	metrics.recordRepositoryAuthorizationDenied("raw", "repository_grants", "scope_not_granted")
+	metrics.recordRepositoryAuthorizationDenied("management", "repository_grants", "grant_lookup_failed")
+	metrics.recordRepositoryAuthorizationDenied("raw", "legacy_static", "scope_not_granted")
+	metrics.recordRepositoryAuthorizationDenied("untrusted-format", "repository_grants", "scope_not_granted")
+	metrics.recordRepositoryAuthorizationDenied("raw", "repository_grants", "untrusted-reason")
+
+	response := httptest.NewRecorder()
+	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := response.Body.String()
+	for _, want := range []string{
+		`artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`,
+		`artifact_gateway_repository_authorization_denials_total{format="management",authorization_source="repository_grants",authorization_reason="grant_lookup_failed"} 1`,
+		`artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="grant_lookup_failed"} 0`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, body)
+		}
+	}
+	for _, unexpected := range []string{"legacy_static", "untrusted-format", "untrusted-reason"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("unbounded authorization label %q in:\n%s", unexpected, body)
+		}
+	}
+}
+
 func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, selectiveAdapter{available: map[string]bool{"proxy": true}}, testAuthenticator())

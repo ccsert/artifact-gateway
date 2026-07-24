@@ -23,6 +23,12 @@ type nativeRawHandler struct {
 	auth       Authenticator
 	authorizer RepositoryAuthorizer
 	audit      repository.Store
+	metrics    *Metrics
+}
+
+func (h nativeRawHandler) withMetrics(metrics *Metrics) nativeRawHandler {
+	h.metrics = metrics
+	return h
 }
 
 func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeRawHandler {
@@ -126,6 +132,9 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 }
 
 func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.metrics != nil {
+		h.metrics.recordRepositoryAuthorizationDenied("raw", decision.Source, decision.Reason)
+	}
 	if h.audit == nil {
 		return
 	}

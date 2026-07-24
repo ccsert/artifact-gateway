@@ -202,6 +202,11 @@ func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 	if audit.Outcome != repository.AuditAccessDenied || audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "management" {
 		t.Fatalf("audit=%#v", audit)
 	}
+	metrics := httptest.NewRecorder()
+	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="management",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
+		t.Fatalf("management authorization metric=%s", metrics.Body.String())
+	}
 	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusAccepted {
 		t.Fatalf("writer delete=%d body=%s", response.Code, response.Body.String())
 	}

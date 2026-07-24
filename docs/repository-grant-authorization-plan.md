@@ -97,6 +97,31 @@ authorization denials, not exposed through an artifact-not-found response or a
 principal-specific error message. The fields are bounded policy values, never
 tokens, credentials, or principal-derived labels.
 
+## Metrics
+
+`artifact_gateway_repository_authorization_denials_total` counts denied
+decisions produced by an explicitly managed Repository grant set. It has only
+these bounded labels:
+
+- `format`: `management`, `maven`, `oci`, `raw`, or `conan`;
+- `authorization_source`: currently the fixed value `repository_grants`;
+- `authorization_reason`: `scope_not_granted` or `grant_lookup_failed`.
+
+The metric must never label actor, repository name or ID, member, artifact
+path, coordinate, request ID, trace ID, endpoint, or upstream host. Operators
+can identify a policy rollout problem with:
+
+```promql
+sum by (format, authorization_reason) (
+  increase(artifact_gateway_repository_authorization_denials_total[15m])
+)
+```
+
+Legacy static-policy and unauthenticated protocol denials retain their
+existing metrics. They are deliberately excluded from this grant-specific
+counter so an operator can distinguish a grant rollout from pre-existing
+authentication or static-policy failures.
+
 ## Rollout and Rollback
 
 1. Add the evaluator with unit tests for hierarchy, legacy fallback, explicit

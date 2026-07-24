@@ -661,6 +661,7 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"reader": {}}}
+	metrics := &Metrics{}
 	handler := ConanHandler{
 		Store:         store,
 		Repositories:  store,
@@ -668,6 +669,7 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 		Authenticator: authenticator,
 		Client:        conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":1}]}`},
 		Cache:         NewConanCache(nil),
+		Metrics:       metrics,
 	}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	readerRequest := httptest.NewRequest(http.MethodGet, path, nil)
@@ -692,6 +694,11 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 	handler.ServeHTTP(deniedResponse, deniedRequest)
 	if deniedResponse.Code != http.StatusForbidden {
 		t.Fatalf("denied=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="conan",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+		t.Fatalf("Conan authorization metric=%s", metricResponse.Body.String())
 	}
 }
 

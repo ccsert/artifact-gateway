@@ -104,6 +104,11 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "raw" {
 		t.Fatalf("audit=%#v", audit)
 	}
+	metrics := httptest.NewRecorder()
+	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+		t.Fatalf("raw authorization metric=%s", metrics.Body.String())
+	}
 }
 
 func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
