@@ -88,6 +88,7 @@ type NativeOCIStore interface {
 	LockOCIObject(context.Context, string) (func(), error)
 	GetOCIUpload(context.Context, string) (OCIUpload, error)
 	UpdateOCIUpload(context.Context, string, int64) (OCIUpload, error)
+	CancelOCIUpload(context.Context, string) (OCIUpload, error)
 	StageOCIObjectIntent(context.Context, OCIObjectIntent) error
 	CompleteOCIUpload(context.Context, string, OCIBlob) (OCIBlob, error)
 	ExpireOCIUploads(context.Context, time.Time, int) ([]OCIUpload, error)
@@ -101,6 +102,7 @@ type NativeOCIStore interface {
 	GetOCIBlob(context.Context, string, string) (OCIBlob, error)
 	PutOCIManifest(context.Context, OCIManifest, string) (OCIManifest, error)
 	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
+	ListOCITags(context.Context, string, string, int, string) ([]string, error)
 	DeleteOCIManifest(context.Context, string, string, string) error
 }
 
@@ -471,6 +473,18 @@ func (s *MemoryStore) UpdateOCIUpload(_ context.Context, id string, offset int64
 	s.ociUploads[id] = v
 	return v, nil
 }
+func (s *MemoryStore) CancelOCIUpload(_ context.Context, id string) (OCIUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.ociUploads[id]
+	if !ok || v.State != "open" {
+		return OCIUpload{}, ErrNotFound
+	}
+	v.State = "expired"
+	v.CollectedAt = time.Now().UTC()
+	s.ociUploads[id] = v
+	return v, nil
+}
 func (s *MemoryStore) CompleteOCIUpload(_ context.Context, id string, blob OCIBlob) (OCIBlob, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -630,6 +644,30 @@ func (s *MemoryStore) GetOCIManifest(_ context.Context, repositoryID, name, refe
 		return OCIManifest{}, ErrNotFound
 	}
 	return v, nil
+}
+func (s *MemoryStore) ListOCITags(_ context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	prefix := repositoryID + "\x00" + name + "\x00"
+	var tags []string
+	for key := range s.ociTags {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		tag := strings.TrimPrefix(key, prefix)
+		if after != "" && tag <= after {
+			continue
+		}
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	if len(tags) > limit {
+		tags = tags[:limit]
+	}
+	return tags, nil
 }
 func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, digest string) error {
 	s.mu.Lock()

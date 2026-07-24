@@ -221,6 +221,17 @@ func (s *PostgresStore) UpdateOCIUpload(ctx context.Context, id string, offset i
 	}
 	return v, err
 }
+func (s *PostgresStore) CancelOCIUpload(ctx context.Context, id string) (OCIUpload, error) {
+	var v OCIUpload
+	err := s.db.QueryRowContext(ctx, `UPDATE native_oci_uploads
+        SET state='expired', collected_at=now()
+        WHERE id::text=$1 AND state='open'
+        RETURNING id::text,repository_id::text,name,object_key,byte_offset,state,expires_at,collected_at`, id).Scan(&v.ID, &v.RepositoryID, &v.Name, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt, &v.CollectedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIUpload{}, ErrNotFound
+	}
+	return v, err
+}
 func (s *PostgresStore) CompleteOCIUpload(ctx context.Context, id string, blob OCIBlob) (OCIBlob, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -425,6 +436,27 @@ func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, 
 		return v, ErrNotFound
 	}
 	return v, err
+}
+func (s *PostgresStore) ListOCITags(ctx context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT tag FROM native_oci_tags
+        WHERE repository_id::text=$1 AND name=$2 AND ($3='' OR tag > $3)
+        ORDER BY tag LIMIT $4`, repositoryID, name, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	return tags, rows.Err()
 }
 func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, name, digest string) error {
 	tx, err := s.db.BeginTx(ctx, nil)

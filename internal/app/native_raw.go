@@ -54,12 +54,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			http.NotFound(w, r)
 			return true
 		}
-		body, err := h.objects.Get(r.Context(), asset.ObjectKey)
-		if err != nil {
-			http.Error(w, "raw object unavailable", http.StatusInternalServerError)
-			return true
-		}
-		serveRaw(w, r, path, RawContent{Body: body, Digest: strings.TrimPrefix(asset.Digest, "sha256:"), ContentType: asset.ContentType})
+		serveNativeRawObject(w, r, path, asset, h.objects)
 	case http.MethodPut:
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<30))
 		if err != nil {
@@ -107,4 +102,53 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects OCIObjectStore) rawServeResult {
+	statusWriter := &rawStatusWriter{ResponseWriter: w}
+	digest := strings.TrimPrefix(asset.Digest, "sha256:")
+	w.Header().Set("Content-Type", asset.ContentType)
+	etag := `"sha256-` + digest + `"`
+	w.Header().Set("ETag", etag)
+	if decoded, err := hex.DecodeString(digest); err == nil {
+		w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(decoded))
+	}
+	if r.Header.Get("If-None-Match") == etag {
+		statusWriter.WriteHeader(http.StatusNotModified)
+		return statusWriter.result()
+	}
+	if r.Method == http.MethodGet && r.Header.Get("Range") != "" {
+		start, end, ok := parseOCIRange(statusWriter, r, asset.Size)
+		if !ok {
+			return statusWriter.result()
+		}
+		length := end - start + 1
+		reader, _, err := objects.OpenRange(r.Context(), asset.ObjectKey, start, length)
+		if err != nil {
+			http.Error(statusWriter, "raw object unavailable", http.StatusInternalServerError)
+			return statusWriter.result()
+		}
+		defer func() { _ = reader.Close() }()
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Range", "bytes "+utoa(uint64(start))+"-"+utoa(uint64(end))+"/"+utoa(uint64(asset.Size)))
+		w.Header().Set("Content-Length", utoa(uint64(length)))
+		statusWriter.WriteHeader(http.StatusPartialContent)
+		_, _ = io.CopyN(statusWriter, reader, length)
+		return statusWriter.result()
+	}
+	reader, size, err := objects.Open(r.Context(), asset.ObjectKey)
+	if err != nil {
+		http.Error(statusWriter, "raw object unavailable", http.StatusInternalServerError)
+		return statusWriter.result()
+	}
+	defer func() { _ = reader.Close() }()
+	if asset.Size > 0 {
+		size = asset.Size
+	}
+	w.Header().Set("Content-Length", utoa(uint64(size)))
+	statusWriter.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = io.Copy(statusWriter, reader)
+	}
+	return statusWriter.result()
 }

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +67,8 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.startUpload(w, r, repo, imageName)
 	case "manifest":
 		h.manifest(w, r, repo, imageName, reference)
+	case "tags":
+		h.tags(w, r, repo, imageName)
 	default:
 		return false
 	}
@@ -76,6 +79,10 @@ func parseNativeOCIPath(path string) (name, resource, reference, uploadID string
 	parts := strings.Split(strings.TrimSuffix(strings.TrimPrefix(path, "/v2/"), "/"), "/")
 	for i, part := range parts {
 		switch part {
+		case "tags":
+			if i > 0 && i+2 == len(parts) && parts[i+1] == "list" {
+				return strings.Join(parts[:i], "/"), "tags", "", "", true
+			}
 		case "manifests":
 			if i > 0 && i+2 == len(parts) {
 				return strings.Join(parts[:i], "/"), "manifest", parts[i+1], "", true
@@ -146,6 +153,14 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 	switch r.Method {
 	case http.MethodGet:
 		h.uploadHeaders(w, repo.Name, name, upload)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		upload, err = h.store.CancelOCIUpload(r.Context(), id)
+		if err != nil {
+			writeOCIError(w, 404, "BLOB_UPLOAD_UNKNOWN", "blob upload unknown to registry")
+			return
+		}
+		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPatch:
 		upload, err = h.appendUpload(r.Context(), r, upload)
@@ -276,6 +291,10 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 			writeOCIError(w, 404, "MANIFEST_UNKNOWN", "manifest unknown to registry")
 			return
 		}
+		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
+			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")
+			return
+		}
 		serveCachedOCIContent(w, r, reference, CachedOCIContent{Digest: manifest.Digest, Object: manifest.ObjectKey, Size: manifest.Size, store: h.objects, ContentType: manifest.MediaType})
 	case http.MethodPut:
 		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<20))
@@ -339,6 +358,42 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 	}
 }
 
+func (h nativeOCIHandler) tags(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 1000 {
+			writeOCIError(w, http.StatusBadRequest, "NAME_INVALID", "tag page size must be between 1 and 1000")
+			return
+		}
+		limit = parsed
+	}
+	tags, err := h.store.ListOCITags(r.Context(), repo.ID, name, limit+1, r.URL.Query().Get("last"))
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list tags")
+		return
+	}
+	if len(tags) > limit {
+		tags = tags[:limit]
+		next := "/v2/" + repo.Name + "/" + name + "/tags/list?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(tags[len(tags)-1])
+		w.Header().Set("Link", "<"+next+">; rel=\"next\"")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"name": repo.Name + "/" + name, "tags": tags})
+}
+
 func validOCIDigest(value string) bool {
 	if !strings.HasPrefix(value, "sha256:") || len(value) != 71 {
 		return false
@@ -353,6 +408,23 @@ func validOCIDigest(value string) bool {
 func validOCIManifest(data []byte) bool {
 	var v map[string]json.RawMessage
 	return json.Unmarshal(data, &v) == nil && v != nil
+}
+
+func ociAcceptsManifest(accept, mediaType string) bool {
+	if accept == "" || mediaType == "" {
+		return true
+	}
+	mediaType = strings.TrimSpace(strings.Split(mediaType, ";")[0])
+	for _, entry := range strings.Split(accept, ",") {
+		value := strings.TrimSpace(strings.Split(entry, ";")[0])
+		if value == "*/*" || value == mediaType {
+			return true
+		}
+		if prefix, _, ok := strings.Cut(value, "/"); ok && strings.HasSuffix(value, "/*") && strings.HasPrefix(mediaType, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 type ociDescriptor struct {
