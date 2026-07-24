@@ -2,11 +2,27 @@
 
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
+OPENAPI_TOOLS := tools/openapi
+OPENAPI_SOURCE := api/openapi/native-hosted.yaml
+OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e backup-restore-readiness up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e backup-restore-readiness up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, backup-restore-readiness'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, backup-restore-readiness, openapi-bundle, openapi-generate-admin, openapi-check'
+
+openapi-bundle:
+	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
+	@$(OPENAPI_TOOLS)/node_modules/.bin/redocly bundle $(OPENAPI_SOURCE) --output $(OPENAPI_BUNDLE) --ext json
+
+openapi-generate-admin: openapi-bundle
+	@./scripts/generate-admin-openapi.sh
+
+openapi-check: openapi-generate-admin
+	@npm --prefix console ci --ignore-scripts --no-audit --no-fund
+	@npm --prefix console run check:api
+	@go test ./contracts
+	@git diff --exit-code -- $(OPENAPI_BUNDLE) console/src/client internal/admin/openapi/generated.go
 
 console-build:
 	@cd console && npm run build

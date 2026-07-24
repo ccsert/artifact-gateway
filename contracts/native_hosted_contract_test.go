@@ -21,6 +21,20 @@ func loadNativeHostedSpec(t *testing.T) *openapi3.T {
 	return spec
 }
 
+func loadNativeHostedSource(t *testing.T) *openapi3.T {
+	t.Helper()
+	loader := openapi3.NewLoader()
+	loader.IsExternalRefsAllowed = true
+	spec, err := loader.LoadFromFile(filepath.Join("..", "api", "openapi", "native-hosted.yaml"))
+	if err != nil {
+		t.Fatalf("load OpenAPI source: %v", err)
+	}
+	if err := spec.Validate(loader.Context); err != nil {
+		t.Fatalf("validate OpenAPI source: %v", err)
+	}
+	return spec
+}
+
 func operation(t *testing.T, spec *openapi3.T, path, method string) *openapi3.Operation {
 	t.Helper()
 	item := spec.Paths.Find(path)
@@ -105,6 +119,46 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 	for _, field := range []string{"code", "requestId"} {
 		if !contains(problem.Required, field) {
 			t.Errorf("Problem missing required %s", field)
+		}
+	}
+	generated, err := os.ReadFile(filepath.Join("..", "internal", "admin", "openapi", "generated.go"))
+	if err != nil {
+		t.Fatalf("read generated management contract: %v", err)
+	}
+	for _, declaration := range []string{"type ServerInterface interface", "type StrictServerInterface interface", "ListRepositories", "CreateRepository", "GetRepository", "DeleteRepository"} {
+		if !strings.Contains(string(generated), declaration) {
+			t.Errorf("generated management contract is missing %q", declaration)
+		}
+	}
+}
+
+func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
+	source := loadNativeHostedSource(t)
+	bundle := loadNativeHostedSpec(t)
+	if source.OpenAPI != "3.1.0" || bundle.OpenAPI != source.OpenAPI {
+		t.Fatalf("source=%q bundle=%q", source.OpenAPI, bundle.OpenAPI)
+	}
+	if len(source.Paths.Map()) != len(bundle.Paths.Map()) {
+		t.Fatalf("source paths=%d bundle paths=%d", len(source.Paths.Map()), len(bundle.Paths.Map()))
+	}
+	for path := range bundle.Paths.Map() {
+		if source.Paths.Find(path) == nil {
+			t.Errorf("source is missing bundled path %s", path)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join("..", "api", "openapi", "components", "schemas.yaml"),
+		filepath.Join("..", "api", "openapi", "components", "parameters.yaml"),
+		filepath.Join("..", "api", "openapi", "components", "responses.yaml"),
+		filepath.Join("..", "api", "openapi", "management", "repositories.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "oci.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "raw.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "maven.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "conan.yaml"),
+		filepath.Join("..", "internal", "admin", "openapi", "generated.go"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("required generated-contract input %s: %v", path, err)
 		}
 	}
 }
