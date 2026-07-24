@@ -23,6 +23,12 @@ function dataOrThrow<T>(result: { data?: T; error?: unknown }) {
   return result.data;
 }
 
+function repositoryPageOrThrow(result: { data?: RepositoryPage; error?: { message?: string } }) {
+  const page = dataOrThrow<RepositoryPage>(result);
+  if (!Array.isArray(page.items)) throw new Error('The repository service returned an invalid repository inventory.');
+  return page;
+}
+
 export function App() {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [name, setName] = useState('');
@@ -36,7 +42,7 @@ export function App() {
   const refresh = useCallback(async () => {
     setBusy(true); setError('');
     try {
-      const page = dataOrThrow<RepositoryPage>(await listRepositories({ headers: authHeaders() }));
+      const page = repositoryPageOrThrow(await listRepositories({ headers: authHeaders() }));
       setRepositories(page.items);
       if (selected) {
         const repository = dataOrThrow<Repository>(await getRepository({ path: { repositoryId: selected.id }, headers: authHeaders() }));
@@ -80,7 +86,7 @@ export function App() {
     <section className="workspace" aria-label="Repository management">
       <form className="create" onSubmit={submit}>
         <h2>Create repository</h2>
-        <label>Name<input required pattern="[a-z0-9][a-z0-9-]{0,61}" value={name} onChange={(event) => setName(event.target.value)} placeholder="release-artifacts" /></label>
+        <label>Name<input required minLength={1} maxLength={63} value={name} onChange={(event) => setName(event.target.value)} placeholder="release-artifacts" /></label>
         <label>Format<select value={format} onChange={(event) => setFormat(event.target.value as Format)}><option value="oci">OCI</option><option value="maven">Maven</option><option value="raw">Raw</option></select></label>
         <button type="submit" disabled={busy}>Create repository</button>
       </form>
