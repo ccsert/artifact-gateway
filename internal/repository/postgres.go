@@ -355,7 +355,7 @@ func (s *PostgresStore) DeleteHostedGroup(ctx context.Context, id string) error 
 func loadRepositoryGrants(ctx context.Context, query interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, repositoryID, version string) (RepositoryGrantSet, error) {
-	rows, err := query.QueryContext(ctx, `SELECT principal, scopes FROM repository_grants WHERE repository_id::text=$1 ORDER BY principal`, repositoryID)
+	rows, err := query.QueryContext(ctx, `SELECT principal, array_to_json(scopes) FROM repository_grants WHERE repository_id::text=$1 ORDER BY principal`, repositoryID)
 	if err != nil {
 		return RepositoryGrantSet{}, err
 	}
@@ -363,7 +363,11 @@ func loadRepositoryGrants(ctx context.Context, query interface {
 	set := RepositoryGrantSet{Version: version, Grants: []RepositoryGrant{}}
 	for rows.Next() {
 		var grant RepositoryGrant
-		if err := rows.Scan(&grant.Principal, &grant.Scopes); err != nil {
+		var scopes []byte
+		if err := rows.Scan(&grant.Principal, &scopes); err != nil {
+			return RepositoryGrantSet{}, err
+		}
+		if err := json.Unmarshal(scopes, &grant.Scopes); err != nil {
 			return RepositoryGrantSet{}, err
 		}
 		set.Grants = append(set.Grants, grant)

@@ -18,6 +18,8 @@ minio_api_port=$(free_port)
 minio_console_port=$(free_port)
 project="artifact-gateway-backup-${RANDOM}-${RANDOM}"
 isolated_environment=$(mktemp)
+grant_headers=$(mktemp)
+grant_response=$(mktemp)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
 
@@ -31,6 +33,8 @@ compose() {
 cleanup() {
   compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f "$isolated_environment"
+  rm -f "$grant_headers"
+  rm -f "$grant_response"
   rm -rf "$backup_dir"
 }
 trap cleanup EXIT
@@ -39,10 +43,53 @@ compose up -d --build --wait
 # shellcheck disable=SC1091
 source "$isolated_environment"
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
+gateway_token() {
+  curl --silent --show-error --fail --user "$1:$GATEWAY_RESOLVER_TOKEN" "$gateway_url/auth/token" |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
+}
 run_id="backup-${RANDOM}"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E_RUN_ID="$run_id" ./scripts/raw-e2e.sh
 raw_group="raw-ready-${run_id}"
 conan_group="conan-ready-${run_id}"
+grant_repository="grant-restore-${run_id}"
+create_repository=$(printf '{"name":"%s","format":"raw"}' "$grant_repository")
+repository=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: grant-restore-${run_id}" --data "$create_repository" "$gateway_url/api/v2/repositories")
+repository_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$repository")
+[[ -n "$repository_id" ]] || { printf '%s\n' 'Creating grant recovery Repository returned no ID.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id")
+[[ "$status" == 200 ]] || { printf 'Created grant recovery Repository %s lookup returned HTTP %s.\n' "$repository_id" "$status" >&2; exit 1; }
+
+writer_token=$(gateway_token recovery-writer)
+reader_token=$(gateway_token recovery-reader)
+denied_token=$(gateway_token recovery-denied)
+status=$(curl --silent --show-error --write-out '%{http_code}' \
+  --request PUT -H "Authorization: Bearer $writer_token" --data-binary 'grant restore artifact' \
+  "$gateway_url/raw/$grant_repository/releases/app.txt")
+[[ "$status" == 201 ]] || { printf 'Writing grant recovery Raw object returned HTTP %s.\n' "$status" >&2; exit 1; }
+grant_payload='[{"principal":"recovery-reader","scopes":["repositories:read"]}]'
+status=$(curl --silent --show-error --write-out '%{http_code}' \
+  --request PUT -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H 'If-Match: 1' \
+  --data "$grant_payload" --output "$grant_response" "$gateway_url/api/v2/repositories/$repository_id/grants")
+[[ "$status" == 200 ]] || { printf 'Replacing grant recovery Repository grants for %s returned HTTP %s: %s\n' "$repository_id" "$status" "$(<"$grant_response")" >&2; exit 1; }
+configured_grants=$(curl --silent --show-error --fail --dump-header "$grant_headers" \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id/grants")
+tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Configured Repository grants did not receive version 2.' >&2; exit 1; }
+grep -Fq '"principal":"recovery-reader"' <<<"$configured_grants" || { printf '%s\n' 'Configured Repository grants did not retain recovery-reader.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $denied_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
+[[ "$status" == 401 ]] || { printf 'Managed grant denial before backup returned HTTP %s.\n' "$status" >&2; exit 1; }
+metrics=$(curl --silent --show-error --fail "$gateway_url/metrics")
+grep -Fq 'artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1' <<<"$metrics" || {
+  printf '%s\n' 'Managed grant denial metric is unavailable or has unexpected labels.' >&2; exit 1;
+}
+status=$(curl --silent --show-error --output "$grant_response" --write-out '%{http_code}' \
+  -H "Authorization: Bearer $reader_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
+[[ "$status" == 200 && $(<"$grant_response") == 'grant restore artifact' ]] || {
+  printf 'Managed grant allow before backup returned HTTP %s: %s\n' "$status" "$(<"$grant_response")" >&2; exit 1;
+}
 conan_payload=$(printf '{"name":"%s","anonymous":true,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":true}]}' "$conan_group")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -70,8 +117,22 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v1/raw/groups/post-restore-$run_id")
 [[ "$status" == 404 ]] || { printf 'Post-backup Raw Group survived restore with HTTP %s.\n' "$status" >&2; exit 1; }
 [[ $(curl --silent --show-error "$gateway_url/raw/$raw_group/release/app.txt") == 'raw release artifact' ]] || { printf '%s\n' 'Restored Raw cache content is unavailable.' >&2; exit 1; }
+restored_grants=$(curl --silent --show-error --fail --dump-header "$grant_headers" \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id/grants")
+tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Restored Repository grants did not retain version 2.' >&2; exit 1; }
+grep -Fq '"principal":"recovery-reader"' <<<"$restored_grants" || { printf '%s\n' 'Restored Repository grants did not retain recovery-reader.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $denied_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
+[[ "$status" == 401 ]] || { printf 'Managed grant denial after restore returned HTTP %s.\n' "$status" >&2; exit 1; }
+status=$(curl --silent --show-error --output "$grant_response" --write-out '%{http_code}' \
+  -H "Authorization: Bearer $reader_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
+[[ "$status" == 200 && $(<"$grant_response") == 'grant restore artifact' ]] || {
+  printf 'Restored managed grant allow returned HTTP %s: %s\n' "$status" "$(<"$grant_response")" >&2; exit 1;
+}
 audits=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v1/audits?limit=500")
 grep -Fq '"Format":"raw"' <<<"$audits" || { printf '%s\n' 'Restored Raw audit is unavailable.' >&2; exit 1; }
 grep -Fq '"Format":"conan"' <<<"$audits" || { printf '%s\n' 'Restored Conan audit is unavailable.' >&2; exit 1; }
+grep -Fq '"Actor":"recovery-denied"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant denial audit is unavailable.' >&2; exit 1; }
+grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant authorization source is unavailable.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved Raw cache, Conan state, and V2 audit records.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved Raw cache, Conan state, Repository grants, and authorization audits.'

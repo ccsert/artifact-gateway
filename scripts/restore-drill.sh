@@ -15,7 +15,12 @@ minio_container=$("${compose[@]}" ps -q minio)
 test -n "$minio_container"
 "${compose[@]}" exec -T minio sh -ec 'rm -rf /data/*'
 docker cp - "$minio_container:/data" <"$backup_dir/minio-data.tar"
-"${compose[@]}" start gateway
+# Starting through Compose re-evaluates the completed migrate dependency on
+# some Compose releases. The restored dump already contains its schema, so
+# restart only the existing Gateway container.
+gateway_container=$("${compose[@]}" ps -aq gateway)
+test -n "$gateway_container"
+docker start "$gateway_container" >/dev/null
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT:-8080}"
 ready_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$gateway_url/readyz")
 [[ "$ready_status" == 204 ]] || { printf 'Restored Gateway readiness returned HTTP %s.\n' "$ready_status" >&2; exit 1; }

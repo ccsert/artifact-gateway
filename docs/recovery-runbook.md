@@ -18,13 +18,21 @@ the local stack started by `make up`. The scripts keep backups under
    Proxy artifact, then record the expected audit entry and cached object. For
    V2 validation, record the Raw canonical path or Conan revision coordinate,
    the member allowlist decision, and whether the read was authenticated or
-   anonymous.
+   anonymous. When a managed Repository is in scope, record its grant-set ETag,
+   a principal with `repositories:read`, and a separately authenticated
+   principal without that scope; never record either credential.
 4. Record the UTC recovery start time and run `scripts/restore-drill.sh <backup-dir>`.
 5. Confirm `curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/readyz`
    returns `204`, query `GET /api/v1/audits` with an administrator token, and
    resolve the cached artifact. For V2 data, also resolve the recorded Raw path
    and Conan 2 revision through the restored Gateway and confirm their audit
    records retain format, actor, member, cache disposition, and outcome.
+   For a managed Repository, confirm the recorded grant-set ETag and principal
+   remain present, the granted principal reads the recorded object, and the
+   ungranted principal receives the protocol's normal authorization denial.
+   Treat an unexpected allow as a security incident: keep the Repository out of
+   service, preserve the backup and audit evidence, and restore the last known
+   grant set using an administrator before reopening traffic.
 6. Record the UTC completion time, measured RTO, the backup timestamp used for
    RPO, and any failed verification in the incident record.
 

@@ -139,6 +139,13 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	if grantsReplaced.Code != http.StatusOK || grantsReplaced.Header().Get("ETag") != "2" {
 		t.Fatalf("replace repository grants = %d etag=%q body=%s", grantsReplaced.Code, grantsReplaced.Header().Get("ETag"), grantsReplaced.Body.String())
 	}
+	grantList := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+hosted.ID+"/grants", nil)
+	authorize(grantList, "admin-secret")
+	listedGrants := httptest.NewRecorder()
+	handler.ServeHTTP(listedGrants, grantList)
+	if listedGrants.Code != http.StatusOK || listedGrants.Header().Get("ETag") != "2" || !strings.Contains(listedGrants.Body.String(), "integration-reader") {
+		t.Fatalf("list repository grants = %d etag=%q body=%s", listedGrants.Code, listedGrants.Header().Get("ETag"), listedGrants.Body.String())
+	}
 	retentionReplace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+hosted.ID+"/retention-policy", strings.NewReader(`{"version":"1","keepDays":21,"minimumVersions":2}`))
 	authorize(retentionReplace, "admin-secret")
 	retentionReplace.Header.Set("If-Match", "1")

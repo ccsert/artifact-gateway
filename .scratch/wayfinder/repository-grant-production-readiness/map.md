@@ -17,13 +17,11 @@ tracker: local-markdown
 
 ## Decisions so far
 
-无。
+- [验证恢复后的 Repository grants 强制执行](tickets/01-grant-restore-enforcement.md) —
+  已实现：隔离 Postgres/MinIO 恢复后通过 Native Raw 的 granted/denied bearer 请求、
+  grant ETag、审计和有界 metrics 共同证明恢复一致性。
 
 ## Fog
 
-- 首先要确认隔离备份恢复演练能否构造受管 grant set，并在恢复后通过真实协议入口同时
-  证明允许与拒绝。结果会决定后续是否需要新增备份范围、迁移兼容检查或专门的恢复校验。
-- 授权拒绝指标已具备有界标签；仍需根据恢复演练结果确定发布记录应要求的 PromQL 查询、
-  告警阈值及责任分工，避免把环境特定阈值硬编码进代码。
-- 需要核对恢复/回滚手册是否清晰区分“恢复数据使 grants 重新生效”与“临时回退运行时
-  evaluator 使用静态策略”；这取决于首个演练对实际操作步骤的发现。
+无。发布清单给出固定标签 PromQL 查询；告警阈值和责任分工由部署环境的基线与值班制度
+决定，不在应用代码中硬编码。恢复与运行时回退的安全操作已记录在发布及恢复手册中。

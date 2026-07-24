@@ -53,10 +53,21 @@ deviation in the release record.
       V2 rows to serve existing OCI Groups.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
       against isolated volumes, verifies restored Raw cache content, Conan
-      Group state, and both V2 audit formats. Run `make backup-drill` against
-      the release environment only after the isolated rehearsal passes.
+      Group state, Repository grant version/content, and authorization-denial
+      audit records. It verifies the same Native Raw object remains denied to
+      an authenticated principal without a grant and readable by the granted
+      principal. Run `make backup-drill` against the release environment only
+      after the isolated rehearsal passes.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
-      allowlists, repository-reader grants, quotas, and OIDC issuer/audience.
+      allowlists, Repository grant sets, quotas, and OIDC issuer/audience. For
+      a grant rollout, review the bounded authorization signal without adding
+      actor or Repository labels:
+
+      ```promql
+      sum by (format, authorization_reason) (
+        increase(artifact_gateway_repository_authorization_denials_total[15m])
+      )
+      ```
 
 ## Default Operating Policy
 
@@ -111,7 +122,9 @@ flowchart LR
    [the recovery runbook](recovery-runbook.md), restoring PostgreSQL and MinIO
    together from the same backup set. Confirm an OCI/Maven read and, where V2
    state was affected, a Raw GET and Conan 2 revision read before reopening
-   traffic.
+   traffic. For a managed Repository, confirm a known granted principal can
+   read and a separately authenticated, ungranted principal still receives the
+   protocol denial; do not remove grants merely to diagnose restoration.
 5. Rotate any potentially exposed resolver, administrator, or object
    storage credentials and record the incident and final validation result.
 
