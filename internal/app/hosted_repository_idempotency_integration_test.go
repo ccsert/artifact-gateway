@@ -13,6 +13,8 @@ import (
 )
 
 func TestPostgresHostedRepositoryIdempotencySerializesFirstUse(t *testing.T) {
+	// This also protects the PostgreSQL advisory-lock input: the serialized key
+	// must be valid SQL text while concurrent first use still produces a replay.
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")

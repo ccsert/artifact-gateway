@@ -4,10 +4,10 @@ COMPOSE := docker compose --env-file .env -f compose.gitea.yml
 GO_IMAGE := golang:1.26-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 
-.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
+.PHONY: help gitea-up gitea-down gitea-reset gitea-seed gitea-fixture oci-e2e raw-e2e conan-e2e maven-e2e native-maven-e2e maven-e2e-cleanup-test performance-readiness upgrade-readiness backup-restore-readiness release-readiness release-readiness-cleanup-test up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, gitea-up, gitea-down, gitea-reset, gitea-seed, gitea-fixture, oci-e2e, raw-e2e, conan-e2e, maven-e2e, native-maven-e2e, maven-e2e-cleanup-test, performance-readiness, upgrade-readiness, backup-restore-readiness, release-readiness, release-readiness-cleanup-test'
 
 console-build:
 	@cd console && npm run build
@@ -92,6 +92,9 @@ conan-e2e:
 
 maven-e2e: gitea-fixture
 	@./scripts/maven-e2e.sh
+
+native-maven-e2e:
+	@./scripts/native-maven-e2e.sh
 
 maven-e2e-cleanup-test: gitea-fixture
 	@./scripts/maven-e2e-cleanup-test.sh
