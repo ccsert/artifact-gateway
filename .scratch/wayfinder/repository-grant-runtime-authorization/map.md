@@ -27,6 +27,8 @@ tracker: local-markdown
   OpenAPI 和 Console 统一暴露可选且有界的授权决策字段，V1 响应不变。
 - [Group 成员级授权语义](tickets/07-group-member-authorization.md) — 已决策：仅显式绑定
   Repository 的成员适用 managed grants；拒绝候选在 cache/source 前跳过，耗尽时返回拒绝。
+- [Group 成员 grants 绑定与执行](tickets/09-group-member-grant-enforcement.md) — 已实现：
+  OCI、Maven、Raw、Conan 的已绑定成员在缓存与 upstream 前统一执行 grants，来源缓存可撤权。
 
 ## Fog
 
