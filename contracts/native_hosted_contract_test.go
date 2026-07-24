@@ -64,6 +64,7 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		"/groups/{groupId}/members",
 		"/repositories/{repositoryId}/publish-sessions",
 		"/publish-sessions/{sessionId}:commit",
+		"/repository/maven/{repository}/coordinates/{coordinate}:commit",
 		"/repositories/{repositoryId}/artifacts/{artifactId}",
 	} {
 		if spec.Paths.Find(path) == nil {
@@ -73,7 +74,7 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 	if spec.Paths.Find("/repositories/{repositoryId}/members") != nil {
 		t.Error("repository-owned member mutation must not be exposed")
 	}
-	for _, schema := range []string{"Repository", "Group", "Member", "Grant", "RetentionPolicy", "PublishSession", "Artifact", "Problem"} {
+	for _, schema := range []string{"Repository", "Group", "Member", "Grant", "RetentionPolicy", "PublishSession", "Artifact", "Problem", "CommitMavenCoordinate"} {
 		if spec.Components.Schemas[schema] == nil {
 			t.Errorf("missing schema %s", schema)
 		}
@@ -92,6 +93,34 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		if !contains(problem.Required, field) {
 			t.Errorf("Problem missing required %s", field)
 		}
+	}
+}
+
+func TestMavenCoordinateCommitContract(t *testing.T) {
+	spec := loadNativeHostedSpec(t)
+	stage := operation(t, spec, "/repository/maven/{repository}/{assetPath}", "PUT")
+	for _, status := range []string{"201", "401", "409", "422"} {
+		requireResponse(t, stage, status)
+	}
+	path := spec.Paths.Find("/repository/maven/{repository}/{assetPath}")
+	if path.Extensions["x-gateway-publication"] != "stage_only_until_explicit_coordinate_commit" {
+		t.Fatal("Maven deploy must stage until explicit coordinate commit")
+	}
+
+	commit := operation(t, spec, "/repository/maven/{repository}/coordinates/{coordinate}:commit", "POST")
+	if !hasParameter(commit.Parameters, "Idempotency-Key", "header") {
+		t.Fatal("Maven coordinate commit must be idempotent")
+	}
+	for _, status := range []string{"200", "409", "422"} {
+		requireResponse(t, commit, status)
+	}
+	item := spec.Paths.Find("/repository/maven/{repository}/coordinates/{coordinate}:commit")
+	if item.Extensions["x-gateway-visibility-transition"] != "single_postgres_transaction" {
+		t.Fatal("Maven visibility must use one PostgreSQL transaction")
+	}
+	commitRequest := spec.Components.Schemas["CommitMavenCoordinate"].Value
+	if !contains(commitRequest.Required, "expectedAssetNames") || !commitRequest.Properties["expectedAssetNames"].Value.UniqueItems {
+		t.Fatal("commit must require a unique expected asset set")
 	}
 }
 
@@ -228,6 +257,9 @@ func TestNativeHostedContractHasLifecycleAndRetirementDecisions(t *testing.T) {
 		"PostgreSQL is authoritative", "Object upload precedes metadata promotion", "orphan collector",
 		"Idempotency-Key", "pageToken", "Gitea retirement boundary", "shadow-read mode", "non-goals",
 		"/groups/{groupId}/members", "gateway catch-all", "Docker-Content-Digest", "generated from committed coordinates",
+		"Maven and Gradle do not define a portable transaction-complete request", "Gateway never infers publication completion",
+		"The production flow retains standard Maven repository URLs and HTTP `PUT`", "expected-name list is an incompleteness assertion",
+		"FOR UPDATE SKIP LOCKED", "session_expired",
 	} {
 		if !strings.Contains(doc, phrase) {
 			t.Errorf("missing contract decision %q", phrase)

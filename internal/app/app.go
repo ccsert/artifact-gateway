@@ -18,6 +18,9 @@ type Checker interface {
 
 type Dependencies struct {
 	checkers []Checker
+	// NativeMavenObjectStore is supplied by the runtime after S3 is initialized.
+	// Tests omit it and receive an isolated in-memory store.
+	NativeMavenObjectStore OCIObjectStore
 }
 
 func NewDependencies(cfg config.Config) Dependencies {

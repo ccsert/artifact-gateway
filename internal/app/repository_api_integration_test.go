@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestPostgresHTTPIntegration(t *testing.T) {
@@ -136,6 +137,51 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 	if conflictCount != 1 || resolvedCount != 1 {
 		t.Fatalf("Maven audit counts = conflict:%d resolved:%d", conflictCount, resolvedCount)
+	}
+}
+
+func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "claim-fence-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", Publisher: "alice", PomObject: "widget-1.0.0.pom", State: "expired", ExpiresAt: time.Now().Add(-time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:claim-fence", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	key := "native/maven/sha256/claim-fence-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, key); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT 1 FROM native_maven_publish_sessions WHERE id=$1 FOR UPDATE`, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(time.Hour), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("collector claimed an intent behind commit session lock: %#v", claimed)
 	}
 }
 

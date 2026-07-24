@@ -52,6 +52,45 @@ type HostedRepositoryStore interface {
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
 }
 
+// NativeMavenStore contains only committed Maven metadata. Object bytes live in
+// the object store; staging rows never participate in protocol reads.
+type NativeMavenStore interface {
+	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
+	FindOpenMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)
+	FindMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)
+	FindAnyMavenPublishSession(context.Context, string, string) (MavenPublishSession, error)
+	AppendMavenPublishObject(context.Context, string, MavenDeclaredObject) error
+	SetMavenPublishPom(context.Context, string, string) error
+	CreateMavenPublishSessionIdempotently(context.Context, MavenPublishSession, string, string, string, string) (MavenPublishSession, bool, error)
+	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
+	MarkMavenPublishObject(context.Context, string, string, string) error
+	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
+	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
+	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
+	DeleteClaimedMavenObjectIntent(context.Context, string) error
+	ReleaseClaimedMavenObjectIntent(context.Context, string) error
+}
+
+type MavenDeclaredObject struct {
+	Name, Digest string
+	Size         int64
+}
+type MavenPublishSession struct {
+	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
+	Objects                                                   []MavenDeclaredObject
+	ExpiresAt                                                 time.Time
+}
+type MavenAsset struct {
+	RepositoryID, Path, ObjectKey, Digest string
+	Size                                  int64
+}
+type MavenArtifact struct {
+	ID, RepositoryID, Coordinate, Digest, State string
+	CreatedAt                                   time.Time
+}
+type MavenObjectIntent struct{ ObjectKey string }
+
 type MemberType string
 
 const (
@@ -154,7 +193,15 @@ type MemoryStore struct {
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
 	idempotencyRecords map[string]idempotencyRecord
+	mavenSessions      map[string]MavenPublishSession
+	mavenUploads       map[string]map[string]string
+	mavenAssets        map[string]MavenAsset
+	mavenArtifacts     map[string]MavenArtifact
+	mavenSessionKeys   map[string]idempotencyRecord
+	mavenObjectIntents map[string]mavenObjectIntent
 }
+
+type mavenObjectIntent struct{ createdAt, claimedAt time.Time }
 
 type idempotencyRecord struct {
 	payload, repositoryID string
@@ -162,7 +209,228 @@ type idempotencyRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent)}
+}
+
+func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mavenSessions[session.ID] = session
+	s.mavenUploads[session.ID] = map[string]string{}
+	return session, nil
+}
+func (s *MemoryStore) CreateMavenPublishSessionIdempotently(ctx context.Context, session MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordKey := actor + "\x00" + target + "\x00" + key
+	if record, ok := s.mavenSessionKeys[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.payload != payload {
+			return MavenPublishSession{}, false, ErrIdempotencyConflict
+		}
+		return s.mavenSessions[record.repositoryID], true, nil
+	}
+	s.mavenSessions[session.ID] = session
+	s.mavenUploads[session.ID] = map[string]string{}
+	s.mavenSessionKeys[recordKey] = idempotencyRecord{payload: payload, repositoryID: session.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return session, false, nil
+}
+func (s *MemoryStore) GetMavenPublishSession(_ context.Context, id string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.mavenSessions[id]
+	if !ok {
+		return MavenPublishSession{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) FindOpenMavenPublishSession(_ context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.Publisher == publisher && v.State == "open" {
+			return v, nil
+		}
+	}
+	return MavenPublishSession{}, ErrNotFound
+}
+func (s *MemoryStore) FindMavenPublishSession(_ context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.Publisher == publisher && v.State == "open" {
+			return v, nil
+		}
+	}
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.Publisher == publisher {
+			return v, nil
+		}
+	}
+	return MavenPublishSession{}, ErrNotFound
+}
+func (s *MemoryStore) FindAnyMavenPublishSession(_ context.Context, repoID, coordinate string) (MavenPublishSession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.State == "open" {
+			return v, nil
+		}
+	}
+	for _, v := range s.mavenSessions {
+		if v.RepositoryID == repoID && v.Coordinate == coordinate {
+			return v, nil
+		}
+	}
+	return MavenPublishSession{}, ErrNotFound
+}
+func (s *MemoryStore) AppendMavenPublishObject(_ context.Context, id string, object MavenDeclaredObject) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.mavenSessions[id]
+	if !ok || v.State != "open" {
+		return ErrNotFound
+	}
+	for _, o := range v.Objects {
+		if o.Name == object.Name {
+			if o.Digest != object.Digest || o.Size != object.Size {
+				return ErrNameExists
+			}
+			return nil
+		}
+	}
+	v.Objects = append(v.Objects, object)
+	s.mavenSessions[id] = v
+	return nil
+}
+func (s *MemoryStore) SetMavenPublishPom(_ context.Context, id, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.mavenSessions[id]
+	if !ok || v.State != "open" {
+		return ErrNotFound
+	}
+	v.PomObject = name
+	s.mavenSessions[id] = v
+	return nil
+}
+func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.mavenSessions[id]; !ok {
+		return ErrNotFound
+	}
+	s.mavenUploads[id][name] = key
+	s.mavenObjectIntents[key] = mavenObjectIntent{createdAt: time.Now().UTC()}
+	return nil
+}
+func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.mavenSessions[id]
+	if !ok {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	for _, o := range session.Objects {
+		if s.mavenUploads[id][o.Name] == "" {
+			return MavenArtifact{}, ErrDisabled
+		}
+		if intent := s.mavenObjectIntents[s.mavenUploads[id][o.Name]]; !intent.claimedAt.IsZero() {
+			return MavenArtifact{}, ErrDisabled
+		}
+	}
+	for _, existing := range s.mavenArtifacts {
+		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+			return MavenArtifact{}, ErrNameExists
+		}
+	}
+	for _, a := range assets {
+		k := a.RepositoryID + "\x00" + a.Path
+		if _, exists := s.mavenAssets[k]; exists {
+			return MavenArtifact{}, ErrNameExists
+		}
+		s.mavenAssets[k] = a
+	}
+	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	s.mavenArtifacts[id] = artifact
+	session.State = "committed"
+	s.mavenSessions[id] = session
+	return artifact, nil
+}
+func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string) (MavenAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.mavenAssets[repositoryID+"\x00"+path]
+	if !ok {
+		return MavenAsset{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string) ([]MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []MavenArtifact{}
+	for _, a := range s.mavenArtifacts {
+		if a.RepositoryID == repositoryID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	claimed := make([]MavenObjectIntent, 0, limit)
+	for key, intent := range s.mavenObjectIntents {
+		if len(claimed) == limit || !intent.claimedAt.IsZero() || intent.createdAt.After(before) {
+			continue
+		}
+		liveSession := false
+		for sessionID, uploads := range s.mavenUploads {
+			if uploadsKey := uploads; uploadsKey != nil {
+				for _, uploadedKey := range uploadsKey {
+					if uploadedKey == key {
+						session := s.mavenSessions[sessionID]
+						liveSession = session.State == "open" && session.ExpiresAt.After(time.Now())
+						break
+					}
+				}
+			}
+			if liveSession {
+				break
+			}
+		}
+		if liveSession {
+			continue
+		}
+		intent.claimedAt = time.Now().UTC()
+		s.mavenObjectIntents[key] = intent
+		claimed = append(claimed, MavenObjectIntent{ObjectKey: key})
+	}
+	return claimed, nil
+}
+func (s *MemoryStore) DeleteClaimedMavenObjectIntent(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	intent, ok := s.mavenObjectIntents[key]
+	if !ok || intent.claimedAt.IsZero() {
+		return ErrNotFound
+	}
+	delete(s.mavenObjectIntents, key)
+	return nil
+}
+func (s *MemoryStore) ReleaseClaimedMavenObjectIntent(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	intent, ok := s.mavenObjectIntents[key]
+	if !ok || intent.claimedAt.IsZero() {
+		return ErrNotFound
+	}
+	intent.claimedAt = time.Time{}
+	s.mavenObjectIntents[key] = intent
+	return nil
 }
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {

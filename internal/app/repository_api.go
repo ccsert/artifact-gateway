@@ -365,6 +365,9 @@ type Authenticator struct {
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
+	// RepositoryWriters is intentionally separate from readers: Maven deploy
+	// must never turn a download grant into publication authority.
+	RepositoryWriters map[string][]string
 	OIDC              *OIDCValidator
 }
 
@@ -428,6 +431,18 @@ func (a Authenticator) CanReadMavenRepository(principal Principal, groupName str
 	return false
 }
 
+func (a Authenticator) CanWriteMavenRepository(principal Principal, repositoryName string) bool {
+	if principal.Admin {
+		return true
+	}
+	for _, pattern := range a.RepositoryWriters[principal.Actor] {
+		if pattern == repositoryName || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(repositoryName, strings.TrimSuffix(pattern, "*")) {
+			return true
+		}
+	}
+	return false
+}
+
 func (a Authenticator) IssueToken(actor string) string {
 	expiresAt := time.Now().UTC().Add(5 * time.Minute).Unix()
 	payload := "v1." + base64.RawURLEncoding.EncodeToString([]byte(actor)) + "." + strconv.FormatInt(expiresAt, 10)
@@ -471,6 +486,7 @@ type GatewayStore interface {
 	repository.RawStore
 	repository.ConanStore
 	repository.HostedRepositoryStore
+	repository.NativeMavenStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -534,7 +550,13 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/api/v1/conan/groups", conanAPI)
 	mux.Handle("/api/v1/conan/groups/", conanAPI)
 	mux.Handle("/api/v2/repositories", hostedRepositoryAPIHandler{store: store, authenticator: authenticator})
-	mux.Handle("/api/v2/repositories/", hostedRepositoryAPIHandler{store: store, authenticator: authenticator})
+	nativeObjects := dependencies.NativeMavenObjectStore
+	if nativeObjects == nil {
+		nativeObjects = NewMemoryOCIObjectStore()
+	}
+	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator)
+	mux.Handle("/api/v2/repositories/", nativeMaven)
+	mux.Handle("/api/v2/publish-sessions/", nativeMaven)
 	mux.Handle("POST /api/v1/conan/cache/invalidate", conanCacheInvalidationHandler{store: store, authenticator: authenticator, cache: conanCache})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
@@ -543,6 +565,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
 	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: oci})
+	mux.Handle("/repository/maven/", nativeMaven)
 	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: MavenHandler{Store: store, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}})
 	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}})
 	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})

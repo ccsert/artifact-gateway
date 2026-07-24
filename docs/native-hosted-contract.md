@@ -137,9 +137,101 @@ and repository metadata are generated from committed coordinates, never
 accepted as client-owned mutable metadata. Uncommitted POM, component, checksum,
 and generated metadata paths are all non-readable.
 
+### Maven coordinate publication
+
+Maven and Gradle do not define a portable transaction-complete request across
+their independent POM, primary artifact, attached-artifact, checksum, and
+metadata uploads. `maven-metadata.xml`, a checksum sidecar, a last observed
+request, and a quiet period are therefore not commit signals: each can be
+absent, reordered, retried, or written before a failed attached artifact. The
+Gateway never infers publication completion from standard HTTP traffic.
+
+The production flow retains standard Maven repository URLs and HTTP `PUT`
+uploads. A publish-authorized `PUT /repository/maven/{repository}/{assetPath}`
+opens or appends to the publisher's one `open` session for the server-derived
+`repository + groupId:artifactId:version` coordinate. The Gateway derives the
+canonical asset name, byte digest, size, and coordinate from the path and bytes,
+records an intent before S3 upload, and returns `201` while the object is staged.
+Client checksum sidecars are assertions only: the Gateway verifies or discards
+them and generates readable checksums from verified primary objects. Client
+repository and snapshot metadata are accepted only as compatibility no-ops;
+readable metadata is generated from visible coordinates.
+
+An optional Gateway Maven extension and Gradle plugin are required for atomic
+visibility. After their normal deploy uploads succeed, they call
+`POST /repository/maven/{repository}/coordinates/{coordinate}:commit` with an
+idempotency key and expected non-metadata asset names. The extension is a
+transport companion, not a replacement repository protocol: resolution and
+uploads remain standard Maven HTTP. A deploy without it may stage and resume
+uploads but cannot become visible; it expires rather than silently publishing a
+partial coordinate. This is an intentional compatibility limit because standard
+Maven clients expose no universal finalization hook.
+
+The commit caller must be the session publisher or a narrowly authorized release
+principal. Its expected-name list is an incompleteness assertion only; it never
+supplies a digest, size, metadata, object key, or visibility decision. In one
+PostgreSQL transaction, the Gateway locks the open session and coordinate,
+confirms the POM parses to the requested coordinate, confirms every expected
+asset is verified and staged, derives checksum and metadata references, rejects
+an already-visible immutable release coordinate, inserts all references, makes
+the coordinate visible, and marks the session `committed`. This transaction is
+the trusted server-controlled commit signal. Readers consult only committed
+references, so every POM, artifact, checksum, and metadata path is `404` until
+commit succeeds.
+
+Commit is idempotent for 24 hours per publisher, repository, coordinate, and
+`Idempotency-Key`: an identical retry returns the committed artifact, while a
+changed expected-name set returns `409 idempotency_conflict`. Concurrent commits
+and duplicate uploads serialize on the session and coordinate locks. A missing
+POM, unverified object, unexpected duplicate asset, coordinate conflict, or
+malformed POM leaves the session open and invisible and returns `422` or `409`.
+Expired sessions return `409 session_expired` and require a fresh upload session.
+Promotion never overwrites a release; snapshots create a new immutable
+timestamped coordinate and move generated metadata in the same transaction.
+Rollback before visibility is abort plus orphan collection. After visibility it
+is a logical tombstone or a new promotion under retention policy, never mutation
+or deletion of S3 bytes.
+
+PostgreSQL owns the session, derived asset inventory, object intent, verified
+reference, idempotency record, and commit lock. S3 stores bytes only at
+server-derived digest keys. A failed S3 upload has no verified object and cannot
+commit; a failed PostgreSQL promotion leaves unreachable, retryable staged bytes.
+Expiration or abort removes intents. The collector claims only unreferenced
+intents older than 24 hours with `FOR UPDATE SKIP LOCKED`, rechecks in the
+claiming transaction that no committed reference exists, then deletes the S3
+byte and finalizes the intent. Gitea is not consulted by this path.
+
+### CCS-44 implementation sequence
+
+1. Make the Maven protocol `PUT` adapter derive a coordinate from a canonical
+   asset path, reuse the single open PostgreSQL session for that publisher and
+   coordinate, append the verified object intent, and return staging success.
+   The more-specific `coordinates/{coordinate}:commit` route must take
+   precedence over the catch-all asset route.
+2. Implement the commit adapter behind one `CommitMavenCoordinate` module. It
+   owns session locking, POM identity parsing, expected-name validation,
+   idempotency replay, release/snapshot conflict policy, generated metadata and
+   checksum references, and the one promotion transaction. Protocol handlers
+   must call this interface rather than reproduce its checks.
+3. Ship the Maven extension and Gradle plugin with an opt-in repository flag.
+   During migration, existing clients can upload to staging but cannot publish;
+   enable atomic publication only after the extension is configured. Keep GET
+   resolution unchanged, so already committed Gitea or native coordinates remain
+   standard-client-readable.
+4. Add black-box Maven and Gradle fixtures for partial POM/JAR/sidecar failure,
+   metadata/checksum retry, identical and conflicting commit retries, concurrent
+   commit, session expiry/restart, and an S3-success/PostgreSQL-failure retry.
+   Add PostgreSQL integration coverage for the 24-hour `SKIP LOCKED` collector
+   and its reference recheck.
+
+Non-goals for CCS-44 are guessing a completion event for unmodified clients,
+making client metadata authoritative, cross-coordinate transactions, and a
+Gitea runtime fallback in the write path.
+
 Raw accepts a canonical non-directory path and immutable byte digest. OCI
 accepts manifest publication by digest, then optional tag movement. Maven
-accepts a complete coordinate plus POM and component/checksum objects. Direct
+accepts a complete coordinate plus POM and component objects followed by the
+explicit Maven commit signal. Direct
 bucket access, arbitrary Maven metadata writes, OCI digest deletion,
 cross-repository copies, and Gitea package administration are non-goals.
 

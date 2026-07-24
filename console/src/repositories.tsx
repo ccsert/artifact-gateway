@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { createRepository, deleteRepository, getRepository, listRepositories, type Repository, type RepositoryPage } from './client';
+import { createRepository, deleteRepository, getRepository, listArtifacts, listRepositories, type Artifact, type Repository, type RepositoryPage } from './client';
 import { client } from './client/client.gen';
 
 type Format = 'raw' | 'oci' | 'maven';
@@ -17,8 +17,8 @@ function problemMessage(error: unknown) {
   return error instanceof Error ? error.message : 'The repository service could not complete this request.';
 }
 
-function dataOrThrow<T>(result: { data?: T; error?: { message?: string } }) {
-  if (result.error) throw new Error(result.error.message ?? 'The repository service could not complete this request.');
+function dataOrThrow<T>(result: { data?: T; error?: unknown }) {
+  if (result.error) throw new Error(typeof result.error === 'object' && result.error && 'message' in result.error && typeof result.error.message === 'string' ? result.error.message : 'The repository service could not complete this request.');
   if (result.data === undefined) throw new Error('The repository service returned no data.');
   return result.data;
 }
@@ -28,6 +28,8 @@ export function App() {
   const [name, setName] = useState('');
   const [format, setFormat] = useState<Format>('oci');
   const [selected, setSelected] = useState<Repository | null>(null);
+
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -36,12 +38,24 @@ export function App() {
     try {
       const page = dataOrThrow<RepositoryPage>(await listRepositories({ headers: authHeaders() }));
       setRepositories(page.items);
-      if (selected) setSelected(dataOrThrow<Repository>(await getRepository({ path: { repositoryId: selected.id }, headers: authHeaders() })));
+      if (selected) {
+        const repository = dataOrThrow<Repository>(await getRepository({ path: { repositoryId: selected.id }, headers: authHeaders() }));
+        setSelected(repository);
+        setArtifacts(repository.format === 'maven' ? dataOrThrow<{ items: Artifact[] }>(await listArtifacts({ path: { repositoryId: repository.id }, headers: authHeaders() })).items : []);
+      }
     } catch (reason) { setError(problemMessage(reason)); }
     finally { setBusy(false); }
   }, [selected]);
 
   useEffect(() => { void refresh(); }, []); // Initial inventory.
+
+  useEffect(() => {
+    if (!selected || selected.format !== 'maven') return;
+    void (async () => {
+      try { setArtifacts(dataOrThrow<{ items: Artifact[] }>(await listArtifacts({ path: { repositoryId: selected.id }, headers: authHeaders() })).items); }
+      catch (reason) { setError(problemMessage(reason)); }
+    })();
+  }, [selected?.id, selected?.format]);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
@@ -72,10 +86,10 @@ export function App() {
       </form>
       <section className="inventory"><h2>Repository inventory</h2><div className="table" role="table" aria-label="Repository inventory">
         <div className="row heading" role="row"><span>Name</span><span>Format</span><span>State</span></div>
-        {repositories.map((repository) => <button className="row repository" role="row" key={repository.id} onClick={() => setSelected(repository)}><span>{repository.name}</span><span>{repository.format.toUpperCase()}</span><span className={'state ' + repository.state}>{repository.state === 'deleting' ? 'Disabled' : repository.state}</span></button>)}
+        {repositories.map((repository) => <button className="row repository" role="row" key={repository.id} onClick={() => { setSelected(repository); setArtifacts([]); }}><span>{repository.name}</span><span>{repository.format.toUpperCase()}</span><span className={'state ' + repository.state}>{repository.state === 'deleting' ? 'Disabled' : repository.state}</span></button>)}
         {!busy && repositories.length === 0 && <p className="empty">No repositories yet.</p>}
       </div></section>
-      <aside className="detail" aria-live="polite"><h2>Repository details</h2>{selected ? <><dl><dt>Name</dt><dd>{selected.name}</dd><dt>Format</dt><dd>{selected.format.toUpperCase()}</dd><dt>State</dt><dd>{selected.state === 'deleting' ? 'Disabled' : selected.state}</dd><dt>Version</dt><dd>{selected.version}</dd></dl>{selected.state === 'active' && <button className="danger" onClick={() => void disable()} disabled={busy}>Disable repository</button>}</> : <p className="empty">Select a repository to inspect its configuration.</p>}</aside>
+      <aside className="detail" aria-live="polite"><h2>Repository details</h2>{selected ? <><dl><dt>Name</dt><dd>{selected.name}</dd><dt>Format</dt><dd>{selected.format.toUpperCase()}</dd><dt>State</dt><dd>{selected.state === 'deleting' ? 'Disabled' : selected.state}</dd><dt>Version</dt><dd>{selected.version}</dd></dl>{selected.format === 'maven' && <><h3>Published coordinates</h3>{artifacts.length ? <ul className="artifact-list">{artifacts.map((artifact) => <li key={artifact.id}><strong>{artifact.coordinate}</strong><small>{artifact.state} · {artifact.digest} · {new Date(artifact.createdAt).toLocaleString()}</small></li>)}</ul> : <p className="empty">No published coordinates.</p>}</>}{selected.state === 'active' && <button className="danger" onClick={() => void disable()} disabled={busy}>Disable repository</button>}</> : <p className="empty">Select a repository to inspect its configuration.</p>}</aside>
     </section>
   </main>;
 }
