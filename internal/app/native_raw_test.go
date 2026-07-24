@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -62,6 +63,64 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("missing=%d", missing.Code)
 	}
+}
+
+func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
+	objects := &recordingNativeRawObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	put := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/big.bin", strings.NewReader(strings.Repeat("abcdef", 128)))
+	authorize(put, "resolver-secret")
+	created := httptest.NewRecorder()
+	handler.ServeHTTP(created, put)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("put=%d %s", created.Code, created.Body.String())
+	}
+	rangeRequest := httptest.NewRequest(http.MethodGet, "/raw/downloads/releases/big.bin", nil)
+	rangeRequest.Header.Set("Range", "bytes=6-11")
+	authorize(rangeRequest, "resolver-secret")
+	ranged := httptest.NewRecorder()
+	handler.ServeHTTP(ranged, rangeRequest)
+	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != "abcdef" {
+		t.Fatalf("range=%d body=%q", ranged.Code, ranged.Body.String())
+	}
+	if objects.openRangeCalls != 1 || objects.openCalls != 0 {
+		t.Fatalf("open=%d openRange=%d", objects.openCalls, objects.openRangeCalls)
+	}
+	get := httptest.NewRequest(http.MethodGet, "/raw/downloads/releases/big.bin", nil)
+	authorize(get, "resolver-secret")
+	getResponse := httptest.NewRecorder()
+	handler.ServeHTTP(getResponse, get)
+	if getResponse.Code != http.StatusOK || getResponse.Body.Len() == 0 || objects.openCalls != 1 {
+		t.Fatalf("get=%d bytes=%d open=%d", getResponse.Code, getResponse.Body.Len(), objects.openCalls)
+	}
+	head := httptest.NewRequest(http.MethodHead, "/raw/downloads/releases/big.bin", nil)
+	authorize(head, "resolver-secret")
+	headResponse := httptest.NewRecorder()
+	handler.ServeHTTP(headResponse, head)
+	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
+		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
+	}
+	if objects.openCalls != 2 {
+		t.Fatalf("head did not stream metadata through Open: open=%d", objects.openCalls)
+	}
+}
+
+type recordingNativeRawObjectStore struct {
+	*MemoryOCIObjectStore
+	openCalls      int
+	openRangeCalls int
+}
+
+func (s *recordingNativeRawObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	s.openCalls++
+	return s.MemoryOCIObjectStore.Open(ctx, key)
+}
+
+func (s *recordingNativeRawObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
+	s.openRangeCalls++
+	return s.MemoryOCIObjectStore.OpenRange(ctx, key, offset, length)
 }
 
 func TestNativeRawCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {

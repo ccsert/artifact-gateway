@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -100,6 +102,124 @@ func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 	handler.ServeHTTP(missing, missingRequest)
 	if missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "MANIFEST_UNKNOWN") {
 		t.Fatalf("missing=%d %s", missing.Code, missing.Body.String())
+	}
+}
+
+func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	for _, tag := range []string{"gamma", "alpha", "beta"} {
+		manifest := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`))
+		manifest.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		authorize(manifest, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, manifest)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", tag, response.Code, response.Body.String())
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/tags/list?n=2", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("tags=%d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Name string   `json:"name"`
+		Tags []string `json:"tags"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Name != "team/app" || strings.Join(body.Tags, ",") != "alpha,beta" {
+		t.Fatalf("body=%#v", body)
+	}
+	link := response.Header().Get("Link")
+	if !strings.Contains(link, "/v2/team/app/tags/list?n=2&last=beta") || !strings.Contains(link, `rel="next"`) {
+		t.Fatalf("link=%q", link)
+	}
+	next := httptest.NewRequest(http.MethodGet, "/v2/team/app/tags/list?n=2&last="+url.QueryEscape("beta"), nil)
+	authorize(next, "resolver-secret")
+	nextResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nextResponse, next)
+	if nextResponse.Code != http.StatusOK || !strings.Contains(nextResponse.Body.String(), `"gamma"`) {
+		t.Fatalf("next=%d %s", nextResponse.Code, nextResponse.Body.String())
+	}
+	head := httptest.NewRequest(http.MethodHead, "/v2/team/app/tags/list", nil)
+	authorize(head, "resolver-secret")
+	headResponse := httptest.NewRecorder()
+	handler.ServeHTTP(headResponse, head)
+	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
+		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
+	}
+}
+
+func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	start := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
+	authorize(start, "resolver-secret")
+	started := httptest.NewRecorder()
+	handler.ServeHTTP(started, start)
+	if started.Code != http.StatusAccepted {
+		t.Fatalf("start=%d", started.Code)
+	}
+	location := started.Header().Get("Location")
+	patch := httptest.NewRequest(http.MethodPatch, location, strings.NewReader("partial"))
+	authorize(patch, "resolver-secret")
+	patched := httptest.NewRecorder()
+	handler.ServeHTTP(patched, patch)
+	if patched.Code != http.StatusAccepted {
+		t.Fatalf("patch=%d %s", patched.Code, patched.Body.String())
+	}
+	cancel := httptest.NewRequest(http.MethodDelete, location, nil)
+	authorize(cancel, "resolver-secret")
+	cancelled := httptest.NewRecorder()
+	handler.ServeHTTP(cancelled, cancel)
+	if cancelled.Code != http.StatusNoContent {
+		t.Fatalf("cancel=%d %s", cancelled.Code, cancelled.Body.String())
+	}
+	retry := httptest.NewRequest(http.MethodPatch, location, strings.NewReader("again"))
+	authorize(retry, "resolver-secret")
+	retried := httptest.NewRecorder()
+	handler.ServeHTTP(retried, retry)
+	if retried.Code != http.StatusNotFound || !strings.Contains(retried.Body.String(), "BLOB_UPLOAD_UNKNOWN") {
+		t.Fatalf("retry=%d %s", retried.Code, retried.Body.String())
+	}
+}
+
+func TestNativeOCIManifestAcceptNegotiation(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	manifest := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/latest", strings.NewReader(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`))
+	manifest.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+	authorize(manifest, "resolver-secret")
+	published := httptest.NewRecorder()
+	handler.ServeHTTP(published, manifest)
+	if published.Code != http.StatusCreated {
+		t.Fatalf("publish=%d %s", published.Code, published.Body.String())
+	}
+	for _, accept := range []string{"application/vnd.oci.image.manifest.v1+json", "application/*", "*/*"} {
+		request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+		request.Header.Set("Accept", accept)
+		authorize(request, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("accept %q=%d %s", accept, response.Code, response.Body.String())
+		}
+	}
+	reject := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	reject.Header.Set("Accept", "text/plain")
+	authorize(reject, "resolver-secret")
+	rejected := httptest.NewRecorder()
+	handler.ServeHTTP(rejected, reject)
+	if rejected.Code != http.StatusNotAcceptable || !strings.Contains(rejected.Body.String(), "MANIFEST_UNKNOWN") {
+		t.Fatalf("reject=%d %s", rejected.Code, rejected.Body.String())
 	}
 }
 

@@ -38,7 +38,15 @@ manifest='{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+
 expect 201 "${auth[@]}" -D "$headers" -H 'Content-Type: application/vnd.oci.image.manifest.v1+json' -X PUT --data-binary "$manifest" "$gateway_url/v2/team/widget/manifests/latest"
 manifest_digest=$(awk 'tolower($1)=="docker-content-digest:" {sub(/\r$/, "", $2); print $2}' "$headers")
 test -n "$manifest_digest"
+expect 200 "${auth[@]}" "$gateway_url/v2/team/widget/tags/list?n=1"
+grep -q '"latest"' "$workdir/response"
+expect 406 "${auth[@]}" -H 'Accept: text/plain' "$gateway_url/v2/team/widget/manifests/latest"
 expect 200 "${auth[@]}" -I "$gateway_url/v2/team/widget/manifests/latest"
+expect 202 "${auth[@]}" -D "$headers" -X POST "$gateway_url/v2/team/widget/blobs/uploads/"
+cancel_location=$(awk 'tolower($1)=="location:" {sub(/\r$/, "", $2); print $2}' "$headers")
+test -n "$cancel_location"
+expect 204 "${auth[@]}" -X DELETE "$gateway_url$cancel_location"
+expect 404 "${auth[@]}" -X PATCH --data-binary 'cancelled' "$gateway_url$cancel_location"
 expect 202 "${auth[@]}" -X DELETE "$gateway_url/v2/team/widget/manifests/$manifest_digest"
 expect 404 "${auth[@]}" "$gateway_url/v2/team/widget/manifests/latest"
 printf 'Native OCI Registry V2 E2E passed through %s\n' "$gateway_url"
