@@ -15,20 +15,18 @@ membership edge between a Group and a Repository, with a unique position. An
 canonical path, an OCI `repository@sha256:<digest>` (tags are mutable refs), or
 a Maven `groupId:artifactId:version[:extension[:classifier]]`.
 
-A **publish session** is the only way to create Hosted bytes. It stages a
-format-specific coordinate and declared objects, accepts resumable object
-uploads, verifies every declared digest and size, then atomically promotes the
-coordinate. Sessions expire and cannot be reused after `committed`, `aborted`,
-or `expired`. `Idempotency-Key` scopes a create request to its authenticated
-actor and request target for 24 hours; a reused key with a different payload
-returns `409 idempotency_conflict`.
-
-The session creation body is a discriminated contract: Raw supplies `format:
-raw`, a canonical path, and declared object; OCI supplies `format: oci`, a
-manifest digest, declared blobs, and optional tag; Maven supplies `format:
-maven`, a complete coordinate, required POM object, and components/checksums.
-The repository format must match this body. Upload and commit are the shared
-write protocol; protocol reads expose none of these objects before commit.
+Hosted write contracts are format-specific. Raw uses standard
+`PUT /raw/{repository}/{path}` and makes the verified path visible when the
+object reference is committed. OCI uses the Registry V2 upload, blob, manifest,
+and tag routes directly. Maven is the only current format that exposes a
+management publish session: standard Maven/Gradle `PUT` requests stage verified
+objects under a server-derived coordinate, then
+`POST /repository/maven/{repository}/coordinates/{coordinate}:commit` is the
+explicit visibility signal. Maven publish sessions expire and cannot be reused
+after `committed`, `aborted`, or `expired`. `Idempotency-Key` scopes Maven
+session creation or coordinate commit to its authenticated actor and request
+target for 24 hours; a reused key with a different payload returns
+`409 idempotency_conflict`.
 
 Group membership is owned and mutated only by the Group. The management
 collection is `/groups/{groupId}/members`; each replacement supplies the full
@@ -46,21 +44,23 @@ continue to obey `docs/v2-contract.md`.
 ## Metadata, object lifecycle, and transactions
 
 PostgreSQL is authoritative for Repository, Group, member, principal grant,
-retention policy, publish session, artifact coordinate, object reference, and
-audit rows. S3-compatible storage holds immutable byte objects only, under a
-digest-addressed key (`native/sha256/<hex>`); object keys are never client input.
+retention policy, Maven publish session, artifact coordinate, object reference,
+and audit rows. S3-compatible storage holds immutable byte objects only, under a
+server-derived digest-addressed key; object keys are never client input.
 PostgreSQL supplies short-lived coordination through advisory locks and
 transactional idempotency records. A lost database connection releases its
 advisory locks and must fail closed for the affected concurrent operation,
 never change durable truth.
 
 Object upload precedes metadata promotion because PostgreSQL cannot join an S3
-transaction. The service first records a `staging` object intent in PostgreSQL,
-uploads the digest-addressed object, verifies size and digest by a read/HEAD,
-then runs one PostgreSQL transaction that locks the publish session and target
-coordinate, inserts object references, changes the coordinate to visible, and
-marks the session `committed`. A reader serves an object only through a visible
-coordinate and committed reference. Thus an uploaded-but-uncommitted object is
+transaction. For Raw and OCI the service records a format-specific object intent,
+uploads the digest-addressed object, verifies size and digest, then writes the
+visible path, blob, manifest, or tag reference in PostgreSQL. Maven performs the
+same intent-and-reference transition through its explicit coordinate commit
+transaction, which locks the publish session and target coordinate, inserts
+object references, changes the coordinate to visible, and marks the session
+`committed`. A reader serves an object only through a visible coordinate or
+path and committed reference. Thus an uploaded-but-uncommitted object is
 unreachable; a committed coordinate never points to an unverified object.
 
 Replacing an immutable coordinate is rejected with `409 coordinate_exists`.
@@ -110,25 +110,33 @@ returns `400 invalid_page_token`.
 ## Native formats and protocol contracts
 
 Protocol routes are distinct from the authenticated management API and use the
-protocol principal mapped to the same Repository grant policy. A session's
-declared objects remain unreadable until its commit transaction succeeds; every
-protocol route returns `404` for an absent, staged, expired, aborted, or deleted
-coordinate. The versioned OpenAPI file carries these exact routes and response
-shapes.
+protocol principal mapped to the same Repository grant policy. Staged Maven
+objects remain unreadable until coordinate commit succeeds; Raw and OCI reads
+consult only committed path, blob, manifest, and tag references. Every protocol
+route returns `404` for an absent, staged, expired, aborted, or deleted
+coordinate/path. The versioned OpenAPI file carries these exact routes and
+response shapes.
 
-**Raw.** `GET /raw/{repository}/content/{path}` reads a committed immutable
-object. `path` is a gateway catch-all rather than a single URL segment, so a
-canonical path such as `releases/acme/app-1.2.3.tar.gz` remains a multi-segment
-path; it rejects empty, directory, dot, dot-dot, and percent-encoded segments.
-An unauthenticated request returns `401` plus `WWW-Authenticate`; a session
-must commit before the same path returns `200` with bytes.
+**Raw.** `PUT /raw/{repository}/{path}` writes a canonical immutable object and
+`GET`/`HEAD /raw/{repository}/{path}` read it back after the verified object
+reference is committed. `path` is a gateway catch-all rather than a single URL
+segment, so a canonical path such as `releases/acme/app-1.2.3.tar.gz` remains a
+multi-segment path; it rejects empty, directory, dot, dot-dot, and
+percent-encoded segments. Reads support HEAD, Digest, ETag, and single byte
+ranges through the object-store streaming interface. An unauthenticated request
+returns `401` plus `WWW-Authenticate`.
 
 **OCI.** `GET /v2/{name}/manifests/{reference}` reads a committed OCI manifest
 by immutable `sha256:` digest or mutable tag and returns `Docker-Content-Digest`.
-`GET /v2/{name}/blobs/{digest}` returns a committed blob by digest. OCI uses a
-Bearer `WWW-Authenticate` challenge on `401`. Manifest/tag resolution and blob
-reads are invisible before commit; a tag move atomically changes only the tag
-reference while preserving immutable manifest coordinates.
+`GET /v2/{name}/blobs/{digest}` returns a committed blob by digest. OCI writes
+use Registry V2 upload sessions, including PATCH resume, mount, manifest PUT,
+tag movement, upload cancel, and manifest media-type negotiation. `GET`/`HEAD
+/v2/{name}/tags/list` returns committed tags with bounded lexical pagination.
+OCI uses a Bearer `WWW-Authenticate` challenge on `401`. Manifest/tag
+resolution and blob reads are invisible before commit; a tag move atomically
+changes only the tag reference while preserving immutable manifest coordinates.
+`_catalog`, referrers, and direct blob deletion are not part of the current
+compatibility target.
 
 **Maven.** `GET /repository/maven/{repository}/{assetPath}` reads a canonical
 multi-segment Maven asset path, for example
@@ -229,10 +237,10 @@ Non-goals for CCS-44 are guessing a completion event for unmodified clients,
 making client metadata authoritative, cross-coordinate transactions, and a
 runtime fallback in the write path.
 
-Raw accepts a canonical non-directory path and immutable byte digest. OCI
-accepts manifest publication by digest, then optional tag movement. Maven
-accepts a complete coordinate plus POM and component objects followed by the
-explicit Maven commit signal. Direct
+Raw accepts a canonical non-directory path through standard PUT and immutable
+byte digest. OCI accepts Registry V2 blob upload and manifest publication by
+digest, then optional tag movement. Maven accepts a complete coordinate plus POM
+and component objects followed by the explicit Maven commit signal. Direct
 bucket access, arbitrary Maven metadata writes, OCI digest deletion,
 cross-repository copies, and external package administration are non-goals.
 

@@ -2,6 +2,18 @@
 
 export type Format = 'raw' | 'oci' | 'maven';
 
+export type OciTagList = {
+    name: string;
+    tags: Array<string>;
+};
+
+export type OciError = {
+    errors: Array<{
+        code: string;
+        message: string;
+    }>;
+};
+
 export type Repository = {
     id: string;
     name: string;
@@ -49,23 +61,10 @@ export type RetentionPolicy = {
     minimumVersions: number;
 };
 
-export type CreatePublishSession = CreateRawPublishSession | CreateOciPublishSession | CreateMavenPublishSession;
-
-export type CreateRawPublishSession = {
-    format: 'raw';
-    /**
-     * Canonical multi-segment Raw path.
-     */
-    coordinate: string;
-    objects: Array<DeclaredObject>;
-};
-
-export type CreateOciPublishSession = {
-    format: 'oci';
-    manifestDigest: string;
-    tag?: string;
-    objects: Array<DeclaredObject>;
-};
+/**
+ * Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes.
+ */
+export type CreatePublishSession = CreateMavenPublishSession;
 
 export type CreateMavenPublishSession = {
     format: 'maven';
@@ -529,6 +528,39 @@ export type ReplaceGroupResponses = {
 
 export type ReplaceGroupResponse = ReplaceGroupResponses[keyof ReplaceGroupResponses];
 
+export type DeleteRawHostedContentData = {
+    body?: never;
+    path: {
+        repository: string;
+        /**
+         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
+         */
+        path: string;
+    };
+    query?: never;
+    url: '/raw/{repository}/{path}';
+};
+
+export type DeleteRawHostedContentErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type DeleteRawHostedContentResponses = {
+    /**
+     * Deleted
+     */
+    204: void;
+};
+
+export type DeleteRawHostedContentResponse = DeleteRawHostedContentResponses[keyof DeleteRawHostedContentResponses];
+
 export type ReadRawContentData = {
     body?: never;
     path: {
@@ -539,7 +571,7 @@ export type ReadRawContentData = {
         path: string;
     };
     query?: never;
-    url: '/raw/{repository}/content/{path}';
+    url: '/raw/{repository}/{path}';
 };
 
 export type ReadRawContentErrors = {
@@ -561,6 +593,302 @@ export type ReadRawContentResponses = {
 };
 
 export type ReadRawContentResponse = ReadRawContentResponses[keyof ReadRawContentResponses];
+
+export type HeadRawContentData = {
+    body?: never;
+    path: {
+        repository: string;
+        /**
+         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
+         */
+        path: string;
+    };
+    query?: never;
+    url: '/raw/{repository}/{path}';
+};
+
+export type HeadRawContentErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type HeadRawContentResponses = {
+    /**
+     * Committed immutable protocol object
+     */
+    200: Blob | File;
+};
+
+export type HeadRawContentResponse = HeadRawContentResponses[keyof HeadRawContentResponses];
+
+export type PutRawHostedContentData = {
+    body: string;
+    path: {
+        repository: string;
+        /**
+         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
+         */
+        path: string;
+    };
+    query?: never;
+    url: '/raw/{repository}/{path}';
+};
+
+export type PutRawHostedContentErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+    /**
+     * Problem response
+     */
+    422: Problem;
+};
+
+export type PutRawHostedContentError = PutRawHostedContentErrors[keyof PutRawHostedContentErrors];
+
+export type PutRawHostedContentResponses = {
+    /**
+     * Stored and immediately addressable at this Raw path
+     */
+    201: unknown;
+};
+
+export type StartOciUploadData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+    };
+    query?: {
+        mount?: string;
+        from?: string;
+    };
+    url: '/v2/{name}/blobs/uploads/';
+};
+
+export type StartOciUploadErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+};
+
+export type StartOciUploadError = StartOciUploadErrors[keyof StartOciUploadErrors];
+
+export type StartOciUploadResponses = {
+    /**
+     * Blob mounted
+     */
+    201: unknown;
+    /**
+     * Registry V2 upload in progress
+     */
+    202: unknown;
+};
+
+export type CancelOciUploadData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        uuid: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/uploads/{uuid}';
+};
+
+export type CancelOciUploadErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    404: OciError;
+};
+
+export type CancelOciUploadError = CancelOciUploadErrors[keyof CancelOciUploadErrors];
+
+export type CancelOciUploadResponses = {
+    /**
+     * Upload cancelled
+     */
+    204: void;
+};
+
+export type CancelOciUploadResponse = CancelOciUploadResponses[keyof CancelOciUploadResponses];
+
+export type GetOciUploadStatusData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        uuid: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/uploads/{uuid}';
+};
+
+export type GetOciUploadStatusErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    404: OciError;
+};
+
+export type GetOciUploadStatusError = GetOciUploadStatusErrors[keyof GetOciUploadStatusErrors];
+
+export type GetOciUploadStatusResponses = {
+    /**
+     * Registry V2 upload in progress
+     */
+    204: void;
+};
+
+export type GetOciUploadStatusResponse = GetOciUploadStatusResponses[keyof GetOciUploadStatusResponses];
+
+export type AppendOciUploadData = {
+    body: string;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        uuid: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/uploads/{uuid}';
+};
+
+export type AppendOciUploadErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    404: OciError;
+    /**
+     * OCI Registry error response
+     */
+    416: OciError;
+};
+
+export type AppendOciUploadError = AppendOciUploadErrors[keyof AppendOciUploadErrors];
+
+export type AppendOciUploadResponses = {
+    /**
+     * Registry V2 upload in progress
+     */
+    202: unknown;
+};
+
+export type CompleteOciUploadData = {
+    body?: string;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        uuid: string;
+    };
+    query: {
+        digest: string;
+    };
+    url: '/v2/{name}/blobs/uploads/{uuid}';
+};
+
+export type CompleteOciUploadErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    404: OciError;
+    /**
+     * OCI Registry error response
+     */
+    409: OciError;
+    /**
+     * OCI Registry error response
+     */
+    416: OciError;
+};
+
+export type CompleteOciUploadError = CompleteOciUploadErrors[keyof CompleteOciUploadErrors];
+
+export type CompleteOciUploadResponses = {
+    /**
+     * Blob completed
+     */
+    201: unknown;
+};
+
+export type DeleteOciManifestData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        reference: string;
+    };
+    query?: never;
+    url: '/v2/{name}/manifests/{reference}';
+};
+
+export type DeleteOciManifestErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    404: OciError;
+};
+
+export type DeleteOciManifestError = DeleteOciManifestErrors[keyof DeleteOciManifestErrors];
+
+export type DeleteOciManifestResponses = {
+    /**
+     * Manifest deleted
+     */
+    202: unknown;
+};
 
 export type ReadOciManifestData = {
     body?: never;
@@ -584,7 +912,13 @@ export type ReadOciManifestErrors = {
      * No committed object is addressable at this protocol path
      */
     404: unknown;
+    /**
+     * OCI Registry error response
+     */
+    406: OciError;
 };
+
+export type ReadOciManifestError = ReadOciManifestErrors[keyof ReadOciManifestErrors];
 
 export type ReadOciManifestResponses = {
     /**
@@ -596,6 +930,86 @@ export type ReadOciManifestResponses = {
 };
 
 export type ReadOciManifestResponse = ReadOciManifestResponses[keyof ReadOciManifestResponses];
+
+export type HeadOciManifestData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        reference: string;
+    };
+    query?: never;
+    url: '/v2/{name}/manifests/{reference}';
+};
+
+export type HeadOciManifestErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+    /**
+     * OCI Registry error response
+     */
+    406: OciError;
+};
+
+export type HeadOciManifestError = HeadOciManifestErrors[keyof HeadOciManifestErrors];
+
+export type HeadOciManifestResponses = {
+    /**
+     * Committed OCI manifest, returned with Docker-Content-Digest
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type HeadOciManifestResponse = HeadOciManifestResponses[keyof HeadOciManifestResponses];
+
+export type PutOciManifestData = {
+    body: {
+        [key: string]: unknown;
+    };
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        reference: string;
+    };
+    query?: never;
+    url: '/v2/{name}/manifests/{reference}';
+};
+
+export type PutOciManifestErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * OCI Registry error response
+     */
+    413: OciError;
+};
+
+export type PutOciManifestError = PutOciManifestErrors[keyof PutOciManifestErrors];
+
+export type PutOciManifestResponses = {
+    /**
+     * Manifest published
+     */
+    201: unknown;
+};
 
 export type ReadOciBlobData = {
     body?: never;
@@ -629,6 +1043,121 @@ export type ReadOciBlobResponses = {
 };
 
 export type ReadOciBlobResponse = ReadOciBlobResponses[keyof ReadOciBlobResponses];
+
+export type HeadOciBlobData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+        digest: string;
+    };
+    query?: never;
+    url: '/v2/{name}/blobs/{digest}';
+};
+
+export type HeadOciBlobErrors = {
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type HeadOciBlobResponses = {
+    /**
+     * Committed immutable protocol object
+     */
+    200: Blob | File;
+};
+
+export type HeadOciBlobResponse = HeadOciBlobResponses[keyof HeadOciBlobResponses];
+
+export type ListOciTagsData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+    };
+    query?: {
+        n?: number;
+        last?: string;
+    };
+    url: '/v2/{name}/tags/list';
+};
+
+export type ListOciTagsErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type ListOciTagsError = ListOciTagsErrors[keyof ListOciTagsErrors];
+
+export type ListOciTagsResponses = {
+    /**
+     * OCI tag list ordered lexicographically. A Link header with rel=next is returned when more tags are available.
+     */
+    200: OciTagList;
+};
+
+export type ListOciTagsResponse = ListOciTagsResponses[keyof ListOciTagsResponses];
+
+export type HeadOciTagsData = {
+    body?: never;
+    path: {
+        /**
+         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
+         */
+        name: string;
+    };
+    query?: {
+        n?: number;
+        last?: string;
+    };
+    url: '/v2/{name}/tags/list';
+};
+
+export type HeadOciTagsErrors = {
+    /**
+     * OCI Registry error response
+     */
+    400: OciError;
+    /**
+     * OCI Bearer authentication challenge
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+};
+
+export type HeadOciTagsError = HeadOciTagsErrors[keyof HeadOciTagsErrors];
+
+export type HeadOciTagsResponses = {
+    /**
+     * OCI tag list ordered lexicographically. A Link header with rel=next is returned when more tags are available.
+     */
+    200: OciTagList;
+};
+
+export type HeadOciTagsResponse = HeadOciTagsResponses[keyof HeadOciTagsResponses];
 
 export type ReadMavenAssetData = {
     body?: never;
@@ -915,5 +1444,5 @@ export type GetArtifactResponses = {
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
 export type ClientOptions = {
-    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
+    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
 };

@@ -316,7 +316,7 @@
         }
       }
     },
-    "/raw/{repository}/content/{path}": {
+    "/raw/{repository}/{path}": {
       "servers": [
         {
           "url": "https://gateway.example.com"
@@ -361,8 +361,133 @@
           }
         }
       },
+      "head": {
+        "operationId": "headRawContent",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putRawHostedContent",
+        "description": "Standard Raw Hosted write. The request body is stored directly under the canonical Raw path; no management publish session is used for Raw.",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stored and immediately addressable at this Raw path"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteRawHostedContent",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
       "x-gateway-catchAll": "path",
       "x-gateway-visibility": "committed_only"
+    },
+    "/v2/{name}/blobs/uploads/": {
+      "servers": [{"url": "https://gateway.example.com"}],
+      "parameters": [{"$ref": "#/components/parameters/OCIName"}],
+      "post": {
+        "operationId": "startOCIUpload",
+        "description": "Starts a Registry V2 blob upload. mount and from request a cross-repository mount when the source blob is available to the Gateway.",
+        "security": [{"ociBearerAuth": []}],
+        "parameters": [
+          {"name": "mount", "in": "query", "schema": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}},
+          {"name": "from", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "201": {"description": "Blob mounted", "headers": {"Location": {"schema": {"type": "string"}}, "Docker-Content-Digest": {"schema": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}}},
+          "202": {"$ref": "#/components/responses/OCIUploadAccepted"},
+          "400": {"$ref": "#/components/responses/OCIError"},
+          "401": {"$ref": "#/components/responses/OCIUnauthorized"}
+        }
+      }
+    },
+    "/v2/{name}/blobs/uploads/{uuid}": {
+      "servers": [{"url": "https://gateway.example.com"}],
+      "parameters": [{"$ref": "#/components/parameters/OCIName"}, {"name": "uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+      "get": {
+        "operationId": "getOCIUploadStatus",
+        "security": [{"ociBearerAuth": []}],
+        "responses": {"204": {"$ref": "#/components/responses/OCIUploadAccepted"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/OCIError"}}
+      },
+      "patch": {
+        "operationId": "appendOCIUpload",
+        "security": [{"ociBearerAuth": []}],
+        "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "contentEncoding": "binary"}}}},
+        "responses": {"202": {"$ref": "#/components/responses/OCIUploadAccepted"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/OCIError"}, "416": {"$ref": "#/components/responses/OCIError"}}
+      },
+      "put": {
+        "operationId": "completeOCIUpload",
+        "security": [{"ociBearerAuth": []}],
+        "parameters": [{"name": "digest", "in": "query", "required": true, "schema": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}],
+        "requestBody": {"content": {"application/octet-stream": {"schema": {"type": "string", "contentEncoding": "binary"}}}},
+        "responses": {"201": {"description": "Blob completed", "headers": {"Location": {"schema": {"type": "string"}}, "Docker-Content-Digest": {"schema": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}}}, "400": {"$ref": "#/components/responses/OCIError"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/OCIError"}, "409": {"$ref": "#/components/responses/OCIError"}, "416": {"$ref": "#/components/responses/OCIError"}}
+      },
+      "delete": {
+        "operationId": "cancelOCIUpload",
+        "security": [{"ociBearerAuth": []}],
+        "responses": {"204": {"description": "Upload cancelled"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/OCIError"}}
+      }
     },
     "/v2/{name}/manifests/{reference}": {
       "servers": [
@@ -393,10 +518,30 @@
           "401": {
             "$ref": "#/components/responses/OCIUnauthorized"
           },
+          "406": {
+            "$ref": "#/components/responses/OCIError"
+          },
           "404": {
             "$ref": "#/components/responses/ProtocolNotFound"
           }
         }
+      },
+      "head": {
+        "operationId": "headOCIManifest",
+        "security": [{"ociBearerAuth": []}, {}],
+        "responses": {"200": {"$ref": "#/components/responses/OCIManifest"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "406": {"$ref": "#/components/responses/OCIError"}, "404": {"$ref": "#/components/responses/ProtocolNotFound"}}
+      },
+      "put": {
+        "operationId": "putOCIManifest",
+        "security": [{"ociBearerAuth": []}],
+        "requestBody": {"required": true, "content": {"application/vnd.oci.image.manifest.v1+json": {"schema": {"type": "object"}}, "application/vnd.oci.image.index.v1+json": {"schema": {"type": "object"}}}},
+        "responses": {"201": {"description": "Manifest published", "headers": {"Location": {"schema": {"type": "string"}}, "Docker-Content-Digest": {"schema": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}}}, "400": {"$ref": "#/components/responses/OCIError"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "413": {"$ref": "#/components/responses/OCIError"}}
+      },
+      "delete": {
+        "operationId": "deleteOCIManifest",
+        "description": "Deletes an OCI manifest by digest. Deleting by a mutable tag is not supported.",
+        "security": [{"ociBearerAuth": []}],
+        "responses": {"202": {"description": "Manifest deleted"}, "400": {"$ref": "#/components/responses/OCIError"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/OCIError"}}
       },
       "x-gateway-visibility": "committed_only"
     },
@@ -425,6 +570,87 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/BinaryObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headOCIBlob",
+        "security": [{"ociBearerAuth": []}, {}],
+        "responses": {"200": {"$ref": "#/components/responses/BinaryObject"}, "401": {"$ref": "#/components/responses/OCIUnauthorized"}, "404": {"$ref": "#/components/responses/ProtocolNotFound"}}
+      },
+      "x-gateway-visibility": "committed_only"
+    },
+    "/v2/{name}/tags/list": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OCIName"
+        },
+        {
+          "name": "n",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100
+          }
+        },
+        {
+          "name": "last",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listOCITags",
+        "security": [
+          {
+            "ociBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OCITagList"
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headOCITags",
+        "security": [
+          {
+            "ociBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OCITagList"
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
           },
           "401": {
             "$ref": "#/components/responses/OCIUnauthorized"
@@ -867,6 +1093,41 @@
           }
         }
       },
+      "OCIUploadAccepted": {
+        "description": "Registry V2 upload in progress",
+        "headers": {
+          "Location": {"required": true, "schema": {"type": "string"}},
+          "Docker-Upload-UUID": {"required": true, "schema": {"type": "string", "format": "uuid"}},
+          "Range": {"schema": {"type": "string"}}
+        }
+      },
+      "OCITagList": {
+        "description": "OCI tag list ordered lexicographically. A Link header with rel=next is returned when more tags are available.",
+        "headers": {
+          "Link": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OCITagList"
+            }
+          }
+        }
+      },
+      "OCIError": {
+        "description": "OCI Registry error response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OCIError"
+            }
+          }
+        }
+      },
       "BasicUnauthorized": {
         "description": "Raw or Maven Basic authentication required when anonymous read policy is disabled",
         "headers": {
@@ -1013,6 +1274,50 @@
           "oci",
           "maven"
         ]
+      },
+      "OCITagList": {
+        "type": "object",
+        "required": [
+          "name",
+          "tags"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "OCIError": {
+        "type": "object",
+        "required": [
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       },
       "Repository": {
         "type": "object",
@@ -1188,71 +1493,10 @@
       "CreatePublishSession": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/CreateRawPublishSession"
-          },
-          {
-            "$ref": "#/components/schemas/CreateOCIPublishSession"
-          },
-          {
             "$ref": "#/components/schemas/CreateMavenPublishSession"
           }
-        ]
-      },
-      "CreateRawPublishSession": {
-        "type": "object",
-        "required": [
-          "format",
-          "coordinate",
-          "objects"
         ],
-        "additionalProperties": false,
-        "properties": {
-          "format": {
-            "type": "string",
-            "const": "raw"
-          },
-          "coordinate": {
-            "type": "string",
-            "description": "Canonical multi-segment Raw path."
-          },
-          "objects": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/DeclaredObject"
-            }
-          }
-        }
-      },
-      "CreateOCIPublishSession": {
-        "type": "object",
-        "required": [
-          "format",
-          "manifestDigest",
-          "objects"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "format": {
-            "type": "string",
-            "const": "oci"
-          },
-          "manifestDigest": {
-            "type": "string",
-            "pattern": "^sha256:[a-f0-9]{64}$"
-          },
-          "tag": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$"
-          },
-          "objects": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/DeclaredObject"
-            }
-          }
-        }
+        "description": "Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes."
       },
       "CreateMavenPublishSession": {
         "type": "object",
