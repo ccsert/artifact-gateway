@@ -29,8 +29,9 @@ tracker: local-markdown
   Repository 的成员适用 managed grants；拒绝候选在 cache/source 前跳过，耗尽时返回拒绝。
 - [Group 成员 grants 绑定与执行](tickets/09-group-member-grant-enforcement.md) — 已实现：
   OCI、Maven、Raw、Conan 的已绑定成员在缓存与 upstream 前统一执行 grants，来源缓存可撤权。
+- [Repository 列表 scoped 可见性](tickets/10-repository-list-visibility.md) — 已决策：
+  grants 仅授权已知 Repository 的操作，不授予列表、审计或跨资源发现能力。
 
 ## Fog
 
-- 管理面可见性与操作授权的最终边界取决于“Repository 列表 scoped visibility”结论；
-  例如是否应让 read-only grant 看到 repository metadata，仍需与管理 API 契约一起确认。
+- 当前没有已知但尚未成形的授权决策；后续变更应从完整实现与发布前验证中发现新的问题。

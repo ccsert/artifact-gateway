@@ -55,12 +55,15 @@ deleting policy state.
 | Write | `repositories:write` | Native Maven publication, OCI upload/manifest/delete, Raw PUT/DELETE |
 | Admin | `repositories:admin` | Repository grant replacement and future repository-scoped administrative mutations |
 
-The existing control-plane administrator requirement remains in place for V2
-repository/group lifecycle, retention, artifact, and publish-session API
-routes in the first rollout. Those APIs become grant-aware only after their
-per-resource visibility and error behavior are separately specified. A grant
-therefore cannot be used to escalate into control-plane administration during
-the protocol rollout.
+V2 separates global discovery from known-resource operations. A principal with
+an applicable `read` grant (including `write` and `admin`) may read the known
+Repository's detail, retention policy, artifacts, and publish sessions. A
+`write` grant may perform Repository-scoped mutations; `admin` manages grants.
+The Repository list, audit list, Repository/Group lifecycle, and other global
+management discovery routes remain administrator-only. A scoped grant is not a
+discovery grant: it never enumerates Repository metadata, groups, audit events,
+or pagination state. This preserves V1 management behavior and avoids turning
+an empty filtered list into an existence oracle.
 
 ## Groups and Proxies
 
