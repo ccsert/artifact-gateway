@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -21,13 +22,14 @@ type nativeRawHandler struct {
 	objects    OCIObjectStore
 	auth       Authenticator
 	authorizer RepositoryAuthorizer
+	audit      repository.Store
 }
 
 func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeRawHandler {
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{
+	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,
 		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
@@ -61,6 +63,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		operation = RepositoryRead
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return true
@@ -120,6 +123,17 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "raw", Resource: strings.TrimPrefix(r.URL.Path, "/raw/"+repo.Name+"/"), Operation: string(operation), Status: http.StatusUnauthorized, CacheDisposition: "bypass",
+		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
+	})
 }
 
 func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects OCIObjectStore) rawServeResult {

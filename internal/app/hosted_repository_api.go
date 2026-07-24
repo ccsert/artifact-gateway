@@ -101,6 +101,7 @@ type generatedRepositoryAPIAdapter struct {
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
 	authorizer        RepositoryAuthorizer
+	audit             repository.Store
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -468,6 +469,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
 		return
 	}
@@ -502,10 +504,22 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.Re
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
 		return
 	}
 	handler(principal)
+}
+
+func (h generatedRepositoryAPIAdapter) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "management", Resource: "repositories/" + repo.ID, Operation: string(operation), Status: http.StatusForbidden, CacheDisposition: "bypass",
+		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
+	})
 }
 
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {

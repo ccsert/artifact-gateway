@@ -97,6 +97,13 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if readerPutResponse.Code != http.StatusUnauthorized || readerPutResponse.Header().Get("WWW-Authenticate") == "" {
 		t.Fatalf("reader put=%d headers=%v", readerPutResponse.Code, readerPutResponse.Header())
 	}
+	if len(store.Audits) == 0 {
+		t.Fatal("expected authorization audit")
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "raw" {
+		t.Fatalf("audit=%#v", audit)
+	}
 }
 
 func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {

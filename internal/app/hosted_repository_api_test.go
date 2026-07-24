@@ -195,6 +195,13 @@ func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "reader", ""); response.Code != http.StatusForbidden {
 		t.Fatalf("reader delete=%d body=%s", response.Code, response.Body.String())
 	}
+	if len(store.Audits) == 0 {
+		t.Fatal("expected authorization audit")
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.Outcome != repository.AuditAccessDenied || audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "management" {
+		t.Fatalf("audit=%#v", audit)
+	}
 	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusAccepted {
 		t.Fatalf("writer delete=%d body=%s", response.Code, response.Body.String())
 	}

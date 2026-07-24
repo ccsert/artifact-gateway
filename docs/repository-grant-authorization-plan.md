@@ -92,8 +92,10 @@ Authorization denial must preserve the protocol's established response:
 - Management routes retain `application/problem+json` and their existing
   unauthenticated `access_denied` behavior.
 
-The evaluator's reason is recorded internally, not exposed through an
-artifact-not-found response or a principal-specific error message.
+The evaluator's source and reason are recorded in the audit log for
+authorization denials, not exposed through an artifact-not-found response or a
+principal-specific error message. The fields are bounded policy values, never
+tokens, credentials, or principal-derived labels.
 
 ## Rollout and Rollback
 

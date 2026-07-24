@@ -502,6 +502,13 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("write=%d body=%s", denied.Code, denied.Body.String())
 	}
+	if len(store.Audits) == 0 {
+		t.Fatal("expected authorization audit")
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "maven" {
+		t.Fatalf("audit=%#v", audit)
+	}
 }
 
 func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {

@@ -147,6 +147,13 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if readerStartResponse.Code != http.StatusUnauthorized || readerStartResponse.Header().Get("WWW-Authenticate") == "" {
 		t.Fatalf("reader start=%d headers=%v", readerStartResponse.Code, readerStartResponse.Header())
 	}
+	if len(store.Audits) == 0 {
+		t.Fatal("expected authorization audit")
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" || audit.Format != "oci" {
+		t.Fatalf("audit=%#v", audit)
+	}
 }
 
 func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {

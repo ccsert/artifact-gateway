@@ -350,8 +350,8 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead).Allowed {
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden})
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
@@ -441,7 +441,8 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite).Allowed {
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: coordinate, Operation: "commit", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
@@ -554,8 +555,8 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite).Allowed {
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden})
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}

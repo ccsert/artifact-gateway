@@ -275,6 +275,7 @@ type AuditRecord struct {
 	Actor                                                                                   string
 	OccurredAt                                                                              time.Time
 	Format, Resource, Representation, MemberType, UpstreamHost, Operation, CacheDisposition string
+	AuthorizationSource, AuthorizationReason                                                string
 	RequestID, TraceID                                                                      string
 	Status                                                                                  int
 	Bytes                                                                                   int64

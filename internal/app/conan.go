@@ -465,7 +465,7 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		if actor != "anonymous" {
 			if decision, managed := h.managedConanMemberDecision(ctx, principal, member); managed {
 				if !decision.Allowed {
-					h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditAccessDenied)
+					h.audit(withConanAuditAuthorization(ctx, decision), group.Name, path, member.Name, actor, repository.AuditAccessDenied)
 					accessDenied = true
 					continue
 				}
@@ -641,6 +641,7 @@ func (h ConanHandler) verifyFile(ctx context.Context, group repository.Group, pa
 
 type conanAuditState struct {
 	method, representation, cacheDisposition string
+	authorizationSource, authorizationReason string
 	bytes                                    int64
 	checksumFailure                          bool
 	status                                   int
@@ -668,6 +669,12 @@ func withConanAuditChecksum(ctx context.Context) context.Context {
 func withConanAuditStatus(ctx context.Context, status int) context.Context {
 	state, _ := ctx.Value(conanAuditStateKey{}).(conanAuditState)
 	state.status = status
+	return context.WithValue(ctx, conanAuditStateKey{}, state)
+}
+func withConanAuditAuthorization(ctx context.Context, decision AuthorizationDecision) context.Context {
+	state, _ := ctx.Value(conanAuditStateKey{}).(conanAuditState)
+	state.authorizationSource = decision.Source
+	state.authorizationReason = decision.Reason
 	return context.WithValue(ctx, conanAuditStateKey{}, state)
 }
 func conanCacheDisposition(cache *ConanCache) string {
@@ -708,7 +715,7 @@ func (h ConanHandler) audit(ctx context.Context, group, path, member, actor stri
 		status = state.status
 	}
 	bytes := state.bytes
-	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: path, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: "conan", Resource: path, Representation: state.representation, MemberType: string(selected.Type), UpstreamHost: upstreamHost, Operation: state.method, Status: status, CacheDisposition: state.cacheDisposition, Bytes: bytes, RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx)})
+	_ = h.Store.RecordAudit(ctx, repository.AuditRecord{GroupName: group, Repository: path, MemberName: member, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: "conan", Resource: path, Representation: state.representation, MemberType: string(selected.Type), UpstreamHost: upstreamHost, Operation: state.method, Status: status, CacheDisposition: state.cacheDisposition, Bytes: bytes, AuthorizationSource: state.authorizationSource, AuthorizationReason: state.authorizationReason, RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx)})
 	if h.Metrics != nil {
 		h.Metrics.recordConanAudit(outcome, state.bytes, state.checksumFailure)
 	}

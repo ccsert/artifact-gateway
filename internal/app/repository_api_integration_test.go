@@ -288,6 +288,30 @@ func TestPostgresConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
 	}
 }
 
+func TestPostgresAuditRetainsRepositoryGrantDecision(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	group := "grant-audit-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	if err := store.RecordAudit(context.Background(), repository.AuditRecord{
+		GroupName: group, Repository: group, Actor: "reader", Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "management", Resource: "repositories/id", Operation: "write", Status: http.StatusForbidden, CacheDisposition: "bypass",
+		AuthorizationSource: "repository_grants", AuthorizationReason: "scope_not_granted",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{GroupName: group})
+	if err != nil || len(audits) != 1 || audits[0].AuthorizationSource != "repository_grants" || audits[0].AuthorizationReason != "scope_not_granted" {
+		t.Fatalf("audits=%#v err=%v", audits, err)
+	}
+}
+
 func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

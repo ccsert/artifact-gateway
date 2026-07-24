@@ -677,6 +677,15 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 	if readerResponse.Code != http.StatusOK {
 		t.Fatalf("reader=%d body=%s", readerResponse.Code, readerResponse.Body.String())
 	}
+	foundAuthorizationAudit := false
+	for _, audit := range store.Audits {
+		if audit.MemberName == "denied" && audit.AuthorizationSource == "repository_grants" && audit.AuthorizationReason == "scope_not_granted" {
+			foundAuthorizationAudit = true
+		}
+	}
+	if !foundAuthorizationAudit {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
 	deniedRequest := httptest.NewRequest(http.MethodGet, path, nil)
 	deniedRequest.SetBasicAuth("other", "resolver-secret")
 	deniedResponse := httptest.NewRecorder()

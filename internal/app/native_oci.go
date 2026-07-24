@@ -27,13 +27,14 @@ type nativeOCIHandler struct {
 	objects    OCIObjectStore
 	auth       Authenticator
 	authorizer RepositoryAuthorizer
+	audit      repository.Store
 }
 
 func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeOCIHandler {
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{
+	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,
 		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
@@ -65,7 +66,9 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		writeOCIChallenge(w, r)
 		return true
 	}
-	if !h.authorizer.Authorize(r.Context(), p, repo, nativeOCIOperation(resource, r.Method)).Allowed {
+	operation := nativeOCIOperation(resource, r.Method)
+	if decision := h.authorizer.Authorize(r.Context(), p, repo, operation); !decision.Allowed {
+		h.recordAuthorizationDenial(r, p, repo, operation, decision)
 		writeOCIChallenge(w, r)
 		return true
 	}
@@ -84,6 +87,17 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 	return true
+}
+
+func (h nativeOCIHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "oci", Resource: r.URL.Path, Operation: string(operation), Status: http.StatusUnauthorized, CacheDisposition: "bypass",
+		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
+	})
 }
 
 func nativeOCIOperation(resource, method string) RepositoryOperation {
