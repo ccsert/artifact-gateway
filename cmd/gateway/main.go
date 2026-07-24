@@ -78,6 +78,7 @@ func main() {
 	runtimeContext := signalContext()
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
+	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeRawMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{
