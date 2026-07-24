@@ -325,7 +325,7 @@ func TestPostgresLegacyGroupsPreserveManagedRepositoryBindings(t *testing.T) {
 				t.Fatal(err)
 			}
 			groupName := tc.name + "-group-" + suffix
-			if err := tc.create(repository.Group{Name: groupName, Members: []repository.Member{{Name: "bound", Type: repository.MemberHosted, Endpoint: "https://" + tc.name + ".example", RepositoryID: repo.ID}}}); err != nil {
+			if err := tc.create(repository.Group{Name: groupName, CacheQuotaBytes: 1 << 20, Members: []repository.Member{{Name: "bound", Type: repository.MemberHosted, Endpoint: "https://" + tc.name + ".example", RepositoryID: repo.ID}}}); err != nil {
 				t.Fatal(err)
 			}
 			loaded, err := tc.load(groupName)
