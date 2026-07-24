@@ -25,10 +25,10 @@ tracker: local-markdown
   拒绝按固定 format、来源和原因计数，不包含 actor、Repository、路径或 endpoint 标签。
 - [审计 API 授权字段契约](tickets/06-audit-api-contract.md) — 已实现：V2 管理审计 API、
   OpenAPI 和 Console 统一暴露可选且有界的授权决策字段，V1 响应不变。
+- [Group 成员级授权语义](tickets/07-group-member-authorization.md) — 已决策：仅显式绑定
+  Repository 的成员适用 managed grants；拒绝候选在 cache/source 前跳过，耗尽时返回拒绝。
 
 ## Fog
 
-- Group 路由的“成员不可见”与“请求被拒绝”的最终外部语义，取决于现有解析器能否在
-  不泄漏成员存在性的前提下继续安全回退；先由成员级授权工作票验证。
 - 全局 Repository 列表是否应对 scoped principal 过滤，以及没有任何可见资源时应返回
   空列表还是保持管理面管理员入口，取决于管理面可见性契约工作票的决定。

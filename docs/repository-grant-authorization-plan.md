@@ -64,17 +64,41 @@ the protocol rollout.
 
 ## Groups and Proxies
 
-Native protocol routes identify a repository name, while group and proxy routes
-may resolve to several members. Authorization is evaluated against the actual
-hosted member before data is returned or modified. A request may use a group
-only if the principal is authorized for the selected member. The resolver must
-continue to use its existing anonymous-member filtering before authorization.
+Native protocol routes identify a repository name, while Group and Proxy routes
+may resolve to several members. Managed grants can be evaluated for a Group
+member only when its persisted `repositoryId` explicitly identifies an active,
+format-matching Repository. The runtime must never infer this relationship from
+a member name, Group name, path, or endpoint.
 
-For a group with multiple eligible members, an unauthorized member is skipped;
-the resolver may continue to a later authorized eligible member. A request that
-has no authorized eligible member is denied, not reported as a missing
-artifact. This prevents group membership from exposing an unauthorized
-repository through fallback behavior.
+Conan already carries this explicit binding. OCI, Maven, and Raw legacy Group
+members do not yet persist it and therefore retain their legacy static-policy
+behavior until the binding and per-candidate enforcement rollout is complete.
+This is intentional compatibility behavior, not an authorization fallback for
+an explicitly bound member.
+
+The target candidate algorithm is shared by all formats:
+
+| Candidate state | Result before cache or upstream access |
+| --- | --- |
+| Anonymous and not enabled by the existing Group/member policy | Exclude before authorization and cache lookup. |
+| Authenticated, explicitly bound, managed grant allows read | Candidate is eligible; inspect only that candidate's cache and then its source. |
+| Authenticated, explicitly bound, managed grant denies or lookup fails | Audit the bounded decision, increment grant-denial metrics, and skip the candidate. |
+| Authenticated, unbound legacy member | Apply the format's existing static-policy behavior unchanged. |
+
+If an authenticated request exhausts candidates solely because explicitly bound
+members were denied, it returns the format's existing access-denied response,
+never `404`. A later authorized candidate may still resolve successfully; this
+does not reveal the denied member because it is not fetched, cached, or named
+in the client response. A positive or negative cache entry is eligible only
+after its recorded source member has passed the same candidate authorization
+check. Authorization denials and failures are never cached.
+
+| Format | Current bound-member behavior | Target terminal denial |
+| --- | --- | --- |
+| OCI Group | Legacy group-level static policy only | Registry `403 DENIED` response |
+| Maven Group | Legacy group-level static policy only | Existing Maven `403` response |
+| Raw Group | Legacy group and first-member static policy | Existing Raw `403` response |
+| Conan Group | Bound members are skipped; unbound members use legacy policy | Existing Conan `403` response |
 
 Conan has no native hosted artifact endpoint, so a managed Conan Repository is
 an authorization target for a read-through remote. A Conan Group member opts
