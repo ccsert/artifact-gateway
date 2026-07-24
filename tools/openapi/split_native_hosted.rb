@@ -121,6 +121,7 @@ runtime_document = root_document.dup
 runtime_document["paths"] = paths.slice(
   "/repositories",
   "/repositories/{repositoryId}",
+  "/repositories/{repositoryId}/grants",
   "/groups",
   "/groups/{groupId}",
   "/groups/{groupId}/members",

@@ -83,6 +83,21 @@ type HostedGroupStore interface {
 	DeleteHostedGroup(context.Context, string) error
 }
 
+type RepositoryGrant struct {
+	Principal string   `json:"principal"`
+	Scopes    []string `json:"scopes"`
+}
+
+type RepositoryGrantSet struct {
+	Version string
+	Grants  []RepositoryGrant
+}
+
+type RepositoryGrantStore interface {
+	GetRepositoryGrants(context.Context, string) (RepositoryGrantSet, error)
+	ReplaceRepositoryGrants(context.Context, string, []RepositoryGrant, string) (RepositoryGrantSet, error)
+}
+
 // NativeMavenStore contains only committed Maven metadata. Object bytes live in
 // the object store; staging rows never participate in protocol reads.
 type NativeMavenStore interface {
@@ -295,6 +310,7 @@ type MemoryStore struct {
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
 	hostedGroups       map[string]HostedGroup
+	repositoryGrants   map[string]RepositoryGrantSet
 	idempotencyRecords map[string]idempotencyRecord
 	mavenSessions      map[string]MavenPublishSession
 	mavenUploads       map[string]map[string]string
@@ -714,7 +730,7 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), repositoryGrants: make(map[string]RepositoryGrantSet), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -1197,6 +1213,49 @@ func (s *MemoryStore) DeleteHostedGroup(_ context.Context, id string) error {
 	}
 	delete(s.hostedGroups, id)
 	return nil
+}
+
+func cloneRepositoryGrantSet(set RepositoryGrantSet) RepositoryGrantSet {
+	set.Grants = append([]RepositoryGrant(nil), set.Grants...)
+	for i := range set.Grants {
+		set.Grants[i].Scopes = append([]string(nil), set.Grants[i].Scopes...)
+	}
+	return set
+}
+
+func (s *MemoryStore) GetRepositoryGrants(_ context.Context, repositoryID string) (RepositoryGrantSet, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set, ok := s.repositoryGrants[repositoryID]
+	if !ok {
+		return RepositoryGrantSet{Version: "1", Grants: []RepositoryGrant{}}, nil
+	}
+	return cloneRepositoryGrantSet(set), nil
+}
+
+func (s *MemoryStore) ReplaceRepositoryGrants(_ context.Context, repositoryID string, grants []RepositoryGrant, expectedVersion string) (RepositoryGrantSet, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set, ok := s.repositoryGrants[repositoryID]
+	if !ok {
+		set.Version = "1"
+	}
+	if set.Version != expectedVersion {
+		return RepositoryGrantSet{}, ErrVersionConflict
+	}
+	set.Version = nextHostedGroupVersion(set.Version)
+	set.Grants = append([]RepositoryGrant{}, grants...)
+	for i := range set.Grants {
+		set.Grants[i].Scopes = append([]string(nil), set.Grants[i].Scopes...)
+	}
+	s.repositoryGrants[repositoryID] = set
+	return cloneRepositoryGrantSet(set), nil
 }
 
 func (s *MemoryStore) CreateRawGroup(_ context.Context, group Group) (Group, error) {

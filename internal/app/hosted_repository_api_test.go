@@ -115,6 +115,46 @@ func TestHostedGroupManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "grant-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	list := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/grants", nil)
+	authorize(list, "admin-secret")
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || listed.Header().Get("ETag") != "1" || listed.Body.String() != "[]\n" {
+		t.Fatalf("list=%d etag=%q body=%s", listed.Code, listed.Header().Get("ETag"), listed.Body.String())
+	}
+	replace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["repositories:read","repositories:write"]}]`))
+	authorize(replace, "admin-secret")
+	replace.Header.Set("If-Match", "1")
+	replaced := httptest.NewRecorder()
+	handler.ServeHTTP(replaced, replace)
+	if replaced.Code != http.StatusOK || replaced.Header().Get("ETag") != "2" || !strings.Contains(replaced.Body.String(), "build-agent") {
+		t.Fatalf("replace=%d etag=%q body=%s", replaced.Code, replaced.Header().Get("ETag"), replaced.Body.String())
+	}
+	stale := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[]`))
+	authorize(stale, "admin-secret")
+	stale.Header.Set("If-Match", "1")
+	staleResult := httptest.NewRecorder()
+	handler.ServeHTTP(staleResult, stale)
+	if staleResult.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale=%d body=%s", staleResult.Code, staleResult.Body.String())
+	}
+	invalid := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["unknown"]}]`))
+	authorize(invalid, "admin-secret")
+	invalid.Header.Set("If-Match", "2")
+	invalidResult := httptest.NewRecorder()
+	handler.ServeHTTP(invalidResult, invalid)
+	if invalidResult.Code != http.StatusBadRequest {
+		t.Fatalf("invalid=%d body=%s", invalidResult.Code, invalidResult.Body.String())
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()

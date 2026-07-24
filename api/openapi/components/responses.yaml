@@ -110,6 +110,11 @@ MemberList:
         "$ref": "../components/schemas.yaml#/MemberList"
 GrantList:
   description: Grants
+  headers:
+    ETag:
+      required: true
+      schema:
+        type: string
   content:
     application/json:
       schema:

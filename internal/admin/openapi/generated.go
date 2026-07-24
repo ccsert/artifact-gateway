@@ -88,6 +88,27 @@ func (e Format) Valid() bool {
 	}
 }
 
+// Defines values for GrantScopes.
+const (
+	RepositoriesAdmin GrantScopes = "repositories:admin"
+	RepositoriesRead  GrantScopes = "repositories:read"
+	RepositoriesWrite GrantScopes = "repositories:write"
+)
+
+// Valid indicates whether the value is a known member of the GrantScopes enum.
+func (e GrantScopes) Valid() bool {
+	switch e {
+	case RepositoriesAdmin:
+		return true
+	case RepositoriesRead:
+		return true
+	case RepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemCode.
 const (
 	AccessDenied        ProblemCode = "access_denied"
@@ -244,6 +265,18 @@ type DeletionState string
 // Format defines model for Format.
 type Format string
 
+// Grant defines model for Grant.
+type Grant struct {
+	Principal string        `json:"principal"`
+	Scopes    []GrantScopes `json:"scopes"`
+}
+
+// GrantScopes defines model for Grant.Scopes.
+type GrantScopes string
+
+// GrantList defines model for GrantList.
+type GrantList = []Grant
+
 // Group defines model for Group.
 type Group struct {
 	Format  Format             `json:"format"`
@@ -380,6 +413,11 @@ type ListArtifactsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ReplaceGrantsParams defines parameters for ReplaceGrants.
+type ReplaceGrantsParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // CreatePublishSessionParams defines parameters for CreatePublishSession.
 type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -396,6 +434,9 @@ type ReplaceGroupMembersJSONRequestBody = MemberList
 
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
+
+// ReplaceGrantsJSONRequestBody defines body for ReplaceGrants for application/json ContentType.
+type ReplaceGrantsJSONRequestBody = GrantList
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
@@ -483,6 +524,12 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams)
+
+	// (GET /repositories/{repositoryId}/grants)
+	ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /repositories/{repositoryId}/grants)
+	ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
@@ -1059,6 +1106,86 @@ func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListGrants(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceGrants operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceGrantsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceGrants(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreatePublishSession operation middleware
 func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r *http.Request) {
 
@@ -1248,6 +1375,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 
 	return m
@@ -1258,6 +1387,15 @@ type ArtifactJSONResponse Artifact
 type ArtifactListJSONResponse ArtifactPage
 
 type DeletionJSONResponse Deletion
+
+type GrantListResponseHeaders struct {
+	ETag string
+}
+type GrantListJSONResponse struct {
+	Body GrantList
+
+	Headers GrantListResponseHeaders
+}
 
 type GroupJSONResponse Group
 
@@ -1802,6 +1940,70 @@ func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.R
 	return err
 }
 
+type ListGrantsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type ListGrantsResponseObject interface {
+	VisitListGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListGrants200JSONResponse struct{ GrantListJSONResponse }
+
+func (response ListGrants200JSONResponse) VisitListGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceGrantsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceGrantsParams
+	Body         *ReplaceGrantsJSONRequestBody
+}
+
+type ReplaceGrantsResponseObject interface {
+	VisitReplaceGrantsResponse(w http.ResponseWriter) error
+}
+
+type ReplaceGrants200JSONResponse struct{ GrantListJSONResponse }
+
+func (response ReplaceGrants200JSONResponse) VisitReplaceGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceGrants412ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceGrants412ApplicationProblemPlusJSONResponse) VisitReplaceGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreatePublishSessionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreatePublishSessionParams
@@ -1889,6 +2091,12 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/grants)
+	ListGrants(ctx context.Context, request ListGrantsRequestObject) (ListGrantsResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/grants)
+	ReplaceGrants(ctx context.Context, request ReplaceGrantsRequestObject) (ReplaceGrantsResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
@@ -2350,6 +2558,66 @@ func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
 		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListGrants operation middleware
+func (sh *strictHandler) ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ListGrantsRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListGrants(ctx, request.(ListGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListGrantsResponseObject); ok {
+		if err := validResponse.VisitListGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceGrants operation middleware
+func (sh *strictHandler) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams) {
+	var request ReplaceGrantsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceGrantsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceGrants(ctx, request.(ReplaceGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceGrantsResponseObject); ok {
+		if err := validResponse.VisitReplaceGrantsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

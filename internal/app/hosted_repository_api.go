@@ -89,6 +89,7 @@ type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
 	sessions nativeMavenHandler
 	groups   repository.HostedGroupStore
+	grants   repository.RepositoryGrantStore
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -115,6 +116,70 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 	if _, ok := h.authorize(w, r); ok {
 		h.get(w, r, id.String())
 	}
+}
+
+func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list grants failed")
+		return
+	}
+	w.Header().Set("ETag", set.Version)
+	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var grants []repository.RepositoryGrant
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principals and valid scopes")
+		return
+	}
+	set, err := h.grants.ReplaceRepositoryGrants(r.Context(), repositoryID.String(), grants, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace grants failed")
+		return
+	}
+	w.Header().Set("ETag", set.Version)
+	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+}
+
+func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
+	principals := map[string]bool{}
+	for _, grant := range grants {
+		if strings.TrimSpace(grant.Principal) == "" || principals[grant.Principal] || len(grant.Scopes) == 0 {
+			return false
+		}
+		principals[grant.Principal] = true
+		scopes := map[string]bool{}
+		for _, scope := range grant.Scopes {
+			if !validScopes[scope] || scopes[scope] {
+				return false
+			}
+			scopes[scope] = true
+		}
+	}
+	return true
 }
 
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {

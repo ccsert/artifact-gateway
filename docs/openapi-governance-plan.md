@@ -65,7 +65,7 @@ production-backed `/api/v2` handler:
 | Maven artifact list | Generated | The existing committed-artifact store supplies the list response. |
 | Artifact detail and deletion | Deferred | `NativeMavenStore` has no lookup-by-artifact-ID or deletion/tombstone operation. |
 | Groups | Generated | V2 groups are a separate UUID-based aggregate over active Hosted Repositories; V1 OCI, Maven, Raw, and Conan groups remain protocol-specific and unchanged. |
-| Grants | Deferred | No repository-grant aggregate or persistence contract exists. |
+| Grants | Generated | Repository grant sets are versioned with `ETag`/`If-Match` and persist principal-to-scope mappings. |
 | Retention policies | Deferred | No retention-policy aggregate, optimistic-concurrency token, or execution lifecycle exists. |
 
 Adding a deferred path to `management-runtime.yaml` requires first adding the

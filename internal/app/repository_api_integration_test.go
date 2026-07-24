@@ -131,6 +131,14 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	if groupReplaced.Code != http.StatusOK || !strings.Contains(groupReplaced.Body.String(), `"version":"2"`) {
 		t.Fatalf("replace Hosted group = %d %s", groupReplaced.Code, groupReplaced.Body.String())
 	}
+	grantReplace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+hosted.ID+"/grants", strings.NewReader(`[{"principal":"integration-reader","scopes":["repositories:read"]}]`))
+	authorize(grantReplace, "admin-secret")
+	grantReplace.Header.Set("If-Match", "1")
+	grantsReplaced := httptest.NewRecorder()
+	handler.ServeHTTP(grantsReplaced, grantReplace)
+	if grantsReplaced.Code != http.StatusOK || grantsReplaced.Header().Get("ETag") != "2" {
+		t.Fatalf("replace repository grants = %d etag=%q body=%s", grantsReplaced.Code, grantsReplaced.Header().Get("ETag"), grantsReplaced.Body.String())
+	}
 	hostedDisabled := integrationRequest(handler, http.MethodDelete, "/api/v2/repositories/"+hosted.ID, "", "admin-secret")
 	if hostedDisabled.Code != http.StatusAccepted {
 		t.Fatalf("disable Hosted repository = %d %s", hostedDisabled.Code, hostedDisabled.Body.String())

@@ -13,6 +13,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
+  "/repositories/{repositoryId}/grants":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/groups":
     "$ref": "./management/groups.yaml#/groups"
   "/groups/{groupId}":
