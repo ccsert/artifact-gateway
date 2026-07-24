@@ -1333,6 +1333,52 @@ func TestPostgresAnonymousMigrationPreservesLegacyOCIAndMavenRows(t *testing.T) 
 	}
 }
 
+func TestPostgresMavenRetentionTombstonesExpiredExcessVersions(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-pg-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 1, MinimumVersions: 1}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	ids := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
+	for index, id := range ids {
+		createdAt := time.Now().UTC().Add(-time.Duration(72-index*24) * time.Hour)
+		coordinate := fmt.Sprintf("org.example:retained:%d.0.0", index+1)
+		if _, err = db.ExecContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state,created_at) VALUES ($1,$2,$3,$4,'visible',$5)`, id, repo.ID, coordinate, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", createdAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = (NativeMavenRetention{Store: store, Now: func() time.Time { return time.Now().UTC() }}).Collect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	visible, err := store.ListMavenArtifacts(ctx, repo.ID)
+	if err != nil || len(visible) != 1 || visible[0].ID != ids[2] {
+		t.Fatalf("visible artifacts=%#v err=%v", visible, err)
+	}
+	for _, id := range ids[:2] {
+		artifact, getErr := store.GetMavenArtifact(ctx, repo.ID, id)
+		if getErr != nil || artifact.State != "deleted" {
+			t.Fatalf("artifact=%#v err=%v", artifact, getErr)
+		}
+	}
+}
+
 func integrationRequest(handler http.Handler, method, target, body, token string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	authorize(request, token)
