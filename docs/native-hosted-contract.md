@@ -254,8 +254,9 @@ traceable until the retention collector verifies no committed reference exists.
 
 ## Executable contract
 
-`api/openapi/native-hosted-v1.json` is the versioned management and protocol
-contract source of truth. `go test ./contracts` parses and validates OpenAPI
-references, then checks group membership and Raw/OCI/Maven lifecycle fixtures.
-`make api-contract` runs that check; CI invokes the same target before the full
-test suite.
+`api/openapi/native-hosted.yaml` is the editable versioned management and
+protocol contract source. `api/openapi/native-hosted-v1.json` is its generated
+bundle for consumers. `go test ./contracts` parses both forms, validates local
+references, and checks group membership and Raw/OCI/Maven lifecycle fixtures.
+`make openapi-check` rebuilds the bundle and generated clients, then runs this
+contract gate; CI invokes it before the full test suite.

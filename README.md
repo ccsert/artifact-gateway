@@ -30,6 +30,24 @@ make native-raw-e2e
 make native-maven-e2e
 ```
 
+## OpenAPI contract workflow
+
+The editable Native Hosted contract starts at
+`api/openapi/native-hosted.yaml`. Shared components, management routes, and
+protocol overlays live in its sibling YAML directories. Do not edit
+`api/openapi/native-hosted-v1.json`, `console/src/client`, or
+`internal/admin/openapi/generated.go` by hand: they are generated artifacts.
+
+```sh
+make openapi-bundle
+make openapi-generate-admin
+make openapi-check
+```
+
+`make openapi-check` rebuilds the public JSON bundle, the generated Console
+client, and the generated repository-management Go contract; it then fails if
+any generated artifact differs from the worktree.
+
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an

@@ -20,13 +20,23 @@ and Conan. It is not a commitment to add new protocols.
   and manifest requests.
 - Maven is the only current format with a management publish session, and its
   visible publication boundary is the explicit coordinate commit route.
-- `api/openapi/native-hosted-v1.json` is the executable contract for
-  management and protocol routes. `go test ./contracts` must fail when the
-  OpenAPI contract drifts from these protocol decisions.
+- `api/openapi/native-hosted.yaml` and its `components`, `management`, and
+  `protocols` fragments are the editable contract source;
+  `native-hosted-v1.json` is the generated executable bundle. `go test
+  ./contracts` must fail when either form drifts from these protocol decisions.
 - `docs/native-hosted-contract.md` remains the architectural contract for
   metadata authority, object lifecycle, idempotency, and deletion semantics.
 - README should stay short and describe only the operator-facing protocol roots
   and fixture commands; this document owns the detailed compatibility matrix.
+
+## Normative References And Overlays
+
+| Protocol | Official reference | Gateway overlay |
+| --- | --- | --- |
+| OCI | [OCI Distribution Specification](https://distribution.github.io/distribution/spec/api/) | `api/openapi/protocols/oci.yaml` limits the Registry V2 surface to the implemented upload, blob, manifest, and tag routes. The handler tests and `make native-oci-e2e` are the executable overlay. |
+| Raw | No protocol-wide Raw repository HTTP standard | `api/openapi/protocols/raw.yaml` defines the Gateway route grammar, immutable object semantics, and Range behavior; `make native-raw-e2e` is the executable overlay. |
+| Maven | [Maven repository documentation](https://maven.apache.org/repositories/index.html) | `api/openapi/protocols/maven.yaml` records standard PUT staging plus the Gateway-specific coordinate commit. Maven/Gradle fixtures enforce it. |
+| Conan | [Conan 2 remote documentation](https://docs.conan.io/2/reference/commands/remote.html) | `api/openapi/protocols/conan.yaml` declares Group/Proxy read-through only; no native Hosted write routes are generated or exposed. |
 
 ## Low-risk Go package boundary plan
 
