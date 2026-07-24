@@ -30,6 +30,9 @@ const (
 	FormatRaw   Format = "raw"
 	FormatOCI   Format = "oci"
 	FormatMaven Format = "maven"
+	// FormatConan is a managed authorization target for Conan Group members.
+	// Conan remains read-through only; this format has no native artifact route.
+	FormatConan Format = "conan"
 )
 
 type RepositoryState string
@@ -239,6 +242,7 @@ type Member struct {
 	Position     int        `json:"position"`
 	Anonymous    bool       `json:"anonymous"`
 	AllowedHosts []string   `json:"allowedHosts,omitempty"`
+	RepositoryID string     `json:"repositoryId,omitempty"`
 }
 
 type Group struct {

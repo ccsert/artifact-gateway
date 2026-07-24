@@ -5,6 +5,7 @@ Format:
   - raw
   - oci
   - maven
+  - conan
 OCITagList:
   type: object
   required:

@@ -264,6 +264,30 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 }
 
+func TestPostgresConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "conan-binding-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupName := "conan-binding-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	if _, err := store.CreateConanGroup(context.Background(), repository.Group{Name: groupName, Members: []repository.Member{{Name: "remote", Type: repository.MemberProxy, Endpoint: "https://conan.example", AllowedHosts: []string{"conan.example"}, RepositoryID: repo.ID}}}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.GetConanGroup(context.Background(), groupName)
+	if err != nil || len(loaded.Members) != 1 || loaded.Members[0].RepositoryID != repo.ID {
+		t.Fatalf("loaded=%#v err=%v", loaded, err)
+	}
+}
+
 func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

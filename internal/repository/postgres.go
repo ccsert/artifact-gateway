@@ -1509,7 +1509,7 @@ func (s *PostgresStore) CreateConanGroup(ctx context.Context, group Group) (Grou
 		return Group{}, err
 	}
 	for _, member := range group.Members {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO conan_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::text[], '{}'::text[]))`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO conan_group_members (group_name, name, member_type, endpoint, position, anonymous, allowed_hosts, repository_id) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::text[], '{}'::text[]),NULLIF($8,'')::uuid)`, group.Name, member.Name, member.Type, member.Endpoint, member.Position, member.Anonymous, member.AllowedHosts, member.RepositoryID); err != nil {
 			return Group{}, err
 		}
 	}
@@ -1526,7 +1526,7 @@ func (s *PostgresStore) GetConanGroup(ctx context.Context, name string) (Group, 
 		}
 		return Group{}, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, array_to_json(allowed_hosts) FROM conan_group_members WHERE group_name=$1 ORDER BY position`, name)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, member_type, endpoint, position, anonymous, array_to_json(allowed_hosts), COALESCE(repository_id::text, '') FROM conan_group_members WHERE group_name=$1 ORDER BY position`, name)
 	if err != nil {
 		return Group{}, err
 	}
@@ -1534,7 +1534,7 @@ func (s *PostgresStore) GetConanGroup(ctx context.Context, name string) (Group, 
 	for rows.Next() {
 		var member Member
 		var allowedHosts []byte
-		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &allowedHosts); err != nil {
+		if err := rows.Scan(&member.Name, &member.Type, &member.Endpoint, &member.Position, &member.Anonymous, &allowedHosts, &member.RepositoryID); err != nil {
 			return Group{}, err
 		}
 		if err := json.Unmarshal(allowedHosts, &member.AllowedHosts); err != nil {

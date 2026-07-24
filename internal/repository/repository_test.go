@@ -46,3 +46,22 @@ func TestMemoryHostedGroupVersionAndIdempotency(t *testing.T) {
 		t.Fatalf("stale replace err=%v", err)
 	}
 }
+
+func TestMemoryConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
+	store := NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), HostedRepository{ID: "conan-repository", Name: "central-remote", Format: FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.CreateConanGroup(context.Background(), Group{Name: "central", Members: []Member{{Name: "remote", Type: MemberProxy, Endpoint: "https://conan.example", RepositoryID: repo.ID}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Members) != 1 || created.Members[0].RepositoryID != repo.ID {
+		t.Fatalf("created=%#v", created)
+	}
+	loaded, err := store.GetConanGroup(context.Background(), "central")
+	if err != nil || len(loaded.Members) != 1 || loaded.Members[0].RepositoryID != repo.ID {
+		t.Fatalf("loaded=%#v err=%v", loaded, err)
+	}
+}

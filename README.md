@@ -51,7 +51,7 @@ any generated artifact differs from the worktree.
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an
-idempotency key and a `format` of `oci`, `raw`, or `maven`. OCI repositories
+idempotency key and a `format` of `oci`, `raw`, `maven`, or `conan`. OCI repositories
 are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`.
 

@@ -37,22 +37,35 @@ func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}
 	}
+	if decision, managed := a.ManagedDecision(ctx, principal, target, operation); managed {
+		return decision
+	}
+	return a.authorizeLegacyForTarget(principal, target, operation)
+}
+
+// ManagedDecision evaluates only an explicitly managed grant set. Callers
+// serving legacy Groups use this to distinguish an unbound member from an
+// explicit grant denial without weakening their existing static policy.
+func (a RepositoryAuthorizer) ManagedDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation) (AuthorizationDecision, bool) {
+	if principal.Admin {
+		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}, true
+	}
 	if a.Grants == nil {
-		return a.authorizeLegacyForTarget(principal, target, operation)
+		return AuthorizationDecision{}, false
 	}
 	set, err := a.Grants.GetRepositoryGrants(ctx, target.ID)
 	if err != nil {
-		return AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}
+		return AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}, true
 	}
-	if isManagedRepositoryGrantSet(set.Version) {
-		for _, grant := range set.Grants {
-			if grant.Principal == principal.Actor && grantAllows(grant.Scopes, operation) {
-				return AuthorizationDecision{Allowed: true, Source: "repository_grants", Reason: "scope_granted"}
-			}
+	if !isManagedRepositoryGrantSet(set.Version) {
+		return AuthorizationDecision{}, false
+	}
+	for _, grant := range set.Grants {
+		if grant.Principal == principal.Actor && grantAllows(grant.Scopes, operation) {
+			return AuthorizationDecision{Allowed: true, Source: "repository_grants", Reason: "scope_granted"}, true
 		}
-		return AuthorizationDecision{Source: "repository_grants", Reason: "scope_not_granted"}
 	}
-	return a.authorizeLegacyForTarget(principal, target, operation)
+	return AuthorizationDecision{Source: "repository_grants", Reason: "scope_not_granted"}, true
 }
 
 func (a RepositoryAuthorizer) authorizeLegacyForTarget(principal Principal, target repository.HostedRepository, operation RepositoryOperation) AuthorizationDecision {

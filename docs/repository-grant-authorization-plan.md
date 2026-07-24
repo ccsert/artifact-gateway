@@ -76,6 +76,13 @@ has no authorized eligible member is denied, not reported as a missing
 artifact. This prevents group membership from exposing an unauthorized
 repository through fallback behavior.
 
+Conan has no native hosted artifact endpoint, so a managed Conan Repository is
+an authorization target for a read-through remote. A Conan Group member opts
+into grant evaluation by carrying its stable `repositoryId`, which must refer
+to an active `format: conan` Repository. Unbound legacy members retain their
+existing static policy. The runtime never infers this relationship from a
+member name or endpoint.
+
 ## Protocol Contract
 
 Authorization denial must preserve the protocol's established response:

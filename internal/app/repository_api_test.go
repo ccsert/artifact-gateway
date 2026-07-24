@@ -249,6 +249,28 @@ func TestConanGroupAPIRequiresProxyAllowlistAndDefaultsQuota(t *testing.T) {
 	}
 }
 
+func TestConanGroupAPIValidatesManagedRepositoryBinding(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "conan-repository", Name: "conan-remote", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	create := func(group, repositoryID string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/conan/groups", strings.NewReader(`{"name":"`+group+`","members":[{"name":"remote","type":"hosted","endpoint":"https://conan.example","repositoryId":"`+repositoryID+`"}]}`))
+		authorize(r, "admin-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := create("central", repo.ID); response.Code != http.StatusCreated {
+		t.Fatalf("valid binding=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := create("invalid", "missing"); response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid binding=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestResolverTokenCannotManageGroups(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"test://available","position":0}]}`))

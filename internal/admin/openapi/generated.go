@@ -69,6 +69,7 @@ func (e DeletionState) Valid() bool {
 
 // Defines values for Format.
 const (
+	FormatConan Format = "conan"
 	FormatMaven Format = "maven"
 	FormatOci   Format = "oci"
 	FormatRaw   Format = "raw"
@@ -77,6 +78,8 @@ const (
 // Valid indicates whether the value is a known member of the Format enum.
 func (e Format) Valid() bool {
 	switch e {
+	case FormatConan:
+		return true
 	case FormatMaven:
 		return true
 	case FormatOci:

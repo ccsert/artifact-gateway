@@ -7,7 +7,7 @@ current V2 binary.
 ## Scope and terms
 
 A **Repository** is the durable policy, authorization, retention, and storage
-namespace for exactly one format (`raw`, `oci`, or `maven`). A Repository has
+namespace for exactly one format (`raw`, `oci`, `maven`, or `conan`). A Repository has
 one Hosted source. A **Group** is an ordered, read-only view of Repository
 members of the same format; it does not own artifact bytes. A **member** is the
 membership edge between a Group and a Repository, with a unique position. An
@@ -15,7 +15,9 @@ membership edge between a Group and a Repository, with a unique position. An
 canonical path, an OCI `repository@sha256:<digest>` (tags are mutable refs), or
 a Maven `groupId:artifactId:version[:extension[:classifier]]`.
 
-Hosted write contracts are format-specific. Raw uses standard
+Hosted write contracts are format-specific. A `conan` Repository is an
+authorization target for a Conan read-through Group member and does not expose
+native artifact storage or publication routes. Raw uses standard
 `PUT /raw/{repository}/{path}` and makes the verified path visible when the
 object reference is committed. OCI uses the Registry V2 upload, blob, manifest,
 and tag routes directly. Maven is the only current format that exposes a

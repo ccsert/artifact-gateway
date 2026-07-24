@@ -285,6 +285,8 @@ func (c *ConanCache) proxyAllowed(member repository.Member) bool {
 
 type ConanHandler struct {
 	Store         repository.ConanStore
+	Repositories  repository.HostedRepositoryStore
+	Authorizer    RepositoryAuthorizer
 	Authenticator Authenticator
 	Client        ConanClient
 	Cache         *ConanCache
@@ -318,7 +320,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if authenticated && h.Authenticator.CanReadMavenRepository(principal, group) {
+		if authenticated && h.canReadConanGroup(r.Context(), principal, configured) {
 			w.Header().Set("X-Conan-Server-Capabilities", "revisions")
 			h.audit(withConanAuditDisposition(withConanAuditStatus(r.Context(), http.StatusOK), "bypass"), group, "", "", principal.Actor, repository.AuditResolved)
 			w.WriteHeader(http.StatusOK)
@@ -353,7 +355,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-		if !h.Authenticator.CanReadMavenRepository(principal, group) {
+		if !h.canReadConanGroup(r.Context(), principal, configured) {
 			h.audit(withConanAuditStatus(r.Context(), http.StatusForbidden), group, "", "", principal.Actor, repository.AuditAccessDenied)
 			http.Error(w, "repository read permission required", http.StatusForbidden)
 			return
@@ -385,15 +387,15 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	if p.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(p, group) {
-		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
-		http.Error(w, "repository read permission required", http.StatusForbidden)
-		return
-	}
 	g, err := h.Store.GetConanGroup(r.Context(), group)
 	if err != nil || !g.Enabled {
 		h.audit(r.Context(), group, path, "", p.Actor, auditOutcome(err))
 		http.NotFound(w, r)
+		return
+	}
+	if p.Actor != "anonymous" && !h.canReadConanGroup(r.Context(), p, g) {
+		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditAccessDenied)
+		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
 	if h.Metrics != nil {
@@ -449,7 +451,7 @@ func (h ConanHandler) authenticate(request *http.Request) (Principal, bool) {
 func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path, kind string, headers http.Header, principal Principal) (conanCacheEntry, int, error) {
 	actor := principal.Actor
 	metadata := kind == "metadata"
-	hadFailure, denied := false, false
+	hadFailure, denied, accessDenied := false, false, false
 	members := group.Members
 	if actor == "anonymous" {
 		members = make([]repository.Member, 0, len(group.Members))
@@ -460,9 +462,17 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 	}
 	for _, member := range prioritizeHosted(members) {
-		if actor != "anonymous" && !h.Authenticator.CanReadRepository(principal, member.Name) {
-			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditAccessDenied)
-			return conanCacheEntry{}, http.StatusForbidden, errors.New("repository read permission required")
+		if actor != "anonymous" {
+			if decision, managed := h.managedConanMemberDecision(ctx, principal, member); managed {
+				if !decision.Allowed {
+					h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditAccessDenied)
+					accessDenied = true
+					continue
+				}
+			} else if !h.Authenticator.CanReadRepository(principal, member.Name) {
+				h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditAccessDenied)
+				return conanCacheEntry{}, http.StatusForbidden, errors.New("repository read permission required")
+			}
 		}
 		key := ""
 		representation := conanRepresentation(headers)
@@ -573,10 +583,39 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 	if hadFailure {
 		return conanCacheEntry{}, http.StatusBadGateway, errors.New("upstream repository unavailable")
 	}
+	if accessDenied {
+		return conanCacheEntry{}, http.StatusForbidden, errors.New("repository read permission required")
+	}
 	if denied {
 		return conanCacheEntry{}, http.StatusForbidden, errors.New("upstream repository is not allowed")
 	}
 	return conanCacheEntry{}, http.StatusNotFound, errors.New("Conan resource not found")
+}
+
+func (h ConanHandler) canReadConanGroup(ctx context.Context, principal Principal, group repository.Group) bool {
+	if h.Authenticator.CanReadMavenRepository(principal, group.Name) {
+		return true
+	}
+	for _, member := range group.Members {
+		if decision, managed := h.managedConanMemberDecision(ctx, principal, member); managed && decision.Allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func (h ConanHandler) managedConanMemberDecision(ctx context.Context, principal Principal, member repository.Member) (AuthorizationDecision, bool) {
+	if member.RepositoryID == "" {
+		return AuthorizationDecision{}, false
+	}
+	if h.Repositories == nil {
+		return AuthorizationDecision{Source: "repository_grants", Reason: "repository_lookup_unavailable"}, true
+	}
+	repo, err := h.Repositories.GetHostedRepository(ctx, member.RepositoryID)
+	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+		return AuthorizationDecision{Source: "repository_grants", Reason: "repository_lookup_failed"}, true
+	}
+	return h.Authorizer.ManagedDecision(ctx, principal, repo, RepositoryRead)
 }
 func conanRepresentation(headers http.Header) string { return strings.TrimSpace(headers.Get("Accept")) }
 

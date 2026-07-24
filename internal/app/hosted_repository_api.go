@@ -611,7 +611,7 @@ func (h hostedRepositoryAPIHandler) disable(w http.ResponseWriter, r *http.Reque
 }
 
 func validHostedRepository(request createHostedRepositoryRequest) bool {
-	return hostedRepositoryName.MatchString(request.Name) && (request.Format == repository.FormatRaw || request.Format == repository.FormatOCI || request.Format == repository.FormatMaven)
+	return hostedRepositoryName.MatchString(request.Name) && (request.Format == repository.FormatRaw || request.Format == repository.FormatOCI || request.Format == repository.FormatMaven || request.Format == repository.FormatConan)
 }
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {

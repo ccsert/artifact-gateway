@@ -633,8 +633,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		}
 		RawHandler{Store: store, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 	})})
-	mux.Handle("/conan/v2/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
-	mux.Handle("/conan/", ConanHandler{Store: store, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache})
+	conan := ConanHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache}
+	mux.Handle("/conan/v2/", conan)
+	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return tracedHTTPHandler(mux)
 }
@@ -762,7 +763,7 @@ type mavenAPIHandler struct {
 }
 
 type conanAPIHandler struct {
-	store         repository.ConanStore
+	store         GatewayStore
 	authenticator Authenticator
 }
 type conanCacheInvalidationHandler struct {
@@ -973,6 +974,10 @@ func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := validateConanGroup(group); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
+			return
+		}
+		if err := validateConanGroupRepositoryBindings(r.Context(), a.store, group); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_group", err.Error())
 			return
 		}
@@ -1278,6 +1283,19 @@ func validateConanGroup(group repository.Group) error {
 	for _, member := range group.Members {
 		if member.Type == repository.MemberProxy && len(member.AllowedHosts) == 0 {
 			return errors.New("proxy members require a non-empty allowlist")
+		}
+	}
+	return nil
+}
+
+func validateConanGroupRepositoryBindings(ctx context.Context, store repository.HostedRepositoryStore, group repository.Group) error {
+	for _, member := range group.Members {
+		if member.RepositoryID == "" {
+			continue
+		}
+		repo, err := store.GetHostedRepository(ctx, member.RepositoryID)
+		if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+			return errors.New("member repositoryId must reference an active Conan repository")
 		}
 	}
 	return nil

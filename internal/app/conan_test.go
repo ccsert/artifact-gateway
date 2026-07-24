@@ -637,6 +637,55 @@ func TestConanAuthenticatedReadChecksMemberAuthorizationBeforeCache(t *testing.T
 	}
 }
 
+func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	deniedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "conan-denied", Name: "conan-denied", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "conan-allowed", Name: "conan-allowed", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), deniedRepository.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), allowedRepository.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{
+		{Name: "denied", Type: repository.MemberHosted, Endpoint: "https://denied.example", Position: 0, RepositoryID: deniedRepository.ID},
+		{Name: "allowed", Type: repository.MemberHosted, Endpoint: "https://allowed.example", Position: 1, RepositoryID: allowedRepository.ID},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"reader": {}}}
+	handler := ConanHandler{
+		Store:         store,
+		Repositories:  store,
+		Authorizer:    RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		Authenticator: authenticator,
+		Client:        conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":1}]}`},
+		Cache:         NewConanCache(nil),
+	}
+	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	readerRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	readerRequest.SetBasicAuth("reader", "resolver-secret")
+	readerResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerResponse, readerRequest)
+	if readerResponse.Code != http.StatusOK {
+		t.Fatalf("reader=%d body=%s", readerResponse.Code, readerResponse.Body.String())
+	}
+	deniedRequest := httptest.NewRequest(http.MethodGet, path, nil)
+	deniedRequest.SetBasicAuth("other", "resolver-secret")
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, deniedRequest)
+	if deniedResponse.Code != http.StatusForbidden {
+		t.Fatalf("denied=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+}
+
 func TestConanBasicAuthenticationRespectsGroupAndMemberPermissions(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example"}
