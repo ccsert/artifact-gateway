@@ -20,12 +20,12 @@ import (
 )
 
 // ConanClient is deliberately narrower than a generic HTTP client: client
-// credentials are applied only to Hosted members and never forwarded to Proxy.
+// credentials are never forwarded to an upstream member.
 type ConanClient interface {
 	FetchConan(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
 }
 
-func (c GiteaClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+func (c UpstreamClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	if member.Type == repository.MemberProxy {
 		proxyURL, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
 		if err != nil {
@@ -40,7 +40,7 @@ func (c GiteaClient) FetchConan(ctx context.Context, method string, member repos
 	return c.fetchConan(ctx, c.HTTPClient, method, member, path, headers)
 }
 
-func (c GiteaClient) fetchConan(ctx context.Context, client *http.Client, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+func (c UpstreamClient) fetchConan(ctx context.Context, client *http.Client, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	u, err := url.Parse(strings.TrimRight(member.Endpoint, "/") + "/conans/" + path)
 	if err != nil {
 		return nil, fmt.Errorf("parse Conan endpoint: %w", err)
@@ -51,9 +51,6 @@ func (c GiteaClient) fetchConan(ctx context.Context, client *http.Client, method
 	}
 	if accept := headers.Get("Accept"); accept != "" {
 		r.Header.Set("Accept", accept)
-	}
-	if member.Type == repository.MemberHosted {
-		r.SetBasicAuth(c.Username, c.Token)
 	}
 	client = tracedHTTPClient(client)
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -493,6 +490,27 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditProxyDenied)
 			denied = true
 			continue
+		}
+		if h.Cache != nil && h.Cache.coordinator != nil && kind != "file" {
+			release, lockErr := acquireCacheRequestLock(ctx, h.Cache.coordinator, key)
+			if lockErr != nil {
+				return conanCacheEntry{}, http.StatusServiceUnavailable, errors.New("unable to coordinate Conan cache fetch")
+			}
+			defer release()
+			if e, ok := h.Cache.load(ctx, key); ok {
+				if e.status == http.StatusNotFound {
+					if h.Metrics != nil {
+						h.Metrics.recordConanNegativeCacheHit()
+					}
+					h.audit(withConanAuditDisposition(ctx, "hit"), group.Name, path, member.Name, actor, repository.AuditNotFound)
+					continue
+				}
+				if h.Metrics != nil {
+					h.Metrics.recordConanCacheHit()
+				}
+				e.cacheDisposition = "hit"
+				return e, http.StatusOK, nil
+			}
 		}
 		response, err := h.Client.FetchConan(ctx, http.MethodGet, member, path, headers)
 		if err != nil {

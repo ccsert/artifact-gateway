@@ -21,6 +21,20 @@ func loadNativeHostedSpec(t *testing.T) *openapi3.T {
 	return spec
 }
 
+func loadNativeHostedSource(t *testing.T) *openapi3.T {
+	t.Helper()
+	loader := openapi3.NewLoader()
+	loader.IsExternalRefsAllowed = true
+	spec, err := loader.LoadFromFile(filepath.Join("..", "api", "openapi", "native-hosted.yaml"))
+	if err != nil {
+		t.Fatalf("load OpenAPI source: %v", err)
+	}
+	if err := spec.Validate(loader.Context); err != nil {
+		t.Fatalf("validate OpenAPI source: %v", err)
+	}
+	return spec
+}
+
 func operation(t *testing.T, spec *openapi3.T, path, method string) *openapi3.Operation {
 	t.Helper()
 	item := spec.Paths.Find(path)
@@ -31,10 +45,16 @@ func operation(t *testing.T, spec *openapi3.T, path, method string) *openapi3.Op
 	switch method {
 	case "GET":
 		op = item.Get
+	case "HEAD":
+		op = item.Head
 	case "PUT":
 		op = item.Put
 	case "POST":
 		op = item.Post
+	case "PATCH":
+		op = item.Patch
+	case "DELETE":
+		op = item.Delete
 	default:
 		t.Fatalf("unsupported method %s", method)
 	}
@@ -65,6 +85,8 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		"/repositories/{repositoryId}/publish-sessions",
 		"/publish-sessions/{sessionId}:commit",
 		"/repository/maven/{repository}/coordinates/{coordinate}:commit",
+		"/v2/{name}/blobs/uploads/",
+		"/v2/{name}/blobs/uploads/{uuid}",
 		"/repositories/{repositoryId}/artifacts/{artifactId}",
 	} {
 		if spec.Paths.Find(path) == nil {
@@ -80,18 +102,63 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		}
 	}
 	publish := spec.Components.Schemas["CreatePublishSession"].Value
-	if len(publish.OneOf) != 3 {
-		t.Fatalf("publish session variants=%d want 3", len(publish.OneOf))
+	if len(publish.OneOf) != 1 {
+		t.Fatalf("publish session variants=%d want 1 Maven-only variant", len(publish.OneOf))
 	}
-	for _, schema := range []string{"CreateRawPublishSession", "CreateOCIPublishSession", "CreateMavenPublishSession"} {
+	for _, schema := range []string{"CreateMavenPublishSession"} {
 		if spec.Components.Schemas[schema] == nil {
 			t.Errorf("missing format-specific publish schema %s", schema)
+		}
+	}
+	for _, schema := range []string{"CreateRawPublishSession", "CreateOCIPublishSession"} {
+		if spec.Components.Schemas[schema] != nil {
+			t.Errorf("Raw/OCI publish session schema %s must not be exposed", schema)
 		}
 	}
 	problem := spec.Components.Schemas["Problem"].Value
 	for _, field := range []string{"code", "requestId"} {
 		if !contains(problem.Required, field) {
 			t.Errorf("Problem missing required %s", field)
+		}
+	}
+	generated, err := os.ReadFile(filepath.Join("..", "internal", "admin", "openapi", "generated.go"))
+	if err != nil {
+		t.Fatalf("read generated management contract: %v", err)
+	}
+	for _, declaration := range []string{"type ServerInterface interface", "type StrictServerInterface interface", "ListRepositories", "CreateRepository", "GetRepository", "DeleteRepository"} {
+		if !strings.Contains(string(generated), declaration) {
+			t.Errorf("generated management contract is missing %q", declaration)
+		}
+	}
+}
+
+func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
+	source := loadNativeHostedSource(t)
+	bundle := loadNativeHostedSpec(t)
+	if source.OpenAPI != "3.1.0" || bundle.OpenAPI != source.OpenAPI {
+		t.Fatalf("source=%q bundle=%q", source.OpenAPI, bundle.OpenAPI)
+	}
+	if len(source.Paths.Map()) != len(bundle.Paths.Map()) {
+		t.Fatalf("source paths=%d bundle paths=%d", len(source.Paths.Map()), len(bundle.Paths.Map()))
+	}
+	for path := range bundle.Paths.Map() {
+		if source.Paths.Find(path) == nil {
+			t.Errorf("source is missing bundled path %s", path)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join("..", "api", "openapi", "components", "schemas.yaml"),
+		filepath.Join("..", "api", "openapi", "components", "parameters.yaml"),
+		filepath.Join("..", "api", "openapi", "components", "responses.yaml"),
+		filepath.Join("..", "api", "openapi", "management", "repositories.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "oci.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "raw.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "maven.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "conan.yaml"),
+		filepath.Join("..", "internal", "admin", "openapi", "generated.go"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("required generated-contract input %s: %v", path, err)
 		}
 	}
 }
@@ -165,9 +232,12 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 		catchAll           string
 		securitySchemes    []string
 	}{
-		{"Raw multi-segment path", "/raw/{repository}/content/{path}", "GET", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}},
-		{"OCI manifest by tag or digest", "/v2/{name}/manifests/{reference}", "GET", []string{"200", "401", "404"}, "", []string{"ociBearerAuth"}},
+		{"Raw multi-segment path", "/raw/{repository}/{path}", "GET", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}},
+		{"Raw multi-segment path metadata", "/raw/{repository}/{path}", "HEAD", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}},
+		{"OCI manifest by tag or digest", "/v2/{name}/manifests/{reference}", "GET", []string{"200", "401", "404", "406"}, "", []string{"ociBearerAuth"}},
 		{"OCI blob by digest", "/v2/{name}/blobs/{digest}", "GET", []string{"200", "401", "404"}, "", []string{"ociBearerAuth"}},
+		{"OCI tag list", "/v2/{name}/tags/list", "GET", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}},
+		{"OCI tag list metadata", "/v2/{name}/tags/list", "HEAD", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}},
 		{"Maven POM component metadata path", "/repository/maven/{repository}/{assetPath}", "GET", []string{"200", "401", "404"}, "assetPath", []string{"protocolBasicAuth", "protocolBearerAuth"}},
 	}
 	for _, fixture := range fixtures {
@@ -197,6 +267,38 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 			}
 		})
 	}
+	rawPut := operation(t, spec, "/raw/{repository}/{path}", "PUT")
+	for _, status := range []string{"201", "401", "422"} {
+		requireResponse(t, rawPut, status)
+	}
+	for _, fixture := range []struct {
+		method string
+		status []string
+	}{
+		{"POST", []string{"201", "202", "400", "401"}},
+		{"GET", []string{"204", "401", "404"}},
+		{"PATCH", []string{"202", "401", "404", "416"}},
+		{"PUT", []string{"201", "400", "401", "404", "409", "416"}},
+		{"DELETE", []string{"204", "401", "404"}},
+	} {
+		op := operation(t, spec, "/v2/{name}/blobs/uploads/"+map[bool]string{true: "", false: "{uuid}"}[fixture.method == "POST"], fixture.method)
+		for _, status := range fixture.status {
+			requireResponse(t, op, status)
+		}
+	}
+	for _, fixture := range []struct {
+		method string
+		status []string
+	}{{"HEAD", []string{"200", "401", "406", "404"}}, {"PUT", []string{"201", "400", "401", "413"}}, {"DELETE", []string{"202", "400", "401", "404"}}} {
+		op := operation(t, spec, "/v2/{name}/manifests/{reference}", fixture.method)
+		for _, status := range fixture.status {
+			requireResponse(t, op, status)
+		}
+	}
+	rawDelete := operation(t, spec, "/raw/{repository}/{path}", "DELETE")
+	for _, status := range []string{"204", "401", "404"} {
+		requireResponse(t, rawDelete, status)
+	}
 	ociManifest := operation(t, spec, "/v2/{name}/manifests/{reference}", "GET")
 	if requireResponse(t, ociManifest, "200").Headers["Docker-Content-Digest"] == nil {
 		t.Error("OCI manifest must return Docker-Content-Digest")
@@ -206,7 +308,7 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 	if challenge == nil || challenge.Value.Schema.Value.Pattern != "^Bearer " {
 		t.Error("OCI authentication must be a Bearer challenge")
 	}
-	for _, path := range []string{"/raw/{repository}/content/{path}", "/repository/maven/{repository}/{assetPath}"} {
+	for _, path := range []string{"/raw/{repository}/{path}", "/repository/maven/{repository}/{assetPath}"} {
 		challenge := requireResponse(t, operation(t, spec, path, "GET"), "401").Headers["WWW-Authenticate"]
 		if challenge == nil || challenge.Value.Schema.Value.Pattern != "^Basic " {
 			t.Errorf("%s must return a Basic challenge", path)
@@ -255,7 +357,7 @@ func TestNativeHostedContractHasLifecycleAndRetirementDecisions(t *testing.T) {
 	doc := string(b)
 	for _, phrase := range []string{
 		"PostgreSQL is authoritative", "Object upload precedes metadata promotion", "orphan collector",
-		"Idempotency-Key", "pageToken", "Gitea retirement boundary", "shadow-read mode", "non-goals",
+		"Idempotency-Key", "pageToken", "Native hosted completion boundary", "non-goals",
 		"/groups/{groupId}/members", "gateway catch-all", "Docker-Content-Digest", "generated from committed coordinates",
 		"Maven and Gradle do not define a portable transaction-complete request", "Gateway never infers publication completion",
 		"The production flow retains standard Maven repository URLs and HTTP `PUT`", "expected-name list is an incompleteness assertion",

@@ -1,0 +1,353 @@
+---
+Format:
+  type: string
+  enum:
+  - raw
+  - oci
+  - maven
+OCITagList:
+  type: object
+  required:
+  - name
+  - tags
+  properties:
+    name:
+      type: string
+    tags:
+      type: array
+      items:
+        type: string
+OCIError:
+  type: object
+  required:
+  - errors
+  properties:
+    errors:
+      type: array
+      items:
+        type: object
+        required:
+        - code
+        - message
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+Repository:
+  type: object
+  required:
+  - id
+  - name
+  - format
+  - state
+  - version
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+      pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+    format:
+      "$ref": "#/Format"
+    state:
+      type: string
+      enum:
+      - active
+      - deleting
+      - deleted
+    version:
+      type: string
+CreateRepository:
+  type: object
+  required:
+  - name
+  - format
+  additionalProperties: false
+  properties:
+    name:
+      type: string
+    format:
+      "$ref": "#/Format"
+Group:
+  type: object
+  required:
+  - id
+  - name
+  - format
+  - members
+  - version
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    format:
+      "$ref": "#/Format"
+    members:
+      "$ref": "#/MemberList"
+    version:
+      type: string
+CreateGroup:
+  type: object
+  required:
+  - name
+  - format
+  - members
+  additionalProperties: false
+  properties:
+    name:
+      type: string
+    format:
+      "$ref": "#/Format"
+    members:
+      "$ref": "#/MemberList"
+Member:
+  type: object
+  required:
+  - repositoryId
+  - position
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    position:
+      type: integer
+      minimum: 0
+MemberList:
+  type: array
+  items:
+    "$ref": "#/Member"
+Grant:
+  type: object
+  required:
+  - principal
+  - scopes
+  properties:
+    principal:
+      type: string
+    scopes:
+      type: array
+      items:
+        type: string
+        enum:
+        - repositories:read
+        - repositories:write
+        - repositories:admin
+GrantList:
+  type: array
+  items:
+    "$ref": "#/Grant"
+RetentionPolicy:
+  type: object
+  required:
+  - version
+  - keepDays
+  - minimumVersions
+  properties:
+    version:
+      type: string
+    keepDays:
+      type: integer
+      minimum: 1
+    minimumVersions:
+      type: integer
+      minimum: 1
+CreatePublishSession:
+  oneOf:
+  - "$ref": "#/CreateMavenPublishSession"
+  description: Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path};
+    OCI Hosted writes use Registry V2 upload and manifest routes.
+CreateMavenPublishSession:
+  type: object
+  required:
+  - format
+  - coordinate
+  - pomObject
+  - objects
+  additionalProperties: false
+  properties:
+    format:
+      type: string
+      const: maven
+    coordinate:
+      type: string
+      pattern: "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+)?)?$"
+    pomObject:
+      type: string
+      pattern: "^[^/]+$"
+    objects:
+      type: array
+      minItems: 1
+      items:
+        "$ref": "#/DeclaredObject"
+CommitMavenCoordinate:
+  type: object
+  description: Expected names detect incomplete upload only. Digest, size, checksum,
+    metadata, object keys, and visibility are derived and controlled by the Gateway.
+  required:
+  - expectedAssetNames
+  additionalProperties: false
+  properties:
+    expectedAssetNames:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[^/]+$"
+DeclaredObject:
+  type: object
+  required:
+  - name
+  - digest
+  - size
+  properties:
+    name:
+      type: string
+      pattern: "^[^/]+$"
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      minimum: 0
+PublishSession:
+  type: object
+  required:
+  - id
+  - repositoryId
+  - coordinate
+  - state
+  - expiresAt
+  - objects
+  properties:
+    id:
+      type: string
+      format: uuid
+    repositoryId:
+      type: string
+      format: uuid
+    coordinate:
+      type: string
+    state:
+      type: string
+      enum:
+      - open
+      - committed
+      - aborted
+      - expired
+    expiresAt:
+      type: string
+      format: date-time
+    objects:
+      type: array
+      items:
+        "$ref": "#/DeclaredObject"
+Artifact:
+  type: object
+  required:
+  - id
+  - coordinate
+  - digest
+  - createdAt
+  - state
+  properties:
+    id:
+      type: string
+      format: uuid
+    coordinate:
+      type: string
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    createdAt:
+      type: string
+      format: date-time
+    state:
+      type: string
+      enum:
+      - visible
+      - deleted
+Deletion:
+  type: object
+  required:
+  - id
+  - state
+  properties:
+    id:
+      type: string
+      format: uuid
+    state:
+      type: string
+      const: pending
+Problem:
+  type: object
+  required:
+  - type
+  - title
+  - status
+  - code
+  - message
+  - requestId
+  properties:
+    type:
+      type: string
+      format: uri-reference
+    title:
+      type: string
+    status:
+      type: integer
+    code:
+      type: string
+      enum:
+      - invalid_request
+      - invalid_page_token
+      - access_denied
+      - not_found
+      - version_conflict
+      - idempotency_conflict
+      - coordinate_exists
+      - session_closed
+      - digest_mismatch
+      - retention_protected
+      - internal_error
+    message:
+      type: string
+    requestId:
+      type: string
+RepositoryPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/Repository"
+    nextPageToken:
+      type: string
+GroupPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/Group"
+    nextPageToken:
+      type: string
+ArtifactPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/Artifact"
+    nextPageToken:
+      type: string

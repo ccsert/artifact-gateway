@@ -1,0 +1,16 @@
+---
+bearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: JWT
+protocolBasicAuth:
+  type: http
+  scheme: basic
+protocolBearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: Gateway resolver token
+ociBearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: OCI Registry token

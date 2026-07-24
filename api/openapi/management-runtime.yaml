@@ -1,0 +1,167 @@
+---
+info:
+  title: Artifact Gateway Native Hosted Management API
+  version: 1.0.0
+  description: Frozen contract for the planned Native Hosted Platform V3.
+servers:
+- url: https://gateway.example.com/api/v2
+security:
+- bearerAuth: []
+openapi: 3.1.0
+paths:
+  "/repositories":
+    "$ref": "./management/repositories.yaml#/repositories"
+  "/repositories/{repositoryId}":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId"
+  "/repositories/{repositoryId}/grants":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
+  "/repositories/{repositoryId}/retention-policy":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/groups":
+    "$ref": "./management/groups.yaml#/groups"
+  "/groups/{groupId}":
+    "$ref": "./management/groups.yaml#/groups_groupId"
+  "/groups/{groupId}/members":
+    "$ref": "./management/groups.yaml#/groups_groupId_members"
+  "/repositories/{repositoryId}/publish-sessions":
+    "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
+  "/repositories/{repositoryId}/artifacts":
+    "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/repositories/{repositoryId}/artifacts/{artifactId}":
+    "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
+  "/publish-sessions/{sessionId}":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
+  "/publish-sessions/{sessionId}/objects/{objectName}":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_objects_objectName"
+  "/publish-sessions/{sessionId}:commit":
+    "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_commit"
+components:
+  schemas:
+    Format:
+      "$ref": "./components/schemas.yaml#/Format"
+    OCITagList:
+      "$ref": "./components/schemas.yaml#/OCITagList"
+    OCIError:
+      "$ref": "./components/schemas.yaml#/OCIError"
+    Repository:
+      "$ref": "./components/schemas.yaml#/Repository"
+    CreateRepository:
+      "$ref": "./components/schemas.yaml#/CreateRepository"
+    Group:
+      "$ref": "./components/schemas.yaml#/Group"
+    CreateGroup:
+      "$ref": "./components/schemas.yaml#/CreateGroup"
+    Member:
+      "$ref": "./components/schemas.yaml#/Member"
+    MemberList:
+      "$ref": "./components/schemas.yaml#/MemberList"
+    Grant:
+      "$ref": "./components/schemas.yaml#/Grant"
+    GrantList:
+      "$ref": "./components/schemas.yaml#/GrantList"
+    RetentionPolicy:
+      "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    CreatePublishSession:
+      "$ref": "./components/schemas.yaml#/CreatePublishSession"
+    CreateMavenPublishSession:
+      "$ref": "./components/schemas.yaml#/CreateMavenPublishSession"
+    CommitMavenCoordinate:
+      "$ref": "./components/schemas.yaml#/CommitMavenCoordinate"
+    DeclaredObject:
+      "$ref": "./components/schemas.yaml#/DeclaredObject"
+    PublishSession:
+      "$ref": "./components/schemas.yaml#/PublishSession"
+    Artifact:
+      "$ref": "./components/schemas.yaml#/Artifact"
+    Deletion:
+      "$ref": "./components/schemas.yaml#/Deletion"
+    Problem:
+      "$ref": "./components/schemas.yaml#/Problem"
+    RepositoryPage:
+      "$ref": "./components/schemas.yaml#/RepositoryPage"
+    GroupPage:
+      "$ref": "./components/schemas.yaml#/GroupPage"
+    ArtifactPage:
+      "$ref": "./components/schemas.yaml#/ArtifactPage"
+  parameters:
+    RepositoryId:
+      "$ref": "./components/parameters.yaml#/RepositoryId"
+    GroupId:
+      "$ref": "./components/parameters.yaml#/GroupId"
+    SessionId:
+      "$ref": "./components/parameters.yaml#/SessionId"
+    RepositoryName:
+      "$ref": "./components/parameters.yaml#/RepositoryName"
+    OCIName:
+      "$ref": "./components/parameters.yaml#/OCIName"
+    OCIReference:
+      "$ref": "./components/parameters.yaml#/OCIReference"
+    Digest:
+      "$ref": "./components/parameters.yaml#/Digest"
+    PageSize:
+      "$ref": "./components/parameters.yaml#/PageSize"
+    PageToken:
+      "$ref": "./components/parameters.yaml#/PageToken"
+    IdempotencyKey:
+      "$ref": "./components/parameters.yaml#/IdempotencyKey"
+    IfMatch:
+      "$ref": "./components/parameters.yaml#/IfMatch"
+  responses:
+    Problem:
+      "$ref": "./components/responses.yaml#/Problem"
+    BinaryObject:
+      "$ref": "./components/responses.yaml#/BinaryObject"
+    OCIManifest:
+      "$ref": "./components/responses.yaml#/OCIManifest"
+    OCIUploadAccepted:
+      "$ref": "./components/responses.yaml#/OCIUploadAccepted"
+    OCITagList:
+      "$ref": "./components/responses.yaml#/OCITagList"
+    OCIError:
+      "$ref": "./components/responses.yaml#/OCIError"
+    BasicUnauthorized:
+      "$ref": "./components/responses.yaml#/BasicUnauthorized"
+    OCIUnauthorized:
+      "$ref": "./components/responses.yaml#/OCIUnauthorized"
+    ProtocolNotFound:
+      "$ref": "./components/responses.yaml#/ProtocolNotFound"
+    Repository:
+      "$ref": "./components/responses.yaml#/Repository"
+    RepositoryList:
+      "$ref": "./components/responses.yaml#/RepositoryList"
+    Group:
+      "$ref": "./components/responses.yaml#/Group"
+    GroupList:
+      "$ref": "./components/responses.yaml#/GroupList"
+    MemberList:
+      "$ref": "./components/responses.yaml#/MemberList"
+    GrantList:
+      "$ref": "./components/responses.yaml#/GrantList"
+    RetentionPolicy:
+      "$ref": "./components/responses.yaml#/RetentionPolicy"
+    PublishSession:
+      "$ref": "./components/responses.yaml#/PublishSession"
+    Artifact:
+      "$ref": "./components/responses.yaml#/Artifact"
+    ArtifactList:
+      "$ref": "./components/responses.yaml#/ArtifactList"
+    Deletion:
+      "$ref": "./components/responses.yaml#/Deletion"
+  securitySchemes:
+    bearerAuth:
+      "$ref": "./components/security-schemes.yaml#/bearerAuth"
+    protocolBasicAuth:
+      "$ref": "./components/security-schemes.yaml#/protocolBasicAuth"
+    protocolBearerAuth:
+      "$ref": "./components/security-schemes.yaml#/protocolBearerAuth"
+    ociBearerAuth:
+      "$ref": "./components/security-schemes.yaml#/ociBearerAuth"
+x-gateway-protocol-overlays:
+  oci:
+    officialSpecification: https://distribution.github.io/distribution/spec/api/
+  raw:
+    gatewayOverlay: docs/protocol-compatibility.md#raw-hosted
+  maven:
+    officialSpecification: https://maven.apache.org/repositories/index.html
+  conan:
+    "$ref": "./protocols/conan.yaml"

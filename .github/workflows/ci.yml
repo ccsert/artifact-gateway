@@ -13,13 +13,21 @@ jobs:
         with:
           fetch-depth: 0
       - name: Validate OpenAPI contract
-        run: make api-contract
+        run: make openapi-check
       - name: Check Native Hosted API compatibility
         env:
           GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: make api-change-check
       - name: Run tests
         run: make test
+      - name: Run Native OCI E2E
+        run: make native-oci-e2e
+      - name: Run Native Raw E2E
+        run: make native-raw-e2e
+      - name: Run Native Maven E2E
+        run: make native-maven-e2e
+      - name: Run integration tests
+        run: make integration-test
   console:
     runs-on: ubuntu-latest
     steps:

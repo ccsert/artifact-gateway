@@ -17,16 +17,12 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
-func TestOCIHostedGroupServesManifestAndRange(t *testing.T) {
+func TestOCILegacyGroupServesManifestAndRange(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"config":{"digest":"sha256:config"}}`)
 	digest := digestOf(manifest)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.URL.Path, "/v2/team/app/manifests/"+digest; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
-		}
-		user, password, ok := r.BasicAuth()
-		if !ok || user != "gitea" || password != "gitea-token" {
-			t.Fatal("missing Gitea basic authentication")
 		}
 		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
 		w.Header().Set("Docker-Content-Digest", digest)
@@ -42,11 +38,11 @@ func TestOCIHostedGroupServesManifestAndRange(t *testing.T) {
 	defer upstream.Close()
 
 	store := repository.NewMemoryStore()
-	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 
 	challenge := httptest.NewRecorder()
 	handler.ServeHTTP(challenge, httptest.NewRequest(http.MethodGet, "/v2/", nil))
@@ -69,7 +65,7 @@ func TestOCIHostedGroupServesManifestAndRange(t *testing.T) {
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/vnd.oci.image.manifest.v1+json" || response.Header().Get("Docker-Content-Digest") != digest || response.Body.String() != string(manifest) {
 		t.Fatalf("manifest = %d headers=%v body=%q", response.Code, response.Header(), response.Body.String())
 	}
-	if len(store.Audits) != 1 || store.Audits[0].MemberName != "gitea-hosted" || store.Audits[0].Actor != "ci" || store.Audits[0].Repository != "team/app" {
+	if len(store.Audits) != 1 || store.Audits[0].MemberName != "legacy" || store.Audits[0].Actor != "ci" || store.Audits[0].Repository != "team/app" {
 		t.Fatalf("audit = %#v", store.Audits)
 	}
 
@@ -103,7 +99,7 @@ func TestGatewayPropagatesTraceContextToOCIUpstream(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	request.Header.Set("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
 	authorize(request, "resolver-secret")
@@ -126,8 +122,8 @@ func TestOCIRangeIsServedFromVerifiedFullResponse(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+digest, nil)
 	request.Header.Set("Range", "bytes=0-7")
 	authorize(request, "resolver-secret")
@@ -151,8 +147,8 @@ func TestOCIRejectsDigestMismatchAndSupportsHead(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+expected, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -174,7 +170,7 @@ func TestOCIDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
 	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"allowed.example"})
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: GiteaClient{}, Authenticator: testAuthenticator(), Cache: cache}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: UpstreamClient{}, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -284,11 +280,11 @@ func TestOCIHostedGroupServesTaggedManifest(t *testing.T) {
 	defer upstream.Close()
 
 	store := repository.NewMemoryStore()
-	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -311,12 +307,12 @@ func TestOCIHostedGroupPrefersHostedMember(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{
 		{Name: "proxy-first", Type: repository.MemberProxy, Endpoint: "http://proxy.example", Position: 0},
-		{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 1},
+		{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 1},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -325,7 +321,7 @@ func TestOCIHostedGroupPrefersHostedMember(t *testing.T) {
 	if response.Code != http.StatusOK || response.Body.String() != string(manifest) {
 		t.Fatalf("manifest = %d %q", response.Code, response.Body.String())
 	}
-	if got := store.Audits[len(store.Audits)-1].MemberName; got != "gitea-hosted" {
+	if got := store.Audits[len(store.Audits)-1].MemberName; got != "legacy-hosted" {
 		t.Fatalf("audit member = %q", got)
 	}
 }
@@ -342,7 +338,7 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 			return
 		}
 		if _, _, ok := r.BasicAuth(); ok {
-			t.Fatal("proxy received Gitea credentials")
+			t.Fatal("proxy received Legacy credentials")
 		}
 		w.Header().Set("Docker-Content-Digest", digest)
 		_, _ = w.Write(manifest)
@@ -350,10 +346,10 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{
-		{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
+		{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), GiteaClient{Username: "gitea", Token: "gitea-token"})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -387,11 +383,11 @@ func TestOCITriesProxyAfterHostedFailure(t *testing.T) {
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{
-		{Name: "gitea-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
+		{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
 	metrics := &Metrics{}
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: GiteaClient{}, Authenticator: testAuthenticator()}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: UpstreamClient{}, Authenticator: testAuthenticator()}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -400,7 +396,7 @@ func TestOCITriesProxyAfterHostedFailure(t *testing.T) {
 	if response.Code != http.StatusOK || response.Body.String() != string(manifest) {
 		t.Fatalf("manifest = %d %q", response.Code, response.Body.String())
 	}
-	if len(store.Audits) != 2 || store.Audits[0].MemberName != "gitea-hosted" || store.Audits[0].Outcome != repository.AuditUpstreamError || store.Audits[1].MemberName != "proxy" || store.Audits[1].Outcome != repository.AuditResolved {
+	if len(store.Audits) != 2 || store.Audits[0].MemberName != "legacy-hosted" || store.Audits[0].Outcome != repository.AuditUpstreamError || store.Audits[1].MemberName != "proxy" || store.Audits[1].Outcome != repository.AuditResolved {
 		t.Fatalf("audits = %#v", store.Audits)
 	}
 	if metrics.failed.Load() != 0 || metrics.resolved.Load() != 1 {
@@ -417,8 +413,8 @@ func TestOCITokensAuditLoginSubject(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	for _, username := range []string{"alice", "bob"} {
 		tokenResponse := httptest.NewRecorder()
 		tokenRequest := httptest.NewRequest(http.MethodGet, "/auth/token", nil)
@@ -444,8 +440,8 @@ func TestOCIRejectsTaggedManifestWithMismatchedDigest(t *testing.T) {
 	}))
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -458,7 +454,7 @@ func TestOCIRejectsTaggedManifestWithMismatchedDigest(t *testing.T) {
 
 func TestOCIErrorContract(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), GiteaClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
 	tests := []struct {
 		name   string
 		method string
@@ -492,9 +488,9 @@ func TestOCIMapsUpstreamNotFoundByResource(t *testing.T) {
 	upstream := httptest.NewServer(http.NotFoundHandler())
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, GiteaClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
 	for _, test := range []struct {
 		path string
 		code string
@@ -514,7 +510,7 @@ func TestOCIMapsUpstreamNotFoundByResource(t *testing.T) {
 		t.Fatalf("audits = %#v", store.Audits)
 	}
 	for _, audit := range store.Audits {
-		if audit.Outcome != repository.AuditNotFound || audit.MemberName != "gitea" || audit.Actor != "alice" || audit.Repository != "team/app" {
+		if audit.Outcome != repository.AuditNotFound || audit.MemberName != "legacy" || audit.Actor != "alice" || audit.Repository != "team/app" {
 			t.Fatalf("audit = %#v", audit)
 		}
 	}
@@ -522,9 +518,9 @@ func TestOCIMapsUpstreamNotFoundByResource(t *testing.T) {
 
 func TestOCIAuditsUpstreamTransportFailure(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: "://invalid", Position: 0}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: "://invalid", Position: 0}}})
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, GiteaClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, authenticator.IssueToken("alice"))
 	response := httptest.NewRecorder()
@@ -533,7 +529,7 @@ func TestOCIAuditsUpstreamTransportFailure(t *testing.T) {
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
-	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditUpstreamError || store.Audits[0].MemberName != "gitea" || store.Audits[0].Actor != "alice" || store.Audits[0].Repository != "team/app" {
+	if len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditUpstreamError || store.Audits[0].MemberName != "legacy" || store.Audits[0].Actor != "alice" || store.Audits[0].Repository != "team/app" {
 		t.Fatalf("audits = %#v", store.Audits)
 	}
 }
@@ -542,7 +538,7 @@ func TestOCIRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"alice": {"team/allowed/*"}}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, GiteaClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/private/manifests/latest", nil)
 	authorize(request, authenticator.IssueToken("alice"))
 	response := httptest.NewRecorder()
@@ -557,7 +553,7 @@ func TestOCIRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 
 func TestOCIResolutionFailuresIncrementMetrics(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "disabled", Members: []repository.Member{{Name: "gitea", Type: repository.MemberHosted, Endpoint: "http://gitea", Position: 0}}})
+	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "disabled", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: "http://legacy", Position: 0}}})
 	if err := store.DisableGroup(context.Background(), "disabled"); err != nil {
 		t.Fatal(err)
 	}

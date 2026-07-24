@@ -1,0 +1,92 @@
+---
+repositories:
+  get:
+    operationId: listRepositories
+    parameters:
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createRepository
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateRepository"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/Repository"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getRepository
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Repository"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteRepository
+    responses:
+      '202':
+        "$ref": "../components/responses.yaml#/Deletion"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_grants:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listGrants
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/GrantList"
+  put:
+    operationId: replaceGrants
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/GrantList"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/GrantList"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_retention_policy:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getRetentionPolicy
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RetentionPolicy"
+  put:
+    operationId: replaceRetentionPolicy
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/RetentionPolicy"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RetentionPolicy"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"

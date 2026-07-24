@@ -1,0 +1,80 @@
+---
+groups:
+  get:
+    operationId: listGroups
+    parameters:
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/GroupList"
+  post:
+    operationId: createGroup
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateGroup"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/Group"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+groups_groupId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/GroupId"
+  get:
+    operationId: getGroup
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Group"
+  put:
+    operationId: replaceGroup
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/Group"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Group"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteGroup
+    responses:
+      '204':
+        description: Deleted
+groups_groupId_members:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/GroupId"
+  get:
+    operationId: listGroupMembers
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/MemberList"
+  put:
+    operationId: replaceGroupMembers
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/MemberList"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/MemberList"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+    x-gateway-memberConstraints:
+    - repositoryId_unique
+    - position_contiguous_from_zero
+    - repository_format_matches_group

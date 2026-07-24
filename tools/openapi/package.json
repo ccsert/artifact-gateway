@@ -1,0 +1,8 @@
+{
+  "name": "artifact-gateway-openapi-tools",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "@redocly/cli": "1.34.5"
+  }
+}

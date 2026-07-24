@@ -3,33 +3,26 @@
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw, and
 Conan 2 read paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
-local `.env`. It uses the real local Gitea fixture seeded from `busybox:1.36`,
-but does not require any production credentials.
+local `.env`; it does not require an external package service or production
+credentials.
 
 ```sh
-make release-readiness
+make integration-test
+make native-oci-e2e
+make native-raw-e2e
+make native-maven-e2e
 ```
 
-The command runs Docker/ORAS OCI, Maven/Gradle, a curl-driven live Gateway Raw
-HTTP fixture, and real Conan 2 black-box clients, an OCI cache performance gate, and an isolated
-upgrade/rollback rehearsal. It then verifies object storage and PostgreSQL
-readiness failures, recovery after each dependency is restored, the
-administrator cache-maintenance view, and static resolver-token rotation.
-`scripts/release-readiness.sh` restores the configured resolver token and live
-adapter, Gitea, and Maven Proxy settings before it exits, including after a
-failed check. `make release-readiness-cleanup-test` exercises both the
-successful path and an injected post-rotation failure against a running
-Gateway. Record the command output,
-Git revision, operator, UTC start/end, and any deviation in the release record.
+The commands exercise the native protocol fixtures and persistent metadata
+store. Record their output, Git revision, operator, UTC start/end, and any
+deviation in the release record.
 
 ## Release Checklist
 
-- [ ] `make test`, `make integration-test`, and `make release-readiness` pass.
-- [ ] The local Gitea fixture was freshly seeded and its minimal package token
-      was used by the Gateway; no Gitea administrator token is used for reads.
-- [ ] OCI pull passes with Docker and ORAS. `make release-readiness` requires
-      both clients; Podman compatibility is tracked separately. Maven first
-      read uses Maven and cached resolution after upstream outage uses Gradle.
+- [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
+      `make native-raw-e2e`, and `make native-maven-e2e` pass.
+- [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
+      publish and resolution pass through the native Maven fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
@@ -41,11 +34,11 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
       collection, verifies the successful-run count, and records its state.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
+- [ ] Maven retention maintenance runs outside request handling, preserves the
+      configured newest versions per module, and tombstones only expired excess
+      coordinates before the Maven orphan collector reclaims bytes.
 - [ ] Resolver-token rotation rejects an OCI bearer token issued by the old
       token and permits a newly issued token.
-- [ ] `make release-readiness-cleanup-test` confirms that the complete gate
-      restores the live adapter, Gitea credentials, Maven Proxy allowlist, and
-      resolver token after both a successful run and a post-rotation failure.
 - [ ] The cached OCI manifest performance gate completes 50 requests at
       concurrency 10 with zero errors and p95 latency at or below one second.
       Override only with an approved release record using
@@ -69,7 +62,7 @@ Git revision, operator, UTC start/end, and any deviation in the release record.
 
 | Area | MVP default |
 | --- | --- |
-| Hosted source | Gitea Packages through its OCI and Maven HTTP APIs only |
+| Hosted source | Native PostgreSQL metadata and MinIO-compatible object bytes |
 | External Proxy | Disabled unless the exact upstream host is in the protocol allowlist |
 | Authentication | Static resolver/admin tokens for local break-glass; HTTPS RS256 OIDC for production identity |
 | Authorization | Deny unmatched repository readers when `GATEWAY_REPOSITORY_READERS` is configured |
@@ -86,9 +79,8 @@ flowchart LR
   clients[Docker / ORAS / Maven / Gradle] --> gateway[Artifact Gateway]
   gateway --> auth[Static tokens or OIDC]
   gateway --> db[(PostgreSQL metadata and audit)]
-  gateway --> redis[(Redis cache coordination)]
+	  gateway --> postgres[(PostgreSQL metadata and cache coordination)]
   gateway --> cache[(S3-compatible cache)]
-  gateway --> gitea[Gitea Packages Hosted]
   gateway --> proxy[Allowlisted external Proxy]
   gateway --> telemetry[Metrics and OTLP traces]
 ```
@@ -106,8 +98,6 @@ flowchart LR
   the identity provider; JWKS refresh is cached for five minutes.
 - Cache collection is asynchronous. An object remains during its configured
   grace period when it may still be referenced by a live index.
-- The local Gitea fixture validates integration behavior; it is not an HA,
-  load, or multi-region production topology test.
 
 ## Rollback
 
@@ -122,7 +112,7 @@ flowchart LR
    together from the same backup set. Confirm an OCI/Maven read and, where V2
    state was affected, a Raw GET and Conan 2 revision read before reopening
    traffic.
-5. Rotate any potentially exposed resolver, administrator, Gitea, or object
+5. Rotate any potentially exposed resolver, administrator, or object
    storage credentials and record the incident and final validation result.
 
 ## V2 Anonymous Policy Operations

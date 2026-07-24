@@ -1,0 +1,98 @@
+---
+x-gateway-protocol-overlay:
+  officialSpecification: https://maven.apache.org/repositories/index.html
+  gatewayDecision: Use standard PUT staging plus explicit Gateway coordinate commit;
+    client metadata is not authoritative.
+repository_maven_repository_assetPath:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: assetPath
+    in: path
+    required: true
+    allowReserved: true
+    description: 'Canonical Maven asset path: groupId path, artifactId, version, and
+      filename. This is a gateway catch-all parameter; only committed POMs, component
+      assets, checksums, and generated metadata are readable.'
+    schema:
+      type: string
+      minLength: 1
+  get:
+    operationId: readMavenAsset
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/BinaryObject"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  put:
+    operationId: stageMavenProtocolAsset
+    description: Standard Maven/Gradle deploy upload. The Gateway derives coordinate
+      and verified object facts from this request and stages it only. Client checksum
+      sidecars are assertions and client metadata is a compatibility no-op; the Gateway
+      generates both from committed coordinates.
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '201':
+        description: Staged or idempotently replayed; not readable until coordinate
+          commit
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+  x-gateway-catchAll: assetPath
+  x-gateway-visibility: committed_only
+  x-gateway-publication: stage_only_until_explicit_coordinate_commit
+repository_maven_repository_coordinates_coordinate_commit:
+  servers:
+  - url: https://gateway.example.com
+  post:
+    operationId: commitMavenCoordinate
+    description: Called by the Gateway Maven/Gradle publisher extension after normal
+      deploy uploads. It is the only Maven coordinate visibility signal; request ordering,
+      client checksums, client metadata, and quiet time are never completion signals.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    - "$ref": "../components/parameters.yaml#/RepositoryName"
+    - name: coordinate
+      in: path
+      required: true
+      allowReserved: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CommitMavenCoordinate"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Artifact"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+  x-gateway-visibility-transition: single_postgres_transaction
+  x-gateway-client-authority: asset_names_only

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,6 +17,7 @@ var (
 	ErrDisabled            = errors.New("group is disabled")
 	ErrNameExists          = errors.New("group name already exists")
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
+	ErrVersionConflict     = errors.New("resource version conflicts with current state")
 )
 
 const mavenObjectClaimLease = 5 * time.Minute
@@ -57,6 +59,56 @@ type HostedRepositoryStore interface {
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
 }
 
+// HostedGroup is the V2 management aggregate. It is intentionally separate
+// from the protocol-specific V1 group types below.
+type HostedGroup struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Format  Format        `json:"format"`
+	Members []GroupMember `json:"members"`
+	Version string        `json:"version"`
+}
+
+type GroupMember struct {
+	RepositoryID string `json:"repositoryId"`
+	Position     int    `json:"position"`
+}
+
+type HostedGroupStore interface {
+	CreateHostedGroupIdempotently(context.Context, HostedGroup, string, string, string) (HostedGroup, bool, error)
+	ListHostedGroups(context.Context, int, string) ([]HostedGroup, string, error)
+	GetHostedGroup(context.Context, string) (HostedGroup, error)
+	ReplaceHostedGroup(context.Context, HostedGroup, string) (HostedGroup, error)
+	ReplaceHostedGroupMembers(context.Context, string, []GroupMember, string) (HostedGroup, error)
+	DeleteHostedGroup(context.Context, string) error
+}
+
+type RepositoryGrant struct {
+	Principal string   `json:"principal"`
+	Scopes    []string `json:"scopes"`
+}
+
+type RepositoryGrantSet struct {
+	Version string
+	Grants  []RepositoryGrant
+}
+
+type RepositoryGrantStore interface {
+	GetRepositoryGrants(context.Context, string) (RepositoryGrantSet, error)
+	ReplaceRepositoryGrants(context.Context, string, []RepositoryGrant, string) (RepositoryGrantSet, error)
+}
+
+type RepositoryRetentionPolicy struct {
+	Version         string `json:"version"`
+	KeepDays        int    `json:"keepDays"`
+	MinimumVersions int    `json:"minimumVersions"`
+}
+
+type RepositoryRetentionPolicyStore interface {
+	GetRepositoryRetentionPolicy(context.Context, string) (RepositoryRetentionPolicy, error)
+	ReplaceRepositoryRetentionPolicy(context.Context, string, RepositoryRetentionPolicy, string) (RepositoryRetentionPolicy, error)
+}
+
 // NativeMavenStore contains only committed Maven metadata. Object bytes live in
 // the object store; staging rows never participate in protocol reads.
 type NativeMavenStore interface {
@@ -72,10 +124,82 @@ type NativeMavenStore interface {
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
+	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)
 	DeleteClaimedMavenObjectIntent(context.Context, string, string) error
 	ReleaseClaimedMavenObjectIntent(context.Context, string, string) error
+}
+
+// NativeOCIStore owns the registry metadata. Blob bytes are deliberately not
+// represented here: they live in the object store and are only made visible
+// after one of these transactional metadata operations succeeds.
+type NativeOCIStore interface {
+	CreateOCIUpload(context.Context, OCIUpload) (OCIUpload, error)
+	LockOCIUpload(context.Context, string) (func(), error)
+	LockOCIObject(context.Context, string) (func(), error)
+	GetOCIUpload(context.Context, string) (OCIUpload, error)
+	UpdateOCIUpload(context.Context, string, int64) (OCIUpload, error)
+	CancelOCIUpload(context.Context, string) (OCIUpload, error)
+	StageOCIObjectIntent(context.Context, OCIObjectIntent) error
+	CompleteOCIUpload(context.Context, string, OCIBlob) (OCIBlob, error)
+	ExpireOCIUploads(context.Context, time.Time, int) ([]OCIUpload, error)
+	ListUncollectedOCIUploads(context.Context, int) ([]OCIUpload, error)
+	MarkOCIUploadCollected(context.Context, string) error
+	ListUnclaimedOCIObjectIntents(context.Context, time.Time, int) ([]OCIObjectIntent, error)
+	OCIObjectIntentIsUnclaimed(context.Context, string) (bool, error)
+	MarkOCIObjectIntentCollected(context.Context, string) error
+	MountOCIBlob(context.Context, string, string) (OCIBlob, error)
+	MountOCIBlobFrom(context.Context, string, string, string) (OCIBlob, error)
+	GetOCIBlob(context.Context, string, string) (OCIBlob, error)
+	PutOCIManifest(context.Context, OCIManifest, string) (OCIManifest, error)
+	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
+	ListOCITags(context.Context, string, string, int, string) ([]string, error)
+	DeleteOCIManifest(context.Context, string, string, string) error
+}
+
+type NativeRawStore interface {
+	LockRawObject(context.Context, string) (func(), error)
+	StageRawObject(context.Context, RawObject) error
+	PutRawAsset(context.Context, RawAsset) (RawAsset, error)
+	GetRawAsset(context.Context, string, string) (RawAsset, error)
+	DeleteRawAsset(context.Context, string, string) error
+	ListUnreferencedRawObjects(context.Context, time.Time, int) ([]RawObject, error)
+	RawObjectIsUnreferenced(context.Context, string) (bool, error)
+	MarkRawObjectCollected(context.Context, string) error
+}
+
+type RawAsset struct {
+	RepositoryID, Path, Digest, ObjectKey, ContentType string
+	Size                                               int64
+}
+type RawObject struct {
+	Digest, ObjectKey      string
+	Size                   int64
+	CreatedAt, CollectedAt time.Time
+}
+
+type OCIUpload struct {
+	ID, RepositoryID, Name, ObjectKey, State string
+	Offset                                   int64
+	ExpiresAt                                time.Time
+	CollectedAt                              time.Time
+}
+
+type OCIBlob struct {
+	Digest, ObjectKey string
+	Size              int64
+}
+type OCIObjectIntent struct {
+	ObjectKey, Digest                 string
+	Size                              int64
+	CreatedAt, ClaimedAt, CollectedAt time.Time
+}
+
+type OCIManifest struct {
+	RepositoryID, Name, Digest, ObjectKey, MediaType string
+	Size                                             int64
 }
 
 type MavenDeclaredObject struct {
@@ -92,8 +216,12 @@ type MavenAsset struct {
 	Size                                  int64
 }
 type MavenArtifact struct {
-	ID, RepositoryID, Coordinate, Digest, State string
-	CreatedAt                                   time.Time
+	ID           string    `json:"id"`
+	RepositoryID string    `json:"repositoryId"`
+	Coordinate   string    `json:"coordinate"`
+	Digest       string    `json:"digest"`
+	State        string    `json:"state"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 type MavenObjectIntent struct{ ObjectKey, ClaimToken string }
 
@@ -198,6 +326,9 @@ type MemoryStore struct {
 	conanGroups        map[string]Group
 	Audits             []AuditRecord
 	hostedRepositories map[string]HostedRepository
+	hostedGroups       map[string]HostedGroup
+	repositoryGrants   map[string]RepositoryGrantSet
+	retentionPolicies  map[string]RepositoryRetentionPolicy
 	idempotencyRecords map[string]idempotencyRecord
 	mavenSessions      map[string]MavenPublishSession
 	mavenUploads       map[string]map[string]string
@@ -206,6 +337,17 @@ type MemoryStore struct {
 	mavenSessionKeys   map[string]idempotencyRecord
 	mavenObjectIntents map[string]mavenObjectIntent
 	mavenObjectRefs    map[string]bool
+	ociUploads         map[string]OCIUpload
+	ociBlobs           map[string]OCIBlob
+	ociRepositoryBlobs map[string]map[string]bool
+	ociManifests       map[string]OCIManifest
+	ociTags            map[string]string
+	ociUploadLocks     map[string]*sync.Mutex
+	ociObjectLocks     map[string]*sync.Mutex
+	rawAssets          map[string]RawAsset
+	rawObjects         map[string]RawObject
+	rawObjectLocks     map[string]*sync.Mutex
+	ociObjectIntents   map[string]OCIObjectIntent
 }
 
 type mavenObjectIntent struct {
@@ -218,8 +360,395 @@ type idempotencyRecord struct {
 	expiresAt             time.Time
 }
 
+func ociManifestKey(repositoryID, name, digest string) string {
+	return repositoryID + "\x00" + name + "\x00" + digest
+}
+func ociTagKey(repositoryID, name, tag string) string {
+	return repositoryID + "\x00" + name + "\x00" + tag
+}
+func rawAssetKey(repositoryID, path string) string { return repositoryID + "\x00" + path }
+
+func (s *MemoryStore) LockRawObject(_ context.Context, digest string) (func(), error) {
+	s.mu.Lock()
+	lock := s.rawObjectLocks[digest]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.rawObjectLocks[digest] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock, nil
+}
+
+func (s *MemoryStore) StageRawObject(_ context.Context, object RawObject) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.rawObjects[object.Digest]; ok {
+		existing.CollectedAt = time.Time{}
+		s.rawObjects[object.Digest] = existing
+		return nil
+	}
+	object.CreatedAt = time.Now().UTC()
+	s.rawObjects[object.Digest] = object
+	return nil
+}
+
+func (s *MemoryStore) PutRawAsset(_ context.Context, asset RawAsset) (RawAsset, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if object, ok := s.rawObjects[asset.Digest]; ok {
+		asset.ObjectKey = object.ObjectKey
+		asset.Size = object.Size
+	} else {
+		s.rawObjects[asset.Digest] = RawObject{Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: time.Now().UTC()}
+	}
+	s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)] = asset
+	return asset, nil
+}
+func (s *MemoryStore) GetRawAsset(_ context.Context, repositoryID, path string) (RawAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	asset, ok := s.rawAssets[rawAssetKey(repositoryID, path)]
+	if !ok {
+		return RawAsset{}, ErrNotFound
+	}
+	return asset, nil
+}
+func (s *MemoryStore) DeleteRawAsset(_ context.Context, repositoryID, path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := rawAssetKey(repositoryID, path)
+	if _, ok := s.rawAssets[key]; !ok {
+		return ErrNotFound
+	}
+	delete(s.rawAssets, key)
+	return nil
+}
+func (s *MemoryStore) ListUnreferencedRawObjects(_ context.Context, before time.Time, limit int) ([]RawObject, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var objects []RawObject
+	for digest, object := range s.rawObjects {
+		if len(objects) >= limit || !object.CollectedAt.IsZero() || !object.CreatedAt.Before(before) {
+			continue
+		}
+		referenced := false
+		for _, asset := range s.rawAssets {
+			if asset.Digest == digest {
+				referenced = true
+				break
+			}
+		}
+		if !referenced {
+			objects = append(objects, object)
+		}
+	}
+	return objects, nil
+}
+func (s *MemoryStore) RawObjectIsUnreferenced(_ context.Context, digest string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	object, ok := s.rawObjects[digest]
+	if !ok || !object.CollectedAt.IsZero() {
+		return false, nil
+	}
+	for _, asset := range s.rawAssets {
+		if asset.Digest == digest {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+func (s *MemoryStore) MarkRawObjectCollected(_ context.Context, digest string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	object, ok := s.rawObjects[digest]
+	if !ok || !object.CollectedAt.IsZero() {
+		return ErrNotFound
+	}
+	for _, asset := range s.rawAssets {
+		if asset.Digest == digest {
+			return ErrNotFound
+		}
+	}
+	object.CollectedAt = time.Now().UTC()
+	s.rawObjects[digest] = object
+	return nil
+}
+
+func (s *MemoryStore) CreateOCIUpload(_ context.Context, upload OCIUpload) (OCIUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ociUploads[upload.ID] = upload
+	return upload, nil
+}
+func (s *MemoryStore) StageOCIObjectIntent(_ context.Context, intent OCIObjectIntent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.ociObjectIntents[intent.ObjectKey]; !exists {
+		intent.CreatedAt = time.Now().UTC()
+		s.ociObjectIntents[intent.ObjectKey] = intent
+	}
+	return nil
+}
+func (s *MemoryStore) LockOCIUpload(_ context.Context, id string) (func(), error) {
+	s.mu.Lock()
+	lock := s.ociUploadLocks[id]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.ociUploadLocks[id] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock, nil
+}
+func (s *MemoryStore) LockOCIObject(_ context.Context, objectKey string) (func(), error) {
+	s.mu.Lock()
+	lock := s.ociObjectLocks[objectKey]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.ociObjectLocks[objectKey] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock, nil
+}
+func (s *MemoryStore) GetOCIUpload(_ context.Context, id string) (OCIUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.ociUploads[id]
+	if !ok {
+		return OCIUpload{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) UpdateOCIUpload(_ context.Context, id string, offset int64) (OCIUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.ociUploads[id]
+	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) {
+		return OCIUpload{}, ErrNotFound
+	}
+	v.Offset = offset
+	s.ociUploads[id] = v
+	return v, nil
+}
+func (s *MemoryStore) CancelOCIUpload(_ context.Context, id string) (OCIUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.ociUploads[id]
+	if !ok || v.State != "open" {
+		return OCIUpload{}, ErrNotFound
+	}
+	v.State = "expired"
+	v.CollectedAt = time.Now().UTC()
+	s.ociUploads[id] = v
+	return v, nil
+}
+func (s *MemoryStore) CompleteOCIUpload(_ context.Context, id string, blob OCIBlob) (OCIBlob, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.ociUploads[id]
+	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) {
+		return OCIBlob{}, ErrNotFound
+	}
+	if current, exists := s.ociBlobs[blob.Digest]; exists {
+		blob = current
+	} else {
+		s.ociBlobs[blob.Digest] = blob
+	}
+	if s.ociRepositoryBlobs[v.RepositoryID] == nil {
+		s.ociRepositoryBlobs[v.RepositoryID] = map[string]bool{}
+	}
+	s.ociRepositoryBlobs[v.RepositoryID][blob.Digest] = true
+	v.State = "completed"
+	s.ociUploads[id] = v
+	delete(s.ociObjectIntents, blob.ObjectKey)
+	return blob, nil
+}
+func (s *MemoryStore) ExpireOCIUploads(_ context.Context, before time.Time, limit int) ([]OCIUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var uploads []OCIUpload
+	for id, upload := range s.ociUploads {
+		if len(uploads) >= limit || upload.State != "open" || !upload.ExpiresAt.Before(before) {
+			continue
+		}
+		upload.State = "expired"
+		s.ociUploads[id] = upload
+		uploads = append(uploads, upload)
+	}
+	return uploads, nil
+}
+func (s *MemoryStore) ListUncollectedOCIUploads(_ context.Context, limit int) ([]OCIUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var uploads []OCIUpload
+	for _, upload := range s.ociUploads {
+		if len(uploads) >= limit {
+			break
+		}
+		if upload.State == "expired" && upload.CollectedAt.IsZero() {
+			uploads = append(uploads, upload)
+		}
+	}
+	return uploads, nil
+}
+func (s *MemoryStore) MarkOCIUploadCollected(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	upload, ok := s.ociUploads[id]
+	if !ok || upload.State != "expired" {
+		return ErrNotFound
+	}
+	upload.CollectedAt = time.Now().UTC()
+	s.ociUploads[id] = upload
+	return nil
+}
+func (s *MemoryStore) ListUnclaimedOCIObjectIntents(_ context.Context, before time.Time, limit int) ([]OCIObjectIntent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var intents []OCIObjectIntent
+	for _, intent := range s.ociObjectIntents {
+		if len(intents) >= limit {
+			break
+		}
+		if intent.ClaimedAt.IsZero() && intent.CollectedAt.IsZero() && intent.CreatedAt.Before(before) {
+			intents = append(intents, intent)
+		}
+	}
+	return intents, nil
+}
+func (s *MemoryStore) OCIObjectIntentIsUnclaimed(_ context.Context, objectKey string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	intent, ok := s.ociObjectIntents[objectKey]
+	return ok && intent.ClaimedAt.IsZero() && intent.CollectedAt.IsZero(), nil
+}
+func (s *MemoryStore) MarkOCIObjectIntentCollected(_ context.Context, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	intent, ok := s.ociObjectIntents[objectKey]
+	if !ok || !intent.ClaimedAt.IsZero() || !intent.CollectedAt.IsZero() {
+		return ErrNotFound
+	}
+	intent.CollectedAt = time.Now().UTC()
+	s.ociObjectIntents[objectKey] = intent
+	return nil
+}
+func (s *MemoryStore) MountOCIBlob(_ context.Context, repositoryID, digest string) (OCIBlob, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.ociBlobs[digest]
+	if !ok {
+		return OCIBlob{}, ErrNotFound
+	}
+	if s.ociRepositoryBlobs[repositoryID] == nil {
+		s.ociRepositoryBlobs[repositoryID] = map[string]bool{}
+	}
+	s.ociRepositoryBlobs[repositoryID][digest] = true
+	return v, nil
+}
+func (s *MemoryStore) MountOCIBlobFrom(_ context.Context, repositoryID, sourceRepositoryID, digest string) (OCIBlob, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.ociRepositoryBlobs[sourceRepositoryID][digest] {
+		return OCIBlob{}, ErrNotFound
+	}
+	v, ok := s.ociBlobs[digest]
+	if !ok {
+		return OCIBlob{}, ErrNotFound
+	}
+	if s.ociRepositoryBlobs[repositoryID] == nil {
+		s.ociRepositoryBlobs[repositoryID] = map[string]bool{}
+	}
+	s.ociRepositoryBlobs[repositoryID][digest] = true
+	return v, nil
+}
+func (s *MemoryStore) GetOCIBlob(_ context.Context, repositoryID, digest string) (OCIBlob, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.ociRepositoryBlobs[repositoryID][digest] {
+		return OCIBlob{}, ErrNotFound
+	}
+	v, ok := s.ociBlobs[digest]
+	if !ok {
+		return OCIBlob{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) PutOCIManifest(_ context.Context, manifest OCIManifest, reference string) (OCIManifest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := ociManifestKey(manifest.RepositoryID, manifest.Name, manifest.Digest)
+	if existing, ok := s.ociManifests[key]; ok {
+		manifest = existing
+	} else {
+		s.ociManifests[key] = manifest
+	}
+	if !strings.HasPrefix(reference, "sha256:") {
+		s.ociTags[ociTagKey(manifest.RepositoryID, manifest.Name, reference)] = manifest.Digest
+	}
+	delete(s.ociObjectIntents, manifest.ObjectKey)
+	return manifest, nil
+}
+func (s *MemoryStore) GetOCIManifest(_ context.Context, repositoryID, name, reference string) (OCIManifest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	digest := reference
+	if !strings.HasPrefix(digest, "sha256:") {
+		digest = s.ociTags[ociTagKey(repositoryID, name, reference)]
+	}
+	v, ok := s.ociManifests[ociManifestKey(repositoryID, name, digest)]
+	if !ok {
+		return OCIManifest{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) ListOCITags(_ context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	prefix := repositoryID + "\x00" + name + "\x00"
+	var tags []string
+	for key := range s.ociTags {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		tag := strings.TrimPrefix(key, prefix)
+		if after != "" && tag <= after {
+			continue
+		}
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	if len(tags) > limit {
+		tags = tags[:limit]
+	}
+	return tags, nil
+}
+func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, digest string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := ociManifestKey(repositoryID, name, digest)
+	if _, ok := s.ociManifests[key]; !ok {
+		return ErrNotFound
+	}
+	manifest := s.ociManifests[key]
+	delete(s.ociManifests, key)
+	s.ociObjectIntents[manifest.ObjectKey] = OCIObjectIntent{ObjectKey: manifest.ObjectKey, Digest: manifest.Digest, Size: manifest.Size, CreatedAt: time.Now().UTC()}
+	for tag, target := range s.ociTags {
+		if target == digest && strings.HasPrefix(tag, repositoryID+"\x00"+name+"\x00") {
+			delete(s.ociTags, tag)
+		}
+	}
+	return nil
+}
+
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), repositoryGrants: make(map[string]RepositoryGrantSet), retentionPolicies: make(map[string]RepositoryRetentionPolicy), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent)}
 }
 
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
@@ -397,11 +926,59 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 	defer s.mu.RUnlock()
 	out := []MavenArtifact{}
 	for _, a := range s.mavenArtifacts {
-		if a.RepositoryID == repositoryID {
+		if a.RepositoryID == repositoryID && a.State == "visible" {
 			out = append(out, a)
 		}
 	}
 	return out, nil
+}
+
+func (s *MemoryStore) GetMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	artifact, ok := s.mavenArtifacts[artifactID]
+	if !ok || artifact.RepositoryID != repositoryID {
+		return MavenArtifact{}, ErrNotFound
+	}
+	return artifact, nil
+}
+
+func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	artifact, ok := s.mavenArtifacts[artifactID]
+	if !ok || artifact.RepositoryID != repositoryID {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if artifact.State == "deleted" {
+		return artifact, nil
+	}
+	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
+	for key, asset := range s.mavenAssets {
+		if asset.RepositoryID == repositoryID && strings.HasPrefix(asset.Path, prefix) {
+			delete(s.mavenAssets, key)
+		}
+	}
+	for key := range s.mavenObjectRefs {
+		stillReferenced := false
+		for _, asset := range s.mavenAssets {
+			if asset.ObjectKey == key {
+				stillReferenced = true
+				break
+			}
+		}
+		if !stillReferenced {
+			delete(s.mavenObjectRefs, key)
+		}
+	}
+	artifact.State = "deleted"
+	s.mavenArtifacts[artifactID] = artifact
+	return artifact, nil
+}
+
+func mavenArtifactPathPrefix(coordinate string) string {
+	parts := strings.Split(coordinate, ":")
+	return strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/"
 }
 func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	s.mu.Lock()
@@ -578,6 +1155,208 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 	repo.Version = "2"
 	s.hostedRepositories[id] = repo
 	return repo, nil
+}
+
+func cloneHostedGroup(group HostedGroup) HostedGroup {
+	group.Members = append([]GroupMember(nil), group.Members...)
+	return group
+}
+
+func nextHostedGroupVersion(version string) string {
+	current, err := strconv.ParseInt(version, 10, 64)
+	if err != nil || current < 1 {
+		return "1"
+	}
+	return strconv.FormatInt(current+1, 10)
+}
+
+func (s *MemoryStore) CreateHostedGroupIdempotently(_ context.Context, group HostedGroup, actor, key, payload string) (HostedGroup, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordKey := actor + "\x00/groups\x00" + key
+	if record, ok := s.idempotencyRecords[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.payload != payload {
+			return HostedGroup{}, false, ErrIdempotencyConflict
+		}
+		return cloneHostedGroup(s.hostedGroups[record.repositoryID]), true, nil
+	}
+	for _, existing := range s.hostedGroups {
+		if existing.Name == group.Name {
+			return HostedGroup{}, false, ErrNameExists
+		}
+	}
+	group.Version = "1"
+	group.Members = append([]GroupMember(nil), group.Members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	s.hostedGroups[group.ID] = group
+	s.idempotencyRecords[recordKey] = idempotencyRecord{payload: payload, repositoryID: group.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return cloneHostedGroup(group), false, nil
+}
+
+func (s *MemoryStore) ListHostedGroups(_ context.Context, limit int, after string) ([]HostedGroup, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	items := make([]HostedGroup, 0, len(s.hostedGroups))
+	for _, group := range s.hostedGroups {
+		items = append(items, cloneHostedGroup(group))
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	start := 0
+	if after != "" {
+		found := false
+		for i, group := range items {
+			if group.ID == after {
+				start, found = i+1, true
+				break
+			}
+		}
+		if !found {
+			return nil, "", ErrNotFound
+		}
+	}
+	end := start + limit
+	next := ""
+	if end < len(items) {
+		next = items[end-1].ID
+	} else {
+		end = len(items)
+	}
+	return items[start:end], next, nil
+}
+
+func (s *MemoryStore) GetHostedGroup(_ context.Context, id string) (HostedGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	group, ok := s.hostedGroups[id]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) ReplaceHostedGroup(_ context.Context, group HostedGroup, expectedVersion string) (HostedGroup, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, ok := s.hostedGroups[group.ID]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	if stored.Version != expectedVersion {
+		return HostedGroup{}, ErrVersionConflict
+	}
+	group.Version = nextHostedGroupVersion(stored.Version)
+	group.Members = append([]GroupMember(nil), group.Members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	s.hostedGroups[group.ID] = group
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) ReplaceHostedGroupMembers(_ context.Context, id string, members []GroupMember, expectedVersion string) (HostedGroup, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group, ok := s.hostedGroups[id]
+	if !ok {
+		return HostedGroup{}, ErrNotFound
+	}
+	if group.Version != expectedVersion {
+		return HostedGroup{}, ErrVersionConflict
+	}
+	group.Members = append([]GroupMember(nil), members...)
+	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
+	group.Version = nextHostedGroupVersion(group.Version)
+	s.hostedGroups[id] = group
+	return cloneHostedGroup(group), nil
+}
+
+func (s *MemoryStore) DeleteHostedGroup(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedGroups[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.hostedGroups, id)
+	return nil
+}
+
+func cloneRepositoryGrantSet(set RepositoryGrantSet) RepositoryGrantSet {
+	set.Grants = append([]RepositoryGrant(nil), set.Grants...)
+	for i := range set.Grants {
+		set.Grants[i].Scopes = append([]string(nil), set.Grants[i].Scopes...)
+	}
+	return set
+}
+
+func (s *MemoryStore) GetRepositoryGrants(_ context.Context, repositoryID string) (RepositoryGrantSet, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set, ok := s.repositoryGrants[repositoryID]
+	if !ok {
+		return RepositoryGrantSet{Version: "1", Grants: []RepositoryGrant{}}, nil
+	}
+	return cloneRepositoryGrantSet(set), nil
+}
+
+func (s *MemoryStore) ReplaceRepositoryGrants(_ context.Context, repositoryID string, grants []RepositoryGrant, expectedVersion string) (RepositoryGrantSet, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set, ok := s.repositoryGrants[repositoryID]
+	if !ok {
+		set.Version = "1"
+	}
+	if set.Version != expectedVersion {
+		return RepositoryGrantSet{}, ErrVersionConflict
+	}
+	set.Version = nextHostedGroupVersion(set.Version)
+	set.Grants = append([]RepositoryGrant{}, grants...)
+	for i := range set.Grants {
+		set.Grants[i].Scopes = append([]string(nil), set.Grants[i].Scopes...)
+	}
+	s.repositoryGrants[repositoryID] = set
+	return cloneRepositoryGrantSet(set), nil
+}
+
+func defaultRepositoryRetentionPolicy() RepositoryRetentionPolicy {
+	return RepositoryRetentionPolicy{Version: "1", KeepDays: 30, MinimumVersions: 1}
+}
+
+func (s *MemoryStore) GetRepositoryRetentionPolicy(_ context.Context, repositoryID string) (RepositoryRetentionPolicy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryRetentionPolicy{}, ErrNotFound
+	}
+	policy, ok := s.retentionPolicies[repositoryID]
+	if !ok {
+		return defaultRepositoryRetentionPolicy(), nil
+	}
+	return policy, nil
+}
+
+func (s *MemoryStore) ReplaceRepositoryRetentionPolicy(_ context.Context, repositoryID string, policy RepositoryRetentionPolicy, expectedVersion string) (RepositoryRetentionPolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryRetentionPolicy{}, ErrNotFound
+	}
+	current, ok := s.retentionPolicies[repositoryID]
+	if !ok {
+		current = defaultRepositoryRetentionPolicy()
+	}
+	if current.Version != expectedVersion {
+		return RepositoryRetentionPolicy{}, ErrVersionConflict
+	}
+	policy.Version = nextHostedGroupVersion(current.Version)
+	s.retentionPolicies[repositoryID] = policy
+	return policy, nil
 }
 
 func (s *MemoryStore) CreateRawGroup(_ context.Context, group Group) (Group, error) {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -41,9 +42,8 @@ type repositoryPageCursor struct {
 }
 
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
-	if !ok || !principal.Admin {
-		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+	principal, ok := h.authorize(w, r)
+	if !ok {
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v2/repositories")
@@ -73,8 +73,402 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok || !principal.Admin {
+		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+		return Principal{}, false
+	}
+	return principal, true
+}
+
+// generatedRepositoryAPIAdapter keeps authorization and domain behavior in the
+// existing handler while the generated OpenAPI wrapper owns route and parameter
+// binding for the active repository-management surface.
+type generatedRepositoryAPIAdapter struct {
+	hostedRepositoryAPIHandler
+	sessions          nativeMavenHandler
+	groups            repository.HostedGroupStore
+	grants            repository.RepositoryGrantStore
+	retentionPolicies repository.RepositoryRetentionPolicyStore
+}
+
+var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
+
+func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
+	if _, ok := h.authorize(w, r); ok {
+		h.listBound(w, r, params)
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateRepositoryParams) {
+	if principal, ok := h.authorize(w, r); ok {
+		h.createWithIdempotencyKey(w, r, principal, string(params.IdempotencyKey))
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); ok {
+		h.disable(w, r, id.String())
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); ok {
+		h.get(w, r, id.String())
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list grants failed")
+		return
+	}
+	w.Header().Set("ETag", set.Version)
+	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var grants []repository.RepositoryGrant
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principals and valid scopes")
+		return
+	}
+	set, err := h.grants.ReplaceRepositoryGrants(r.Context(), repositoryID.String(), grants, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace grants failed")
+		return
+	}
+	w.Header().Set("ETag", set.Version)
+	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+}
+
+func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
+	principals := map[string]bool{}
+	for _, grant := range grants {
+		if strings.TrimSpace(grant.Principal) == "" || principals[grant.Principal] || len(grant.Scopes) == 0 {
+			return false
+		}
+		principals[grant.Principal] = true
+		scopes := map[string]bool{}
+		for _, scope := range grant.Scopes {
+			if !validScopes[scope] || scopes[scope] {
+				return false
+			}
+			scopes[scope] = true
+		}
+	}
+	return true
+}
+
+func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repositoryID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, policy)
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceRetentionPolicyParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var policy repository.RepositoryRetentionPolicy
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&policy); err != nil || policy.Version == "" || policy.KeepDays < 1 || policy.MinimumVersions < 1 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, keepDays, and minimumVersions must be valid")
+		return
+	}
+	updated, err := h.retentionPolicies.ReplaceRepositoryRetentionPolicy(r.Context(), repositoryID.String(), policy, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, updated)
+}
+
+func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	limit, after := 50, ""
+	if params.PageSize != nil {
+		limit = int(*params.PageSize)
+	}
+	if params.PageToken != nil {
+		after = string(*params.PageToken)
+	}
+	items, next, err := h.groups.ListHostedGroups(r.Context(), limit, after)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list groups failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"items": items, "nextPageToken": next})
+}
+
+func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateGroupParams) {
+	principal, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	var group repository.HostedGroup
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&group); err != nil || !h.validHostedGroup(r, group) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name, format, and members must be valid")
+		return
+	}
+	group.ID = uuid.NewString()
+	payload, _ := json.Marshal(struct {
+		Name    string                   `json:"name"`
+		Format  repository.Format        `json:"format"`
+		Members []repository.GroupMember `json:"members"`
+	}{group.Name, group.Format, group.Members})
+	digest := sha256.Sum256(payload)
+	created, _, err := h.groups.CreateHostedGroupIdempotently(r.Context(), group, principal.Actor, string(params.IdempotencyKey), base64.RawURLEncoding.EncodeToString(digest[:]))
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
+		return
+	}
+	if errors.Is(err, repository.ErrNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "version_conflict", "group name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create group failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, created)
+}
+
+func (h generatedRepositoryAPIAdapter) GetGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+	h.writeGroup(w, r, id.String())
+}
+func (h generatedRepositoryAPIAdapter) ListGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get group failed")
+		return
+	}
+	writeNativeMavenJSON(w, 200, group.Members)
+}
+func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	err := h.groups.DeleteHostedGroup(r.Context(), id.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "delete group failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var group repository.HostedGroup
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&group); err != nil || !h.validHostedGroup(r, group) {
+		writeHostedProblem(w, 400, "invalid_request", "name, format, and members must be valid")
+		return
+	}
+	group.ID = id.String()
+	updated, err := h.groups.ReplaceHostedGroup(r.Context(), group, string(params.IfMatch))
+	h.writeGroupMutation(w, updated, err)
+}
+func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupMembersParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	var members []repository.GroupMember
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&members); err != nil || !h.validHostedGroup(r, repository.HostedGroup{Name: group.Name, Format: group.Format, Members: members}) {
+		writeHostedProblem(w, 400, "invalid_request", "members must be valid")
+		return
+	}
+	updated, err := h.groups.ReplaceHostedGroupMembers(r.Context(), id.String(), members, string(params.IfMatch))
+	h.writeGroupMutation(w, updated, err)
+}
+
+func (h generatedRepositoryAPIAdapter) writeGroup(w http.ResponseWriter, r *http.Request, id string) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	group, err := h.groups.GetHostedGroup(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get group failed")
+		return
+	}
+	writeNativeMavenJSON(w, 200, group)
+}
+func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter, group repository.HostedGroup, err error) {
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, 412, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "update group failed")
+		return
+	}
+	writeNativeMavenJSON(w, 200, group)
+}
+func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
+	if !hostedRepositoryName.MatchString(group.Name) || (group.Format != repository.FormatOCI && group.Format != repository.FormatMaven && group.Format != repository.FormatRaw) || len(group.Members) == 0 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, member := range group.Members {
+		if _, err := uuid.Parse(member.RepositoryID); err != nil || member.Position < 0 || seen[member.RepositoryID] {
+			return false
+		}
+		seen[member.RepositoryID] = true
+		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
+		if err != nil || repo.Format != group.Format || repo.State != repository.RepositoryActive {
+			return false
+		}
+	}
+	for i := range group.Members {
+		found := false
+		for _, member := range group.Members {
+			if member.Position == i {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (h generatedRepositoryAPIAdapter) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreatePublishSessionParams) {
+	h.withSessionAdmin(w, r, func(principal Principal) {
+		h.sessions.createWithIdempotencyKey(w, r, principal, repositoryID.String(), string(params.IdempotencyKey))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.listArtifacts(w, r, repositoryID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.deleteArtifact(w, r, repositoryID.String(), artifactID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.getSession(w, r, sessionID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.upload(w, r, sessionID.String(), objectName)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+	h.withSessionAdmin(w, r, func(Principal) {
+		h.sessions.commit(w, r, sessionID.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) withSessionAdmin(w http.ResponseWriter, r *http.Request, operation func(Principal)) {
+	if principal, ok := h.sessions.admin(r); ok {
+		operation(principal)
+		return
+	}
+	writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+}
+
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	h.createWithIdempotencyKey(w, r, principal, r.Header.Get("Idempotency-Key"))
+}
+
+func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWriter, r *http.Request, principal Principal, key string) {
+	key = strings.TrimSpace(key)
 	if key == "" || len(key) > 128 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
 		return
@@ -109,16 +503,35 @@ func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Reques
 }
 
 func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request) {
-	pageSize := 50
+	params := adminopenapi.ListRepositoriesParams{}
 	if raw := r.URL.Query().Get("pageSize"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 200 {
+		pageSize, err := strconv.Atoi(raw)
+		if err != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
 			return
 		}
-		pageSize = parsed
+		params.PageSize = &pageSize
 	}
-	after, err := h.decodeCursor(r.URL.Query().Get("pageToken"))
+	if token := r.URL.Query().Get("pageToken"); token != "" {
+		params.PageToken = &token
+	}
+	h.listBound(w, r, params)
+}
+
+func (h hostedRepositoryAPIHandler) listBound(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
+	pageSize := 50
+	if params.PageSize != nil {
+		pageSize = int(*params.PageSize)
+		if pageSize < 1 || pageSize > 200 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+			return
+		}
+	}
+	pageToken := ""
+	if params.PageToken != nil {
+		pageToken = string(*params.PageToken)
+	}
+	after, err := h.decodeCursor(pageToken)
 	if err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 		return

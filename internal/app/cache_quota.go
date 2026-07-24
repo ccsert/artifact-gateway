@@ -16,9 +16,10 @@ var ErrCacheQuotaExceeded = errors.New("repository cache quota exceeded")
 // are digest-addressed and shared, so usage is intentionally logical index
 // usage: one repository cannot consume another repository's quota.
 type CacheQuota struct {
-	store  OCIObjectStore
-	limits map[string]int64
-	mu     sync.Mutex
+	store       OCIObjectStore
+	limits      map[string]int64
+	mu          sync.Mutex
+	coordinator OCICacheCoordinator
 }
 
 type cacheQuotaIndex struct {
@@ -56,6 +57,11 @@ func NewCacheQuota(store OCIObjectStore, limits map[string]int64) *CacheQuota {
 	return &CacheQuota{store: store, limits: limits}
 }
 
+func (q *CacheQuota) WithCoordinator(coordinator OCICacheCoordinator) *CacheQuota {
+	q.coordinator = coordinator
+	return q
+}
+
 func (q *CacheQuota) Admit(ctx context.Context, repository, replacingKey string, size int64, publish func() error) error {
 	if q == nil || repository == "" {
 		return publish()
@@ -77,45 +83,72 @@ func (q *CacheQuota) AdmitWithLimit(ctx context.Context, repository, replacingKe
 }
 
 func (q *CacheQuota) admit(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"oci/index/", "maven/index/", "raw/index/"})
-	if err != nil {
-		return err
-	}
-	if size > limit-used {
-		return ErrCacheQuotaExceeded
-	}
-	return publish()
+	return q.withAdmissionLock(ctx, repository, func() error {
+		used, err := q.usedLocked(ctx, repository, replacingKey, []string{"oci/index/", "maven/index/", "raw/index/"})
+		if err != nil {
+			return err
+		}
+		if size > limit-used {
+			return ErrCacheQuotaExceeded
+		}
+		return publish()
+	})
 }
 
 func (q *CacheQuota) admitRaw(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
+	return q.withAdmissionLock(ctx, repository, func() error {
+		used, err := q.usedLocked(ctx, repository, replacingKey, []string{"raw/index/"})
+		if err != nil {
+			return err
+		}
+		if size > limit-used {
+			return ErrCacheQuotaExceeded
+		}
+		return publish()
+	})
+}
+
+func (q *CacheQuota) withAdmissionLock(ctx context.Context, repository string, work func() error) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"raw/index/"})
-	if err != nil {
-		return err
+	if q.coordinator == nil {
+		return work()
 	}
-	if size > limit-used {
-		return ErrCacheQuotaExceeded
+	for {
+		owner, acquired, err := q.coordinator.Acquire(ctx, "cache-quota:"+repository, rawDistributedLockLease)
+		if err != nil {
+			return err
+		}
+		if acquired {
+			defer func() {
+				releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				defer cancel()
+				_ = q.coordinator.Release(releaseCtx, "cache-quota:"+repository, owner)
+			}()
+			return work()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
-	return publish()
 }
 
 func (q *CacheQuota) AdmitConanWithLimit(ctx context.Context, repository, replacingKey string, size, limit int64, publish func() error) error {
 	if q == nil || repository == "" || limit <= 0 {
 		return publish()
 	}
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	used, err := q.usedLocked(ctx, repository, replacingKey, []string{"conan/index/"})
-	if err != nil {
-		return err
-	}
-	if size > limit-used {
-		return ErrCacheQuotaExceeded
-	}
-	return publish()
+	return q.withAdmissionLock(ctx, repository, func() error {
+		used, err := q.usedLocked(ctx, repository, replacingKey, []string{"conan/index/"})
+		if err != nil {
+			return err
+		}
+		if size > limit-used {
+			return ErrCacheQuotaExceeded
+		}
+		return publish()
+	})
 }
 
 func (q *CacheQuota) usedLocked(ctx context.Context, repository, skipKey string, prefixes []string) (int64, error) {

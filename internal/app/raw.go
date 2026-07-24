@@ -41,7 +41,7 @@ type RawClient interface {
 	FetchRaw(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
 }
 
-func (c GiteaClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
+func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	client := c.HTTPClient
 	if member.Type == repository.MemberProxy {
 		u, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
@@ -69,9 +69,6 @@ func (c GiteaClient) FetchRaw(ctx context.Context, method string, member reposit
 	}
 	// Raw has one cached file representation. Range and content negotiation are
 	// applied locally after the complete canonical representation is fetched.
-	if member.Type == repository.MemberHosted {
-		r.SetBasicAuth(c.Username, c.Token)
-	}
 	client = tracedHTTPClient(client)
 	// Never follow upstream redirects: a redirect can otherwise bypass the
 	// configured proxy host allowlist (and may disclose hosted credentials).
@@ -527,6 +524,32 @@ func (h RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditProxyDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method})
 			hadProxyDenied = true
 			continue
+		}
+		if h.Cache != nil {
+			release, lockErr := acquireCacheRequestLock(r.Context(), h.Cache.coordinator, key)
+			if lockErr != nil {
+				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+				return
+			}
+			defer release()
+			content, cacheErr := h.Cache.Load(r.Context(), key)
+			if cacheErr == nil {
+				if h.Metrics != nil {
+					h.Metrics.recordRawCacheHit()
+				}
+				served := serveRaw(w, r, path, content)
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: "hit", Bytes: served.Bytes, Method: r.Method})
+				return
+			}
+			if errors.Is(cacheErr, errRawCacheNegative) {
+				if h.Metrics != nil {
+					h.Metrics.recordRawNegativeCacheHit()
+				}
+				h.audit(r.Context(), group, path, rawAuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
+				negativeMember := member
+				lastNegative = &negativeMember
+				continue
+			}
 		}
 		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, nil)
 		if fetchErr != nil {

@@ -1,0 +1,476 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
+)
+
+// nativeOCIHandler is the write-capable Registry V2 implementation. It only
+// claims paths whose first component is a V3 OCI hosted repository; all other
+// V2 paths retain the legacy group/proxy behaviour while it is being removed.
+type nativeOCIHandler struct {
+	store   repository.NativeOCIStore
+	repos   repository.HostedRepositoryStore
+	objects OCIObjectStore
+	auth    Authenticator
+}
+
+func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeOCIHandler {
+	if objects == nil {
+		objects = NewMemoryOCIObjectStore()
+	}
+	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth}
+}
+
+func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
+	name, resource, reference, uploadID, ok := parseNativeOCIPath(r.URL.Path)
+	if !ok {
+		return false
+	}
+	root, imageName, found := strings.Cut(name, "/")
+	if !found || imageName == "" {
+		return false
+	}
+	repo, err := h.repos.GetHostedRepositoryByName(r.Context(), root)
+	if errors.Is(err, repository.ErrNotFound) || repo.Format != repository.FormatOCI {
+		return false
+	}
+	if err != nil || repo.State != repository.RepositoryActive {
+		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
+		return true
+	}
+	p, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
+	if !authenticated {
+		writeOCIChallenge(w, r)
+		return true
+	}
+	_ = p
+	switch resource {
+	case "blob":
+		h.blob(w, r, repo, imageName, reference)
+	case "upload":
+		h.upload(w, r, repo, imageName, uploadID)
+	case "uploads":
+		h.startUpload(w, r, repo, imageName)
+	case "manifest":
+		h.manifest(w, r, repo, imageName, reference)
+	case "tags":
+		h.tags(w, r, repo, imageName)
+	default:
+		return false
+	}
+	return true
+}
+
+func parseNativeOCIPath(path string) (name, resource, reference, uploadID string, ok bool) {
+	parts := strings.Split(strings.TrimSuffix(strings.TrimPrefix(path, "/v2/"), "/"), "/")
+	for i, part := range parts {
+		switch part {
+		case "tags":
+			if i > 0 && i+2 == len(parts) && parts[i+1] == "list" {
+				return strings.Join(parts[:i], "/"), "tags", "", "", true
+			}
+		case "manifests":
+			if i > 0 && i+2 == len(parts) {
+				return strings.Join(parts[:i], "/"), "manifest", parts[i+1], "", true
+			}
+		case "blobs":
+			if i > 0 && i+2 == len(parts) && parts[i+1] != "uploads" {
+				return strings.Join(parts[:i], "/"), "blob", parts[i+1], "", true
+			}
+			if i > 0 && i+1 == len(parts) {
+				return strings.Join(parts[:i], "/"), "uploads", "", "", true
+			}
+			if i > 0 && i+2 == len(parts) && parts[i+1] == "uploads" {
+				return strings.Join(parts[:i], "/"), "uploads", "", "", true
+			}
+			if i > 0 && i+3 == len(parts) && parts[i+1] == "uploads" {
+				return strings.Join(parts[:i], "/"), "upload", "", parts[i+2], true
+			}
+		}
+	}
+	return "", "", "", "", false
+}
+
+func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if digest := r.URL.Query().Get("mount"); digest != "" {
+		if !validOCIDigest(digest) {
+			writeOCIError(w, http.StatusBadRequest, "DIGEST_INVALID", "valid sha256 digest is required")
+			return
+		}
+		if sourceRoot, sourceName, found := strings.Cut(r.URL.Query().Get("from"), "/"); found && sourceRoot != "" && sourceName != "" {
+			source, err := h.repos.GetHostedRepositoryByName(r.Context(), sourceRoot)
+			if err == nil && source.Format == repository.FormatOCI && source.State == repository.RepositoryActive {
+				blob, err := h.store.MountOCIBlobFrom(r.Context(), repo.ID, source.ID, digest)
+				if err == nil {
+					w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/blobs/"+blob.Digest)
+					w.Header().Set("Docker-Content-Digest", blob.Digest)
+					w.WriteHeader(http.StatusCreated)
+					return
+				}
+			}
+		}
+	}
+	id := uuid.NewString()
+	upload := repository.OCIUpload{ID: id, RepositoryID: repo.ID, Name: name, ObjectKey: "native/oci/uploads/" + id, State: "open", ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	if _, err := h.store.CreateOCIUpload(r.Context(), upload); err != nil {
+		writeOCIError(w, 500, "UNKNOWN", "create upload failed")
+		return
+	}
+	h.uploadHeaders(w, repo.Name, name, upload)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, id string) {
+	release, err := h.store.LockOCIUpload(r.Context(), id)
+	if err != nil {
+		writeOCIError(w, http.StatusServiceUnavailable, "UNKNOWN", "upload coordination is unavailable")
+		return
+	}
+	defer release()
+	upload, err := h.store.GetOCIUpload(r.Context(), id)
+	if err != nil || upload.RepositoryID != repo.ID || upload.Name != name || upload.State != "open" || time.Now().After(upload.ExpiresAt) {
+		writeOCIError(w, 404, "BLOB_UPLOAD_UNKNOWN", "blob upload unknown to registry")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		h.uploadHeaders(w, repo.Name, name, upload)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		upload, err = h.store.CancelOCIUpload(r.Context(), id)
+		if err != nil {
+			writeOCIError(w, 404, "BLOB_UPLOAD_UNKNOWN", "blob upload unknown to registry")
+			return
+		}
+		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodPatch:
+		upload, err = h.appendUpload(r.Context(), r, upload)
+		if err != nil {
+			writeOCIError(w, 416, "RANGE_INVALID", "upload range is invalid")
+			return
+		}
+		h.uploadHeaders(w, repo.Name, name, upload)
+		w.WriteHeader(http.StatusAccepted)
+	case http.MethodPut:
+		if r.ContentLength != 0 {
+			upload, err = h.appendUpload(r.Context(), r, upload)
+			if err != nil {
+				writeOCIError(w, 416, "RANGE_INVALID", "upload range is invalid")
+				return
+			}
+		}
+		digest := r.URL.Query().Get("digest")
+		if !validOCIDigest(digest) {
+			writeOCIError(w, 400, "DIGEST_INVALID", "valid sha256 digest is required")
+			return
+		}
+		data, err := h.objects.Get(r.Context(), upload.ObjectKey)
+		if err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "upload bytes are unavailable")
+			return
+		}
+		sum := sha256.Sum256(data)
+		if digest != "sha256:"+hex.EncodeToString(sum[:]) {
+			writeOCIError(w, 400, "DIGEST_INVALID", "provided digest did not match uploaded content")
+			return
+		}
+		key := "native/oci/blobs/sha256/" + strings.TrimPrefix(digest, "sha256:")
+		releaseObject, err := h.store.LockOCIObject(r.Context(), key)
+		if err != nil {
+			writeOCIError(w, http.StatusServiceUnavailable, "UNKNOWN", "blob coordination is unavailable")
+			return
+		}
+		defer releaseObject()
+		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "stage blob intent failed")
+			return
+		}
+		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "persist blob failed")
+			return
+		}
+		blob, err := h.store.CompleteOCIUpload(r.Context(), id, repository.OCIBlob{Digest: digest, ObjectKey: key, Size: int64(len(data))})
+		if err != nil {
+			writeOCIError(w, 409, "BLOB_UPLOAD_INVALID", "blob upload cannot be completed")
+			return
+		}
+		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/blobs/"+blob.Digest)
+		w.Header().Set("Docker-Content-Digest", blob.Digest)
+		w.WriteHeader(http.StatusCreated)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h nativeOCIHandler) appendUpload(ctx context.Context, r *http.Request, upload repository.OCIUpload) (repository.OCIUpload, error) {
+	if start, ok := uploadRangeStart(r.Header.Get("Content-Range")); ok && start != upload.Offset {
+		return upload, errors.New("offset mismatch")
+	}
+	old, err := h.objects.Get(ctx, upload.ObjectKey)
+	if err != nil && !errors.Is(err, errOCICacheMiss) {
+		return upload, err
+	}
+	chunk, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, 1<<30))
+	if err != nil {
+		return upload, err
+	}
+	if err = h.objects.PutReader(ctx, upload.ObjectKey, io.MultiReader(bytes.NewReader(old), bytes.NewReader(chunk)), int64(len(old)+len(chunk))); err != nil {
+		return upload, err
+	}
+	return h.store.UpdateOCIUpload(ctx, upload.ID, int64(len(old)+len(chunk)))
+}
+
+func uploadRangeStart(value string) (int64, bool) {
+	if value == "" {
+		return 0, false
+	}
+	value = strings.TrimPrefix(value, "bytes ")
+	left, _, ok := strings.Cut(value, "-")
+	if !ok {
+		return 0, false
+	}
+	var n int64
+	for _, c := range left {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + int64(c-'0')
+	}
+	return n, true
+}
+func (h nativeOCIHandler) uploadHeaders(w http.ResponseWriter, root, name string, upload repository.OCIUpload) {
+	w.Header().Set("Docker-Upload-UUID", upload.ID)
+	w.Header().Set("Location", "/v2/"+root+"/"+name+"/blobs/uploads/"+upload.ID)
+	if upload.Offset > 0 {
+		w.Header().Set("Range", "0-"+utoa(uint64(upload.Offset-1)))
+	}
+}
+
+func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, _ string, digest string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !validOCIDigest(digest) {
+		writeOCIError(w, 400, "DIGEST_INVALID", "valid sha256 digest is required")
+		return
+	}
+	blob, err := h.store.GetOCIBlob(r.Context(), repo.ID, digest)
+	if err != nil {
+		writeOCIError(w, 404, "BLOB_UNKNOWN", "blob unknown to registry")
+		return
+	}
+	serveCachedOCIContent(w, r, digest, CachedOCIContent{Digest: blob.Digest, Object: blob.ObjectKey, Size: blob.Size, store: h.objects, ContentType: "application/octet-stream"})
+}
+
+func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, reference string) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		manifest, err := h.store.GetOCIManifest(r.Context(), repo.ID, name, reference)
+		if err != nil {
+			writeOCIError(w, 404, "MANIFEST_UNKNOWN", "manifest unknown to registry")
+			return
+		}
+		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
+			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")
+			return
+		}
+		serveCachedOCIContent(w, r, reference, CachedOCIContent{Digest: manifest.Digest, Object: manifest.ObjectKey, Size: manifest.Size, store: h.objects, ContentType: manifest.MediaType})
+	case http.MethodPut:
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<20))
+		if err != nil {
+			writeOCIError(w, 413, "MANIFEST_INVALID", "manifest is too large")
+			return
+		}
+		if !validOCIManifest(data) {
+			writeOCIError(w, 400, "MANIFEST_INVALID", "manifest must be a JSON object")
+			return
+		}
+		if code, message := h.validateManifestDescriptors(r.Context(), repo, name, data); code != "" {
+			writeOCIError(w, http.StatusBadRequest, code, message)
+			return
+		}
+		sum := sha256.Sum256(data)
+		digest := "sha256:" + hex.EncodeToString(sum[:])
+		if validOCIDigest(reference) && reference != digest {
+			writeOCIError(w, 400, "DIGEST_INVALID", "manifest digest did not match content")
+			return
+		}
+		mediaType := r.Header.Get("Content-Type")
+		if mediaType == "" {
+			mediaType = "application/vnd.oci.image.manifest.v1+json"
+		}
+		key := "native/oci/manifests/" + repo.ID + "/" + url.PathEscape(name) + "/" + strings.TrimPrefix(digest, "sha256:")
+		releaseObject, err := h.store.LockOCIObject(r.Context(), key)
+		if err != nil {
+			writeOCIError(w, http.StatusServiceUnavailable, "UNKNOWN", "manifest coordination is unavailable")
+			return
+		}
+		defer releaseObject()
+		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "stage manifest intent failed")
+			return
+		}
+		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "persist manifest failed")
+			return
+		}
+		manifest, err := h.store.PutOCIManifest(r.Context(), repository.OCIManifest{RepositoryID: repo.ID, Name: name, Digest: digest, ObjectKey: key, MediaType: mediaType, Size: int64(len(data))}, reference)
+		if err != nil {
+			writeOCIError(w, 500, "UNKNOWN", "publish manifest failed")
+			return
+		}
+		w.Header().Set("Docker-Content-Digest", manifest.Digest)
+		w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/manifests/"+reference)
+		w.WriteHeader(http.StatusCreated)
+	case http.MethodDelete:
+		if !validOCIDigest(reference) {
+			writeOCIError(w, 400, "DIGEST_INVALID", "manifest deletion requires a digest")
+			return
+		}
+		if err := h.store.DeleteOCIManifest(r.Context(), repo.ID, name, reference); err != nil {
+			writeOCIError(w, 404, "MANIFEST_UNKNOWN", "manifest unknown to registry")
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h nativeOCIHandler) tags(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 1000 {
+			writeOCIError(w, http.StatusBadRequest, "NAME_INVALID", "tag page size must be between 1 and 1000")
+			return
+		}
+		limit = parsed
+	}
+	tags, err := h.store.ListOCITags(r.Context(), repo.ID, name, limit+1, r.URL.Query().Get("last"))
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list tags")
+		return
+	}
+	if len(tags) > limit {
+		tags = tags[:limit]
+		next := "/v2/" + repo.Name + "/" + name + "/tags/list?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(tags[len(tags)-1])
+		w.Header().Set("Link", "<"+next+">; rel=\"next\"")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"name": repo.Name + "/" + name, "tags": tags})
+}
+
+func validOCIDigest(value string) bool {
+	if !strings.HasPrefix(value, "sha256:") || len(value) != 71 {
+		return false
+	}
+	for _, c := range value[7:] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+func validOCIManifest(data []byte) bool {
+	var v map[string]json.RawMessage
+	return json.Unmarshal(data, &v) == nil && v != nil
+}
+
+func ociAcceptsManifest(accept, mediaType string) bool {
+	if accept == "" || mediaType == "" {
+		return true
+	}
+	mediaType = strings.TrimSpace(strings.Split(mediaType, ";")[0])
+	for _, entry := range strings.Split(accept, ",") {
+		value := strings.TrimSpace(strings.Split(entry, ";")[0])
+		if value == "*/*" || value == mediaType {
+			return true
+		}
+		if prefix, _, ok := strings.Cut(value, "/"); ok && strings.HasSuffix(value, "/*") && strings.HasPrefix(mediaType, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+type ociDescriptor struct {
+	Digest string `json:"digest"`
+	Size   *int64 `json:"size"`
+}
+
+type ociManifestDescriptors struct {
+	Config    *ociDescriptor  `json:"config"`
+	Layers    []ociDescriptor `json:"layers"`
+	Manifests []ociDescriptor `json:"manifests"`
+}
+
+func (h nativeOCIHandler) validateManifestDescriptors(ctx context.Context, repo repository.HostedRepository, name string, data []byte) (code, message string) {
+	var document ociManifestDescriptors
+	if err := json.Unmarshal(data, &document); err != nil {
+		return "MANIFEST_INVALID", "manifest must be a JSON object"
+	}
+	blobs := make([]ociDescriptor, 0, len(document.Layers)+1)
+	if document.Config != nil {
+		blobs = append(blobs, *document.Config)
+	}
+	blobs = append(blobs, document.Layers...)
+	for _, descriptor := range blobs {
+		if !validOCIDigest(descriptor.Digest) || descriptor.Size != nil && *descriptor.Size < 0 {
+			return "MANIFEST_INVALID", "manifest contains an invalid blob descriptor"
+		}
+		blob, err := h.store.GetOCIBlob(ctx, repo.ID, descriptor.Digest)
+		if err != nil {
+			return "MANIFEST_BLOB_UNKNOWN", "manifest references a blob unknown to repository"
+		}
+		if descriptor.Size != nil && *descriptor.Size != blob.Size {
+			return "MANIFEST_INVALID", "manifest blob descriptor size does not match stored content"
+		}
+	}
+	for _, descriptor := range document.Manifests {
+		if !validOCIDigest(descriptor.Digest) || descriptor.Size != nil && *descriptor.Size < 0 {
+			return "MANIFEST_INVALID", "manifest contains an invalid manifest descriptor"
+		}
+		manifest, err := h.store.GetOCIManifest(ctx, repo.ID, name, descriptor.Digest)
+		if err != nil {
+			return "MANIFEST_UNKNOWN", "manifest references a manifest unknown to repository"
+		}
+		if descriptor.Size != nil && *descriptor.Size != manifest.Size {
+			return "MANIFEST_INVALID", "manifest descriptor size does not match stored content"
+		}
+	}
+	return "", ""
+}

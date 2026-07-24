@@ -85,13 +85,87 @@ func (c *integrationOCIUpstream) Calls(reference string) int {
 	return c.calls[reference]
 }
 
-func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
-	redisAddress := os.Getenv("TEST_REDIS_ADDRESS")
+func TestPostgresCacheControlStoreKeepsAllFormatIndexesOutOfS3(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
 	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
-	if redisAddress == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
-		t.Skip("Redis and S3 integration environment is required")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+
+	bucket := fmt.Sprintf("cache-control-%d", time.Now().UnixNano())
+	objects, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := objects.EnsureBucket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	control, err := NewPostgresCacheControlStore(objects, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer control.Close()
+
+	for _, key := range []string{
+		"oci/index/control.json", "oci/gc/control.json", "maven/index/control.json", "raw/index/control.json", "conan/index/control.json",
+	} {
+		if err := control.Put(context.Background(), key, []byte(`{"expires_at":"2099-01-01T00:00:00Z"}`)); err != nil {
+			t.Fatalf("store %s: %v", key, err)
+		}
+		if _, err := control.Get(context.Background(), key); err != nil {
+			t.Fatalf("load %s: %v", key, err)
+		}
+		if objects, err := objects.List(context.Background(), key[:strings.LastIndex(key, "/")+1]); err != nil || len(objects) != 0 {
+			t.Fatalf("S3 control objects for %s = %#v, %v; want none", key, objects, err)
+		}
+	}
+	if err := control.Put(context.Background(), "oci/objects/bytes", []byte("artifact bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if objects, err := objects.List(context.Background(), "oci/objects/"); err != nil || len(objects) != 1 {
+		t.Fatalf("S3 artifact objects = %#v, %v; want one", objects, err)
+	}
+}
+
+func TestPostgresCacheTaskQueueClaimsWorkOnceAcrossGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	queueA, err := NewPostgresCacheTaskQueue(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer queueA.Close()
+	queueB, err := NewPostgresCacheTaskQueue(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer queueB.Close()
+	if err := queueA.EnqueueCollection(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	claimed, ok, err := queueA.claimCollection(context.Background(), time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("first claim = %#v, %t, %v", claimed, ok, err)
+	}
+	if _, ok, err := queueB.claimCollection(context.Background(), time.Minute); err != nil || ok {
+		t.Fatalf("second claim while leased = %t, %v; want unavailable", ok, err)
+	}
+	if err := queueA.complete(context.Background(), claimed); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
 
 	const bucket = "oci-cache-integration"
@@ -106,6 +180,16 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	controlA, err := NewPostgresCacheControlStore(storeA, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controlA.Close()
+	controlB, err := NewPostgresCacheControlStore(storeB, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controlB.Close()
 
 	groupName := "proxy-cache-e2e"
 	upstream := &integrationOCIUpstream{
@@ -126,10 +210,20 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheA := NewOCICache(storeA, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
-	cacheB := NewOCICache(storeB, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
+	coordinatorA, err := NewPostgresCacheCoordinator(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coordinatorA.Close()
+	coordinatorB, err := NewPostgresCacheCoordinator(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coordinatorB.Close()
+	cacheA := NewOCICache(controlA, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(coordinatorA)
+	cacheB := NewOCICache(controlB, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(coordinatorB)
 	metricsA, metricsB := &Metrics{}, &Metrics{}
-	client := GiteaClient{HTTPClient: upstreamServer.Client()}
+	client := UpstreamClient{HTTPClient: upstreamServer.Client()}
 	handlerA := OCIHandler{Resolver: Resolver{Store: repositoryStore, Adapter: TestAdapter{}, Metrics: metricsA}, Client: client, Authenticator: testAuthenticator(), Cache: cacheA}
 	handlerB := OCIHandler{Resolver: Resolver{Store: repositoryStore, Adapter: TestAdapter{}, Metrics: metricsB}, Client: client, Authenticator: testAuthenticator(), Cache: cacheB}
 
@@ -148,6 +242,9 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 	wait.Wait()
 	if calls := upstream.Calls("latest"); calls != 1 {
 		t.Fatalf("upstream latest calls = %d, want 1 across instances", calls)
+	}
+	if indexes, err := storeA.List(context.Background(), "oci/index/"); err != nil || len(indexes) != 0 {
+		t.Fatalf("S3 OCI indexes = %#v, %v; want none", indexes, err)
 	}
 
 	upstream.mu.Lock()
@@ -251,12 +348,12 @@ func TestOCIProxyCacheWithRedisAndS3AcrossGatewayInstances(t *testing.T) {
 }
 
 func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
-	redisAddress := os.Getenv("TEST_REDIS_ADDRESS")
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
 	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
-	if redisAddress == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
-		t.Skip("Redis and S3 integration environment is required")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
 
 	const bucket = "oci-cache-integration"
@@ -280,8 +377,18 @@ func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
 		objectStored:   make(chan struct{}),
 		allowIndex:     make(chan struct{}),
 	}
-	cacheA := NewDefaultRawCache(gatedStore, nil).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
-	cacheB := NewDefaultRawCache(storeB, nil).WithCoordinator(NewRedisOCICacheCoordinator(redisAddress))
+	coordinatorA, err := NewPostgresCacheCoordinator(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coordinatorA.Close()
+	coordinatorB, err := NewPostgresCacheCoordinator(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coordinatorB.Close()
+	cacheA := NewDefaultRawCache(gatedStore, nil).WithCoordinator(coordinatorA)
+	cacheB := NewDefaultRawCache(storeB, nil).WithCoordinator(coordinatorB)
 	content := RawContent{Body: []byte(unique), Repository: unique}
 
 	stored := make(chan error, 1)

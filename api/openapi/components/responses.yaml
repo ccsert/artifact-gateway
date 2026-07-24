@@ -1,0 +1,151 @@
+---
+Problem:
+  description: Problem response
+  content:
+    application/problem+json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Problem"
+BinaryObject:
+  description: Committed immutable protocol object
+  content:
+    application/octet-stream:
+      schema:
+        type: string
+        contentEncoding: binary
+OCIManifest:
+  description: Committed OCI manifest, returned with Docker-Content-Digest
+  headers:
+    Docker-Content-Digest:
+      required: true
+      schema:
+        type: string
+        pattern: "^sha256:[a-f0-9]{64}$"
+  content:
+    application/vnd.oci.image.manifest.v1+json:
+      schema:
+        type: object
+    application/vnd.oci.image.index.v1+json:
+      schema:
+        type: object
+OCIUploadAccepted:
+  description: Registry V2 upload in progress
+  headers:
+    Location:
+      required: true
+      schema:
+        type: string
+    Docker-Upload-UUID:
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Range:
+      schema:
+        type: string
+OCITagList:
+  description: OCI tag list ordered lexicographically. A Link header with rel=next
+    is returned when more tags are available.
+  headers:
+    Link:
+      schema:
+        type: string
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/OCITagList"
+OCIError:
+  description: OCI Registry error response
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/OCIError"
+BasicUnauthorized:
+  description: Raw or Maven Basic authentication required when anonymous read policy
+    is disabled
+  headers:
+    WWW-Authenticate:
+      required: true
+      schema:
+        type: string
+        pattern: "^Basic "
+OCIUnauthorized:
+  description: OCI Bearer authentication challenge
+  headers:
+    WWW-Authenticate:
+      required: true
+      schema:
+        type: string
+        pattern: "^Bearer "
+ProtocolNotFound:
+  description: No committed object is addressable at this protocol path
+Repository:
+  description: Repository
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Repository"
+RepositoryList:
+  description: Repository page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryPage"
+Group:
+  description: Group
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Group"
+GroupList:
+  description: Group page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/GroupPage"
+MemberList:
+  description: Members
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/MemberList"
+GrantList:
+  description: Grants
+  headers:
+    ETag:
+      required: true
+      schema:
+        type: string
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/GrantList"
+RetentionPolicy:
+  description: Retention policy
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RetentionPolicy"
+PublishSession:
+  description: Publish session
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/PublishSession"
+Artifact:
+  description: Artifact
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Artifact"
+ArtifactList:
+  description: Artifact page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactPage"
+Deletion:
+  description: Accepted deletion
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Deletion"

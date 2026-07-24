@@ -34,12 +34,11 @@ func TestReadinessReportsDependencyFailure(t *testing.T) {
 
 func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
 	dependencies := NewDependencies(config.Config{
-		DatabaseURL:  "postgres://gateway:password@db:5432/gateway",
-		RedisAddress: "redis:6379",
-		S3Endpoint:   "https://objects.example.test/prefix",
+		DatabaseURL: "postgres://gateway:password@db:5432/gateway",
+		S3Endpoint:  "https://objects.example.test/prefix",
 	})
-	if len(dependencies.checkers) != 3 {
-		t.Fatalf("checker count = %d, want 3", len(dependencies.checkers))
+	if len(dependencies.checkers) != 2 {
+		t.Fatalf("checker count = %d, want 2", len(dependencies.checkers))
 	}
 	databaseChecker, ok := dependencies.checkers[0].(postgresChecker)
 	if !ok {
@@ -48,7 +47,7 @@ func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
 	if databaseChecker.databaseURL != "postgres://gateway:password@db:5432/gateway" {
 		t.Fatalf("database checker URL = %q", databaseChecker.databaseURL)
 	}
-	s3Checker, ok := dependencies.checkers[2].(httpChecker)
+	s3Checker, ok := dependencies.checkers[1].(httpChecker)
 	if !ok {
 		t.Fatalf("S3 checker type = %T, want httpChecker", dependencies.checkers[2])
 	}

@@ -16,7 +16,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -328,49 +327,12 @@ type OCICacheCoordinator interface {
 	CloseCircuit(context.Context, string) error
 }
 
-type RedisOCICacheCoordinator struct{ client *redis.Client }
-
-func NewRedisOCICacheCoordinator(address string) *RedisOCICacheCoordinator {
-	return &RedisOCICacheCoordinator{client: redis.NewClient(&redis.Options{Addr: address})}
-}
-
-func (c *RedisOCICacheCoordinator) Acquire(ctx context.Context, key string, ttl time.Duration) (string, bool, error) {
-	owner, err := newOCILockOwner()
-	if err != nil {
-		return "", false, err
-	}
-	ok, err := c.client.SetNX(ctx, "artifact-gateway:oci:lock:"+key, owner, ttl).Result()
-	return owner, ok, err
-}
-
-func (c *RedisOCICacheCoordinator) Renew(ctx context.Context, key, owner string, ttl time.Duration) (bool, error) {
-	result, err := c.client.Eval(ctx, "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) end return 0", []string{ociLockKey(key)}, owner, ttl.Milliseconds()).Int()
-	return result == 1, err
-}
-
-func (c *RedisOCICacheCoordinator) Release(ctx context.Context, key, owner string) error {
-	_, err := c.client.Eval(ctx, "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0", []string{ociLockKey(key)}, owner).Result()
-	return err
-}
-
-func ociLockKey(key string) string { return "artifact-gateway:oci:lock:" + key }
-
 func newOCILockOwner() (string, error) {
 	var value [16]byte
 	if _, err := rand.Read(value[:]); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(value[:]), nil
-}
-func (c *RedisOCICacheCoordinator) CircuitOpen(ctx context.Context, key string) (bool, error) {
-	result, err := c.client.Exists(ctx, "artifact-gateway:oci:circuit:"+key).Result()
-	return result == 1, err
-}
-func (c *RedisOCICacheCoordinator) OpenCircuit(ctx context.Context, key string, ttl time.Duration) error {
-	return c.client.Set(ctx, "artifact-gateway:oci:circuit:"+key, "1", ttl).Err()
-}
-func (c *RedisOCICacheCoordinator) CloseCircuit(ctx context.Context, key string) error {
-	return c.client.Del(ctx, "artifact-gateway:oci:circuit:"+key).Err()
 }
 
 func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *OCICache {
