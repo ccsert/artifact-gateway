@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -41,9 +42,8 @@ type repositoryPageCursor struct {
 }
 
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
-	if !ok || !principal.Admin {
-		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+	principal, ok := h.authorize(w, r)
+	if !ok {
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v2/repositories")
@@ -73,8 +73,52 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok || !principal.Admin {
+		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+		return Principal{}, false
+	}
+	return principal, true
+}
+
+// generatedRepositoryAPIAdapter keeps authorization and domain behavior in the
+// existing handler while the generated OpenAPI wrapper owns route and parameter
+// binding for the active repository-management surface.
+type generatedRepositoryAPIAdapter struct{ hostedRepositoryAPIHandler }
+
+var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
+
+func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
+	if _, ok := h.authorize(w, r); ok {
+		h.listBound(w, r, params)
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateRepositoryParams) {
+	if principal, ok := h.authorize(w, r); ok {
+		h.createWithIdempotencyKey(w, r, principal, string(params.IdempotencyKey))
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); ok {
+		h.disable(w, r, id.String())
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); ok {
+		h.get(w, r, id.String())
+	}
+}
+
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	h.createWithIdempotencyKey(w, r, principal, r.Header.Get("Idempotency-Key"))
+}
+
+func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWriter, r *http.Request, principal Principal, key string) {
+	key = strings.TrimSpace(key)
 	if key == "" || len(key) > 128 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
 		return
@@ -109,16 +153,35 @@ func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Reques
 }
 
 func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request) {
-	pageSize := 50
+	params := adminopenapi.ListRepositoriesParams{}
 	if raw := r.URL.Query().Get("pageSize"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 200 {
+		pageSize, err := strconv.Atoi(raw)
+		if err != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
 			return
 		}
-		pageSize = parsed
+		params.PageSize = &pageSize
 	}
-	after, err := h.decodeCursor(r.URL.Query().Get("pageToken"))
+	if token := r.URL.Query().Get("pageToken"); token != "" {
+		params.PageToken = &token
+	}
+	h.listBound(w, r, params)
+}
+
+func (h hostedRepositoryAPIHandler) listBound(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
+	pageSize := 50
+	if params.PageSize != nil {
+		pageSize = int(*params.PageSize)
+		if pageSize < 1 || pageSize > 200 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+			return
+		}
+	}
+	pageToken := ""
+	if params.PageToken != nil {
+		pageToken = string(*params.PageToken)
+	}
+	after, err := h.decodeCursor(pageToken)
 	if err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 		return

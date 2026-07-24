@@ -69,6 +69,13 @@ func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing
 	if paged.Code != http.StatusBadRequest || !strings.Contains(paged.Body.String(), `"code":"invalid_page_token"`) {
 		t.Fatalf("invalid page token=%d body=%s", paged.Code, paged.Body.String())
 	}
+	invalidID := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/not-a-uuid", nil)
+	authorize(invalidID, "admin-secret")
+	invalidIDResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidIDResponse, invalidID)
+	if invalidIDResponse.Code != http.StatusBadRequest || !strings.Contains(invalidIDResponse.Body.String(), `"code":"invalid_request"`) {
+		t.Fatalf("invalid id=%d body=%s", invalidIDResponse.Code, invalidIDResponse.Body.String())
+	}
 }
 
 func TestHostedRepositoryIdempotencyAndPagination(t *testing.T) {

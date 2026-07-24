@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
 )
@@ -553,7 +554,14 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	conanAPI := conanAPIHandler{store: store, authenticator: authenticator}
 	mux.Handle("/api/v1/conan/groups", conanAPI)
 	mux.Handle("/api/v1/conan/groups/", conanAPI)
-	mux.Handle("/api/v2/repositories", hostedRepositoryAPIHandler{store: store, authenticator: authenticator})
+	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositories}, adminopenapi.StdHTTPServerOptions{
+		BaseURL:    "/api/v2",
+		BaseRouter: mux,
+		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		},
+	})
 	nativeObjects := dependencies.NativeMavenObjectStore
 	if nativeObjects == nil {
 		nativeObjects = NewMemoryOCIObjectStore()
