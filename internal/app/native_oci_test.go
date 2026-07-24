@@ -316,7 +316,7 @@ func TestNativeOCIConcurrentPatchUsesUploadOffsetFence(t *testing.T) {
 		}()
 	}
 	first, second := <-responses, <-responses
-	if !((first == http.StatusAccepted && second == http.StatusRequestedRangeNotSatisfiable) || (second == http.StatusAccepted && first == http.StatusRequestedRangeNotSatisfiable)) {
+	if (first != http.StatusAccepted || second != http.StatusRequestedRangeNotSatisfiable) && (second != http.StatusAccepted || first != http.StatusRequestedRangeNotSatisfiable) {
 		t.Fatalf("concurrent patch responses = %d, %d", first, second)
 	}
 }

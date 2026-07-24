@@ -62,7 +62,6 @@ type conanCacheEntry struct {
 	contentType, member, endpoint string
 	cacheDisposition              string
 	status                        int
-	expires                       time.Time
 }
 
 type conanCacheIndex struct {
@@ -244,7 +243,7 @@ func (c *ConanCache) withPublicationLock(ctx context.Context, work func(context.
 		err = work(workCtx)
 		select {
 		case <-failed:
-			return errors.New("Conan distributed publication lock renewal failed")
+			return errors.New("conan distributed publication lock renewal failed")
 		default:
 			return err
 		}
@@ -595,7 +594,7 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 	if denied {
 		return conanCacheEntry{}, http.StatusForbidden, errors.New("upstream repository is not allowed")
 	}
-	return conanCacheEntry{}, http.StatusNotFound, errors.New("Conan resource not found")
+	return conanCacheEntry{}, http.StatusNotFound, errors.New("conan resource not found")
 }
 
 func (h ConanHandler) canReadConanGroup(ctx context.Context, principal Principal, group repository.Group) bool {

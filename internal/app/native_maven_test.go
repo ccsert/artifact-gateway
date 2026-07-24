@@ -69,10 +69,9 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	h := newNativeMavenHandler(store, objects, testAuthenticator())
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project>")
 	sum := sha256.Sum256(pom)
-	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewBufferString(`{"format":"maven","coordinate":"org.example:widget:1.0.0","pomObject":"widget-1.0.0.pom","objects":[{"name":"widget-1.0.0.pom","digest":"sha256:`+hex.EncodeToString(sum[:])+`","size":`+"42"+`}]} `))
 	// The exact request body length is derived below to avoid coupling the test
 	// to the illustrative POM text above.
-	request = httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewBufferString(""))
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewBufferString(""))
 	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(pom))}}})
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	authorize(request, "admin-secret")
@@ -209,7 +208,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	status := func(method, path, body string, headers map[string]string) (int, string) {
 		t.Helper()
 		response := request(method, path, body, headers)
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		content, err := io.ReadAll(response.Body)
 		if err != nil {
 			t.Fatal(err)
@@ -320,7 +319,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	failedUpload.Body.Close()
+	_ = failedUpload.Body.Close()
 	if failedUpload.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("object-store upload failure = %d, want 500", failedUpload.StatusCode)
 	}
@@ -333,7 +332,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	response.Body.Close()
+	_ = response.Body.Close()
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("failed upload coordinate read = %d, want 404", response.StatusCode)
 	}
@@ -370,7 +369,7 @@ func TestNativeMavenProtocolCommitRetryAfterControlPlaneFailure(t *testing.T) {
 	status := func(method, path, body string) int {
 		t.Helper()
 		response := request(method, path, body)
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		return response.StatusCode
 	}
 	const version = "4.0.0"
@@ -451,7 +450,9 @@ func TestNativeMavenRejectsAnonymousReads(t *testing.T) {
 	sum := sha256.Sum256(asset)
 	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
 	_ = objects.Put(context.Background(), key, asset)
-	store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "session", RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)})
+	if _, err := store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "session", RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
 	_ = store.MarkMavenPublishObject(context.Background(), "session", "widget-1.0.0.jar", key)
 	_, _ = store.CommitMavenPublishSession(context.Background(), "session", []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}})
 	open := newNativeMavenHandler(store, objects, Authenticator{})

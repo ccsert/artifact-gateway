@@ -58,7 +58,7 @@ func (p postgresChecker) Check(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer connection.Close(ctx)
+	defer func() { _ = connection.Close(ctx) }()
 	return connection.Ping(ctx)
 }
 

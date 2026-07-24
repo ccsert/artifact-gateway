@@ -41,7 +41,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if err != nil {
 		return HostedRepository{}, false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Row locks cannot serialize the first use of a key because no row exists
 	// yet. A transaction-scoped advisory lock covers that gap without holding a
 	// process-local mutex across gateway instances.
@@ -106,7 +106,7 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 	if err != nil {
 		return nil, "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]HostedRepository, 0, limit)
 	for rows.Next() {
 		var repo HostedRepository
@@ -169,7 +169,7 @@ func scanHostedGroupMembers(ctx context.Context, query interface {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	group.Members = nil
 	for rows.Next() {
 		var member GroupMember
@@ -204,7 +204,7 @@ func (s *PostgresStore) CreateHostedGroupIdempotently(ctx context.Context, group
 	if err != nil {
 		return HostedGroup{}, false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	lockKey := fmt.Sprintf("hosted-group:%d:%s%d:%s", len(actor), actor, len(key), key)
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
 		return HostedGroup{}, false, err
@@ -261,7 +261,7 @@ func (s *PostgresStore) ListHostedGroups(ctx context.Context, limit int, after s
 	if err != nil {
 		return nil, "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	groups := make([]HostedGroup, 0, limit)
 	for rows.Next() {
 		var group HostedGroup
@@ -293,7 +293,7 @@ func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string,
 	if err != nil {
 		return HostedGroup{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	query := `UPDATE hosted_groups SET version=version+1`
 	args := []any{id, expectedVersion}
 	if replaceMetadata {
@@ -359,7 +359,7 @@ func loadRepositoryGrants(ctx context.Context, query interface {
 	if err != nil {
 		return RepositoryGrantSet{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	set := RepositoryGrantSet{Version: version, Grants: []RepositoryGrant{}}
 	for rows.Next() {
 		var grant RepositoryGrant
@@ -395,7 +395,7 @@ func (s *PostgresStore) ReplaceRepositoryGrants(ctx context.Context, repositoryI
 	if err != nil {
 		return RepositoryGrantSet{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var exists bool
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
 		return RepositoryGrantSet{}, err
@@ -449,7 +449,7 @@ func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, re
 	if err != nil {
 		return RepositoryRetentionPolicy{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var exists bool
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
 		return RepositoryRetentionPolicy{}, err
@@ -548,7 +548,7 @@ func (s *PostgresStore) CompleteOCIUpload(ctx context.Context, id string, blob O
 	if err != nil {
 		return OCIBlob{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var repositoryID string
 	err = tx.QueryRowContext(ctx, `SELECT repository_id::text FROM native_oci_uploads WHERE id::text=$1 AND state='open' AND expires_at > now() FOR UPDATE`, id).Scan(&repositoryID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -582,7 +582,7 @@ func (s *PostgresStore) ExpireOCIUploads(ctx context.Context, before time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx, `WITH candidates AS (
         SELECT id FROM native_oci_uploads
         WHERE state='open' AND expires_at < $1
@@ -593,7 +593,7 @@ func (s *PostgresStore) ExpireOCIUploads(ctx context.Context, before time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var uploads []OCIUpload
 	for rows.Next() {
 		var upload OCIUpload
@@ -615,7 +615,7 @@ func (s *PostgresStore) ListUncollectedOCIUploads(ctx context.Context, limit int
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var uploads []OCIUpload
 	for rows.Next() {
 		var upload OCIUpload
@@ -644,7 +644,7 @@ func (s *PostgresStore) ListUnclaimedOCIObjectIntents(ctx context.Context, befor
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var intents []OCIObjectIntent
 	for rows.Next() {
 		var intent OCIObjectIntent
@@ -687,7 +687,7 @@ func (s *PostgresStore) MountOCIBlobFrom(ctx context.Context, repositoryID, sour
 	if err != nil {
 		return OCIBlob{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var v OCIBlob
 	err = tx.QueryRowContext(ctx, `SELECT b.digest,b.object_key,b.size
         FROM native_oci_blobs b
@@ -721,7 +721,7 @@ func (s *PostgresStore) PutOCIManifest(ctx context.Context, v OCIManifest, refer
 	if err != nil {
 		return v, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (repository_id,name,digest) DO NOTHING`, v.RepositoryID, v.Name, v.Digest, v.ObjectKey, v.MediaType, v.Size); err != nil {
 		return v, err
 	}
@@ -758,7 +758,7 @@ func (s *PostgresStore) ListOCITags(ctx context.Context, repositoryID, name stri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var tags []string
 	for rows.Next() {
 		var tag string
@@ -774,7 +774,7 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `DELETE FROM native_oci_tags WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest); err != nil {
 		return err
 	}
@@ -796,7 +796,7 @@ func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, 
 	if err != nil {
 		return v, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO UPDATE SET collected_at=NULL`, v.Digest, v.ObjectKey, v.Size); err != nil {
 		return v, err
 	}
@@ -852,7 +852,7 @@ func (s *PostgresStore) ListUnreferencedRawObjects(ctx context.Context, before t
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var objects []RawObject
 	for rows.Next() {
 		var object RawObject
@@ -991,7 +991,7 @@ func (s *PostgresStore) AppendMavenPublishObject(ctx context.Context, id string,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var raw []byte
 	if err = tx.QueryRowContext(ctx, `SELECT objects FROM native_maven_publish_sessions WHERE id::text=$1 AND state='open' FOR UPDATE`, id).Scan(&raw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1033,7 +1033,7 @@ func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, ke
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var raw []byte
 	if err = tx.QueryRowContext(ctx, `SELECT objects FROM native_maven_publish_sessions WHERE id::text=$1 AND state='open' FOR UPDATE`, id).Scan(&raw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1085,7 +1085,7 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 	if err != nil {
 		return MavenArtifact{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var v MavenPublishSession
 	var objects []byte
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
@@ -1166,7 +1166,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []MavenArtifact{}
 	for rows.Next() {
 		var a MavenArtifact
@@ -1190,7 +1190,7 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 	if err != nil {
 		return MavenArtifact{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var artifact MavenArtifact
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1223,7 +1223,7 @@ func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, befo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []MavenObjectIntent{}
 	for rows.Next() {
 		var v MavenObjectIntent
@@ -1364,7 +1364,7 @@ func (s *PostgresStore) GetRawGroup(ctx context.Context, name string) (Group, er
 	if err != nil {
 		return Group{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var m Member
 		var allowedHosts []byte

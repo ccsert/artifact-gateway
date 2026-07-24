@@ -385,7 +385,7 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := h.objects.Get(r.Context(), asset.ObjectKey)
 	if err != nil {
-		http.Error(w, "artifact unavailable", 503)
+		http.Error(w, "artifact unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("ETag", `"`+strings.TrimPrefix(asset.Digest, "sha256:")+`"`)
@@ -695,7 +695,7 @@ func (h nativeMavenHandler) protocolPrincipal(r *http.Request) (Principal, bool)
 func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, actor string) {
 	items, err := h.store.ListMavenArtifacts(r.Context(), repo.ID)
 	if err != nil {
-		http.Error(w, "metadata unavailable", 503)
+		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	prefix := strings.TrimSuffix(path, "/maven-metadata.xml")

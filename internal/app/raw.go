@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -301,7 +302,7 @@ func (c *RawCache) withPublicationLock(ctx context.Context, work func(context.Co
 		err = work(workCtx)
 		select {
 		case <-renewalFailed:
-			return errors.New("Raw distributed publication lock renewal failed")
+			return errors.New("raw distributed publication lock renewal failed")
 		default:
 			return err
 		}
@@ -337,15 +338,10 @@ func (c *RawCache) ProxyAllowed(endpoint string) bool {
 	return ok
 }
 
-func safeRawProxyEndpoint(ctx context.Context, endpoint string) error {
-	_, _, err := resolveRawProxyEndpoint(ctx, endpoint)
-	return err
-}
-
 func resolveRawProxyEndpoint(ctx context.Context, endpoint string) (*url.URL, []net.IP, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
-		return nil, nil, errors.New("Raw proxy endpoint is not a valid HTTPS URL")
+		return nil, nil, errors.New("raw proxy endpoint is not a valid HTTPS URL")
 	}
 	ips, err := rawProxyLookupIP(ctx, "ip", u.Hostname())
 	if err != nil || len(ips) == 0 {
@@ -353,7 +349,7 @@ func resolveRawProxyEndpoint(ctx context.Context, endpoint string) (*url.URL, []
 	}
 	for _, ip := range ips {
 		if privateAddress(ip) {
-			return nil, nil, errors.New("Raw proxy endpoint resolves to a private address")
+			return nil, nil, errors.New("raw proxy endpoint resolves to a private address")
 		}
 	}
 	return u, ips, nil
@@ -371,17 +367,17 @@ func rawProxyHTTPClient(client *http.Client, hostname, port string, ips []net.IP
 	}
 	base, ok := transport.(*http.Transport)
 	if !ok {
-		return nil, errors.New("Raw proxy HTTP client must use *http.Transport")
+		return nil, errors.New("raw proxy HTTP client must use *http.Transport")
 	}
-	if base.DialTLSContext != nil || base.DialTLS != nil {
-		return nil, errors.New("Raw proxy HTTP client must not override TLS dialing")
+	if base.DialTLSContext != nil || transportHasLegacyDialTLS(base) {
+		return nil, errors.New("raw proxy HTTP client must not override TLS dialing")
 	}
 	copy := *client
 	pinnedTransport := base.Clone()
 	pinnedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		requestHost, requestPort, err := net.SplitHostPort(address)
 		if err != nil || !strings.EqualFold(requestHost, hostname) {
-			return nil, errors.New("Raw proxy dial target changed")
+			return nil, errors.New("raw proxy dial target changed")
 		}
 		if port != "" {
 			requestPort = port
@@ -398,6 +394,13 @@ func rawProxyHTTPClient(client *http.Client, hostname, port string, ips []net.IP
 	}
 	copy.Transport = pinnedTransport
 	return &copy, nil
+}
+
+// DialTLS is deprecated but an installed legacy hook must still be rejected:
+// it would bypass the pinned connection path below.
+func transportHasLegacyDialTLS(transport *http.Transport) bool {
+	field := reflect.ValueOf(transport).Elem().FieldByName("DialTLS")
+	return field.IsValid() && !field.IsNil()
 }
 
 func privateAddress(ip net.IP) bool {
@@ -706,7 +709,7 @@ func safeRawCorrelationID(value string) string {
 		return ""
 	}
 	for _, r := range value {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' {
 			return ""
 		}
 	}
@@ -759,7 +762,7 @@ func validChecksum(path string, b []byte) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			return false
 		}
 	}

@@ -13,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 )
 
-const tracerName = "github.com/artifact-gateway/artifact-gateway"
-
 // NewTracing installs an OTLP/HTTP exporter when configured. Without an
 // endpoint, the SDK remains local and unsampled, so development needs no
 // collector while HTTP context propagation remains standards-compliant.

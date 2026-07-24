@@ -31,8 +31,9 @@ tracker: local-markdown
   OCI、Maven、Raw、Conan 的已绑定成员在缓存与 upstream 前统一执行 grants，来源缓存可撤权。
 - [Repository 列表 scoped 可见性](tickets/10-repository-list-visibility.md) — 已决策：
   grants 仅授权已知 Repository 的操作，不授予列表、审计或跨资源发现能力。
+- [CI lint 收口](tickets/11-ci-lint-cleanup.md) — 已实现：无 suppression 清除全部静态
+  检查问题，并通过单元、集成、OpenAPI、Console 与四种协议 E2E 门禁。
 
 ## Fog
 
-- `make lint` 当前报告 27 条既有静态检查问题；需在最终 CI 门禁前将其清零，并确认修复不改变
-  Repository grants 的协议与审计语义。
+无。Repository grants runtime authorization 的范围、兼容边界和交付门禁均已收口。

@@ -78,7 +78,7 @@ func (s *PostgresCacheControlStore) List(ctx context.Context, prefix string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var keys []string
 	for rows.Next() {
 		var key string

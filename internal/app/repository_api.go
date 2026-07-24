@@ -849,7 +849,7 @@ func (h conanCacheInvalidationHandler) ServeHTTP(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusServiceUnavailable, "cache_unavailable", "Conan cache is not configured")
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	var request struct{ Group, Path, Member, Endpoint string }
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
@@ -901,7 +901,7 @@ func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		var g repository.Group
 		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON")
