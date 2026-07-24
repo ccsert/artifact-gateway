@@ -529,6 +529,7 @@ type GatewayStore interface {
 	repository.HostedRepositoryStore
 	repository.HostedGroupStore
 	repository.RepositoryGrantStore
+	repository.RepositoryRetentionPolicyStore
 	repository.NativeMavenStore
 	repository.NativeOCIStore
 	repository.NativeRawStore
@@ -602,7 +603,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator)
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authorize},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

@@ -66,7 +66,7 @@ production-backed `/api/v2` handler:
 | Artifact detail and deletion | Deferred | `NativeMavenStore` has no lookup-by-artifact-ID or deletion/tombstone operation. |
 | Groups | Generated | V2 groups are a separate UUID-based aggregate over active Hosted Repositories; V1 OCI, Maven, Raw, and Conan groups remain protocol-specific and unchanged. |
 | Grants | Generated | Repository grant sets are versioned with `ETag`/`If-Match` and persist principal-to-scope mappings. |
-| Retention policies | Deferred | No retention-policy aggregate, optimistic-concurrency token, or execution lifecycle exists. |
+| Retention policies | Generated | Policies have a default `keepDays=30`/`minimumVersions=1`, versioned `If-Match` replacement, and Memory/Postgres persistence. Automatic deletion remains deferred until each format has a safe tombstone lifecycle. |
 
 Adding a deferred path to `management-runtime.yaml` requires first adding the
 corresponding domain aggregate, persistence operations in both memory and

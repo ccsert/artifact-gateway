@@ -345,6 +345,13 @@ type RepositoryPage struct {
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
+// RetentionPolicy defines model for RetentionPolicy.
+type RetentionPolicy struct {
+	KeepDays        int    `json:"keepDays"`
+	MinimumVersions int    `json:"minimumVersions"`
+	Version         string `json:"version"`
+}
+
 // GroupId defines model for GroupId.
 type GroupId = openapi_types.UUID
 
@@ -423,6 +430,11 @@ type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// ReplaceRetentionPolicyParams defines parameters for ReplaceRetentionPolicy.
+type ReplaceRetentionPolicyParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -440,6 +452,9 @@ type ReplaceGrantsJSONRequestBody = GrantList
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
+
+// ReplaceRetentionPolicyJSONRequestBody defines body for ReplaceRetentionPolicy for application/json ContentType.
+type ReplaceRetentionPolicyJSONRequestBody = RetentionPolicy
 
 // AsCreateMavenPublishSession returns the union data inside the CreatePublishSession as a CreateMavenPublishSession
 func (t CreatePublishSession) AsCreateMavenPublishSession() (CreateMavenPublishSession, error) {
@@ -533,6 +548,12 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
+
+	// (GET /repositories/{repositoryId}/retention-policy)
+	GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /repositories/{repositoryId}/retention-policy)
+	ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceRetentionPolicyParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1240,6 +1261,86 @@ func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetRetentionPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRetentionPolicy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRetentionPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRetentionPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRetentionPolicy(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1378,6 +1479,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
 
 	return m
 }
@@ -1410,6 +1513,8 @@ type PublishSessionJSONResponse PublishSession
 type RepositoryJSONResponse Repository
 
 type RepositoryListJSONResponse RepositoryPage
+
+type RetentionPolicyJSONResponse RetentionPolicy
 
 type ListGroupsRequestObject struct {
 	Params ListGroupsParams
@@ -2044,6 +2149,68 @@ func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type GetRetentionPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetRetentionPolicyResponseObject interface {
+	VisitGetRetentionPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetRetentionPolicy200JSONResponse struct{ RetentionPolicyJSONResponse }
+
+func (response GetRetentionPolicy200JSONResponse) VisitGetRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRetentionPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceRetentionPolicyParams
+	Body         *ReplaceRetentionPolicyJSONRequestBody
+}
+
+type ReplaceRetentionPolicyResponseObject interface {
+	VisitReplaceRetentionPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRetentionPolicy200JSONResponse struct{ RetentionPolicyJSONResponse }
+
+func (response ReplaceRetentionPolicy200JSONResponse) VisitReplaceRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRetentionPolicy412ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceRetentionPolicy412ApplicationProblemPlusJSONResponse) VisitReplaceRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -2100,6 +2267,12 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/retention-policy)
+	GetRetentionPolicy(ctx context.Context, request GetRetentionPolicyRequestObject) (GetRetentionPolicyResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/retention-policy)
+	ReplaceRetentionPolicy(ctx context.Context, request ReplaceRetentionPolicyRequestObject) (ReplaceRetentionPolicyResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2652,6 +2825,66 @@ func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
 		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRetentionPolicy operation middleware
+func (sh *strictHandler) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetRetentionPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRetentionPolicy(ctx, request.(GetRetentionPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRetentionPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRetentionPolicyResponseObject); ok {
+		if err := validResponse.VisitGetRetentionPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRetentionPolicy operation middleware
+func (sh *strictHandler) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceRetentionPolicyParams) {
+	var request ReplaceRetentionPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceRetentionPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRetentionPolicy(ctx, request.(ReplaceRetentionPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRetentionPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRetentionPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceRetentionPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

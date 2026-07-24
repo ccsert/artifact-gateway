@@ -155,6 +155,46 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "retention-target", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	get := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/retention-policy", nil)
+	authorize(get, "admin-secret")
+	defaultPolicy := httptest.NewRecorder()
+	handler.ServeHTTP(defaultPolicy, get)
+	if defaultPolicy.Code != http.StatusOK || !strings.Contains(defaultPolicy.Body.String(), `"version":"1"`) || !strings.Contains(defaultPolicy.Body.String(), `"keepDays":30`) {
+		t.Fatalf("default policy=%d body=%s", defaultPolicy.Code, defaultPolicy.Body.String())
+	}
+	replace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"1","keepDays":14,"minimumVersions":3}`))
+	authorize(replace, "admin-secret")
+	replace.Header.Set("If-Match", "1")
+	replaced := httptest.NewRecorder()
+	handler.ServeHTTP(replaced, replace)
+	if replaced.Code != http.StatusOK || !strings.Contains(replaced.Body.String(), `"version":"2"`) || !strings.Contains(replaced.Body.String(), `"minimumVersions":3`) {
+		t.Fatalf("replace=%d body=%s", replaced.Code, replaced.Body.String())
+	}
+	stale := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"1","keepDays":7,"minimumVersions":1}`))
+	authorize(stale, "admin-secret")
+	stale.Header.Set("If-Match", "1")
+	staleResult := httptest.NewRecorder()
+	handler.ServeHTTP(staleResult, stale)
+	if staleResult.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale=%d body=%s", staleResult.Code, staleResult.Body.String())
+	}
+	invalid := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"2","keepDays":0,"minimumVersions":1}`))
+	authorize(invalid, "admin-secret")
+	invalid.Header.Set("If-Match", "2")
+	invalidResult := httptest.NewRecorder()
+	handler.ServeHTTP(invalidResult, invalid)
+	if invalidResult.Code != http.StatusBadRequest {
+		t.Fatalf("invalid=%d body=%s", invalidResult.Code, invalidResult.Body.String())
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()

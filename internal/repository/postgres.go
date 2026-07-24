@@ -428,6 +428,51 @@ func (s *PostgresStore) ReplaceRepositoryGrants(ctx context.Context, repositoryI
 	return RepositoryGrantSet{Version: version, Grants: append([]RepositoryGrant{}, grants...)}, nil
 }
 
+func (s *PostgresStore) GetRepositoryRetentionPolicy(ctx context.Context, repositoryID string) (RepositoryRetentionPolicy, error) {
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	if !exists {
+		return RepositoryRetentionPolicy{}, ErrNotFound
+	}
+	policy := defaultRepositoryRetentionPolicy()
+	err := s.db.QueryRowContext(ctx, `SELECT version::text,keep_days,minimum_versions FROM repository_retention_policies WHERE repository_id::text=$1`, repositoryID).Scan(&policy.Version, &policy.KeepDays, &policy.MinimumVersions)
+	if errors.Is(err, sql.ErrNoRows) {
+		return policy, nil
+	}
+	return policy, err
+}
+
+func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, repositoryID string, policy RepositoryRetentionPolicy, expectedVersion string) (RepositoryRetentionPolicy, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	if !exists {
+		return RepositoryRetentionPolicy{}, ErrNotFound
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_retention_policies (repository_id,version,keep_days,minimum_versions) VALUES ($1,1,30,1) ON CONFLICT DO NOTHING`, repositoryID); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	err = tx.QueryRowContext(ctx, `UPDATE repository_retention_policies SET version=version+1, keep_days=$3, minimum_versions=$4 WHERE repository_id::text=$1 AND version::text=$2 RETURNING version::text`, repositoryID, expectedVersion, policy.KeepDays, policy.MinimumVersions).Scan(&policy.Version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RepositoryRetentionPolicy{}, ErrVersionConflict
+	}
+	if err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	return policy, nil
+}
+
 func (s *PostgresStore) CreateOCIUpload(ctx context.Context, v OCIUpload) (OCIUpload, error) {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_uploads (id,repository_id,name,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Name, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
 	return v, err

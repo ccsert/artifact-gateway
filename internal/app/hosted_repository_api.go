@@ -87,9 +87,10 @@ func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Req
 // binding for the active repository-management surface.
 type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
-	sessions nativeMavenHandler
-	groups   repository.HostedGroupStore
-	grants   repository.RepositoryGrantStore
+	sessions          nativeMavenHandler
+	groups            repository.HostedGroupStore
+	grants            repository.RepositoryGrantStore
+	retentionPolicies repository.RepositoryRetentionPolicyStore
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -180,6 +181,49 @@ func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
 		}
 	}
 	return true
+}
+
+func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repositoryID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, policy)
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceRetentionPolicyParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var policy repository.RepositoryRetentionPolicy
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&policy); err != nil || policy.Version == "" || policy.KeepDays < 1 || policy.MinimumVersions < 1 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, keepDays, and minimumVersions must be valid")
+		return
+	}
+	updated, err := h.retentionPolicies.ReplaceRepositoryRetentionPolicy(r.Context(), repositoryID.String(), policy, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, updated)
 }
 
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {

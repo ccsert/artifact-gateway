@@ -69,6 +69,15 @@ the tag reference in that same transaction. Deletion is logical: it writes a
 tombstone and removes the coordinate from resolution. Retention is evaluated
 against visible coordinates, never against a bare S3 listing.
 
+Every Hosted Repository has a retention policy. Until an administrator replaces
+it, the policy is `keepDays=30` and `minimumVersions=1` with version `1`.
+`PUT /api/v2/repositories/{repositoryId}/retention-policy` requires both that
+version in the representation and an `If-Match` header; a successful replacement
+increments the stored version and a stale precondition returns `412`. Policy
+configuration does not synchronously remove content. Automatic enforcement is
+enabled only after the affected format can tombstone visible metadata and defer
+byte removal to the orphan collector.
+
 The orphan collector runs after a configurable grace period (minimum 24 hours).
 It deletes a staged object only when no live object reference, nonexpired
 session, or active lease names its digest; it rechecks this predicate in a
