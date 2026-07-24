@@ -23,6 +23,8 @@ tracker: local-markdown
   保存有界的授权来源和原因，并通过 Memory/Postgres round-trip 验证。
 - [有界授权拒绝指标](tickets/05-bounded-authorization-metrics.md) — 已实现：grant
   拒绝按固定 format、来源和原因计数，不包含 actor、Repository、路径或 endpoint 标签。
+- [审计 API 授权字段契约](tickets/06-audit-api-contract.md) — 已实现：V2 管理审计 API、
+  OpenAPI 和 Console 统一暴露可选且有界的授权决策字段，V1 响应不变。
 
 ## Fog
 

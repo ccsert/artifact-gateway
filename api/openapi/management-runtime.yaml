@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/audits":
+    "$ref": "./management/audits.yaml#/audits"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
@@ -83,6 +85,10 @@ components:
       "$ref": "./components/schemas.yaml#/GroupPage"
     ArtifactPage:
       "$ref": "./components/schemas.yaml#/ArtifactPage"
+    AuditRecord:
+      "$ref": "./components/schemas.yaml#/AuditRecord"
+    AuditList:
+      "$ref": "./components/schemas.yaml#/AuditList"
   parameters:
     RepositoryId:
       "$ref": "./components/parameters.yaml#/RepositoryId"
@@ -147,6 +153,8 @@ components:
       "$ref": "./components/responses.yaml#/ArtifactList"
     Deletion:
       "$ref": "./components/responses.yaml#/Deletion"
+    AuditList:
+      "$ref": "./components/responses.yaml#/AuditList"
   securitySchemes:
     bearerAuth:
       "$ref": "./components/security-schemes.yaml#/bearerAuth"

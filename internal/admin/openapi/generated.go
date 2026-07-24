@@ -220,6 +220,36 @@ type ArtifactPage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// AuditList defines model for AuditList.
+type AuditList = []AuditRecord
+
+// AuditRecord defines model for AuditRecord.
+type AuditRecord struct {
+	Actor *string `json:"actor,omitempty"`
+
+	// AuthorizationReason Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values.
+	AuthorizationReason *string `json:"authorizationReason,omitempty"`
+
+	// AuthorizationSource Optional bounded authorization decision source. Current values include repository_grants, legacy_static, legacy_protocol, and administrator; consumers must accept future bounded values.
+	AuthorizationSource *string   `json:"authorizationSource,omitempty"`
+	Bytes               *int64    `json:"bytes,omitempty"`
+	CacheDisposition    *string   `json:"cacheDisposition,omitempty"`
+	Format              *string   `json:"format,omitempty"`
+	GroupName           *string   `json:"groupName,omitempty"`
+	MemberName          *string   `json:"memberName,omitempty"`
+	MemberType          *string   `json:"memberType,omitempty"`
+	OccurredAt          time.Time `json:"occurredAt"`
+	Operation           *string   `json:"operation,omitempty"`
+	Outcome             string    `json:"outcome"`
+	Repository          *string   `json:"repository,omitempty"`
+	Representation      *string   `json:"representation,omitempty"`
+	RequestId           *string   `json:"requestId,omitempty"`
+	Resource            *string   `json:"resource,omitempty"`
+	Status              *int      `json:"status,omitempty"`
+	TraceId             *string   `json:"traceId,omitempty"`
+	UpstreamHost        *string   `json:"upstreamHost,omitempty"`
+}
+
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
 	Format  Format     `json:"format"`
@@ -385,6 +415,13 @@ type GroupList = GroupPage
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
 
+// ListAuditsParams defines parameters for ListAudits.
+type ListAuditsParams struct {
+	Group      *string `form:"group,omitempty" json:"group,omitempty"`
+	Repository *string `form:"repository,omitempty" json:"repository,omitempty"`
+	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListGroupsParams defines parameters for ListGroups.
 type ListGroupsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -498,6 +535,9 @@ func (t *CreatePublishSession) UnmarshalJSON(b []byte) error {
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /audits)
+	ListAudits(w http.ResponseWriter, r *http.Request, params ListAuditsParams)
+
 	// (GET /groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, params ListGroupsParams)
 
@@ -573,6 +613,65 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAudits operation middleware
+func (siw *ServerInterfaceWrapper) ListAudits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAuditsParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "group", r.URL.Query(), &params.Group, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "group"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "repository" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repository", r.URL.Query(), &params.Repository, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAudits(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListGroups(w http.ResponseWriter, r *http.Request) {
@@ -1540,6 +1639,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audits", wrapper.ListAudits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/groups/{groupId}", wrapper.DeleteGroup)
@@ -1570,6 +1670,8 @@ type ArtifactJSONResponse Artifact
 
 type ArtifactListJSONResponse ArtifactPage
 
+type AuditListJSONResponse AuditList
+
 type DeletionJSONResponse Deletion
 
 type GrantListResponseHeaders struct {
@@ -1596,6 +1698,44 @@ type RepositoryJSONResponse Repository
 type RepositoryListJSONResponse RepositoryPage
 
 type RetentionPolicyJSONResponse RetentionPolicy
+
+type ListAuditsRequestObject struct {
+	Params ListAuditsParams
+}
+
+type ListAuditsResponseObject interface {
+	VisitListAuditsResponse(w http.ResponseWriter) error
+}
+
+type ListAudits200JSONResponse struct{ AuditListJSONResponse }
+
+func (response ListAudits200JSONResponse) VisitListAuditsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAudits401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAudits401ApplicationProblemPlusJSONResponse) VisitListAuditsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListGroupsRequestObject struct {
 	Params ListGroupsParams
@@ -2341,6 +2481,9 @@ func (response ReplaceRetentionPolicy412ApplicationProblemPlusJSONResponse) Visi
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /audits)
+	ListAudits(ctx context.Context, request ListAuditsRequestObject) (ListAuditsResponseObject, error)
+
 	// (GET /groups)
 	ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error)
 
@@ -2445,6 +2588,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAudits operation middleware
+func (sh *strictHandler) ListAudits(w http.ResponseWriter, r *http.Request, params ListAuditsParams) {
+	var request ListAuditsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAudits(ctx, request.(ListAuditsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAudits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuditsResponseObject); ok {
+		if err := validResponse.VisitListAuditsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListGroups operation middleware

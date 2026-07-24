@@ -79,6 +79,7 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		t.Fatalf("openapi=%s", spec.OpenAPI)
 	}
 	for _, path := range []string{
+		"/audits",
 		"/repositories",
 		"/groups",
 		"/groups/{groupId}/members",
@@ -96,7 +97,7 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 	if spec.Paths.Find("/repositories/{repositoryId}/members") != nil {
 		t.Error("repository-owned member mutation must not be exposed")
 	}
-	for _, schema := range []string{"Repository", "Group", "Member", "Grant", "RetentionPolicy", "PublishSession", "Artifact", "Problem", "CommitMavenCoordinate"} {
+	for _, schema := range []string{"Repository", "Group", "Member", "Grant", "RetentionPolicy", "PublishSession", "Artifact", "Problem", "CommitMavenCoordinate", "AuditRecord", "AuditList"} {
 		if spec.Components.Schemas[schema] == nil {
 			t.Errorf("missing schema %s", schema)
 		}
@@ -125,9 +126,27 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read generated management contract: %v", err)
 	}
-	for _, declaration := range []string{"type ServerInterface interface", "type StrictServerInterface interface", "ListRepositories", "CreateRepository", "GetRepository", "DeleteRepository"} {
+	for _, declaration := range []string{"type ServerInterface interface", "type StrictServerInterface interface", "ListAudits", "ListRepositories", "CreateRepository", "GetRepository", "DeleteRepository"} {
 		if !strings.Contains(string(generated), declaration) {
 			t.Errorf("generated management contract is missing %q", declaration)
+		}
+	}
+	audit := spec.Components.Schemas["AuditRecord"].Value
+	for _, field := range []string{"authorizationSource", "authorizationReason"} {
+		if audit.Properties[field] == nil {
+			t.Errorf("AuditRecord missing %s", field)
+		}
+		if contains(audit.Required, field) {
+			t.Errorf("AuditRecord %s must remain optional", field)
+		}
+	}
+	audits := operation(t, spec, "/audits", "GET")
+	for _, status := range []string{"200", "401"} {
+		requireResponse(t, audits, status)
+	}
+	for _, parameter := range []string{"group", "repository", "limit"} {
+		if !hasParameter(audits.Parameters, parameter, "query") {
+			t.Errorf("audit list missing query parameter %s", parameter)
 		}
 	}
 }
@@ -151,6 +170,7 @@ func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 		filepath.Join("..", "api", "openapi", "components", "parameters.yaml"),
 		filepath.Join("..", "api", "openapi", "components", "responses.yaml"),
 		filepath.Join("..", "api", "openapi", "management", "repositories.yaml"),
+		filepath.Join("..", "api", "openapi", "management", "audits.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "oci.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "raw.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "maven.yaml"),

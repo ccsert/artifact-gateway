@@ -97,6 +97,14 @@ authorization denials, not exposed through an artifact-not-found response or a
 principal-specific error message. The fields are bounded policy values, never
 tokens, credentials, or principal-derived labels.
 
+`GET /api/v2/audits` is the administrator-only management API for these
+records. Its `AuditRecord.authorizationSource` and
+`AuditRecord.authorizationReason` fields are optional: they are present only
+when a request reached a repository authorization decision. Current values are
+bounded policy vocabulary, but API consumers must accept future bounded values
+and treat an absent field as "no repository authorization decision". The
+legacy `/api/v1/audits` response remains unchanged for V1 consumers.
+
 ## Metrics
 
 `artifact_gateway_repository_authorization_denials_total` counts denied

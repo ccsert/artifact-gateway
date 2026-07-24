@@ -1,0 +1,27 @@
+---
+audits:
+  get:
+    operationId: listAudits
+    description: Lists administrative audit records. Authorization decision fields are
+      present only when the record represents a repository authorization decision.
+    parameters:
+    - name: group
+      in: query
+      schema:
+        type: string
+    - name: repository
+      in: query
+      schema:
+        type: string
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuditList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"

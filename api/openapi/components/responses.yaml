@@ -149,3 +149,9 @@ Deletion:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/Deletion"
+AuditList:
+  description: Administrative audit records, ordered newest first
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/AuditList"

@@ -132,6 +132,36 @@ export type ArtifactPage = {
     nextPageToken?: string;
 };
 
+export type AuditRecord = {
+    groupName?: string;
+    repository?: string;
+    memberName?: string;
+    outcome: string;
+    actor?: string;
+    occurredAt: string;
+    format?: string;
+    resource?: string;
+    representation?: string;
+    memberType?: string;
+    upstreamHost?: string;
+    operation?: string;
+    status?: number;
+    cacheDisposition?: string;
+    bytes?: number;
+    /**
+     * Optional bounded authorization decision source. Current values include repository_grants, legacy_static, legacy_protocol, and administrator; consumers must accept future bounded values.
+     */
+    authorizationSource?: string;
+    /**
+     * Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values.
+     */
+    authorizationReason?: string;
+    requestId?: string;
+    traceId?: string;
+};
+
+export type AuditList = Array<AuditRecord>;
+
 export type RepositoryId = string;
 
 export type GroupId = string;
@@ -156,6 +186,35 @@ export type PageToken = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type ListAuditsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        group?: string;
+        repository?: string;
+        limit?: number;
+    };
+    url: '/audits';
+};
+
+export type ListAuditsErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+};
+
+export type ListAuditsError = ListAuditsErrors[keyof ListAuditsErrors];
+
+export type ListAuditsResponses = {
+    /**
+     * Administrative audit records, ordered newest first
+     */
+    200: AuditList;
+};
+
+export type ListAuditsResponse = ListAuditsResponses[keyof ListAuditsResponses];
 
 export type ListRepositoriesData = {
     body?: never;

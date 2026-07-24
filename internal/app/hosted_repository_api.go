@@ -113,6 +113,70 @@ func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r
 	}
 }
 
+func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http.Request, params adminopenapi.ListAuditsParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	limit := 100
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+	if limit < 1 || limit > 500 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "limit must be between 1 and 500")
+		return
+	}
+	query := repository.AuditQuery{Limit: limit}
+	if params.Group != nil {
+		query.GroupName = *params.Group
+	}
+	if params.Repository != nil {
+		query.Repository = *params.Repository
+	}
+	audits, err := h.audit.ListAudits(r.Context(), query)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list audits failed")
+		return
+	}
+	response := make([]auditResponse, 0, len(audits))
+	for _, audit := range audits {
+		response = append(response, auditResponseFromRecord(audit))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
+// auditResponse is the V2 audit representation. V1 keeps returning the
+// historical repository.AuditRecord JSON field names for compatibility.
+type auditResponse struct {
+	GroupName           string                  `json:"groupName,omitempty"`
+	Repository          string                  `json:"repository,omitempty"`
+	MemberName          string                  `json:"memberName,omitempty"`
+	Outcome             repository.AuditOutcome `json:"outcome"`
+	Actor               string                  `json:"actor,omitempty"`
+	OccurredAt          time.Time               `json:"occurredAt"`
+	Format              string                  `json:"format,omitempty"`
+	Resource            string                  `json:"resource,omitempty"`
+	Representation      string                  `json:"representation,omitempty"`
+	MemberType          string                  `json:"memberType,omitempty"`
+	UpstreamHost        string                  `json:"upstreamHost,omitempty"`
+	Operation           string                  `json:"operation,omitempty"`
+	Status              int                     `json:"status,omitempty"`
+	CacheDisposition    string                  `json:"cacheDisposition,omitempty"`
+	Bytes               int64                   `json:"bytes,omitempty"`
+	AuthorizationSource string                  `json:"authorizationSource,omitempty"`
+	AuthorizationReason string                  `json:"authorizationReason,omitempty"`
+	RequestID           string                  `json:"requestId,omitempty"`
+	TraceID             string                  `json:"traceId,omitempty"`
+}
+
+func auditResponseFromRecord(audit repository.AuditRecord) auditResponse {
+	return auditResponse{
+		GroupName: audit.GroupName, Repository: audit.Repository, MemberName: audit.MemberName, Outcome: audit.Outcome, Actor: audit.Actor, OccurredAt: audit.OccurredAt,
+		Format: audit.Format, Resource: audit.Resource, Representation: audit.Representation, MemberType: audit.MemberType, UpstreamHost: audit.UpstreamHost,
+		Operation: audit.Operation, CacheDisposition: audit.CacheDisposition, AuthorizationSource: audit.AuthorizationSource, AuthorizationReason: audit.AuthorizationReason,
+		RequestID: audit.RequestID, TraceID: audit.TraceID, Status: audit.Status, Bytes: audit.Bytes,
+	}
+}
+
 func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateRepositoryParams) {
 	if principal, ok := h.authorize(w, r); ok {
 		h.createWithIdempotencyKey(w, r, principal, string(params.IdempotencyKey))

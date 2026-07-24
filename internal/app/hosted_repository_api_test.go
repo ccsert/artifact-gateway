@@ -48,6 +48,43 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
+	store := repository.NewMemoryStore()
+	store.Audits = []repository.AuditRecord{{
+		GroupName: "releases", Repository: "releases", Actor: "reader", Outcome: repository.AuditAccessDenied,
+		OccurredAt: time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC), Format: "maven", Operation: "get", Status: http.StatusForbidden,
+		AuthorizationSource: "repository_grants", AuthorizationReason: "scope_not_granted",
+	}}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/audits?group=releases&repository=releases&limit=1", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var audits []struct {
+		AuthorizationSource string    `json:"authorizationSource"`
+		AuthorizationReason string    `json:"authorizationReason"`
+		OccurredAt          time.Time `json:"occurredAt"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if len(audits) != 1 || audits[0].AuthorizationSource != "repository_grants" || audits[0].AuthorizationReason != "scope_not_granted" || audits[0].OccurredAt.IsZero() {
+		t.Fatalf("audits=%#v", audits)
+	}
+
+	nonAdmin := httptest.NewRequest(http.MethodGet, "/api/v2/audits", nil)
+	authorize(nonAdmin, "resolver-secret")
+	denied := httptest.NewRecorder()
+	handler.ServeHTTP(denied, nonAdmin)
+	if denied.Code != http.StatusUnauthorized {
+		t.Fatalf("non-admin status=%d body=%s", denied.Code, denied.Body.String())
+	}
+}
+
 func TestHostedGroupManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
 	first, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-first", Format: repository.FormatMaven})
