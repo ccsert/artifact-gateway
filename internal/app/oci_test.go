@@ -212,6 +212,72 @@ func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
 	}
 }
 
+func TestOCIUsesManagedGrantsForBoundMembersAndCachedSources(t *testing.T) {
+	content := []byte(`{"schemaVersion":2}`)
+	store := repository.NewMemoryStore()
+	firstRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-first", Name: "oci-first", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-second", Name: "oci-second", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), firstRepository.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), secondRepository.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{
+		{Name: "first", Type: repository.MemberProxy, Endpoint: "https://first.example", Position: 0, RepositoryID: firstRepository.ID},
+		{Name: "second", Type: repository.MemberProxy, Endpoint: "https://second.example", Position: 1, RepositoryID: secondRepository.ID},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"team/app"}}}
+	client := &countingOCIClient{content: content, status: http.StatusOK}
+	metrics := &Metrics{}
+	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"first.example", "second.example"})
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: client, Authenticator: authenticator, Cache: cache}
+	request := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+		authorize(r, "resolver-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := request(); response.Code != http.StatusOK || strings.Join(client.Members(), ",") != "first" {
+		t.Fatalf("first response=%d members=%v", response.Code, client.Members())
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), firstRepository.ID, nil, "2"); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(); response.Code != http.StatusOK || strings.Join(client.Members(), ",") != "first,second" {
+		t.Fatalf("fallback response=%d members=%v", response.Code, client.Members())
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), secondRepository.ID, nil, "2"); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(); response.Code != http.StatusForbidden || client.Calls() != 2 {
+		t.Fatalf("denied response=%d calls=%d", response.Code, client.Calls())
+	}
+	var foundGrantAudit bool
+	for _, audit := range store.Audits {
+		if audit.MemberName == "first" && audit.AuthorizationSource == "repository_grants" && audit.AuthorizationReason == "scope_not_granted" {
+			foundGrantAudit = true
+		}
+	}
+	if !foundGrantAudit {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	metricResponse := httptest.NewRecorder()
+	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="oci",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 3`) {
+		t.Fatalf("authorization metrics=%s", metricResponse.Body.String())
+	}
+}
+
 func TestOCICacheWithoutEndpointProvenanceIsRefetched(t *testing.T) {
 	content := []byte(`{"schemaVersion":2}`)
 	client := &countingOCIClient{content: content, status: http.StatusOK}

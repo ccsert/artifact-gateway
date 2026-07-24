@@ -132,6 +132,19 @@ func (r Resolver) RecordOCIFailure(ctx context.Context, groupName, repositoryNam
 	return r.audit(ctx, groupName, repositoryName, memberName, outcome, actor)
 }
 
+func (r Resolver) RecordOCIGrantDenied(ctx context.Context, groupName, repositoryName, resource, method, memberName, actor string, decision AuthorizationDecision) error {
+	if err := r.Store.RecordAudit(ctx, repository.AuditRecord{
+		GroupName: groupName, Repository: repositoryName, MemberName: memberName, Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: "oci", Resource: resource, Representation: resource, Operation: strings.ToLower(method), Status: http.StatusForbidden, CacheDisposition: "bypass",
+		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
+	}); err != nil {
+		return fmt.Errorf("record OCI grant denial: %w", err)
+	}
+	r.Metrics.recordAudit(repositoryName, repository.AuditAccessDenied)
+	r.Metrics.recordRepositoryAuthorizationDenied("oci", decision.Source, decision.Reason)
+	return nil
+}
+
 func (r Resolver) RecordOCIRequestFailure() {
 	r.Metrics.failed.Add(1)
 }
@@ -635,7 +648,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := ociClient.(ConanClient); ok {
 		conanClient = client
 	}
-	oci := OCIHandler{Resolver: resolver, Client: ociClient, Authenticator: authenticator, Cache: cache}
+	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics)
 	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))

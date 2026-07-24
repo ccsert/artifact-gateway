@@ -18,6 +18,7 @@ import (
 type countingOCIClient struct {
 	mu      sync.Mutex
 	calls   int
+	members []string
 	content []byte
 	status  int
 	delay   time.Duration
@@ -129,12 +130,13 @@ func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 	}
 }
 
-func (c *countingOCIClient) Fetch(_ context.Context, method string, _ repository.Member, _, _, _ string, _ http.Header) (*http.Response, error) {
+func (c *countingOCIClient) Fetch(_ context.Context, method string, member repository.Member, _, _, _ string, _ http.Header) (*http.Response, error) {
 	if c.delay > 0 {
 		time.Sleep(c.delay)
 	}
 	c.mu.Lock()
 	c.calls++
+	c.members = append(c.members, member.Name)
 	c.mu.Unlock()
 	digest := digestOf(c.content)
 	return &http.Response{StatusCode: c.status, Header: http.Header{"Docker-Content-Digest": []string{digest}, "Content-Type": []string{"application/vnd.oci.image.manifest.v1+json"}}, Body: io.NopCloser(bytes.NewReader(c.content)), Request: &http.Request{Method: method}}, nil
@@ -144,6 +146,12 @@ func (c *countingOCIClient) Calls() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.calls
+}
+
+func (c *countingOCIClient) Members() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.members...)
 }
 
 func TestOCICacheServesVerifiedContentAndCoalescesConcurrentPulls(t *testing.T) {

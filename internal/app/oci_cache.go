@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"golang.org/x/sync/singleflight"
@@ -379,7 +380,7 @@ func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, erro
 		return CachedOCIContent{}, errOCICacheMiss
 	}
 	if index.Negative {
-		return CachedOCIContent{}, errOCICacheNegative
+		return CachedOCIContent{Member: index.Member, Endpoint: index.Endpoint}, errOCICacheNegative
 	}
 	info, err := c.store.Stat(ctx, index.Object)
 	if err != nil {
@@ -492,9 +493,9 @@ func (c *OCICache) storeContentAdmitted(ctx context.Context, key string, content
 	return nil
 }
 
-func (c *OCICache) StoreNegative(ctx context.Context, key string) error {
+func (c *OCICache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
-		return c.storeNegative(workCtx, key)
+		return c.storeNegative(workCtx, key, member)
 	})
 }
 
@@ -512,9 +513,9 @@ func (c *OCICache) Invalidate(ctx context.Context, key string) {
 	_ = c.removeIndex(ctx, key, encoded, index)
 }
 
-func (c *OCICache) storeNegative(ctx context.Context, key string) error {
+func (c *OCICache) storeNegative(ctx context.Context, key string, member repository.Member) error {
 	previous := c.loadIndex(ctx, key)
-	encoded, err := json.Marshal(cachedOCIIndex{Negative: true, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
+	encoded, err := json.Marshal(cachedOCIIndex{Negative: true, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
 		return err
 	}
