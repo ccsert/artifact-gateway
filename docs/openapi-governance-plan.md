@@ -51,6 +51,29 @@ uses a small standard-library routing bridge because its path parameter has a
 literal suffix. The strict interface is generated alongside it as the typed
 extension point for later management route migrations.
 
+## Management runtime coverage
+
+`management.yaml` is the complete reviewed management contract; it is not a
+claim that every operation has a runtime implementation. The generated runtime
+projection intentionally contains only operations with an equivalent,
+production-backed `/api/v2` handler:
+
+| Contract area | Runtime status | Reason |
+| --- | --- | --- |
+| Repositories | Generated | Hosted repositories have UUID identity, lifecycle state, and idempotent creation. |
+| Maven publish sessions | Generated | The existing session service supplies authorization, staged-object validation, and transactional commit. |
+| Maven artifact list | Generated | The existing committed-artifact store supplies the list response. |
+| Artifact detail and deletion | Deferred | `NativeMavenStore` has no lookup-by-artifact-ID or deletion/tombstone operation. |
+| Groups | Deferred | V1 OCI, Maven, Raw, and Conan groups are protocol-specific, name-addressed models; they do not satisfy the contract's UUID repository references, version token, or replacement semantics. |
+| Grants | Deferred | No repository-grant aggregate or persistence contract exists. |
+| Retention policies | Deferred | No retention-policy aggregate, optimistic-concurrency token, or execution lifecycle exists. |
+
+Adding a deferred path to `management-runtime.yaml` requires first adding the
+corresponding domain aggregate, persistence operations in both memory and
+Postgres stores, authorization behavior, and a handler-level contract test.
+The generated wrapper then owns route and parameter binding; it must not be
+used to publish an unsupported route.
+
 Protocol APIs are not handler-generated. OCI Registry V2, Raw, Maven, and
 Conan behavior is defined first by official specifications and ecosystem client
 expectations. `api/openapi/protocols/*.yaml` contains the Gateway overlay and
