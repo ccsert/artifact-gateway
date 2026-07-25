@@ -11,6 +11,3 @@ type CacheQuota = cache.Quota
 var NewPostgresCacheCoordinator = cache.NewPostgresCoordinator
 var NewCacheQuota = cache.NewQuota
 var ErrCacheQuotaExceeded = cache.ErrQuotaExceeded
-
-const cacheDistributedLockLease = cache.DefaultLockLease
-const cacheDistributedLockRenewInterval = cache.DefaultLockRenewInterval

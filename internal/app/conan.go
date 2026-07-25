@@ -8,12 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -62,224 +60,6 @@ type conanCacheEntry struct {
 	contentType, member, endpoint string
 	cacheDisposition              string
 	status                        int
-}
-
-type conanCacheIndex struct {
-	Object, Digest, ContentType, Member, Endpoint, Repository string
-	Group, Path, Representation                               string
-	Size                                                      int64
-	Status                                                    int
-	ExpiresAt                                                 time.Time
-	Negative                                                  bool
-}
-type ConanCache struct {
-	objectStore    OCIObjectStore
-	quota          *CacheQuota
-	maxObjectBytes int64
-	coordinator    OCICacheCoordinator
-	publicationMu  sync.Mutex
-}
-
-func NewConanCache(hosts []string) *ConanCache {
-	return NewConanCacheWithStore(NewMemoryOCIObjectStore(), hosts)
-}
-func NewConanCacheWithStore(store OCIObjectStore, _ []string) *ConanCache {
-	return &ConanCache{objectStore: store, maxObjectBytes: defaultRawMaxObjectBytes}
-}
-func NewDefaultConanCache(store OCIObjectStore, hosts []string) *ConanCache {
-	return NewConanCacheWithStore(store, hosts)
-}
-func (c *ConanCache) WithQuota(quota *CacheQuota) *ConanCache { c.quota = quota; return c }
-func (c *ConanCache) WithCoordinator(coordinator OCICacheCoordinator) *ConanCache {
-	c.coordinator = coordinator
-	return c
-}
-func (c *ConanCache) WithMaxObjectBytes(limit int64) *ConanCache {
-	if limit > 0 {
-		c.maxObjectBytes = limit
-	}
-	return c
-}
-func (c *ConanCache) load(ctx context.Context, key string) (conanCacheEntry, bool) {
-	encoded, err := c.objectStore.Get(ctx, key)
-	if err != nil {
-		return conanCacheEntry{}, false
-	}
-	var index conanCacheIndex
-	if json.Unmarshal(encoded, &index) != nil || !time.Now().UTC().Before(index.ExpiresAt) {
-		_ = c.objectStore.Delete(ctx, key)
-		return conanCacheEntry{}, false
-	}
-	if index.Negative {
-		return conanCacheEntry{status: http.StatusNotFound, member: index.Member, endpoint: index.Endpoint}, true
-	}
-	body, err := c.objectStore.Get(ctx, index.Object)
-	if err != nil {
-		_ = c.objectStore.Delete(ctx, key)
-		return conanCacheEntry{}, false
-	}
-	sum := sha256.Sum256(body)
-	if hex.EncodeToString(sum[:]) != index.Digest {
-		_ = c.objectStore.Delete(ctx, key)
-		return conanCacheEntry{}, false
-	}
-	return conanCacheEntry{body: body, contentType: index.ContentType, member: index.Member, endpoint: index.Endpoint, status: index.Status}, true
-}
-func (c *ConanCache) store(ctx context.Context, key string, e conanCacheEntry, repositoryName string, quotaBytes int64, ttl time.Duration, identity ...string) error {
-	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
-		return c.quota.AdmitConanWithLimit(workCtx, repositoryName, key, int64(len(e.body)), quotaBytes, func() error {
-			sum := sha256.Sum256(e.body)
-			digest := hex.EncodeToString(sum[:])
-			object := "conan/objects/" + digest
-			if !e.statusIsNegative() {
-				if err := c.objectStore.Put(workCtx, object, e.body); err != nil {
-					return err
-				}
-			}
-			index := conanCacheIndex{Object: object, Digest: digest, ContentType: e.contentType, Member: e.member, Endpoint: e.endpoint, Repository: repositoryName, Size: int64(len(e.body)), Status: e.status, ExpiresAt: time.Now().UTC().Add(ttl), Negative: e.status == http.StatusNotFound}
-			if len(identity) == 3 {
-				index.Group, index.Path, index.Representation = identity[0], identity[1], identity[2]
-			}
-			encoded, err := json.Marshal(index)
-			if err != nil {
-				return err
-			}
-			return c.objectStore.Put(workCtx, key, encoded)
-		})
-	})
-}
-func (e conanCacheEntry) statusIsNegative() bool { return e.status == http.StatusNotFound }
-func (c *ConanCache) key(group, path string, member repository.Member, representation ...string) string {
-	value := ""
-	if len(representation) > 0 {
-		value = representation[0]
-	}
-	sum := sha256.Sum256([]byte(group + "\x00" + path + "\x00" + member.Name + "\x00" + member.Endpoint + "\x00" + value))
-	return "conan/index/" + hex.EncodeToString(sum[:]) + ".json"
-}
-func (c *ConanCache) Invalidate(ctx context.Context, group, path string, member repository.Member) {
-	_ = c.withPublicationLock(ctx, func(workCtx context.Context) error {
-		// Remove indexes written before representation was recorded in their value.
-		_ = c.objectStore.Delete(workCtx, c.key(group, path, member))
-		keys, err := c.objectStore.List(workCtx, "conan/index/")
-		if err != nil {
-			return err
-		}
-		for _, key := range keys {
-			encoded, err := c.objectStore.Get(workCtx, key)
-			if err != nil {
-				continue
-			}
-			var index conanCacheIndex
-			if json.Unmarshal(encoded, &index) == nil && index.Group == group && index.Path == path && index.Member == member.Name && index.Endpoint == member.Endpoint {
-				_ = c.objectStore.Delete(workCtx, key)
-			}
-		}
-		return nil
-	})
-}
-func (c *ConanCache) CollectGarbage(ctx context.Context) error {
-	return c.withPublicationLock(ctx, func(workCtx context.Context) error { return c.collectGarbage(workCtx) })
-}
-func (c *ConanCache) collectGarbage(ctx context.Context) error {
-	keys, err := c.objectStore.List(ctx, "conan/index/")
-	if err != nil {
-		return err
-	}
-	referenced := map[string]bool{}
-	for _, key := range keys {
-		encoded, err := c.objectStore.Get(ctx, key)
-		if err != nil {
-			continue
-		}
-		var index conanCacheIndex
-		if json.Unmarshal(encoded, &index) != nil || !time.Now().UTC().Before(index.ExpiresAt) {
-			_ = c.objectStore.Delete(ctx, key)
-			continue
-		}
-		if index.Object != "" {
-			referenced[index.Object] = true
-		}
-	}
-	objects, err := c.objectStore.List(ctx, "conan/objects/")
-	if err != nil {
-		return err
-	}
-	for _, object := range objects {
-		if !referenced[object] {
-			_ = c.objectStore.Delete(ctx, object)
-		}
-	}
-	return nil
-}
-func (c *ConanCache) withPublicationLock(ctx context.Context, work func(context.Context) error) error {
-	c.publicationMu.Lock()
-	defer c.publicationMu.Unlock()
-	if c.coordinator == nil {
-		return work(ctx)
-	}
-	for {
-		owner, acquired, err := c.coordinator.Acquire(ctx, "conan-publication", cacheDistributedLockLease)
-		if err != nil {
-			return err
-		}
-		if !acquired {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(20 * time.Millisecond):
-				continue
-			}
-		}
-		defer func() {
-			releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			_ = c.coordinator.Release(releaseCtx, "conan-publication", owner)
-		}()
-		workCtx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		failed := make(chan struct{})
-		go c.renewConanLock(workCtx, owner, failed, cancel)
-		err = work(workCtx)
-		select {
-		case <-failed:
-			return errors.New("conan distributed publication lock renewal failed")
-		default:
-			return err
-		}
-	}
-}
-func (c *ConanCache) renewConanLock(ctx context.Context, owner string, failed chan<- struct{}, cancel context.CancelFunc) {
-	ticker := time.NewTicker(cacheDistributedLockRenewInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			ok, err := c.coordinator.Renew(ctx, "conan-publication", owner, cacheDistributedLockLease)
-			if err != nil || !ok {
-				close(failed)
-				cancel()
-				return
-			}
-		}
-	}
-}
-func (c *ConanCache) proxyAllowed(member repository.Member) bool {
-	u, err := url.Parse(member.Endpoint)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
-		return false
-	}
-	if ip := net.ParseIP(u.Hostname()); ip != nil && privateAddress(ip) {
-		return false
-	}
-	for _, host := range member.AllowedHosts {
-		if strings.EqualFold(strings.TrimSpace(host), u.Hostname()) {
-			return true
-		}
-	}
-	return false
 }
 
 type ConanHandler struct {
@@ -503,8 +283,8 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			denied = true
 			continue
 		}
-		if h.Cache != nil && h.Cache.coordinator != nil && kind != "file" {
-			release, lockErr := acquireCacheRequestLock(ctx, h.Cache.coordinator, key)
+		if h.Cache != nil && kind != "file" {
+			release, lockErr := h.Cache.AcquireRequestLock(ctx, key)
 			if lockErr != nil {
 				return conanCacheEntry{}, http.StatusServiceUnavailable, errors.New("unable to coordinate Conan cache fetch")
 			}
@@ -534,8 +314,8 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			continue
 		}
 		limit := defaultRawMaxObjectBytes
-		if h.Cache != nil && h.Cache.maxObjectBytes > 0 {
-			limit = h.Cache.maxObjectBytes
+		if h.Cache != nil && h.Cache.MaxObjectBytes() > 0 {
+			limit = h.Cache.MaxObjectBytes()
 		}
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		_ = response.Body.Close()
