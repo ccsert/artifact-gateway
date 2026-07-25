@@ -43,6 +43,7 @@ down:
 	@docker compose --env-file .env -f compose.yml down
 
 test:
+	@./scripts/release-readiness-check.sh
 	@python3 -m unittest scripts/maven_proxy_fixture_test.py
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./...
 
