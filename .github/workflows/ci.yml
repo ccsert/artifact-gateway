@@ -30,6 +30,8 @@ jobs:
         run: make conan-e2e
       - name: Run integration tests
         run: make integration-test
+      - name: Check release readiness entrypoints
+        run: make release-readiness-check
   console:
     runs-on: ubuntu-latest
     steps:
