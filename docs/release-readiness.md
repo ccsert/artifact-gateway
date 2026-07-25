@@ -16,12 +16,17 @@ make readiness-e2e
 make resolver-rotation-e2e
 make oci-performance-e2e
 make cache-operations-e2e
+make openapi-check
+make console-typecheck
+make console-build
+make console-e2e
 make upgrade-readiness
 make backup-restore-readiness
 ```
 
 The commands exercise native protocol fixtures, persistent metadata, dependency
-readiness, token rotation, performance, upgrade, and restore behavior. Record
+readiness, token rotation, performance, Console contract/build/browser behavior,
+upgrade, and restore behavior. Record
 their output, Git revision, operator, UTC start/end, and any deviation in the
 release record.
 
@@ -43,6 +48,10 @@ release record.
       succeeds for an administrator, and increases the successful-run count.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
+- [ ] `make openapi-check`, `make console-typecheck`, `make console-build`,
+      and `make console-e2e` verify the generated `/api/v2` management
+      client, the Console production build, and the browser flow that reads and
+      triggers the administrator-only `/api/v1/operations/cache` surface.
 - [ ] Maven retention maintenance runs outside request handling, preserves the
       configured newest versions per module, and tombstones only expired excess
       coordinates before the Maven orphan collector reclaims bytes.

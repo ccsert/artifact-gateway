@@ -26,8 +26,10 @@ depends_on:
 - `NativeMaintenance` 与 Maven `NativeRetention` 迁入相应协议模块；`cmd/gateway`
   仍通过 app compatibility alias 装配，`CacheMaintenance` 则保留为管理 API 的跨协议
   状态和 collection 编排。
-- `docs/release-readiness.md` 现将 `make conan-e2e` 作为明确的可执行发布门禁；README
-  明确 Conan 是受管授权目标而非 native 存储，并给出控制台验证入口和各格式 Proxy 配置边界。
+- `docs/release-readiness.md` 现将 `make conan-e2e`、缓存运维、OpenAPI 和 Console
+  验证作为明确的可执行发布门禁；README 明确 Conan 是受管授权目标而非 native 存储，
+  并给出 Console 使用 `/api/v2` 管理 client 与 `/api/v1/operations/cache`
+  运维面的边界。
 
 ## Verification
 

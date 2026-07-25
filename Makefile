@@ -9,7 +9,7 @@ OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 .PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 openapi-bundle:
 	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
