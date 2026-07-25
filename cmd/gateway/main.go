@@ -12,6 +12,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -20,6 +21,9 @@ import (
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "preflight" {
 		os.Exit(preflight.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "evidence" {
+		os.Exit(evidence.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	}
 	cfg, err := config.Load()
 	if err != nil {

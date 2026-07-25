@@ -116,3 +116,23 @@ policy, PostgreSQL, object-store, and optional OIDC/JWKS checks. It returns `0`
 for pass/skip-only reports, `1` for a failed check, and `2` for invalid CLI
 usage. Its JSON report deliberately excludes credentials, token values, full
 database URLs, and dependency error text.
+
+## Stage 2 Status
+
+The evidence collector reads the existing readiness, metrics, audit, and cache
+operations endpoints. It creates `manifest.json` plus one redacted JSON record
+per endpoint:
+
+```sh
+export GATEWAY_EVIDENCE_ADMIN_TOKEN='injected-at-runtime'
+make evidence \
+  GATEWAY_URL='https://gateway.example.test' \
+  EVIDENCE_OUTPUT='.artifacts/release-evidence/20260725T000000Z' \
+  GIT_REVISION='candidate-revision' \
+  IMAGE_DIGEST='registry.example/gateway@sha256:...'
+```
+
+The output directory must be empty. The manifest hashes the target URL rather
+than storing it. Metrics are reduced to a fixed allowlist of aggregate values;
+audits become outcome/format counts; cache errors are omitted. The token, URL,
+audit actor/path/upstream fields, and response error bodies are never written.

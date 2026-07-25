@@ -6,10 +6,10 @@ OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 openapi-bundle:
 	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
@@ -85,6 +85,12 @@ restore-drill:
 
 preflight:
 	@docker compose --env-file .env -f compose.yml run --rm --no-deps gateway preflight run --format json
+
+evidence:
+	@test -n "$(GATEWAY_URL)" || { printf '%s\n' 'set GATEWAY_URL'; exit 2; }
+	@test -n "$(EVIDENCE_OUTPUT)" || { printf '%s\n' 'set EVIDENCE_OUTPUT'; exit 2; }
+	@test -n "$$GATEWAY_EVIDENCE_ADMIN_TOKEN" || { printf '%s\n' 'set GATEWAY_EVIDENCE_ADMIN_TOKEN'; exit 2; }
+	@go run ./cmd/gateway evidence collect --gateway-url "$(GATEWAY_URL)" --output "$(EVIDENCE_OUTPUT)" --revision "$(GIT_REVISION)" --image "$(IMAGE_DIGEST)"
 
 raw-e2e:
 	@./scripts/raw-e2e.sh
