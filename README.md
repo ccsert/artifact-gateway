@@ -89,3 +89,6 @@ URL defaults to the issuer's standard path.
 
 Administrators can inspect audits at `GET /api/v1/audits`, metrics at
 `GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.
+The Console uses the generated `/api/v2` management client for Repository
+operations and calls the `/api/v1/operations/cache` surface directly for
+administrator-only cache status and collection.

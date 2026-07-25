@@ -6,7 +6,19 @@ client.setConfig({
   baseUrl: import.meta.env.VITE_GATEWAY_API_URL ?? '/api/v2',
 });
 
-function authHeaders() {
+const operationsBaseUrl = import.meta.env.VITE_GATEWAY_OPERATIONS_URL ?? '/api/v1';
+
+type CacheStatus = {
+  object_count: number;
+  bytes: number;
+  pending_candidates: number;
+  last_completed_at?: string;
+  last_error?: string;
+  successful_runs: number;
+  failed_runs: number;
+};
+
+function authHeaders(): Record<string, string> {
   const token = window.localStorage.getItem('gatewayAdminToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -27,6 +39,36 @@ function repositoryPageOrThrow(result: { data?: RepositoryPage; error?: { messag
   return page;
 }
 
+async function operationsError(response: Response) {
+  const text = await response.text();
+  if (!text) return `Gateway returned HTTP ${response.status}.`;
+  try {
+    const body = JSON.parse(text) as { message?: string; detail?: string };
+    return body.message ?? body.detail ?? text;
+  } catch {
+    return text;
+  }
+}
+
+async function getCacheStatus() {
+  const response = await fetch(`${operationsBaseUrl}/operations/cache`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(await operationsError(response));
+  return await response.json() as CacheStatus;
+}
+
+async function collectCache() {
+  const response = await fetch(`${operationsBaseUrl}/operations/cache/collect`, { method: 'POST', headers: authHeaders() });
+  if (!response.ok) throw new Error(await operationsError(response));
+}
+
+function numberLabel(value: number) {
+  return new Intl.NumberFormat().format(value);
+}
+
+function timeLabel(value?: string) {
+  return value ? new Date(value).toLocaleString() : 'Never';
+}
+
 export function App() {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [name, setName] = useState('');
@@ -34,8 +76,17 @@ export function App() {
   const [selected, setSelected] = useState<Repository | null>(null);
 
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cacheBusy, setCacheBusy] = useState(false);
+
+  const refreshCache = useCallback(async () => {
+    setCacheBusy(true); setError('');
+    try { setCacheStatus(await getCacheStatus()); }
+    catch (reason) { setError(problemMessage(reason)); }
+    finally { setCacheBusy(false); }
+  }, []);
 
   const refresh = useCallback(async () => {
     setBusy(true); setError('');
@@ -51,7 +102,7 @@ export function App() {
     finally { setBusy(false); }
   }, [selected]);
 
-  useEffect(() => { void refresh(); }, []); // Initial inventory.
+  useEffect(() => { void refresh(); void refreshCache(); }, []); // Initial inventory and operations state.
 
   useEffect(() => {
     if (!selected || selected.format !== 'maven') return;
@@ -78,9 +129,31 @@ export function App() {
     finally { setBusy(false); }
   }
 
+  async function runCacheCollection() {
+    setCacheBusy(true); setError('');
+    try { await collectCache(); setCacheStatus(await getCacheStatus()); }
+    catch (reason) { setError(problemMessage(reason)); }
+    finally { setCacheBusy(false); }
+  }
+
   return <main className="shell">
-    <header><div><p className="eyebrow">Artifact Gateway</p><h1>Repositories</h1></div><button className="icon-button" aria-label="Refresh repositories" title="Refresh repositories" onClick={() => void refresh()} disabled={busy}>↻</button></header>
+    <header><div><p className="eyebrow">Artifact Gateway</p><h1>Repositories</h1></div><button className="icon-button" aria-label="Refresh repositories" title="Refresh repositories" onClick={() => { void refresh(); void refreshCache(); }} disabled={busy || cacheBusy}>↻</button></header>
     {error && <div className="alert" role="alert">{error}</div>}
+    <section className="operations" aria-label="Cache operations">
+      <div>
+        <h2>Cache operations</h2>
+        <dl>
+          <dt>Objects</dt><dd>{cacheStatus ? numberLabel(cacheStatus.object_count) : '—'}</dd>
+          <dt>Bytes</dt><dd>{cacheStatus ? numberLabel(cacheStatus.bytes) : '—'}</dd>
+          <dt>Pending GC</dt><dd>{cacheStatus ? numberLabel(cacheStatus.pending_candidates) : '—'}</dd>
+          <dt>Successful runs</dt><dd>{cacheStatus ? numberLabel(cacheStatus.successful_runs) : '—'}</dd>
+          <dt>Failed runs</dt><dd>{cacheStatus ? numberLabel(cacheStatus.failed_runs) : '—'}</dd>
+          <dt>Last completed</dt><dd>{timeLabel(cacheStatus?.last_completed_at)}</dd>
+        </dl>
+        {cacheStatus?.last_error && <p className="cache-error">{cacheStatus.last_error}</p>}
+      </div>
+      <button type="button" onClick={() => void runCacheCollection()} disabled={cacheBusy}>Collect cache</button>
+    </section>
     <section className="workspace" aria-label="Repository management">
       <form className="create" onSubmit={submit}>
         <h2>Create repository</h2>
