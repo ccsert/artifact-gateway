@@ -1,5 +1,9 @@
 # Full Artifact Repository Roadmap
 
+The authoritative delivery objective and completion criteria are in
+[Full Artifact Repository V1 Goal](full-artifact-repository-goal.md). This
+document records architecture sequencing and implementation status.
+
 ## Product Goal
 
 Artifact Gateway is becoming a complete artifact repository for its supported
