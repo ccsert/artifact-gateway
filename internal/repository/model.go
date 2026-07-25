@@ -154,6 +154,28 @@ type MavenArtifact struct {
 }
 type MavenObjectIntent struct{ RepositoryID, ObjectKey, ClaimToken string }
 
+type ConanObjectIntent struct {
+	RepositoryID, ObjectKey, Digest string
+	Size                            int64
+	CreatedAt, ClaimedAt            time.Time
+}
+
+type ConanAsset struct {
+	RepositoryID, Reference, RecipeRevision, PackageID, PackageRevision string
+	Path, ObjectKey, Digest                                             string
+	Size                                                                int64
+}
+
+type ConanRecipeRevision struct {
+	RepositoryID, Reference, Revision, Digest, State string
+	CreatedAt                                        time.Time
+}
+
+type ConanPackageRevision struct {
+	RepositoryID, Reference, RecipeRevision, PackageID, Revision, Digest, State string
+	CreatedAt                                                                   time.Time
+}
+
 type MemberType string
 
 const (

@@ -150,3 +150,13 @@ type ConanStore interface {
 	DisableConanGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 }
+
+type NativeConanStore interface {
+	StageConanObject(context.Context, ConanObjectIntent) error
+	PutConanRecipeRevision(context.Context, ConanRecipeRevision, []ConanAsset) (ConanRecipeRevision, error)
+	PutConanPackageRevision(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)
+	GetConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
+	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
+	TombstoneConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
+	TombstoneConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
+}
