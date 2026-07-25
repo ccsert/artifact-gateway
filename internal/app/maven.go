@@ -168,7 +168,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		hasHosted = hasHosted || member.Type == repository.MemberHosted
 	}
 	if h.Cache != nil && hasProxy {
-		cacheKey = h.Cache.key(groupName, artifactPath)
+		cacheKey = h.Cache.Key(groupName, artifactPath)
 		if !hasHosted {
 			if h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey) {
 				return
@@ -198,17 +198,18 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				hadFailure = true
 				continue
 			}
-			if h.Cache.coordinator != nil {
-				release, lockErr := acquireCacheRequestLock(request.Context(), h.Cache.coordinator, cacheKey)
-				if lockErr != nil {
-					h.Metrics.failed.Add(1)
-					http.Error(w, "unable to coordinate Maven cache fetch", http.StatusServiceUnavailable)
-					return
-				}
-				defer release()
-				if h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey) {
-					return
-				}
+			served := false
+			locked, lockErr := h.Cache.WithRequestLock(request.Context(), cacheKey, func() error {
+				served = h.serveMavenCache(w, request, groupName, artifactPath, actor, members, cacheKey)
+				return nil
+			})
+			if lockErr != nil {
+				h.Metrics.failed.Add(1)
+				http.Error(w, "unable to coordinate Maven cache fetch", http.StatusServiceUnavailable)
+				return
+			}
+			if locked && served {
+				return
 			}
 		}
 		response, fetchErr := h.fetchMavenWithRetry(request.Context(), request.Method, member, artifactPath, request.Header)

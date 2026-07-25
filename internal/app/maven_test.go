@@ -110,7 +110,8 @@ func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
 func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
-	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	objects := NewMemoryOCIObjectStore()
+	cache := NewMavenCache(objects, time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
 	client := &countingMavenClient{status: http.StatusNotFound}
 	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
 	for range 2 {
@@ -125,7 +126,7 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	if calls := client.Calls(); calls != 1 {
 		t.Fatalf("negative cache calls = %d", calls)
 	}
-	cache.allowedProxyHost = map[string]struct{}{}
+	cache.SetAllowedProxyHosts(nil)
 	r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/missing/1.0/missing-1.0.pom", nil)
 	r.SetBasicAuth("maven", "resolver-secret")
 	w := httptest.NewRecorder()
@@ -133,7 +134,7 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	if w.Code != http.StatusForbidden || client.Calls() != 1 {
 		t.Fatalf("revoked negative response=%d calls=%d", w.Code, client.Calls())
 	}
-	cache.allowedProxyHost = map[string]struct{}{"repo.example": {}}
+	cache.SetAllowedProxyHosts([]string{"repo.example"})
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "untrusted", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
 	disallowedRequest := httptest.NewRequest(http.MethodGet, "/maven/untrusted/com/example/library/1.0/library-1.0.pom", nil)
 	disallowedRequest.SetBasicAuth("maven", "resolver-secret")
@@ -153,8 +154,8 @@ func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 		t.Fatalf("retry response=%d calls=%d", w.Code, client.Calls())
 	}
 
-	key := cache.key("engineering", "com/example/corrupt/1.0/corrupt-1.0.pom")
-	if err := cache.store.Put(context.Background(), key, []byte("not json")); err != nil {
+	key := cache.Key("engineering", "com/example/corrupt/1.0/corrupt-1.0.pom")
+	if err := objects.Put(context.Background(), key, []byte("not json")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := cache.Load(context.Background(), key); !errors.Is(err, errMavenCacheMiss) {
@@ -178,13 +179,13 @@ func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *
 		t.Fatalf("HTTP retry response=%d body=%q calls=%d", response.Code, response.Body.String(), client.Calls())
 	}
 
-	cache.allowedProxyHost = map[string]struct{}{}
+	cache.SetAllowedProxyHosts(nil)
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || client.Calls() != 2 {
 		t.Fatalf("revoked cached source response=%d calls=%d", response.Code, client.Calls())
 	}
-	if _, err := cache.Load(context.Background(), cache.key("engineering", "com/example/library/1.0/library-1.0.pom")); err == nil {
+	if _, err := cache.Load(context.Background(), cache.Key("engineering", "com/example/library/1.0/library-1.0.pom")); err == nil {
 		t.Fatal("revoked cache was still readable")
 	}
 	if metrics.mavenCacheInvalidated.Load() != 1 {
