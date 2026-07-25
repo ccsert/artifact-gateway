@@ -54,10 +54,9 @@ V1 is done when all of the following are true:
 ## Current Checkpoint
 
 The shared state model, OCI tombstone vertical slice, durable lifecycle-job
-store, OCI reclaim worker, and Maven reclaim worker are complete. The active
-work package remains **1: finish lifecycle foundation**: migrate Raw
-deletion/reclamation onto the same repository-scoped lifecycle-job boundary,
-then define Conan's native artifact state model.
+store, and OCI, Maven, and Raw reclaim workers are complete. The active work
+package remains **1: finish lifecycle foundation**: define Conan's native
+artifact state model and lifecycle boundary.
 
 ## Constraints
 
