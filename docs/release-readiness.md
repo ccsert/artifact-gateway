@@ -11,6 +11,7 @@ make integration-test
 make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
+make conan-e2e
 ```
 
 The commands exercise the native protocol fixtures and persistent metadata
@@ -20,7 +21,8 @@ deviation in the release record.
 ## Release Checklist
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
-      `make native-raw-e2e`, and `make native-maven-e2e` pass.
+      `make native-raw-e2e`, `make native-maven-e2e`, and `make conan-e2e`
+      pass.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and

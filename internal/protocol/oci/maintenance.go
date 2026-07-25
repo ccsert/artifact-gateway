@@ -1,21 +1,22 @@
-package app
+package oci
 
 import (
 	"context"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
-// NativeOCIMaintenance retains expired-upload rows after byte deletion so
-// operators can distinguish pending, failed, and completed cleanup work.
-type NativeOCIMaintenance struct {
+// NativeMaintenance cleans expired native OCI upload and object intents outside
+// request handling, preserving their durable lifecycle records for operators.
+type NativeMaintenance struct {
 	Store   repository.NativeOCIStore
-	Objects OCIObjectStore
+	Objects objectstore.Store
 	Now     func() time.Time
 }
 
-func (m NativeOCIMaintenance) Collect(ctx context.Context) error {
+func (m NativeMaintenance) Collect(ctx context.Context) error {
 	now := time.Now
 	if m.Now != nil {
 		now = m.Now
@@ -66,7 +67,10 @@ func (m NativeOCIMaintenance) Collect(ctx context.Context) error {
 	return nil
 }
 
-func (m NativeOCIMaintenance) Start(ctx context.Context, interval time.Duration) {
+func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
