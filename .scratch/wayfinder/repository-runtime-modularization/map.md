@@ -43,8 +43,12 @@ integration、Conan 和 Raw 测试已按行为域分文件；拆分同时修复�
 - [提炼 Raw 协议与 Hosted 生命周期 package](tickets/06-raw-protocol-hosted-package-slice.md) —
 Raw cache、HTTP handler 与共享运行时依赖已迁至 protocol/cache/objectstore/authorization
 module；app 仅负责 transport、runtime adapter 与路由装配，完整门禁通过。
+- [收敛 OCI、Maven、Conan 缓存与维护生命周期](tickets/07-protocol-cache-maintenance-convergence.md) —
+OCI、Maven、Conan 的缓存已归入各自 protocol module；原生 OCI/Maven 的后台回收与 Maven
+保留策略也已迁入协议模块。app 仅保留兼容装配别名和管理 API 的跨协议缓存编排，完整 Go、
+集成、原生 OCI/Maven、Conan 与控制台门禁通过。
 
 ## Fog
 
-- OCI、Maven、Conan 和通用 cache/maintenance 的后续迁移顺序需要按 Raw 切片验证出的
-  runtime interface 与依赖方向重新确定。
+- 尚无已识别的协议缓存或维护生命周期残留；后续工作应以新的行为变化或发布演练发现为准，
+  避免为拆分而拆分。
