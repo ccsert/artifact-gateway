@@ -12,6 +12,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -80,7 +81,7 @@ func main() {
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
-	app.NativeRawMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
+	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{

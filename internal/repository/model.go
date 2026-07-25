@@ -1,0 +1,173 @@
+package repository
+
+import "time"
+
+type Format string
+
+const (
+	FormatRaw   Format = "raw"
+	FormatOCI   Format = "oci"
+	FormatMaven Format = "maven"
+	// FormatConan is a managed authorization target for Conan Group members.
+	// Conan remains read-through only; this format has no native artifact route.
+	FormatConan Format = "conan"
+)
+
+type RepositoryState string
+
+const (
+	RepositoryActive   RepositoryState = "active"
+	RepositoryDeleting RepositoryState = "deleting"
+)
+
+type HostedRepository struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Format    Format          `json:"format"`
+	State     RepositoryState `json:"state"`
+	Version   string          `json:"version"`
+	CreatedAt time.Time       `json:"-"`
+}
+
+type HostedGroup struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Format  Format        `json:"format"`
+	Members []GroupMember `json:"members"`
+	Version string        `json:"version"`
+}
+
+type GroupMember struct {
+	RepositoryID string `json:"repositoryId"`
+	Position     int    `json:"position"`
+}
+
+type RepositoryGrant struct {
+	Principal string   `json:"principal"`
+	Scopes    []string `json:"scopes"`
+}
+
+type RepositoryGrantSet struct {
+	Version string
+	Grants  []RepositoryGrant
+}
+
+type RepositoryRetentionPolicy struct {
+	Version         string `json:"version"`
+	KeepDays        int    `json:"keepDays"`
+	MinimumVersions int    `json:"minimumVersions"`
+}
+
+type RawAsset struct {
+	RepositoryID, Path, Digest, ObjectKey, ContentType string
+	Size                                               int64
+}
+type RawObject struct {
+	Digest, ObjectKey      string
+	Size                   int64
+	CreatedAt, CollectedAt time.Time
+}
+
+type OCIUpload struct {
+	ID, RepositoryID, Name, ObjectKey, State string
+	Offset                                   int64
+	ExpiresAt                                time.Time
+	CollectedAt                              time.Time
+}
+
+type OCIBlob struct {
+	Digest, ObjectKey string
+	Size              int64
+}
+type OCIObjectIntent struct {
+	ObjectKey, Digest                 string
+	Size                              int64
+	CreatedAt, ClaimedAt, CollectedAt time.Time
+}
+
+type OCIManifest struct {
+	RepositoryID, Name, Digest, ObjectKey, MediaType string
+	Size                                             int64
+}
+
+type MavenDeclaredObject struct {
+	Name, Digest string
+	Size         int64
+}
+type MavenPublishSession struct {
+	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
+	Objects                                                   []MavenDeclaredObject
+	ExpiresAt                                                 time.Time
+}
+type MavenAsset struct {
+	RepositoryID, Path, ObjectKey, Digest string
+	Size                                  int64
+}
+type MavenArtifact struct {
+	ID           string    `json:"id"`
+	RepositoryID string    `json:"repositoryId"`
+	Coordinate   string    `json:"coordinate"`
+	Digest       string    `json:"digest"`
+	State        string    `json:"state"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+type MavenObjectIntent struct{ ObjectKey, ClaimToken string }
+
+type MemberType string
+
+const (
+	MemberHosted MemberType = "hosted"
+	MemberProxy  MemberType = "proxy"
+)
+
+type Member struct {
+	Name         string     `json:"name"`
+	Type         MemberType `json:"type"`
+	Endpoint     string     `json:"endpoint"`
+	Position     int        `json:"position"`
+	Anonymous    bool       `json:"anonymous"`
+	AllowedHosts []string   `json:"allowedHosts,omitempty"`
+	RepositoryID string     `json:"repositoryId,omitempty"`
+}
+
+type Group struct {
+	Name            string    `json:"name"`
+	Enabled         bool      `json:"enabled"`
+	Anonymous       bool      `json:"anonymous"`
+	CacheQuotaBytes int64     `json:"cacheQuotaBytes,omitempty"`
+	Members         []Member  `json:"members"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+type AuditOutcome string
+
+const (
+	AuditResolved          AuditOutcome = "resolved"
+	AuditInternalPreferred AuditOutcome = "internal_preferred"
+	AuditNotFound          AuditOutcome = "not_found"
+	AuditGroupDisabled     AuditOutcome = "group_disabled"
+	AuditStorageError      AuditOutcome = "storage_error"
+	AuditUpstreamError     AuditOutcome = "upstream_error"
+	AuditAccessDenied      AuditOutcome = "access_denied"
+	AuditProxyDenied       AuditOutcome = "proxy_denied"
+)
+
+type AuditRecord struct {
+	GroupName                                                                               string
+	Repository                                                                              string
+	MemberName                                                                              string
+	Outcome                                                                                 AuditOutcome
+	Actor                                                                                   string
+	OccurredAt                                                                              time.Time
+	Format, Resource, Representation, MemberType, UpstreamHost, Operation, CacheDisposition string
+	AuthorizationSource, AuthorizationReason                                                string
+	RequestID, TraceID                                                                      string
+	Status                                                                                  int
+	Bytes                                                                                   int64
+}
+
+type AuditQuery struct {
+	GroupName  string
+	Repository string
+	Limit      int
+}

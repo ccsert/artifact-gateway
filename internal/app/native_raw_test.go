@@ -5,13 +5,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -167,27 +165,4 @@ func (s *recordingNativeRawObjectStore) Open(ctx context.Context, key string) (i
 func (s *recordingNativeRawObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
 	s.openRangeCalls++
 	return s.MemoryOCIObjectStore.OpenRange(ctx, key, offset, length)
-}
-
-func TestNativeRawCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
-	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
-	digest := "sha256:" + strings.Repeat("a", 64)
-	key := "native/raw/sha256/" + strings.Repeat("a", 64)
-	if err := store.StageRawObject(context.Background(), repository.RawObject{Digest: digest, ObjectKey: key, Size: 6}); err != nil {
-		t.Fatal(err)
-	}
-	if err := objects.Put(context.Background(), key, []byte("orphan")); err != nil {
-		t.Fatal(err)
-	}
-	if err := (NativeRawMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }}).Collect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := objects.Get(context.Background(), key); !errors.Is(err, errOCICacheMiss) {
-		t.Fatalf("orphan object err=%v", err)
-	}
-	candidates, err := store.ListUnreferencedRawObjects(context.Background(), time.Now().UTC().Add(48*time.Hour), 10)
-	if err != nil || len(candidates) != 0 {
-		t.Fatalf("remaining raw collection candidates=%#v err=%v", candidates, err)
-	}
 }

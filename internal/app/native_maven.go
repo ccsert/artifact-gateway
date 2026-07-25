@@ -686,10 +686,10 @@ func (h nativeMavenHandler) protocolPrincipal(r *http.Request) (Principal, bool)
 		return principal, true
 	}
 	user, pass, ok := r.BasicAuth()
-	if !ok || user == "" || !tokenMatches(pass, h.authenticator.ResolverToken) {
+	if !ok {
 		return Principal{}, false
 	}
-	return h.authenticator.principal(user), true
+	return h.authenticator.AuthenticateBasic(user, pass)
 }
 
 func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, actor string) {

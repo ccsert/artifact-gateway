@@ -341,23 +341,11 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	http.NotFound(w, request)
 }
 
-// authorizedMavenMembers removes only explicitly bound members whose managed
-// grant set denies the principal. Unbound legacy members retain Group policy.
 func (h MavenHandler) authorizedMavenMembers(ctx context.Context, groupName, artifactPath, actor string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {
-	eligible := make([]repository.Member, 0, len(members))
-	hadDenied := false
-	for _, member := range members {
-		decision, managed := ManagedGroupMemberDecision(ctx, h.Repositories, h.Authorizer, principal, member, repository.FormatMaven)
-		if managed && !decision.Allowed {
-			if err := h.auditAuthorizationDenied(ctx, groupName, artifactPath, member.Name, actor, decision); err != nil {
-				return nil, false, err
-			}
-			hadDenied = true
-			continue
-		}
-		eligible = append(eligible, member)
-	}
-	return eligible, hadDenied, nil
+	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatMaven}
+	return access.filterManaged(ctx, principal, members, func(member repository.Member, decision AuthorizationDecision) error {
+		return h.auditAuthorizationDenied(ctx, groupName, artifactPath, member.Name, actor, decision)
+	})
 }
 
 func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Request, groupName, artifactPath, actor string, members []repository.Member, cacheKey string) bool {
@@ -408,12 +396,7 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 }
 
 func (h MavenHandler) cacheSourceAllowed(content CachedMavenContent, members []repository.Member) bool {
-	for _, member := range members {
-		if member.Type == repository.MemberProxy && member.Name == content.Member && member.Endpoint == content.Endpoint {
-			return h.Cache.ProxyAllowed(member.Endpoint)
-		}
-	}
-	return false
+	return cacheSourceAllowed(content.Member, content.Endpoint, members, h.Cache.ProxyAllowed)
 }
 
 func (h MavenHandler) fetchMavenWithRetry(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
@@ -542,10 +525,10 @@ func (h MavenHandler) authenticate(request *http.Request) (Principal, bool) {
 		return principal, true
 	}
 	username, password, ok := request.BasicAuth()
-	if !ok || username == "" || !tokenMatches(password, h.Authenticator.ResolverToken) {
+	if !ok {
 		return Principal{}, false
 	}
-	return h.Authenticator.principal(username), true
+	return h.Authenticator.AuthenticateBasic(username, password)
 }
 
 func (h MavenHandler) audit(ctx context.Context, groupName, artifactPath, memberName, actor string, outcome repository.AuditOutcome) error {

@@ -169,9 +169,9 @@ func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"cacheQuotaBytes":5`) {
 		t.Fatalf("Raw group creation=%d %s", created.Code, created.Body.String())
 	}
-	hostedKey := rawCache.key("downloads", "release/app.txt", "hosted", "http://legacy")
-	proxyKey := rawCache.key("downloads", "release/app.txt", "proxy", "https://proxy.example")
-	otherKey := rawCache.key("downloads", "release/other.txt", "hosted", "http://legacy")
+	hostedKey := rawCache.Key("downloads", "release/app.txt", "hosted", "http://legacy")
+	proxyKey := rawCache.Key("downloads", "release/app.txt", "proxy", "https://proxy.example")
+	otherKey := rawCache.Key("downloads", "release/other.txt", "hosted", "http://legacy")
 	for _, key := range []string{hostedKey, proxyKey, otherKey} {
 		if err := rawCache.Store(context.Background(), key, RawContent{Body: []byte(key), Repository: "downloads", CacheQuotaBytes: 10000}); err != nil {
 			t.Fatal(err)

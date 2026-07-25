@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -46,7 +47,7 @@ func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 }
 
 func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
-	repositoryName, path, ok := parseRawPath(r.URL.EscapedPath())
+	repositoryName, path, ok := rawprotocol.ParsePath(r.URL.EscapedPath())
 	if !ok {
 		return false
 	}
@@ -145,8 +146,8 @@ func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal P
 	})
 }
 
-func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects OCIObjectStore) rawServeResult {
-	statusWriter := &rawStatusWriter{ResponseWriter: w}
+func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects OCIObjectStore) rawprotocol.ServeResult {
+	statusWriter := &nativeRawStatusWriter{ResponseWriter: w}
 	digest := strings.TrimPrefix(asset.Digest, "sha256:")
 	w.Header().Set("Content-Type", asset.ContentType)
 	etag := `"sha256-` + digest + `"`
@@ -192,4 +193,35 @@ func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, a
 		_, _ = io.Copy(statusWriter, reader)
 	}
 	return statusWriter.result()
+}
+
+type nativeRawStatusWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int64
+}
+
+func (w *nativeRawStatusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *nativeRawStatusWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(body)
+	w.bytes += int64(n)
+	return n, err
+}
+
+func (w *nativeRawStatusWriter) result() rawprotocol.ServeResult {
+	status := w.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return rawprotocol.ServeResult{Status: status}
+	}
+	return rawprotocol.ServeResult{Status: status, Bytes: w.bytes}
 }

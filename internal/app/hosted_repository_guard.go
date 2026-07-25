@@ -57,7 +57,7 @@ func (h hostedRepositoryGuard) authenticated(r *http.Request) bool {
 		return true
 	}
 	username, password, ok := r.BasicAuth()
-	return ok && username != "" && tokenMatches(password, h.authenticator.ResolverToken)
+	return ok && username != "" && h.authenticator.ResolverPasswordMatches(password)
 }
 
 func (h hostedRepositoryGuard) reject(w http.ResponseWriter, r *http.Request, status int) {

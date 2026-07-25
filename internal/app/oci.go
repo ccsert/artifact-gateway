@@ -278,20 +278,10 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 }
 
 func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, repositoryName, resource, method string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {
-	eligible := make([]repository.Member, 0, len(members))
-	hadDenied := false
-	for _, member := range members {
-		decision, managed := ManagedGroupMemberDecision(ctx, h.Repositories, h.Authorizer, principal, member, repository.FormatOCI)
-		if managed && !decision.Allowed {
-			if err := h.Resolver.RecordOCIGrantDenied(ctx, groupName, repositoryName, resource, method, member.Name, principal.Actor, decision); err != nil {
-				return nil, false, err
-			}
-			hadDenied = true
-			continue
-		}
-		eligible = append(eligible, member)
-	}
-	return eligible, hadDenied, nil
+	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatOCI}
+	return access.filterManaged(ctx, principal, members, func(member repository.Member, decision AuthorizationDecision) error {
+		return h.Resolver.RecordOCIGrantDenied(ctx, groupName, repositoryName, resource, method, member.Name, principal.Actor, decision)
+	})
 }
 
 type ociFetchError struct {
@@ -443,22 +433,11 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 }
 
 func (h OCIHandler) cacheSourceAllowed(content CachedOCIContent, members []repository.Member) bool {
-	member, ok := h.cacheSourceMember(content, members)
-	return ok && h.Cache.ProxyAllowed(member.Endpoint)
+	return cacheSourceAllowed(content.Member, content.Endpoint, members, h.Cache.ProxyAllowed)
 }
 
 func (h OCIHandler) cacheSourcePresent(content CachedOCIContent, members []repository.Member) bool {
-	_, ok := h.cacheSourceMember(content, members)
-	return ok
-}
-
-func (h OCIHandler) cacheSourceMember(content CachedOCIContent, members []repository.Member) (repository.Member, bool) {
-	for _, member := range members {
-		if member.Type == repository.MemberProxy && member.Name == content.Member && member.Endpoint == content.Endpoint {
-			return member, true
-		}
-	}
-	return repository.Member{}, false
+	return cacheSourcePresent(content.Member, content.Endpoint, members)
 }
 
 func (h OCIHandler) authenticateProbe(w http.ResponseWriter, request *http.Request) {
@@ -697,7 +676,7 @@ func writeOCIError(w http.ResponseWriter, status int, code, message string) {
 
 func (h OCIHandler) Token(w http.ResponseWriter, request *http.Request) {
 	username, password, ok := request.BasicAuth()
-	if !ok || username == "" || !tokenMatches(password, h.Authenticator.ResolverToken) {
+	if !ok || username == "" || !h.Authenticator.ResolverPasswordMatches(password) {
 		writeOCIChallenge(w, request)
 		return
 	}

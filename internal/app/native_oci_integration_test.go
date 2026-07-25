@@ -1,0 +1,259 @@
+//go:build integration
+
+package app
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
+)
+
+func TestPostgresNativeOCIStateTransitions(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: repo.ID, Name: "widget", ObjectKey: "native/oci/uploads/" + uuid.NewString(), State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upload, err = store.UpdateOCIUpload(ctx, upload.ID, 12); err != nil || upload.Offset != 12 {
+		t.Fatalf("update upload=%#v err=%v", upload, err)
+	}
+	blob, err := store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: digest, ObjectKey: "native/oci/blobs/sha256/" + strings.Repeat("a", 64), Size: 12})
+	if err != nil || blob.Digest != digest {
+		t.Fatalf("complete blob=%#v err=%v", blob, err)
+	}
+	if _, err = store.MountOCIBlob(ctx, repo.ID, digest); err != nil {
+		t.Fatalf("idempotent mount: %v", err)
+	}
+	manifestDigest := "sha256:" + strings.Repeat("b", 64)
+	manifest, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "widget", Digest: manifestDigest, ObjectKey: "native/oci/manifests/" + uuid.NewString(), MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 42}, "latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := store.GetOCIManifest(ctx, repo.ID, "widget", "latest")
+	if err != nil || resolved.Digest != manifest.Digest {
+		t.Fatalf("tag resolution=%#v err=%v", resolved, err)
+	}
+	if err = store.DeleteOCIManifest(ctx, repo.ID, "widget", manifest.Digest); err != nil {
+		t.Fatalf("delete manifest: %v", err)
+	}
+	if _, err = store.GetOCIManifest(ctx, repo.ID, "widget", "latest"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("deleted tag lookup=%v", err)
+	}
+}
+
+func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-oci-http-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objectsA, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:18]
+	source, err := storeA.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "oci-src-" + suffix, Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := storeA.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "oci-dst-" + suffix, Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer serverA.Close()
+	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	defer serverB.Close()
+	client := serverA.Client()
+	request := func(method, address string, body []byte) *http.Response {
+		t.Helper()
+		r, err := http.NewRequest(method, address, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Header.Set("Authorization", "Bearer resolver-secret")
+		response, err := client.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	body := []byte("cross-instance OCI blob")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	start := request(http.MethodPost, serverA.URL+"/v2/"+source.Name+"/app/blobs/uploads/", nil)
+	if start.StatusCode != http.StatusAccepted {
+		t.Fatalf("start upload=%d", start.StatusCode)
+	}
+	location := start.Header.Get("Location")
+	_ = start.Body.Close()
+	if location == "" {
+		t.Fatal("upload location is missing")
+	}
+	complete := request(http.MethodPut, serverA.URL+location+"?digest="+digest, body)
+	if complete.StatusCode != http.StatusCreated {
+		t.Fatalf("complete upload=%d", complete.StatusCode)
+	}
+	_ = complete.Body.Close()
+	mount := request(http.MethodPost, serverB.URL+"/v2/"+target.Name+"/app/blobs/uploads/?mount="+digest+"&from="+source.Name+"/app", nil)
+	if mount.StatusCode != http.StatusCreated {
+		t.Fatalf("cross-instance mount=%d", mount.StatusCode)
+	}
+	_ = mount.Body.Close()
+	manifest := []byte(`{"schemaVersion":2,"config":{"digest":"` + digest + `","size":` + fmt.Sprint(len(body)) + `}}`)
+	publish := request(http.MethodPut, serverB.URL+"/v2/"+target.Name+"/app/manifests/latest", manifest)
+	if publish.StatusCode != http.StatusCreated {
+		t.Fatalf("cross-instance manifest publish=%d", publish.StatusCode)
+	}
+	_ = publish.Body.Close()
+	read := request(http.MethodGet, serverA.URL+"/v2/"+target.Name+"/app/manifests/latest", nil)
+	defer read.Body.Close()
+	got, err := io.ReadAll(read.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.StatusCode != http.StatusOK || !bytes.Equal(got, manifest) {
+		t.Fatalf("cross-instance manifest read=%d body=%q", read.StatusCode, got)
+	}
+}
+
+func TestPostgresNativeOCIUploadLockSerializesConnections(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	first, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	release, err := first.LockOCIUpload(context.Background(), "cross-instance-upload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan func(), 1)
+	errs := make(chan error, 1)
+	go func() {
+		unlock, lockErr := second.LockOCIUpload(context.Background(), "cross-instance-upload")
+		if lockErr != nil {
+			errs <- lockErr
+			return
+		}
+		acquired <- unlock
+	}()
+	select {
+	case <-acquired:
+		t.Fatal("second connection acquired upload lock before release")
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	release()
+	select {
+	case unlock := <-acquired:
+		unlock()
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(time.Second):
+		t.Fatal("second connection did not acquire upload lock")
+	}
+}
+
+func TestPostgresNativeOCIObjectLockSerializesConnections(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	first, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	key := "native/oci/manifests/cross-instance-" + uuid.NewString()
+	release, err := first.LockOCIObject(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan func(), 1)
+	errs := make(chan error, 1)
+	go func() {
+		unlock, lockErr := second.LockOCIObject(context.Background(), key)
+		if lockErr != nil {
+			errs <- lockErr
+			return
+		}
+		acquired <- unlock
+	}()
+	select {
+	case <-acquired:
+		t.Fatal("second connection acquired object lock before release")
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	release()
+	select {
+	case unlock := <-acquired:
+		unlock()
+	case err := <-errs:
+		t.Fatal(err)
+	case <-time.After(time.Second):
+		t.Fatal("second connection did not acquire object lock")
+	}
+}

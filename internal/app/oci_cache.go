@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,13 +13,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"golang.org/x/sync/singleflight"
 )
 
-var errOCICacheMiss = errors.New("OCI cache miss")
+var errOCICacheMiss = objectstore.ErrNotFound
 var errOCICacheNegative = errors.New("OCI negative cache hit")
 var errOCIUpstreamOpen = errors.New("OCI upstream circuit is open")
 
@@ -31,245 +29,15 @@ const ociSharedWorkTimeout = 30 * time.Second
 const ociDistributedLockLease = 35 * time.Second
 const ociDistributedLockRenewInterval = ociDistributedLockLease / 3
 
-// OCIObjectStore is deliberately small so the cache's publication ordering can
-// be tested without a running object-store service.
-type OCIObjectStore interface {
-	Get(context.Context, string) ([]byte, error)
-	Put(context.Context, string, []byte) error
-	Stat(context.Context, string) (OCIObjectInfo, error)
-	Open(context.Context, string) (io.ReadCloser, int64, error)
-	OpenRange(context.Context, string, int64, int64) (io.ReadCloser, int64, error)
-	PutReader(context.Context, string, io.Reader, int64) error
-	PutVerifiedReader(context.Context, string, io.Reader, int64, string) error
-	SetVerifiedDigest(context.Context, string, string) error
-	Delete(context.Context, string) error
-	List(context.Context, string) ([]string, error)
-}
+// Compatibility aliases retain the public app composition API while object
+// storage is owned by its protocol-independent module.
+type OCIObjectStore = objectstore.Store
+type OCIObjectInfo = objectstore.Info
+type MemoryOCIObjectStore = objectstore.MemoryStore
+type S3OCIObjectStore = objectstore.S3Store
 
-type OCIObjectInfo struct {
-	Size   int64
-	Digest string
-}
-
-type MemoryOCIObjectStore struct {
-	mu      sync.RWMutex
-	objects map[string][]byte
-}
-
-func NewMemoryOCIObjectStore() *MemoryOCIObjectStore {
-	return &MemoryOCIObjectStore{objects: make(map[string][]byte)}
-}
-
-func (s *MemoryOCIObjectStore) Get(_ context.Context, key string) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	value, ok := s.objects[key]
-	if !ok {
-		return nil, errOCICacheMiss
-	}
-	return append([]byte(nil), value...), nil
-}
-
-func (s *MemoryOCIObjectStore) Put(_ context.Context, key string, value []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.objects[key] = append([]byte(nil), value...)
-	return nil
-}
-
-func (s *MemoryOCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
-	value, err := s.Get(ctx, key)
-	if err != nil {
-		return nil, 0, err
-	}
-	return io.NopCloser(bytes.NewReader(value)), int64(len(value)), nil
-}
-
-func (s *MemoryOCIObjectStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
-	value, err := s.Get(ctx, key)
-	if err != nil {
-		return OCIObjectInfo{}, err
-	}
-	sum := sha256.Sum256(value)
-	return OCIObjectInfo{Size: int64(len(value)), Digest: "sha256:" + hex.EncodeToString(sum[:])}, nil
-}
-
-func (s *MemoryOCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
-	value, err := s.Get(ctx, key)
-	if err != nil {
-		return nil, 0, err
-	}
-	size := int64(len(value))
-	if offset < 0 || length < 0 || offset > size || length > size-offset {
-		return nil, 0, errors.New("OCI object range is out of bounds")
-	}
-	return io.NopCloser(bytes.NewReader(value[offset : offset+length])), size, nil
-}
-
-func (s *MemoryOCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, _ int64) error {
-	data, err := io.ReadAll(value)
-	if err != nil {
-		return err
-	}
-	return s.Put(ctx, key, data)
-}
-
-func (s *MemoryOCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
-	return s.PutReader(ctx, key, value, size)
-}
-
-func (s *MemoryOCIObjectStore) SetVerifiedDigest(context.Context, string, string) error { return nil }
-
-func (s *MemoryOCIObjectStore) Delete(_ context.Context, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.objects, key)
-	return nil
-}
-
-func (s *MemoryOCIObjectStore) List(_ context.Context, prefix string) ([]string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	keys := make([]string, 0)
-	for key := range s.objects {
-		if strings.HasPrefix(key, prefix) {
-			keys = append(keys, key)
-		}
-	}
-	return keys, nil
-}
-
-type S3OCIObjectStore struct {
-	client *minio.Client
-	bucket string
-}
-
-func NewS3OCIObjectStore(endpoint, accessKey, secretKey, bucket string) (*S3OCIObjectStore, error) {
-	client, err := minio.New(strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://"), &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: strings.HasPrefix(endpoint, "https://"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &S3OCIObjectStore{client: client, bucket: bucket}, nil
-}
-
-func (s *S3OCIObjectStore) EnsureBucket(ctx context.Context) error {
-	exists, err := s.client.BucketExists(ctx, s.bucket)
-	if err != nil || exists {
-		return err
-	}
-	return s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
-}
-
-func (s *S3OCIObjectStore) Get(ctx context.Context, key string) ([]byte, error) {
-	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = object.Close() }()
-	value, err := io.ReadAll(object)
-	if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-		return nil, errOCICacheMiss
-	}
-	return value, err
-}
-
-func (s *S3OCIObjectStore) Put(ctx context.Context, key string, value []byte) error {
-	return s.PutReader(ctx, key, bytes.NewReader(value), int64(len(value)))
-}
-
-func (s *S3OCIObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
-	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
-	if err != nil {
-		return nil, 0, err
-	}
-	info, err := object.Stat()
-	if err != nil {
-		_ = object.Close()
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-			return nil, 0, errOCICacheMiss
-		}
-		return nil, 0, err
-	}
-	return object, info.Size, nil
-}
-
-func (s *S3OCIObjectStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
-	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
-	if err != nil {
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-			return OCIObjectInfo{}, errOCICacheMiss
-		}
-		return OCIObjectInfo{}, err
-	}
-	return OCIObjectInfo{Size: info.Size, Digest: ociObjectDigestMetadata(info.UserMetadata)}, nil
-}
-
-func ociObjectDigestMetadata(metadata map[string]string) string {
-	for key, value := range metadata {
-		if strings.EqualFold(key, "Artifact-Gateway-Sha256") || strings.EqualFold(key, "X-Amz-Meta-Artifact-Gateway-Sha256") {
-			return value
-		}
-	}
-	return ""
-}
-
-func (s *S3OCIObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
-	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
-	if err != nil {
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-			return nil, 0, errOCICacheMiss
-		}
-		return nil, 0, err
-	}
-	if offset < 0 || length < 0 || offset > info.Size || length > info.Size-offset {
-		return nil, 0, errors.New("OCI object range is out of bounds")
-	}
-	options := minio.GetObjectOptions{}
-	if err := options.SetRange(offset, offset+length-1); err != nil {
-		return nil, 0, err
-	}
-	object, err := s.client.GetObject(ctx, s.bucket, key, options)
-	if err != nil {
-		return nil, 0, err
-	}
-	return object, info.Size, nil
-}
-
-func (s *S3OCIObjectStore) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
-	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
-	return err
-}
-
-func (s *S3OCIObjectStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
-	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream", UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}})
-	return err
-}
-
-func (s *S3OCIObjectStore) SetVerifiedDigest(ctx context.Context, key, digest string) error {
-	_, err := s.client.CopyObject(ctx,
-		minio.CopyDestOptions{Bucket: s.bucket, Object: key, ReplaceMetadata: true, UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}},
-		minio.CopySrcOptions{Bucket: s.bucket, Object: key},
-	)
-	return err
-}
-
-func (s *S3OCIObjectStore) Delete(ctx context.Context, key string) error {
-	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
-}
-
-func (s *S3OCIObjectStore) List(ctx context.Context, prefix string) ([]string, error) {
-	keys := make([]string, 0)
-	for object := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
-		if object.Err != nil {
-			return nil, object.Err
-		}
-		keys = append(keys, object.Key)
-	}
-	return keys, nil
-}
+var NewMemoryOCIObjectStore = objectstore.NewMemoryStore
+var NewS3OCIObjectStore = objectstore.NewS3Store
 
 type cachedOCIIndex struct {
 	Object      string    `json:"object,omitempty"`
@@ -317,23 +85,6 @@ type OCICache struct {
 	lockRenewEvery   time.Duration
 	gcGrace          time.Duration
 	publicationMu    sync.Mutex
-}
-
-type OCICacheCoordinator interface {
-	Acquire(context.Context, string, time.Duration) (string, bool, error)
-	Renew(context.Context, string, string, time.Duration) (bool, error)
-	Release(context.Context, string, string) error
-	CircuitOpen(context.Context, string) (bool, error)
-	OpenCircuit(context.Context, string, time.Duration) error
-	CloseCircuit(context.Context, string) error
-}
-
-func newOCILockOwner() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(value[:]), nil
 }
 
 func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *OCICache {

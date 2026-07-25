@@ -219,7 +219,7 @@ func (c *ConanCache) withPublicationLock(ctx context.Context, work func(context.
 		return work(ctx)
 	}
 	for {
-		owner, acquired, err := c.coordinator.Acquire(ctx, "conan-publication", rawDistributedLockLease)
+		owner, acquired, err := c.coordinator.Acquire(ctx, "conan-publication", cacheDistributedLockLease)
 		if err != nil {
 			return err
 		}
@@ -250,14 +250,14 @@ func (c *ConanCache) withPublicationLock(ctx context.Context, work func(context.
 	}
 }
 func (c *ConanCache) renewConanLock(ctx context.Context, owner string, failed chan<- struct{}, cancel context.CancelFunc) {
-	ticker := time.NewTicker(rawDistributedLockRenewInterval)
+	ticker := time.NewTicker(cacheDistributedLockRenewInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ok, err := c.coordinator.Renew(ctx, "conan-publication", owner, rawDistributedLockLease)
+			ok, err := c.coordinator.Renew(ctx, "conan-publication", owner, cacheDistributedLockLease)
 			if err != nil || !ok {
 				close(failed)
 				cancel()
@@ -441,10 +441,10 @@ func (h ConanHandler) authenticate(request *http.Request) (Principal, bool) {
 		return principal, true
 	}
 	username, password, ok := request.BasicAuth()
-	if !ok || username == "" || !tokenMatches(password, h.Authenticator.ResolverToken) {
+	if !ok {
 		return Principal{}, false
 	}
-	return h.Authenticator.principal(username), true
+	return h.Authenticator.AuthenticateBasic(username, password)
 }
 
 func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path, kind string, headers http.Header, principal Principal) (conanCacheEntry, int, error) {
@@ -610,7 +610,8 @@ func (h ConanHandler) canReadConanGroup(ctx context.Context, principal Principal
 }
 
 func (h ConanHandler) managedConanMemberDecision(ctx context.Context, principal Principal, member repository.Member) (AuthorizationDecision, bool) {
-	return ManagedGroupMemberDecision(ctx, h.Repositories, h.Authorizer, principal, member, repository.FormatConan)
+	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatConan}
+	return access.managedDecision(ctx, principal, member)
 }
 
 func conanCacheSourceMatches(entry conanCacheEntry, member repository.Member) bool {

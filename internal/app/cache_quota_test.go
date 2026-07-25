@@ -31,7 +31,11 @@ func TestCacheQuotaRejectsNewEntryButAllowsReplacement(t *testing.T) {
 
 func TestCacheQuotaIgnoresExpiredIndexes(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
-	encoded, err := json.Marshal(cacheQuotaIndex{Repository: "engineering", Size: 10, ExpiresAt: time.Now().UTC().Add(-time.Minute)})
+	encoded, err := json.Marshal(struct {
+		Repository string    `json:"repository"`
+		Size       int64     `json:"size"`
+		ExpiresAt  time.Time `json:"expires_at"`
+	}{Repository: "engineering", Size: 10, ExpiresAt: time.Now().UTC().Add(-time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}

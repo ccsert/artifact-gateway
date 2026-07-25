@@ -13,7 +13,7 @@ func acquireCacheRequestLock(ctx context.Context, coordinator OCICacheCoordinato
 		return func() {}, nil
 	}
 	for {
-		owner, acquired, err := coordinator.Acquire(ctx, "cache-request:"+key, rawDistributedLockLease)
+		owner, acquired, err := coordinator.Acquire(ctx, "cache-request:"+key, cacheDistributedLockLease)
 		if err != nil {
 			return nil, err
 		}
