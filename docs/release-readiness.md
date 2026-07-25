@@ -99,8 +99,7 @@ release record.
 flowchart LR
   clients[Docker / ORAS / Maven / Gradle] --> gateway[Artifact Gateway]
   gateway --> auth[Static tokens or OIDC]
-  gateway --> db[(PostgreSQL metadata and audit)]
-	  gateway --> postgres[(PostgreSQL metadata and cache coordination)]
+  gateway --> postgres[(PostgreSQL metadata, audit, and cache coordination)]
   gateway --> cache[(S3-compatible cache)]
   gateway --> proxy[Allowlisted external Proxy]
   gateway --> telemetry[Metrics and OTLP traces]
