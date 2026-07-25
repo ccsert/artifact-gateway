@@ -73,7 +73,7 @@ The OCI deletion slice is implemented. Migration `000032` introduces generic
 Artifact Tombstones and reserved lifecycle jobs. OCI manifest deletion now
 writes a tombstone in the same transaction that removes manifest/tag visibility
 and releases the delayed object intent. The existing Registry V2 response and
-post-delete `404` behavior are unchanged. OCI reclaim now runs through
-repository-scoped lifecycle jobs. The next slice is migrating Maven and Raw
+post-delete `404` behavior are unchanged. OCI and Maven reclaim now run
+through repository-scoped lifecycle jobs. The next slice is migrating Raw
 reclamation onto that same durable worker boundary, before promotion or
 replication.
