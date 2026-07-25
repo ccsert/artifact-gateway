@@ -46,4 +46,5 @@ depends_on:
 - `make readiness-e2e`
 - `make resolver-rotation-e2e`
 - `make oci-performance-e2e`
+- `make cache-operations-e2e`
 - `git diff --check`

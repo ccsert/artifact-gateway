@@ -15,6 +15,7 @@ make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
 make oci-performance-e2e
+make cache-operations-e2e
 make upgrade-readiness
 make backup-restore-readiness
 ```
@@ -38,8 +39,8 @@ release record.
       anonymous policy, and Proxy allowlist denial.
 - [ ] `make readiness-e2e` verifies `/readyz` returns `503` while MinIO or
       PostgreSQL is stopped and `204` after each is restored.
-- [ ] Cache collection is administrator-only and a release run triggers one
-      collection, verifies the successful-run count, and records its state.
+- [ ] `make cache-operations-e2e` verifies cache collection is administrator-only,
+      succeeds for an administrator, and increases the successful-run count.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
 - [ ] Maven retention maintenance runs outside request handling, preserves the
@@ -89,6 +90,7 @@ release record.
 | Maven cache | Component files: 15 minutes; metadata and negative results: one minute |
 | Backup target | PostgreSQL metadata plus MinIO object data; 24-hour RPO, 30-minute RTO drill target |
 | OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
+| Cache operations gate | Resolver denied; administrator collection increases successful-run count |
 | Upgrade gate | Previous revision `0d1d3f8`, isolated PostgreSQL/MinIO volumes, current migration, protocol regression, binary rollback |
 
 ## Architecture
