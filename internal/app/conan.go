@@ -80,7 +80,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.Metrics != nil {
 		h.Metrics.recordConanRequest(r.Method)
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete {
 		if group, path, ok := conanReadGroupAndPath(r.URL.EscapedPath()); ok {
 			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, path, "", "anonymous", repository.AuditNotFound)
 			http.NotFound(w, r)
@@ -168,6 +168,14 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if r.Method == http.MethodDelete {
+		if h.deleteNativeConan(w, r, group, path, p) {
+			return
+		}
+		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)
+		http.NotFound(w, r)
+		return
+	}
 	if h.serveNativeConan(w, r, group, path, file, p) {
 		return
 	}
@@ -219,6 +227,48 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		servedBytes = int64(n)
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), content.cacheDisposition), content.status), servedBytes), group, path, content.member, p.Actor, repository.AuditResolved)
+}
+
+// deleteNativeConan only accepts a fully qualified revision. Deleting a file
+// would make a visible revision internally inconsistent, and deleting a
+// reference would bypass the revision-level tombstone lifecycle.
+func (h ConanHandler) deleteNativeConan(w http.ResponseWriter, r *http.Request, name, path string, principal Principal) bool {
+	if h.NativeStore == nil || h.Repositories == nil {
+		return false
+	}
+	repo, err := h.Repositories.GetHostedRepositoryByName(r.Context(), name)
+	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+		return false
+	}
+	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite)
+	if !decision.Allowed {
+		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
+		http.Error(w, "repository write permission required", http.StatusForbidden)
+		return true
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) == 6 && parts[4] == "revisions" {
+		_, err = h.NativeStore.TombstoneConanRecipeRevision(r.Context(), repo.ID, strings.Join(parts[:4], "/"), parts[5])
+	} else if len(parts) == 10 && parts[4] == "revisions" && parts[6] == "packages" && parts[8] == "revisions" {
+		_, err = h.NativeStore.TombstoneConanPackageRevision(r.Context(), repo.ID, strings.Join(parts[:4], "/"), parts[5], parts[7], parts[9])
+	} else {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditNotFound)
+		http.NotFound(w, r)
+		return true
+	}
+	if errors.Is(err, repository.ErrNotFound) {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditNotFound)
+		http.NotFound(w, r)
+		return true
+	}
+	if err != nil {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditUpstreamError)
+		http.Error(w, "unable to delete native Conan artifact", http.StatusInternalServerError)
+		return true
+	}
+	h.audit(withConanAuditStatus(r.Context(), http.StatusNoContent), name, path, "native", principal.Actor, repository.AuditResolved)
+	w.WriteHeader(http.StatusNoContent)
+	return true
 }
 
 func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, name, path, file string, principal Principal) bool {
@@ -694,7 +744,7 @@ func (h ConanHandler) audit(ctx context.Context, group, path, member, actor stri
 }
 
 func parseConanPath(method, raw string) (group, path, kind, file string, ok bool) {
-	if method != http.MethodGet && method != http.MethodHead {
+	if method != http.MethodGet && method != http.MethodHead && method != http.MethodDelete {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(raw, "/"), "/")
@@ -725,6 +775,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		return
 	}
 	if len(rest) >= 6 && rest[4] == "revisions" {
+		if method == http.MethodDelete && len(rest) == 6 {
+			path = strings.Join(rest, "/")
+			kind = "revision"
+			ok = true
+			return
+		}
 		if len(rest) == 7 && rest[6] == "search" {
 			path = strings.Join(rest, "/")
 			kind = "metadata"
@@ -755,6 +811,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 			// Conan 2 uses this to select an omitted package revision. It is
 			// metadata, so it must be validated and use the metadata TTL.
 			kind = "metadata"
+			ok = true
+			return
+		}
+		if method == http.MethodDelete && len(rest) == 10 && rest[6] == "packages" && rest[8] == "revisions" {
+			path = strings.Join(rest, "/")
+			kind = "revision"
 			ok = true
 			return
 		}

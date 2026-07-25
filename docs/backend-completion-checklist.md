@@ -30,7 +30,7 @@ goal. It intentionally excludes frontend work.
 - [ ] Raw resumable upload support.
 - [ ] Conan Hosted publish/session flow.
 - [x] Conan Hosted metadata/file read flow.
-- [ ] Conan Hosted logical delete and restore.
+- [ ] Conan Hosted logical delete and restore (logical delete complete; restore pending).
 - [ ] Conan Hosted search/index projection.
 
 ## Management API
