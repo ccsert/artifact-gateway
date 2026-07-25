@@ -2,7 +2,8 @@
 
 Status: current-protocol baseline for the Nexus comparison track. This document
 covers only the protocols already present in Artifact Gateway: OCI, Maven, Raw,
-and Conan. It is not a commitment to add new protocols.
+and Conan. Its unsupported rows describe the current release, not the long-term
+product boundary; see [the full repository roadmap](full-artifact-repository-roadmap.md).
 
 ## Compatibility matrix
 

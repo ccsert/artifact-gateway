@@ -1,5 +1,9 @@
 # Gitea Back-End Reference And Next Objective
 
+> The operational objective in this document has been superseded as the
+> product's strategic boundary by the [full artifact repository roadmap](full-artifact-repository-roadmap.md).
+> Preflight and evidence collection remain required release infrastructure.
+
 ## Reference Baseline
 
 This analysis uses a local, read-only checkout of Gitea `v1.24.7`, source
