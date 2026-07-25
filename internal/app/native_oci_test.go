@@ -103,6 +103,10 @@ func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 	if missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "MANIFEST_UNKNOWN") {
 		t.Fatalf("missing=%d %s", missing.Code, missing.Body.String())
 	}
+	tombstone, err := store.GetArtifactTombstone(context.Background(), "oci-repo", repository.FormatOCI, "app@"+manifestDigest)
+	if err != nil || tombstone.Digest != manifestDigest || tombstone.TombstonedAt.IsZero() {
+		t.Fatalf("tombstone=%#v err=%v", tombstone, err)
+	}
 }
 
 func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {

@@ -65,6 +65,10 @@ func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	if _, err = store.GetOCIManifest(ctx, repo.ID, "widget", "latest"); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("deleted tag lookup=%v", err)
 	}
+	tombstone, err := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatOCI, "widget@"+manifest.Digest)
+	if err != nil || tombstone.Digest != manifest.Digest || tombstone.TombstonedAt.IsZero() {
+		t.Fatalf("tombstone=%#v err=%v", tombstone, err)
+	}
 }
 
 func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {

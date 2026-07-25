@@ -90,6 +90,16 @@ type OCIManifest struct {
 	Size                                             int64
 }
 
+// ArtifactTombstone keeps a deleted artifact's identity until its byte objects
+// are safely reclaimed by the lifecycle collector.
+type ArtifactTombstone struct {
+	RepositoryID string
+	Format       Format
+	Coordinate   string
+	Digest       string
+	TombstonedAt time.Time
+}
+
 type MavenDeclaredObject struct {
 	Name, Digest string
 	Size         int64

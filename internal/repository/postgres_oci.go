@@ -316,6 +316,9 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=NULL,collected_at=NULL,created_at=now() WHERE object_key=(SELECT object_key FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3)`, repositoryID, name, digest); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest) SELECT repository_id,'oci',name || '@' || digest,digest FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3 ON CONFLICT DO NOTHING`, repositoryID, name, digest); err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, `DELETE FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest)
 	if err != nil {
 		return err
@@ -324,4 +327,13 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 		return ErrNotFound
 	}
 	return tx.Commit()
+}
+
+func (s *PostgresStore) GetArtifactTombstone(ctx context.Context, repositoryID string, format Format, coordinate string) (ArtifactTombstone, error) {
+	var tombstone ArtifactTombstone
+	err := s.db.QueryRowContext(ctx, `SELECT repository_id::text,format,coordinate,digest,tombstoned_at FROM artifact_tombstones WHERE repository_id::text=$1 AND format=$2 AND coordinate=$3`, repositoryID, format, coordinate).Scan(&tombstone.RepositoryID, &tombstone.Format, &tombstone.Coordinate, &tombstone.Digest, &tombstone.TombstonedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ArtifactTombstone{}, ErrNotFound
+	}
+	return tombstone, err
 }

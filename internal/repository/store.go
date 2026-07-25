@@ -42,6 +42,10 @@ type RepositoryRetentionPolicyStore interface {
 	ReplaceRepositoryRetentionPolicy(context.Context, string, RepositoryRetentionPolicy, string) (RepositoryRetentionPolicy, error)
 }
 
+type ArtifactTombstoneStore interface {
+	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
+}
+
 type NativeMavenStore interface {
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
 	FindOpenMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)

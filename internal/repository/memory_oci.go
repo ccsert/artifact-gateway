@@ -283,5 +283,17 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 			delete(s.ociTags, tag)
 		}
 	}
+	coordinate := name + "@" + digest
+	s.artifactTombstones[repositoryID+"\x00"+string(FormatOCI)+"\x00"+coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatOCI, Coordinate: coordinate, Digest: digest, TombstonedAt: time.Now().UTC()}
 	return nil
+}
+
+func (s *MemoryStore) GetArtifactTombstone(_ context.Context, repositoryID string, format Format, coordinate string) (ArtifactTombstone, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tombstone, ok := s.artifactTombstones[repositoryID+"\x00"+string(format)+"\x00"+coordinate]
+	if !ok {
+		return ArtifactTombstone{}, ErrNotFound
+	}
+	return tombstone, nil
 }

@@ -61,4 +61,14 @@ tag movement, and native integration fixtures.
 - Replacing protocol-native endpoints with a generic upload API.
 - Destructive physical deletion without a Tombstone and grace-period collector.
 - Cross-repository promotion or replication before the single-Repository state
-  model is proven.
+model is proven.
+
+## Lifecycle Foundation Status
+
+The OCI deletion slice is implemented. Migration `000032` introduces generic
+Artifact Tombstones and reserved lifecycle jobs. OCI manifest deletion now
+writes a tombstone in the same transaction that removes manifest/tag visibility
+and releases the delayed object intent. The existing Registry V2 response and
+post-delete `404` behavior are unchanged. The next slice is a durable lifecycle
+job repository and worker, beginning with retention/reclamation rather than
+promotion or replication.
