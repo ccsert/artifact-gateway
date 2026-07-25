@@ -248,7 +248,7 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			return
 		}
 		defer releaseObject()
-		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
+		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "stage blob intent failed")
 			return
 		}
@@ -375,7 +375,7 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 			return
 		}
 		defer releaseObject()
-		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
+		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "stage manifest intent failed")
 			return
 		}

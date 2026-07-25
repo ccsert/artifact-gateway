@@ -152,7 +152,7 @@ func (s *MemoryStore) ListUnclaimedOCIObjectIntents(_ context.Context, before ti
 		if len(intents) >= limit {
 			break
 		}
-		if intent.ClaimedAt.IsZero() && intent.CollectedAt.IsZero() && intent.CreatedAt.Before(before) {
+		if intent.RepositoryID != "" && intent.ClaimedAt.IsZero() && intent.CollectedAt.IsZero() && intent.CreatedAt.Before(before) {
 			intents = append(intents, intent)
 		}
 	}
@@ -277,7 +277,7 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 	}
 	manifest := s.ociManifests[key]
 	delete(s.ociManifests, key)
-	s.ociObjectIntents[manifest.ObjectKey] = OCIObjectIntent{ObjectKey: manifest.ObjectKey, Digest: manifest.Digest, Size: manifest.Size, CreatedAt: time.Now().UTC()}
+	s.ociObjectIntents[manifest.ObjectKey] = OCIObjectIntent{RepositoryID: repositoryID, ObjectKey: manifest.ObjectKey, Digest: manifest.Digest, Size: manifest.Size, CreatedAt: time.Now().UTC()}
 	for tag, target := range s.ociTags {
 		if target == digest && strings.HasPrefix(tag, repositoryID+"\x00"+name+"\x00") {
 			delete(s.ociTags, tag)

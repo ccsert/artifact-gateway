@@ -80,7 +80,7 @@ type OCIBlob struct {
 	Size              int64
 }
 type OCIObjectIntent struct {
-	ObjectKey, Digest                 string
+	RepositoryID, ObjectKey, Digest   string
 	Size                              int64
 	CreatedAt, ClaimedAt, CollectedAt time.Time
 }

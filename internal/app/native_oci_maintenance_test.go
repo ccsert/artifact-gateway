@@ -42,7 +42,7 @@ func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()
-	intent := repository.OCIObjectIntent{ObjectKey: "native/oci/manifests/orphan", Digest: "sha256:" + strings.Repeat("a", 64), Size: 6}
+	intent := repository.OCIObjectIntent{RepositoryID: "repo", ObjectKey: "native/oci/manifests/orphan", Digest: "sha256:" + strings.Repeat("a", 64), Size: 6}
 	if err := store.StageOCIObjectIntent(context.Background(), intent); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 func TestNativeOCICollectorRechecksIntentAfterAcquiringObjectLock(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()
-	intent := repository.OCIObjectIntent{ObjectKey: "native/oci/manifests/published", Digest: "sha256:" + strings.Repeat("b", 64), Size: 9}
+	intent := repository.OCIObjectIntent{RepositoryID: "repo", ObjectKey: "native/oci/manifests/published", Digest: "sha256:" + strings.Repeat("b", 64), Size: 9}
 	if err := store.StageOCIObjectIntent(context.Background(), intent); err != nil {
 		t.Fatal(err)
 	}

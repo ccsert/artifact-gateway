@@ -8,12 +8,19 @@ import (
 	"time"
 )
 
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
 func (s *PostgresStore) CreateOCIUpload(ctx context.Context, v OCIUpload) (OCIUpload, error) {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_uploads (id,repository_id,name,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Name, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
 	return v, err
 }
 func (s *PostgresStore) StageOCIObjectIntent(ctx context.Context, intent OCIObjectIntent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_object_intents (object_key,digest,size) VALUES ($1,$2,$3) ON CONFLICT (object_key) DO NOTHING`, intent.ObjectKey, intent.Digest, intent.Size)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO UPDATE SET repository_id=COALESCE(native_oci_object_intents.repository_id,EXCLUDED.repository_id)`, intent.ObjectKey, nullableString(intent.RepositoryID), intent.Digest, intent.Size)
 	return err
 }
 
@@ -175,7 +182,7 @@ func (s *PostgresStore) ListUnclaimedOCIObjectIntents(ctx context.Context, befor
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT object_key,digest,size,created_at,claimed_at,collected_at FROM native_oci_object_intents WHERE created_at < $1 AND claimed_at IS NULL AND collected_at IS NULL ORDER BY created_at LIMIT $2`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,object_key,digest,size,created_at,claimed_at,collected_at FROM native_oci_object_intents WHERE repository_id IS NOT NULL AND created_at < $1 AND claimed_at IS NULL AND collected_at IS NULL ORDER BY created_at LIMIT $2`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +190,15 @@ func (s *PostgresStore) ListUnclaimedOCIObjectIntents(ctx context.Context, befor
 	var intents []OCIObjectIntent
 	for rows.Next() {
 		var intent OCIObjectIntent
-		if err = rows.Scan(&intent.ObjectKey, &intent.Digest, &intent.Size, &intent.CreatedAt, &intent.ClaimedAt, &intent.CollectedAt); err != nil {
+		var claimedAt, collectedAt sql.NullTime
+		if err = rows.Scan(&intent.RepositoryID, &intent.ObjectKey, &intent.Digest, &intent.Size, &intent.CreatedAt, &claimedAt, &collectedAt); err != nil {
 			return nil, err
+		}
+		if claimedAt.Valid {
+			intent.ClaimedAt = claimedAt.Time
+		}
+		if collectedAt.Valid {
+			intent.CollectedAt = collectedAt.Time
 		}
 		intents = append(intents, intent)
 	}
@@ -313,7 +327,7 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 	if _, err = tx.ExecContext(ctx, `DELETE FROM native_oci_tags WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=NULL,collected_at=NULL,created_at=now() WHERE object_key=(SELECT object_key FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3)`, repositoryID, name, digest); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_object_intents (object_key,repository_id,digest,size,created_at,claimed_at,collected_at) SELECT object_key,repository_id,digest,size,now(),NULL,NULL FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3 ON CONFLICT (object_key) DO UPDATE SET repository_id=EXCLUDED.repository_id,claimed_at=NULL,collected_at=NULL,created_at=EXCLUDED.created_at`, repositoryID, name, digest); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest) SELECT repository_id,'oci',name || '@' || digest,digest FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3 ON CONFLICT DO NOTHING`, repositoryID, name, digest); err != nil {

@@ -51,7 +51,11 @@ func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 		t.Fatalf("idempotent mount: %v", err)
 	}
 	manifestDigest := "sha256:" + strings.Repeat("b", 64)
-	manifest, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "widget", Digest: manifestDigest, ObjectKey: "native/oci/manifests/" + uuid.NewString(), MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 42}, "latest")
+	manifestObjectKey := "native/oci/manifests/" + uuid.NewString()
+	if err := store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: manifestObjectKey, Digest: manifestDigest, Size: 42}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "widget", Digest: manifestDigest, ObjectKey: manifestObjectKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 42}, "latest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +68,10 @@ func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	}
 	if _, err = store.GetOCIManifest(ctx, repo.ID, "widget", "latest"); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("deleted tag lookup=%v", err)
+	}
+	intents, err := store.ListUnclaimedOCIObjectIntents(ctx, time.Now().Add(time.Hour), 10)
+	if err != nil || len(intents) != 1 || intents[0].RepositoryID != repo.ID || intents[0].ObjectKey != manifestObjectKey {
+		t.Fatalf("reclaim intents=%#v err=%v", intents, err)
 	}
 	tombstone, err := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatOCI, "widget@"+manifest.Digest)
 	if err != nil || tombstone.Digest != manifest.Digest || tombstone.TombstonedAt.IsZero() {

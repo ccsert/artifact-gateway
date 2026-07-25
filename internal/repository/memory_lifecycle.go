@@ -31,6 +31,14 @@ func (s *MemoryStore) EnqueueLifecycleJob(_ context.Context, job LifecycleJob) (
 }
 
 func (s *MemoryStore) ClaimLifecycleJobs(_ context.Context, limit int) ([]LifecycleJob, error) {
+	return s.claimLifecycleJobs("", limit)
+}
+
+func (s *MemoryStore) ClaimLifecycleJobsByKind(_ context.Context, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
+	return s.claimLifecycleJobs(kind, limit)
+}
+
+func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if limit <= 0 {
@@ -38,7 +46,7 @@ func (s *MemoryStore) ClaimLifecycleJobs(_ context.Context, limit int) ([]Lifecy
 	}
 	keys := make([]string, 0, len(s.lifecycleJobs))
 	for key, job := range s.lifecycleJobs {
-		if job.State == LifecycleJobPending {
+		if job.State == LifecycleJobPending && (kind == "" || job.Kind == kind) {
 			keys = append(keys, key)
 		}
 	}

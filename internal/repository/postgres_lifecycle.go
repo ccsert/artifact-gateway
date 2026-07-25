@@ -26,10 +26,18 @@ func (s *PostgresStore) EnqueueLifecycleJob(ctx context.Context, job LifecycleJo
 }
 
 func (s *PostgresStore) ClaimLifecycleJobs(ctx context.Context, limit int) ([]LifecycleJob, error) {
+	return s.claimLifecycleJobs(ctx, "", limit)
+}
+
+func (s *PostgresStore) ClaimLifecycleJobsByKind(ctx context.Context, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
+	return s.claimLifecycleJobs(ctx, kind, limit)
+}
+
+func (s *PostgresStore) claimLifecycleJobs(ctx context.Context, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT id FROM lifecycle_jobs WHERE state='pending' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1) UPDATE lifecycle_jobs jobs SET state='running',started_at=now() FROM candidates WHERE jobs.id=candidates.id RETURNING jobs.id::text,jobs.repository_id::text,jobs.kind,jobs.idempotency_key,jobs.payload,jobs.state,jobs.created_at,jobs.started_at,jobs.completed_at,jobs.last_error`, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT id FROM lifecycle_jobs WHERE state='pending' AND ($1='' OR kind=$1) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $2) UPDATE lifecycle_jobs jobs SET state='running',started_at=now() FROM candidates WHERE jobs.id=candidates.id RETURNING jobs.id::text,jobs.repository_id::text,jobs.kind,jobs.idempotency_key,jobs.payload,jobs.state,jobs.created_at,jobs.started_at,jobs.completed_at,jobs.last_error`, kind, limit)
 	if err != nil {
 		return nil, err
 	}

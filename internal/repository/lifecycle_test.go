@@ -37,3 +37,22 @@ func TestMemoryLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 		t.Fatalf("repeat completion error=%v", err)
 	}
 }
+
+func TestMemoryLifecycleJobsCanBeClaimedByKind(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	if _, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "reclaim", RepositoryID: "repository-1", Kind: LifecycleJobReclaim, IdempotencyKey: "reclaim-1", Payload: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "retention", RepositoryID: "repository-1", Kind: LifecycleJobRetention, IdempotencyKey: "retention-1", Payload: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimLifecycleJobsByKind(ctx, LifecycleJobReclaim, 10)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != "reclaim" {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	remaining, err := store.ClaimLifecycleJobsByKind(ctx, LifecycleJobRetention, 10)
+	if err != nil || len(remaining) != 1 || remaining[0].ID != "retention" {
+		t.Fatalf("remaining=%#v err=%v", remaining, err)
+	}
+}
