@@ -151,6 +151,19 @@ func (s *S3Store) EnsureBucket(ctx context.Context) error {
 	return s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
 }
 
+// CheckBucket verifies that the configured bucket is accessible without
+// creating or modifying it.
+func (s *S3Store) CheckBucket(ctx context.Context) error {
+	exists, err := s.client.BucketExists(ctx, s.bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("configured bucket does not exist")
+	}
+	return nil
+}
+
 func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
 	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {

@@ -13,10 +13,14 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
+	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "preflight" {
+		os.Exit(preflight.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)

@@ -99,3 +99,20 @@ Production access, operator credential source, evidence retention location,
 and the isolated-drill marker are deployment decisions. They must be supplied
 before implementing stages 2 through 4; local Docker results are not a
 substitute for those production records.
+
+## Stage 1 Status
+
+The preflight foundation is available in the Gateway binary:
+
+```sh
+gateway preflight list
+gateway preflight run --format json
+gateway preflight run --check postgres --check object_store --format json
+```
+
+`make preflight` runs the command in the existing Compose Gateway environment;
+start the local stack with `make up` first. The command performs configuration,
+policy, PostgreSQL, object-store, and optional OIDC/JWKS checks. It returns `0`
+for pass/skip-only reports, `1` for a failed check, and `2` for invalid CLI
+usage. Its JSON report deliberately excludes credentials, token values, full
+database URLs, and dependency error text.
