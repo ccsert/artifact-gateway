@@ -45,4 +45,5 @@ depends_on:
 - `make upgrade-readiness`
 - `make readiness-e2e`
 - `make resolver-rotation-e2e`
+- `make oci-performance-e2e`
 - `git diff --check`

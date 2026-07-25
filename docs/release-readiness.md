@@ -41,9 +41,9 @@ deviation in the release record.
       coordinates before the Maven orphan collector reclaims bytes.
 - [ ] `make resolver-rotation-e2e` rejects an OCI bearer token issued by the
       old resolver token after Gateway restart and permits a newly issued token.
-- [ ] The cached OCI manifest performance gate completes 50 requests at
-      concurrency 10 with zero errors and p95 latency at or below one second.
-      Override only with an approved release record using
+- [ ] `make oci-performance-e2e` completes cached OCI manifest reads with the
+      default 50 requests at concurrency 10, zero errors, and p95 latency at or
+      below one second. Override only with an approved release record using
       `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
 - [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
