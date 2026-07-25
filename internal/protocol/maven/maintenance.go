@@ -2,20 +2,34 @@ package maven
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 // NativeMaintenance collects only old, unreferenced native Maven object
 // intents. The store rechecks references while deleting.
 type NativeMaintenance struct {
-	Store   repository.NativeMavenStore
+	Store   MavenReclaimStore
 	Objects objectstore.Store
 	Now     func() time.Time
+}
+
+type MavenReclaimStore interface {
+	repository.NativeMavenStore
+	repository.LifecycleJobStore
+}
+
+type reclaimPayload struct {
+	Format     repository.Format `json:"format"`
+	ObjectKey  string            `json:"objectKey"`
+	ClaimToken string            `json:"claimToken"`
 }
 
 func (m NativeMaintenance) Collect(ctx context.Context) error {
@@ -23,29 +37,85 @@ func (m NativeMaintenance) Collect(ctx context.Context) error {
 	if m.Now != nil {
 		now = m.Now
 	}
-	intents, err := m.Store.ClaimExpiredMavenObjectIntents(ctx, now().UTC().Add(-24*time.Hour), 100)
+	if err := m.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100); err != nil {
+		return err
+	}
+	return m.RunReclaimJobs(ctx, 100)
+}
+
+func (m NativeMaintenance) EnqueueReclaimJobs(ctx context.Context, before time.Time, limit int) error {
+	intents, err := m.Store.ClaimExpiredMavenObjectIntents(ctx, before, limit)
 	if err != nil {
 		return err
 	}
 	for _, intent := range intents {
-		referenced, err := m.Store.MavenObjectIntentHasReference(ctx, intent.ObjectKey)
+		payload, err := json.Marshal(reclaimPayload{Format: repository.FormatMaven, ObjectKey: intent.ObjectKey, ClaimToken: intent.ClaimToken})
 		if err != nil {
 			return err
 		}
-		if referenced {
-			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
-			continue
-		}
-		if err := m.Objects.Delete(ctx, intent.ObjectKey); err != nil {
-			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
-			return err
-		}
-		if err := m.Store.DeleteClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken); err != nil {
+		if _, _, err = m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: intent.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "maven-object:" + intent.ObjectKey + ":" + intent.ClaimToken, Payload: payload}); err != nil {
 			_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, intent.ObjectKey, intent.ClaimToken)
 			return err
 		}
 	}
 	return nil
+}
+
+func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error {
+	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, limit)
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if err := m.runReclaimJob(ctx, job); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
+	var payload reclaimPayload
+	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" || payload.ClaimToken == "" {
+		return m.failReclaimJob(ctx, job.ID, "invalid Maven reclaim payload")
+	}
+	active, err := m.Store.MavenObjectIntentClaimIsActive(ctx, payload.ObjectKey, payload.ClaimToken)
+	if err != nil {
+		return m.failReclaimJob(ctx, job.ID, "Maven object claim lookup failed")
+	}
+	if !active {
+		return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	}
+	referenced, err := m.Store.MavenObjectIntentHasReference(ctx, payload.ObjectKey)
+	if err != nil {
+		return m.releaseAndFail(ctx, job.ID, payload, "Maven object reference lookup failed")
+	}
+	if referenced {
+		_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken)
+		return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	}
+	if err := m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
+		return m.releaseAndFail(ctx, job.ID, payload, fmt.Sprintf("delete Maven object: %v", err))
+	}
+	if err := m.Store.DeleteClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken); err != nil {
+		return m.releaseAndFail(ctx, job.ID, payload, "mark Maven object intent collected failed")
+	}
+	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+}
+
+func (m NativeMaintenance) releaseAndFail(ctx context.Context, id string, payload reclaimPayload, message string) error {
+	_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken)
+	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+		return err
+	}
+	return fmt.Errorf("%s", message)
+}
+
+func (m NativeMaintenance) failReclaimJob(ctx context.Context, id, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+		return err
+	}
+	return fmt.Errorf("%s", message)
 }
 
 func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {

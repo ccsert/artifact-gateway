@@ -152,7 +152,7 @@ type MavenArtifact struct {
 	State        string    `json:"state"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
-type MavenObjectIntent struct{ ObjectKey, ClaimToken string }
+type MavenObjectIntent struct{ RepositoryID, ObjectKey, ClaimToken string }
 
 type MemberType string
 

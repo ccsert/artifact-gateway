@@ -269,9 +269,26 @@ func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before t
 		}
 		intent.claimedAt, intent.claimToken = now, newMavenObjectClaimToken()
 		s.mavenObjectIntents[key] = intent
-		claimed = append(claimed, MavenObjectIntent{ObjectKey: key, ClaimToken: intent.claimToken})
+		claimed = append(claimed, MavenObjectIntent{RepositoryID: s.mavenObjectIntentRepositoryID(key), ObjectKey: key, ClaimToken: intent.claimToken})
 	}
 	return claimed, nil
+}
+func (s *MemoryStore) MavenObjectIntentClaimIsActive(_ context.Context, key, claimToken string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	intent, ok := s.mavenObjectIntents[key]
+	return ok && !intent.claimedAt.IsZero() && time.Since(intent.claimedAt) < mavenObjectClaimLease && intent.claimToken == claimToken && intent.deletedAt.IsZero() && !s.mavenObjectRefs[key], nil
+}
+
+func (s *MemoryStore) mavenObjectIntentRepositoryID(key string) string {
+	for sessionID, uploads := range s.mavenUploads {
+		for _, uploadedKey := range uploads {
+			if uploadedKey == key {
+				return s.mavenSessions[sessionID].RepositoryID
+			}
+		}
+	}
+	return ""
 }
 func (s *MemoryStore) MavenObjectIntentHasReference(_ context.Context, key string) (bool, error) {
 	s.mu.RLock()

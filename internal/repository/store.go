@@ -71,6 +71,7 @@ type NativeMavenStore interface {
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
+	MavenObjectIntentClaimIsActive(context.Context, string, string) (bool, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)
 	DeleteClaimedMavenObjectIntent(context.Context, string, string) error
 	ReleaseClaimedMavenObjectIntent(context.Context, string, string) error

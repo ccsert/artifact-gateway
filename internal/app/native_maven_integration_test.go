@@ -99,7 +99,7 @@ func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T)
 	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeMavenMaintenance{Store: referenceAfterClaimStore{NativeMavenStore: store, db: db, repositoryID: repo.ID}, Objects: objects, Now: func() time.Time { return time.Now() }}
+	maintenance := NativeMavenMaintenance{Store: referenceAfterClaimStore{NativeMavenStore: store, LifecycleJobStore: store, db: db, repositoryID: repo.ID}, Objects: objects, Now: func() time.Time { return time.Now() }}
 	if err = maintenance.Collect(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestPostgresMavenCollectorRecoversClaimAfterTombstoneWriteFailure(t *testin
 	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
 		t.Fatal(err)
 	}
-	failed := NativeMavenMaintenance{Store: failMavenTombstoneStore{NativeMavenStore: store}, Objects: objects, Now: func() time.Time { return time.Now() }}
+	failed := NativeMavenMaintenance{Store: failMavenTombstoneStore{NativeMavenStore: store, LifecycleJobStore: store}, Objects: objects, Now: func() time.Time { return time.Now() }}
 	if err = failed.Collect(ctx); err == nil {
 		t.Fatal("collector must report the interrupted tombstone write")
 	}

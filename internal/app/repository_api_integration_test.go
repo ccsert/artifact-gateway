@@ -21,6 +21,7 @@ import (
 
 type referenceAfterClaimStore struct {
 	repository.NativeMavenStore
+	repository.LifecycleJobStore
 	db           *sql.DB
 	repositoryID string
 }
@@ -43,7 +44,10 @@ type blockingMavenCommitStore struct {
 	release chan struct{}
 }
 
-type failMavenTombstoneStore struct{ repository.NativeMavenStore }
+type failMavenTombstoneStore struct {
+	repository.NativeMavenStore
+	repository.LifecycleJobStore
+}
 
 func (s failMavenTombstoneStore) DeleteClaimedMavenObjectIntent(context.Context, string, string) error {
 	return errors.New("tombstone write interrupted")
