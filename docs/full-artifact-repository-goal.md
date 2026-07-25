@@ -55,9 +55,10 @@ V1 is done when all of the following are true:
 
 The shared state model, OCI tombstone vertical slice, durable lifecycle-job
 store, OCI/Maven/Raw reclaim workers, and the Conan native artifact state
-model are complete. The next backend slice is wiring the Conan model into
-Hosted publication, resolution, deletion, and reclaim work without changing
-the existing Conan 2 read-through routes.
+model are complete. The current backend backlog is tracked in
+[Backend Completion Checklist](backend-completion-checklist.md). The next
+slice is wiring the Conan model into Hosted publication, resolution, deletion,
+and reclaim work without introducing a separate `/conan/v3` route family.
 
 ## Constraints
 
