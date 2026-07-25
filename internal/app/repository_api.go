@@ -71,6 +71,7 @@ type GatewayStore interface {
 	repository.NativeMavenStore
 	repository.NativeOCIStore
 	repository.NativeRawStore
+	repository.NativeConanStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -171,7 +172,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		}
 		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 	})})
-	conan := ConanHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache}
+	nativeConanObjects := dependencies.NativeConanObjectStore
+	if nativeConanObjects == nil {
+		nativeConanObjects = NewMemoryOCIObjectStore()
+	}
+	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	mux.Handle("/conan/v2/", conan)
 	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)

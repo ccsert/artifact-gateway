@@ -64,11 +64,13 @@ type conanCacheEntry struct {
 
 type ConanHandler struct {
 	Store         repository.ConanStore
+	NativeStore   repository.NativeConanStore
 	Repositories  repository.HostedRepositoryStore
 	Authorizer    RepositoryAuthorizer
 	Authenticator Authenticator
 	Client        ConanClient
 	Cache         *ConanCache
+	NativeObjects OCIObjectStore
 	Metrics       *Metrics
 }
 
@@ -166,6 +168,9 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if h.serveNativeConan(w, r, group, path, file, p) {
+		return
+	}
 	g, err := h.Store.GetConanGroup(r.Context(), group)
 	if err != nil || !g.Enabled {
 		h.audit(r.Context(), group, path, "", p.Actor, auditOutcome(err))
@@ -214,6 +219,190 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		servedBytes = int64(n)
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), content.cacheDisposition), content.status), servedBytes), group, path, content.member, p.Actor, repository.AuditResolved)
+}
+
+func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, name, path, file string, principal Principal) bool {
+	if h.NativeStore == nil || h.NativeObjects == nil || h.Repositories == nil {
+		return false
+	}
+	repo, err := h.Repositories.GetHostedRepositoryByName(r.Context(), name)
+	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+		return false
+	}
+	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryRead)
+	if !decision.Allowed {
+		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
+		http.Error(w, "repository read permission required", http.StatusForbidden)
+		return true
+	}
+	content, ok, err := h.nativeConanContent(r.Context(), repo, path, file)
+	if err != nil {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditUpstreamError)
+		http.Error(w, "unable to read native Conan artifact", http.StatusInternalServerError)
+		return true
+	}
+	if !ok {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditNotFound)
+		http.NotFound(w, r)
+		return true
+	}
+	w.Header().Set("Content-Type", content.contentType)
+	w.Header().Set("Content-Length", fmt.Sprint(len(content.body)))
+	servedBytes := int64(0)
+	if r.Method == http.MethodGet {
+		n, _ := w.Write(content.body)
+		servedBytes = int64(n)
+	}
+	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), "bypass"), http.StatusOK), servedBytes), name, path, "native", principal.Actor, repository.AuditResolved)
+	return true
+}
+
+func (h ConanHandler) nativeConanContent(ctx context.Context, repo repository.HostedRepository, path, file string) (conanCacheEntry, bool, error) {
+	parts := strings.Split(path, "/")
+	if len(parts) < 5 {
+		return conanCacheEntry{}, false, nil
+	}
+	reference := strings.Join(parts[:4], "/")
+	if len(parts) == 5 && parts[4] == "revisions" {
+		revisions, err := h.NativeStore.ListConanRecipeRevisions(ctx, repo.ID, reference)
+		if err != nil {
+			return conanCacheEntry{}, false, err
+		}
+		body, _ := json.Marshal(struct {
+			Revisions []conanRevisionJSON `json:"revisions"`
+		}{Revisions: conanRecipeRevisionJSON(revisions)})
+		return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+	}
+	if len(parts) >= 7 && parts[4] == "revisions" {
+		recipeRevision := parts[5]
+		visibleRecipe, err := h.nativeConanVisibleRecipe(ctx, repo.ID, reference, recipeRevision)
+		if err != nil || !visibleRecipe {
+			return conanCacheEntry{}, visibleRecipe, err
+		}
+		if len(parts) == 7 && parts[6] == "files" {
+			assets, err := h.NativeStore.ListConanRecipeAssets(ctx, repo.ID, reference, recipeRevision)
+			if err != nil {
+				return conanCacheEntry{}, false, err
+			}
+			body, _ := json.Marshal(nativeConanFilesJSON(assets))
+			return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+		}
+		if len(parts) == 8 && parts[6] == "files" {
+			asset, err := h.NativeStore.GetConanRecipeAsset(ctx, repo.ID, reference, recipeRevision, parts[7])
+			return h.nativeConanFile(ctx, asset, err)
+		}
+		if len(parts) == 9 && parts[6] == "packages" && parts[8] == "revisions" {
+			revisions, err := h.NativeStore.ListConanPackageRevisions(ctx, repo.ID, reference, recipeRevision, parts[7])
+			if err != nil {
+				return conanCacheEntry{}, false, err
+			}
+			body, _ := json.Marshal(struct {
+				Revisions []conanRevisionJSON `json:"revisions"`
+			}{Revisions: conanPackageRevisionJSON(revisions)})
+			return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+		}
+		if len(parts) == 11 && parts[6] == "packages" && parts[8] == "revisions" && parts[10] == "files" {
+			visiblePackage, err := h.nativeConanVisiblePackage(ctx, repo.ID, reference, recipeRevision, parts[7], parts[9])
+			if err != nil || !visiblePackage {
+				return conanCacheEntry{}, visiblePackage, err
+			}
+			assets, err := h.NativeStore.ListConanPackageAssets(ctx, repo.ID, reference, recipeRevision, parts[7], parts[9])
+			if err != nil {
+				return conanCacheEntry{}, false, err
+			}
+			body, _ := json.Marshal(nativeConanFilesJSON(assets))
+			return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+		}
+		if len(parts) == 12 && parts[6] == "packages" && parts[8] == "revisions" && parts[10] == "files" {
+			visiblePackage, err := h.nativeConanVisiblePackage(ctx, repo.ID, reference, recipeRevision, parts[7], parts[9])
+			if err != nil || !visiblePackage {
+				return conanCacheEntry{}, visiblePackage, err
+			}
+			asset, err := h.NativeStore.GetConanPackageAsset(ctx, repo.ID, reference, recipeRevision, parts[7], parts[9], parts[11])
+			return h.nativeConanFile(ctx, asset, err)
+		}
+	}
+	return conanCacheEntry{}, false, nil
+}
+
+func (h ConanHandler) nativeConanVisibleRecipe(ctx context.Context, repositoryID, reference, revision string) (bool, error) {
+	recipe, err := h.NativeStore.GetConanRecipeRevision(ctx, repositoryID, reference, revision)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil && recipe.State == "visible", err
+}
+
+func (h ConanHandler) nativeConanVisiblePackage(ctx context.Context, repositoryID, reference, recipeRevision, packageID, revision string) (bool, error) {
+	pkg, err := h.NativeStore.GetConanPackageRevision(ctx, repositoryID, reference, recipeRevision, packageID, revision)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil && pkg.State == "visible", err
+}
+
+func (h ConanHandler) nativeConanFile(ctx context.Context, asset repository.ConanAsset, err error) (conanCacheEntry, bool, error) {
+	if errors.Is(err, repository.ErrNotFound) {
+		return conanCacheEntry{}, false, nil
+	}
+	if err != nil {
+		return conanCacheEntry{}, false, err
+	}
+	reader, size, err := h.NativeObjects.Open(ctx, asset.ObjectKey)
+	if err != nil {
+		return conanCacheEntry{}, false, err
+	}
+	defer reader.Close()
+	body, err := io.ReadAll(io.LimitReader(reader, size+1))
+	if err != nil || int64(len(body)) != size {
+		return conanCacheEntry{}, false, errors.New("native Conan object size mismatch")
+	}
+	return conanCacheEntry{body: body, contentType: "application/octet-stream", member: "native", status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+}
+
+type conanRevisionJSON struct {
+	Revision string `json:"revision"`
+	Time     string `json:"time"`
+}
+
+func conanRecipeRevisionJSON(revisions []repository.ConanRecipeRevision) []conanRevisionJSON {
+	out := make([]conanRevisionJSON, 0, len(revisions))
+	for _, revision := range revisions {
+		out = append(out, conanRevisionJSON{Revision: revision.Revision, Time: revision.CreatedAt.UTC().Format(time.RFC3339)})
+	}
+	return out
+}
+
+func conanPackageRevisionJSON(revisions []repository.ConanPackageRevision) []conanRevisionJSON {
+	out := make([]conanRevisionJSON, 0, len(revisions))
+	for _, revision := range revisions {
+		out = append(out, conanRevisionJSON{Revision: revision.Revision, Time: revision.CreatedAt.UTC().Format(time.RFC3339)})
+	}
+	return out
+}
+
+func nativeConanFilesJSON(assets []repository.ConanAsset) struct {
+	Files map[string]struct {
+		SHA256 string `json:"sha256"`
+		Size   int64  `json:"size"`
+	} `json:"files"`
+} {
+	files := map[string]struct {
+		SHA256 string `json:"sha256"`
+		Size   int64  `json:"size"`
+	}{}
+	for _, asset := range assets {
+		files[asset.Path] = struct {
+			SHA256 string `json:"sha256"`
+			Size   int64  `json:"size"`
+		}{SHA256: strings.TrimPrefix(asset.Digest, "sha256:"), Size: asset.Size}
+	}
+	return struct {
+		Files map[string]struct {
+			SHA256 string `json:"sha256"`
+			Size   int64  `json:"size"`
+		} `json:"files"`
+	}{Files: files}
 }
 
 func (h ConanHandler) authenticate(request *http.Request) (Principal, bool) {

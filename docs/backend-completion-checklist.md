@@ -29,7 +29,7 @@ goal. It intentionally excludes frontend work.
 - [ ] Raw checksum metadata and checksum sidecar behavior.
 - [ ] Raw resumable upload support.
 - [ ] Conan Hosted publish/session flow.
-- [ ] Conan Hosted metadata/file read flow.
+- [x] Conan Hosted metadata/file read flow.
 - [ ] Conan Hosted logical delete and restore.
 - [ ] Conan Hosted search/index projection.
 
@@ -61,6 +61,6 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement Conan Hosted HTTP read/write on the existing Conan backend surface,
-starting with recipe revision metadata and file read/write using the native
-Conan lifecycle model.
+Implement Conan Hosted publication/session flow on the existing Conan backend
+surface, using the native Conan lifecycle model and preserving current Group
+read-through behavior.

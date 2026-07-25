@@ -21,6 +21,7 @@ type Dependencies struct {
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore OCIObjectStore
 	NativeOCIObjectStore   OCIObjectStore
+	NativeConanObjectStore OCIObjectStore
 }
 
 func NewDependencies(cfg config.Config) Dependencies {

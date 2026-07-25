@@ -112,6 +112,82 @@ func (s *PostgresStore) GetConanPackageRevision(ctx context.Context, repositoryI
 	return item, err
 }
 
+func (s *PostgresStore) ListConanRecipeRevisions(ctx context.Context, repositoryID, reference string) ([]ConanRecipeRevision, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND state='visible' ORDER BY created_at DESC`, repositoryID, reference)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConanRecipeRevision
+	for rows.Next() {
+		var item ConanRecipeRevision
+		if err := scanConanRecipeRevision(rows, &item); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) ListConanPackageRevisions(ctx context.Context, repositoryID, reference, recipeRevision, packageID string) ([]ConanPackageRevision, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND state='visible' ORDER BY created_at DESC`, repositoryID, reference, recipeRevision, packageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConanPackageRevision
+	for rows.Next() {
+		var item ConanPackageRevision
+		if err := scanConanPackageRevision(rows, &item); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) ListConanRecipeAssets(ctx context.Context, repositoryID, reference, revision string) ([]ConanAsset, error) {
+	return s.listConanAssets(ctx, repositoryID, reference, revision, "", "")
+}
+
+func (s *PostgresStore) ListConanPackageAssets(ctx context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision string) ([]ConanAsset, error) {
+	return s.listConanAssets(ctx, repositoryID, reference, recipeRevision, packageID, packageRevision)
+}
+
+func (s *PostgresStore) listConanAssets(ctx context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision string) ([]ConanAsset, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,package_revision,path,object_key,digest,size FROM native_conan_assets WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND package_revision=$5 ORDER BY path`, repositoryID, reference, recipeRevision, packageID, packageRevision)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConanAsset
+	for rows.Next() {
+		var asset ConanAsset
+		if err := scanConanAsset(rows, &asset); err != nil {
+			return nil, err
+		}
+		out = append(out, asset)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) GetConanRecipeAsset(ctx context.Context, repositoryID, reference, revision, path string) (ConanAsset, error) {
+	return s.getConanAsset(ctx, repositoryID, reference, revision, "", "", path)
+}
+
+func (s *PostgresStore) GetConanPackageAsset(ctx context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision, path string) (ConanAsset, error) {
+	return s.getConanAsset(ctx, repositoryID, reference, recipeRevision, packageID, packageRevision, path)
+}
+
+func (s *PostgresStore) getConanAsset(ctx context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision, path string) (ConanAsset, error) {
+	var asset ConanAsset
+	err := scanConanAsset(s.db.QueryRowContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,package_revision,path,object_key,digest,size FROM native_conan_assets WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND package_revision=$5 AND path=$6`, repositoryID, reference, recipeRevision, packageID, packageRevision, path), &asset)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ConanAsset{}, ErrNotFound
+	}
+	return asset, err
+}
+
 func (s *PostgresStore) TombstoneConanRecipeRevision(ctx context.Context, repositoryID, reference, revision string) (ConanRecipeRevision, error) {
 	var item ConanRecipeRevision
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -160,4 +236,8 @@ func scanConanRecipeRevision(scanner interface{ Scan(...any) error }, item *Cona
 
 func scanConanPackageRevision(scanner interface{ Scan(...any) error }, item *ConanPackageRevision) error {
 	return scanner.Scan(&item.RepositoryID, &item.Reference, &item.RecipeRevision, &item.PackageID, &item.Revision, &item.Digest, &item.State, &item.CreatedAt)
+}
+
+func scanConanAsset(scanner interface{ Scan(...any) error }, asset *ConanAsset) error {
+	return scanner.Scan(&asset.RepositoryID, &asset.Reference, &asset.RecipeRevision, &asset.PackageID, &asset.PackageRevision, &asset.Path, &asset.ObjectKey, &asset.Digest, &asset.Size)
 }

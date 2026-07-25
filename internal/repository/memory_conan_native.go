@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"time"
 )
 
@@ -93,6 +94,71 @@ func (s *MemoryStore) GetConanPackageRevision(_ context.Context, repositoryID, r
 		return ConanPackageRevision{}, ErrNotFound
 	}
 	return item, nil
+}
+
+func (s *MemoryStore) ListConanRecipeRevisions(_ context.Context, repositoryID, reference string) ([]ConanRecipeRevision, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []ConanRecipeRevision
+	for _, item := range s.conanRecipes {
+		if item.RepositoryID == repositoryID && item.Reference == reference && item.State == "visible" {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (s *MemoryStore) ListConanPackageRevisions(_ context.Context, repositoryID, reference, recipeRevision, packageID string) ([]ConanPackageRevision, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []ConanPackageRevision
+	for _, item := range s.conanPackages {
+		if item.RepositoryID == repositoryID && item.Reference == reference && item.RecipeRevision == recipeRevision && item.PackageID == packageID && item.State == "visible" {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (s *MemoryStore) ListConanRecipeAssets(_ context.Context, repositoryID, reference, revision string) ([]ConanAsset, error) {
+	return s.listConanAssets(repositoryID, reference, revision, "", "")
+}
+
+func (s *MemoryStore) ListConanPackageAssets(_ context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision string) ([]ConanAsset, error) {
+	return s.listConanAssets(repositoryID, reference, recipeRevision, packageID, packageRevision)
+}
+
+func (s *MemoryStore) listConanAssets(repositoryID, reference, recipeRevision, packageID, packageRevision string) ([]ConanAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []ConanAsset
+	for _, asset := range s.conanAssets {
+		if asset.RepositoryID == repositoryID && asset.Reference == reference && asset.RecipeRevision == recipeRevision && asset.PackageID == packageID && asset.PackageRevision == packageRevision {
+			out = append(out, asset)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+func (s *MemoryStore) GetConanRecipeAsset(_ context.Context, repositoryID, reference, revision, path string) (ConanAsset, error) {
+	return s.getConanAsset(repositoryID, reference, revision, "", "", path)
+}
+
+func (s *MemoryStore) GetConanPackageAsset(_ context.Context, repositoryID, reference, recipeRevision, packageID, packageRevision, path string) (ConanAsset, error) {
+	return s.getConanAsset(repositoryID, reference, recipeRevision, packageID, packageRevision, path)
+}
+
+func (s *MemoryStore) getConanAsset(repositoryID, reference, recipeRevision, packageID, packageRevision, path string) (ConanAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	asset, ok := s.conanAssets[conanPackageKey(repositoryID, reference, recipeRevision, packageID, packageRevision)+"\x00"+path]
+	if !ok {
+		return ConanAsset{}, ErrNotFound
+	}
+	return asset, nil
 }
 
 func (s *MemoryStore) TombstoneConanRecipeRevision(_ context.Context, repositoryID, reference, revision string) (ConanRecipeRevision, error) {

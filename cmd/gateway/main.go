@@ -55,6 +55,7 @@ func main() {
 	}
 	dependencies.NativeMavenObjectStore = objectStore
 	dependencies.NativeOCIObjectStore = objectStore
+	dependencies.NativeConanObjectStore = objectStore
 	store, err := repository.NewPostgresStore(cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("open repository store", "error", err)

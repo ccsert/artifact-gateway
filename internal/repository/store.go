@@ -157,6 +157,12 @@ type NativeConanStore interface {
 	PutConanPackageRevision(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)
 	GetConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
+	ListConanRecipeRevisions(context.Context, string, string) ([]ConanRecipeRevision, error)
+	ListConanPackageRevisions(context.Context, string, string, string, string) ([]ConanPackageRevision, error)
+	ListConanRecipeAssets(context.Context, string, string, string) ([]ConanAsset, error)
+	ListConanPackageAssets(context.Context, string, string, string, string, string) ([]ConanAsset, error)
+	GetConanRecipeAsset(context.Context, string, string, string, string) (ConanAsset, error)
+	GetConanPackageAsset(context.Context, string, string, string, string, string, string) (ConanAsset, error)
 	TombstoneConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	TombstoneConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
 }
