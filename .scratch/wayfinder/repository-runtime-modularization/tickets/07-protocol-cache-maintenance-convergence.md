@@ -44,4 +44,5 @@ depends_on:
 - `make backup-restore-readiness`
 - `make upgrade-readiness`
 - `make readiness-e2e`
+- `make resolver-rotation-e2e`
 - `git diff --check`

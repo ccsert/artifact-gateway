@@ -39,8 +39,8 @@ deviation in the release record.
 - [ ] Maven retention maintenance runs outside request handling, preserves the
       configured newest versions per module, and tombstones only expired excess
       coordinates before the Maven orphan collector reclaims bytes.
-- [ ] Resolver-token rotation rejects an OCI bearer token issued by the old
-      token and permits a newly issued token.
+- [ ] `make resolver-rotation-e2e` rejects an OCI bearer token issued by the
+      old resolver token after Gateway restart and permits a newly issued token.
 - [ ] The cached OCI manifest performance gate completes 50 requests at
       concurrency 10 with zero errors and p95 latency at or below one second.
       Override only with an approved release record using
