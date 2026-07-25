@@ -74,5 +74,6 @@ Artifact Tombstones and reserved lifecycle jobs. OCI manifest deletion now
 writes a tombstone in the same transaction that removes manifest/tag visibility
 and releases the delayed object intent. The existing Registry V2 response and
 post-delete `404` behavior are unchanged. OCI, Maven, and Raw reclaim now run
-through repository-scoped lifecycle jobs. The next slice is defining Conan's
-native artifact state model before promotion or replication.
+through repository-scoped lifecycle jobs. Conan now has a native repository
+state model; the next slice wires it into Hosted publication, resolution,
+deletion, and reclaim before promotion or replication.
