@@ -6,7 +6,7 @@ OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e backup-restore-readiness up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e backup-restore-readiness upgrade-readiness up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
 	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, backup-restore-readiness, openapi-bundle, openapi-generate-admin, openapi-check'
@@ -99,3 +99,6 @@ native-raw-e2e:
 
 backup-restore-readiness:
 	@./scripts/backup-restore-readiness.sh
+
+upgrade-readiness:
+	@./scripts/upgrade-readiness.sh

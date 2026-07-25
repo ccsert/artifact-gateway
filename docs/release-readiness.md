@@ -46,13 +46,13 @@ deviation in the release record.
       Override only with an approved release record using
       `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
-- [ ] The upgrade gate deploys `GATEWAY_UPGRADE_FROM_REF` (default `0d1d3f8`)
-      into fresh isolated volumes, migrates it to the current checkout, repeats
-      OCI and Maven/Gradle client reads, then starts the prior revision against
-      those volumes and verifies the persisted OCI Group can still be read.
-      V2 migrations are additive: verify Raw/Conan Group policy, cache, and
-      audit rows remain present after upgrade; a rollback binary must not need
-      V2 rows to serve existing OCI Groups.
+- [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
+      `0d1d3f8`) into fresh isolated volumes, migrates it to the current
+      checkout, verifies the persisted OCI/Maven Groups, creates current
+      Raw/Conan Group state, then starts the prior revision against those
+      volumes and verifies the persisted OCI Group can still be read. V2
+      migrations are additive: a rollback binary must not need V2 rows to
+      serve existing OCI Groups.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
       against isolated volumes, verifies restored Raw cache content, Conan
       Group state, Repository grant version/content, and authorization-denial
