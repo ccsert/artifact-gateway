@@ -30,8 +30,8 @@ deviation in the release record.
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
       handshake, revisioned recipe/package downloads, cache, checksum failure,
       anonymous policy, and Proxy allowlist denial.
-- [ ] `/readyz` returns `503` while MinIO or PostgreSQL is stopped and `204`
-      after each is restored.
+- [ ] `make readiness-e2e` verifies `/readyz` returns `503` while MinIO or
+      PostgreSQL is stopped and `204` after each is restored.
 - [ ] Cache collection is administrator-only and a release run triggers one
       collection, verifies the successful-run count, and records its state.
       Its deterministic retention behavior is covered by
