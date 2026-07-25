@@ -12,11 +12,17 @@ make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
 make conan-e2e
+make readiness-e2e
+make resolver-rotation-e2e
+make oci-performance-e2e
+make upgrade-readiness
+make backup-restore-readiness
 ```
 
-The commands exercise the native protocol fixtures and persistent metadata
-store. Record their output, Git revision, operator, UTC start/end, and any
-deviation in the release record.
+The commands exercise native protocol fixtures, persistent metadata, dependency
+readiness, token rotation, performance, upgrade, and restore behavior. Record
+their output, Git revision, operator, UTC start/end, and any deviation in the
+release record.
 
 ## Release Checklist
 
