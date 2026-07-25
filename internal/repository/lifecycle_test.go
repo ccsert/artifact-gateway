@@ -56,3 +56,21 @@ func TestMemoryLifecycleJobsCanBeClaimedByKind(t *testing.T) {
 		t.Fatalf("remaining=%#v err=%v", remaining, err)
 	}
 }
+
+func TestMemoryLifecycleJobsCanBeClaimedByFormat(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	for _, format := range []Format{FormatOCI, FormatMaven} {
+		if _, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: string(format), RepositoryID: "repository-1", Kind: LifecycleJobReclaim, IdempotencyKey: string(format), Payload: []byte(`{"format":"` + string(format) + `"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, LifecycleJobReclaim, FormatOCI, 10)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != "oci" {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	remaining, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, LifecycleJobReclaim, FormatMaven, 10)
+	if err != nil || len(remaining) != 1 || remaining[0].ID != "maven" {
+		t.Fatalf("remaining=%#v err=%v", remaining, err)
+	}
+}

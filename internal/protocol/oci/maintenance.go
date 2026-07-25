@@ -27,7 +27,8 @@ type OCIReclaimStore interface {
 }
 
 type reclaimPayload struct {
-	ObjectKey string `json:"objectKey"`
+	Format    repository.Format `json:"format"`
+	ObjectKey string            `json:"objectKey"`
 }
 
 func (m NativeMaintenance) Collect(ctx context.Context) error {
@@ -64,7 +65,7 @@ func (m NativeMaintenance) EnqueueReclaimJobs(ctx context.Context, before time.T
 		return err
 	}
 	for _, intent := range intents {
-		payload, err := json.Marshal(reclaimPayload{ObjectKey: intent.ObjectKey})
+		payload, err := json.Marshal(reclaimPayload{Format: repository.FormatOCI, ObjectKey: intent.ObjectKey})
 		if err != nil {
 			return err
 		}
@@ -84,7 +85,7 @@ func (m NativeMaintenance) EnqueueReclaimJobs(ctx context.Context, before time.T
 // RunReclaimJobs performs the guarded physical deletion for OCI reclaim jobs.
 // Jobs for other lifecycle responsibilities remain pending for their workers.
 func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error {
-	jobs, err := m.Store.ClaimLifecycleJobsByKind(ctx, repository.LifecycleJobReclaim, limit)
+	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatOCI, limit)
 	if err != nil {
 		return err
 	}

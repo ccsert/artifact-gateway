@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"time"
 )
@@ -31,14 +32,18 @@ func (s *MemoryStore) EnqueueLifecycleJob(_ context.Context, job LifecycleJob) (
 }
 
 func (s *MemoryStore) ClaimLifecycleJobs(_ context.Context, limit int) ([]LifecycleJob, error) {
-	return s.claimLifecycleJobs("", limit)
+	return s.claimLifecycleJobs("", "", limit)
 }
 
 func (s *MemoryStore) ClaimLifecycleJobsByKind(_ context.Context, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
-	return s.claimLifecycleJobs(kind, limit)
+	return s.claimLifecycleJobs(kind, "", limit)
 }
 
-func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
+func (s *MemoryStore) ClaimLifecycleJobsByKindAndFormat(_ context.Context, kind LifecycleJobKind, format Format, limit int) ([]LifecycleJob, error) {
+	return s.claimLifecycleJobs(kind, format, limit)
+}
+
+func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, limit int) ([]LifecycleJob, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if limit <= 0 {
@@ -46,7 +51,7 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, limit int) ([]Li
 	}
 	keys := make([]string, 0, len(s.lifecycleJobs))
 	for key, job := range s.lifecycleJobs {
-		if job.State == LifecycleJobPending && (kind == "" || job.Kind == kind) {
+		if job.State == LifecycleJobPending && (kind == "" || job.Kind == kind) && lifecycleJobMatchesFormat(job.Payload, format) {
 			keys = append(keys, key)
 		}
 	}
@@ -64,6 +69,16 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, limit int) ([]Li
 		jobs = append(jobs, cloneLifecycleJob(job))
 	}
 	return jobs, nil
+}
+
+func lifecycleJobMatchesFormat(payload []byte, format Format) bool {
+	if format == "" {
+		return true
+	}
+	var value struct {
+		Format Format `json:"format"`
+	}
+	return json.Unmarshal(payload, &value) == nil && value.Format == format
 }
 
 func (s *MemoryStore) CompleteLifecycleJob(_ context.Context, id string) error {

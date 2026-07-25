@@ -110,6 +110,22 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	if err := store.CompleteLifecycleJob(ctx, job.ID); err != nil {
 		t.Fatal(err)
 	}
+	ociJob := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "oci-" + uuid.NewString(), Payload: []byte(`{"format":"oci","objectKey":"oci-object"}`)}
+	mavenJob := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "maven-" + uuid.NewString(), Payload: []byte(`{"format":"maven","objectKey":"maven-object"}`)}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, ociJob); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, mavenJob); err != nil {
+		t.Fatal(err)
+	}
+	ociClaimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatOCI, 10)
+	if err != nil || len(ociClaimed) != 1 || ociClaimed[0].ID != ociJob.ID {
+		t.Fatalf("OCI claimed=%#v err=%v", ociClaimed, err)
+	}
+	mavenClaimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, 10)
+	if err != nil || len(mavenClaimed) != 1 || mavenClaimed[0].ID != mavenJob.ID {
+		t.Fatalf("Maven claimed=%#v err=%v", mavenClaimed, err)
+	}
 }
 
 func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
