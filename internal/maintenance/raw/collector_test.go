@@ -24,6 +24,12 @@ func TestCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
 	if err := store.StageRawObject(context.Background(), repository.RawObject{Digest: digest, ObjectKey: key, Size: 6}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.PutRawAsset(context.Background(), repository.RawAsset{RepositoryID: "repo", Path: "orphan.bin", Digest: digest, ObjectKey: key, Size: 6}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteRawAsset(context.Background(), "repo", "orphan.bin"); err != nil {
+		t.Fatal(err)
+	}
 	objects.objects[key] = true
 	if err := (Collector{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }}).Collect(context.Background()); err != nil {
 		t.Fatal(err)

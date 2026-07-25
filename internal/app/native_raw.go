@@ -102,7 +102,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			return true
 		}
 		defer release()
-		if err = h.store.StageRawObject(r.Context(), repository.RawObject{Digest: digest, ObjectKey: key, Size: int64(len(body))}); err != nil {
+		if err = h.store.StageRawObject(r.Context(), repository.RawObject{RepositoryID: repo.ID, Digest: digest, ObjectKey: key, Size: int64(len(body))}); err != nil {
 			http.Error(w, "stage raw object failed", http.StatusInternalServerError)
 			return true
 		}

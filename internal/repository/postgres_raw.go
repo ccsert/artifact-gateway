@@ -13,7 +13,7 @@ func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, 
 		return v, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO UPDATE SET collected_at=NULL`, v.Digest, v.ObjectKey, v.Size); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=EXCLUDED.repository_id,collected_at=NULL`, v.Digest, v.RepositoryID, v.ObjectKey, v.Size); err != nil {
 		return v, err
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT object_key,size FROM native_raw_objects WHERE digest=$1`, v.Digest).Scan(&v.ObjectKey, &v.Size); err != nil {
@@ -25,7 +25,7 @@ func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, 
 	return v, tx.Commit()
 }
 func (s *PostgresStore) StageRawObject(ctx context.Context, object RawObject) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,object_key,size) VALUES ($1,$2,$3) ON CONFLICT (digest) DO UPDATE SET collected_at=NULL`, object.Digest, object.ObjectKey, object.Size)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=COALESCE(native_raw_objects.repository_id,EXCLUDED.repository_id),collected_at=NULL`, object.Digest, nullableString(object.RepositoryID), object.ObjectKey, object.Size)
 	return err
 }
 func (s *PostgresStore) LockRawObject(ctx context.Context, digest string) (func(), error) {
@@ -64,7 +64,7 @@ func (s *PostgresStore) ListUnreferencedRawObjects(ctx context.Context, before t
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT o.digest,o.object_key FROM native_raw_objects o WHERE o.created_at < $1 AND o.collected_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_raw_assets a WHERE a.digest=o.digest) ORDER BY o.created_at LIMIT $2`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT o.repository_id::text,o.digest,o.object_key FROM native_raw_objects o WHERE o.repository_id IS NOT NULL AND o.created_at < $1 AND o.collected_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_raw_assets a WHERE a.digest=o.digest) ORDER BY o.created_at LIMIT $2`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (s *PostgresStore) ListUnreferencedRawObjects(ctx context.Context, before t
 	var objects []RawObject
 	for rows.Next() {
 		var object RawObject
-		if err = rows.Scan(&object.Digest, &object.ObjectKey); err != nil {
+		if err = rows.Scan(&object.RepositoryID, &object.Digest, &object.ObjectKey); err != nil {
 			return nil, err
 		}
 		objects = append(objects, object)

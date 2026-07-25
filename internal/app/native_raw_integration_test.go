@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,8 +58,16 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 	if referenced, err := store.RawObjectIsUnreferenced(context.Background(), digest); err != nil || !referenced {
 		t.Fatalf("raw object unreferenced=%t err=%v", referenced, err)
 	}
-	if err = store.MarkRawObjectCollected(context.Background(), digest); err != nil {
-		t.Fatalf("mark raw object collected: %v", err)
+	objectsStore := NewMemoryOCIObjectStore()
+	if err = objectsStore.Put(context.Background(), objectKey, []byte("raw payload")); err != nil {
+		t.Fatal(err)
+	}
+	collector := rawmaintenance.Collector{Store: store, Objects: objectsStore, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	if err = collector.Collect(context.Background()); err != nil {
+		t.Fatalf("collect raw object: %v", err)
+	}
+	if _, err = objectsStore.Get(context.Background(), objectKey); err == nil {
+		t.Fatal("raw object bytes remain after lifecycle reclaim")
 	}
 	objects, err = store.ListUnreferencedRawObjects(context.Background(), time.Now().Add(time.Hour), 10)
 	if err != nil || len(objects) != 0 {

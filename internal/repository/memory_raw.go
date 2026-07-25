@@ -37,10 +37,13 @@ func (s *MemoryStore) PutRawAsset(_ context.Context, asset RawAsset) (RawAsset, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if object, ok := s.rawObjects[asset.Digest]; ok {
+		object.RepositoryID = asset.RepositoryID
+		object.CollectedAt = time.Time{}
+		s.rawObjects[asset.Digest] = object
 		asset.ObjectKey = object.ObjectKey
 		asset.Size = object.Size
 	} else {
-		s.rawObjects[asset.Digest] = RawObject{Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: time.Now().UTC()}
+		s.rawObjects[asset.Digest] = RawObject{RepositoryID: asset.RepositoryID, Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: time.Now().UTC()}
 	}
 	s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)] = asset
 	return asset, nil
@@ -69,7 +72,7 @@ func (s *MemoryStore) ListUnreferencedRawObjects(_ context.Context, before time.
 	defer s.mu.RUnlock()
 	var objects []RawObject
 	for digest, object := range s.rawObjects {
-		if len(objects) >= limit || !object.CollectedAt.IsZero() || !object.CreatedAt.Before(before) {
+		if len(objects) >= limit || object.RepositoryID == "" || !object.CollectedAt.IsZero() || !object.CreatedAt.Before(before) {
 			continue
 		}
 		referenced := false

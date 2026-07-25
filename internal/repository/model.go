@@ -63,9 +63,9 @@ type RawAsset struct {
 	Size                                               int64
 }
 type RawObject struct {
-	Digest, ObjectKey      string
-	Size                   int64
-	CreatedAt, CollectedAt time.Time
+	RepositoryID, Digest, ObjectKey string
+	Size                            int64
+	CreatedAt, CollectedAt          time.Time
 }
 
 type OCIUpload struct {
