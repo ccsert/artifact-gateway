@@ -6,9 +6,10 @@ current V2 binary.
 
 ## Scope and terms
 
-A **Repository** is the durable policy, authorization, retention, and storage
-namespace for exactly one format (`raw`, `oci`, `maven`, or `conan`). A Repository has
-one Hosted source. A **Group** is an ordered, read-only view of Repository
+A **Repository** is the durable policy, authorization, and retention namespace
+for exactly one format (`raw`, `oci`, `maven`, or `conan`). Raw, OCI, and Maven
+Repositories also own one Hosted storage source; a Conan Repository is only an
+authorization target for a read-through member. A **Group** is an ordered, read-only view of Repository
 members of the same format; it does not own artifact bytes. A **member** is the
 membership edge between a Group and a Repository, with a unique position. An
 **artifact coordinate** is the immutable identity used by its format: a Raw

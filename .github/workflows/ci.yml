@@ -26,6 +26,8 @@ jobs:
         run: make native-raw-e2e
       - name: Run Native Maven E2E
         run: make native-maven-e2e
+      - name: Run Conan E2E
+        run: make conan-e2e
       - name: Run integration tests
         run: make integration-test
   console:

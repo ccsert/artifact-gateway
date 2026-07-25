@@ -370,7 +370,7 @@ func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
 	}
 
 	unique := fmt.Sprintf("raw-publication-%d", time.Now().UnixNano())
-	indexKey := NewDefaultRawCache(storeA, nil).key(unique, "artifact", "proxy", "https://proxy.example")
+	indexKey := NewDefaultRawCache(storeA, nil).Key(unique, "artifact", "proxy", "https://proxy.example")
 	gatedStore := &rawPublicationGateStore{
 		OCIObjectStore: storeA,
 		indexKey:       indexKey,

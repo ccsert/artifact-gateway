@@ -28,6 +28,7 @@ external package service:
 make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
+make conan-e2e
 ```
 
 ## OpenAPI contract workflow
@@ -63,8 +64,12 @@ MinIO stores only content-addressed object bytes.
 
 `GATEWAY_REPOSITORY_READERS` configures read grants in the form
 `actor=repository-pattern|repository-pattern`. `GATEWAY_REPOSITORY_CACHE_QUOTAS`
-sets legacy Proxy cache limits. For OIDC, configure `GATEWAY_OIDC_ISSUER` and
-`GATEWAY_OIDC_AUDIENCE`; the JWKS URL defaults to the issuer's standard path.
+sets legacy Proxy cache limits. `GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES` and
+`GATEWAY_CONAN_CACHE_MAX_OBJECT_BYTES` cap an individual cached Proxy object
+for their respective formats (both default to 1 GiB). Configure each Proxy's
+upstream allowlist with its format-specific `GATEWAY_*_PROXY_ALLOWED_HOSTS`
+variable. For OIDC, configure `GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`;
+the JWKS URL defaults to the issuer's standard path.
 
 Administrators can inspect audits at `GET /api/v1/audits`, metrics at
 `GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.

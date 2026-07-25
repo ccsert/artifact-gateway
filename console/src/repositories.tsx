@@ -1,8 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { createRepository, deleteRepository, getRepository, listArtifacts, listRepositories, type Artifact, type Repository, type RepositoryPage } from './client';
+import { createRepository, deleteRepository, getRepository, listArtifacts, listRepositories, type Artifact, type Format, type Repository, type RepositoryPage } from './client';
 import { client } from './client/client.gen';
-
-type Format = 'raw' | 'oci' | 'maven';
 
 client.setConfig({
   baseUrl: import.meta.env.VITE_GATEWAY_API_URL ?? '/api/v2',
@@ -87,7 +85,7 @@ export function App() {
       <form className="create" onSubmit={submit}>
         <h2>Create repository</h2>
         <label>Name<input required minLength={1} maxLength={63} value={name} onChange={(event) => setName(event.target.value)} placeholder="release-artifacts" /></label>
-        <label>Format<select value={format} onChange={(event) => setFormat(event.target.value as Format)}><option value="oci">OCI</option><option value="maven">Maven</option><option value="raw">Raw</option></select></label>
+        <label>Format<select value={format} onChange={(event) => setFormat(event.target.value as Format)}><option value="oci">OCI</option><option value="maven">Maven</option><option value="raw">Raw</option><option value="conan">Conan (read-through)</option></select></label>
         <button type="submit" disabled={busy}>Create repository</button>
       </form>
       <section className="inventory"><h2>Repository inventory</h2><div className="table" role="table" aria-label="Repository inventory">
