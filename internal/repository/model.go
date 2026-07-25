@@ -100,6 +100,37 @@ type ArtifactTombstone struct {
 	TombstonedAt time.Time
 }
 
+type LifecycleJobKind string
+
+const (
+	LifecycleJobRetention   LifecycleJobKind = "retention"
+	LifecycleJobPromotion   LifecycleJobKind = "promotion"
+	LifecycleJobReplication LifecycleJobKind = "replication"
+	LifecycleJobReclaim     LifecycleJobKind = "reclaim"
+)
+
+type LifecycleJobState string
+
+const (
+	LifecycleJobPending   LifecycleJobState = "pending"
+	LifecycleJobRunning   LifecycleJobState = "running"
+	LifecycleJobCompleted LifecycleJobState = "completed"
+	LifecycleJobFailed    LifecycleJobState = "failed"
+)
+
+type LifecycleJob struct {
+	ID             string
+	RepositoryID   string
+	Kind           LifecycleJobKind
+	IdempotencyKey string
+	Payload        []byte
+	State          LifecycleJobState
+	CreatedAt      time.Time
+	StartedAt      time.Time
+	CompletedAt    time.Time
+	LastError      string
+}
+
 type MavenDeclaredObject struct {
 	Name, Digest string
 	Size         int64

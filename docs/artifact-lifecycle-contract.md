@@ -23,10 +23,11 @@ Migration `000032_artifact_lifecycle.sql` adds two additive records:
 - `artifact_tombstones` records Repository, format, coordinate, digest, and
   tombstone timestamp. The unique Repository/format/coordinate key makes a
   tombstone idempotent.
-- `lifecycle_jobs` reserves a durable, idempotent work boundary for retention,
-  promotion, replication, and physical reclamation. This first slice does not
-  yet schedule jobs; existing format collectors remain authoritative until a
-  job consumer is introduced.
+- `lifecycle_jobs` is a durable, idempotent work boundary for retention,
+  promotion, replication, and physical reclamation. It supports semantic JSON
+  idempotency, atomic pending-to-running claims, and terminal completion or
+  failure. This slice does not yet start a worker; existing format collectors
+  remain authoritative until a job consumer is introduced.
 
 ## OCI Slice
 

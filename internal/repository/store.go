@@ -46,6 +46,13 @@ type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
 }
 
+type LifecycleJobStore interface {
+	EnqueueLifecycleJob(context.Context, LifecycleJob) (LifecycleJob, bool, error)
+	ClaimLifecycleJobs(context.Context, int) ([]LifecycleJob, error)
+	CompleteLifecycleJob(context.Context, string) error
+	FailLifecycleJob(context.Context, string, string) error
+}
+
 type NativeMavenStore interface {
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
 	FindOpenMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)

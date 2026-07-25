@@ -71,6 +71,39 @@ func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	}
 }
 
+func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "jobs-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "reclaim-" + uuid.NewString(), Payload: []byte(`{"object":"intent-1"}`)}
+	created, replayed, err := store.EnqueueLifecycleJob(ctx, job)
+	if err != nil || replayed || created.State != repository.LifecycleJobPending {
+		t.Fatalf("created=%#v replayed=%v err=%v", created, replayed, err)
+	}
+	replay, replayed, err := store.EnqueueLifecycleJob(ctx, job)
+	if err != nil || !replayed || replay.ID != job.ID {
+		t.Fatalf("replay=%#v replayed=%v err=%v", replay, replayed, err)
+	}
+	claimed, err := store.ClaimLifecycleJobs(ctx, 10)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != job.ID || claimed[0].State != repository.LifecycleJobRunning {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	if err := store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
