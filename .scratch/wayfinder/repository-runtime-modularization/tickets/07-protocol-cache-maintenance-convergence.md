@@ -41,4 +41,6 @@ depends_on:
 - `make console-typecheck`
 - `make console-build`
 - `make console-e2e`
+- `make backup-restore-readiness`
+- `make upgrade-readiness`
 - `git diff --check`
