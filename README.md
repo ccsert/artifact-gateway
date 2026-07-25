@@ -2,8 +2,10 @@
 
 Artifact Gateway serves native OCI, Raw, and Maven Hosted repositories using
 PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
-verified bytes. Legacy Groups remain available only for allowlisted external
-Proxy reads.
+verified bytes. Conan 2 is a read-through Group protocol: a managed `conan`
+Repository is an authorization target for a bound remote, not native artifact
+storage. Legacy Groups remain available only for allowlisted external Proxy
+reads.
 
 ## Local development
 
@@ -31,6 +33,16 @@ make native-maven-e2e
 make conan-e2e
 ```
 
+The repository console is generated from the same OpenAPI contract. Check its
+client, types, production build, and browser flow with:
+
+```sh
+make console-api-check
+make console-typecheck
+make console-build
+make console-e2e
+```
+
 ## OpenAPI contract workflow
 
 The editable Native Hosted contract starts at
@@ -55,6 +67,8 @@ Administrators create repositories through `POST /api/v2/repositories` with an
 idempotency key and a `format` of `oci`, `raw`, `maven`, or `conan`. OCI repositories
 are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`.
+Conan repositories do not create a native endpoint: bind one to an allowlisted
+Conan Group member to apply repository grants to that remote read-through path.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
@@ -66,10 +80,12 @@ MinIO stores only content-addressed object bytes.
 `actor=repository-pattern|repository-pattern`. `GATEWAY_REPOSITORY_CACHE_QUOTAS`
 sets legacy Proxy cache limits. `GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES` and
 `GATEWAY_CONAN_CACHE_MAX_OBJECT_BYTES` cap an individual cached Proxy object
-for their respective formats (both default to 1 GiB). Configure each Proxy's
-upstream allowlist with its format-specific `GATEWAY_*_PROXY_ALLOWED_HOSTS`
-variable. For OIDC, configure `GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`;
-the JWKS URL defaults to the issuer's standard path.
+for their respective formats (both default to 1 GiB). Configure OCI, Maven,
+and Raw Proxy host allowlists with their matching
+`GATEWAY_{OCI,MAVEN,RAW}_PROXY_ALLOWED_HOSTS` variables. Conan uses the
+allowlist attached to its bound Group member, so it has no global host variable.
+For OIDC, configure `GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`; the JWKS
+URL defaults to the issuer's standard path.
 
 Administrators can inspect audits at `GET /api/v1/audits`, metrics at
 `GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.
