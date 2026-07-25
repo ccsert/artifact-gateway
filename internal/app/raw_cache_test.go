@@ -83,7 +83,7 @@ func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	quota := NewCacheQuota(store, nil)
 	ociCache := NewDefaultOCICache(store, nil)
-	ociKey := ociCache.key("downloads", "downloads", ociManifest, "latest")
+	ociKey := ociCache.Key("downloads", "downloads", ociManifest, "latest")
 	if err := ociCache.Store(context.Background(), ociKey, CachedOCIContent{Body: []byte("12345"), Digest: digestOf([]byte("12345")), Repository: "downloads"}); err != nil {
 		t.Fatal(err)
 	}

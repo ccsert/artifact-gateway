@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,11 +14,15 @@ import (
 	"strings"
 	"time"
 
+	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 const ociManifest = "manifests"
 const ociBlob = "blobs"
+const ociSharedWorkTimeout = 30 * time.Second
+
+var errOCIUpstreamOpen = errors.New("OCI upstream circuit is open")
 
 type OCIClient interface {
 	Fetch(context.Context, string, repository.Member, string, string, string, http.Header) (*http.Response, error)
@@ -142,7 +145,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	if h.Cache != nil {
-		cacheKey = h.Cache.key(groupName, repositoryName, resource, reference)
+		cacheKey = h.Cache.Key(groupName, repositoryName, resource, reference)
 	}
 	if h.Cache != nil && !hasHostedMember {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
@@ -237,22 +240,22 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 				}
 				return CachedOCIContent{}, fetchErr
 			}
-			if fetched.cacheable {
+			if fetched.Cacheable() {
 				fetched.Repository = repositoryName
 				if cacheErr := h.Cache.Store(fetchCtx, cacheKey, fetched); cacheErr != nil {
 					if errors.Is(cacheErr, ErrCacheQuotaExceeded) {
 						h.Resolver.Metrics.cacheQuotaDenied.Add(1)
 						return fetched, nil
 					}
-					fetched.cleanup()
+					fetched.Cleanup()
 					return CachedOCIContent{}, cacheErr
 				}
-				fetched.cleanup()
+				fetched.Cleanup()
 				return h.Cache.Load(fetchCtx, cacheKey)
 			}
-			if hasHostedMember && fetched.tempPath != "" {
+			if hasHostedMember && fetched.HasTemporaryReader() {
 				staged, stageErr := h.Cache.Stage(fetchCtx, fetched)
-				fetched.cleanup()
+				fetched.Cleanup()
 				if stageErr != nil {
 					return CachedOCIContent{}, stageErr
 				}
@@ -273,7 +276,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
 		return
 	}
-	defer content.cleanup()
+	defer content.Cleanup()
 	serveCachedOCIContent(w, request, reference, content)
 }
 
@@ -405,7 +408,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			continue
 		}
 		if err := h.Resolver.RecordOCIResolution(ctx, groupName, repositoryName, member.Name, actor); err != nil {
-			content.cleanup()
+			content.Cleanup()
 			return CachedOCIContent{}, err
 		}
 		if h.Cache != nil {
@@ -414,7 +417,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		content.ContentType = response.Header.Get("Content-Type")
 		content.Member = member.Name
 		content.Endpoint = member.Endpoint
-		content.cacheable = member.Type == repository.MemberProxy
+		content.SetCacheable(member.Type == repository.MemberProxy)
 		return content, nil
 	}
 	if hadProxyDenied {
@@ -493,13 +496,7 @@ func verifyOCIResponse(response *http.Response, reference string) (CachedOCICont
 		_ = os.Remove(file.Name())
 		return CachedOCIContent{}, errors.New("upstream body digest does not match requested digest")
 	}
-	return CachedOCIContent{Digest: expectedDigest, Size: size, tempPath: file.Name()}, nil
-}
-
-func (content CachedOCIContent) cleanup() {
-	if content.tempPath != "" {
-		_ = os.Remove(content.tempPath)
-	}
+	return ociprotocol.NewVerifiedContent(expectedDigest, size, file.Name()), nil
 }
 
 func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, reference string, content CachedOCIContent) {
@@ -511,7 +508,7 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 	if request.Header.Get("Range") != "" && request.Method == http.MethodGet {
 		size := content.Size
 		if size == 0 {
-			reader, actualSize, err := content.open(request.Context())
+			reader, actualSize, err := content.Open(request.Context())
 			if err != nil {
 				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
 				return
@@ -523,7 +520,7 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 		if !ok {
 			return
 		}
-		reader, _, err := content.openRange(request.Context(), start, end-start+1)
+		reader, _, err := content.OpenRange(request.Context(), start, end-start+1)
 		if err != nil {
 			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
 			return
@@ -537,7 +534,7 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 		_, _ = io.CopyN(w, reader, length)
 		return
 	}
-	reader, size, err := content.open(request.Context())
+	reader, size, err := content.Open(request.Context())
 	if err != nil {
 		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read cached content")
 		return
@@ -551,52 +548,6 @@ func serveCachedOCIContent(w http.ResponseWriter, request *http.Request, referen
 	if request.Method != http.MethodHead {
 		_, _ = io.Copy(w, reader)
 	}
-}
-
-func (content CachedOCIContent) open(ctx context.Context) (io.ReadCloser, int64, error) {
-	if content.tempPath != "" {
-		file, err := os.Open(content.tempPath)
-		if err != nil {
-			return nil, 0, err
-		}
-		info, err := file.Stat()
-		if err != nil {
-			_ = file.Close()
-			return nil, 0, err
-		}
-		return file, info.Size(), nil
-	}
-	if content.Object != "" {
-		if content.store == nil {
-			return nil, 0, errors.New("cached object has no object store")
-		}
-		return content.store.Open(ctx, content.Object)
-	}
-	return io.NopCloser(strings.NewReader(string(content.Body))), int64(len(content.Body)), nil
-}
-
-func (content CachedOCIContent) openRange(ctx context.Context, offset, length int64) (io.ReadCloser, int64, error) {
-	if content.tempPath != "" {
-		file, err := os.Open(content.tempPath)
-		if err != nil {
-			return nil, 0, err
-		}
-		if _, err := file.Seek(offset, io.SeekStart); err != nil {
-			_ = file.Close()
-			return nil, 0, err
-		}
-		return struct {
-			io.Reader
-			io.Closer
-		}{Reader: io.LimitReader(file, length), Closer: file}, content.Size, nil
-	}
-	if content.Object != "" && content.store != nil {
-		return content.store.OpenRange(ctx, content.Object, offset, length)
-	}
-	if offset < 0 || length < 0 || offset > int64(len(content.Body)) || length > int64(len(content.Body))-offset {
-		return nil, 0, errors.New("OCI content range is out of bounds")
-	}
-	return io.NopCloser(bytes.NewReader(content.Body[offset : offset+length])), int64(len(content.Body)), nil
 }
 
 func parseOCIRange(w http.ResponseWriter, request *http.Request, size int64) (int64, int64, bool) {

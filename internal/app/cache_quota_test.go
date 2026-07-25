@@ -14,12 +14,12 @@ func TestCacheQuotaRejectsNewEntryButAllowsReplacement(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	quota := NewCacheQuota(store, map[string]int64{"team/app": 5})
 	cache := NewDefaultOCICache(store, nil).WithQuota(quota)
-	key := cache.key("team", "team/app", ociManifest, "latest")
+	key := cache.Key("team", "team/app", ociManifest, "latest")
 	first := []byte("12345")
 	if err := cache.Store(context.Background(), key, CachedOCIContent{Body: first, Digest: digestOf(first), Repository: "team/app"}); err != nil {
 		t.Fatal(err)
 	}
-	secondKey := cache.key("team", "team/app", ociManifest, "next")
+	secondKey := cache.Key("team", "team/app", ociManifest, "next")
 	if err := cache.Store(context.Background(), secondKey, CachedOCIContent{Body: []byte("x"), Digest: digestOf([]byte("x")), Repository: "team/app"}); !errors.Is(err, ErrCacheQuotaExceeded) {
 		t.Fatalf("new entry error = %v, want quota error", err)
 	}

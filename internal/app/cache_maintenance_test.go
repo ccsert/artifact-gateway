@@ -16,7 +16,7 @@ func TestCacheMaintenanceReportsCapacityAndCleanupState(t *testing.T) {
 	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, nil)
 	maintenance := NewCacheMaintenance(objectStore, cache)
 	content := []byte("cached")
-	if err := cache.Store(context.Background(), cache.key("team", "team/app", ociManifest, "latest"), CachedOCIContent{Body: content, Digest: digestOf(content)}); err != nil {
+	if err := cache.Store(context.Background(), cache.Key("team", "team/app", ociManifest, "latest"), CachedOCIContent{Body: content, Digest: digestOf(content)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := maintenance.Run(context.Background()); err != nil {

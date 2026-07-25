@@ -198,7 +198,7 @@ func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
 	if first.Code != http.StatusOK || client.Calls() != 1 {
 		t.Fatalf("first response = %d calls=%d", first.Code, client.Calls())
 	}
-	cache.allowedProxyHost = map[string]struct{}{}
+	cache.SetAllowedProxyHosts(nil)
 	second := httptest.NewRecorder()
 	handler.ServeHTTP(second, request)
 	if second.Code != http.StatusForbidden || client.Calls() != 1 {
@@ -290,16 +290,16 @@ func TestOCICacheWithoutEndpointProvenanceIsRefetched(t *testing.T) {
 	authorize(request, "resolver-secret")
 	first := httptest.NewRecorder()
 	handler.ServeHTTP(first, request)
-	key := cache.key("team", "team/app", ociManifest, "latest")
+	key := cache.Key("team", "team/app", ociManifest, "latest")
 	encoded, err := objects.Get(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var index cachedOCIIndex
+	var index map[string]any
 	if err := json.Unmarshal(encoded, &index); err != nil {
 		t.Fatal(err)
 	}
-	index.Endpoint = ""
+	index["endpoint"] = ""
 	encoded, err = json.Marshal(index)
 	if err != nil {
 		t.Fatal(err)

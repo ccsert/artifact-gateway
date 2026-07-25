@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -327,7 +328,7 @@ func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repo
 		writeOCIError(w, 404, "BLOB_UNKNOWN", "blob unknown to registry")
 		return
 	}
-	serveCachedOCIContent(w, r, digest, CachedOCIContent{Digest: blob.Digest, Object: blob.ObjectKey, Size: blob.Size, store: h.objects, ContentType: "application/octet-stream"})
+	serveCachedOCIContent(w, r, digest, ociprotocol.NewStoredContent(blob.Digest, "application/octet-stream", blob.ObjectKey, blob.Size, h.objects))
 }
 
 func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, reference string) {
@@ -342,7 +343,7 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")
 			return
 		}
-		serveCachedOCIContent(w, r, reference, CachedOCIContent{Digest: manifest.Digest, Object: manifest.ObjectKey, Size: manifest.Size, store: h.objects, ContentType: manifest.MediaType})
+		serveCachedOCIContent(w, r, reference, ociprotocol.NewStoredContent(manifest.Digest, manifest.MediaType, manifest.ObjectKey, manifest.Size, h.objects))
 	case http.MethodPut:
 		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<20))
 		if err != nil {

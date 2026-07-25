@@ -320,7 +320,7 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 	if response := integrationRequest(handlerA, http.MethodGet, invalidPath, "", "resolver-secret"); response.Code != http.StatusBadGateway {
 		t.Fatalf("digest mismatch response = %d", response.Code)
 	}
-	invalidKey := cacheA.key(groupName, groupName+"/app", ociBlob, "invalid")
+	invalidKey := cacheA.Key(groupName, groupName+"/app", ociBlob, "invalid")
 	if _, err := storeA.Get(context.Background(), invalidKey); !errors.Is(err, errOCICacheMiss) {
 		t.Fatalf("invalid digest published cache index: %v", err)
 	}

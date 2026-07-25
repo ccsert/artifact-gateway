@@ -105,8 +105,7 @@ func (c *renewingTestCoordinator) SetFail() {
 func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 	coordinator := &renewingTestCoordinator{}
 	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), nil).WithCoordinator(coordinator)
-	cache.lockLease = 30 * time.Millisecond
-	cache.lockRenewEvery = 5 * time.Millisecond
+	cache.WithLockTiming(30*time.Millisecond, 5*time.Millisecond)
 
 	content, err := cache.Do(context.Background(), "key", func(ctx context.Context) (CachedOCIContent, error) {
 		select {
@@ -361,7 +360,7 @@ func TestOCIHostedSingleflightGivesEveryWaiterAnIndependentReader(t *testing.T) 
 
 func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 	cache := NewOCICache(NewMemoryOCIObjectStore(), -time.Millisecond, time.Hour, time.Hour, []string{"trusted.example"})
-	key := cache.key("team", "team/app", ociManifest, "latest")
+	key := cache.Key("team", "team/app", ociManifest, "latest")
 	if err := cache.Store(context.Background(), key, CachedOCIContent{Body: []byte("content"), Digest: digestOf([]byte("content"))}); err != nil {
 		t.Fatal(err)
 	}
@@ -385,12 +384,12 @@ func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 func TestOCICacheCollectsOnlyUnreferencedDigestObjectsAfterGracePeriod(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	cache := NewOCICache(store, time.Hour, time.Hour, time.Hour, nil)
-	cache.gcGrace = 5 * time.Millisecond
+	cache.WithGarbageCollectionGrace(5 * time.Millisecond)
 	first := []byte("first")
 	second := []byte("second")
 	firstObject := "oci/objects/" + strings.ReplaceAll(digestOf(first), ":", "/")
-	keyA := cache.key("team", "team/a", ociManifest, "latest")
-	keyB := cache.key("team", "team/b", ociManifest, "latest")
+	keyA := cache.Key("team", "team/a", ociManifest, "latest")
+	keyB := cache.Key("team", "team/b", ociManifest, "latest")
 	if err := cache.Store(context.Background(), keyA, CachedOCIContent{Body: first, Digest: digestOf(first)}); err != nil {
 		t.Fatal(err)
 	}

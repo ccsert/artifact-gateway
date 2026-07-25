@@ -1,4 +1,4 @@
-package app
+package oci
 
 import (
 	"bytes"
@@ -13,31 +13,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/cache"
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"golang.org/x/sync/singleflight"
 )
 
-var errOCICacheMiss = objectstore.ErrNotFound
-var errOCICacheNegative = errors.New("OCI negative cache hit")
-var errOCIUpstreamOpen = errors.New("OCI upstream circuit is open")
+var ErrCacheMiss = objectstore.ErrNotFound
+var ErrNegativeCache = errors.New("OCI negative cache hit")
 
 const defaultOCICacheTTL = 15 * time.Minute
 const defaultOCINegativeCacheTTL = time.Minute
 const defaultOCIProxyBreakerTTL = 30 * time.Second
-const ociSharedWorkTimeout = 30 * time.Second
 const ociDistributedLockLease = 35 * time.Second
 const ociDistributedLockRenewInterval = ociDistributedLockLease / 3
-
-// Compatibility aliases retain the public app composition API while object
-// storage is owned by its protocol-independent module.
-type OCIObjectStore = objectstore.Store
-type OCIObjectInfo = objectstore.Info
-type MemoryOCIObjectStore = objectstore.MemoryStore
-type S3OCIObjectStore = objectstore.S3Store
-
-var NewMemoryOCIObjectStore = objectstore.NewMemoryStore
-var NewS3OCIObjectStore = objectstore.NewS3Store
 
 type cachedOCIIndex struct {
 	Object      string    `json:"object,omitempty"`
@@ -56,7 +45,7 @@ type ociGarbageCandidate struct {
 	DeleteAfter time.Time `json:"delete_after"`
 }
 
-type CachedOCIContent struct {
+type CachedContent struct {
 	Body        []byte
 	Digest      string
 	ContentType string
@@ -66,12 +55,78 @@ type CachedOCIContent struct {
 	Object      string
 	Size        int64
 	tempPath    string
-	store       OCIObjectStore
+	store       objectstore.Store
 	cacheable   bool
 }
 
-type OCICache struct {
-	store            OCIObjectStore
+func NewVerifiedContent(digest string, size int64, tempPath string) CachedContent {
+	return CachedContent{Digest: digest, Size: size, tempPath: tempPath}
+}
+
+func NewStoredContent(digest, contentType, object string, size int64, store objectstore.Store) CachedContent {
+	return CachedContent{Digest: digest, ContentType: contentType, Object: object, Size: size, store: store}
+}
+
+func (c CachedContent) Cacheable() bool { return c.cacheable }
+
+func (c *CachedContent) SetCacheable(cacheable bool) { c.cacheable = cacheable }
+
+func (c CachedContent) HasTemporaryReader() bool { return c.tempPath != "" }
+
+func (c CachedContent) Cleanup() {
+	if c.tempPath != "" {
+		_ = os.Remove(c.tempPath)
+	}
+}
+
+func (c CachedContent) Open(ctx context.Context) (io.ReadCloser, int64, error) {
+	if c.tempPath != "" {
+		file, err := os.Open(c.tempPath)
+		if err != nil {
+			return nil, 0, err
+		}
+		info, err := file.Stat()
+		if err != nil {
+			_ = file.Close()
+			return nil, 0, err
+		}
+		return file, info.Size(), nil
+	}
+	if c.Object != "" {
+		if c.store == nil {
+			return nil, 0, errors.New("cached object has no object store")
+		}
+		return c.store.Open(ctx, c.Object)
+	}
+	return io.NopCloser(bytes.NewReader(c.Body)), int64(len(c.Body)), nil
+}
+
+func (c CachedContent) OpenRange(ctx context.Context, offset, length int64) (io.ReadCloser, int64, error) {
+	if c.tempPath != "" {
+		file, err := os.Open(c.tempPath)
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, err := file.Seek(offset, io.SeekStart); err != nil {
+			_ = file.Close()
+			return nil, 0, err
+		}
+		return struct {
+			io.Reader
+			io.Closer
+		}{Reader: io.LimitReader(file, length), Closer: file}, c.Size, nil
+	}
+	if c.Object != "" && c.store != nil {
+		return c.store.OpenRange(ctx, c.Object, offset, length)
+	}
+	if offset < 0 || length < 0 || offset > int64(len(c.Body)) || length > int64(len(c.Body))-offset {
+		return nil, 0, errors.New("OCI content range is out of bounds")
+	}
+	return io.NopCloser(bytes.NewReader(c.Body[offset : offset+length])), int64(len(c.Body)), nil
+}
+
+type Cache struct {
+	store            objectstore.Store
 	ttl              time.Duration
 	negativeTTL      time.Duration
 	breakerTTL       time.Duration
@@ -79,80 +134,109 @@ type OCICache struct {
 	group            singleflight.Group
 	mu               sync.Mutex
 	openUntil        map[string]time.Time
-	coordinator      OCICacheCoordinator
-	quota            *CacheQuota
+	coordinator      cache.Coordinator
+	quota            *cache.Quota
 	lockLease        time.Duration
 	lockRenewEvery   time.Duration
 	gcGrace          time.Duration
 	publicationMu    sync.Mutex
 }
 
-func NewOCICache(store OCIObjectStore, ttl, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *OCICache {
+func NewCache(store objectstore.Store, ttl, negativeTTL, breakerTTL time.Duration, allowedProxyHosts []string) *Cache {
 	allowed := make(map[string]struct{}, len(allowedProxyHosts))
 	for _, host := range allowedProxyHosts {
 		if host = strings.ToLower(strings.TrimSpace(host)); host != "" {
 			allowed[host] = struct{}{}
 		}
 	}
-	return &OCICache{store: store, ttl: ttl, negativeTTL: negativeTTL, breakerTTL: breakerTTL, allowedProxyHost: allowed, openUntil: make(map[string]time.Time), lockLease: ociDistributedLockLease, lockRenewEvery: ociDistributedLockRenewInterval, gcGrace: ttl}
+	return &Cache{store: store, ttl: ttl, negativeTTL: negativeTTL, breakerTTL: breakerTTL, allowedProxyHost: allowed, openUntil: make(map[string]time.Time), lockLease: ociDistributedLockLease, lockRenewEvery: ociDistributedLockRenewInterval, gcGrace: ttl}
 }
 
-func NewDefaultOCICache(store OCIObjectStore, allowedProxyHosts []string) *OCICache {
-	return NewOCICache(store, defaultOCICacheTTL, defaultOCINegativeCacheTTL, defaultOCIProxyBreakerTTL, allowedProxyHosts)
+func NewDefaultCache(store objectstore.Store, allowedProxyHosts []string) *Cache {
+	return NewCache(store, defaultOCICacheTTL, defaultOCINegativeCacheTTL, defaultOCIProxyBreakerTTL, allowedProxyHosts)
 }
 
-func (c *OCICache) WithCoordinator(coordinator OCICacheCoordinator) *OCICache {
+func (c *Cache) WithCoordinator(coordinator cache.Coordinator) *Cache {
 	c.coordinator = coordinator
 	return c
 }
 
-func (c *OCICache) WithQuota(quota *CacheQuota) *OCICache {
+func (c *Cache) WithQuota(quota *cache.Quota) *Cache {
 	c.quota = quota
 	return c
 }
 
-func (c *OCICache) key(group, repository, resource, reference string) string {
+func (c *Cache) WithLockTiming(lease, renewEvery time.Duration) *Cache {
+	if lease > 0 {
+		c.lockLease = lease
+	}
+	if renewEvery > 0 {
+		c.lockRenewEvery = renewEvery
+	}
+	return c
+}
+
+func (c *Cache) WithGarbageCollectionGrace(grace time.Duration) *Cache {
+	if grace >= 0 {
+		c.gcGrace = grace
+	}
+	return c
+}
+
+func (c *Cache) SetAllowedProxyHosts(hosts []string) {
+	allowed := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		if host = strings.ToLower(strings.TrimSpace(host)); host != "" {
+			allowed[host] = struct{}{}
+		}
+	}
+	c.mu.Lock()
+	c.allowedProxyHost = allowed
+	c.mu.Unlock()
+}
+
+func (c *Cache) Key(group, repository, resource, reference string) string {
 	sum := sha256.Sum256([]byte(group + "\x00" + repository + "\x00" + resource + "\x00" + reference))
 	return "oci/index/" + hex.EncodeToString(sum[:]) + ".json"
 }
 
-func (c *OCICache) Load(ctx context.Context, key string) (CachedOCIContent, error) {
+func (c *Cache) Load(ctx context.Context, key string) (CachedContent, error) {
 	encoded, err := c.store.Get(ctx, key)
 	if err != nil {
-		return CachedOCIContent{}, err
+		return CachedContent{}, err
 	}
 	var index cachedOCIIndex
 	if err := json.Unmarshal(encoded, &index); err != nil {
 		_ = c.removeIndex(ctx, key, encoded, cachedOCIIndex{})
-		return CachedOCIContent{}, errOCICacheMiss
+		return CachedContent{}, ErrCacheMiss
 	}
 	if !time.Now().UTC().Before(index.ExpiresAt) {
 		_ = c.removeIndex(ctx, key, encoded, index)
-		return CachedOCIContent{}, errOCICacheMiss
+		return CachedContent{}, ErrCacheMiss
 	}
 	if index.Negative {
-		return CachedOCIContent{Member: index.Member, Endpoint: index.Endpoint}, errOCICacheNegative
+		return CachedContent{Member: index.Member, Endpoint: index.Endpoint}, ErrNegativeCache
 	}
 	info, err := c.store.Stat(ctx, index.Object)
 	if err != nil {
 		_ = c.removeIndex(ctx, key, encoded, index)
-		return CachedOCIContent{}, errOCICacheMiss
+		return CachedContent{}, ErrCacheMiss
 	}
 	if info.Digest == "" {
 		if err := c.verifyAndMigrateObject(ctx, index); err != nil {
 			_ = c.removeIndex(ctx, key, encoded, index)
-			return CachedOCIContent{}, errOCICacheMiss
+			return CachedContent{}, ErrCacheMiss
 		}
 		info.Digest = index.Digest
 	}
 	if info.Size != index.Size || info.Digest != index.Digest {
 		_ = c.removeIndex(ctx, key, encoded, index)
-		return CachedOCIContent{}, errOCICacheMiss
+		return CachedContent{}, ErrCacheMiss
 	}
-	return CachedOCIContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Object: index.Object, Size: info.Size, store: c.store}, nil
+	return CachedContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Object: index.Object, Size: info.Size, store: c.store}, nil
 }
 
-func (c *OCICache) verifyAndMigrateObject(ctx context.Context, index cachedOCIIndex) error {
+func (c *Cache) verifyAndMigrateObject(ctx context.Context, index cachedOCIIndex) error {
 	body, size, err := c.store.Open(ctx, index.Object)
 	if err != nil {
 		return err
@@ -169,7 +253,7 @@ func (c *OCICache) verifyAndMigrateObject(ctx context.Context, index cachedOCIIn
 	return c.store.SetVerifiedDigest(ctx, index.Object, index.Digest)
 }
 
-func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIContent) error {
+func (c *Cache) Store(ctx context.Context, key string, content CachedContent) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
 		return c.storeContent(workCtx, key, content)
 	})
@@ -178,30 +262,30 @@ func (c *OCICache) Store(ctx context.Context, key string, content CachedOCIConte
 // Stage stores a verified response without publishing an index. It is used for
 // coalesced Hosted responses: waiters need an independent reader, but Hosted
 // content must not become eligible for Proxy fallback cache reads.
-func (c *OCICache) Stage(ctx context.Context, content CachedOCIContent) (CachedOCIContent, error) {
+func (c *Cache) Stage(ctx context.Context, content CachedContent) (CachedContent, error) {
 	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
 	if content.tempPath == "" {
-		return CachedOCIContent{}, errors.New("OCI staged content has no reader")
+		return CachedContent{}, errors.New("OCI staged content has no reader")
 	}
 	file, err := os.Open(content.tempPath)
 	if err != nil {
-		return CachedOCIContent{}, err
+		return CachedContent{}, err
 	}
 	err = c.store.PutVerifiedReader(ctx, object, file, content.Size, content.Digest)
 	closeErr := file.Close()
 	if err != nil {
-		return CachedOCIContent{}, err
+		return CachedContent{}, err
 	}
 	if closeErr != nil {
-		return CachedOCIContent{}, closeErr
+		return CachedContent{}, closeErr
 	}
 	if err := c.markObjectForCollection(ctx, object); err != nil {
-		return CachedOCIContent{}, err
+		return CachedContent{}, err
 	}
-	return CachedOCIContent{Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, Object: object, Size: content.Size, store: c.store}, nil
+	return CachedContent{Digest: content.Digest, ContentType: content.ContentType, Member: content.Member, Object: object, Size: content.Size, store: c.store}, nil
 }
 
-func (c *OCICache) storeContent(ctx context.Context, key string, content CachedOCIContent) error {
+func (c *Cache) storeContent(ctx context.Context, key string, content CachedContent) error {
 	if content.Size == 0 && content.tempPath == "" {
 		content.Size = int64(len(content.Body))
 	}
@@ -210,7 +294,7 @@ func (c *OCICache) storeContent(ctx context.Context, key string, content CachedO
 	})
 }
 
-func (c *OCICache) storeContentAdmitted(ctx context.Context, key string, content CachedOCIContent) error {
+func (c *Cache) storeContentAdmitted(ctx context.Context, key string, content CachedContent) error {
 	object := "oci/objects/" + strings.ReplaceAll(content.Digest, ":", "/")
 	previous := c.loadIndex(ctx, key)
 	// Publish the index only after its immutable, digest-addressed object exists.
@@ -244,7 +328,7 @@ func (c *OCICache) storeContentAdmitted(ctx context.Context, key string, content
 	return nil
 }
 
-func (c *OCICache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
+func (c *Cache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
 		return c.storeNegative(workCtx, key, member)
 	})
@@ -252,7 +336,7 @@ func (c *OCICache) StoreNegative(ctx context.Context, key string, member reposit
 
 // Invalidate removes an index and schedules its digest object for collection.
 // It is used when an index no longer has enough provenance to serve safely.
-func (c *OCICache) Invalidate(ctx context.Context, key string) {
+func (c *Cache) Invalidate(ctx context.Context, key string) {
 	encoded, err := c.store.Get(ctx, key)
 	if err != nil {
 		return
@@ -264,7 +348,7 @@ func (c *OCICache) Invalidate(ctx context.Context, key string) {
 	_ = c.removeIndex(ctx, key, encoded, index)
 }
 
-func (c *OCICache) storeNegative(ctx context.Context, key string, member repository.Member) error {
+func (c *Cache) storeNegative(ctx context.Context, key string, member repository.Member) error {
 	previous := c.loadIndex(ctx, key)
 	encoded, err := json.Marshal(cachedOCIIndex{Negative: true, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
@@ -279,7 +363,7 @@ func (c *OCICache) storeNegative(ctx context.Context, key string, member reposit
 	return nil
 }
 
-func (c *OCICache) loadIndex(ctx context.Context, key string) cachedOCIIndex {
+func (c *Cache) loadIndex(ctx context.Context, key string) cachedOCIIndex {
 	encoded, err := c.store.Get(ctx, key)
 	if err != nil {
 		return cachedOCIIndex{}
@@ -291,13 +375,13 @@ func (c *OCICache) loadIndex(ctx context.Context, key string) cachedOCIIndex {
 	return index
 }
 
-func (c *OCICache) removeIndex(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
+func (c *Cache) removeIndex(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
 		return c.removeIndexLocked(workCtx, key, expected, index)
 	})
 }
 
-func (c *OCICache) removeIndexLocked(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
+func (c *Cache) removeIndexLocked(ctx context.Context, key string, expected []byte, index cachedOCIIndex) error {
 	current, err := c.store.Get(ctx, key)
 	if err != nil || !bytes.Equal(current, expected) {
 		return err
@@ -311,7 +395,7 @@ func (c *OCICache) removeIndexLocked(ctx context.Context, key string, expected [
 	return nil
 }
 
-func (c *OCICache) markObjectForCollection(ctx context.Context, object string) error {
+func (c *Cache) markObjectForCollection(ctx context.Context, object string) error {
 	encoded, err := json.Marshal(ociGarbageCandidate{Object: object, DeleteAfter: time.Now().UTC().Add(c.gcGrace)})
 	if err != nil {
 		return err
@@ -322,11 +406,11 @@ func (c *OCICache) markObjectForCollection(ctx context.Context, object string) e
 
 // CollectGarbage deletes only candidates whose grace period has elapsed and
 // whose digest object is not referenced by any currently valid OCI index.
-func (c *OCICache) CollectGarbage(ctx context.Context) error {
+func (c *Cache) CollectGarbage(ctx context.Context) error {
 	return c.withPublicationLock(ctx, c.collectGarbage)
 }
 
-func (c *OCICache) collectGarbage(ctx context.Context) error {
+func (c *Cache) collectGarbage(ctx context.Context) error {
 	garbage, err := c.store.List(ctx, "oci/gc/")
 	if err != nil {
 		return err
@@ -357,7 +441,7 @@ func (c *OCICache) collectGarbage(ctx context.Context) error {
 	return nil
 }
 
-func (c *OCICache) withPublicationLock(ctx context.Context, work func(context.Context) error) error {
+func (c *Cache) withPublicationLock(ctx context.Context, work func(context.Context) error) error {
 	c.publicationMu.Lock()
 	defer c.publicationMu.Unlock()
 	if c.coordinator == nil {
@@ -395,7 +479,7 @@ func (c *OCICache) withPublicationLock(ctx context.Context, work func(context.Co
 	}
 }
 
-func (c *OCICache) referencedObjects(ctx context.Context) (map[string]bool, error) {
+func (c *Cache) referencedObjects(ctx context.Context) (map[string]bool, error) {
 	keys, err := c.store.List(ctx, "oci/index/")
 	if err != nil {
 		return nil, err
@@ -411,7 +495,7 @@ func (c *OCICache) referencedObjects(ctx context.Context) (map[string]bool, erro
 	return references, nil
 }
 
-func (c *OCICache) Do(ctx context.Context, key string, fetch func(context.Context) (CachedOCIContent, error)) (CachedOCIContent, error) {
+func (c *Cache) Do(ctx context.Context, key string, fetch func(context.Context) (CachedContent, error)) (CachedContent, error) {
 	value, err, _ := c.group.Do(key, func() (any, error) {
 		if c.coordinator == nil {
 			return fetch(ctx)
@@ -448,12 +532,12 @@ func (c *OCICache) Do(ctx context.Context, key string, fetch func(context.Contex
 		}
 	})
 	if err != nil {
-		return CachedOCIContent{}, err
+		return CachedContent{}, err
 	}
-	return value.(CachedOCIContent), nil
+	return value.(CachedContent), nil
 }
 
-func (c *OCICache) renewOCILock(ctx context.Context, key, owner string, failed chan<- struct{}, cancel context.CancelFunc) {
+func (c *Cache) renewOCILock(ctx context.Context, key, owner string, failed chan<- struct{}, cancel context.CancelFunc) {
 	ticker := time.NewTicker(c.lockRenewEvery)
 	defer ticker.Stop()
 	for {
@@ -471,7 +555,9 @@ func (c *OCICache) renewOCILock(ctx context.Context, key, owner string, failed c
 	}
 }
 
-func (c *OCICache) ProxyAllowed(endpoint string) bool {
+func (c *Cache) ProxyAllowed(endpoint string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.allowedProxyHost) == 0 {
 		return false
 	}
@@ -480,7 +566,7 @@ func (c *OCICache) ProxyAllowed(endpoint string) bool {
 	return ok
 }
 
-func (c *OCICache) UpstreamAllowed(ctx context.Context, endpoint string) bool {
+func (c *Cache) UpstreamAllowed(ctx context.Context, endpoint string) bool {
 	if c.coordinator != nil {
 		open, err := c.coordinator.CircuitOpen(ctx, endpoint)
 		if err == nil && open {
@@ -493,7 +579,7 @@ func (c *OCICache) UpstreamAllowed(ctx context.Context, endpoint string) bool {
 	return until.IsZero() || !time.Now().UTC().Before(until)
 }
 
-func (c *OCICache) RecordUpstreamFailure(ctx context.Context, endpoint string) {
+func (c *Cache) RecordUpstreamFailure(ctx context.Context, endpoint string) {
 	if c.coordinator != nil {
 		_ = c.coordinator.OpenCircuit(ctx, endpoint, c.breakerTTL)
 	}
@@ -502,7 +588,7 @@ func (c *OCICache) RecordUpstreamFailure(ctx context.Context, endpoint string) {
 	c.openUntil[endpoint] = time.Now().UTC().Add(c.breakerTTL)
 }
 
-func (c *OCICache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
+func (c *Cache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
 	if c.coordinator != nil {
 		_ = c.coordinator.CloseCircuit(ctx, endpoint)
 	}
