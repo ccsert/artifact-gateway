@@ -28,7 +28,8 @@ The commands exercise native protocol fixtures, persistent metadata, dependency
 readiness, token rotation, performance, Console contract/build/browser behavior,
 upgrade, and restore behavior. Record
 their output, Git revision, operator, UTC start/end, and any deviation in the
-release record.
+[release record](release-record-template.md). Do not include bearer tokens,
+storage credentials, or unredacted upstream URLs in that record.
 
 ## Release Checklist
 
