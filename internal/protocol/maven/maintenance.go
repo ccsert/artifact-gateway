@@ -148,6 +148,52 @@ type NativeRetention struct {
 	Now func() time.Time
 }
 
+// NativePromotion executes immutable Maven metadata promotions through durable
+// lifecycle jobs. Object bytes remain content-addressed and are not copied.
+type NativePromotion struct {
+	Store interface {
+		repository.NativeMavenStore
+		repository.LifecycleJobStore
+	}
+}
+type promotionPayload struct {
+	Format             repository.Format `json:"format"`
+	SourceRepositoryID string            `json:"sourceRepositoryId"`
+	Coordinate         string            `json:"coordinate"`
+	Digest             string            `json:"digest"`
+	PromotionID        string            `json:"promotionId"`
+}
+
+func (m NativePromotion) Enqueue(ctx context.Context, targetRepositoryID, idempotencyKey string, payload promotionPayload) (repository.LifecycleJob, bool, error) {
+	payload.Format = repository.FormatMaven
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return repository.LifecycleJob{}, false, err
+	}
+	return m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: targetRepositoryID, Kind: repository.LifecycleJobPromotion, IdempotencyKey: idempotencyKey, Payload: encoded})
+}
+func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
+	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobPromotion, repository.FormatMaven, limit)
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		var p promotionPayload
+		if err := json.Unmarshal(job.Payload, &p); err != nil || p.SourceRepositoryID == "" || p.Coordinate == "" || p.Digest == "" || p.PromotionID == "" {
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Maven promotion payload")
+			continue
+		}
+		if _, err := m.Store.PromoteMavenArtifact(ctx, repository.MavenPromotion{ID: p.PromotionID, SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Coordinate: p.Coordinate, Digest: p.Digest}); err != nil {
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, "promote Maven artifact failed")
+			continue
+		}
+		if err := m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type retentionPayload struct {
 	Format        repository.Format `json:"format"`
 	PolicyVersion string            `json:"policyVersion"`
