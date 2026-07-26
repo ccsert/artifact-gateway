@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -50,6 +51,13 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	if err := json.Unmarshal(job.Payload, &p); err != nil || p.Format != repository.FormatRaw || p.SourceRepositoryID == "" || p.Path == "" || p.Digest == "" {
 		return m.fail(ctx, job.ID, "invalid Raw promotion payload")
 	}
+	// Serialize the destination name, not the source digest: separate sources
+	// must never race into an immutable target path.
+	release, err := m.Store.LockRawObject(ctx, "promotion:"+job.RepositoryID+":"+strings.TrimPrefix(p.Path, "/"))
+	if err != nil {
+		return m.fail(ctx, job.ID, "target Raw path coordination failed")
+	}
+	defer release()
 	if _, err := m.Store.GetRawAsset(ctx, job.RepositoryID, p.Path); err == nil {
 		return m.fail(ctx, job.ID, "target Raw path already exists")
 	} else if err != repository.ErrNotFound {
