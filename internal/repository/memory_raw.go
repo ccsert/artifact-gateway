@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -56,6 +58,21 @@ func (s *MemoryStore) GetRawAsset(_ context.Context, repositoryID, path string) 
 		return RawAsset{}, ErrNotFound
 	}
 	return asset, nil
+}
+func (s *MemoryStore) ListRawAssets(_ context.Context, repositoryID, prefix string, limit int, after string) ([]RawAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	assets := make([]RawAsset, 0)
+	for _, asset := range s.rawAssets {
+		if asset.RepositoryID == repositoryID && strings.HasPrefix(asset.Path, prefix) && asset.Path > after {
+			assets = append(assets, asset)
+		}
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+	if limit > 0 && len(assets) > limit {
+		assets = assets[:limit]
+	}
+	return assets, nil
 }
 func (s *MemoryStore) DeleteRawAsset(_ context.Context, repositoryID, path string) error {
 	s.mu.Lock()

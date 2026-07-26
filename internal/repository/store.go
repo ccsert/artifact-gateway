@@ -112,6 +112,7 @@ type NativeRawStore interface {
 	StageRawObject(context.Context, RawObject) error
 	PutRawAsset(context.Context, RawAsset) (RawAsset, error)
 	GetRawAsset(context.Context, string, string) (RawAsset, error)
+	ListRawAssets(context.Context, string, string, int, string) ([]RawAsset, error)
 	DeleteRawAsset(context.Context, string, string) error
 	ListUnreferencedRawObjects(context.Context, time.Time, int) ([]RawObject, error)
 	RawObjectIsUnreferenced(context.Context, string) (bool, error)

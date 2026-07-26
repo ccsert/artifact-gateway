@@ -50,6 +50,28 @@ func ParsePath(path string) (string, string, bool) {
 	return parts[0], resource.String(), true
 }
 
+// ParseDirectoryPath accepts a canonical directory prefix for Native Raw
+// listing. A trailing slash is required so it cannot collide with a file path.
+func ParseDirectoryPath(path string) (string, string, bool) {
+	const prefix = "/raw/"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, "/") {
+		return "", "", false
+	}
+	rest := strings.TrimSuffix(strings.TrimPrefix(path, prefix), "/")
+	parts := strings.Split(rest, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return "", "", false
+	}
+	if len(parts) == 1 {
+		return parts[0], "", true
+	}
+	resource, ok := v2contract.NewCanonicalResource(strings.Join(parts[1:], "/"))
+	if !ok {
+		return "", "", false
+	}
+	return parts[0], resource.String() + "/", true
+}
+
 // ValidChecksum verifies the canonical hexadecimal checksum sidecar formats
 // served by Raw repositories.
 func ValidChecksum(path string, body []byte) bool {

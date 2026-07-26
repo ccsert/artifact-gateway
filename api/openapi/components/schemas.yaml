@@ -291,6 +291,36 @@ OCIImagePage:
         "$ref": "#/OCIImage"
     nextPageToken:
       type: string
+RawDirectoryEntry:
+  type: object
+  required:
+  - path
+  - digest
+  - size
+  - contentType
+  properties:
+    path:
+      type: string
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      minimum: 0
+    contentType:
+      type: string
+RawDirectoryPage:
+  type: object
+  required:
+  - path
+  - items
+  properties:
+    path:
+      type: string
+    items:
+      type: array
+      items:
+        "$ref": "#/RawDirectoryEntry"
 Deletion:
   type: object
   required:

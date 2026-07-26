@@ -50,6 +50,25 @@ func (s *PostgresStore) GetRawAsset(ctx context.Context, repositoryID, path stri
 	}
 	return v, err
 }
+func (s *PostgresStore) ListRawAssets(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]RawAsset, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.digest,o.object_key,o.size,a.content_type FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest WHERE a.repository_id::text=$1 AND ($2='' OR left(a.path,length($2))=$2) AND a.path>$3 ORDER BY a.path LIMIT $4`, repositoryID, prefix, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	assets := make([]RawAsset, 0)
+	for rows.Next() {
+		var asset RawAsset
+		if err := rows.Scan(&asset.RepositoryID, &asset.Path, &asset.Digest, &asset.ObjectKey, &asset.Size, &asset.ContentType); err != nil {
+			return nil, err
+		}
+		assets = append(assets, asset)
+	}
+	return assets, rows.Err()
+}
 func (s *PostgresStore) DeleteRawAsset(ctx context.Context, repositoryID, path string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM native_raw_assets WHERE repository_id::text=$1 AND path=$2`, repositoryID, path)
 	if err != nil {

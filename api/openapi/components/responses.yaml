@@ -149,6 +149,16 @@ OCIImageList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/OCIImagePage"
+RawDirectoryList:
+  description: Lexicographically ordered Native Raw directory-prefix page
+  headers:
+    Link:
+      schema:
+        type: string
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RawDirectoryPage"
 Deletion:
   description: Accepted deletion
   content:

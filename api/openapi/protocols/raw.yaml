@@ -3,7 +3,35 @@ x-gateway-protocol-overlay:
   officialSpecification: No protocol-wide Raw repository HTTP standard; this is a
     Gateway overlay.
   gatewayDecision: Use PUT, GET, HEAD, and DELETE at /raw/{repository}/{path}; path
-    is a catch-all.
+    is a catch-all. GET or HEAD on a trailing-slash directory prefix lists visible
+    Hosted assets below that prefix.
+raw_repository_root_directory:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  get:
+    operationId: listRawRootDirectory
+    parameters:
+    - name: n
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+    - name: last
+      in: query
+      schema:
+        type: string
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RawDirectoryList"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
 raw_repository_path:
   servers:
   - url: https://gateway.example.com
@@ -21,13 +49,16 @@ raw_repository_path:
       minLength: 1
   get:
     operationId: readRawContent
+    description: Returns Raw bytes for a file path. When the catch-all path ends
+      in `/`, it instead returns a lexicographically ordered listing of visible
+      Hosted assets below that canonical prefix; `n` and `last` control pagination.
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
     - {}
     responses:
       '200':
-        "$ref": "../components/responses.yaml#/BinaryObject"
+        description: Raw bytes or a Raw directory-prefix JSON page
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '404':

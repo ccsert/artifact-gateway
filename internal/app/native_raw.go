@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +50,12 @@ func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 }
 
 func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
+	listRepositoryName, prefix, listing := rawprotocol.ParseDirectoryPath(r.URL.EscapedPath())
 	repositoryName, path, ok := rawprotocol.ParsePath(r.URL.EscapedPath())
+	if listing {
+		repositoryName = listRepositoryName
+		ok = true
+	}
 	if !ok {
 		return false
 	}
@@ -73,6 +81,10 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return true
+	}
+	if listing {
+		h.list(w, r, repo, prefix)
 		return true
 	}
 	switch r.Method {
@@ -130,6 +142,61 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func (h nativeRawHandler) list(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, prefix string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 1000 {
+			http.Error(w, "list page size must be between 1 and 1000", http.StatusBadRequest)
+			return
+		}
+		limit = n
+	}
+	after := r.URL.Query().Get("last")
+	if !validRawListCursor(repo.Name, prefix, after) {
+		http.Error(w, "list cursor is invalid", http.StatusBadRequest)
+		return
+	}
+	assets, err := h.store.ListRawAssets(r.Context(), repo.ID, prefix, limit+1, after)
+	if err != nil {
+		http.Error(w, "list raw objects failed", http.StatusInternalServerError)
+		return
+	}
+	if len(assets) > limit {
+		assets = assets[:limit]
+		next := r.URL.EscapedPath() + "?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(assets[len(assets)-1].Path)
+		w.Header().Set("Link", "<"+next+">; rel=\"next\"")
+	}
+	type item struct {
+		Path        string `json:"path"`
+		Digest      string `json:"digest"`
+		Size        int64  `json:"size"`
+		ContentType string `json:"contentType"`
+	}
+	items := make([]item, 0, len(assets))
+	for _, asset := range assets {
+		items = append(items, item{Path: asset.Path, Digest: asset.Digest, Size: asset.Size, ContentType: asset.ContentType})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"path": prefix, "items": items})
+}
+
+func validRawListCursor(repositoryName, prefix, cursor string) bool {
+	if cursor == "" {
+		return true
+	}
+	_, canonical, ok := rawprotocol.ParsePath("/raw/" + repositoryName + "/" + cursor)
+	return ok && canonical == cursor && strings.HasPrefix(cursor, prefix)
 }
 
 func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {

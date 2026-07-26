@@ -580,6 +580,7 @@
       ],
       "get": {
         "operationId": "readRawContent",
+        "description": "Returns Raw bytes for a file path. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination.",
         "security": [
           {
             "protocolBasicAuth": []
@@ -591,7 +592,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BinaryObject"
+            "description": "Raw bytes or a Raw directory-prefix JSON page"
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
@@ -682,6 +683,56 @@
       },
       "x-gateway-catchAll": "path",
       "x-gateway-visibility": "committed_only"
+    },
+    "/raw/{repository}/": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        }
+      ],
+      "get": {
+        "operationId": "listRawRootDirectory",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          },
+          {
+            "name": "last",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RawDirectoryList"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          }
+        }
+      }
     },
     "/v2/{name}/blobs/uploads/": {
       "servers": [
@@ -1341,6 +1392,49 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "RawDirectoryEntry": {
+        "type": "object",
+        "required": [
+          "path",
+          "digest",
+          "size",
+          "contentType"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          }
+        }
+      },
+      "RawDirectoryPage": {
+        "type": "object",
+        "required": [
+          "path",
+          "items"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RawDirectoryEntry"
             }
           }
         }
@@ -2111,6 +2205,23 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/OCITagList"
+            }
+          }
+        }
+      },
+      "RawDirectoryList": {
+        "description": "Lexicographically ordered Native Raw directory-prefix page",
+        "headers": {
+          "Link": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RawDirectoryPage"
             }
           }
         }

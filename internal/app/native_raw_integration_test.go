@@ -3,8 +3,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"net/http"
@@ -72,6 +74,115 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 	objects, err = store.ListUnreferencedRawObjects(context.Background(), time.Now().Add(time.Hour), 10)
 	if err != nil || len(objects) != 0 {
 		t.Fatalf("collected raw objects=%#v err=%v", objects, err)
+	}
+}
+
+func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-raw-list-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objectsA, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := storeA.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "raw-list-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer serverA.Close()
+	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	defer serverB.Close()
+	request := func(method, address string, body []byte) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(method, address, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer resolver-secret")
+		response, err := serverA.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	for _, name := range []string{"releases/alpha.txt", "releases/beta.txt"} {
+		response := request(http.MethodPut, serverA.URL+"/raw/"+repo.Name+"/"+name, []byte(name))
+		if response.StatusCode != http.StatusCreated {
+			_ = response.Body.Close()
+			t.Fatalf("put %s=%d", name, response.StatusCode)
+		}
+		_ = response.Body.Close()
+	}
+	listRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/raw/"+repo.Name+"/releases/?n=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	listResponse, err := serverB.Client().Do(listRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listResponse.Body.Close()
+	var page struct {
+		Items []struct {
+			Path string `json:"path"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if listResponse.StatusCode != http.StatusOK || len(page.Items) != 1 || page.Items[0].Path != "releases/alpha.txt" || listResponse.Header.Get("Link") == "" {
+		t.Fatalf("list status=%d page=%#v link=%q", listResponse.StatusCode, page, listResponse.Header.Get("Link"))
+	}
+	deleted := request(http.MethodDelete, serverA.URL+"/raw/"+repo.Name+"/releases/alpha.txt", nil)
+	if deleted.StatusCode != http.StatusNoContent {
+		_ = deleted.Body.Close()
+		t.Fatalf("delete=%d", deleted.StatusCode)
+	}
+	_ = deleted.Body.Close()
+	remainingRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/raw/"+repo.Name+"/releases/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remainingRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	remainingResponse, err := serverB.Client().Do(remainingRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remainingResponse.Body.Close()
+	var remaining struct {
+		Items []struct {
+			Path string `json:"path"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(remainingResponse.Body).Decode(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remainingResponse.StatusCode != http.StatusOK || len(remaining.Items) != 1 || remaining.Items[0].Path != "releases/beta.txt" {
+		t.Fatalf("remaining status=%d page=%#v", remainingResponse.StatusCode, remaining)
 	}
 }
 
