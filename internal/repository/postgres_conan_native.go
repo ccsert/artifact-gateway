@@ -202,6 +202,9 @@ func (s *PostgresStore) TombstoneConanRecipeRevision(ctx context.Context, reposi
 	if err != nil {
 		return item, err
 	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_conan_package_revisions SET state='deleted' WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3`, repositoryID, reference, revision); err != nil {
+		return item, err
+	}
 	coordinate := reference + "#" + revision
 	if _, err = tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest) VALUES ($1,'conan',$2,$3) ON CONFLICT DO NOTHING`, repositoryID, coordinate, item.Digest); err != nil {
 		return item, err

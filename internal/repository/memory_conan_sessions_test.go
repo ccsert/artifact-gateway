@@ -33,3 +33,27 @@ func TestMemoryConanPublishSessionRequiresEveryDeclaredObject(t *testing.T) {
 		t.Fatalf("committed session=%#v err=%v", committed, err)
 	}
 }
+
+func TestTombstoneConanRecipeAlsoHidesPackages(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "recipe", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: "pkg/1/user/stable", Revision: "rrev", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, []ConanAsset{{RepositoryID: "repo", Reference: "pkg/1/user/stable", RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: "recipe", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "package", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: "pkg/1/user/stable", RecipeRevision: "rrev", PackageID: "id", Revision: "prev", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, []ConanAsset{{RepositoryID: "repo", Reference: "pkg/1/user/stable", RecipeRevision: "rrev", PackageID: "id", PackageRevision: "prev", Path: "package.tgz", ObjectKey: "package", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TombstoneConanRecipeRevision(ctx, "repo", "pkg/1/user/stable", "rrev"); err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := store.GetConanPackageRevision(ctx, "repo", "pkg/1/user/stable", "rrev", "id", "prev")
+	if err != nil || pkg.State != "deleted" {
+		t.Fatalf("package=%#v err=%v", pkg, err)
+	}
+}

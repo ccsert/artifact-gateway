@@ -171,6 +171,12 @@ func (s *MemoryStore) TombstoneConanRecipeRevision(_ context.Context, repository
 	}
 	item.State = "deleted"
 	s.conanRecipes[key] = item
+	for packageKey, pkg := range s.conanPackages {
+		if pkg.RepositoryID == repositoryID && pkg.Reference == reference && pkg.RecipeRevision == revision {
+			pkg.State = "deleted"
+			s.conanPackages[packageKey] = pkg
+		}
+	}
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatConan)+"\x00"+reference+"#"+revision] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatConan, Coordinate: reference + "#" + revision, Digest: item.Digest, TombstonedAt: time.Now().UTC()}
 	return item, nil
 }
