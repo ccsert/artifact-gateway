@@ -149,7 +149,7 @@ func (s *PostgresStore) PromoteConanRecipeRevision(ctx context.Context, p ConanP
 		return ConanRecipeRevision{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_recipe_revisions(repository_id,reference,revision,digest,state) VALUES($1,$2,$3,$4,'visible')`, p.TargetRepositoryID, p.Reference, p.Revision, p.Digest); err != nil {
-		return ConanRecipeRevision{}, ErrNameExists
+		return ConanRecipeRevision{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_package_revisions(repository_id,reference,recipe_revision,package_id,revision,digest,state) SELECT $1,reference,recipe_revision,package_id,revision,digest,'visible' FROM native_conan_package_revisions WHERE repository_id::text=$2 AND reference=$3 AND recipe_revision=$4 AND state='visible'`, p.TargetRepositoryID, p.SourceRepositoryID, p.Reference, p.Revision); err != nil {
 		return ConanRecipeRevision{}, err
