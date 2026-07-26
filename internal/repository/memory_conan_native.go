@@ -253,3 +253,41 @@ func (s *MemoryStore) TombstoneConanPackageRevision(_ context.Context, repositor
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatConan)+"\x00"+coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatConan, Coordinate: coordinate, Digest: item.Digest, TombstonedAt: time.Now().UTC()}
 	return item, nil
 }
+
+func (s *MemoryStore) RestoreConanRecipeRevision(_ context.Context, repositoryID, reference, revision string) (ConanRecipeRevision, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := conanRecipeKey(repositoryID, reference, revision)
+	item, ok := s.conanRecipes[key]
+	if !ok || item.State != "deleted" || s.conanAssetsCollectedLocked(repositoryID, reference, revision, "", "") {
+		return ConanRecipeRevision{}, ErrNotFound
+	}
+	item.State = "visible"
+	s.conanRecipes[key] = item
+	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatConan)+"\x00"+reference+"#"+revision)
+	return item, nil
+}
+func (s *MemoryStore) RestoreConanPackageRevision(_ context.Context, repositoryID, reference, recipeRevision, packageID, revision string) (ConanPackageRevision, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := conanPackageKey(repositoryID, reference, recipeRevision, packageID, revision)
+	item, ok := s.conanPackages[key]
+	if !ok || item.State != "deleted" || s.conanAssetsCollectedLocked(repositoryID, reference, recipeRevision, packageID, revision) {
+		return ConanPackageRevision{}, ErrNotFound
+	}
+	if recipe := s.conanRecipes[conanRecipeKey(repositoryID, reference, recipeRevision)]; recipe.State != "visible" {
+		return ConanPackageRevision{}, ErrDisabled
+	}
+	item.State = "visible"
+	s.conanPackages[key] = item
+	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatConan)+"\x00"+reference+"#"+recipeRevision+"/"+packageID+"#"+revision)
+	return item, nil
+}
+func (s *MemoryStore) conanAssetsCollectedLocked(repositoryID, reference, recipeRevision, packageID, packageRevision string) bool {
+	for _, asset := range s.conanAssets {
+		if asset.RepositoryID == repositoryID && asset.Reference == reference && asset.RecipeRevision == recipeRevision && asset.PackageID == packageID && asset.PackageRevision == packageRevision && !s.conanObjects[asset.ObjectKey].CollectedAt.IsZero() {
+			return true
+		}
+	}
+	return false
+}

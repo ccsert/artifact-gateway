@@ -273,6 +273,46 @@ func (s *PostgresStore) TombstoneConanPackageRevision(ctx context.Context, repos
 	return item, tx.Commit()
 }
 
+func (s *PostgresStore) RestoreConanRecipeRevision(ctx context.Context, repositoryID, reference, revision string) (ConanRecipeRevision, error) {
+	var item ConanRecipeRevision
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return item, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_recipe_revisions r SET state='visible' WHERE r.repository_id::text=$1 AND r.reference=$2 AND r.revision=$3 AND r.state='deleted' AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key WHERE a.repository_id=r.repository_id AND a.reference=r.reference AND a.recipe_revision=r.revision AND a.package_id='' AND i.collected_at IS NOT NULL) RETURNING repository_id::text,reference,revision,digest,state,created_at`, repositoryID, reference, revision), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return item, ErrNotFound
+	}
+	if err != nil {
+		return item, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='conan' AND coordinate=$2`, repositoryID, reference+"#"+revision); err != nil {
+		return item, err
+	}
+	return item, tx.Commit()
+}
+func (s *PostgresStore) RestoreConanPackageRevision(ctx context.Context, repositoryID, reference, recipeRevision, packageID, revision string) (ConanPackageRevision, error) {
+	var item ConanPackageRevision
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return item, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = scanConanPackageRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_package_revisions p SET state='visible' WHERE p.repository_id::text=$1 AND p.reference=$2 AND p.recipe_revision=$3 AND p.package_id=$4 AND p.revision=$5 AND p.state='deleted' AND EXISTS (SELECT 1 FROM native_conan_recipe_revisions r WHERE r.repository_id=p.repository_id AND r.reference=p.reference AND r.revision=p.recipe_revision AND r.state='visible') AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key WHERE a.repository_id=p.repository_id AND a.reference=p.reference AND a.recipe_revision=p.recipe_revision AND a.package_id=p.package_id AND a.package_revision=p.revision AND i.collected_at IS NOT NULL) RETURNING repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at`, repositoryID, reference, recipeRevision, packageID, revision), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return item, ErrNotFound
+	}
+	if err != nil {
+		return item, err
+	}
+	coordinate := reference + "#" + recipeRevision + "/" + packageID + "#" + revision
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='conan' AND coordinate=$2`, repositoryID, coordinate); err != nil {
+		return item, err
+	}
+	return item, tx.Commit()
+}
+
 func scanConanRecipeRevision(scanner interface{ Scan(...any) error }, item *ConanRecipeRevision) error {
 	return scanner.Scan(&item.RepositoryID, &item.Reference, &item.Revision, &item.Digest, &item.State, &item.CreatedAt)
 }

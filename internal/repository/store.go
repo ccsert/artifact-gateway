@@ -173,4 +173,6 @@ type NativeConanStore interface {
 	GetConanPackageAsset(context.Context, string, string, string, string, string, string) (ConanAsset, error)
 	TombstoneConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	TombstoneConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
+	RestoreConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
+	RestoreConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
 }
