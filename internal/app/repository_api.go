@@ -141,6 +141,12 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeObjects = NewMemoryOCIObjectStore()
 	}
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics)
+	nativeConanObjects := dependencies.NativeConanObjectStore
+	if nativeConanObjects == nil {
+		nativeConanObjects = NewMemoryOCIObjectStore()
+	}
+	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
+	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
 	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
@@ -149,8 +155,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 		},
 	})
-	mux.Handle("/api/v2/repositories/", nativeMaven)
+	mux.Handle("/api/v2/repositories/", publishRouter)
 	mux.Handle("/api/v2/publish-sessions/", nativeMaven)
+	mux.Handle("/api/v2/conan-publish-sessions/", nativeConanPublish)
 	mux.Handle("POST /api/v1/conan/cache/invalidate", conanCacheInvalidationHandler{store: store, authenticator: authenticator, cache: conanCache})
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
@@ -172,10 +179,6 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		}
 		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 	})})
-	nativeConanObjects := dependencies.NativeConanObjectStore
-	if nativeConanObjects == nil {
-		nativeConanObjects = NewMemoryOCIObjectStore()
-	}
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	mux.Handle("/conan/v2/", conan)
 	mux.Handle("/conan/", conan)
