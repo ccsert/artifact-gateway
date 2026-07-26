@@ -157,6 +157,10 @@ func (h nativeConanPublishHandler) commit(w http.ResponseWriter, r *http.Request
 		writeHostedProblem(w, http.StatusConflict, "revision_exists", "Conan revision already exists")
 		return
 	}
+	if repository.IsQuotaExceeded(err) {
+		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")
+		return
+	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publish_session", "Conan revision cannot be published")
 		return

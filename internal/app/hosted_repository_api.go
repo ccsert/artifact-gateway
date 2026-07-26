@@ -468,6 +468,10 @@ func (h generatedRepositoryAPIAdapter) ReplaceRepositoryCapacity(w http.Response
 			return
 		}
 		capacity, err := h.capacities.ReplaceRepositoryCapacityQuota(r.Context(), repositoryID.String(), request.QuotaBytes)
+		if repository.IsQuotaExceeded(err) {
+			writeHostedProblem(w, http.StatusConflict, "quota_exceeded", "quotaBytes is lower than current repository usage")
+			return
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 			return

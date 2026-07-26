@@ -392,6 +392,10 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		}
 		blob, err := h.store.CompleteOCIUpload(r.Context(), id, repository.OCIBlob{Digest: digest, ObjectKey: key, Size: int64(len(data))})
 		if err != nil {
+			if repository.IsQuotaExceeded(err) {
+				writeOCIError(w, http.StatusInsufficientStorage, "DENIED", "repository capacity quota exceeded")
+				return
+			}
 			writeOCIError(w, 409, "BLOB_UPLOAD_INVALID", "blob upload cannot be completed")
 			return
 		}
@@ -530,6 +534,10 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 		}
 		manifest, err := h.store.PutOCIManifest(r.Context(), repository.OCIManifest{RepositoryID: repo.ID, Name: name, Digest: digest, ObjectKey: key, MediaType: mediaType, SubjectDigest: envelope.Subject.Digest, ArtifactType: envelope.ArtifactType, Size: int64(len(data))}, reference)
 		if err != nil {
+			if repository.IsQuotaExceeded(err) {
+				writeOCIError(w, http.StatusInsufficientStorage, "DENIED", "repository capacity quota exceeded")
+				return
+			}
 			writeOCIError(w, 500, "UNKNOWN", "publish manifest failed")
 			return
 		}

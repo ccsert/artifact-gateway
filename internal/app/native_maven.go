@@ -298,6 +298,10 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 	a, err := h.promote(r.Context(), s)
+	if repository.IsQuotaExceeded(err) {
+		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")
+		return
+	}
 	if errors.Is(err, repository.ErrNameExists) {
 		writeHostedProblem(w, 409, "coordinate_exists", "Maven coordinate already exists")
 		return
@@ -508,6 +512,10 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	artifact, _, err := h.promoteIdempotently(r.Context(), s, key, mavenCommitPayloadHash(body.ExpectedAssetNames))
+	if repository.IsQuotaExceeded(err) {
+		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")
+		return
+	}
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different coordinate commit")
 		return

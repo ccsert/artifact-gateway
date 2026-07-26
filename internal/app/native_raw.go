@@ -151,6 +151,10 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			contentType = "application/octet-stream"
 		}
 		if _, err = h.store.PutRawAsset(r.Context(), repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: int64(len(body)), ContentType: contentType}); err != nil {
+			if repository.IsQuotaExceeded(err) {
+				http.Error(w, "repository capacity quota exceeded", http.StatusInsufficientStorage)
+				return true
+			}
 			http.Error(w, "publish raw object failed", http.StatusInternalServerError)
 			return true
 		}
