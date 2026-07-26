@@ -42,6 +42,11 @@ type RepositoryRetentionPolicyStore interface {
 	ReplaceRepositoryRetentionPolicy(context.Context, string, RepositoryRetentionPolicy, string) (RepositoryRetentionPolicy, error)
 }
 
+type RepositoryCapacityStore interface {
+	GetRepositoryCapacity(context.Context, string) (RepositoryCapacity, error)
+	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (RepositoryCapacity, error)
+}
+
 type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
 	ListArtifactTombstones(context.Context, string, Format, string, int, string) ([]ArtifactTombstone, error)

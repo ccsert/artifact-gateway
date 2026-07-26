@@ -44,6 +44,50 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	}
 }
 
+func TestMemoryRepositoryCapacityUsesLogicalVisibleReferences(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "raw", Name: "capacity-raw", Format: FormatRaw}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "raw", Path: "a", Digest: "sha256:a", ObjectKey: "a", Size: 4}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "raw", Path: "b", Digest: "sha256:a", ObjectKey: "a", Size: 4}); err != nil {
+		t.Fatal(err)
+	}
+	capacity, err := store.ReplaceRepositoryCapacityQuota(ctx, "raw", 10)
+	if err != nil || capacity.UsedBytes != 8 || capacity.ObjectCount != 2 || capacity.QuotaBytes != 10 {
+		t.Fatalf("capacity=%#v err=%v", capacity, err)
+	}
+}
+
+func TestMemoryRepositoryCapacityExcludesTombstonedMavenAssets(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "maven", Name: "capacity-maven", Format: FormatMaven}); err != nil {
+		t.Fatal(err)
+	}
+	session := MavenPublishSession{ID: "capacity-session", RepositoryID: "maven", Coordinate: "org.example:widget:1.0.0", Publisher: "alice", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []MavenDeclaredObject{{Name: "widget.jar", Digest: "sha256:widget", Size: 4}}}
+	if _, err := store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(ctx, session.ID, "widget.jar", "native/maven/widget"); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(ctx, session.ID, []MavenAsset{{RepositoryID: "maven", Path: "org/example/widget/1.0.0/widget.jar", ObjectKey: "native/maven/widget", Digest: "sha256:widget", Size: 4}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, "maven", artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	capacity, err := store.GetRepositoryCapacity(ctx, "maven")
+	if err != nil || capacity.UsedBytes != 0 || capacity.ObjectCount != 0 {
+		t.Fatalf("capacity=%#v err=%v", capacity, err)
+	}
+}
+
 func TestMemoryMavenCommitRejectsCollectorClaim(t *testing.T) {
 	store := NewMemoryStore()
 	key := "native/maven/sha256/claimed"
