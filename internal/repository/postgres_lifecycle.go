@@ -61,7 +61,18 @@ func (s *PostgresStore) claimLifecycleJobs(ctx context.Context, kind LifecycleJo
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT id FROM lifecycle_jobs WHERE state IN ('pending','failed') AND ($1='' OR kind=$1) AND ($2='' OR payload->>'format'=$2) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $3) UPDATE lifecycle_jobs jobs SET state='running',started_at=now(),completed_at=NULL FROM candidates WHERE jobs.id=candidates.id RETURNING jobs.id::text,jobs.repository_id::text,jobs.kind,jobs.idempotency_key,jobs.payload,jobs.state,jobs.created_at,jobs.started_at,jobs.completed_at,jobs.last_error`, kind, format, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH per_repository AS (
+        SELECT DISTINCT ON (repository_id) id,repository_id
+        FROM lifecycle_jobs
+        WHERE state IN ('pending','failed') AND ($1='' OR kind=$1) AND ($2='' OR payload->>'format'=$2)
+        ORDER BY repository_id,created_at
+    ), candidates AS (
+        SELECT id FROM per_repository
+        WHERE pg_try_advisory_xact_lock(hashtextextended(repository_id::text, 0))
+        ORDER BY id LIMIT $3
+    ) UPDATE lifecycle_jobs jobs SET state='running',started_at=now(),completed_at=NULL
+    FROM candidates WHERE jobs.id=candidates.id AND jobs.state IN ('pending','failed')
+    RETURNING jobs.id::text,jobs.repository_id::text,jobs.kind,jobs.idempotency_key,jobs.payload,jobs.state,jobs.created_at,jobs.started_at,jobs.completed_at,jobs.last_error`, kind, format, limit)
 	if err != nil {
 		return nil, err
 	}

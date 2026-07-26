@@ -62,14 +62,23 @@ func (m NativeMaintenance) EnqueueReclaimJobs(ctx context.Context, before time.T
 }
 
 func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error {
-	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, limit)
-	if err != nil {
-		return err
+	if limit <= 0 {
+		limit = 100
 	}
-	for _, job := range jobs {
-		if err := m.runReclaimJob(ctx, job); err != nil {
+	for remaining := limit; remaining > 0; {
+		jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, remaining)
+		if err != nil {
 			return err
 		}
+		if len(jobs) == 0 {
+			return nil
+		}
+		for _, job := range jobs {
+			if err := m.runReclaimJob(ctx, job); err != nil {
+				return err
+			}
+		}
+		remaining -= len(jobs)
 	}
 	return nil
 }

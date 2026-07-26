@@ -74,3 +74,32 @@ func TestMemoryLifecycleJobsCanBeClaimedByFormat(t *testing.T) {
 		t.Fatalf("remaining=%#v err=%v", remaining, err)
 	}
 }
+
+func TestMemoryLifecycleClaimLimitsEachRepositoryToOneRunningJob(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	for _, job := range []LifecycleJob{
+		{ID: "one", RepositoryID: "repo", Kind: LifecycleJobReclaim, IdempotencyKey: "one", Payload: []byte(`{"format":"raw"}`)},
+		{ID: "two", RepositoryID: "repo", Kind: LifecycleJobPromotion, IdempotencyKey: "two", Payload: []byte(`{"format":"raw"}`)},
+		{ID: "three", RepositoryID: "other", Kind: LifecycleJobReclaim, IdempotencyKey: "three", Payload: []byte(`{"format":"raw"}`)},
+	} {
+		if _, _, err := store.EnqueueLifecycleJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claimed, err := store.ClaimLifecycleJobs(ctx, 10)
+	if err != nil || len(claimed) != 2 {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	for _, job := range claimed {
+		if job.RepositoryID == "repo" {
+			if err = store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	next, err := store.ClaimLifecycleJobs(ctx, 10)
+	if err != nil || len(next) != 1 || next[0].RepositoryID != "repo" {
+		t.Fatalf("next=%#v err=%v", next, err)
+	}
+}

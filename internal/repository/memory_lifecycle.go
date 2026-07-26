@@ -78,13 +78,18 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, l
 		return s.lifecycleJobs[keys[i]].CreatedAt.Before(s.lifecycleJobs[keys[j]].CreatedAt)
 	})
 	jobs := make([]LifecycleJob, 0, limit)
+	claimedRepositories := make(map[string]bool)
 	for _, key := range keys {
 		if len(jobs) == limit {
 			break
 		}
 		job := s.lifecycleJobs[key]
+		if claimedRepositories[job.RepositoryID] {
+			continue
+		}
 		job.State, job.StartedAt, job.CompletedAt = LifecycleJobRunning, time.Now().UTC(), time.Time{}
 		s.lifecycleJobs[key] = job
+		claimedRepositories[job.RepositoryID] = true
 		jobs = append(jobs, cloneLifecycleJob(job))
 	}
 	return jobs, nil
