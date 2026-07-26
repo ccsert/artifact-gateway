@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -50,6 +51,24 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 		}
 	}
 	return nil
+}
+
+func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RunJobs(ctx, 100)
+			}
+		}
+	}()
 }
 
 func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) error {

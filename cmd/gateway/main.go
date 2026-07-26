@@ -91,6 +91,7 @@ func main() {
 	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
 	app.NativeMavenPromotion{Store: store}.Start(runtimeContext, time.Minute)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
+	app.NativeOCIPromotion{Store: store, Objects: objectStore}.Start(runtimeContext, time.Minute)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{

@@ -14,6 +14,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
+	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -492,25 +493,28 @@ func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.Respons
 
 func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryPromotionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
-		if source.Format != repository.FormatMaven {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is currently supported only for Maven repositories")
+		if source.Format != repository.FormatMaven && source.Format != repository.FormatOCI {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is currently supported only for Maven and OCI repositories")
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validMavenCoordinate(request.Coordinate) || request.Digest == "" {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, Maven coordinate, and digest are required")
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || request.Digest == "" || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
 			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
-			if err != nil || target.Format != repository.FormatMaven || target.State != repository.RepositoryActive {
-				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Maven repository")
+			if err != nil || target.Format != source.Format || target.State != repository.RepositoryActive {
+				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
 				return
 			}
-			// The promotion identity is part of the durable job payload, so it must
-			// be stable when an HTTP client retries the same idempotency key.
-			promotionID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("maven-promotion:"+target.ID+":"+string(params.IdempotencyKey))).String()
-			job, _, err := (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: promotionID})
+			var job repository.LifecycleJob
+			if source.Format == repository.FormatMaven {
+				promotionID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("maven-promotion:"+target.ID+":"+string(params.IdempotencyKey))).String()
+				job, _, err = (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: promotionID})
+			} else {
+				job, _, err = (ociprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: request.Coordinate, Digest: request.Digest})
+			}
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
 				return
