@@ -129,7 +129,11 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 	if checkpoint.Size < 0 || checkpoint.ByteOffset < 0 || checkpoint.ByteOffset > checkpoint.Size || !validSHA256(checkpoint.Digest) {
 		return fmt.Errorf("invalid checkpoint")
 	}
-	if info, err := w.Source.Stat(ctx, checkpoint.ObjectKey); err != nil {
+	sourceObjectKey := checkpoint.SourceObjectKey
+	if sourceObjectKey == "" {
+		sourceObjectKey = checkpoint.ObjectKey
+	}
+	if info, err := w.Source.Stat(ctx, sourceObjectKey); err != nil {
 		return fmt.Errorf("stat source: %w", err)
 	} else if info.Size != checkpoint.Size {
 		return fmt.Errorf("source size mismatch")
@@ -163,7 +167,7 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 	}
 	for checkpoint.ByteOffset < checkpoint.Size {
 		length := min(chunkSize, checkpoint.Size-checkpoint.ByteOffset)
-		reader, _, err := w.Source.OpenRange(ctx, checkpoint.ObjectKey, checkpoint.ByteOffset, length)
+		reader, _, err := w.Source.OpenRange(ctx, sourceObjectKey, checkpoint.ByteOffset, length)
 		if err != nil {
 			return fmt.Errorf("read source: %w", err)
 		}

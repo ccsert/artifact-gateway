@@ -105,6 +105,86 @@ func TestPostgresMinIOOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
 	}
 }
 
+func TestPostgresMinIOOCIReplicationPublishesTargetOwnedManifest(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "replication-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-oci-source-" + uuid.NewString(), Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-oci-target-" + uuid.NewString(), Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobBody := []byte("OCI blob replicated with manifest")
+	blobSum := sha256.Sum256(blobBody)
+	blobDigest := "sha256:" + fmt.Sprintf("%x", blobSum[:])
+	blobKey := "native/oci/blobs/sha256/" + fmt.Sprintf("%x", blobSum[:])
+	if err = objects.PutVerifiedReader(ctx, blobKey, bytes.NewReader(blobBody), int64(len(blobBody)), blobDigest); err != nil {
+		t.Fatal(err)
+	}
+	upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: source.ID, Name: "team/widget", ObjectKey: blobKey, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: source.ID, ObjectKey: blobKey, Digest: blobDigest, Size: int64(len(blobBody))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: blobDigest, ObjectKey: blobKey, Size: int64(len(blobBody))}); err != nil {
+		t.Fatal(err)
+	}
+	manifestBody := []byte(`{"schemaVersion":2,"config":{"digest":"` + blobDigest + `"}}`)
+	manifestSum := sha256.Sum256(manifestBody)
+	manifestDigest := "sha256:" + fmt.Sprintf("%x", manifestSum[:])
+	sourceKey := "native/oci/manifests/" + source.ID + "/team%2Fwidget/" + fmt.Sprintf("%x", manifestSum[:])
+	if err = objects.PutVerifiedReader(ctx, sourceKey, bytes.NewReader(manifestBody), int64(len(manifestBody)), manifestDigest); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: source.ID, ObjectKey: sourceKey, Digest: manifestDigest, Size: int64(len(manifestBody))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest, ObjectKey: sourceKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(manifestBody))}, manifestDigest); err != nil {
+		t.Fatal(err)
+	}
+	targetKey := ociReplicationTargetObjectKey(target.ID, "team/widget", manifestDigest)
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatOCI, IdempotencyKey: "postgres-minio-oci-replication"}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: manifestDigest, Size: int64(len(manifestBody))}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = (OCIReplication{Store: store, Source: objects, Destination: objects, ChunkBytes: 5}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	replicated, err := store.GetOCIManifest(ctx, target.ID, "team/widget", manifestDigest)
+	if err != nil || replicated.ObjectKey != targetKey || replicated.ObjectKey == sourceKey {
+		t.Fatalf("manifest=%#v err=%v", replicated, err)
+	}
+	if _, err = store.GetOCIBlob(ctx, target.ID, blobDigest); err != nil {
+		t.Fatalf("mounted blob: %v", err)
+	}
+	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 1 || checks[0].State != "verified" || checks[0].SourceObjectKey != sourceKey || checks[0].ObjectKey != targetKey {
+		t.Fatalf("checkpoints=%#v err=%v", checks, err)
+	}
+}
+
 func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

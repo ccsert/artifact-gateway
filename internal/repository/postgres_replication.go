@@ -23,7 +23,11 @@ func (s *PostgresStore) CreateReplicationPlan(ctx context.Context, plan Replicat
 		plan.ID, plan.SourceRepositoryID, plan.TargetRepositoryID, plan.Format, plan.IdempotencyKey), &plan)
 	if err == nil {
 		for _, checkpoint := range checkpoints {
-			if _, err = tx.ExecContext(ctx, `INSERT INTO replication_checkpoints (plan_id,object_key,digest,size,byte_offset,state,attempts,last_error) VALUES ($1,$2,$3,$4,0,'pending',0,'')`, plan.ID, checkpoint.ObjectKey, checkpoint.Digest, checkpoint.Size); err != nil {
+			sourceObjectKey := checkpoint.SourceObjectKey
+			if sourceObjectKey == "" {
+				sourceObjectKey = checkpoint.ObjectKey
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO replication_checkpoints (plan_id,source_object_key,object_key,digest,size,byte_offset,state,attempts,last_error) VALUES ($1,$2,$3,$4,$5,0,'pending',0,'')`, plan.ID, sourceObjectKey, checkpoint.ObjectKey, checkpoint.Digest, checkpoint.Size); err != nil {
 				return ReplicationPlan{}, false, err
 			}
 		}
@@ -166,7 +170,7 @@ type replicationCheckpointScanner interface{ Scan(...any) error }
 
 func scanReplicationCheckpoint(scanner replicationCheckpointScanner, checkpoint *ReplicationCheckpoint) error {
 	var verifiedAt sql.NullTime
-	if err := scanner.Scan(&checkpoint.PlanID, &checkpoint.ObjectKey, &checkpoint.Digest, &checkpoint.Size, &checkpoint.ByteOffset, &checkpoint.State, &checkpoint.Attempts, &checkpoint.LastError, &verifiedAt, &checkpoint.UpdatedAt); err != nil {
+	if err := scanner.Scan(&checkpoint.PlanID, &checkpoint.SourceObjectKey, &checkpoint.ObjectKey, &checkpoint.Digest, &checkpoint.Size, &checkpoint.ByteOffset, &checkpoint.State, &checkpoint.Attempts, &checkpoint.LastError, &verifiedAt, &checkpoint.UpdatedAt); err != nil {
 		return err
 	}
 	if verifiedAt.Valid {
@@ -180,7 +184,7 @@ type replicationCheckpointQuery interface {
 }
 
 func listReplicationCheckpoints(ctx context.Context, query replicationCheckpointQuery, planID string) ([]ReplicationCheckpoint, error) {
-	rows, err := query.QueryContext(ctx, `SELECT plan_id::text,object_key,digest,size,byte_offset,state,attempts,last_error,verified_at,updated_at FROM replication_checkpoints WHERE plan_id::text=$1 ORDER BY object_key`, planID)
+	rows, err := query.QueryContext(ctx, `SELECT plan_id::text,source_object_key,object_key,digest,size,byte_offset,state,attempts,last_error,verified_at,updated_at FROM replication_checkpoints WHERE plan_id::text=$1 ORDER BY object_key`, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +217,15 @@ func equivalentReplicationCheckpoints(existing, requested []ReplicationCheckpoin
 	want := append([]ReplicationCheckpoint(nil), requested...)
 	sort.Slice(want, func(i, j int) bool { return want[i].ObjectKey < want[j].ObjectKey })
 	for i, got := range existing {
-		if got.ObjectKey != want[i].ObjectKey || got.Digest != want[i].Digest || got.Size != want[i].Size {
+		gotSource := got.SourceObjectKey
+		if gotSource == "" {
+			gotSource = got.ObjectKey
+		}
+		wantSource := want[i].SourceObjectKey
+		if wantSource == "" {
+			wantSource = want[i].ObjectKey
+		}
+		if gotSource != wantSource || got.ObjectKey != want[i].ObjectKey || got.Digest != want[i].Digest || got.Size != want[i].Size {
 			return false
 		}
 	}

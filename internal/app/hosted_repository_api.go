@@ -588,8 +588,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || source.Format != repository.FormatRaw || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Raw replication requires a visible path and sha256 digest")
+		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "OCI or Raw replication requires a visible coordinate and sha256 digest")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
@@ -598,16 +598,32 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
 				return
 			}
-			asset, err := h.sessions.store.GetRawAsset(r.Context(), source.ID, request.Coordinate)
-			if errors.Is(err, repository.ErrNotFound) || asset.Digest != request.Digest {
-				writeHostedProblem(w, http.StatusNotFound, "not_found", "source Raw artifact is unavailable")
-				return
+			format := source.Format
+			var checkpoint repository.ReplicationCheckpoint
+			if format == repository.FormatRaw {
+				asset, lookupErr := h.sessions.store.GetRawAsset(r.Context(), source.ID, request.Coordinate)
+				if errors.Is(lookupErr, repository.ErrNotFound) || asset.Digest != request.Digest {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Raw artifact is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Raw artifact failed")
+					return
+				}
+				checkpoint = repository.ReplicationCheckpoint{ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}
+			} else {
+				manifest, lookupErr := h.sessions.store.GetOCIManifest(r.Context(), source.ID, request.Coordinate, request.Digest)
+				if errors.Is(lookupErr, repository.ErrNotFound) || manifest.Digest != request.Digest {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source OCI manifest is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source OCI manifest failed")
+					return
+				}
+				checkpoint = repository.ReplicationCheckpoint{SourceObjectKey: manifest.ObjectKey, ObjectKey: ociReplicationTargetObjectKey(target.ID, manifest.Name, manifest.Digest), Digest: manifest.Digest, Size: manifest.Size}
 			}
-			if err != nil {
-				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Raw artifact failed")
-				return
-			}
-			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: string(params.IdempotencyKey)}, []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}})
+			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, IdempotencyKey: string(params.IdempotencyKey)}, []repository.ReplicationCheckpoint{checkpoint})
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing replication plan")
 				return

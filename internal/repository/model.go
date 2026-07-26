@@ -156,10 +156,10 @@ type ReplicationPlan struct {
 }
 
 type ReplicationCheckpoint struct {
-	PlanID, ObjectKey, Digest, State, LastError string
-	Size, ByteOffset                            int64
-	Attempts                                    int
-	VerifiedAt, UpdatedAt                       time.Time
+	PlanID, SourceObjectKey, ObjectKey, Digest, State, LastError string
+	Size, ByteOffset                                             int64
+	Attempts                                                     int
+	VerifiedAt, UpdatedAt                                        time.Time
 }
 
 type MavenDeclaredObject struct {
