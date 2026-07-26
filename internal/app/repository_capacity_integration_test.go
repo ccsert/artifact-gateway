@@ -65,7 +65,7 @@ func TestPostgresRepositoryCapacityAcrossHostedFormats(t *testing.T) {
 	assertCapacity(maven, 4, 1)
 
 	oci := create(repository.FormatOCI)
-	blobDigest := "sha256:oci-blob-" + uuid.NewString()
+	blobDigest := "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: oci.ID, Name: "widget", ObjectKey: "native/oci/uploads/" + uuid.NewString(), State: "open", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestPostgresRepositoryCapacityAcrossHostedFormats(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifestKey := "native/oci/manifests/" + uuid.NewString()
-	manifestDigest := "sha256:oci-manifest-" + uuid.NewString()
+	manifestDigest := "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: oci.ID, ObjectKey: manifestKey, Digest: manifestDigest, Size: 5}); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestPostgresRepositoryCapacityAcrossHostedFormats(t *testing.T) {
 
 	conan := create(repository.FormatConan)
 	conanKey := "native/conan/objects/" + uuid.NewString()
-	conanDigest := "sha256:conan-" + uuid.NewString()
+	conanDigest := "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: conan.ID, ObjectKey: conanKey, Digest: conanDigest, Size: 7}); err != nil {
 		t.Fatal(err)
 	}
@@ -141,13 +141,13 @@ func TestPostgresRepositoryCapacityRejectsVisibleWritesAcrossFormats(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: "sha256:oci-" + uuid.NewString(), ObjectKey: "native/oci/blobs/" + uuid.NewString(), Size: 2}); !repository.IsQuotaExceeded(err) {
+	if _, err = store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", ObjectKey: "native/oci/blobs/" + uuid.NewString(), Size: 2}); !repository.IsQuotaExceeded(err) {
 		t.Fatalf("oci quota err=%v", err)
 	}
 
 	conan := create(repository.FormatConan)
 	conanKey := "native/conan/quota-" + uuid.NewString()
-	conanDigest := "sha256:conan-" + uuid.NewString()
+	conanDigest := "sha256:9999999999999999999999999999999999999999999999999999999999999999"
 	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: conan.ID, ObjectKey: conanKey, Digest: conanDigest, Size: 2}); err != nil {
 		t.Fatal(err)
 	}
