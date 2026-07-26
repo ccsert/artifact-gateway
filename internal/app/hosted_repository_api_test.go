@@ -49,14 +49,27 @@ func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *
 	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: "org/example/promotion-widget/1.0.0/promotion-widget-1.0.0.jar", ObjectKey: objectKey, Digest: digestText, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, authenticator)
 	promote := func(targetID, key string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+targetID+`","coordinate":"`+session.Coordinate+`","digest":"`+digestText+`"}`))
-		authorize(req, "admin-secret")
+		authorize(req, authenticator.IssueToken("promoter"))
 		req.Header.Set("Idempotency-Key", key)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, req)
 		return response
+	}
+	if denied := promote(target.ID, "promote-widget"); denied.Code != http.StatusForbidden {
+		t.Fatalf("target authorization=%d %s", denied.Code, denied.Body.String())
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin"}}, {Principal: "maven", Scopes: []string{"repositories:read"}}}, "2"); err != nil {
+		t.Fatal(err)
 	}
 	first := promote(target.ID, "promote-widget")
 	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"kind":"promotion"`) {
