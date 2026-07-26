@@ -21,6 +21,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
   "/repositories/{repositoryId}/retention:dry-run":
     "$ref": "./management/retention.yaml#/repositories_repositoryId_retention_dry_run"
+  "/repositories/{repositoryId}/restore":
+    "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
   "/repositories/{repositoryId}/tombstones":
@@ -103,6 +105,8 @@ components:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
     RetentionDryRun:
       "$ref": "./components/schemas.yaml#/RetentionDryRun"
+    RestoreArtifact:
+      "$ref": "./components/schemas.yaml#/RestoreArtifact"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
     ArtifactTombstone:

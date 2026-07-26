@@ -567,6 +567,11 @@ type RepositoryPage struct {
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
+// RestoreArtifact defines model for RestoreArtifact.
+type RestoreArtifact struct {
+	Coordinate string `json:"coordinate"`
+}
+
 // RetentionDryRun defines model for RetentionDryRun.
 type RetentionDryRun struct {
 	Candidates []struct {
@@ -757,6 +762,9 @@ type ReplaceGrantsJSONRequestBody = GrantList
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
 
+// RestoreRepositoryArtifactJSONRequestBody defines body for RestoreRepositoryArtifact for application/json ContentType.
+type RestoreRepositoryArtifactJSONRequestBody = RestoreArtifact
+
 // ReplaceRetentionPolicyJSONRequestBody defines body for ReplaceRetentionPolicy for application/json ContentType.
 type ReplaceRetentionPolicyJSONRequestBody = RetentionPolicy
 
@@ -879,6 +887,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
+
+	// (POST /repositories/{repositoryId}/restore)
+	RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/retention-policy)
 	GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -2051,6 +2062,32 @@ func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// RestoreRepositoryArtifact operation middleware
+func (siw *ServerInterfaceWrapper) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreRepositoryArtifact(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRetentionPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetRetentionPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -2372,6 +2409,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/restore", wrapper.RestoreRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:dry-run", wrapper.DryRunRepositoryRetention)
@@ -3426,6 +3464,23 @@ func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type RestoreRepositoryArtifactRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *RestoreRepositoryArtifactJSONRequestBody
+}
+
+type RestoreRepositoryArtifactResponseObject interface {
+	VisitRestoreRepositoryArtifactResponse(w http.ResponseWriter) error
+}
+
+type RestoreRepositoryArtifact204Response struct {
+}
+
+func (response RestoreRepositoryArtifact204Response) VisitRestoreRepositoryArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
 type GetRetentionPolicyRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -3618,6 +3673,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/restore)
+	RestoreRepositoryArtifact(ctx context.Context, request RestoreRepositoryArtifactRequestObject) (RestoreRepositoryArtifactResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/retention-policy)
 	GetRetentionPolicy(ctx context.Context, request GetRetentionPolicyRequestObject) (GetRetentionPolicyResponseObject, error)
@@ -4422,6 +4480,39 @@ func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
 		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreRepositoryArtifact operation middleware
+func (sh *strictHandler) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request RestoreRepositoryArtifactRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body RestoreRepositoryArtifactJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreRepositoryArtifact(ctx, request.(RestoreRepositoryArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreRepositoryArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreRepositoryArtifactResponseObject); ok {
+		if err := validResponse.VisitRestoreRepositoryArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

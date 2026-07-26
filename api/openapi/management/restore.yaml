@@ -1,0 +1,15 @@
+---
+repositories_repositoryId_restore:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: restoreRepositoryArtifact
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/RestoreArtifact"
+    responses:
+      '204':
+        description: Tombstoned artifact restored

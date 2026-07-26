@@ -82,6 +82,10 @@ export type RetentionDryRun = {
     }>;
 };
 
+export type RestoreArtifact = {
+    coordinate: string;
+};
+
 export type LifecycleJob = {
     id: string;
     kind: 'retention' | 'promotion' | 'replication' | 'reclaim';
@@ -548,6 +552,24 @@ export type DryRunRepositoryRetentionResponses = {
 };
 
 export type DryRunRepositoryRetentionResponse = DryRunRepositoryRetentionResponses[keyof DryRunRepositoryRetentionResponses];
+
+export type RestoreRepositoryArtifactData = {
+    body: RestoreArtifact;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/restore';
+};
+
+export type RestoreRepositoryArtifactResponses = {
+    /**
+     * Tombstoned artifact restored
+     */
+    204: void;
+};
+
+export type RestoreRepositoryArtifactResponse = RestoreRepositoryArtifactResponses[keyof RestoreRepositoryArtifactResponses];
 
 export type ListRepositoryLifecycleJobsData = {
     body?: never;

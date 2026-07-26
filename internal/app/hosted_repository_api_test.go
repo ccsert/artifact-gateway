@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -487,6 +488,78 @@ func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *t
 	}
 	if response := request(maven.ID, authenticator.IssueToken("retention-reader")); response.Code != http.StatusForbidden {
 		t.Fatalf("reader dry run=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	conan, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "restore-conan", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "restore-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, conan.ID, []repository.RepositoryGrant{{Principal: "restore-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	publish := func(reference, revision, key string) repository.ConanRecipeRevision {
+		t.Helper()
+		digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		if err := store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: conan.ID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		item, err := store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: conan.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: conan.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return item
+	}
+	first := publish("pkg/1.0/user/stable", "rrev", "native/conan/restore/first")
+	if _, err = store.TombstoneConanRecipeRevision(ctx, conan.ID, first.Reference, first.Revision); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(repositoryID, token, coordinate string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repositoryID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
+		authorize(req, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	coordinate := first.Reference + "#" + first.Revision
+	if response := request(conan.ID, "admin-secret", coordinate); response.Code != http.StatusNoContent {
+		t.Fatalf("restore=%d body=%s", response.Code, response.Body.String())
+	}
+	restored, err := store.GetConanRecipeRevision(ctx, conan.ID, first.Reference, first.Revision)
+	if err != nil || restored.State != "visible" {
+		t.Fatalf("restored=%#v err=%v", restored, err)
+	}
+	if _, err = store.GetArtifactTombstone(ctx, conan.ID, repository.FormatConan, coordinate); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("restore kept tombstone: %v", err)
+	}
+	second := publish("pkg/2.0/user/stable", "rrev", "native/conan/restore/second")
+	if _, err = store.TombstoneConanRecipeRevision(ctx, conan.ID, second.Reference, second.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkConanObjectCollected(ctx, "native/conan/restore/second"); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(conan.ID, "admin-secret", second.Reference+"#"+second.Revision); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore_unavailable") {
+		t.Fatalf("restore collected=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(raw.ID, "admin-secret", coordinate); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "unsupported_operation") {
+		t.Fatalf("restore raw=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(conan.ID, authenticator.IssueToken("restore-reader"), coordinate); response.Code != http.StatusForbidden {
+		t.Fatalf("restore reader=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(conan.ID, "admin-secret", "not-a-coordinate"); response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid restore=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

@@ -470,6 +470,52 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatConan {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is currently supported only for Conan tombstones")
+			return
+		}
+		var request adminopenapi.RestoreArtifact
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || !validConanRestoreCoordinate(request.Coordinate) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a Conan recipe or package tombstone")
+			return
+		}
+		if _, err := h.tombstones.GetArtifactTombstone(r.Context(), repo.ID, repo.Format, request.Coordinate); errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "tombstone not found")
+			return
+		} else if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get tombstone failed")
+			return
+		}
+		err := h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
+		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) {
+			writeHostedProblem(w, http.StatusConflict, "restore_unavailable", "Conan revision cannot be restored")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "restore Conan revision failed")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) restoreConanCoordinate(r *http.Request, repositoryID, coordinate string) error {
+	reference, recipeRevision, packageID, packageRevision, packageRestore, ok := parseConanRestoreCoordinate(coordinate)
+	if !ok {
+		return repository.ErrNotFound
+	}
+	if packageRestore {
+		_, err := h.conan.RestoreConanPackageRevision(r.Context(), repositoryID, reference, recipeRevision, packageID, packageRevision)
+		return err
+	}
+	_, err := h.conan.RestoreConanRecipeRevision(r.Context(), repositoryID, reference, recipeRevision)
+	return err
+}
+
 func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 		jobs, err := h.lifecycleJobs.ListLifecycleJobs(r.Context(), repositoryID.String(), 100)
@@ -1157,6 +1203,29 @@ func validConanReferencePrefix(value string) bool {
 		}
 	}
 	return true
+}
+
+func validConanRestoreCoordinate(value string) bool {
+	_, _, _, _, _, ok := parseConanRestoreCoordinate(value)
+	return ok
+}
+
+func parseConanRestoreCoordinate(value string) (reference, recipeRevision, packageID, packageRevision string, packageRestore, ok bool) {
+	if len(value) > 1024 || strings.ContainsAny(value, "\\\x00") {
+		return "", "", "", "", false, false
+	}
+	reference, remainder, split := strings.Cut(value, "#")
+	if !split || strings.Count(reference, "/") != 3 || !validConanReferencePrefix(reference) {
+		return "", "", "", "", false, false
+	}
+	if recipeRevision, remainder, split = strings.Cut(remainder, "/"); !split {
+		return reference, recipeRevision, "", "", false, validConanSegment(recipeRevision)
+	}
+	packageID, packageRevision, split = strings.Cut(remainder, "#")
+	if !split || strings.Contains(packageRevision, "/") {
+		return "", "", "", "", false, false
+	}
+	return reference, recipeRevision, packageID, packageRevision, true, validConanSegment(recipeRevision) && validConanSegment(packageID) && validConanSegment(packageRevision)
 }
 
 func validRawAssetPrefix(value string) bool {

@@ -5,6 +5,8 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -152,6 +154,24 @@ func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
+	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	restore := func() *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+revision.Reference+`#`+revision.Revision+`"}`))
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	if response := restore(); response.Code != http.StatusNoContent {
+		t.Fatalf("restore before reclaim=%d body=%s", response.Code, response.Body.String())
+	}
+	if restored, getErr := store.GetConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); getErr != nil || restored.State != "visible" {
+		t.Fatalf("restored=%#v err=%v", restored, getErr)
+	}
+	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
+		t.Fatal(err)
+	}
 	maintenance := NativeConanMaintenance{Store: store, Objects: &failOnceConanReclaimStore{OCIObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
@@ -162,7 +182,7 @@ func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = objects.Get(ctx, key); err == nil {
 		t.Fatal("MinIO object remains after reclaim")
 	}
-	if _, err = store.RestoreConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); !errors.Is(err, repository.ErrNotFound) {
-		t.Fatalf("restore collected revision error=%v", err)
+	if response := restore(); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore_unavailable") {
+		t.Fatalf("restore collected revision=%d body=%s", response.Code, response.Body.String())
 	}
 }

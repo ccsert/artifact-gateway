@@ -232,6 +232,31 @@
         }
       }
     },
+    "/repositories/{repositoryId}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "restoreRepositoryArtifact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreArtifact"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Tombstoned artifact restored"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/lifecycle-jobs": {
       "parameters": [
         {
@@ -2023,6 +2048,20 @@
                 }
               }
             }
+          }
+        }
+      },
+      "RestoreArtifact": {
+        "type": "object",
+        "required": [
+          "coordinate"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "coordinate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
           }
         }
       },

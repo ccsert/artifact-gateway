@@ -169,6 +169,15 @@ RetentionDryRun:
           coordinate: {type: string}
           digest: {type: string}
           createdAt: {type: string, format: date-time}
+RestoreArtifact:
+  type: object
+  required: [coordinate]
+  additionalProperties: false
+  properties:
+    coordinate:
+      type: string
+      minLength: 1
+      maxLength: 1024
 LifecycleJob:
   type: object
   required:
