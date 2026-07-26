@@ -761,5 +761,9 @@ func TestPostgresMavenRetentionTombstonesExpiredExcessVersions(t *testing.T) {
 		if getErr != nil || artifact.State != "deleted" {
 			t.Fatalf("artifact=%#v err=%v", artifact, getErr)
 		}
+		tombstone, getErr := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatMaven, artifact.Coordinate)
+		if getErr != nil || tombstone.Digest != artifact.Digest || tombstone.TombstonedAt.IsZero() {
+			t.Fatalf("tombstone=%#v err=%v", tombstone, getErr)
+		}
 	}
 }

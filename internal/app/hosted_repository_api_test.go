@@ -543,6 +543,10 @@ func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 	if detailedAfterDelete.Code != http.StatusOK || !strings.Contains(detailedAfterDelete.Body.String(), `"state":"deleted"`) {
 		t.Fatalf("detail after delete=%d body=%s", detailedAfterDelete.Code, detailedAfterDelete.Body.String())
 	}
+	tombstone, err := store.GetArtifactTombstone(context.Background(), repo.ID, repository.FormatMaven, artifact.Coordinate)
+	if err != nil || tombstone.Digest != artifact.Digest || tombstone.TombstonedAt.IsZero() {
+		t.Fatalf("tombstone=%#v err=%v", tombstone, err)
+	}
 }
 
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {

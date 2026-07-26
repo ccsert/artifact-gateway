@@ -403,6 +403,9 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_artifacts SET state='deleted' WHERE id::text=$1`, artifactID); err != nil {
 		return MavenArtifact{}, err
 	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest) VALUES ($1,'maven',$2,$3) ON CONFLICT DO NOTHING`, repositoryID, artifact.Coordinate, artifact.Digest); err != nil {
+		return MavenArtifact{}, err
+	}
 	artifact.State = "deleted"
 	if err = tx.Commit(); err != nil {
 		return MavenArtifact{}, err

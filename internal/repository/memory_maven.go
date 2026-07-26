@@ -281,6 +281,7 @@ func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, ar
 	}
 	artifact.State = "deleted"
 	s.mavenArtifacts[artifactID] = artifact
+	s.artifactTombstones[repositoryID+"\x00"+string(FormatMaven)+"\x00"+artifact.Coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatMaven, Coordinate: artifact.Coordinate, Digest: artifact.Digest, TombstonedAt: time.Now().UTC()}
 	return artifact, nil
 }
 
