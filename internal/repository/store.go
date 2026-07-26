@@ -48,6 +48,13 @@ type RepositoryCapacityStore interface {
 	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (RepositoryCapacity, error)
 }
 
+// BackgroundOperationMetrics accepts only bounded operation dimensions. It is
+// deliberately independent of repository IDs and artifact coordinates.
+type BackgroundOperationMetrics interface {
+	RecordBackgroundOperation(string, Format, string)
+	AddBackgroundOperationInFlight(string, Format, int64)
+}
+
 type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
 	ListArtifactTombstones(context.Context, string, Format, string, int, string) ([]ArtifactTombstone, error)

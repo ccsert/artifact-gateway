@@ -155,6 +155,7 @@ type NativePromotion struct {
 		repository.NativeMavenStore
 		repository.LifecycleJobStore
 	}
+	Metrics repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -178,20 +179,37 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
+		m.beginPromotion()
 		var p PromotionPayload
 		if err := json.Unmarshal(job.Payload, &p); err != nil || p.SourceRepositoryID == "" || p.Coordinate == "" || p.Digest == "" || p.PromotionID == "" {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Maven promotion payload")
+			m.endPromotion("failed")
 			continue
 		}
 		if _, err := m.Store.PromoteMavenArtifact(ctx, repository.MavenPromotion{ID: p.PromotionID, SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Coordinate: p.Coordinate, Digest: p.Digest}); err != nil {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, "promote Maven artifact failed")
+			m.endPromotion("failed")
 			continue
 		}
 		if err := m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			m.endPromotion("failed")
 			return err
 		}
+		m.endPromotion("completed")
 	}
 	return nil
+}
+func (m NativePromotion) beginPromotion() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatMaven, "started")
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatMaven, 1)
+	}
+}
+func (m NativePromotion) endPromotion(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatMaven, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatMaven, -1)
+	}
 }
 
 // Start runs durable promotion work outside the management request path. Failed

@@ -87,21 +87,22 @@ func main() {
 	rawCache := app.NewDefaultRawCache(cacheStore, cfg.RawProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes)
 	conanCache := app.NewDefaultConanCache(cacheStore, nil).WithCoordinator(coordinator).WithQuota(quota).WithMaxObjectBytes(cfg.ConanCacheMaxObjectBytes)
 	maintenance := app.NewCacheMaintenanceWithRaw(cacheStore, ociCache, rawCache).WithConan(conanCache)
+	metrics := &app.Metrics{}
 	runtimeContext := signalContext()
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
-	app.NativeMavenPromotion{Store: store}.Start(runtimeContext, time.Minute)
+	app.NativeMavenPromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
-	app.NativeOCIPromotion{Store: store, Objects: objectStore}.Start(runtimeContext, time.Minute)
-	rawprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
+	app.NativeOCIPromotion{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
+	rawprotocol.NativePromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
-	conanprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
-	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore}.Start(runtimeContext, time.Minute)
+	conanprotocol.NativePromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
+	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
-		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{
+		Handler: app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:        cfg.AdminToken,
 			ResolverToken:     cfg.ResolverToken,
 			AdminActor:        cfg.AdminActor,
@@ -113,7 +114,7 @@ func main() {
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
 			}),
-		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota), rawCache, conanCache, maintenance, app.UpstreamClient{}),
+		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

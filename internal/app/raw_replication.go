@@ -21,10 +21,11 @@ type RawReplication struct {
 	Source      OCIObjectStore
 	Destination OCIObjectStore
 	ChunkBytes  int64
+	Metrics     repository.BackgroundOperationMetrics
 }
 
 func (r RawReplication) RunJobs(ctx context.Context, limit int) error {
-	return (replication.Worker{Store: r.Store, Source: r.Source, Destination: r.Destination, ChunkBytes: r.ChunkBytes, Publish: r.publish}).Run(ctx, limit)
+	return (replication.Worker{Store: r.Store, Source: r.Source, Destination: r.Destination, ChunkBytes: r.ChunkBytes, Publish: r.publish, Metrics: r.Metrics}).Run(ctx, limit)
 }
 
 func (r RawReplication) Start(ctx context.Context, interval time.Duration) {

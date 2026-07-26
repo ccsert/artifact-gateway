@@ -24,6 +24,7 @@ type Worker struct {
 	// Publish makes verified bytes visible through a format-specific metadata
 	// transaction. It must be idempotent because a publish failure is retried.
 	Publish func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error
+	Metrics repository.BackgroundOperationMetrics
 }
 
 func (w Worker) Run(ctx context.Context, limit int) error {
@@ -32,11 +33,29 @@ func (w Worker) Run(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, plan := range plans {
+		w.begin(plan.Format)
 		if err := w.runPlan(ctx, plan); err != nil {
+			w.end(plan.Format, "failed")
 			return err
 		}
+		w.end(plan.Format, "completed")
 	}
 	return nil
+}
+
+func (w Worker) begin(format repository.Format) {
+	if w.Metrics == nil {
+		return
+	}
+	w.Metrics.RecordBackgroundOperation("replication", format, "started")
+	w.Metrics.AddBackgroundOperationInFlight("replication", format, 1)
+}
+func (w Worker) end(format repository.Format, outcome string) {
+	if w.Metrics == nil {
+		return
+	}
+	w.Metrics.RecordBackgroundOperation("replication", format, outcome)
+	w.Metrics.AddBackgroundOperationInFlight("replication", format, -1)
 }
 
 func (w Worker) Start(ctx context.Context, interval time.Duration) {
@@ -64,6 +83,14 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 	checks, err := w.Store.ListReplicationCheckpoints(ctx, plan.ID)
 	if err != nil {
 		return w.failPlan(ctx, plan.ID, "load replication checkpoints failed")
+	}
+	if w.Metrics != nil {
+		for _, checkpoint := range checks {
+			if checkpoint.Attempts > 0 {
+				w.Metrics.RecordBackgroundOperation("replication", plan.Format, "retried")
+				break
+			}
+		}
 	}
 	for _, checkpoint := range checks {
 		if checkpoint.State == "verified" {

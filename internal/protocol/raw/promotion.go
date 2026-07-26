@@ -19,6 +19,7 @@ type NativePromotion struct {
 		repository.NativeRawStore
 		repository.LifecycleJobStore
 	}
+	Metrics repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -41,11 +42,26 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
+		m.begin()
 		if err := m.run(ctx, job); err != nil {
+			m.end("failed")
 			return err
 		}
+		m.end("completed")
 	}
 	return nil
+}
+func (m NativePromotion) begin() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatRaw, "started")
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatRaw, 1)
+	}
+}
+func (m NativePromotion) end(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatRaw, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatRaw, -1)
+	}
 }
 func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {

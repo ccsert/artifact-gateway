@@ -14,6 +14,7 @@ type NativePromotion struct {
 		repository.NativeConanStore
 		repository.LifecycleJobStore
 	}
+	Metrics repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -37,24 +38,43 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
+		m.begin()
 		var p PromotionPayload
 		if err = json.Unmarshal(job.Payload, &p); err != nil || p.Format != repository.FormatConan || p.SourceRepositoryID == "" || p.Reference == "" || p.Revision == "" || p.Digest == "" {
 			if e := m.Store.FailLifecycleJob(ctx, job.ID, "invalid Conan promotion payload"); e != nil {
+				m.end("failed")
 				return e
 			}
+			m.end("failed")
 			continue
 		}
 		if _, err = m.Store.PromoteConanRecipeRevision(ctx, repository.ConanPromotion{SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Reference: p.Reference, Revision: p.Revision, Digest: p.Digest}); err != nil {
 			if e := m.Store.FailLifecycleJob(ctx, job.ID, "promote Conan recipe failed"); e != nil {
+				m.end("failed")
 				return e
 			}
+			m.end("failed")
 			continue
 		}
 		if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			m.end("failed")
 			return err
 		}
+		m.end("completed")
 	}
 	return nil
+}
+func (m NativePromotion) begin() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatConan, "started")
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatConan, 1)
+	}
+}
+func (m NativePromotion) end(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("promotion", repository.FormatConan, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("promotion", repository.FormatConan, -1)
+	}
 }
 func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {

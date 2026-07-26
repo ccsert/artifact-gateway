@@ -67,6 +67,31 @@ func TestRepositoryAuthorizationMetricsUseOnlyBoundedGrantLabels(t *testing.T) {
 	}
 }
 
+func TestBackgroundOperationMetricsUseOnlyBoundedLabels(t *testing.T) {
+	metrics := &Metrics{}
+	metrics.RecordBackgroundOperation("promotion", repository.FormatRaw, "started")
+	metrics.RecordBackgroundOperation("promotion", repository.FormatRaw, "completed")
+	metrics.RecordBackgroundOperation("unknown", repository.FormatRaw, "started")
+	metrics.RecordBackgroundOperation("promotion", repository.FormatRaw, "unknown")
+	metrics.AddBackgroundOperationInFlight("promotion", repository.FormatRaw, 1)
+	metrics.AddBackgroundOperationInFlight("promotion", repository.FormatRaw, -1)
+	response := httptest.NewRecorder()
+	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := response.Body.String()
+	for _, want := range []string{
+		`artifact_gateway_background_operations_total{kind="promotion",format="raw",outcome="started"} 1`,
+		`artifact_gateway_background_operations_total{kind="promotion",format="raw",outcome="completed"} 1`,
+		`artifact_gateway_background_operations_in_flight{kind="promotion",format="raw"} 0`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "unknown") {
+		t.Fatalf("unbounded background metric label in:\n%s", body)
+	}
+}
+
 func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, selectiveAdapter{available: map[string]bool{"proxy": true}}, testAuthenticator())

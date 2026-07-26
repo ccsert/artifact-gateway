@@ -50,10 +50,45 @@ type Metrics struct {
 	conanResponseBytes             atomic.Uint64
 	conanCacheQuotaDenied          atomic.Uint64
 	repositoryAuthorizationDenials [repositoryAuthorizationFormatCount][repositoryGrantDenialReasonCount]atomic.Uint64
+	backgroundOperations           [backgroundOperationKindCount][backgroundOperationFormatCount][backgroundOperationOutcomeCount]atomic.Uint64
+	backgroundInFlight             [backgroundOperationKindCount][backgroundOperationFormatCount]atomic.Int64
 
 	mu           sync.RWMutex
 	repositories map[string]RepositoryMetrics
 }
+
+type backgroundOperationKind uint8
+
+const (
+	backgroundOperationLifecycle backgroundOperationKind = iota
+	backgroundOperationPromotion
+	backgroundOperationReplication
+	backgroundOperationKindCount
+)
+
+type backgroundOperationFormat uint8
+
+const (
+	backgroundOperationRaw backgroundOperationFormat = iota
+	backgroundOperationOCI
+	backgroundOperationMaven
+	backgroundOperationConan
+	backgroundOperationFormatCount
+)
+
+type backgroundOperationOutcome uint8
+
+const (
+	backgroundOperationStarted backgroundOperationOutcome = iota
+	backgroundOperationCompleted
+	backgroundOperationFailed
+	backgroundOperationRetried
+	backgroundOperationOutcomeCount
+)
+
+var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication"}
+var backgroundOperationFormats = [...]repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven, repository.FormatConan}
+var backgroundOperationOutcomes = [...]string{"started", "completed", "failed", "retried"}
 
 type repositoryAuthorizationFormat uint8
 
@@ -101,6 +136,50 @@ func (m *Metrics) recordRequest(repositoryName string) {
 }
 
 func (m *Metrics) recordAnonymousRead() { m.anonymousReads.Add(1) }
+
+func (m *Metrics) RecordBackgroundOperation(kind string, format repository.Format, outcome string) {
+	kindIndex, formatIndex, outcomeIndex := -1, -1, -1
+	for i, value := range backgroundOperationKinds {
+		if value == kind {
+			kindIndex = i
+			break
+		}
+	}
+	for i, value := range backgroundOperationFormats {
+		if value == format {
+			formatIndex = i
+			break
+		}
+	}
+	for i, value := range backgroundOperationOutcomes {
+		if value == outcome {
+			outcomeIndex = i
+			break
+		}
+	}
+	if kindIndex >= 0 && formatIndex >= 0 && outcomeIndex >= 0 {
+		m.backgroundOperations[kindIndex][formatIndex][outcomeIndex].Add(1)
+	}
+}
+
+func (m *Metrics) AddBackgroundOperationInFlight(kind string, format repository.Format, delta int64) {
+	kindIndex, formatIndex := -1, -1
+	for i, value := range backgroundOperationKinds {
+		if value == kind {
+			kindIndex = i
+			break
+		}
+	}
+	for i, value := range backgroundOperationFormats {
+		if value == format {
+			formatIndex = i
+			break
+		}
+	}
+	if kindIndex >= 0 && formatIndex >= 0 {
+		m.backgroundInFlight[kindIndex][formatIndex].Add(delta)
+	}
+}
 
 // recordRepositoryAuthorizationDenied accepts only bounded grant decision
 // values. Actor, repository, path, and endpoint must never become labels.
@@ -231,9 +310,25 @@ func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("artifact_gateway_repository_authorization_denials_total{format=\"" + format + "\",authorization_source=\"repository_grants\",authorization_reason=\"" + reason + "\"} " + utoa(m.repositoryAuthorizationDenials[formatIndex][reasonIndex].Load()) + "\n"))
 		}
 	}
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_background_operations_total counter\n# TYPE artifact_gateway_background_operations_in_flight gauge\n"))
+	for kindIndex, kind := range backgroundOperationKinds {
+		for formatIndex, format := range backgroundOperationFormats {
+			for outcomeIndex, outcome := range backgroundOperationOutcomes {
+				_, _ = w.Write([]byte("artifact_gateway_background_operations_total{kind=\"" + kind + "\",format=\"" + string(format) + "\",outcome=\"" + outcome + "\"} " + utoa(m.backgroundOperations[kindIndex][formatIndex][outcomeIndex].Load()) + "\n"))
+			}
+			_, _ = w.Write([]byte("artifact_gateway_background_operations_in_flight{kind=\"" + kind + "\",format=\"" + string(format) + "\"} " + itoa(m.backgroundInFlight[kindIndex][formatIndex].Load()) + "\n"))
+		}
+	}
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_resolver_requests_total counter\nartifact_gateway_resolver_requests_total{outcome=\"resolved\"} " + utoa(m.resolved.Load()) + "\nartifact_gateway_resolver_requests_total{outcome=\"failed\"} " + utoa(m.failed.Load()) + "\n# TYPE artifact_gateway_oci_cache_requests_total counter\nartifact_gateway_oci_cache_requests_total{outcome=\"hit\"} " + utoa(m.ociCacheHit.Load()) + "\nartifact_gateway_oci_cache_requests_total{outcome=\"miss\"} " + utoa(m.ociCacheMiss.Load()) + "\n# TYPE artifact_gateway_oci_upstream_circuit_open_total counter\nartifact_gateway_oci_upstream_circuit_open_total " + utoa(m.ociCircuitOpen.Load()) + "\n# TYPE artifact_gateway_oci_negative_cache_hits_total counter\nartifact_gateway_oci_negative_cache_hits_total " + utoa(m.ociNegativeHit.Load()) + "\n# TYPE artifact_gateway_oci_proxy_denied_total counter\nartifact_gateway_oci_proxy_denied_total " + utoa(m.ociProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_requests_total counter\nartifact_gateway_maven_cache_requests_total{outcome=\"hit\"} " + utoa(m.mavenCacheHit.Load()) + "\nartifact_gateway_maven_cache_requests_total{outcome=\"miss\"} " + utoa(m.mavenCacheMiss.Load()) + "\n# TYPE artifact_gateway_maven_upstream_circuit_open_total counter\nartifact_gateway_maven_upstream_circuit_open_total " + utoa(m.mavenCircuitOpen.Load()) + "\n# TYPE artifact_gateway_maven_upstream_retries_total counter\nartifact_gateway_maven_upstream_retries_total " + utoa(m.mavenRetry.Load()) + "\n# TYPE artifact_gateway_maven_negative_cache_hits_total counter\nartifact_gateway_maven_negative_cache_hits_total " + utoa(m.mavenNegativeHit.Load()) + "\n# TYPE artifact_gateway_maven_proxy_denied_total counter\nartifact_gateway_maven_proxy_denied_total " + utoa(m.mavenProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_invalidations_total counter\nartifact_gateway_maven_cache_invalidations_total " + utoa(m.mavenCacheInvalidated.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_raw_requests_total counter\nartifact_gateway_raw_requests_total{method=\"get\"} " + utoa(m.rawGetRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"head\"} " + utoa(m.rawHeadRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"other\"} " + utoa(m.rawOtherRequests.Load()) + "\n# TYPE artifact_gateway_raw_authorization_denials_total counter\nartifact_gateway_raw_authorization_denials_total " + utoa(m.rawAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_raw_cache_requests_total counter\nartifact_gateway_raw_cache_requests_total{outcome=\"hit\"} " + utoa(m.rawCacheHit.Load()) + "\nartifact_gateway_raw_cache_requests_total{outcome=\"miss\"} " + utoa(m.rawCacheMiss.Load()) + "\n# TYPE artifact_gateway_raw_negative_cache_hits_total counter\nartifact_gateway_raw_negative_cache_hits_total " + utoa(m.rawNegativeHit.Load()) + "\n# TYPE artifact_gateway_raw_proxy_denied_total counter\nartifact_gateway_raw_proxy_denied_total " + utoa(m.rawProxyDenied.Load()) + "\n# TYPE artifact_gateway_raw_checksum_failures_total counter\nartifact_gateway_raw_checksum_failures_total " + utoa(m.rawChecksumFailure.Load()) + "\n# TYPE artifact_gateway_raw_upstream_failures_total counter\nartifact_gateway_raw_upstream_failures_total " + utoa(m.rawUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_raw_response_bytes_total counter\nartifact_gateway_raw_response_bytes_total " + utoa(m.rawResponseBytes.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_conan_requests_total counter\nartifact_gateway_conan_requests_total{method=\"get\"} " + utoa(m.conanGetRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"head\"} " + utoa(m.conanHeadRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"other\"} " + utoa(m.conanOtherRequests.Load()) + "\n# TYPE artifact_gateway_conan_authorization_denials_total counter\nartifact_gateway_conan_authorization_denials_total " + utoa(m.conanAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_conan_cache_requests_total counter\nartifact_gateway_conan_cache_requests_total{outcome=\"hit\"} " + utoa(m.conanCacheHit.Load()) + "\nartifact_gateway_conan_cache_requests_total{outcome=\"miss\"} " + utoa(m.conanCacheMiss.Load()) + "\n# TYPE artifact_gateway_conan_negative_cache_hits_total counter\nartifact_gateway_conan_negative_cache_hits_total " + utoa(m.conanNegativeHit.Load()) + "\n# TYPE artifact_gateway_conan_proxy_denied_total counter\nartifact_gateway_conan_proxy_denied_total " + utoa(m.conanProxyDenied.Load()) + "\n# TYPE artifact_gateway_conan_checksum_failures_total counter\nartifact_gateway_conan_checksum_failures_total " + utoa(m.conanChecksumFailure.Load()) + "\n# TYPE artifact_gateway_conan_upstream_failures_total counter\nartifact_gateway_conan_upstream_failures_total " + utoa(m.conanUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_conan_response_bytes_total counter\nartifact_gateway_conan_response_bytes_total " + utoa(m.conanResponseBytes.Load()) + "\n# TYPE artifact_gateway_conan_cache_quota_rejections_total counter\nartifact_gateway_conan_cache_quota_rejections_total " + utoa(m.conanCacheQuotaDenied.Load()) + "\n"))
+}
+
+func itoa(value int64) string {
+	if value < 0 {
+		return "0"
+	}
+	return utoa(uint64(value))
 }
 
 func utoa(value uint64) string {
