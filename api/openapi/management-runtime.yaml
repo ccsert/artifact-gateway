@@ -19,6 +19,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/retention:dry-run":
+    "$ref": "./management/retention.yaml#/repositories_repositoryId_retention_dry_run"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
   "/repositories/{repositoryId}/tombstones":
@@ -77,6 +79,8 @@ components:
       "$ref": "./components/schemas.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    RetentionDryRun:
+      "$ref": "./components/schemas.yaml#/RetentionDryRun"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
     ArtifactTombstone:
@@ -189,6 +193,8 @@ components:
       "$ref": "./components/responses.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
+    RetentionDryRun:
+      "$ref": "./components/responses.yaml#/RetentionDryRun"
     LifecycleJobList:
       "$ref": "./components/responses.yaml#/LifecycleJobList"
     ArtifactTombstoneList:

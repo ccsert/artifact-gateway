@@ -1,0 +1,9 @@
+---
+repositories_repositoryId_retention_dry_run:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: dryRunRepositoryRetention
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RetentionDryRun"

@@ -440,6 +440,56 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	maven, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-dry-run", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-dry-run-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, maven.ID, []repository.RepositoryGrant{{Principal: "retention-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: maven.ID, Coordinate: "org.example:dry-run:1.0.0", Publisher: "test", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "dry-run-1.0.0.jar", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, "native/maven/dry-run/"+session.ID); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: maven.ID, Path: "org/example/dry-run/1.0.0/dry-run-1.0.0.jar", ObjectKey: "native/maven/dry-run/" + session.ID, Digest: session.Objects[0].Digest, Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(repositoryID, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repositoryID+"/retention:dry-run", nil)
+		authorize(req, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if response := request(maven.ID, "admin-secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"policyVersion":"1"`) || !strings.Contains(response.Body.String(), `"candidates":[]`) {
+		t.Fatalf("dry run=%d body=%s", response.Code, response.Body.String())
+	}
+	visible, err := store.GetMavenArtifact(ctx, maven.ID, artifact.ID)
+	if err != nil || visible.State != "visible" {
+		t.Fatalf("dry run mutated artifact=%#v err=%v", visible, err)
+	}
+	if response := request(raw.ID, "admin-secret"); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "unsupported_operation") {
+		t.Fatalf("raw dry run=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(maven.ID, authenticator.IssueToken("retention-reader")); response.Code != http.StatusForbidden {
+		t.Fatalf("reader dry run=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

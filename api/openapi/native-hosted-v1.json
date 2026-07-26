@@ -217,6 +217,21 @@
         }
       }
     },
+    "/repositories/{repositoryId}/retention:dry-run": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "dryRunRepositoryRetention",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RetentionDryRun"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/lifecycle-jobs": {
       "parameters": [
         {
@@ -1976,6 +1991,41 @@
           }
         }
       },
+      "RetentionDryRun": {
+        "type": "object",
+        "required": [
+          "policyVersion",
+          "candidates"
+        ],
+        "properties": {
+          "policyVersion": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "coordinate",
+                "digest",
+                "createdAt"
+              ],
+              "properties": {
+                "coordinate": {
+                  "type": "string"
+                },
+                "digest": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
       "LifecycleJob": {
         "type": "object",
         "required": [
@@ -2924,6 +2974,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RetentionPolicy"
+            }
+          }
+        }
+      },
+      "RetentionDryRun": {
+        "description": "Maven retention candidates without state changes",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RetentionDryRun"
             }
           }
         }

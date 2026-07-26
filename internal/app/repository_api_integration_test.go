@@ -538,6 +538,62 @@ func TestPostgresAnonymousMigrationPreservesLegacyOCIAndMavenRows(t *testing.T) 
 	}
 }
 
+func TestPostgresMavenRetentionDryRunReturnsCandidatesWithoutTombstoning(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-dry-run-pg-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 1, MinimumVersions: 1}, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	now := time.Now().UTC()
+	coordinates := []string{"org.example:dry-run:1.0.0", "org.example:dry-run:1.1.0", "org.example:dry-run:1.2.0"}
+	for index, coordinate := range coordinates {
+		createdAt := now.Add(-time.Duration(72-index*30) * time.Hour)
+		if _, err = db.ExecContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state,created_at) VALUES ($1,$2,$3,$4,'visible',$5)`, uuid.NewString(), repo.ID, coordinate, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", createdAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	response := integrationRequest(handler, http.MethodPost, "/api/v2/repositories/"+repo.ID+"/retention:dry-run", "", "admin-secret")
+	if response.Code != http.StatusOK {
+		t.Fatalf("dry run=%d body=%s", response.Code, response.Body.String())
+	}
+	var result struct {
+		PolicyVersion string `json:"policyVersion"`
+		Candidates    []struct {
+			Coordinate string `json:"coordinate"`
+			Digest     string `json:"digest"`
+		} `json:"candidates"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.PolicyVersion != policy.Version || len(result.Candidates) != 2 || result.Candidates[0].Coordinate != coordinates[1] || result.Candidates[1].Coordinate != coordinates[0] {
+		t.Fatalf("dry run result=%#v", result)
+	}
+	visible, err := store.ListMavenArtifacts(ctx, repo.ID)
+	if err != nil || len(visible) != 3 {
+		t.Fatalf("dry run changed artifact visibility=%#v err=%v", visible, err)
+	}
+}
+
 func integrationRequest(handler http.Handler, method, target, body, token string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	authorize(request, token)

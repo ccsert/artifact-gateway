@@ -155,6 +155,20 @@ RetentionPolicy:
     minimumVersions:
       type: integer
       minimum: 1
+RetentionDryRun:
+  type: object
+  required: [policyVersion, candidates]
+  properties:
+    policyVersion: {type: string}
+    candidates:
+      type: array
+      items:
+        type: object
+        required: [coordinate, digest, createdAt]
+        properties:
+          coordinate: {type: string}
+          digest: {type: string}
+          createdAt: {type: string, format: date-time}
 LifecycleJob:
   type: object
   required:

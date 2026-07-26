@@ -73,6 +73,15 @@ export type RetentionPolicy = {
     minimumVersions: number;
 };
 
+export type RetentionDryRun = {
+    policyVersion: string;
+    candidates: Array<{
+        coordinate: string;
+        digest: string;
+        createdAt: string;
+    }>;
+};
+
 export type LifecycleJob = {
     id: string;
     kind: 'retention' | 'promotion' | 'replication' | 'reclaim';
@@ -521,6 +530,24 @@ export type ReplaceRetentionPolicyResponses = {
 };
 
 export type ReplaceRetentionPolicyResponse = ReplaceRetentionPolicyResponses[keyof ReplaceRetentionPolicyResponses];
+
+export type DryRunRepositoryRetentionData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/retention:dry-run';
+};
+
+export type DryRunRepositoryRetentionResponses = {
+    /**
+     * Maven retention candidates without state changes
+     */
+    200: RetentionDryRun;
+};
+
+export type DryRunRepositoryRetentionResponse = DryRunRepositoryRetentionResponses[keyof DryRunRepositoryRetentionResponses];
 
 export type ListRepositoryLifecycleJobsData = {
     body?: never;

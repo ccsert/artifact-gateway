@@ -436,6 +436,40 @@ func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWri
 	})
 }
 
+// DryRunRepositoryRetention exposes the Maven retention planner without
+// tombstoning candidates or enqueuing a lifecycle job.
+func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatMaven {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention dry-run is currently supported only for Maven repositories")
+			return
+		}
+		policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repo.ID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
+			return
+		}
+		candidates, err := (NativeMavenRetention{Store: h.sessions.store}).PlanRepository(r.Context(), repo.ID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "plan retention failed")
+			return
+		}
+		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, Candidates: make([]struct {
+			Coordinate string    `json:"coordinate"`
+			CreatedAt  time.Time `json:"createdAt"`
+			Digest     string    `json:"digest"`
+		}, 0, len(candidates))}
+		for _, candidate := range candidates {
+			response.Candidates = append(response.Candidates, struct {
+				Coordinate string    `json:"coordinate"`
+				CreatedAt  time.Time `json:"createdAt"`
+				Digest     string    `json:"digest"`
+			}{Coordinate: candidate.Coordinate, CreatedAt: candidate.CreatedAt, Digest: candidate.Digest})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, response)
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 		jobs, err := h.lifecycleJobs.ListLifecycleJobs(r.Context(), repositoryID.String(), 100)
