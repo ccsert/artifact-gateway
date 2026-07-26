@@ -589,6 +589,39 @@
         }
       }
     },
+    "/repositories/{repositoryId}/conan/references": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listConanReferences",
+        "description": "Lists visible Conan recipe references in lexical order. The optional q parameter is a reference prefix used for browse and search.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConanReferencePrefix"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ConanReferenceList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/raw/{repository}/{path}": {
       "servers": [
         {
@@ -2254,6 +2287,35 @@
             "type": "string"
           }
         }
+      },
+      "ConanReference": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "ConanReferencePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConanReference"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {
@@ -2370,6 +2432,15 @@
         "name": "q",
         "in": "query",
         "description": "Maven coordinate prefix used to filter the committed-coordinate projection.",
+        "schema": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "ConanReferencePrefix": {
+        "name": "q",
+        "in": "query",
+        "description": "Conan recipe-reference prefix used to filter the visible-reference projection.",
         "schema": {
           "type": "string",
           "maxLength": 255
@@ -2663,6 +2734,16 @@
             }
           }
         }
+      },
+      "ConanReferenceList": {
+        "description": "Conan visible recipe-reference projection page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanReferencePage"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2698,7 +2779,7 @@
       "officialSpecification": "https://maven.apache.org/repositories/index.html"
     },
     "conan": {
-      "description": "Conan 2 is a Gateway Group/Proxy read-through overlay. Native Hosted write, delete, search, and lifecycle routes are intentionally absent from this OpenAPI contract.",
+      "description": "Conan 2 supports Group/Proxy read-through and native Hosted resolution under the existing /conan/v2 route family. Hosted publication uses the repository management publish-session contract; lifecycle operations use the native Hosted revision routes, while indexed reference browse/search is exposed through the versioned management API.",
       "officialSpecification": "https://docs.conan.io/2/reference/commands/remote.html",
       "gatewayOverlay": "docs/protocol-compatibility.md#conan"
     }

@@ -1,0 +1,18 @@
+---
+repositories_repositoryId_conan_references:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listConanReferences
+    description: Lists visible Conan recipe references in lexical order. The optional q parameter is a reference prefix used for browse and search.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/ConanReferencePrefix"
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/ConanReferenceList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

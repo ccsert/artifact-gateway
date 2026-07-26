@@ -78,6 +78,13 @@ MavenCoordinatePrefix:
   schema:
     type: string
     maxLength: 255
+ConanReferencePrefix:
+  name: q
+  in: query
+  description: Conan recipe-reference prefix used to filter the visible-reference projection.
+  schema:
+    type: string
+    maxLength: 255
 IdempotencyKey:
   name: Idempotency-Key
   in: header

@@ -60,7 +60,11 @@ Raw successful file bodies are read-through cached for 15 minutes by default, su
 
 `CONTRACT: conan2-only`
 
-V2 supports Conan 2 read resolution only, for a Conan 2.x client using v2 REST. Conan 1, uploads, recipe/package revision deletion, remote-to-remote copying, search/index enrichment beyond read endpoints, and server-side recipe generation are out of scope.
+V2 supports Conan 2 resolution for a Conan 2.x client using v2 REST, including
+native Hosted metadata and files. Conan 1, remote-to-remote copying, upstream
+index aggregation, and server-side recipe generation are out of scope. Hosted
+publication uses the versioned publish-session management API; immutable
+revision deletion and restore remain in the existing `/conan/v2` family.
 
 Conan routes use `/conan/v2/<group>/conans/...`; the remote URL MUST include the group. The sole protocol exception is the Conan 2 Basic-login handshake `GET /conan/<group>/v2/users/authenticate`; it follows the same resource policy and is not a general user API. Conan 1 authentication and non-GET authentication methods return `404`. The client gets the normal protocol challenge when anonymous access is disabled; credentials are never forwarded to a Proxy.
 

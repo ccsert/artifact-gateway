@@ -35,6 +35,8 @@ paths:
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/repositories/{repositoryId}/maven/coordinates":
     "$ref": "./management/maven.yaml#/repositories_repositoryId_maven_coordinates"
+  "/repositories/{repositoryId}/conan/references":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_references"
   "/publish-sessions/{sessionId}":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
   "/publish-sessions/{sessionId}/objects/{objectName}":
@@ -97,6 +99,10 @@ components:
       "$ref": "./components/schemas.yaml#/MavenCoordinate"
     MavenCoordinatePage:
       "$ref": "./components/schemas.yaml#/MavenCoordinatePage"
+    ConanReference:
+      "$ref": "./components/schemas.yaml#/ConanReference"
+    ConanReferencePage:
+      "$ref": "./components/schemas.yaml#/ConanReferencePage"
     AuditRecord:
       "$ref": "./components/schemas.yaml#/AuditRecord"
     AuditList:
@@ -124,6 +130,8 @@ components:
       "$ref": "./components/parameters.yaml#/OCIImagePrefix"
     MavenCoordinatePrefix:
       "$ref": "./components/parameters.yaml#/MavenCoordinatePrefix"
+    ConanReferencePrefix:
+      "$ref": "./components/parameters.yaml#/ConanReferencePrefix"
     IdempotencyKey:
       "$ref": "./components/parameters.yaml#/IdempotencyKey"
     IfMatch:
@@ -167,6 +175,8 @@ components:
       "$ref": "./components/responses.yaml#/Artifact"
     ArtifactList:
       "$ref": "./components/responses.yaml#/ArtifactList"
+    ConanReferenceList:
+      "$ref": "./components/responses.yaml#/ConanReferenceList"
     OCIImageList:
       "$ref": "./components/responses.yaml#/OCIImageList"
     MavenCoordinateList:

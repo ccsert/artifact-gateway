@@ -177,6 +177,7 @@ type NativeConanStore interface {
 	PutConanPackageRevision(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)
 	GetConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
+	SearchConanReferences(context.Context, string, string, int, string) ([]string, error)
 	ListConanRecipeRevisions(context.Context, string, string) ([]ConanRecipeRevision, error)
 	ListConanPackageRevisions(context.Context, string, string, string, string) ([]ConanPackageRevision, error)
 	ListConanPackageIDs(context.Context, string, string, string) ([]string, error)

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -152,6 +153,26 @@ func (s *MemoryStore) GetConanPackageRevision(_ context.Context, repositoryID, r
 		return ConanPackageRevision{}, ErrNotFound
 	}
 	return item, nil
+}
+
+func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := make(map[string]struct{})
+	for _, item := range s.conanRecipes {
+		if item.RepositoryID == repositoryID && item.State == "visible" && strings.HasPrefix(item.Reference, prefix) && item.Reference > after {
+			seen[item.Reference] = struct{}{}
+		}
+	}
+	refs := make([]string, 0, len(seen))
+	for reference := range seen {
+		refs = append(refs, reference)
+	}
+	sort.Strings(refs)
+	if len(refs) > limit {
+		refs = refs[:limit]
+	}
+	return refs, nil
 }
 
 func (s *MemoryStore) ListConanRecipeRevisions(_ context.Context, repositoryID, reference string) ([]ConanRecipeRevision, error) {

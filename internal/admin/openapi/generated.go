@@ -250,6 +250,17 @@ type AuditRecord struct {
 	UpstreamHost        *string   `json:"upstreamHost,omitempty"`
 }
 
+// ConanReference defines model for ConanReference.
+type ConanReference struct {
+	Reference string `json:"reference"`
+}
+
+// ConanReferencePage defines model for ConanReferencePage.
+type ConanReferencePage struct {
+	Items         []ConanReference `json:"items"`
+	NextPageToken *string          `json:"nextPageToken,omitempty"`
+}
+
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
 	Format  Format     `json:"format"`
@@ -409,6 +420,9 @@ type RetentionPolicy struct {
 	Version         string `json:"version"`
 }
 
+// ConanReferencePrefix defines model for ConanReferencePrefix.
+type ConanReferencePrefix = string
+
 // GroupId defines model for GroupId.
 type GroupId = openapi_types.UUID
 
@@ -438,6 +452,9 @@ type SessionId = openapi_types.UUID
 
 // ArtifactList defines model for ArtifactList.
 type ArtifactList = ArtifactPage
+
+// ConanReferenceList defines model for ConanReferenceList.
+type ConanReferenceList = ConanReferencePage
 
 // GroupList defines model for GroupList.
 type GroupList = GroupPage
@@ -494,6 +511,14 @@ type CreateRepositoryParams struct {
 type ListArtifactsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListConanReferencesParams defines parameters for ListConanReferences.
+type ListConanReferencesParams struct {
+	// Q Conan recipe-reference prefix used to filter the visible-reference projection.
+	Q         *ConanReferencePrefix `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize             `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken            `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ReplaceGrantsParams defines parameters for ReplaceGrants.
@@ -640,6 +665,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
+
+	// (GET /repositories/{repositoryId}/conan/references)
+	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
 
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -1363,6 +1391,74 @@ func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListConanReferences operation middleware
+func (siw *ServerInterfaceWrapper) ListConanReferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConanReferencesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConanReferences(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListGrants operation middleware
 func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Request) {
 
@@ -1851,6 +1947,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
@@ -1867,6 +1964,8 @@ type ArtifactJSONResponse Artifact
 type ArtifactListJSONResponse ArtifactPage
 
 type AuditListJSONResponse AuditList
+
+type ConanReferenceListJSONResponse ConanReferencePage
 
 type DeletionJSONResponse Deletion
 
@@ -2512,6 +2611,59 @@ func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.Respo
 	return err
 }
 
+type ListConanReferencesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListConanReferencesParams
+}
+
+type ListConanReferencesResponseObject interface {
+	VisitListConanReferencesResponse(w http.ResponseWriter) error
+}
+
+type ListConanReferences200JSONResponse struct{ ConanReferenceListJSONResponse }
+
+func (response ListConanReferences200JSONResponse) VisitListConanReferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanReferences400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListConanReferences400ApplicationProblemPlusJSONResponse) VisitListConanReferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanReferences404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanReferences404ApplicationProblemPlusJSONResponse) VisitListConanReferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListGrantsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -2842,6 +2994,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/conan/references)
+	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(ctx context.Context, request ListGrantsRequestObject) (ListGrantsResponseObject, error)
@@ -3401,6 +3556,33 @@ func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, rep
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
 		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConanReferences operation middleware
+func (sh *strictHandler) ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams) {
+	var request ListConanReferencesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConanReferences(ctx, request.(ListConanReferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConanReferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConanReferencesResponseObject); ok {
+		if err := validResponse.VisitListConanReferencesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

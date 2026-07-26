@@ -155,6 +155,12 @@ MavenCoordinateList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/MavenCoordinatePage"
+ConanReferenceList:
+  description: Conan visible recipe-reference projection page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ConanReferencePage"
 RawDirectoryList:
   description: Lexicographically ordered Native Raw directory-prefix page
   headers:

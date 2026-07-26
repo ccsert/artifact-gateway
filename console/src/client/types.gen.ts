@@ -194,6 +194,15 @@ export type MavenCoordinatePage = {
     nextPageToken?: string;
 };
 
+export type ConanReference = {
+    reference: string;
+};
+
+export type ConanReferencePage = {
+    items: Array<ConanReference>;
+    nextPageToken?: string;
+};
+
 export type RepositoryId = string;
 
 export type GroupId = string;
@@ -228,6 +237,11 @@ export type OciImagePrefix = string;
  * Maven coordinate prefix used to filter the committed-coordinate projection.
  */
 export type MavenCoordinatePrefix = string;
+
+/**
+ * Conan recipe-reference prefix used to filter the visible-reference projection.
+ */
+export type ConanReferencePrefix = string;
 
 export type ListAuditsData = {
     body?: never;
@@ -883,6 +897,44 @@ export type ListMavenCoordinatesResponses = {
 };
 
 export type ListMavenCoordinatesResponse = ListMavenCoordinatesResponses[keyof ListMavenCoordinatesResponses];
+
+export type ListConanReferencesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        /**
+         * Conan recipe-reference prefix used to filter the visible-reference projection.
+         */
+        q?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/conan/references';
+};
+
+export type ListConanReferencesErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListConanReferencesError = ListConanReferencesErrors[keyof ListConanReferencesErrors];
+
+export type ListConanReferencesResponses = {
+    /**
+     * Conan visible recipe-reference projection page
+     */
+    200: ConanReferencePage;
+};
+
+export type ListConanReferencesResponse = ListConanReferencesResponses[keyof ListConanReferencesResponses];
 
 export type DeleteRawHostedContentData = {
     body?: never;

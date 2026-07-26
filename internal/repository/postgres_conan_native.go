@@ -152,6 +152,23 @@ func (s *PostgresStore) GetConanPackageRevision(ctx context.Context, repositoryI
 	return item, err
 }
 
+func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' AND reference > $3 ORDER BY reference LIMIT $4`, repositoryID, prefix, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	refs := []string{}
+	for rows.Next() {
+		var reference string
+		if err = rows.Scan(&reference); err != nil {
+			return nil, err
+		}
+		refs = append(refs, reference)
+	}
+	return refs, rows.Err()
+}
+
 func (s *PostgresStore) ListConanRecipeRevisions(ctx context.Context, repositoryID, reference string) ([]ConanRecipeRevision, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND state='visible' ORDER BY created_at DESC`, repositoryID, reference)
 	if err != nil {

@@ -51,6 +51,11 @@ type mavenCoordinatePageCursor struct {
 	ExpiresAt                                  int64
 }
 
+type conanReferencePageCursor struct {
+	Endpoint, RepositoryID, Prefix, Reference string
+	ExpiresAt                                 int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
@@ -111,6 +116,7 @@ type generatedRepositoryAPIAdapter struct {
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
 	oci               repository.NativeOCIStore
+	conan             repository.NativeConanStore
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
 	metrics           *Metrics
@@ -600,6 +606,56 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanReferencesParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatConan {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		prefix := ""
+		if params.Q != nil {
+			prefix = string(*params.Q)
+		}
+		if !validConanReferencePrefix(prefix) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be a valid Conan reference prefix")
+			return
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeConanReferenceCursor(pageToken, repo.ID, prefix)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, prefix, pageSize+1, after)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan references failed")
+			return
+		}
+		var next *string
+		if len(references) > pageSize {
+			references = references[:pageSize]
+			token := h.encodeConanReferenceCursor(repo.ID, prefix, references[len(references)-1])
+			next = &token
+		}
+		items := make([]adminopenapi.ConanReference, 0, len(references))
+		for _, reference := range references {
+			items = append(items, adminopenapi.ConanReference{Reference: reference})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanReferencePage{Items: items, NextPageToken: next})
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
@@ -849,6 +905,22 @@ func validMavenCoordinatePrefix(value string) bool {
 	return true
 }
 
+func validConanReferencePrefix(value string) bool {
+	if len(value) > 255 || strings.ContainsAny(value, "\\\x00#") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%23") {
+		return false
+	}
+	parts := strings.Split(value, "/")
+	for i, part := range parts {
+		if part == "" && i == len(parts)-1 {
+			continue
+		}
+		if !validConanSegment(part) {
+			return false
+		}
+	}
+	return true
+}
+
 func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
 	payload, _ := json.Marshal(ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
@@ -903,6 +975,34 @@ func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositor
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Coordinate, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeConanReferenceCursor(repositoryID, prefix, reference string) string {
+	payload, _ := json.Marshal(conanReferencePageCursor{Endpoint: "conan-references", RepositoryID: repositoryID, Prefix: prefix, Reference: reference, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repositoryID, prefix string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor conanReferencePageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "conan-references" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Reference == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Reference, nil
 }
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {

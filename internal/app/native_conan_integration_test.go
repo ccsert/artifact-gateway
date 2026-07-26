@@ -59,3 +59,38 @@ func TestPostgresNativeConanLifecycleStateTransitions(t *testing.T) {
 		t.Fatalf("recipe tombstone=%#v err=%v", tombstonedRecipe, err)
 	}
 }
+
+func TestPostgresConanReferenceSearchProjection(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-search-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, reference := range []string{"pkg/2.0/user/stable", "pkg/1.0/user/stable", "other/1.0/user/stable"} {
+		key := "native/conan/search/" + uuid.NewString()
+		digest := "sha256:" + strings.Repeat(string(rune('a'+i)), 64)
+		if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: repo.ID, Reference: reference, Revision: "rrev", Digest: digest}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	references, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, "")
+	if err != nil || len(references) != 2 || references[0] != "pkg/1.0/user/stable" || references[1] != "pkg/2.0/user/stable" {
+		t.Fatalf("references=%#v err=%v", references, err)
+	}
+	next, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, references[0])
+	if err != nil || len(next) != 1 || next[0] != "pkg/2.0/user/stable" {
+		t.Fatalf("next=%#v err=%v", next, err)
+	}
+}
