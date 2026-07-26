@@ -97,6 +97,43 @@ func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *
 	}
 }
 
+func TestRepositoryOCIPromotionHTTPEnqueuesIdempotentJob(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-promotion-source", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-promotion-target", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"team/widget","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))
+		authorize(r, authenticator.IssueToken("promoter"))
+		r.Header.Set("Idempotency-Key", "oci-promotion")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	first, replay := request(), request()
+	if first.Code != http.StatusAccepted || replay.Code != http.StatusAccepted || first.Body.String() != replay.Body.String() {
+		t.Fatalf("promotion first=%d %s replay=%d %s", first.Code, first.Body.String(), replay.Code, replay.Body.String())
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobPromotion {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+}
+
 func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
