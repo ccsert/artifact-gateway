@@ -95,6 +95,25 @@ func (s *failOnceConanReclaimStore) Delete(ctx context.Context, key string) erro
 	return s.OCIObjectStore.Delete(ctx, key)
 }
 
+type repositoryScopedConanReclaimStore struct {
+	*repository.PostgresStore
+	repositoryID string
+}
+
+func (s repositoryScopedConanReclaimStore) ListReclaimableConanObjects(ctx context.Context, before time.Time, limit int) ([]repository.ConanObjectIntent, error) {
+	objects, err := s.PostgresStore.ListReclaimableConanObjects(ctx, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	scoped := make([]repository.ConanObjectIntent, 0, len(objects))
+	for _, object := range objects {
+		if object.RepositoryID == s.repositoryID {
+			scoped = append(scoped, object)
+		}
+	}
+	return scoped, nil
+}
+
 func TestPostgresNativeConanLifecycleStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -238,12 +257,20 @@ func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeConanMaintenance{Store: store, Objects: &failOnceConanReclaimStore{OCIObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	maintenance := NativeConanMaintenance{Store: repositoryScopedConanReclaimStore{PostgresStore: store, repositoryID: repo.ID}, Objects: &failOnceConanReclaimStore{OCIObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}
+	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobReclaim || jobs[0].State != repository.LifecycleJobFailed {
+		t.Fatalf("failed reclaim jobs=%#v err=%v", jobs, err)
+	}
 	if err = maintenance.Collect(ctx); err != nil {
 		t.Fatalf("retry reclaim: %v", err)
+	}
+	jobs, err = store.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("completed reclaim jobs=%#v err=%v", jobs, err)
 	}
 	if _, err = objects.Get(ctx, key); err == nil {
 		t.Fatal("MinIO object remains after reclaim")

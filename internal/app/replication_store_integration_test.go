@@ -172,6 +172,10 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, asset.ObjectKey, body); err != nil {
+		t.Fatal(err)
+	}
 	grants := []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}
 	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, grants, "1"); err != nil {
 		t.Fatal(err)
@@ -192,6 +196,13 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
 	if err != nil || len(plans) != 1 || plans[0].SourceRepositoryID != source.ID || plans[0].TargetRepositoryID != target.ID || plans[0].Format != repository.FormatRaw {
 		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+	if err = (RawReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	plans, err = store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].State != "completed" {
+		t.Fatalf("completed plans=%#v err=%v", plans, err)
 	}
 }
 

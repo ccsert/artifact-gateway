@@ -132,7 +132,8 @@ func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, repo := range repos {
-			if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive || !h.authorizer.Authorize(r.Context(), p, repo, RepositoryRead).Allowed {
+			decision, managed := h.authorizer.ManagedDecision(r.Context(), p, repo, RepositoryRead)
+			if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive || !managed || !decision.Allowed {
 				continue
 			}
 			localAfter, include := ociCatalogAfter(repo.Name, last)

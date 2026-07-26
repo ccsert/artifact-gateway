@@ -155,7 +155,17 @@ func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 		t.Fatalf("deleted tag lookup=%v", err)
 	}
 	intents, err := store.ListUnclaimedOCIObjectIntents(ctx, time.Now().Add(time.Hour), 10)
-	if err != nil || len(intents) != 1 || intents[0].RepositoryID != repo.ID || intents[0].ObjectKey != manifestObjectKey {
+	if err != nil {
+		t.Fatal(err)
+	}
+	intentFound := false
+	for _, intent := range intents {
+		if intent.RepositoryID == repo.ID && intent.ObjectKey == manifestObjectKey {
+			intentFound = true
+			break
+		}
+	}
+	if !intentFound {
 		t.Fatalf("reclaim intents=%#v err=%v", intents, err)
 	}
 	tombstone, err := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatOCI, "widget@"+manifest.Digest)
@@ -189,7 +199,17 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 		t.Fatalf("replay=%#v replayed=%v err=%v", replay, replayed, err)
 	}
 	claimed, err := store.ClaimLifecycleJobs(ctx, 10)
-	if err != nil || len(claimed) != 1 || claimed[0].ID != job.ID || claimed[0].State != repository.LifecycleJobRunning {
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobClaimed := false
+	for _, candidate := range claimed {
+		if candidate.ID == job.ID && candidate.State == repository.LifecycleJobRunning {
+			jobClaimed = true
+			break
+		}
+	}
+	if !jobClaimed {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
 	if err := store.CompleteLifecycleJob(ctx, job.ID); err != nil {
@@ -204,12 +224,38 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	ociClaimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatOCI, 10)
-	if err != nil || len(ociClaimed) != 1 || ociClaimed[0].ID != ociJob.ID {
+	if err != nil {
+		t.Fatal(err)
+	}
+	ociJobClaimed := false
+	for _, candidate := range ociClaimed {
+		if candidate.ID == ociJob.ID {
+			ociJobClaimed = true
+			break
+		}
+	}
+	if !ociJobClaimed {
 		t.Fatalf("OCI claimed=%#v err=%v", ociClaimed, err)
 	}
 	mavenClaimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, 10)
-	if err != nil || len(mavenClaimed) != 1 || mavenClaimed[0].ID != mavenJob.ID {
+	if err != nil {
+		t.Fatal(err)
+	}
+	mavenJobClaimed := false
+	for _, candidate := range mavenClaimed {
+		if candidate.ID == mavenJob.ID {
+			mavenJobClaimed = true
+			break
+		}
+	}
+	if !mavenJobClaimed {
 		t.Fatalf("Maven claimed=%#v err=%v", mavenClaimed, err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, ociJob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, mavenJob.ID); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -378,6 +424,14 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	referrer := publish(first.Name, "app", "signature", []byte(`{"schemaVersion":2,"artifactType":"application/vnd.example.signature","subject":{"digest":"`+subject+`"}}`))
 	publish(first.Name, "app-extra", "latest", []byte(`{"schemaVersion":2}`))
 	publish(second.Name, "other", "latest", []byte(`{"schemaVersion":2}`))
+	for _, repo := range []repository.HostedRepository{first, second} {
+		if _, err = storeA.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+			{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}},
+			{Principal: "catalog-reader", Scopes: []string{"repositories:read"}},
+		}, "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	listReferrers, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/"+first.Name+"/app/referrers/"+subject, nil)
 	if err != nil {
@@ -406,7 +460,7 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalogRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	catalogRequest.Header.Set("Authorization", "Bearer "+testAuthenticator().IssueToken("catalog-reader"))
 	catalogResponse, err := serverB.Client().Do(catalogRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -425,7 +479,7 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	nextCatalogRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	nextCatalogRequest.Header.Set("Authorization", "Bearer "+testAuthenticator().IssueToken("catalog-reader"))
 	nextCatalogResponse, err := serverB.Client().Do(nextCatalogRequest)
 	if err != nil {
 		t.Fatal(err)
