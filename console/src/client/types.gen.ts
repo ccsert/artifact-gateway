@@ -594,7 +594,7 @@ export type CreateRepositoryPromotionData = {
 
 export type CreateRepositoryPromotionResponses = {
     /**
-     * Maven promotion job accepted
+     * Immutable Maven or OCI promotion job accepted
      */
     202: LifecycleJob;
 };
