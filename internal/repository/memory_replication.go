@@ -57,6 +57,24 @@ func (s *MemoryStore) ClaimReplicationPlans(_ context.Context, limit int) ([]Rep
 	}
 	return out, nil
 }
+func (s *MemoryStore) ListReplicationPlans(_ context.Context, repositoryID string, limit int) ([]ReplicationPlan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	plans := make([]ReplicationPlan, 0, limit)
+	for _, plan := range s.replicationPlans {
+		if plan.SourceRepositoryID == repositoryID || plan.TargetRepositoryID == repositoryID {
+			plans = append(plans, plan)
+		}
+	}
+	sort.Slice(plans, func(i, j int) bool { return plans[i].CreatedAt.After(plans[j].CreatedAt) })
+	if len(plans) > limit {
+		plans = plans[:limit]
+	}
+	return plans, nil
+}
 func (s *MemoryStore) ListReplicationCheckpoints(_ context.Context, id string) ([]ReplicationCheckpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -72,6 +72,10 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
 		t.Fatal(err)
 	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].ID != plan.ID || plans[0].State != "completed" {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
 }
 
 func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {

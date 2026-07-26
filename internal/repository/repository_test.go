@@ -35,6 +35,10 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
 		t.Fatal(err)
 	}
+	plans, err := store.ListReplicationPlans(ctx, "target", 10)
+	if err != nil || len(plans) != 1 || plans[0].ID != plan.ID || plans[0].State != "completed" {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
 	if _, err = store.ClaimReplicationPlans(ctx, 1); err != nil {
 		t.Fatal(err)
 	}

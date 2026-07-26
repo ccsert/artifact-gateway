@@ -60,6 +60,7 @@ type LifecycleJobStore interface {
 type ReplicationStore interface {
 	CreateReplicationPlan(context.Context, ReplicationPlan, []ReplicationCheckpoint) (ReplicationPlan, bool, error)
 	ClaimReplicationPlans(context.Context, int) ([]ReplicationPlan, error)
+	ListReplicationPlans(context.Context, string, int) ([]ReplicationPlan, error)
 	ListReplicationCheckpoints(context.Context, string) ([]ReplicationCheckpoint, error)
 	UpdateReplicationCheckpoint(context.Context, ReplicationCheckpoint) error
 	CompleteReplicationPlan(context.Context, string) error

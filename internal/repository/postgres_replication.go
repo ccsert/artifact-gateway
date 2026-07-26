@@ -79,6 +79,26 @@ func (s *PostgresStore) ClaimReplicationPlans(ctx context.Context, limit int) ([
 	return plans, rows.Err()
 }
 
+func (s *PostgresStore) ListReplicationPlans(ctx context.Context, repositoryID string, limit int) ([]ReplicationPlan, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error FROM replication_plans WHERE source_repository_id::text=$1 OR target_repository_id::text=$1 ORDER BY created_at DESC LIMIT $2`, repositoryID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	plans := make([]ReplicationPlan, 0, limit)
+	for rows.Next() {
+		var plan ReplicationPlan
+		if err := scanReplicationPlan(rows, &plan); err != nil {
+			return nil, err
+		}
+		plans = append(plans, plan)
+	}
+	return plans, rows.Err()
+}
+
 func (s *PostgresStore) ListReplicationCheckpoints(ctx context.Context, planID string) ([]ReplicationCheckpoint, error) {
 	var exists bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM replication_plans WHERE id::text=$1)`, planID).Scan(&exists); err != nil {
