@@ -2,7 +2,9 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -87,6 +89,19 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.list(w, r, repo, prefix)
 		return true
 	}
+	if rawChecksumExtension(path) != "" {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+			h.checksum(w, r, repo, path)
+		case http.MethodPut:
+			h.verifyChecksumUpload(w, r, repo, path)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+		return true
+	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
 		asset, err := h.store.GetRawAsset(r.Context(), repo.ID, path)
@@ -131,6 +146,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			return true
 		}
 		w.Header().Set("ETag", `"`+digest+`"`)
+		w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(sum[:]))
 		w.WriteHeader(http.StatusCreated)
 	case http.MethodDelete:
 		if err := h.store.DeleteRawAsset(r.Context(), repo.ID, path); err != nil {
@@ -142,6 +158,105 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func rawChecksumExtension(path string) string {
+	if strings.HasSuffix(path, ".sha256") {
+		return ".sha256"
+	}
+	if strings.HasSuffix(path, ".sha512") {
+		return ".sha512"
+	}
+	return ""
+}
+
+func rawChecksumSourcePath(path string) string {
+	return strings.TrimSuffix(path, rawChecksumExtension(path))
+}
+
+func (h nativeRawHandler) checksum(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {
+	source := rawChecksumSourcePath(path)
+	if rawChecksumExtension(source) != "" {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := h.store.GetRawAsset(r.Context(), repo.ID, source)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	body, err := h.rawChecksum(r.Context(), asset, rawChecksumExtension(path))
+	if err != nil {
+		http.Error(w, "raw object unavailable", http.StatusInternalServerError)
+		return
+	}
+	h.serveChecksum(w, r, body)
+}
+
+func (h nativeRawHandler) verifyChecksumUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "checksum sidecar is too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if !rawprotocol.ValidChecksum(path, body) {
+		http.Error(w, "invalid checksum sidecar", http.StatusUnprocessableEntity)
+		return
+	}
+	source := rawChecksumSourcePath(path)
+	if rawChecksumExtension(source) != "" {
+		http.Error(w, "checksum sidecar target is invalid", http.StatusBadRequest)
+		return
+	}
+	asset, err := h.store.GetRawAsset(r.Context(), repo.ID, source)
+	if err != nil {
+		http.Error(w, "checksum sidecar target is unavailable", http.StatusConflict)
+		return
+	}
+	expected, err := h.rawChecksum(r.Context(), asset, rawChecksumExtension(path))
+	if err != nil {
+		http.Error(w, "raw object unavailable", http.StatusInternalServerError)
+		return
+	}
+	if !bytes.Equal(body, expected) {
+		http.Error(w, "checksum mismatch", http.StatusUnprocessableEntity)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h nativeRawHandler) rawChecksum(ctx context.Context, asset repository.RawAsset, extension string) ([]byte, error) {
+	if extension == ".sha256" {
+		return []byte(strings.TrimPrefix(asset.Digest, "sha256:") + "\n"), nil
+	}
+	reader, _, err := h.objects.Open(ctx, asset.ObjectKey)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = reader.Close() }()
+	sum := sha512.New()
+	if _, err = io.Copy(sum, reader); err != nil {
+		return nil, err
+	}
+	return []byte(hex.EncodeToString(sum.Sum(nil)) + "\n"), nil
+}
+
+func (h nativeRawHandler) serveChecksum(w http.ResponseWriter, r *http.Request, body []byte) {
+	sum := sha256.Sum256(body)
+	digest := hex.EncodeToString(sum[:])
+	etag := `"sha256-` + digest + `"`
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(sum[:]))
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(body)
+	}
 }
 
 func (h nativeRawHandler) list(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, prefix string) {

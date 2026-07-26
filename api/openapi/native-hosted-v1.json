@@ -580,7 +580,7 @@
       ],
       "get": {
         "operationId": "readRawContent",
-        "description": "Returns Raw bytes for a file path. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination.",
+        "description": "Returns Raw bytes for a file path. `.sha256` and `.sha512` suffixes return a derived lowercase hexadecimal checksum plus newline. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination.",
         "security": [
           {
             "protocolBasicAuth": []
@@ -627,7 +627,7 @@
       },
       "put": {
         "operationId": "putRawHostedContent",
-        "description": "Standard Raw Hosted write. The request body is stored directly under the canonical Raw path; no management publish session is used for Raw.",
+        "description": "Standard Raw Hosted write. The request body is stored directly under the canonical Raw path; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset.",
         "security": [
           {
             "protocolBasicAuth": []

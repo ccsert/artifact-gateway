@@ -5,7 +5,9 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
@@ -135,6 +137,24 @@ func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
 			t.Fatalf("put %s=%d", name, response.StatusCode)
 		}
 		_ = response.Body.Close()
+	}
+	checksumRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/raw/"+repo.Name+"/releases/alpha.txt.sha256", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checksumRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	checksumResponse, err := serverB.Client().Do(checksumRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer checksumResponse.Body.Close()
+	sum := sha256.Sum256([]byte("releases/alpha.txt"))
+	var checksumBody bytes.Buffer
+	if _, err := checksumBody.ReadFrom(checksumResponse.Body); err != nil {
+		t.Fatal(err)
+	}
+	if checksumResponse.StatusCode != http.StatusOK || checksumBody.String() != hex.EncodeToString(sum[:])+"\n" {
+		t.Fatalf("checksum status=%d body=%q", checksumResponse.StatusCode, checksumBody.String())
 	}
 	listRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/raw/"+repo.Name+"/releases/?n=1", nil)
 	if err != nil {

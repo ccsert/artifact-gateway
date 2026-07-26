@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -107,6 +109,72 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
 		t.Fatalf("raw authorization metric=%s", metrics.Body.String())
+	}
+}
+
+func TestNativeRawHostedGeneratesAndValidatesChecksumSidecars(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, path, bytes.NewReader(body))
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	payload := []byte("checksummed raw artifact")
+	put := request(http.MethodPut, "/raw/downloads/releases/app.bin", payload)
+	if put.Code != http.StatusCreated || put.Header().Get("Digest") == "" {
+		t.Fatalf("put=%d headers=%v", put.Code, put.Header())
+	}
+	sha256Sum := sha256.Sum256(payload)
+	sha256Body := []byte(hex.EncodeToString(sha256Sum[:]) + "\n")
+	sha256Response := request(http.MethodGet, "/raw/downloads/releases/app.bin.sha256", nil)
+	if sha256Response.Code != http.StatusOK || !bytes.Equal(sha256Response.Body.Bytes(), sha256Body) || sha256Response.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+		t.Fatalf("sha256=%d headers=%v body=%q", sha256Response.Code, sha256Response.Header(), sha256Response.Body.Bytes())
+	}
+	sha512Sum := sha512.Sum512(payload)
+	sha512Body := []byte(hex.EncodeToString(sha512Sum[:]) + "\n")
+	sha512Response := request(http.MethodGet, "/raw/downloads/releases/app.bin.sha512", nil)
+	if sha512Response.Code != http.StatusOK || !bytes.Equal(sha512Response.Body.Bytes(), sha512Body) {
+		t.Fatalf("sha512=%d body=%q", sha512Response.Code, sha512Response.Body.Bytes())
+	}
+	head := request(http.MethodHead, "/raw/downloads/releases/app.bin.sha512", nil)
+	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != "129" {
+		t.Fatalf("head=%d headers=%v body=%q", head.Code, head.Header(), head.Body.String())
+	}
+	asserted := request(http.MethodPut, "/raw/downloads/releases/app.bin.sha256", sha256Body)
+	if asserted.Code != http.StatusNoContent {
+		t.Fatalf("asserted=%d %s", asserted.Code, asserted.Body.String())
+	}
+	mismatch := request(http.MethodPut, "/raw/downloads/releases/app.bin.sha256", []byte(strings.Repeat("0", 64)+"\n"))
+	if mismatch.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("mismatch=%d %s", mismatch.Code, mismatch.Body.String())
+	}
+	missing := request(http.MethodPut, "/raw/downloads/releases/missing.bin.sha256", sha256Body)
+	if missing.Code != http.StatusConflict {
+		t.Fatalf("missing=%d %s", missing.Code, missing.Body.String())
+	}
+	listed := request(http.MethodGet, "/raw/downloads/releases/", nil)
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"releases/app.bin"`) || strings.Contains(listed.Body.String(), ".sha256") {
+		t.Fatalf("listed=%d %s", listed.Code, listed.Body.String())
+	}
+	deletedSidecar := request(http.MethodDelete, "/raw/downloads/releases/app.bin.sha256", nil)
+	if deletedSidecar.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("delete sidecar=%d", deletedSidecar.Code)
+	}
+	deleted := request(http.MethodDelete, "/raw/downloads/releases/app.bin", nil)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete=%d", deleted.Code)
+	}
+	missingSidecar := request(http.MethodGet, "/raw/downloads/releases/app.bin.sha256", nil)
+	if missingSidecar.Code != http.StatusNotFound {
+		t.Fatalf("missing sidecar=%d", missingSidecar.Code)
 	}
 }
 
