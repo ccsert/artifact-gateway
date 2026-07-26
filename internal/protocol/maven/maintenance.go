@@ -148,10 +148,6 @@ type NativeRetention struct {
 }
 
 func (m NativeRetention) Collect(ctx context.Context) error {
-	now := time.Now
-	if m.Now != nil {
-		now = m.Now
-	}
 	after := ""
 	for {
 		repositories, next, err := m.Store.ListHostedRepositories(ctx, 200, after)
@@ -162,27 +158,13 @@ func (m NativeRetention) Collect(ctx context.Context) error {
 			if repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
 				continue
 			}
-			policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, repo.ID)
+			candidates, err := m.PlanRepository(ctx, repo.ID)
 			if err != nil {
 				return err
 			}
-			artifacts, err := m.Store.ListMavenArtifacts(ctx, repo.ID)
-			if err != nil {
-				return err
-			}
-			byModule := map[string][]repository.MavenArtifact{}
-			for _, artifact := range artifacts {
-				byModule[retentionModule(artifact.Coordinate)] = append(byModule[retentionModule(artifact.Coordinate)], artifact)
-			}
-			cutoff := now().UTC().AddDate(0, 0, -policy.KeepDays)
-			for _, versions := range byModule {
-				sort.SliceStable(versions, func(i, j int) bool { return versions[i].CreatedAt.After(versions[j].CreatedAt) })
-				for index, artifact := range versions {
-					if index >= policy.MinimumVersions && artifact.CreatedAt.Before(cutoff) {
-						if _, err = m.Store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
-							return err
-						}
-					}
+			for _, artifact := range candidates {
+				if _, err = m.Store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
+					return err
 				}
 			}
 		}
@@ -191,6 +173,39 @@ func (m NativeRetention) Collect(ctx context.Context) error {
 		}
 		after = next
 	}
+}
+
+// PlanRepository returns the artifacts a retention run would tombstone without
+// changing state. It is shared by execution and management dry-run callers.
+func (m NativeRetention) PlanRepository(ctx context.Context, repositoryID string) ([]repository.MavenArtifact, error) {
+	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	artifacts, err := m.Store.ListMavenArtifacts(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now
+	if m.Now != nil {
+		now = m.Now
+	}
+	cutoff := now().UTC().AddDate(0, 0, -policy.KeepDays)
+	byModule := map[string][]repository.MavenArtifact{}
+	for _, artifact := range artifacts {
+		key := retentionModule(artifact.Coordinate)
+		byModule[key] = append(byModule[key], artifact)
+	}
+	candidates := []repository.MavenArtifact{}
+	for _, versions := range byModule {
+		sort.SliceStable(versions, func(i, j int) bool { return versions[i].CreatedAt.After(versions[j].CreatedAt) })
+		for index, artifact := range versions {
+			if index >= policy.MinimumVersions && artifact.CreatedAt.Before(cutoff) {
+				candidates = append(candidates, artifact)
+			}
+		}
+	}
+	return candidates, nil
 }
 
 func (m NativeRetention) Start(ctx context.Context, interval time.Duration) {
