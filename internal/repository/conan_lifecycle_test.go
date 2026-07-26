@@ -57,6 +57,38 @@ func TestMemoryConanLifecyclePublishesAndTombstonesRevisions(t *testing.T) {
 	}
 }
 
+func TestMemoryConanPromotionCopiesRecipePackageClosure(t *testing.T) {
+	ctx, store := context.Background(), NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: id, Name: id, Format: FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "source", ObjectKey: "recipe", Digest: digest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	recipe, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "source", Reference: "pkg/1/user/stable", Revision: "rrev", Digest: digest}, []ConanAsset{{RepositoryID: "source", Reference: "pkg/1/user/stable", RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: "recipe", Digest: digest, Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "source", ObjectKey: "package", Digest: digest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "source", Reference: recipe.Reference, RecipeRevision: recipe.Revision, PackageID: "id", Revision: "prev", Digest: digest}, []ConanAsset{{RepositoryID: "source", Reference: recipe.Reference, RecipeRevision: recipe.Revision, PackageID: "id", PackageRevision: "prev", Path: "package.tgz", ObjectKey: "package", Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PromoteConanRecipeRevision(ctx, ConanPromotion{SourceRepositoryID: "source", TargetRepositoryID: "target", Reference: recipe.Reference, Revision: recipe.Revision, Digest: digest}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.GetConanPackageAsset(ctx, "target", recipe.Reference, recipe.Revision, "id", "prev", "package.tgz"); err != nil {
+		t.Fatalf("promoted package asset: %v", err)
+	}
+	if visible, err := store.ConanObjectHasVisibleReference(ctx, "recipe"); err != nil || !visible {
+		t.Fatalf("reference safety visible=%t err=%v", visible, err)
+	}
+}
+
 func TestMemoryConanPackageRequiresVisibleRecipe(t *testing.T) {
 	store := NewMemoryStore()
 	_, err := store.PutConanPackageRevision(context.Background(), ConanPackageRevision{RepositoryID: "repo", Reference: "pkg/1.0/user/stable", RecipeRevision: "missing", PackageID: "id", Revision: "prev", Digest: "sha256:" + strings.Repeat("c", 64)}, nil)
