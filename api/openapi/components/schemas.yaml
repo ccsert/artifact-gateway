@@ -191,6 +191,21 @@ LifecycleJob:
     lastError:
       type: string
       maxLength: 1024
+ArtifactTombstone:
+  type: object
+  required: [coordinate, digest, tombstonedAt]
+  properties:
+    coordinate: {type: string}
+    digest: {type: string}
+    tombstonedAt: {type: string, format: date-time}
+ArtifactTombstonePage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ArtifactTombstone"}
+    nextPageToken: {type: string}
 RepositoryCapabilities:
   type: object
   required:

@@ -83,6 +83,17 @@ export type LifecycleJob = {
     lastError?: string;
 };
 
+export type ArtifactTombstone = {
+    coordinate: string;
+    digest: string;
+    tombstonedAt: string;
+};
+
+export type ArtifactTombstonePage = {
+    items: Array<ArtifactTombstone>;
+    nextPageToken?: string;
+};
+
 /**
  * Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes.
  */
@@ -537,6 +548,28 @@ export type ListRepositoryLifecycleJobsResponses = {
 };
 
 export type ListRepositoryLifecycleJobsResponse = ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
+
+export type ListRepositoryTombstonesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        q?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/tombstones';
+};
+
+export type ListRepositoryTombstonesResponses = {
+    /**
+     * Tombstoned artifacts for one repository
+     */
+    200: ArtifactTombstonePage;
+};
+
+export type ListRepositoryTombstonesResponse = ListRepositoryTombstonesResponses[keyof ListRepositoryTombstonesResponses];
 
 export type GetRepositoryCapabilitiesData = {
     body?: never;

@@ -322,6 +322,38 @@ func TestPostgresLifecycleJobStatusManagementHTTP(t *testing.T) {
 	}
 }
 
+func TestPostgresTombstoneInspectionHTTP(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "tombstone-api-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "team/widget", Digest: digest, ObjectKey: "oci/" + uuid.NewString(), MediaType: "application/json", Size: 1}, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DeleteOCIManifest(ctx, repo.ID, "team/widget", digest); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/tombstones?q=team%2F", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "team/widget@"+digest) {
+		t.Fatalf("tombstones=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestPostgresConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

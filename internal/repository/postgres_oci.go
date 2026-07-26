@@ -392,3 +392,20 @@ func (s *PostgresStore) GetArtifactTombstone(ctx context.Context, repositoryID s
 	}
 	return tombstone, err
 }
+
+func (s *PostgresStore) ListArtifactTombstones(ctx context.Context, repositoryID string, format Format, prefix string, limit int, after string) ([]ArtifactTombstone, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,format,coordinate,digest,tombstoned_at FROM artifact_tombstones WHERE repository_id::text=$1 AND format=$2 AND ($3='' OR left(coordinate,length($3))=$3) AND coordinate>$4 ORDER BY coordinate LIMIT $5`, repositoryID, format, prefix, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ArtifactTombstone{}
+	for rows.Next() {
+		var item ArtifactTombstone
+		if err := rows.Scan(&item.RepositoryID, &item.Format, &item.Coordinate, &item.Digest, &item.TombstonedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}

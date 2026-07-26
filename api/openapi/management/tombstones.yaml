@@ -1,0 +1,14 @@
+---
+repositories_repositoryId_tombstones:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listRepositoryTombstones
+    parameters:
+    - name: q
+      in: query
+      schema: {type: string, maxLength: 255}
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ArtifactTombstoneList"}

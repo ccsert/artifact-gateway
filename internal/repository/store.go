@@ -44,6 +44,7 @@ type RepositoryRetentionPolicyStore interface {
 
 type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
+	ListArtifactTombstones(context.Context, string, Format, string, int, string) ([]ArtifactTombstone, error)
 }
 
 type LifecycleJobStore interface {

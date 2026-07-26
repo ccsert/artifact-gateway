@@ -37,7 +37,7 @@ goal. It intentionally excludes frontend work.
 
 - [x] Repository capability endpoint per format/type.
 - [x] Cross-format artifact browse/search API.
-- [ ] Tombstone inspection API.
+- [x] Tombstone inspection API.
 - [x] Lifecycle job status API.
 - [ ] Retention execution API and dry-run reporting.
 - [ ] Restore API for supported tombstoned artifacts.

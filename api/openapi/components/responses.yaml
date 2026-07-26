@@ -133,6 +133,12 @@ LifecycleJobList:
         type: array
         items:
           "$ref": "../components/schemas.yaml#/LifecycleJob"
+ArtifactTombstoneList:
+  description: Tombstoned artifacts for one repository
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactTombstonePage"
 RepositoryCapabilities:
   description: Operations supported by a Hosted repository format
   content:

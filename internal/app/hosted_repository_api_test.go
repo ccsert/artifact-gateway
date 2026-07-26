@@ -482,6 +482,50 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	}
 }
 
+func TestRepositoryTombstoneInspectionUsesBoundPagination(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "tombstone-target", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range []string{"team/alpha", "team/beta"} {
+		digest := fmt.Sprintf("sha256:%064x", i+1)
+		if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: name, Digest: digest, ObjectKey: fmt.Sprintf("oci/%d", i), MediaType: "application/json", Size: 1}, "latest"); err != nil {
+			t.Fatal(err)
+		}
+		if err = store.DeleteOCIManifest(ctx, repo.ID, name, digest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(query string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/tombstones?"+query, nil)
+		authorize(req, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	first := request("q=team%2F&pageSize=1")
+	var page struct {
+		Items []struct {
+			Coordinate string `json:"coordinate"`
+		}
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if first.Code != http.StatusOK || json.NewDecoder(first.Body).Decode(&page) != nil || len(page.Items) != 1 || page.Items[0].Coordinate[:10] != "team/alpha" || page.NextPageToken == "" {
+		t.Fatalf("first=%d body=%s page=%#v", first.Code, first.Body.String(), page)
+	}
+	next := request("q=team%2F&pageSize=1&pageToken=" + url.QueryEscape(page.NextPageToken))
+	if next.Code != http.StatusOK || !strings.Contains(next.Body.String(), "team/beta") {
+		t.Fatalf("next=%d body=%s", next.Code, next.Body.String())
+	}
+	changed := request("q=other%2F&pageToken=" + url.QueryEscape(page.NextPageToken))
+	if changed.Code != http.StatusBadRequest || !strings.Contains(changed.Body.String(), "invalid_page_token") {
+		t.Fatalf("changed=%d body=%s", changed.Code, changed.Body.String())
+	}
+}
+
 func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "artifact-target", Format: repository.FormatMaven})

@@ -235,6 +235,37 @@
         }
       }
     },
+    "/repositories/{repositoryId}/tombstones": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listRepositoryTombstones",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ArtifactTombstoneList"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/capabilities": {
       "parameters": [
         {
@@ -1993,6 +2024,43 @@
           }
         }
       },
+      "ArtifactTombstone": {
+        "type": "object",
+        "required": [
+          "coordinate",
+          "digest",
+          "tombstonedAt"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "tombstonedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ArtifactTombstonePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactTombstone"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "CreatePublishSession": {
         "oneOf": [
           {
@@ -2869,6 +2937,16 @@
               "items": {
                 "$ref": "#/components/schemas/LifecycleJob"
               }
+            }
+          }
+        }
+      },
+      "ArtifactTombstoneList": {
+        "description": "Tombstoned artifacts for one repository",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ArtifactTombstonePage"
             }
           }
         }

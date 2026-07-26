@@ -21,6 +21,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
+  "/repositories/{repositoryId}/tombstones":
+    "$ref": "./management/tombstones.yaml#/repositories_repositoryId_tombstones"
   "/repositories/{repositoryId}/capabilities":
     "$ref": "./management/capabilities.yaml#/repositories_repositoryId_capabilities"
   "/groups":
@@ -99,6 +101,10 @@ components:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
+    ArtifactTombstone:
+      "$ref": "./components/schemas.yaml#/ArtifactTombstone"
+    ArtifactTombstonePage:
+      "$ref": "./components/schemas.yaml#/ArtifactTombstonePage"
     CreatePublishSession:
       "$ref": "./components/schemas.yaml#/CreatePublishSession"
     CreateMavenPublishSession:
@@ -185,6 +191,8 @@ components:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
     LifecycleJobList:
       "$ref": "./components/responses.yaml#/LifecycleJobList"
+    ArtifactTombstoneList:
+      "$ref": "./components/responses.yaml#/ArtifactTombstoneList"
     PublishSession:
       "$ref": "./components/responses.yaml#/PublishSession"
     Artifact:

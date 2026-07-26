@@ -60,6 +60,10 @@ type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
 	ExpiresAt                                         int64
 }
+type tombstonePageCursor struct {
+	Endpoint, RepositoryID, Format, Prefix, Coordinate string
+	ExpiresAt                                          int64
+}
 
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
@@ -120,6 +124,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
@@ -457,6 +462,52 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.Respon
 			items = append(items, item)
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.LifecycleJobList(items))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListRepositoryTombstonesParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		prefix := ""
+		if params.Q != nil {
+			prefix = *params.Q
+		}
+		if len(prefix) > 255 || strings.ContainsAny(prefix, "\\\x00") {
+			writeHostedProblem(w, 400, "invalid_request", "q must be a valid tombstone coordinate prefix")
+			return
+		}
+		limit := 50
+		if params.PageSize != nil {
+			limit = int(*params.PageSize)
+		}
+		if limit < 1 || limit > 200 {
+			writeHostedProblem(w, 400, "invalid_request", "pageSize must be between 1 and 200")
+			return
+		}
+		token := ""
+		if params.PageToken != nil {
+			token = string(*params.PageToken)
+		}
+		after, err := h.decodeTombstoneCursor(token, repo.ID, repo.Format, prefix)
+		if err != nil {
+			writeHostedProblem(w, 400, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		items, err := h.tombstones.ListArtifactTombstones(r.Context(), repo.ID, repo.Format, prefix, limit+1, after)
+		if err != nil {
+			writeHostedProblem(w, 500, "internal_error", "list tombstones failed")
+			return
+		}
+		var next *string
+		if len(items) > limit {
+			items = items[:limit]
+			value := h.encodeTombstoneCursor(repo.ID, repo.Format, prefix, items[len(items)-1].Coordinate)
+			next = &value
+		}
+		out := make([]adminopenapi.ArtifactTombstone, 0, len(items))
+		for _, item := range items {
+			out = append(out, adminopenapi.ArtifactTombstone{Coordinate: item.Coordinate, Digest: item.Digest, TombstonedAt: item.TombstonedAt})
+		}
+		writeNativeMavenJSON(w, 200, adminopenapi.ArtifactTombstonePage{Items: out, NextPageToken: next})
 	})
 }
 
@@ -1208,6 +1259,30 @@ func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repository
 	}
 	var cursor artifactSearchPageCursor
 	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Coordinate, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeTombstoneCursor(repositoryID string, format repository.Format, prefix, coordinate string) string {
+	payload, _ := json.Marshal(tombstonePageCursor{Endpoint: "tombstones", RepositoryID: repositoryID, Format: string(format), Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+func (h hostedRepositoryAPIHandler) decodeTombstoneCursor(token, repositoryID string, format repository.Format, prefix string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	var cursor tombstonePageCursor
+	if !hmac.Equal(signature, mac.Sum(nil)) || json.Unmarshal(payload, &cursor) != nil || cursor.Endpoint != "tombstones" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Coordinate, nil

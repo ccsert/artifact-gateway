@@ -337,3 +337,19 @@ func (s *MemoryStore) GetArtifactTombstone(_ context.Context, repositoryID strin
 	}
 	return tombstone, nil
 }
+
+func (s *MemoryStore) ListArtifactTombstones(_ context.Context, repositoryID string, format Format, prefix string, limit int, after string) ([]ArtifactTombstone, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]ArtifactTombstone, 0)
+	for _, item := range s.artifactTombstones {
+		if item.RepositoryID == repositoryID && item.Format == format && strings.HasPrefix(item.Coordinate, prefix) && item.Coordinate > after {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Coordinate < items[j].Coordinate })
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}

@@ -331,6 +331,19 @@ type ArtifactSummaryPage struct {
 	NextPageToken *string           `json:"nextPageToken,omitempty"`
 }
 
+// ArtifactTombstone defines model for ArtifactTombstone.
+type ArtifactTombstone struct {
+	Coordinate   string    `json:"coordinate"`
+	Digest       string    `json:"digest"`
+	TombstonedAt time.Time `json:"tombstonedAt"`
+}
+
+// ArtifactTombstonePage defines model for ArtifactTombstonePage.
+type ArtifactTombstonePage struct {
+	Items         []ArtifactTombstone `json:"items"`
+	NextPageToken *string             `json:"nextPageToken,omitempty"`
+}
+
 // AuditList defines model for AuditList.
 type AuditList = []AuditRecord
 
@@ -597,6 +610,9 @@ type ArtifactList = ArtifactPage
 // ArtifactSummaryList defines model for ArtifactSummaryList.
 type ArtifactSummaryList = ArtifactSummaryPage
 
+// ArtifactTombstoneList defines model for ArtifactTombstoneList.
+type ArtifactTombstoneList = ArtifactTombstonePage
+
 // ConanReferenceList defines model for ConanReferenceList.
 type ConanReferenceList = ConanReferencePage
 
@@ -704,6 +720,13 @@ type CreatePublishSessionParams struct {
 // ReplaceRetentionPolicyParams defines parameters for ReplaceRetentionPolicy.
 type ReplaceRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListRepositoryTombstonesParams defines parameters for ListRepositoryTombstones.
+type ListRepositoryTombstonesParams struct {
+	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
@@ -852,6 +875,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/retention-policy)
 	ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceRetentionPolicyParams)
+
+	// (GET /repositories/{repositoryId}/tombstones)
+	ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2092,6 +2118,74 @@ func (siw *ServerInterfaceWrapper) ReplaceRetentionPolicy(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryTombstones operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryTombstones(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryTombstonesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryTombstones(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2241,6 +2335,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
 
 	return m
 }
@@ -2250,6 +2345,8 @@ type ArtifactJSONResponse Artifact
 type ArtifactListJSONResponse ArtifactPage
 
 type ArtifactSummaryListJSONResponse ArtifactSummaryPage
+
+type ArtifactTombstoneListJSONResponse ArtifactTombstonePage
 
 type AuditListJSONResponse AuditList
 
@@ -3349,6 +3446,31 @@ func (response ReplaceRetentionPolicy412ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type ListRepositoryTombstonesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListRepositoryTombstonesParams
+}
+
+type ListRepositoryTombstonesResponseObject interface {
+	VisitListRepositoryTombstonesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryTombstones200JSONResponse struct {
+	ArtifactTombstoneListJSONResponse
+}
+
+func (response ListRepositoryTombstones200JSONResponse) VisitListRepositoryTombstonesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -3438,6 +3560,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/retention-policy)
 	ReplaceRetentionPolicy(ctx context.Context, request ReplaceRetentionPolicyRequestObject) (ReplaceRetentionPolicyResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/tombstones)
+	ListRepositoryTombstones(ctx context.Context, request ListRepositoryTombstonesRequestObject) (ListRepositoryTombstonesResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -4290,6 +4415,33 @@ func (sh *strictHandler) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceRetentionPolicyResponseObject); ok {
 		if err := validResponse.VisitReplaceRetentionPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryTombstones operation middleware
+func (sh *strictHandler) ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams) {
+	var request ListRepositoryTombstonesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryTombstones(ctx, request.(ListRepositoryTombstonesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryTombstones")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryTombstonesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryTombstonesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
