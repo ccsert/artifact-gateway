@@ -15,6 +15,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
+	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -92,6 +93,7 @@ func main() {
 	app.NativeMavenPromotion{Store: store}.Start(runtimeContext, time.Minute)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeOCIPromotion{Store: store, Objects: objectStore}.Start(runtimeContext, time.Minute)
+	rawprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{
