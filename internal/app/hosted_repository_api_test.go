@@ -48,6 +48,37 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
+	store := repository.NewMemoryStore()
+	conan, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-conan", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maven, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-maven", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), conan.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conan.ID+"/capabilities", nil)
+	authorize(request, authenticator.IssueToken("reader"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"format":"conan"`) || !strings.Contains(response.Body.String(), `"restore"`) || strings.Contains(response.Body.String(), `"retain"`) {
+		t.Fatalf("Conan capabilities=%d %s", response.Code, response.Body.String())
+	}
+	adminRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+maven.ID+"/capabilities", nil)
+	authorize(adminRequest, "admin-secret")
+	adminResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusOK || !strings.Contains(adminResponse.Body.String(), `"retain"`) || strings.Contains(adminResponse.Body.String(), `"restore"`) {
+		t.Fatalf("Maven capabilities=%d %s", adminResponse.Code, adminResponse.Body.String())
+	}
+}
+
 func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 	store := repository.NewMemoryStore()
 	store.Audits = []repository.AuditRecord{{

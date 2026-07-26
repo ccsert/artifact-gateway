@@ -1,0 +1,12 @@
+---
+repositories_repositoryId_capabilities:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getRepositoryCapabilities
+    description: Returns operations currently supported by this Hosted repository's format.
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryCapabilities"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

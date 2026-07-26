@@ -125,6 +125,12 @@ RetentionPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RetentionPolicy"
+RepositoryCapabilities:
+  description: Operations supported by a Hosted repository format
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryCapabilities"
 PublishSession:
   description: Publish session
   content:

@@ -212,6 +212,23 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format))
+	})
+}
+
+func repositoryCapabilities(format repository.Format) adminopenapi.RepositoryCapabilities {
+	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.Read, adminopenapi.Publish, adminopenapi.Browse, adminopenapi.Delete, adminopenapi.Reclaim}
+	switch format {
+	case repository.FormatMaven:
+		operations = append(operations, adminopenapi.Retain)
+	case repository.FormatConan:
+		operations = append(operations, adminopenapi.Restore)
+	}
+	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.Hosted, Operations: operations}
+}
+
 func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 		set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())

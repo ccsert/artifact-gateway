@@ -19,6 +19,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/capabilities":
+    "$ref": "./management/capabilities.yaml#/repositories_repositoryId_capabilities"
   "/groups":
     "$ref": "./management/groups.yaml#/groups"
   "/groups/{groupId}":

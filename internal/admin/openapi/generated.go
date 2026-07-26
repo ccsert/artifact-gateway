@@ -202,6 +202,54 @@ func (e RepositoryState) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryCapabilitiesOperations.
+const (
+	Browse  RepositoryCapabilitiesOperations = "browse"
+	Delete  RepositoryCapabilitiesOperations = "delete"
+	Publish RepositoryCapabilitiesOperations = "publish"
+	Read    RepositoryCapabilitiesOperations = "read"
+	Reclaim RepositoryCapabilitiesOperations = "reclaim"
+	Restore RepositoryCapabilitiesOperations = "restore"
+	Retain  RepositoryCapabilitiesOperations = "retain"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryCapabilitiesOperations enum.
+func (e RepositoryCapabilitiesOperations) Valid() bool {
+	switch e {
+	case Browse:
+		return true
+	case Delete:
+		return true
+	case Publish:
+		return true
+	case Read:
+		return true
+	case Reclaim:
+		return true
+	case Restore:
+		return true
+	case Retain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryCapabilitiesType.
+const (
+	Hosted RepositoryCapabilitiesType = "hosted"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryCapabilitiesType enum.
+func (e RepositoryCapabilitiesType) Valid() bool {
+	switch e {
+	case Hosted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Artifact defines model for Artifact.
 type Artifact struct {
 	Coordinate string             `json:"coordinate"`
@@ -406,6 +454,19 @@ type Repository struct {
 
 // RepositoryState defines model for Repository.State.
 type RepositoryState string
+
+// RepositoryCapabilities defines model for RepositoryCapabilities.
+type RepositoryCapabilities struct {
+	Format     Format                             `json:"format"`
+	Operations []RepositoryCapabilitiesOperations `json:"operations"`
+	Type       RepositoryCapabilitiesType         `json:"type"`
+}
+
+// RepositoryCapabilitiesOperations defines model for RepositoryCapabilities.Operations.
+type RepositoryCapabilitiesOperations string
+
+// RepositoryCapabilitiesType defines model for RepositoryCapabilities.Type.
+type RepositoryCapabilitiesType string
 
 // RepositoryPage defines model for RepositoryPage.
 type RepositoryPage struct {
@@ -665,6 +726,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
+
+	// (GET /repositories/{repositoryId}/capabilities)
+	GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
@@ -1391,6 +1455,32 @@ func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetRepositoryCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryCapabilities(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListConanReferences operation middleware
 func (siw *ServerInterfaceWrapper) ListConanReferences(w http.ResponseWriter, r *http.Request) {
 
@@ -1947,6 +2037,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capabilities", wrapper.GetRepositoryCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
@@ -1993,6 +2084,8 @@ type ProblemApplicationProblemPlusJSONResponse Problem
 type PublishSessionJSONResponse PublishSession
 
 type RepositoryJSONResponse Repository
+
+type RepositoryCapabilitiesJSONResponse RepositoryCapabilities
 
 type RepositoryListJSONResponse RepositoryPage
 
@@ -2611,6 +2704,46 @@ func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.Respo
 	return err
 }
 
+type GetRepositoryCapabilitiesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetRepositoryCapabilitiesResponseObject interface {
+	VisitGetRepositoryCapabilitiesResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryCapabilities200JSONResponse struct {
+	RepositoryCapabilitiesJSONResponse
+}
+
+func (response GetRepositoryCapabilities200JSONResponse) VisitGetRepositoryCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCapabilities404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryCapabilities404ApplicationProblemPlusJSONResponse) VisitGetRepositoryCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListConanReferencesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListConanReferencesParams
@@ -2994,6 +3127,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/capabilities)
+	GetRepositoryCapabilities(ctx context.Context, request GetRepositoryCapabilitiesRequestObject) (GetRepositoryCapabilitiesResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
@@ -3556,6 +3692,32 @@ func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, rep
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
 		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryCapabilities operation middleware
+func (sh *strictHandler) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetRepositoryCapabilitiesRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryCapabilities(ctx, request.(GetRepositoryCapabilitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryCapabilities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryCapabilitiesResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryCapabilitiesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

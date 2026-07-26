@@ -174,6 +174,12 @@ export type AuditRecord = {
 
 export type AuditList = Array<AuditRecord>;
 
+export type RepositoryCapabilities = {
+    format: Format;
+    type: 'hosted';
+    operations: Array<'read' | 'publish' | 'browse' | 'delete' | 'restore' | 'retain' | 'reclaim'>;
+};
+
 export type OciImage = {
     name: string;
 };
@@ -481,6 +487,33 @@ export type ReplaceRetentionPolicyResponses = {
 };
 
 export type ReplaceRetentionPolicyResponse = ReplaceRetentionPolicyResponses[keyof ReplaceRetentionPolicyResponses];
+
+export type GetRepositoryCapabilitiesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/capabilities';
+};
+
+export type GetRepositoryCapabilitiesErrors = {
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetRepositoryCapabilitiesError = GetRepositoryCapabilitiesErrors[keyof GetRepositoryCapabilitiesErrors];
+
+export type GetRepositoryCapabilitiesResponses = {
+    /**
+     * Operations supported by a Hosted repository format
+     */
+    200: RepositoryCapabilities;
+};
+
+export type GetRepositoryCapabilitiesResponse = GetRepositoryCapabilitiesResponses[keyof GetRepositoryCapabilitiesResponses];
 
 export type ListGroupsData = {
     body?: never;

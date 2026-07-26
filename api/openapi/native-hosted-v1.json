@@ -217,6 +217,25 @@
         }
       }
     },
+    "/repositories/{repositoryId}/capabilities": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getRepositoryCapabilities",
+        "description": "Returns operations currently supported by this Hosted repository's format.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryCapabilities"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/groups": {
       "get": {
         "operationId": "listGroups",
@@ -2221,6 +2240,39 @@
           "$ref": "#/components/schemas/AuditRecord"
         }
       },
+      "RepositoryCapabilities": {
+        "type": "object",
+        "required": [
+          "format",
+          "type",
+          "operations"
+        ],
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "type": {
+            "type": "string",
+            "const": "hosted"
+          },
+          "operations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "publish",
+                "browse",
+                "delete",
+                "restore",
+                "retain",
+                "reclaim"
+              ]
+            }
+          }
+        }
+      },
       "OCIImage": {
         "type": "object",
         "required": [
@@ -2711,6 +2763,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuditList"
+            }
+          }
+        }
+      },
+      "RepositoryCapabilities": {
+        "description": "Operations supported by a Hosted repository format",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryCapabilities"
             }
           }
         }

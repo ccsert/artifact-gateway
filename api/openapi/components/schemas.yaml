@@ -156,6 +156,31 @@ RetentionPolicy:
     minimumVersions:
       type: integer
       minimum: 1
+RepositoryCapabilities:
+  type: object
+  required:
+  - format
+  - type
+  - operations
+  properties:
+    format:
+      "$ref": "#/Format"
+    type:
+      type: string
+      const: hosted
+    operations:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        enum:
+        - read
+        - publish
+        - browse
+        - delete
+        - restore
+        - retain
+        - reclaim
 CreatePublishSession:
   oneOf:
   - "$ref": "#/CreateMavenPublishSession"
