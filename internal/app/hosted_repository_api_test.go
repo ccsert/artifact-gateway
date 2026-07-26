@@ -134,6 +134,75 @@ func TestRepositoryOCIPromotionHTTPEnqueuesIdempotentJob(t *testing.T) {
 	}
 }
 
+func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-raw-source", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-raw-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("replicate this Raw object")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", Digest: digest, ObjectKey: "native/raw/sha256/" + fmt.Sprintf("%x", sum[:]), Size: int64(len(body))}
+	if _, err = store.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(key, artifactDigest string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"releases/widget.txt","digest":"`+artifactDigest+`"}`))
+		authorize(r, authenticator.IssueToken("replicator"))
+		r.Header.Set("Idempotency-Key", key)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if denied := request("replicate-widget", digest); denied.Code != http.StatusForbidden {
+		t.Fatalf("target authorization=%d %s", denied.Code, denied.Body.String())
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}, "2"); err != nil {
+		t.Fatal(err)
+	}
+	first := request("replicate-widget", digest)
+	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"state":"pending"`) {
+		t.Fatalf("create=%d %s", first.Code, first.Body.String())
+	}
+	if replay := request("replicate-widget", digest); replay.Code != http.StatusAccepted || replay.Body.String() != first.Body.String() {
+		t.Fatalf("replay=%d %s", replay.Code, replay.Body.String())
+	}
+	if conflict := request("replicate-widget", "sha256:"+strings.Repeat("a", 64)); conflict.Code != http.StatusNotFound {
+		t.Fatalf("source digest validation=%d %s", conflict.Code, conflict.Body.String())
+	}
+	list := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+target.ID+"/replications", nil)
+	authorize(list, authenticator.IssueToken("replicator"))
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"sourceRepositoryId":"`+source.ID) {
+		t.Fatalf("list=%d %s", listed.Code, listed.Body.String())
+	}
+	if plans, err := store.ListReplicationPlans(ctx, target.ID, 10); err != nil || len(plans) != 1 || plans[0].Format != repository.FormatRaw {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+	found := false
+	for _, audit := range store.Audits {
+		found = found || (audit.Operation == "replicate" && audit.Repository == source.Name && audit.Resource == asset.Path && audit.Status == http.StatusAccepted)
+	}
+	if !found {
+		t.Fatalf("replication audit missing: %#v", store.Audits)
+	}
+}
+
 func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())

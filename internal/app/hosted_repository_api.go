@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -130,6 +131,7 @@ type generatedRepositoryAPIAdapter struct {
 	retentionPolicies repository.RepositoryRetentionPolicyStore
 	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
+	replication       repository.ReplicationStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
 	authorizer        RepositoryAuthorizer
@@ -534,6 +536,82 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
 		})
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryReplicationParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
+		var request adminopenapi.ReplicationRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || source.Format != repository.FormatRaw || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Raw replication requires a visible path and sha256 digest")
+			return
+		}
+		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
+			target, err := h.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
+			if err != nil || target.Format != source.Format || target.State != repository.RepositoryActive {
+				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+				return
+			}
+			asset, err := h.sessions.store.GetRawAsset(r.Context(), source.ID, request.Coordinate)
+			if errors.Is(err, repository.ErrNotFound) || asset.Digest != request.Digest {
+				writeHostedProblem(w, http.StatusNotFound, "not_found", "source Raw artifact is unavailable")
+				return
+			}
+			if err != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Raw artifact failed")
+				return
+			}
+			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: string(params.IdempotencyKey)}, []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}})
+			if errors.Is(err, repository.ErrIdempotencyConflict) {
+				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing replication plan")
+				return
+			}
+			if err != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create replication plan failed")
+				return
+			}
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: source.Name, GroupName: source.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: request.Coordinate, Operation: "replicate", Status: http.StatusAccepted})
+			writeNativeMavenJSON(w, http.StatusAccepted, toOpenAPIReplicationPlan(plan))
+		})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+		plans, err := h.replication.ListReplicationPlans(r.Context(), repositoryID.String(), 100)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list replication plans failed")
+			return
+		}
+		items := make([]adminopenapi.ReplicationPlan, 0, len(plans))
+		for _, plan := range plans {
+			items = append(items, toOpenAPIReplicationPlan(plan))
+		}
+		writeNativeMavenJSON(w, http.StatusOK, items)
+	})
+}
+
+func validRepositoryDigest(value string) bool {
+	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+64 {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
+	return err == nil
+}
+
+func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.ReplicationPlan {
+	item := adminopenapi.ReplicationPlan{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanState(plan.State), CreatedAt: plan.CreatedAt}
+	if !plan.StartedAt.IsZero() {
+		item.StartedAt = &plan.StartedAt
+	}
+	if !plan.CompletedAt.IsZero() {
+		item.CompletedAt = &plan.CompletedAt
+	}
+	if plan.LastError != "" {
+		item.LastError = &plan.LastError
+	}
+	return item
 }
 
 func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {

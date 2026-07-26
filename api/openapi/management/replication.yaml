@@ -1,0 +1,36 @@
+---
+repositories_repositoryId_replications:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createRepositoryReplication
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/ReplicationRequest"
+    responses:
+      '202':
+        description: Checkpointed replication plan accepted
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/ReplicationPlan"
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+  get:
+    operationId: listRepositoryReplications
+    responses:
+      '200':
+        description: Replication plans involving this repository
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                "$ref": "../components/schemas.yaml#/ReplicationPlan"
+      '403': {"$ref": "../components/responses.yaml#/Problem"}

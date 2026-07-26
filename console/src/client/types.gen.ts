@@ -96,6 +96,24 @@ export type LifecycleJob = {
     lastError?: string;
 };
 
+export type ReplicationRequest = {
+    targetRepositoryId: string;
+    coordinate: string;
+    digest: string;
+};
+
+export type ReplicationPlan = {
+    id: string;
+    sourceRepositoryId: string;
+    targetRepositoryId: string;
+    format: Format;
+    state: 'pending' | 'running' | 'completed' | 'failed';
+    createdAt: string;
+    startedAt?: string;
+    completedAt?: string;
+    lastError?: string;
+};
+
 export type ArtifactTombstone = {
     coordinate: string;
     digest: string;
@@ -600,6 +618,71 @@ export type CreateRepositoryPromotionResponses = {
 };
 
 export type CreateRepositoryPromotionResponse = CreateRepositoryPromotionResponses[keyof CreateRepositoryPromotionResponses];
+
+export type ListRepositoryReplicationsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/replications';
+};
+
+export type ListRepositoryReplicationsErrors = {
+    /**
+     * Problem response
+     */
+    403: Problem;
+};
+
+export type ListRepositoryReplicationsError = ListRepositoryReplicationsErrors[keyof ListRepositoryReplicationsErrors];
+
+export type ListRepositoryReplicationsResponses = {
+    /**
+     * Replication plans involving this repository
+     */
+    200: Array<ReplicationPlan>;
+};
+
+export type ListRepositoryReplicationsResponse = ListRepositoryReplicationsResponses[keyof ListRepositoryReplicationsResponses];
+
+export type CreateRepositoryReplicationData = {
+    body: ReplicationRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/replications';
+};
+
+export type CreateRepositoryReplicationErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    403: Problem;
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type CreateRepositoryReplicationError = CreateRepositoryReplicationErrors[keyof CreateRepositoryReplicationErrors];
+
+export type CreateRepositoryReplicationResponses = {
+    /**
+     * Checkpointed replication plan accepted
+     */
+    202: ReplicationPlan;
+};
+
+export type CreateRepositoryReplicationResponse = CreateRepositoryReplicationResponses[keyof CreateRepositoryReplicationResponses];
 
 export type RestoreRepositoryArtifactData = {
     body: RestoreArtifact;

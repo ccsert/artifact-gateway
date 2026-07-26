@@ -25,6 +25,8 @@ paths:
     "$ref": "./management/retention-execute.yaml#/repositories_repositoryId_retention_execute"
   "/repositories/{repositoryId}/promotions":
     "$ref": "./management/promotion.yaml#/repositories_repositoryId_promotions"
+  "/repositories/{repositoryId}/replications":
+    "$ref": "./management/replication.yaml#/repositories_repositoryId_replications"
   "/repositories/{repositoryId}/restore":
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
@@ -113,6 +115,10 @@ components:
       "$ref": "./components/schemas.yaml#/RestoreArtifact"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
+    ReplicationRequest:
+      "$ref": "./components/schemas.yaml#/ReplicationRequest"
+    ReplicationPlan:
+      "$ref": "./components/schemas.yaml#/ReplicationPlan"
     ArtifactTombstone:
       "$ref": "./components/schemas.yaml#/ArtifactTombstone"
     ArtifactTombstonePage:

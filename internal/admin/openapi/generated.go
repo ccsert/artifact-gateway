@@ -229,6 +229,30 @@ func (e PublishSessionState) Valid() bool {
 	}
 }
 
+// Defines values for ReplicationPlanState.
+const (
+	ReplicationPlanStateCompleted ReplicationPlanState = "completed"
+	ReplicationPlanStateFailed    ReplicationPlanState = "failed"
+	ReplicationPlanStatePending   ReplicationPlanState = "pending"
+	ReplicationPlanStateRunning   ReplicationPlanState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationPlanState enum.
+func (e ReplicationPlanState) Valid() bool {
+	switch e {
+	case ReplicationPlanStateCompleted:
+		return true
+	case ReplicationPlanStateFailed:
+		return true
+	case ReplicationPlanStatePending:
+		return true
+	case ReplicationPlanStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositoryState.
 const (
 	RepositoryStateActive   RepositoryState = "active"
@@ -543,6 +567,29 @@ type PublishSession struct {
 // PublishSessionState defines model for PublishSession.State.
 type PublishSessionState string
 
+// ReplicationPlan defines model for ReplicationPlan.
+type ReplicationPlan struct {
+	CompletedAt        *time.Time           `json:"completedAt,omitempty"`
+	CreatedAt          time.Time            `json:"createdAt"`
+	Format             Format               `json:"format"`
+	Id                 openapi_types.UUID   `json:"id"`
+	LastError          *string              `json:"lastError,omitempty"`
+	SourceRepositoryId openapi_types.UUID   `json:"sourceRepositoryId"`
+	StartedAt          *time.Time           `json:"startedAt,omitempty"`
+	State              ReplicationPlanState `json:"state"`
+	TargetRepositoryId openapi_types.UUID   `json:"targetRepositoryId"`
+}
+
+// ReplicationPlanState defines model for ReplicationPlan.State.
+type ReplicationPlanState string
+
+// ReplicationRequest defines model for ReplicationRequest.
+type ReplicationRequest struct {
+	Coordinate         string             `json:"coordinate"`
+	Digest             string             `json:"digest"`
+	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
+}
+
 // Repository defines model for Repository.
 type Repository struct {
 	Format  Format          `json:"format"`
@@ -744,6 +791,11 @@ type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// CreateRepositoryReplicationParams defines parameters for CreateRepositoryReplication.
+type CreateRepositoryReplicationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // ReplaceRetentionPolicyParams defines parameters for ReplaceRetentionPolicy.
 type ReplaceRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -781,6 +833,9 @@ type CreateRepositoryPromotionJSONRequestBody = PromotionRequest
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
+
+// CreateRepositoryReplicationJSONRequestBody defines body for CreateRepositoryReplication for application/json ContentType.
+type CreateRepositoryReplicationJSONRequestBody = ReplicationRequest
 
 // RestoreRepositoryArtifactJSONRequestBody defines body for RestoreRepositoryArtifact for application/json ContentType.
 type RestoreRepositoryArtifactJSONRequestBody = RestoreArtifact
@@ -910,6 +965,12 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
+
+	// (GET /repositories/{repositoryId}/replications)
+	ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/replications)
+	CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryReplicationParams)
 
 	// (POST /repositories/{repositoryId}/restore)
 	RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -2142,6 +2203,86 @@ func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryReplications operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryReplications(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryReplications(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepositoryReplication operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepositoryReplication(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRepositoryReplicationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepositoryReplication(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RestoreRepositoryArtifact operation middleware
 func (siw *ServerInterfaceWrapper) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request) {
 
@@ -2544,6 +2685,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.CreateRepositoryReplication)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/restore", wrapper.RestoreRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
@@ -3624,6 +3767,112 @@ func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type ListRepositoryReplicationsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type ListRepositoryReplicationsResponseObject interface {
+	VisitListRepositoryReplicationsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryReplications200JSONResponse []ReplicationPlan
+
+func (response ListRepositoryReplications200JSONResponse) VisitListRepositoryReplicationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryReplications403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryReplications403ApplicationProblemPlusJSONResponse) VisitListRepositoryReplicationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryReplicationRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       CreateRepositoryReplicationParams
+	Body         *CreateRepositoryReplicationJSONRequestBody
+}
+
+type CreateRepositoryReplicationResponseObject interface {
+	VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error
+}
+
+type CreateRepositoryReplication202JSONResponse ReplicationPlan
+
+func (response CreateRepositoryReplication202JSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryReplication400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepositoryReplication400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryReplication403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryReplication403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryReplication409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryReplication409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RestoreRepositoryArtifactRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Body         *RestoreRepositoryArtifactJSONRequestBody
@@ -3859,6 +4108,12 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/replications)
+	ListRepositoryReplications(ctx context.Context, request ListRepositoryReplicationsRequestObject) (ListRepositoryReplicationsResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/replications)
+	CreateRepositoryReplication(ctx context.Context, request CreateRepositoryReplicationRequestObject) (CreateRepositoryReplicationResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/restore)
 	RestoreRepositoryArtifact(ctx context.Context, request RestoreRepositoryArtifactRequestObject) (RestoreRepositoryArtifactResponseObject, error)
@@ -4703,6 +4958,66 @@ func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
 		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryReplications operation middleware
+func (sh *strictHandler) ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ListRepositoryReplicationsRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryReplications(ctx, request.(ListRepositoryReplicationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryReplications")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryReplicationsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryReplicationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepositoryReplication operation middleware
+func (sh *strictHandler) CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryReplicationParams) {
+	var request CreateRepositoryReplicationRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreateRepositoryReplicationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepositoryReplication(ctx, request.(CreateRepositoryReplicationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepositoryReplication")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryReplicationResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryReplicationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
