@@ -295,6 +295,56 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 }
 
+func TestPostgresAuditRetentionCleanupIsBoundedAndDurable(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	old := time.Now().UTC().AddDate(0, 0, -10)
+	for _, actor := range []string{"audit-retention-old-one", "audit-retention-old-two"} {
+		if err := store.RecordAudit(ctx, repository.AuditRecord{Actor: actor, OccurredAt: old}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := store.GetAuditRetentionPolicy(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err = store.ReplaceAuditRetentionPolicy(ctx, repository.AuditRetentionPolicy{Enabled: true, KeepDays: 1}, p.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := (AuditRetentionWorker{Store: store}).Enqueue(ctx, "postgres-audit-retention-"+uuid.NewString(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (AuditRetentionWorker{Store: store}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListAuditCleanupJobs(ctx, 10)
+	if err != nil || len(jobs) == 0 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted || jobs[0].Deleted != 1 {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var remaining int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM resolver_audit_log WHERE actor IN ('audit-retention-old-one','audit-retention-old-two')`).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Fatalf("bounded deletion remaining=%d", remaining)
+	}
+}
+
 func TestPostgresLifecycleJobStatusManagementHTTP(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

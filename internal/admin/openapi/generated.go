@@ -52,6 +52,30 @@ func (e ArtifactState) Valid() bool {
 	}
 }
 
+// Defines values for AuditCleanupJobState.
+const (
+	AuditCleanupJobStateCompleted AuditCleanupJobState = "completed"
+	AuditCleanupJobStateFailed    AuditCleanupJobState = "failed"
+	AuditCleanupJobStatePending   AuditCleanupJobState = "pending"
+	AuditCleanupJobStateRunning   AuditCleanupJobState = "running"
+)
+
+// Valid indicates whether the value is a known member of the AuditCleanupJobState enum.
+func (e AuditCleanupJobState) Valid() bool {
+	switch e {
+	case AuditCleanupJobStateCompleted:
+		return true
+	case AuditCleanupJobStateFailed:
+		return true
+	case AuditCleanupJobStatePending:
+		return true
+	case AuditCleanupJobStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateAPIKeyRoles.
 const (
 	CreateAPIKeyRolesAdmin CreateAPIKeyRoles = "admin"
@@ -478,6 +502,23 @@ type ArtifactTombstonePage struct {
 	NextPageToken *string             `json:"nextPageToken,omitempty"`
 }
 
+// AuditCleanupJob defines model for AuditCleanupJob.
+type AuditCleanupJob struct {
+	BatchSize     int                  `json:"batchSize"`
+	CompletedAt   *time.Time           `json:"completedAt,omitempty"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	CutoffAt      time.Time            `json:"cutoffAt"`
+	Deleted       int                  `json:"deleted"`
+	Id            openapi_types.UUID   `json:"id"`
+	LastError     *string              `json:"lastError,omitempty"`
+	PolicyVersion string               `json:"policyVersion"`
+	StartedAt     *time.Time           `json:"startedAt,omitempty"`
+	State         AuditCleanupJobState `json:"state"`
+}
+
+// AuditCleanupJobState defines model for AuditCleanupJob.State.
+type AuditCleanupJobState string
+
 // AuditList defines model for AuditList.
 type AuditList = []AuditRecord
 
@@ -506,6 +547,13 @@ type AuditRecord struct {
 	Status              *int      `json:"status,omitempty"`
 	TraceId             *string   `json:"traceId,omitempty"`
 	UpstreamHost        *string   `json:"upstreamHost,omitempty"`
+}
+
+// AuditRetentionPolicy defines model for AuditRetentionPolicy.
+type AuditRetentionPolicy struct {
+	Enabled  bool   `json:"enabled"`
+	KeepDays int    `json:"keepDays"`
+	Version  string `json:"version"`
 }
 
 // ConanReference defines model for ConanReference.
@@ -868,6 +916,9 @@ type ArtifactSummaryList = ArtifactSummaryPage
 // ArtifactTombstoneList defines model for ArtifactTombstoneList.
 type ArtifactTombstoneList = ArtifactTombstonePage
 
+// AuditCleanupJobList defines model for AuditCleanupJobList.
+type AuditCleanupJobList = []AuditCleanupJob
+
 // ConanReferenceList defines model for ConanReferenceList.
 type ConanReferenceList = ConanReferencePage
 
@@ -885,6 +936,16 @@ type OCIImageList = OCIImagePage
 
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
+
+// ReplaceAuditRetentionPolicyParams defines parameters for ReplaceAuditRetentionPolicy.
+type ReplaceAuditRetentionPolicyParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ExecuteAuditRetentionParams defines parameters for ExecuteAuditRetention.
+type ExecuteAuditRetentionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
 
 // ListAuditsParams defines parameters for ListAudits.
 type ListAuditsParams struct {
@@ -1002,6 +1063,9 @@ type ListRepositoryTombstonesParams struct {
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateAPIKey
 
+// ReplaceAuditRetentionPolicyJSONRequestBody defines body for ReplaceAuditRetentionPolicy for application/json ContentType.
+type ReplaceAuditRetentionPolicyJSONRequestBody = AuditRetentionPolicy
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -1082,6 +1146,18 @@ type ServerInterface interface {
 
 	// (DELETE /api-keys/{apiKeyId})
 	RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyId openapi_types.UUID)
+
+	// (GET /audit-retention-policy)
+	GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /audit-retention-policy)
+	ReplaceAuditRetentionPolicy(w http.ResponseWriter, r *http.Request, params ReplaceAuditRetentionPolicyParams)
+
+	// (GET /audit-retention/jobs)
+	ListAuditRetentionJobs(w http.ResponseWriter, r *http.Request)
+
+	// (POST /audit-retention:execute)
+	ExecuteAuditRetention(w http.ResponseWriter, r *http.Request, params ExecuteAuditRetentionParams)
 
 	// (GET /audits)
 	ListAudits(w http.ResponseWriter, r *http.Request, params ListAuditsParams)
@@ -1255,6 +1331,124 @@ func (siw *ServerInterfaceWrapper) RevokeApiKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeApiKey(w, r, apiKeyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuditRetentionPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuditRetentionPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceAuditRetentionPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceAuditRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceAuditRetentionPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceAuditRetentionPolicy(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuditRetentionJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListAuditRetentionJobs(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuditRetentionJobs(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExecuteAuditRetention operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteAuditRetention(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteAuditRetentionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExecuteAuditRetention(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3011,6 +3205,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api-keys", wrapper.CreateApiKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api-keys/{apiKeyId}", wrapper.RevokeApiKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit-retention-policy", wrapper.GetAuditRetentionPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/audit-retention-policy", wrapper.ReplaceAuditRetentionPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit-retention/jobs", wrapper.ListAuditRetentionJobs)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/audit-retention:execute", wrapper.ExecuteAuditRetention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audits", wrapper.ListAudits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
@@ -3066,7 +3264,13 @@ type ArtifactSummaryListJSONResponse ArtifactSummaryPage
 
 type ArtifactTombstoneListJSONResponse ArtifactTombstonePage
 
+type AuditCleanupJobJSONResponse AuditCleanupJob
+
+type AuditCleanupJobListJSONResponse []AuditCleanupJob
+
 type AuditListJSONResponse AuditList
+
+type AuditRetentionPolicyJSONResponse AuditRetentionPolicy
 
 type ConanReferenceListJSONResponse ConanReferencePage
 
@@ -3248,6 +3452,131 @@ func (response RevokeApiKey404ApplicationProblemPlusJSONResponse) VisitRevokeApi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuditRetentionPolicyRequestObject struct {
+}
+
+type GetAuditRetentionPolicyResponseObject interface {
+	VisitGetAuditRetentionPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetAuditRetentionPolicy200JSONResponse struct {
+	AuditRetentionPolicyJSONResponse
+}
+
+func (response GetAuditRetentionPolicy200JSONResponse) VisitGetAuditRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceAuditRetentionPolicyRequestObject struct {
+	Params ReplaceAuditRetentionPolicyParams
+	Body   *ReplaceAuditRetentionPolicyJSONRequestBody
+}
+
+type ReplaceAuditRetentionPolicyResponseObject interface {
+	VisitReplaceAuditRetentionPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceAuditRetentionPolicy200JSONResponse struct {
+	AuditRetentionPolicyJSONResponse
+}
+
+func (response ReplaceAuditRetentionPolicy200JSONResponse) VisitReplaceAuditRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceAuditRetentionPolicy412ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceAuditRetentionPolicy412ApplicationProblemPlusJSONResponse) VisitReplaceAuditRetentionPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuditRetentionJobsRequestObject struct {
+}
+
+type ListAuditRetentionJobsResponseObject interface {
+	VisitListAuditRetentionJobsResponse(w http.ResponseWriter) error
+}
+
+type ListAuditRetentionJobs200JSONResponse struct {
+	AuditCleanupJobListJSONResponse
+}
+
+func (response ListAuditRetentionJobs200JSONResponse) VisitListAuditRetentionJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteAuditRetentionRequestObject struct {
+	Params ExecuteAuditRetentionParams
+}
+
+type ExecuteAuditRetentionResponseObject interface {
+	VisitExecuteAuditRetentionResponse(w http.ResponseWriter) error
+}
+
+type ExecuteAuditRetention202JSONResponse struct{ AuditCleanupJobJSONResponse }
+
+func (response ExecuteAuditRetention202JSONResponse) VisitExecuteAuditRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteAuditRetention409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ExecuteAuditRetention409ApplicationProblemPlusJSONResponse) VisitExecuteAuditRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4684,6 +5013,18 @@ type StrictServerInterface interface {
 	// (DELETE /api-keys/{apiKeyId})
 	RevokeApiKey(ctx context.Context, request RevokeApiKeyRequestObject) (RevokeApiKeyResponseObject, error)
 
+	// (GET /audit-retention-policy)
+	GetAuditRetentionPolicy(ctx context.Context, request GetAuditRetentionPolicyRequestObject) (GetAuditRetentionPolicyResponseObject, error)
+
+	// (PUT /audit-retention-policy)
+	ReplaceAuditRetentionPolicy(ctx context.Context, request ReplaceAuditRetentionPolicyRequestObject) (ReplaceAuditRetentionPolicyResponseObject, error)
+
+	// (GET /audit-retention/jobs)
+	ListAuditRetentionJobs(ctx context.Context, request ListAuditRetentionJobsRequestObject) (ListAuditRetentionJobsResponseObject, error)
+
+	// (POST /audit-retention:execute)
+	ExecuteAuditRetention(ctx context.Context, request ExecuteAuditRetentionRequestObject) (ExecuteAuditRetentionResponseObject, error)
+
 	// (GET /audits)
 	ListAudits(ctx context.Context, request ListAuditsRequestObject) (ListAuditsResponseObject, error)
 
@@ -4915,6 +5256,113 @@ func (sh *strictHandler) RevokeApiKey(w http.ResponseWriter, r *http.Request, ap
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeApiKeyResponseObject); ok {
 		if err := validResponse.VisitRevokeApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuditRetentionPolicy operation middleware
+func (sh *strictHandler) GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	var request GetAuditRetentionPolicyRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuditRetentionPolicy(ctx, request.(GetAuditRetentionPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuditRetentionPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuditRetentionPolicyResponseObject); ok {
+		if err := validResponse.VisitGetAuditRetentionPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceAuditRetentionPolicy operation middleware
+func (sh *strictHandler) ReplaceAuditRetentionPolicy(w http.ResponseWriter, r *http.Request, params ReplaceAuditRetentionPolicyParams) {
+	var request ReplaceAuditRetentionPolicyRequestObject
+
+	request.Params = params
+
+	var body ReplaceAuditRetentionPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceAuditRetentionPolicy(ctx, request.(ReplaceAuditRetentionPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceAuditRetentionPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceAuditRetentionPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceAuditRetentionPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAuditRetentionJobs operation middleware
+func (sh *strictHandler) ListAuditRetentionJobs(w http.ResponseWriter, r *http.Request) {
+	var request ListAuditRetentionJobsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuditRetentionJobs(ctx, request.(ListAuditRetentionJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuditRetentionJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuditRetentionJobsResponseObject); ok {
+		if err := validResponse.VisitListAuditRetentionJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExecuteAuditRetention operation middleware
+func (sh *strictHandler) ExecuteAuditRetention(w http.ResponseWriter, r *http.Request, params ExecuteAuditRetentionParams) {
+	var request ExecuteAuditRetentionRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExecuteAuditRetention(ctx, request.(ExecuteAuditRetentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExecuteAuditRetention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExecuteAuditRetentionResponseObject); ok {
+		if err := validResponse.VisitExecuteAuditRetentionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

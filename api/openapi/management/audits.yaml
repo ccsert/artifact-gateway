@@ -25,3 +25,33 @@ audits:
         "$ref": "../components/responses.yaml#/AuditList"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
+audit_retention_policy:
+  get:
+    operationId: getAuditRetentionPolicy
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/AuditRetentionPolicy"}
+  put:
+    operationId: replaceAuditRetentionPolicy
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/AuditRetentionPolicy"}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/AuditRetentionPolicy"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}
+audit_retention_execute:
+  post:
+    operationId: executeAuditRetention
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    responses:
+      '202': {"$ref": "../components/responses.yaml#/AuditCleanupJob"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+audit_retention_jobs:
+  get:
+    operationId: listAuditRetentionJobs
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/AuditCleanupJobList"}

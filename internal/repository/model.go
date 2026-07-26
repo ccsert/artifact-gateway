@@ -318,3 +318,25 @@ type AuditQuery struct {
 	Repository string
 	Limit      int
 }
+
+// AuditRetentionPolicy governs global resolver audit cleanup. It is disabled by
+// default so enabling deletion is always an explicit administrative action.
+type AuditRetentionPolicy struct {
+	Version  string `json:"version"`
+	Enabled  bool   `json:"enabled"`
+	KeepDays int    `json:"keepDays"`
+}
+
+type AuditCleanupJob struct {
+	ID             string
+	IdempotencyKey string
+	PolicyVersion  string
+	CutoffAt       time.Time
+	BatchSize      int
+	Deleted        int
+	State          LifecycleJobState
+	CreatedAt      time.Time
+	StartedAt      time.Time
+	CompletedAt    time.Time
+	LastError      string
+}

@@ -15,6 +15,12 @@ paths:
     "$ref": "./management/api-keys.yaml#/api_keys_apiKeyId"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
+  "/audit-retention-policy":
+    "$ref": "./management/audits.yaml#/audit_retention_policy"
+  "/audit-retention:execute":
+    "$ref": "./management/audits.yaml#/audit_retention_execute"
+  "/audit-retention/jobs":
+    "$ref": "./management/audits.yaml#/audit_retention_jobs"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
@@ -169,6 +175,10 @@ components:
       "$ref": "./components/schemas.yaml#/AuditRecord"
     AuditList:
       "$ref": "./components/schemas.yaml#/AuditList"
+    AuditRetentionPolicy:
+      "$ref": "./components/schemas.yaml#/AuditRetentionPolicy"
+    AuditCleanupJob:
+      "$ref": "./components/schemas.yaml#/AuditCleanupJob"
   parameters:
     RepositoryId:
       "$ref": "./components/parameters.yaml#/RepositoryId"
@@ -261,6 +271,12 @@ components:
       "$ref": "./components/responses.yaml#/Deletion"
     AuditList:
       "$ref": "./components/responses.yaml#/AuditList"
+    AuditRetentionPolicy:
+      "$ref": "./components/responses.yaml#/AuditRetentionPolicy"
+    AuditCleanupJob:
+      "$ref": "./components/responses.yaml#/AuditCleanupJob"
+    AuditCleanupJobList:
+      "$ref": "./components/responses.yaml#/AuditCleanupJobList"
   securitySchemes:
     bearerAuth:
       "$ref": "./components/security-schemes.yaml#/bearerAuth"

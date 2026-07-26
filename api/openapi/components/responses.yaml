@@ -143,6 +143,23 @@ RetentionPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RetentionPolicy"
+AuditRetentionPolicy:
+  description: Global audit retention policy
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/AuditRetentionPolicy"}
+AuditCleanupJob:
+  description: Audit cleanup job
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/AuditCleanupJob"}
+AuditCleanupJobList:
+  description: Audit cleanup jobs, newest first
+  content:
+    application/json:
+      schema:
+        type: array
+        items: {"$ref": "../components/schemas.yaml#/AuditCleanupJob"}
 RepositoryCapacity:
   description: Logical repository capacity and configured quota
   content:

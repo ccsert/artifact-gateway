@@ -172,6 +172,17 @@ type AuditStore interface {
 	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
 }
 
+type AuditRetentionStore interface {
+	GetAuditRetentionPolicy(context.Context) (AuditRetentionPolicy, error)
+	ReplaceAuditRetentionPolicy(context.Context, AuditRetentionPolicy, string) (AuditRetentionPolicy, error)
+	EnqueueAuditCleanupJob(context.Context, AuditCleanupJob) (AuditCleanupJob, bool, error)
+	ListAuditCleanupJobs(context.Context, int) ([]AuditCleanupJob, error)
+	ClaimAuditCleanupJobs(context.Context, int) ([]AuditCleanupJob, error)
+	CompleteAuditCleanupJob(context.Context, string, int) error
+	FailAuditCleanupJob(context.Context, string, string) error
+	DeleteAuditsBefore(context.Context, time.Time, int) (int, error)
+}
+
 // MavenStore keeps Maven Group configuration separate from OCI Groups.
 type MavenStore interface {
 	CreateMavenGroup(context.Context, Group) (Group, error)

@@ -134,6 +134,7 @@ type generatedRepositoryAPIAdapter struct {
 	capacities        repository.RepositoryCapacityStore
 	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
+	auditRetention    repository.AuditRetentionStore
 	replication       repository.ReplicationStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
@@ -255,6 +256,96 @@ func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http
 		response = append(response, auditResponseFromRecord(audit))
 	}
 	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
+func (h generatedRepositoryAPIAdapter) GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	p, err := h.auditRetention.GetAuditRetentionPolicy(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get audit retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.AuditRetentionPolicy{Version: p.Version, Enabled: p.Enabled, KeepDays: p.KeepDays})
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceAuditRetentionPolicy(w http.ResponseWriter, r *http.Request, params adminopenapi.ReplaceAuditRetentionPolicyParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var request adminopenapi.AuditRetentionPolicy
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil || request.Version == "" || request.KeepDays < 0 || request.KeepDays > 36500 || (request.Enabled && request.KeepDays < 1) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, enabled, and keepDays must be valid")
+		return
+	}
+	p, err := h.auditRetention.ReplaceAuditRetentionPolicy(r.Context(), repository.AuditRetentionPolicy{Version: request.Version, Enabled: request.Enabled, KeepDays: request.KeepDays}, string(params.IfMatch))
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace audit retention policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.AuditRetentionPolicy{Version: p.Version, Enabled: p.Enabled, KeepDays: p.KeepDays})
+}
+
+func (h generatedRepositoryAPIAdapter) ExecuteAuditRetention(w http.ResponseWriter, r *http.Request, params adminopenapi.ExecuteAuditRetentionParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	p, err := h.auditRetention.GetAuditRetentionPolicy(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get audit retention policy failed")
+		return
+	}
+	if !p.Enabled {
+		writeHostedProblem(w, http.StatusConflict, "retention_disabled", "audit retention is disabled")
+		return
+	}
+	job, _, err := (AuditRetentionWorker{Store: h.auditRetention}).Enqueue(r.Context(), string(params.IdempotencyKey), 1000)
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing audit cleanup job")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "enqueue audit cleanup job failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusAccepted, auditCleanupJobResponse(job))
+}
+
+func (h generatedRepositoryAPIAdapter) ListAuditRetentionJobs(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	jobs, err := h.auditRetention.ListAuditCleanupJobs(r.Context(), 100)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list audit cleanup jobs failed")
+		return
+	}
+	response := make([]adminopenapi.AuditCleanupJob, 0, len(jobs))
+	for _, job := range jobs {
+		response = append(response, auditCleanupJobResponse(job))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
+func auditCleanupJobResponse(job repository.AuditCleanupJob) adminopenapi.AuditCleanupJob {
+	response := adminopenapi.AuditCleanupJob{Id: uuid.MustParse(job.ID), PolicyVersion: job.PolicyVersion, CutoffAt: job.CutoffAt, BatchSize: job.BatchSize, Deleted: job.Deleted, State: adminopenapi.AuditCleanupJobState(job.State), CreatedAt: job.CreatedAt}
+	if !job.StartedAt.IsZero() {
+		response.StartedAt = &job.StartedAt
+	}
+	if !job.CompletedAt.IsZero() {
+		response.CompletedAt = &job.CompletedAt
+	}
+	if job.LastError != "" {
+		response.LastError = &job.LastError
+	}
+	return response
 }
 
 // auditResponse is the V2 audit representation. V1 keeps returning the
