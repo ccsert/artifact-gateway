@@ -179,6 +179,22 @@ func (s *MemoryStore) ListConanPackageRevisions(_ context.Context, repositoryID,
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
 }
+func (s *MemoryStore) ListConanPackageIDs(_ context.Context, repositoryID, reference, recipeRevision string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := map[string]bool{}
+	for _, item := range s.conanPackages {
+		if item.RepositoryID == repositoryID && item.Reference == reference && item.RecipeRevision == recipeRevision && item.State == "visible" {
+			seen[item.PackageID] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out, nil
+}
 
 func (s *MemoryStore) ListConanRecipeAssets(_ context.Context, repositoryID, reference, revision string) ([]ConanAsset, error) {
 	return s.listConanAssets(repositoryID, reference, revision, "", "")

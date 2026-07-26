@@ -185,6 +185,22 @@ func (s *PostgresStore) ListConanPackageRevisions(ctx context.Context, repositor
 	}
 	return out, rows.Err()
 }
+func (s *PostgresStore) ListConanPackageIDs(ctx context.Context, repositoryID, reference, recipeRevision string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT package_id FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND state='visible' ORDER BY package_id`, repositoryID, reference, recipeRevision)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
 
 func (s *PostgresStore) ListConanRecipeAssets(ctx context.Context, repositoryID, reference, revision string) ([]ConanAsset, error) {
 	return s.listConanAssets(ctx, repositoryID, reference, revision, "", "")

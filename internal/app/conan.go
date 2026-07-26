@@ -383,6 +383,20 @@ func (h ConanHandler) nativeConanContent(ctx context.Context, repo repository.Ho
 			body, _ := json.Marshal(nativeConanFilesJSON(assets))
 			return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
 		}
+		if len(parts) == 7 && parts[6] == "search" {
+			ids, err := h.NativeStore.ListConanPackageIDs(ctx, repo.ID, reference, recipeRevision)
+			if err != nil {
+				return conanCacheEntry{}, false, err
+			}
+			packages := make(map[string]map[string]any, len(ids))
+			for _, id := range ids {
+				packages[id] = map[string]any{}
+			}
+			body, _ := json.Marshal(struct {
+				Packages map[string]map[string]any `json:"packages"`
+			}{Packages: packages})
+			return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+		}
 		if len(parts) == 8 && parts[6] == "files" {
 			asset, err := h.NativeStore.GetConanRecipeAsset(ctx, repo.ID, reference, recipeRevision, parts[7])
 			return h.nativeConanFile(ctx, asset, err)

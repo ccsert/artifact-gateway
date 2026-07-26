@@ -36,9 +36,17 @@ func TestMemoryConanLifecyclePublishesAndTombstonesRevisions(t *testing.T) {
 	if err != nil || publishedPackage.State != "visible" {
 		t.Fatalf("package=%#v err=%v", publishedPackage, err)
 	}
+	ids, err := store.ListConanPackageIDs(ctx, "repo", recipe.Reference, recipe.Revision)
+	if err != nil || len(ids) != 1 || ids[0] != pkg.PackageID {
+		t.Fatalf("visible package IDs=%v err=%v", ids, err)
+	}
 	tombstonedPackage, err := store.TombstoneConanPackageRevision(ctx, "repo", recipe.Reference, recipe.Revision, pkg.PackageID, pkg.Revision)
 	if err != nil || tombstonedPackage.State != "deleted" {
 		t.Fatalf("package tombstone=%#v err=%v", tombstonedPackage, err)
+	}
+	ids, err = store.ListConanPackageIDs(ctx, "repo", recipe.Reference, recipe.Revision)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("tombstoned package IDs=%v err=%v", ids, err)
 	}
 	tombstonedRecipe, err := store.TombstoneConanRecipeRevision(ctx, "repo", recipe.Reference, recipe.Revision)
 	if err != nil || tombstonedRecipe.State != "deleted" {
