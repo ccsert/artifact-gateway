@@ -90,6 +90,8 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.manifest(w, r, repo, imageName, reference)
 	case "tags":
 		h.tags(w, r, repo, imageName)
+	case "referrers":
+		h.referrers(w, r, repo, imageName, reference)
 	default:
 		return false
 	}
@@ -112,7 +114,7 @@ func (h nativeOCIHandler) recordAuthorizationDenial(r *http.Request, principal P
 
 func nativeOCIOperation(resource, method string) RepositoryOperation {
 	switch resource {
-	case "blob", "tags":
+	case "blob", "tags", "referrers":
 		return RepositoryRead
 	case "manifest":
 		if method == http.MethodGet || method == http.MethodHead {
@@ -134,6 +136,10 @@ func parseNativeOCIPath(path string) (name, resource, reference, uploadID string
 			if i > 0 && i+2 == len(parts) {
 				return strings.Join(parts[:i], "/"), "manifest", parts[i+1], "", true
 			}
+		case "referrers":
+			if i > 0 && i+2 == len(parts) {
+				return strings.Join(parts[:i], "/"), "referrers", parts[i+1], "", true
+			}
 		case "blobs":
 			if i > 0 && i+2 == len(parts) && parts[i+1] != "uploads" {
 				return strings.Join(parts[:i], "/"), "blob", parts[i+1], "", true
@@ -150,6 +156,47 @@ func parseNativeOCIPath(path string) (name, resource, reference, uploadID string
 		}
 	}
 	return "", "", "", "", false
+}
+
+func (h nativeOCIHandler) referrers(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, subject string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !validOCIDigest(subject) {
+		writeOCIError(w, http.StatusBadRequest, "DIGEST_INVALID", "valid sha256 digest is required")
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 1000 {
+			writeOCIError(w, http.StatusBadRequest, "NAME_INVALID", "referrer page size must be between 1 and 1000")
+			return
+		}
+		limit = n
+	}
+	items, err := h.store.ListOCIReferrers(r.Context(), repo.ID, name, subject, limit+1, r.URL.Query().Get("last"))
+	if err != nil {
+		writeOCIError(w, 500, "UNKNOWN", "unable to list referrers")
+		return
+	}
+	if len(items) > limit {
+		items = items[:limit]
+		w.Header().Set("Link", "</v2/"+repo.Name+"/"+name+"/referrers/"+subject+"?n="+strconv.Itoa(limit)+"&last="+url.QueryEscape(items[len(items)-1].Digest)+">; rel=\"next\"")
+	}
+	type descriptor struct {
+		MediaType    string `json:"mediaType"`
+		Digest       string `json:"digest"`
+		Size         int64  `json:"size"`
+		ArtifactType string `json:"artifactType,omitempty"`
+	}
+	out := make([]descriptor, 0, len(items))
+	for _, item := range items {
+		out = append(out, descriptor{item.MediaType, item.Digest, item.Size, item.ArtifactType})
+	}
+	w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"schemaVersion": 2, "manifests": out})
 }
 
 func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
