@@ -708,6 +708,14 @@ func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testin
 			t.Fatalf("retried promotion read %s = %d, want 200", path, response.Code)
 		}
 	}
+	differentKey := httptest.NewRequest(http.MethodPost, commitPath, strings.NewReader(commitBody))
+	differentKey.SetBasicAuth("maven", "resolver-secret")
+	differentKey.Header.Set("Idempotency-Key", "different-postgres-promotion-retry")
+	differentKeyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(differentKeyResponse, differentKey)
+	if differentKeyResponse.Code != http.StatusConflict || !strings.Contains(differentKeyResponse.Body.String(), "idempotency_conflict") {
+		t.Fatalf("different commit key=%d %s", differentKeyResponse.Code, differentKeyResponse.Body.String())
+	}
 }
 
 func TestPostgresMavenRetentionTombstonesExpiredExcessVersions(t *testing.T) {

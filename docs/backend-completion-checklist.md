@@ -24,7 +24,7 @@ goal. It intentionally excludes frontend work.
 - [x] OCI referrers endpoint.
 - [x] OCI repository browse/search projection.
 - [x] Maven browse/search projection.
-- [ ] Maven publication companion hardening and black-box fixture coverage.
+- [x] Maven publication companion hardening and black-box fixture coverage.
 - [x] Raw object listing.
 - [x] Raw checksum metadata and checksum sidecar behavior.
 - [x] Raw resumable upload support.
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement Maven Hosted publication companion hardening and black-box fixture
-coverage.
+Reconcile the remaining Conan lifecycle checklist entries with the implemented
+Hosted restore, reclaim, and search/index behavior, then cover any gaps.

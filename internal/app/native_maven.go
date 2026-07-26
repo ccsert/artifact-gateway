@@ -310,8 +310,17 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 }
 
 func (h nativeMavenHandler) promote(ctx context.Context, s repository.MavenPublishSession) (repository.MavenArtifact, error) {
+	artifact, _, err := h.promoteWithIdempotency(ctx, s, "", "")
+	return artifact, err
+}
+
+func (h nativeMavenHandler) promoteIdempotently(ctx context.Context, s repository.MavenPublishSession, key, payload string) (repository.MavenArtifact, bool, error) {
+	return h.promoteWithIdempotency(ctx, s, key, payload)
+}
+
+func (h nativeMavenHandler) promoteWithIdempotency(ctx context.Context, s repository.MavenPublishSession, key, payload string) (repository.MavenArtifact, bool, error) {
 	if err := h.validatePOM(ctx, s); err != nil {
-		return repository.MavenArtifact{}, err
+		return repository.MavenArtifact{}, false, err
 	}
 	base := mavenCoordinatePath(s.Coordinate)
 	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
@@ -319,22 +328,26 @@ func (h nativeMavenHandler) promote(ctx context.Context, s repository.MavenPubli
 		key := "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:")
 		info, statErr := h.objects.Stat(ctx, key)
 		if statErr != nil || info.Size != o.Size || info.Digest != o.Digest {
-			return repository.MavenArtifact{}, errors.New("staged Maven object is unavailable or has changed")
+			return repository.MavenArtifact{}, false, errors.New("staged Maven object is unavailable or has changed")
 		}
 		assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name, ObjectKey: "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:"), Digest: o.Digest, Size: o.Size})
 		body, err := h.objects.Get(ctx, "native/maven/sha256/"+strings.TrimPrefix(o.Digest, "sha256:"))
 		if err != nil {
-			return repository.MavenArtifact{}, errors.New("staged Maven object is unavailable")
+			return repository.MavenArtifact{}, false, errors.New("staged Maven object is unavailable")
 		}
 		for _, checksum := range generatedMavenChecksums(body) {
 			key := "native/maven/sha256/" + checksum.digest
 			if err := h.objects.PutVerifiedReader(ctx, key, strings.NewReader(checksum.body), int64(len(checksum.body)), "sha256:"+checksum.digest); err != nil {
-				return repository.MavenArtifact{}, err
+				return repository.MavenArtifact{}, false, err
 			}
 			assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name + checksum.extension, ObjectKey: key, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
 		}
 	}
-	return h.store.CommitMavenPublishSession(ctx, s.ID, assets)
+	if key == "" {
+		artifact, err := h.store.CommitMavenPublishSession(ctx, s.ID, assets)
+		return artifact, false, err
+	}
+	return h.store.CommitMavenPublishSessionIdempotently(ctx, s.ID, key, payload, assets)
 }
 func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
@@ -445,8 +458,9 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	if strings.TrimSpace(r.Header.Get("Idempotency-Key")) == "" {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required")
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" || len(key) > 128 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
 		return
 	}
 	repo, err := h.store.GetHostedRepositoryByName(r.Context(), repositoryName)
@@ -489,26 +503,15 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		writeHostedProblem(w, http.StatusConflict, "expected_assets_conflict", "expectedAssetNames do not match staged Maven assets")
 		return
 	}
-	if s.State == "committed" {
-		artifacts, listErr := h.store.ListMavenArtifacts(r.Context(), repo.ID)
-		if listErr != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load committed Maven coordinate failed")
-			return
-		}
-		for _, artifact := range artifacts {
-			if artifact.Coordinate == coordinate {
-				writeNativeMavenJSON(w, http.StatusOK, artifact)
-				return
-			}
-		}
-		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "Maven coordinate is already committed")
-		return
-	}
-	if s.State != "open" || time.Now().After(s.ExpiresAt) {
+	if (s.State != "open" && s.State != "committed") || (s.State == "open" && time.Now().After(s.ExpiresAt)) {
 		writeHostedProblem(w, http.StatusConflict, "session_closed", "Maven publish session is closed")
 		return
 	}
-	artifact, err := h.promote(r.Context(), s)
+	artifact, _, err := h.promoteIdempotently(r.Context(), s, key, mavenCommitPayloadHash(body.ExpectedAssetNames))
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different coordinate commit")
+		return
+	}
 	if errors.Is(err, repository.ErrNameExists) {
 		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "Maven coordinate already exists")
 		return
@@ -532,6 +535,14 @@ func validExpectedMavenAssetNames(names []string) bool {
 		seen[name] = struct{}{}
 	}
 	return len(names) > 0
+}
+
+func mavenCommitPayloadHash(names []string) string {
+	canonical := append([]string(nil), names...)
+	sort.Strings(canonical)
+	payload, _ := json.Marshal(canonical)
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }
 
 func sameMavenAssetNames(expected []string, objects []repository.MavenDeclaredObject) bool {

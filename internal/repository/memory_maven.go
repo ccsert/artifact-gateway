@@ -136,6 +136,37 @@ func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key st
 func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.commitMavenPublishSessionLocked(id, assets)
+}
+
+func (s *MemoryStore) CommitMavenPublishSessionIdempotently(_ context.Context, id, key, payload string, assets []MavenAsset) (MavenArtifact, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if record, ok := s.mavenCommitKeys[id]; ok && time.Now().UTC().Before(record.expiresAt) {
+		if record.key != key || record.payload != payload {
+			return MavenArtifact{}, false, ErrIdempotencyConflict
+		}
+		artifact, ok := s.mavenArtifacts[id]
+		if !ok {
+			return MavenArtifact{}, false, ErrNotFound
+		}
+		return artifact, true, nil
+	}
+	delete(s.mavenCommitKeys, id)
+	if session, ok := s.mavenSessions[id]; !ok {
+		return MavenArtifact{}, false, ErrNotFound
+	} else if session.State == "committed" {
+		return MavenArtifact{}, false, ErrNameExists
+	}
+	artifact, err := s.commitMavenPublishSessionLocked(id, assets)
+	if err != nil {
+		return MavenArtifact{}, false, err
+	}
+	s.mavenCommitKeys[id] = mavenCommitRecord{key: key, payload: payload, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
+	return artifact, false, nil
+}
+
+func (s *MemoryStore) commitMavenPublishSessionLocked(id string, assets []MavenAsset) (MavenArtifact, error) {
 	session, ok := s.mavenSessions[id]
 	if !ok {
 		return MavenArtifact{}, ErrNotFound

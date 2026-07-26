@@ -210,77 +210,120 @@ func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, ke
 	return tx.Commit()
 }
 func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	artifact, _, err := s.commitMavenPublishSession(ctx, id, "", "", assets)
+	return artifact, err
+}
+
+func (s *PostgresStore) CommitMavenPublishSessionIdempotently(ctx context.Context, id, key, payload string, assets []MavenAsset) (MavenArtifact, bool, error) {
+	return s.commitMavenPublishSession(ctx, id, key, payload, assets)
+}
+
+func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, payload string, assets []MavenAsset) (MavenArtifact, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	var v MavenPublishSession
 	var objects []byte
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
 	if errors.Is(err, sql.ErrNoRows) {
-		return MavenArtifact{}, ErrNotFound
+		return MavenArtifact{}, false, ErrNotFound
 	}
 	if err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
+	}
+	if key != "" {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_commit_idempotency WHERE session_id=$1 AND expires_at <= now()`, id); err != nil {
+			return MavenArtifact{}, false, err
+		}
+		var storedKey, storedPayload string
+		recordErr := tx.QueryRowContext(ctx, `SELECT key,payload_hash FROM native_maven_commit_idempotency WHERE session_id=$1`, id).Scan(&storedKey, &storedPayload)
+		if recordErr == nil {
+			if storedKey != key || storedPayload != payload {
+				return MavenArtifact{}, false, ErrIdempotencyConflict
+			}
+			if v.State != "committed" {
+				return MavenArtifact{}, false, ErrDisabled
+			}
+			var artifact MavenArtifact
+			if err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt); err != nil {
+				return MavenArtifact{}, false, err
+			}
+			if err = tx.Commit(); err != nil {
+				return MavenArtifact{}, false, err
+			}
+			return artifact, true, nil
+		}
+		if !errors.Is(recordErr, sql.ErrNoRows) {
+			return MavenArtifact{}, false, recordErr
+		}
+		if v.State == "committed" {
+			return MavenArtifact{}, false, ErrNameExists
+		}
 	}
 	if v.State != "open" || time.Now().After(v.ExpiresAt) {
-		return MavenArtifact{}, ErrDisabled
+		return MavenArtifact{}, false, ErrDisabled
 	}
 	if err = json.Unmarshal(objects, &v.Objects); err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
 	var uploaded int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM native_maven_publish_uploads WHERE session_id=$1`, id).Scan(&uploaded); err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
 	if uploaded != len(v.Objects) {
-		return MavenArtifact{}, ErrDisabled
+		return MavenArtifact{}, false, ErrDisabled
 	}
 	var claimed bool
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_intents WHERE session_id=$1 AND claimed_at IS NOT NULL)`, id).Scan(&claimed); err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
 	if claimed {
-		return MavenArtifact{}, ErrDisabled
+		return MavenArtifact{}, false, ErrDisabled
 	}
 	for _, a := range assets {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, id, a.Digest, a.Size); err != nil {
-			return MavenArtifact{}, err
+			return MavenArtifact{}, false, err
 		}
 		var intentClaimed, intentDeleted bool
 		if err = tx.QueryRowContext(ctx, `SELECT claimed_at IS NOT NULL, deleted_at IS NOT NULL FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, a.ObjectKey).Scan(&intentClaimed, &intentDeleted); err != nil {
-			return MavenArtifact{}, err
+			return MavenArtifact{}, false, err
 		}
 		if intentClaimed || intentDeleted {
-			return MavenArtifact{}, ErrDisabled
+			return MavenArtifact{}, false, ErrDisabled
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, a.RepositoryID, a.Path, a.ObjectKey, a.Digest, a.Size)
 		if isUnique(err) {
-			return MavenArtifact{}, ErrNameExists
+			return MavenArtifact{}, false, ErrNameExists
 		}
 		if err != nil {
-			return MavenArtifact{}, err
+			return MavenArtifact{}, false, err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2) ON CONFLICT (object_key) DO NOTHING`, a.ObjectKey, a.RepositoryID); err != nil {
-			return MavenArtifact{}, err
+			return MavenArtifact{}, false, err
 		}
 	}
 	a := MavenArtifact{ID: id, RepositoryID: v.RepositoryID, Coordinate: v.Coordinate, Digest: v.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
 	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') ON CONFLICT (repository_id,coordinate) DO NOTHING RETURNING id::text, digest, state, created_at`, a.ID, a.RepositoryID, a.Coordinate, a.Digest).Scan(&a.ID, &a.Digest, &a.State, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return MavenArtifact{}, ErrNameExists
+		return MavenArtifact{}, false, ErrNameExists
 	}
 	if err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
+	}
+	if key != "" {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_commit_idempotency (session_id,key,payload_hash,expires_at) VALUES ($1,$2,$3,now()+interval '24 hours')`, id, key, payload); err != nil {
+			return MavenArtifact{}, false, err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE id=$1`, id); err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
 	if err = tx.Commit(); err != nil {
-		return MavenArtifact{}, err
+		return MavenArtifact{}, false, err
 	}
-	return a, nil
+	return a, false, nil
 }
 func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) (MavenAsset, error) {
 	var a MavenAsset

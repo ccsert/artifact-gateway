@@ -66,6 +66,7 @@ type NativeMavenStore interface {
 	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
 	MarkMavenPublishObject(context.Context, string, string, string) error
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
+	CommitMavenPublishSessionIdempotently(context.Context, string, string, string, []MavenAsset) (MavenArtifact, bool, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
 	SearchMavenArtifacts(context.Context, string, string, int, string) ([]MavenArtifact, error)

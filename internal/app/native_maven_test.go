@@ -60,6 +60,14 @@ func (s *failOnceMavenCommitStore) CommitMavenPublishSession(ctx context.Context
 	return s.MemoryStore.CommitMavenPublishSession(ctx, id, assets)
 }
 
+func (s *failOnceMavenCommitStore) CommitMavenPublishSessionIdempotently(ctx context.Context, id, key, payload string, assets []repository.MavenAsset) (repository.MavenArtifact, bool, error) {
+	if s.fail {
+		s.fail = false
+		return repository.MavenArtifact{}, false, errors.New("control plane unavailable")
+	}
+	return s.MemoryStore.CommitMavenPublishSessionIdempotently(ctx, id, key, payload, assets)
+}
+
 func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
@@ -149,22 +157,25 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	if out.Code != http.StatusNotFound {
 		t.Fatalf("staged asset=%d %q", out.Code, out.Body.String())
 	}
-	commit := func(expected string) *httptest.ResponseRecorder {
+	commit := func(expected, key string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/repository/maven/deploys/coordinates/org.example:widget:1.2.0:commit", strings.NewReader(expected))
 		r.SetBasicAuth("maven", "resolver-secret")
-		r.Header.Set("Idempotency-Key", "coordinate-commit")
+		r.Header.Set("Idempotency-Key", key)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
 	}
-	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom"]}`); result.Code != http.StatusConflict {
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom"]}`, "coordinate-commit"); result.Code != http.StatusConflict {
 		t.Fatalf("incomplete expected assets=%d %s", result.Code, result.Body.String())
 	}
-	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom","widget-1.2.0.jar"]}`); result.Code != http.StatusOK {
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.pom","widget-1.2.0.jar"]}`, "coordinate-commit"); result.Code != http.StatusOK {
 		t.Fatalf("commit=%d %s", result.Code, result.Body.String())
 	}
-	if result := commit(`{"expectedAssetNames":["widget-1.2.0.jar","widget-1.2.0.pom"]}`); result.Code != http.StatusOK {
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.jar","widget-1.2.0.pom"]}`, "coordinate-commit"); result.Code != http.StatusOK {
 		t.Fatalf("idempotent commit=%d %s", result.Code, result.Body.String())
+	}
+	if result := commit(`{"expectedAssetNames":["widget-1.2.0.jar","widget-1.2.0.pom"]}`, "different-coordinate-commit"); result.Code != http.StatusConflict || !strings.Contains(result.Body.String(), "idempotency_conflict") {
+		t.Fatalf("different idempotency key=%d %s", result.Code, result.Body.String())
 	}
 	out = httptest.NewRecorder()
 	h.ServeHTTP(out, get)

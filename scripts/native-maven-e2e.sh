@@ -84,6 +84,14 @@ EOF
 expect_status 200 "${basic[@]}" -H 'Idempotency-Key: maven-release' -H 'Content-Type: application/json' \
   --data '{"expectedAssetNames":["maven-widget-1.2.3.pom","maven-widget-1.2.3.jar"]}' \
   "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
+# Commit retries use a canonical asset-name set. A different key must not turn
+# an immutable coordinate into an unbounded successful replay.
+expect_status 200 "${basic[@]}" -H 'Idempotency-Key: maven-release' -H 'Content-Type: application/json' \
+  --data '{"expectedAssetNames":["maven-widget-1.2.3.jar","maven-widget-1.2.3.pom"]}' \
+  "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
+expect_status 409 "${basic[@]}" -H 'Idempotency-Key: maven-release-other' -H 'Content-Type: application/json' \
+  --data '{"expectedAssetNames":["maven-widget-1.2.3.pom","maven-widget-1.2.3.jar"]}' \
+  "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
 
 resolve_dir="$workdir/maven-resolve"
 mkdir -p "$resolve_dir"
