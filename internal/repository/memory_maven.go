@@ -323,6 +323,44 @@ func (s *MemoryStore) RestoreMavenArtifact(_ context.Context, repositoryID, arti
 	return artifact, nil
 }
 
+func (s *MemoryStore) PromoteMavenArtifact(_ context.Context, promotion MavenPromotion) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var source MavenArtifact
+	found := false
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == promotion.SourceRepositoryID && artifact.Coordinate == promotion.Coordinate && artifact.Digest == promotion.Digest && artifact.State == "visible" {
+			source, found = artifact, true
+			break
+		}
+	}
+	if !found {
+		return MavenArtifact{}, ErrNotFound
+	}
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == promotion.TargetRepositoryID && artifact.Coordinate == promotion.Coordinate {
+			return MavenArtifact{}, ErrNameExists
+		}
+	}
+	assets := []MavenAsset{}
+	for _, asset := range s.mavenAssets {
+		if asset.RepositoryID == source.RepositoryID && mavenAssetBelongsToArtifact(asset, source.Coordinate) {
+			assets = append(assets, asset)
+		}
+	}
+	if len(assets) == 0 {
+		return MavenArtifact{}, ErrDisabled
+	}
+	for _, asset := range assets {
+		asset.RepositoryID = promotion.TargetRepositoryID
+		s.mavenAssets[asset.RepositoryID+"\x00"+asset.Path] = asset
+		s.mavenObjectRefs[asset.ObjectKey] = true
+	}
+	artifact := MavenArtifact{ID: promotion.ID, RepositoryID: promotion.TargetRepositoryID, Coordinate: source.Coordinate, Digest: source.Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	s.mavenArtifacts[artifact.ID] = artifact
+	return artifact, nil
+}
+
 func mavenArtifactPathPrefix(coordinate string) string {
 	parts := strings.Split(coordinate, ":")
 	return strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/"

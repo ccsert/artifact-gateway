@@ -71,6 +71,31 @@ func TestMemoryMavenTombstoneRestoresUntilObjectIsCollected(t *testing.T) {
 	}
 }
 
+func TestMemoryMavenPromotionCopiesVisibleMetadataOnly(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateMavenPublishSession(ctx, MavenPublishSession{ID: "source", RepositoryID: "source-repo", Coordinate: "org.example:widget:1.0.0", Publisher: "alice", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []MavenDeclaredObject{{Name: "widget.jar", Digest: "sha256:widget", Size: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(ctx, "source", "widget.jar", "native/maven/widget"); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CommitMavenPublishSession(ctx, "source", []MavenAsset{{RepositoryID: "source-repo", Path: "org/example/widget/1.0.0/widget.jar", ObjectKey: "native/maven/widget", Digest: "sha256:widget", Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := store.PromoteMavenArtifact(ctx, MavenPromotion{ID: "target", SourceRepositoryID: "source-repo", TargetRepositoryID: "target-repo", Coordinate: source.Coordinate, Digest: source.Digest})
+	if err != nil || promoted.RepositoryID != "target-repo" {
+		t.Fatalf("promoted=%#v err=%v", promoted, err)
+	}
+	if _, err = store.GetMavenAsset(ctx, "target-repo", "org/example/widget/1.0.0/widget.jar"); err != nil {
+		t.Fatalf("target asset=%v", err)
+	}
+	if _, err = store.PromoteMavenArtifact(ctx, MavenPromotion{ID: "again", SourceRepositoryID: "source-repo", TargetRepositoryID: "target-repo", Coordinate: source.Coordinate, Digest: source.Digest}); !errors.Is(err, ErrNameExists) {
+		t.Fatalf("duplicate promotion=%v", err)
+	}
+}
+
 func TestMemoryHostedGroupVersionAndIdempotency(t *testing.T) {
 	store := NewMemoryStore()
 	group := HostedGroup{ID: "group-1", Name: "releases", Format: FormatMaven, Members: []GroupMember{{RepositoryID: "repo-2", Position: 1}, {RepositoryID: "repo-1", Position: 0}}}

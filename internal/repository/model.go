@@ -158,6 +158,12 @@ type MavenArtifact struct {
 	State        string    `json:"state"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
+
+// MavenPromotion snapshots a visible coordinate for immutable promotion into a
+// second Maven Hosted repository.
+type MavenPromotion struct {
+	ID, SourceRepositoryID, TargetRepositoryID, Coordinate, Digest string
+}
 type MavenObjectIntent struct{ RepositoryID, ObjectKey, ClaimToken string }
 
 type ConanObjectIntent struct {

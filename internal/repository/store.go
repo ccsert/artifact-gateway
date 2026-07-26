@@ -76,6 +76,7 @@ type NativeMavenStore interface {
 	GetMavenArtifactByCoordinate(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	RestoreMavenArtifact(context.Context, string, string) (MavenArtifact, error)
+	PromoteMavenArtifact(context.Context, MavenPromotion) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
 	MavenObjectIntentClaimIsActive(context.Context, string, string) (bool, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)
