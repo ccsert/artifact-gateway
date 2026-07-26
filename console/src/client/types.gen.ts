@@ -73,6 +73,21 @@ export type RetentionPolicy = {
     minimumVersions: number;
 };
 
+export type RepositoryCapacity = {
+    repositoryId: string;
+    format: Format;
+    usedBytes: number;
+    objectCount: number;
+    /**
+     * Zero disables the quota.
+     */
+    quotaBytes: number;
+};
+
+export type RepositoryCapacityQuota = {
+    quotaBytes: number;
+};
+
 export type RetentionDryRun = {
     policyVersion: string;
     candidates: Array<{
@@ -558,6 +573,64 @@ export type ReplaceRetentionPolicyResponses = {
 };
 
 export type ReplaceRetentionPolicyResponse = ReplaceRetentionPolicyResponses[keyof ReplaceRetentionPolicyResponses];
+
+export type GetRepositoryCapacityData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/capacity';
+};
+
+export type GetRepositoryCapacityErrors = {
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetRepositoryCapacityError = GetRepositoryCapacityErrors[keyof GetRepositoryCapacityErrors];
+
+export type GetRepositoryCapacityResponses = {
+    /**
+     * Logical repository capacity and configured quota
+     */
+    200: RepositoryCapacity;
+};
+
+export type GetRepositoryCapacityResponse = GetRepositoryCapacityResponses[keyof GetRepositoryCapacityResponses];
+
+export type ReplaceRepositoryCapacityData = {
+    body: RepositoryCapacityQuota;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/capacity';
+};
+
+export type ReplaceRepositoryCapacityErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ReplaceRepositoryCapacityError = ReplaceRepositoryCapacityErrors[keyof ReplaceRepositoryCapacityErrors];
+
+export type ReplaceRepositoryCapacityResponses = {
+    /**
+     * Logical repository capacity and configured quota
+     */
+    200: RepositoryCapacity;
+};
+
+export type ReplaceRepositoryCapacityResponse = ReplaceRepositoryCapacityResponses[keyof ReplaceRepositoryCapacityResponses];
 
 export type DryRunRepositoryRetentionData = {
     body?: never;

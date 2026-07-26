@@ -154,6 +154,20 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	if retentionReplaced.Code != http.StatusOK || !strings.Contains(retentionReplaced.Body.String(), `"version":"2"`) {
 		t.Fatalf("replace repository retention policy = %d body=%s", retentionReplaced.Code, retentionReplaced.Body.String())
 	}
+	capacityReplace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+hosted.ID+"/capacity", strings.NewReader(`{"quotaBytes":1024}`))
+	authorize(capacityReplace, "admin-secret")
+	capacityReplaced := httptest.NewRecorder()
+	handler.ServeHTTP(capacityReplaced, capacityReplace)
+	if capacityReplaced.Code != http.StatusOK || !strings.Contains(capacityReplaced.Body.String(), `"quotaBytes":1024`) {
+		t.Fatalf("replace repository capacity = %d body=%s", capacityReplaced.Code, capacityReplaced.Body.String())
+	}
+	capacityGet := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+hosted.ID+"/capacity", nil)
+	authorize(capacityGet, "admin-secret")
+	capacityResult := httptest.NewRecorder()
+	handler.ServeHTTP(capacityResult, capacityGet)
+	if capacityResult.Code != http.StatusOK || !strings.Contains(capacityResult.Body.String(), `"format":"maven"`) || !strings.Contains(capacityResult.Body.String(), `"quotaBytes":1024`) {
+		t.Fatalf("get repository capacity = %d body=%s", capacityResult.Code, capacityResult.Body.String())
+	}
 	artifactSession := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: hosted.ID, Coordinate: "org.example:integration:1.0.0", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "integration-1.0.0.jar", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 3}}}
 	if _, err = store.CreateMavenPublishSession(context.Background(), artifactSession); err != nil {
 		t.Fatal(err)

@@ -615,6 +615,22 @@ type RepositoryCapabilitiesOperations string
 // RepositoryCapabilitiesType defines model for RepositoryCapabilities.Type.
 type RepositoryCapabilitiesType string
 
+// RepositoryCapacity defines model for RepositoryCapacity.
+type RepositoryCapacity struct {
+	Format      Format `json:"format"`
+	ObjectCount int64  `json:"objectCount"`
+
+	// QuotaBytes Zero disables the quota.
+	QuotaBytes   int64              `json:"quotaBytes"`
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	UsedBytes    int64              `json:"usedBytes"`
+}
+
+// RepositoryCapacityQuota defines model for RepositoryCapacityQuota.
+type RepositoryCapacityQuota struct {
+	QuotaBytes int64 `json:"quotaBytes"`
+}
+
 // RepositoryPage defines model for RepositoryPage.
 type RepositoryPage struct {
 	Items         []Repository `json:"items"`
@@ -825,6 +841,9 @@ type ReplaceGroupMembersJSONRequestBody = MemberList
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
+// ReplaceRepositoryCapacityJSONRequestBody defines body for ReplaceRepositoryCapacity for application/json ContentType.
+type ReplaceRepositoryCapacityJSONRequestBody = RepositoryCapacityQuota
+
 // ReplaceGrantsJSONRequestBody defines body for ReplaceGrants for application/json ContentType.
 type ReplaceGrantsJSONRequestBody = GrantList
 
@@ -941,6 +960,12 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/capabilities)
 	GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /repositories/{repositoryId}/capacity)
+	GetRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /repositories/{repositoryId}/capacity)
+	ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
@@ -1776,6 +1801,58 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCapabilities(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRepositoryCapabilities(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepositoryCapacity operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryCapacity(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRepositoryCapacity operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRepositoryCapacity(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2677,6 +2754,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capabilities", wrapper.GetRepositoryCapabilities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.GetRepositoryCapacity)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.ReplaceRepositoryCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
@@ -2739,6 +2818,8 @@ type PublishSessionJSONResponse PublishSession
 type RepositoryJSONResponse Repository
 
 type RepositoryCapabilitiesJSONResponse RepositoryCapabilities
+
+type RepositoryCapacityJSONResponse RepositoryCapacity
 
 type RepositoryListJSONResponse RepositoryPage
 
@@ -3440,6 +3521,97 @@ func (response GetRepositoryCapabilities404ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type GetRepositoryCapacityRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetRepositoryCapacityResponseObject interface {
+	VisitGetRepositoryCapacityResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryCapacity200JSONResponse struct{ RepositoryCapacityJSONResponse }
+
+func (response GetRepositoryCapacity200JSONResponse) VisitGetRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCapacity404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryCapacity404ApplicationProblemPlusJSONResponse) VisitGetRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRepositoryCapacityRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *ReplaceRepositoryCapacityJSONRequestBody
+}
+
+type ReplaceRepositoryCapacityResponseObject interface {
+	VisitReplaceRepositoryCapacityResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRepositoryCapacity200JSONResponse struct{ RepositoryCapacityJSONResponse }
+
+func (response ReplaceRepositoryCapacity200JSONResponse) VisitReplaceRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRepositoryCapacity400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceRepositoryCapacity400ApplicationProblemPlusJSONResponse) VisitReplaceRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRepositoryCapacity404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRepositoryCapacity404ApplicationProblemPlusJSONResponse) VisitReplaceRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListConanReferencesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListConanReferencesParams
@@ -4085,6 +4257,12 @@ type StrictServerInterface interface {
 	// (GET /repositories/{repositoryId}/capabilities)
 	GetRepositoryCapabilities(ctx context.Context, request GetRepositoryCapabilitiesRequestObject) (GetRepositoryCapabilitiesResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/capacity)
+	GetRepositoryCapacity(ctx context.Context, request GetRepositoryCapacityRequestObject) (GetRepositoryCapacityResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/capacity)
+	ReplaceRepositoryCapacity(ctx context.Context, request ReplaceRepositoryCapacityRequestObject) (ReplaceRepositoryCapacityResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
 
@@ -4723,6 +4901,65 @@ func (sh *strictHandler) GetRepositoryCapabilities(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryCapabilitiesResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryCapabilitiesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryCapacity operation middleware
+func (sh *strictHandler) GetRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetRepositoryCapacityRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryCapacity(ctx, request.(GetRepositoryCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryCapacityResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRepositoryCapacity operation middleware
+func (sh *strictHandler) ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ReplaceRepositoryCapacityRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ReplaceRepositoryCapacityJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRepositoryCapacity(ctx, request.(ReplaceRepositoryCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRepositoryCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRepositoryCapacityResponseObject); ok {
+		if err := validResponse.VisitReplaceRepositoryCapacityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -19,6 +19,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/capacity":
+    "$ref": "./management/capacity.yaml#/repositories_repositoryId_capacity"
   "/repositories/{repositoryId}/retention:dry-run":
     "$ref": "./management/retention.yaml#/repositories_repositoryId_retention_dry_run"
   "/repositories/{repositoryId}/retention:execute":
@@ -87,6 +89,10 @@ components:
       "$ref": "./components/schemas.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    RepositoryCapacity:
+      "$ref": "./components/schemas.yaml#/RepositoryCapacity"
+    RepositoryCapacityQuota:
+      "$ref": "./components/schemas.yaml#/RepositoryCapacityQuota"
     RetentionDryRun:
       "$ref": "./components/schemas.yaml#/RetentionDryRun"
     RestoreArtifact:
@@ -207,6 +213,8 @@ components:
       "$ref": "./components/responses.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
+    RepositoryCapacity:
+      "$ref": "./components/responses.yaml#/RepositoryCapacity"
     RetentionDryRun:
       "$ref": "./components/responses.yaml#/RetentionDryRun"
     LifecycleJobList:

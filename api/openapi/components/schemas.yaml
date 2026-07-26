@@ -155,6 +155,21 @@ RetentionPolicy:
     minimumVersions:
       type: integer
       minimum: 1
+RepositoryCapacity:
+  type: object
+  required: [repositoryId, format, usedBytes, objectCount, quotaBytes]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    format: {"$ref": "#/Format"}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 0, description: "Zero disables the quota."}
+RepositoryCapacityQuota:
+  type: object
+  required: [quotaBytes]
+  additionalProperties: false
+  properties:
+    quotaBytes: {type: integer, format: int64, minimum: 0}
 RetentionDryRun:
   type: object
   required: [policyVersion, candidates]

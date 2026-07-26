@@ -129,6 +129,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	capacities        repository.RepositoryCapacityStore
 	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
 	replication       repository.ReplicationStore
@@ -439,6 +440,46 @@ func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWri
 			return
 		}
 		writeNativeMavenJSON(w, http.StatusOK, updated)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, _ repository.HostedRepository) {
+		capacity, err := h.capacities.GetRepositoryCapacity(r.Context(), repositoryID.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository capacity failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, capacity)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		var request adminopenapi.RepositoryCapacityQuota
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.QuotaBytes < 0 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "quotaBytes must be a non-negative integer")
+			return
+		}
+		capacity, err := h.capacities.ReplaceRepositoryCapacityQuota(r.Context(), repositoryID.String(), request.QuotaBytes)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace repository capacity failed")
+			return
+		}
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: "repositories/" + repo.ID + "/capacity", Operation: "capacity.configure", Status: http.StatusOK, CacheDisposition: "bypass"})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, capacity)
 	})
 }
 

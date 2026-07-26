@@ -17,6 +17,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/capacity":
+    "$ref": "./management/capacity.yaml#/repositories_repositoryId_capacity"
   "/groups":
     "$ref": "./management/groups.yaml#/groups"
   "/groups/{groupId}":
@@ -61,6 +63,10 @@ components:
       "$ref": "./components/schemas.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    RepositoryCapacity:
+      "$ref": "./components/schemas.yaml#/RepositoryCapacity"
+    RepositoryCapacityQuota:
+      "$ref": "./components/schemas.yaml#/RepositoryCapacityQuota"
     CreatePublishSession:
       "$ref": "./components/schemas.yaml#/CreatePublishSession"
     CreateMavenPublishSession:
@@ -139,6 +145,8 @@ components:
       "$ref": "./components/responses.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
+    RepositoryCapacity:
+      "$ref": "./components/responses.yaml#/RepositoryCapacity"
     PublishSession:
       "$ref": "./components/responses.yaml#/PublishSession"
     Artifact:

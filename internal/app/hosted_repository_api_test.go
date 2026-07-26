@@ -739,6 +739,52 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryCapacityManagementUsesScopedGrantsAndAuditsConfiguration(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "capacity-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: repo.ID, Path: "widget", Digest: "sha256:widget", ObjectKey: "native/raw/widget", Size: 4}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}},
+		{Principal: "manager", Scopes: []string{"repositories:admin"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(method, actor, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/api/v2/repositories/"+repo.ID+"/capacity", strings.NewReader(body))
+		authorize(r, authenticator.IssueToken(actor))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := request(http.MethodGet, "reader", ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"usedBytes":4`) || !strings.Contains(response.Body.String(), `"quotaBytes":0`) {
+		t.Fatalf("reader capacity=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPut, "reader", `{"quotaBytes":10}`); response.Code != http.StatusForbidden {
+		t.Fatalf("reader configure=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPut, "manager", `{"quotaBytes":-1}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid configure=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodPut, "manager", `{"quotaBytes":10}`); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"quotaBytes":10`) {
+		t.Fatalf("configure=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) == 0 {
+		t.Fatal("expected capacity configuration audit")
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.Outcome != repository.AuditResolved || audit.Actor != "manager" || audit.Operation != "capacity.configure" || audit.Resource != "repositories/"+repo.ID+"/capacity" {
+		t.Fatalf("audit=%#v", audit)
+	}
+}
+
 func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

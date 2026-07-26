@@ -33,11 +33,11 @@ type HostedRepository struct {
 // Shared content-addressed bytes are counted once for each visible repository
 // reference so quotas remain meaningful after promotion.
 type RepositoryCapacity struct {
-	RepositoryID string
-	Format       Format
-	UsedBytes    int64
-	ObjectCount  int64
-	QuotaBytes   int64 // zero means no configured quota
+	RepositoryID string `json:"repositoryId"`
+	Format       Format `json:"format"`
+	UsedBytes    int64  `json:"usedBytes"`
+	ObjectCount  int64  `json:"objectCount"`
+	QuotaBytes   int64  `json:"quotaBytes"` // zero means no configured quota
 }
 
 type HostedGroup struct {

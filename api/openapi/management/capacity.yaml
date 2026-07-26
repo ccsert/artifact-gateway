@@ -1,0 +1,26 @@
+---
+repositories_repositoryId_capacity:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getRepositoryCapacity
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryCapacity"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: replaceRepositoryCapacity
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/RepositoryCapacityQuota"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryCapacity"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

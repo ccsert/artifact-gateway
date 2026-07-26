@@ -217,6 +217,48 @@
         }
       }
     },
+    "/repositories/{repositoryId}/capacity": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getRepositoryCapacity",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryCapacity"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceRepositoryCapacity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryCapacityQuota"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryCapacity"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/retention:dry-run": {
       "parameters": [
         {
@@ -2147,6 +2189,55 @@
           }
         }
       },
+      "RepositoryCapacity": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "format",
+          "usedBytes",
+          "objectCount",
+          "quotaBytes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Zero disables the quota."
+          }
+        }
+      },
+      "RepositoryCapacityQuota": {
+        "type": "object",
+        "required": [
+          "quotaBytes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "RetentionDryRun": {
         "type": "object",
         "required": [
@@ -3242,6 +3333,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RetentionPolicy"
+            }
+          }
+        }
+      },
+      "RepositoryCapacity": {
+        "description": "Logical repository capacity and configured quota",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryCapacity"
             }
           }
         }
