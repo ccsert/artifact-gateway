@@ -31,6 +31,8 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
+  "/repositories/{repositoryId}/oci/images":
+    "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/publish-sessions/{sessionId}":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
   "/publish-sessions/{sessionId}/objects/{objectName}":
@@ -85,6 +87,10 @@ components:
       "$ref": "./components/schemas.yaml#/GroupPage"
     ArtifactPage:
       "$ref": "./components/schemas.yaml#/ArtifactPage"
+    OCIImage:
+      "$ref": "./components/schemas.yaml#/OCIImage"
+    OCIImagePage:
+      "$ref": "./components/schemas.yaml#/OCIImagePage"
     AuditRecord:
       "$ref": "./components/schemas.yaml#/AuditRecord"
     AuditList:
@@ -108,6 +114,8 @@ components:
       "$ref": "./components/parameters.yaml#/PageSize"
     PageToken:
       "$ref": "./components/parameters.yaml#/PageToken"
+    OCIImagePrefix:
+      "$ref": "./components/parameters.yaml#/OCIImagePrefix"
     IdempotencyKey:
       "$ref": "./components/parameters.yaml#/IdempotencyKey"
     IfMatch:
@@ -151,6 +159,8 @@ components:
       "$ref": "./components/responses.yaml#/Artifact"
     ArtifactList:
       "$ref": "./components/responses.yaml#/ArtifactList"
+    OCIImageList:
+      "$ref": "./components/responses.yaml#/OCIImageList"
     Deletion:
       "$ref": "./components/responses.yaml#/Deletion"
     AuditList:

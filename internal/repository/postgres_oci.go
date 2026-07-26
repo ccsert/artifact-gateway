@@ -314,10 +314,16 @@ func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name
 	return out, rows.Err()
 }
 func (s *PostgresStore) ListOCIManifestNames(ctx context.Context, repositoryID string, limit int, after string) ([]string, error) {
+	return s.searchOCIManifestNames(ctx, repositoryID, "", limit, after)
+}
+func (s *PostgresStore) SearchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
+	return s.searchOCIManifestNames(ctx, repositoryID, prefix, limit, after)
+}
+func (s *PostgresStore) searchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND name>$2 ORDER BY name LIMIT $3`, repositoryID, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND ($2='' OR left(name,length($2))=$2) AND name>$3 ORDER BY name LIMIT $4`, repositoryID, prefix, after, limit)
 	if err != nil {
 		return nil, err
 	}

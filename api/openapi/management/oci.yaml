@@ -1,0 +1,17 @@
+---
+repositories_repositoryId_oci_images:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listOCIImages
+    parameters:
+    - "$ref": "../components/parameters.yaml#/OCIImagePrefix"
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCIImageList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

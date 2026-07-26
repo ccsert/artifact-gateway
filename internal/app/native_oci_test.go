@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
@@ -359,6 +360,75 @@ func TestNativeOCICatalogPaginatesAndFiltersRepositoryGrants(t *testing.T) {
 	handler.ServeHTTP(headResponse, head)
 	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
 		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
+	}
+}
+
+func TestNativeOCIImageBrowseSearchProjection(t *testing.T) {
+	store := repository.NewMemoryStore()
+	ociRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "oci-images", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "raw-images", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	for _, image := range []string{"team/alpha", "team/beta", "other/gamma"} {
+		req := httptest.NewRequest(http.MethodPut, "/v2/oci-images/"+image+"/manifests/latest", strings.NewReader(`{"schemaVersion":2}`))
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", image, response.Code, response.Body.String())
+		}
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), ociRepo.ID, []repository.RepositoryGrant{{Principal: "oci-browser", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	browserToken := authenticator.IssueToken("oci-browser")
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+ociRepo.ID+"/oci/images?q=team&pageSize=1", nil)
+	authorize(request, browserToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var page struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Name != "team/alpha" || page.NextPageToken == "" {
+		t.Fatalf("browse=%d body=%s page=%#v", response.Code, response.Body.String(), page)
+	}
+	next := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+ociRepo.ID+"/oci/images?q=team&pageSize=1&pageToken="+url.QueryEscape(page.NextPageToken), nil)
+	authorize(next, browserToken)
+	nextResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nextResponse, next)
+	if nextResponse.Code != http.StatusOK || !strings.Contains(nextResponse.Body.String(), `"team/beta"`) {
+		t.Fatalf("next=%d %s", nextResponse.Code, nextResponse.Body.String())
+	}
+
+	crossQuery := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+ociRepo.ID+"/oci/images?q=other&pageToken="+url.QueryEscape(page.NextPageToken), nil)
+	authorize(crossQuery, browserToken)
+	crossQueryResponse := httptest.NewRecorder()
+	handler.ServeHTTP(crossQueryResponse, crossQuery)
+	if crossQueryResponse.Code != http.StatusBadRequest || !strings.Contains(crossQueryResponse.Body.String(), "invalid_page_token") {
+		t.Fatalf("cross query=%d %s", crossQueryResponse.Code, crossQueryResponse.Body.String())
+	}
+	invalidPrefix := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+ociRepo.ID+"/oci/images?q=../invalid", nil)
+	authorize(invalidPrefix, browserToken)
+	invalidPrefixResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidPrefixResponse, invalidPrefix)
+	if invalidPrefixResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid prefix=%d %s", invalidPrefixResponse.Code, invalidPrefixResponse.Body.String())
+	}
+	nonOCI := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+rawRepo.ID+"/oci/images", nil)
+	authorize(nonOCI, browserToken)
+	nonOCIResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nonOCIResponse, nonOCI)
+	if nonOCIResponse.Code != http.StatusNotFound {
+		t.Fatalf("non OCI=%d %s", nonOCIResponse.Code, nonOCIResponse.Body.String())
 	}
 }
 

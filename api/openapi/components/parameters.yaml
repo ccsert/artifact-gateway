@@ -64,6 +64,13 @@ PageToken:
   in: query
   schema:
     type: string
+OCIImagePrefix:
+  name: q
+  in: query
+  description: OCI image-name prefix used to filter the repository projection.
+  schema:
+    type: string
+    maxLength: 255
 IdempotencyKey:
   name: Idempotency-Key
   in: header

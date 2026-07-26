@@ -524,6 +524,38 @@
         }
       }
     },
+    "/repositories/{repositoryId}/oci/images": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listOCIImages",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OCIImagePrefix"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OCIImageList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/raw/{repository}/{path}": {
       "servers": [
         {
@@ -1855,6 +1887,35 @@
         "items": {
           "$ref": "#/components/schemas/AuditRecord"
         }
+      },
+      "OCIImage": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "OCIImagePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OCIImage"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {
@@ -1956,6 +2017,15 @@
         "required": true,
         "schema": {
           "type": "string"
+        }
+      },
+      "OCIImagePrefix": {
+        "name": "q",
+        "in": "query",
+        "description": "OCI image-name prefix used to filter the repository projection.",
+        "schema": {
+          "type": "string",
+          "maxLength": 255
         }
       }
     },
@@ -2206,6 +2276,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuditList"
+            }
+          }
+        }
+      },
+      "OCIImageList": {
+        "description": "OCI image-name projection page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OCIImagePage"
             }
           }
         }

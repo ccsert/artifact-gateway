@@ -37,6 +37,8 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
+  "/repositories/{repositoryId}/oci/images":
+    "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/raw/{repository}/{path}":
     "$ref": "./protocols/raw.yaml#/raw_repository_path"
   "/v2/{name}/blobs/uploads/":

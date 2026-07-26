@@ -143,6 +143,12 @@ ArtifactList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/ArtifactPage"
+OCIImageList:
+  description: OCI image-name projection page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/OCIImagePage"
 Deletion:
   description: Accepted deletion
   content:

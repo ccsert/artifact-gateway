@@ -102,6 +102,7 @@ type NativeOCIStore interface {
 	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
 	ListOCIReferrers(context.Context, string, string, string, int, string) ([]OCIManifest, error)
 	ListOCIManifestNames(context.Context, string, int, string) ([]string, error)
+	SearchOCIManifestNames(context.Context, string, string, int, string) ([]string, error)
 	ListOCITags(context.Context, string, string, int, string) ([]string, error)
 	DeleteOCIManifest(context.Context, string, string, string) error
 }

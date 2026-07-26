@@ -41,6 +41,11 @@ type repositoryPageCursor struct {
 	ExpiresAt    int64
 }
 
+type ociImagePageCursor struct {
+	Endpoint, RepositoryID, Prefix, Name string
+	ExpiresAt                            int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
@@ -100,6 +105,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	oci               repository.NativeOCIStore
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
 	metrics           *Metrics
@@ -489,6 +495,56 @@ func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *h
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIImagesParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatOCI {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "OCI repository not found")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		prefix := ""
+		if params.Q != nil {
+			prefix = string(*params.Q)
+		}
+		if !validOCIImagePrefix(prefix) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be a valid OCI image-name prefix")
+			return
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeOCIImageCursor(pageToken, repo.ID, prefix)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, prefix, pageSize+1, after)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list OCI images failed")
+			return
+		}
+		var next *string
+		if len(names) > pageSize {
+			names = names[:pageSize]
+			token := h.encodeOCIImageCursor(repo.ID, prefix, names[len(names)-1])
+			next = &token
+		}
+		items := make([]adminopenapi.OCIImage, 0, len(names))
+		for _, name := range names {
+			items = append(items, adminopenapi.OCIImage{Name: name})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.OCIImagePage{Items: items, NextPageToken: next})
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
@@ -706,6 +762,52 @@ func (h hostedRepositoryAPIHandler) decodeCursor(token string) (string, error) {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.ID, nil
+}
+
+func validOCIImagePrefix(value string) bool {
+	if len(value) > 255 || strings.HasPrefix(value, "/") || strings.Contains(value, "//") {
+		return false
+	}
+	for _, component := range strings.Split(value, "/") {
+		if component == "." || component == ".." {
+			return false
+		}
+	}
+	for _, c := range value {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' || c == '/' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
+	payload, _ := json.Marshal(ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, prefix string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor ociImagePageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "oci-images" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Name == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Name, nil
 }
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {

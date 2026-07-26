@@ -22,7 +22,7 @@ goal. It intentionally excludes frontend work.
 
 - [x] OCI catalog endpoint and pagination.
 - [x] OCI referrers endpoint.
-- [ ] OCI repository browse/search projection.
+- [x] OCI repository browse/search projection.
 - [ ] Maven browse/search projection.
 - [ ] Maven publication companion hardening and black-box fixture coverage.
 - [ ] Raw object listing.
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement OCI Hosted repository browse/search projection, preserving the
-existing Registry V2 API and repository-grant visibility rules.
+Implement Raw Hosted object listing, with repository-grant visibility rules
+and stable pagination as the foundation for checksum and resumable-upload work.

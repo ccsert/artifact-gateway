@@ -334,6 +334,17 @@ type Member struct {
 // MemberList defines model for MemberList.
 type MemberList = []Member
 
+// OCIImage defines model for OCIImage.
+type OCIImage struct {
+	Name string `json:"name"`
+}
+
+// OCIImagePage defines model for OCIImagePage.
+type OCIImagePage struct {
+	Items         []OCIImage `json:"items"`
+	NextPageToken *string    `json:"nextPageToken,omitempty"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code      ProblemCode `json:"code"`
@@ -394,6 +405,9 @@ type IdempotencyKey = string
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
+// OCIImagePrefix defines model for OCIImagePrefix.
+type OCIImagePrefix = string
+
 // PageSize defines model for PageSize.
 type PageSize = int
 
@@ -411,6 +425,9 @@ type ArtifactList = ArtifactPage
 
 // GroupList defines model for GroupList.
 type GroupList = GroupPage
+
+// OCIImageList defines model for OCIImageList.
+type OCIImageList = OCIImagePage
 
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
@@ -463,6 +480,14 @@ type ListArtifactsParams struct {
 // ReplaceGrantsParams defines parameters for ReplaceGrants.
 type ReplaceGrantsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListOCIImagesParams defines parameters for ListOCIImages.
+type ListOCIImagesParams struct {
+	// Q OCI image-name prefix used to filter the repository projection.
+	Q         *OCIImagePrefix `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize       `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken      `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // CreatePublishSessionParams defines parameters for CreatePublishSession.
@@ -594,6 +619,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams)
+
+	// (GET /repositories/{repositoryId}/oci/images)
+	ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIImagesParams)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
@@ -1385,6 +1413,74 @@ func (siw *ServerInterfaceWrapper) ReplaceGrants(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListOCIImages operation middleware
+func (siw *ServerInterfaceWrapper) ListOCIImages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOCIImagesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOCIImages(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreatePublishSession operation middleware
 func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r *http.Request) {
 
@@ -1659,6 +1755,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
@@ -1688,6 +1785,8 @@ type GroupJSONResponse Group
 type GroupListJSONResponse GroupPage
 
 type MemberListJSONResponse MemberList
+
+type OCIImageListJSONResponse OCIImagePage
 
 type ProblemApplicationProblemPlusJSONResponse Problem
 
@@ -2376,6 +2475,59 @@ func (response ReplaceGrants412ApplicationProblemPlusJSONResponse) VisitReplaceG
 	return err
 }
 
+type ListOCIImagesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListOCIImagesParams
+}
+
+type ListOCIImagesResponseObject interface {
+	VisitListOCIImagesResponse(w http.ResponseWriter) error
+}
+
+type ListOCIImages200JSONResponse struct{ OCIImageListJSONResponse }
+
+func (response ListOCIImages200JSONResponse) VisitListOCIImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIImages400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOCIImages400ApplicationProblemPlusJSONResponse) VisitListOCIImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIImages404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOCIImages404ApplicationProblemPlusJSONResponse) VisitListOCIImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreatePublishSessionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreatePublishSessionParams
@@ -2540,6 +2692,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(ctx context.Context, request ReplaceGrantsRequestObject) (ReplaceGrantsResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/oci/images)
+	ListOCIImages(ctx context.Context, request ListOCIImagesRequestObject) (ListOCIImagesResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
@@ -3147,6 +3302,33 @@ func (sh *strictHandler) ReplaceGrants(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGrantsResponseObject); ok {
 		if err := validResponse.VisitReplaceGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOCIImages operation middleware
+func (sh *strictHandler) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIImagesParams) {
+	var request ListOCIImagesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOCIImages(ctx, request.(ListOCIImagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOCIImages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOCIImagesResponseObject); ok {
+		if err := validResponse.VisitListOCIImagesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

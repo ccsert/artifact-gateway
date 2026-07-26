@@ -272,6 +272,25 @@ Artifact:
       enum:
       - visible
       - deleted
+OCIImage:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+      minLength: 1
+OCIImagePage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/OCIImage"
+    nextPageToken:
+      type: string
 Deletion:
   type: object
   required:

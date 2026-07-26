@@ -293,6 +293,7 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	}
 	subject := publish(first.Name, "app", "subject", []byte(`{"schemaVersion":2}`))
 	referrer := publish(first.Name, "app", "signature", []byte(`{"schemaVersion":2,"artifactType":"application/vnd.example.signature","subject":{"digest":"`+subject+`"}}`))
+	publish(first.Name, "app-extra", "latest", []byte(`{"schemaVersion":2}`))
 	publish(second.Name, "other", "latest", []byte(`{"schemaVersion":2}`))
 
 	listReferrers, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/"+first.Name+"/app/referrers/"+subject, nil)
@@ -318,7 +319,7 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 		t.Fatalf("referrers status=%d page=%#v", referrerResponse.StatusCode, referrerPage)
 	}
 
-	catalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=1", nil)
+	catalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=2", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,10 +335,10 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	if err := json.NewDecoder(catalogResponse.Body).Decode(&catalogPage); err != nil {
 		t.Fatal(err)
 	}
-	if catalogResponse.StatusCode != http.StatusOK || len(catalogPage.Repositories) != 1 || catalogPage.Repositories[0] != first.Name+"/app" || catalogResponse.Header.Get("Link") == "" {
+	if catalogResponse.StatusCode != http.StatusOK || len(catalogPage.Repositories) != 2 || catalogPage.Repositories[0] != first.Name+"/app" || catalogPage.Repositories[1] != first.Name+"/app-extra" || catalogResponse.Header.Get("Link") == "" {
 		t.Fatalf("catalog status=%d page=%#v link=%q", catalogResponse.StatusCode, catalogPage, catalogResponse.Header.Get("Link"))
 	}
-	nextCatalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=1&last="+url.QueryEscape(catalogPage.Repositories[0]), nil)
+	nextCatalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=2&last="+url.QueryEscape(catalogPage.Repositories[1]), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,6 +356,49 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	}
 	if nextCatalogResponse.StatusCode != http.StatusOK || len(nextCatalogPage.Repositories) != 1 || nextCatalogPage.Repositories[0] != second.Name+"/other" {
 		t.Fatalf("next catalog status=%d page=%#v", nextCatalogResponse.StatusCode, nextCatalogPage)
+	}
+	browseRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/api/v2/repositories/"+first.ID+"/oci/images?q=app&pageSize=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browseRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	browseResponse, err := serverB.Client().Do(browseRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer browseResponse.Body.Close()
+	var browsePage struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if err := json.NewDecoder(browseResponse.Body).Decode(&browsePage); err != nil {
+		t.Fatal(err)
+	}
+	if browseResponse.StatusCode != http.StatusOK || len(browsePage.Items) != 1 || browsePage.Items[0].Name != "app" || browsePage.NextPageToken == "" {
+		t.Fatalf("browse status=%d page=%#v", browseResponse.StatusCode, browsePage)
+	}
+	nextBrowseRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/api/v2/repositories/"+first.ID+"/oci/images?q=app&pageSize=1&pageToken="+url.QueryEscape(browsePage.NextPageToken), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextBrowseRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	nextBrowseResponse, err := serverB.Client().Do(nextBrowseRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nextBrowseResponse.Body.Close()
+	var nextBrowsePage struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(nextBrowseResponse.Body).Decode(&nextBrowsePage); err != nil {
+		t.Fatal(err)
+	}
+	if nextBrowseResponse.StatusCode != http.StatusOK || len(nextBrowsePage.Items) != 1 || nextBrowsePage.Items[0].Name != "app-extra" {
+		t.Fatalf("next browse status=%d page=%#v", nextBrowseResponse.StatusCode, nextBrowsePage)
 	}
 
 	deleted := request(http.MethodDelete, serverA.URL+"/v2/"+first.Name+"/app/manifests/"+referrer, nil)
