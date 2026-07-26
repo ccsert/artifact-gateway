@@ -69,7 +69,9 @@ enqueue_idempotently() {
 }
 replication_completed() {
   local repository_id=$1 plan_id=$2 detail
-  for _ in $(seq 1 30); do
+  # Production replication workers poll once per minute. Allow one full poll
+  # interval plus object-store and database publication time.
+  for _ in $(seq 1 90); do
     detail=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
       "$gateway_url/api/v2/repositories/$repository_id/replications/$plan_id") || return 1
     if python3 -c 'import json, sys; plan=json.load(sys.stdin); sys.exit(not (plan["state"] == "completed" and plan["checkpoints"] and all(checkpoint["state"] == "verified" for checkpoint in plan["checkpoints"])))' <<<"$detail"; then
