@@ -51,7 +51,7 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, l
 	}
 	keys := make([]string, 0, len(s.lifecycleJobs))
 	for key, job := range s.lifecycleJobs {
-		if job.State == LifecycleJobPending && (kind == "" || job.Kind == kind) && lifecycleJobMatchesFormat(job.Payload, format) {
+		if (job.State == LifecycleJobPending || job.State == LifecycleJobFailed) && (kind == "" || job.Kind == kind) && lifecycleJobMatchesFormat(job.Payload, format) {
 			keys = append(keys, key)
 		}
 	}
@@ -64,7 +64,7 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, l
 			break
 		}
 		job := s.lifecycleJobs[key]
-		job.State, job.StartedAt = LifecycleJobRunning, time.Now().UTC()
+		job.State, job.StartedAt, job.CompletedAt = LifecycleJobRunning, time.Now().UTC(), time.Time{}
 		s.lifecycleJobs[key] = job
 		jobs = append(jobs, cloneLifecycleJob(job))
 	}
