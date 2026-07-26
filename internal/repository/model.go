@@ -188,6 +188,12 @@ type ConanPackageRevision struct {
 	CreatedAt                                                                   time.Time
 }
 
+// ConanPromotion snapshots a visible recipe revision together with every
+// visible package revision beneath it into another Hosted repository.
+type ConanPromotion struct {
+	SourceRepositoryID, TargetRepositoryID, Reference, Revision, Digest string
+}
+
 // ConanPublishSession keeps uploads unaddressable until a complete recipe or
 // package revision is atomically promoted to visible metadata.
 type ConanPublishSession struct {

@@ -135,6 +135,35 @@ func (s *MemoryStore) PutConanPackageRevision(_ context.Context, revision ConanP
 	return revision, nil
 }
 
+func (s *MemoryStore) PromoteConanRecipeRevision(_ context.Context, promotion ConanPromotion) (ConanRecipeRevision, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	source, ok := s.conanRecipes[conanRecipeKey(promotion.SourceRepositoryID, promotion.Reference, promotion.Revision)]
+	if !ok || source.State != "visible" || source.Digest != promotion.Digest {
+		return ConanRecipeRevision{}, ErrNotFound
+	}
+	targetKey := conanRecipeKey(promotion.TargetRepositoryID, promotion.Reference, promotion.Revision)
+	if _, exists := s.conanRecipes[targetKey]; exists {
+		return ConanRecipeRevision{}, ErrNameExists
+	}
+	for _, asset := range s.conanAssets {
+		if asset.RepositoryID != promotion.SourceRepositoryID || asset.Reference != promotion.Reference || asset.RecipeRevision != promotion.Revision {
+			continue
+		}
+		asset.RepositoryID = promotion.TargetRepositoryID
+		s.conanAssets[conanAssetKey(asset)] = asset
+	}
+	for _, pkg := range s.conanPackages {
+		if pkg.RepositoryID == promotion.SourceRepositoryID && pkg.Reference == promotion.Reference && pkg.RecipeRevision == promotion.Revision && pkg.State == "visible" {
+			pkg.RepositoryID = promotion.TargetRepositoryID
+			s.conanPackages[conanPackageKey(pkg.RepositoryID, pkg.Reference, pkg.RecipeRevision, pkg.PackageID, pkg.Revision)] = pkg
+		}
+	}
+	source.RepositoryID, source.CreatedAt = promotion.TargetRepositoryID, time.Now().UTC()
+	s.conanRecipes[targetKey] = source
+	return source, nil
+}
+
 func (s *MemoryStore) GetConanRecipeRevision(_ context.Context, repositoryID, reference, revision string) (ConanRecipeRevision, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
