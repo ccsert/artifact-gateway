@@ -217,6 +217,24 @@
         }
       }
     },
+    "/repositories/{repositoryId}/lifecycle-jobs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listRepositoryLifecycleJobs",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LifecycleJobList"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/capabilities": {
       "parameters": [
         {
@@ -1768,8 +1786,7 @@
         ],
         "properties": {
           "id": {
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           "name": {
             "type": "string",
@@ -1925,6 +1942,54 @@
           "minimumVersions": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "LifecycleJob": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "retention",
+              "promotion",
+              "replication",
+              "reclaim"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 1024
           }
         }
       },
@@ -2791,6 +2856,19 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RetentionPolicy"
+            }
+          }
+        }
+      },
+      "LifecycleJobList": {
+        "description": "Lifecycle jobs for one repository, newest first",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/LifecycleJob"
+              }
             }
           }
         }

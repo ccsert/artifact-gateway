@@ -73,6 +73,16 @@ export type RetentionPolicy = {
     minimumVersions: number;
 };
 
+export type LifecycleJob = {
+    id: string;
+    kind: 'retention' | 'promotion' | 'replication' | 'reclaim';
+    state: 'pending' | 'running' | 'completed' | 'failed';
+    createdAt: string;
+    startedAt?: string;
+    completedAt?: string;
+    lastError?: string;
+};
+
 /**
  * Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes.
  */
@@ -500,6 +510,33 @@ export type ReplaceRetentionPolicyResponses = {
 };
 
 export type ReplaceRetentionPolicyResponse = ReplaceRetentionPolicyResponses[keyof ReplaceRetentionPolicyResponses];
+
+export type ListRepositoryLifecycleJobsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/lifecycle-jobs';
+};
+
+export type ListRepositoryLifecycleJobsErrors = {
+    /**
+     * Problem response
+     */
+    403: Problem;
+};
+
+export type ListRepositoryLifecycleJobsError = ListRepositoryLifecycleJobsErrors[keyof ListRepositoryLifecycleJobsErrors];
+
+export type ListRepositoryLifecycleJobsResponses = {
+    /**
+     * Lifecycle jobs for one repository, newest first
+     */
+    200: Array<LifecycleJob>;
+};
+
+export type ListRepositoryLifecycleJobsResponse = ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
 
 export type GetRepositoryCapabilitiesData = {
     body?: never;

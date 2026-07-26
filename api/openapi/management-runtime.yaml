@@ -19,6 +19,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/lifecycle-jobs":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
   "/repositories/{repositoryId}/capabilities":
     "$ref": "./management/capabilities.yaml#/repositories_repositoryId_capabilities"
   "/groups":
@@ -73,6 +75,8 @@ components:
       "$ref": "./components/schemas.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    LifecycleJob:
+      "$ref": "./components/schemas.yaml#/LifecycleJob"
     RepositoryCapabilities:
       "$ref": "./components/schemas.yaml#/RepositoryCapabilities"
     CreatePublishSession:
@@ -179,6 +183,8 @@ components:
       "$ref": "./components/responses.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
+    LifecycleJobList:
+      "$ref": "./components/responses.yaml#/LifecycleJobList"
     RepositoryCapabilities:
       "$ref": "./components/responses.yaml#/RepositoryCapabilities"
     PublishSession:

@@ -31,6 +31,25 @@ func (s *MemoryStore) EnqueueLifecycleJob(_ context.Context, job LifecycleJob) (
 	return cloneLifecycleJob(job), false, nil
 }
 
+func (s *MemoryStore) ListLifecycleJobs(_ context.Context, repositoryID string, limit int) ([]LifecycleJob, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	jobs := make([]LifecycleJob, 0, limit)
+	for _, job := range s.lifecycleJobs {
+		if job.RepositoryID == repositoryID {
+			jobs = append(jobs, cloneLifecycleJob(job))
+		}
+	}
+	sort.Slice(jobs, func(i, j int) bool { return jobs[i].CreatedAt.After(jobs[j].CreatedAt) })
+	if len(jobs) > limit {
+		jobs = jobs[:limit]
+	}
+	return jobs, nil
+}
+
 func (s *MemoryStore) ClaimLifecycleJobs(_ context.Context, limit int) ([]LifecycleJob, error) {
 	return s.claimLifecycleJobs("", "", limit)
 }

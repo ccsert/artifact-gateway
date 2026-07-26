@@ -120,6 +120,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	lifecycleJobs     repository.LifecycleJobStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
 	authorizer        RepositoryAuthorizer
@@ -325,12 +326,12 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 }
 
 func repositoryCapabilities(format repository.Format) adminopenapi.RepositoryCapabilities {
-	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.Read, adminopenapi.Publish, adminopenapi.Browse, adminopenapi.Delete, adminopenapi.Reclaim}
+	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsPublish, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsDelete, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
 	switch format {
 	case repository.FormatMaven:
-		operations = append(operations, adminopenapi.Retain)
+		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain)
 	case repository.FormatConan:
-		operations = append(operations, adminopenapi.Restore)
+		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	}
 	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.Hosted, Operations: operations}
 }
@@ -427,6 +428,35 @@ func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWri
 			return
 		}
 		writeNativeMavenJSON(w, http.StatusOK, updated)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+		jobs, err := h.lifecycleJobs.ListLifecycleJobs(r.Context(), repositoryID.String(), 100)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list lifecycle jobs failed")
+			return
+		}
+		items := make([]adminopenapi.LifecycleJob, 0, len(jobs))
+		for _, job := range jobs {
+			createdAt := job.CreatedAt
+			item := adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: createdAt}
+			if !job.StartedAt.IsZero() {
+				startedAt := job.StartedAt
+				item.StartedAt = &startedAt
+			}
+			if !job.CompletedAt.IsZero() {
+				completedAt := job.CompletedAt
+				item.CompletedAt = &completedAt
+			}
+			if job.LastError != "" {
+				lastError := job.LastError
+				item.LastError = &lastError
+			}
+			items = append(items, item)
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.LifecycleJobList(items))
 	})
 }
 

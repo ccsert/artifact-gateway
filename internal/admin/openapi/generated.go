@@ -54,13 +54,13 @@ func (e CreateMavenPublishSessionFormat) Valid() bool {
 
 // Defines values for DeletionState.
 const (
-	Pending DeletionState = "pending"
+	DeletionStatePending DeletionState = "pending"
 )
 
 // Valid indicates whether the value is a known member of the DeletionState enum.
 func (e DeletionState) Valid() bool {
 	switch e {
-	case Pending:
+	case DeletionStatePending:
 		return true
 	default:
 		return false
@@ -106,6 +106,54 @@ func (e GrantScopes) Valid() bool {
 	case RepositoriesRead:
 		return true
 	case RepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LifecycleJobKind.
+const (
+	LifecycleJobKindPromotion   LifecycleJobKind = "promotion"
+	LifecycleJobKindReclaim     LifecycleJobKind = "reclaim"
+	LifecycleJobKindReplication LifecycleJobKind = "replication"
+	LifecycleJobKindRetention   LifecycleJobKind = "retention"
+)
+
+// Valid indicates whether the value is a known member of the LifecycleJobKind enum.
+func (e LifecycleJobKind) Valid() bool {
+	switch e {
+	case LifecycleJobKindPromotion:
+		return true
+	case LifecycleJobKindReclaim:
+		return true
+	case LifecycleJobKindReplication:
+		return true
+	case LifecycleJobKindRetention:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LifecycleJobState.
+const (
+	LifecycleJobStateCompleted LifecycleJobState = "completed"
+	LifecycleJobStateFailed    LifecycleJobState = "failed"
+	LifecycleJobStatePending   LifecycleJobState = "pending"
+	LifecycleJobStateRunning   LifecycleJobState = "running"
+)
+
+// Valid indicates whether the value is a known member of the LifecycleJobState enum.
+func (e LifecycleJobState) Valid() bool {
+	switch e {
+	case LifecycleJobStateCompleted:
+		return true
+	case LifecycleJobStateFailed:
+		return true
+	case LifecycleJobStatePending:
+		return true
+	case LifecycleJobStateRunning:
 		return true
 	default:
 		return false
@@ -204,31 +252,31 @@ func (e RepositoryState) Valid() bool {
 
 // Defines values for RepositoryCapabilitiesOperations.
 const (
-	Browse  RepositoryCapabilitiesOperations = "browse"
-	Delete  RepositoryCapabilitiesOperations = "delete"
-	Publish RepositoryCapabilitiesOperations = "publish"
-	Read    RepositoryCapabilitiesOperations = "read"
-	Reclaim RepositoryCapabilitiesOperations = "reclaim"
-	Restore RepositoryCapabilitiesOperations = "restore"
-	Retain  RepositoryCapabilitiesOperations = "retain"
+	RepositoryCapabilitiesOperationsBrowse  RepositoryCapabilitiesOperations = "browse"
+	RepositoryCapabilitiesOperationsDelete  RepositoryCapabilitiesOperations = "delete"
+	RepositoryCapabilitiesOperationsPublish RepositoryCapabilitiesOperations = "publish"
+	RepositoryCapabilitiesOperationsRead    RepositoryCapabilitiesOperations = "read"
+	RepositoryCapabilitiesOperationsReclaim RepositoryCapabilitiesOperations = "reclaim"
+	RepositoryCapabilitiesOperationsRestore RepositoryCapabilitiesOperations = "restore"
+	RepositoryCapabilitiesOperationsRetain  RepositoryCapabilitiesOperations = "retain"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryCapabilitiesOperations enum.
 func (e RepositoryCapabilitiesOperations) Valid() bool {
 	switch e {
-	case Browse:
+	case RepositoryCapabilitiesOperationsBrowse:
 		return true
-	case Delete:
+	case RepositoryCapabilitiesOperationsDelete:
 		return true
-	case Publish:
+	case RepositoryCapabilitiesOperationsPublish:
 		return true
-	case Read:
+	case RepositoryCapabilitiesOperationsRead:
 		return true
-	case Reclaim:
+	case RepositoryCapabilitiesOperationsReclaim:
 		return true
-	case Restore:
+	case RepositoryCapabilitiesOperationsRestore:
 		return true
-	case Retain:
+	case RepositoryCapabilitiesOperationsRetain:
 		return true
 	default:
 		return false
@@ -399,6 +447,23 @@ type GroupPage struct {
 	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
+// LifecycleJob defines model for LifecycleJob.
+type LifecycleJob struct {
+	CompletedAt *time.Time        `json:"completedAt,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	Id          string            `json:"id"`
+	Kind        LifecycleJobKind  `json:"kind"`
+	LastError   *string           `json:"lastError,omitempty"`
+	StartedAt   *time.Time        `json:"startedAt,omitempty"`
+	State       LifecycleJobState `json:"state"`
+}
+
+// LifecycleJobKind defines model for LifecycleJob.Kind.
+type LifecycleJobKind string
+
+// LifecycleJobState defines model for LifecycleJob.State.
+type LifecycleJobState string
+
 // MavenCoordinate defines model for MavenCoordinate.
 type MavenCoordinate struct {
 	Coordinate string    `json:"coordinate"`
@@ -460,11 +525,11 @@ type PublishSessionState string
 
 // Repository defines model for Repository.
 type Repository struct {
-	Format  Format             `json:"format"`
-	Id      openapi_types.UUID `json:"id"`
-	Name    string             `json:"name"`
-	State   RepositoryState    `json:"state"`
-	Version string             `json:"version"`
+	Format  Format          `json:"format"`
+	Id      string          `json:"id"`
+	Name    string          `json:"name"`
+	State   RepositoryState `json:"state"`
+	Version string          `json:"version"`
 }
 
 // RepositoryState defines model for Repository.State.
@@ -537,6 +602,9 @@ type ConanReferenceList = ConanReferencePage
 
 // GroupList defines model for GroupList.
 type GroupList = GroupPage
+
+// LifecycleJobList defines model for LifecycleJobList.
+type LifecycleJobList = []LifecycleJob
 
 // MavenCoordinateList defines model for MavenCoordinateList.
 type MavenCoordinateList = MavenCoordinatePage
@@ -766,6 +834,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams)
+
+	// (GET /repositories/{repositoryId}/lifecycle-jobs)
+	ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListMavenCoordinatesParams)
@@ -1725,6 +1796,32 @@ func (siw *ServerInterfaceWrapper) ReplaceGrants(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryLifecycleJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryLifecycleJobs(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMavenCoordinates operation middleware
 func (siw *ServerInterfaceWrapper) ListMavenCoordinates(w http.ResponseWriter, r *http.Request) {
 
@@ -2138,6 +2235,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
@@ -2171,6 +2269,8 @@ type GrantListJSONResponse struct {
 type GroupJSONResponse Group
 
 type GroupListJSONResponse GroupPage
+
+type LifecycleJobListJSONResponse []LifecycleJob
 
 type MavenCoordinateListJSONResponse MavenCoordinatePage
 
@@ -3001,6 +3101,44 @@ func (response ReplaceGrants412ApplicationProblemPlusJSONResponse) VisitReplaceG
 	return err
 }
 
+type ListRepositoryLifecycleJobsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type ListRepositoryLifecycleJobsResponseObject interface {
+	VisitListRepositoryLifecycleJobsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryLifecycleJobs200JSONResponse struct{ LifecycleJobListJSONResponse }
+
+func (response ListRepositoryLifecycleJobs200JSONResponse) VisitListRepositoryLifecycleJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryLifecycleJobs403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryLifecycleJobs403ApplicationProblemPlusJSONResponse) VisitListRepositoryLifecycleJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMavenCoordinatesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListMavenCoordinatesParams
@@ -3282,6 +3420,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(ctx context.Context, request ReplaceGrantsRequestObject) (ReplaceGrantsResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/lifecycle-jobs)
+	ListRepositoryLifecycleJobs(ctx context.Context, request ListRepositoryLifecycleJobsRequestObject) (ListRepositoryLifecycleJobsResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(ctx context.Context, request ListMavenCoordinatesRequestObject) (ListMavenCoordinatesResponseObject, error)
@@ -3975,6 +4116,32 @@ func (sh *strictHandler) ReplaceGrants(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGrantsResponseObject); ok {
 		if err := validResponse.VisitReplaceGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryLifecycleJobs operation middleware
+func (sh *strictHandler) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ListRepositoryLifecycleJobsRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryLifecycleJobs(ctx, request.(ListRepositoryLifecycleJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryLifecycleJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryLifecycleJobsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryLifecycleJobsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

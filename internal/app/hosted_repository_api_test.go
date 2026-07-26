@@ -440,6 +440,48 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "job-status-target", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedID := uuid.NewString()
+	if _, _, err = store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: failedID, RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "reclaim-object", Payload: []byte(`{"format":"conan","objectKey":"secret-object-key"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != failedID {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	if err = store.FailLifecycleJob(ctx, failedID, "object store unavailable"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobRetention, IdempotencyKey: "retention-run", Payload: []byte(`{"format":"conan"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "job-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"failed"`) || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"lastError":"object store unavailable"`) || strings.Contains(response.Body.String(), "secret-object-key") || strings.Contains(response.Body.String(), "idempotencyKey") {
+		t.Fatalf("jobs=%d body=%s", response.Code, response.Body.String())
+	}
+	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
+	authorize(denied, authenticator.IssueToken("job-reader"))
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, denied)
+	if deniedResponse.Code != http.StatusForbidden {
+		t.Fatalf("reader status=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+}
+
 func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "artifact-target", Format: repository.FormatMaven})

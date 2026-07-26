@@ -281,6 +281,47 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 }
 
+func TestPostgresLifecycleJobStatusManagementHTTP(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "job-api-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "reclaim-" + uuid.NewString(), Payload: []byte(`{"format":"oci","objectKey":"private-object-key"}`)}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "private-object-key") {
+		t.Fatalf("lifecycle jobs=%d body=%s", response.Code, response.Body.String())
+	}
+	var jobs []struct {
+		ID        string `json:"id"`
+		Kind      string `json:"kind"`
+		State     string `json:"state"`
+		CreatedAt string `json:"createdAt"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].Kind != "reclaim" || jobs[0].State != "pending" || jobs[0].CreatedAt == "" {
+		t.Fatalf("jobs=%#v", jobs)
+	}
+}
+
 func TestPostgresConanGroupPreservesManagedRepositoryBinding(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

@@ -125,6 +125,14 @@ RetentionPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RetentionPolicy"
+LifecycleJobList:
+  description: Lifecycle jobs for one repository, newest first
+  content:
+    application/json:
+      schema:
+        type: array
+        items:
+          "$ref": "../components/schemas.yaml#/LifecycleJob"
 RepositoryCapabilities:
   description: Operations supported by a Hosted repository format
   content:

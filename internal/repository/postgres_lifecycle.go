@@ -25,6 +25,26 @@ func (s *PostgresStore) EnqueueLifecycleJob(ctx context.Context, job LifecycleJo
 	return existing, true, nil
 }
 
+func (s *PostgresStore) ListLifecycleJobs(ctx context.Context, repositoryID string, limit int) ([]LifecycleJob, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,kind,idempotency_key,payload,state,created_at,started_at,completed_at,last_error FROM lifecycle_jobs WHERE repository_id::text=$1 ORDER BY created_at DESC LIMIT $2`, repositoryID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	jobs := make([]LifecycleJob, 0, limit)
+	for rows.Next() {
+		var job LifecycleJob
+		if err := scanLifecycleJob(rows, &job); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
 func (s *PostgresStore) ClaimLifecycleJobs(ctx context.Context, limit int) ([]LifecycleJob, error) {
 	return s.claimLifecycleJobs(ctx, "", "", limit)
 }

@@ -1,0 +1,11 @@
+---
+repositories_repositoryId_lifecycle_jobs:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listRepositoryLifecycleJobs
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/LifecycleJobList"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"

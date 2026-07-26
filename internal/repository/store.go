@@ -48,6 +48,7 @@ type ArtifactTombstoneStore interface {
 
 type LifecycleJobStore interface {
 	EnqueueLifecycleJob(context.Context, LifecycleJob) (LifecycleJob, bool, error)
+	ListLifecycleJobs(context.Context, string, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobs(context.Context, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKind(context.Context, LifecycleJobKind, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKindAndFormat(context.Context, LifecycleJobKind, Format, int) ([]LifecycleJob, error)
