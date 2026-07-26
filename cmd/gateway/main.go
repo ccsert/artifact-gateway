@@ -15,6 +15,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
+	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -96,6 +97,7 @@ func main() {
 	rawprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
+	conanprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{
