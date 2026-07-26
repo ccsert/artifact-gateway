@@ -137,6 +137,20 @@ type LifecycleJob struct {
 	LastError      string
 }
 
+type ReplicationPlan struct {
+	ID, SourceRepositoryID, TargetRepositoryID string
+	Format                                     Format
+	IdempotencyKey, State, LastError           string
+	CreatedAt, StartedAt, CompletedAt          time.Time
+}
+
+type ReplicationCheckpoint struct {
+	PlanID, ObjectKey, Digest, State, LastError string
+	Size, ByteOffset                            int64
+	Attempts                                    int
+	VerifiedAt, UpdatedAt                       time.Time
+}
+
 type MavenDeclaredObject struct {
 	Name, Digest string
 	Size         int64
