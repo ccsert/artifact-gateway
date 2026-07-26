@@ -11,7 +11,11 @@ func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan
 	defer s.mu.Unlock()
 	key := p.TargetRepositoryID + "\x00" + p.IdempotencyKey
 	if id := s.replicationKeys[key]; id != "" {
-		return s.replicationPlans[id], true, nil
+		existing := s.replicationPlans[id]
+		if existing.SourceRepositoryID != p.SourceRepositoryID || existing.TargetRepositoryID != p.TargetRepositoryID || existing.Format != p.Format || !equivalentReplicationCheckpoints(replicationCheckpointValues(s.replicationChecks[id]), checks) {
+			return ReplicationPlan{}, false, ErrIdempotencyConflict
+		}
+		return existing, true, nil
 	}
 	p.State = "pending"
 	p.CreatedAt = time.Now().UTC()
@@ -25,6 +29,15 @@ func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan
 		s.replicationChecks[p.ID][c.ObjectKey] = c
 	}
 	return p, false, nil
+}
+
+func replicationCheckpointValues(checks map[string]ReplicationCheckpoint) []ReplicationCheckpoint {
+	values := make([]ReplicationCheckpoint, 0, len(checks))
+	for _, checkpoint := range checks {
+		values = append(values, checkpoint)
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i].ObjectKey < values[j].ObjectKey })
+	return values
 }
 func (s *MemoryStore) ClaimReplicationPlans(_ context.Context, limit int) ([]ReplicationPlan, error) {
 	s.mu.Lock()

@@ -3,9 +3,42 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	plan := ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "replicate-widget"}
+	checks := []ReplicationCheckpoint{{ObjectKey: "native/raw/widget", Digest: digest, Size: 12}}
+	created, replayed, err := store.CreateReplicationPlan(ctx, plan, checks)
+	if err != nil || replayed || created.State != "pending" {
+		t.Fatalf("created=%#v replayed=%t err=%v", created, replayed, err)
+	}
+	if replay, replayed, err := store.CreateReplicationPlan(ctx, plan, checks); err != nil || !replayed || replay.ID != plan.ID {
+		t.Fatalf("replay=%#v replayed=%t err=%v", replay, replayed, err)
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "native/raw/other", Digest: digest, Size: 12}}); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("conflicting replay err=%v", err)
+	}
+	claimed, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].State != "running" {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	checkpoint := ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: checks[0].ObjectKey, Digest: digest, Size: 12, ByteOffset: 12, State: "verified", Attempts: 1, VerifiedAt: time.Now()}
+	if err = store.UpdateReplicationCheckpoint(ctx, checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ClaimReplicationPlans(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestMemoryMavenCommitRejectsCollectorClaim(t *testing.T) {
 	store := NewMemoryStore()
