@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -255,6 +256,64 @@ func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
 	}
 	if targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path); err != nil || targetAsset.Digest != digest || targetAsset.ObjectKey != asset.ObjectKey {
 		t.Fatalf("target asset=%#v err=%v", targetAsset, err)
+	}
+}
+
+func TestRepositoryConanPromotionHTTPPublishesTargetRevision(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-conan-source", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-conan-target", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("promoted Conan recipe")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	objects := NewMemoryOCIObjectStore()
+	key := "native/conan/objects/" + fmt.Sprintf("%x", sum[:])
+	if err = objects.Put(ctx, key, body); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: source.ID, ObjectKey: key, Digest: digest, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	reference, revision := "pkg/1.0/user/stable", "rrev"
+	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: source.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	grants := []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin", "repositories:read"}}}
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+reference+`#`+revision+`","digest":"`+digest+`"}`))
+	authorize(request, authenticator.IssueToken("promoter"))
+	request.Header.Set("Idempotency-Key", "promote-conan-widget")
+	accepted := httptest.NewRecorder()
+	handler.ServeHTTP(accepted, request)
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("enqueue=%d %s", accepted.Code, accepted.Body.String())
+	}
+	if err = (conanprotocol.NativePromotion{Store: store}).RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRequest(http.MethodGet, "/conan/v2/"+target.Name+"/conans/"+reference+"/revisions/"+revision+"/files/conanfile.py", nil)
+	read.Header.Set("Authorization", "Bearer "+authenticator.IssueToken("promoter"))
+	resolved := httptest.NewRecorder()
+	handler.ServeHTTP(resolved, read)
+	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+		t.Fatalf("promoted Conan read=%d %q", resolved.Code, resolved.Body.String())
+	}
+	if targetRevision, err := store.GetConanRecipeRevision(ctx, target.ID, reference, revision); err != nil || targetRevision.Digest != digest || targetRevision.State != "visible" {
+		t.Fatalf("target revision=%#v err=%v", targetRevision, err)
 	}
 }
 

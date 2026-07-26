@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,9 +14,73 @@ import (
 	"testing"
 	"time"
 
+	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, "promotion-conan-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-conan-source-" + uuid.NewString(), Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-conan-target-" + uuid.NewString(), Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("Conan promotion backed by MinIO")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	key := "native/conan/objects/" + hex.EncodeToString(sum[:])
+	if err = objects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: source.ID, ObjectKey: key, Digest: digest, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	reference, revision := "pkg/1.0/user/stable", "rrev"
+	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: source.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := (conanprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "postgres-minio-conan-promotion", conanprotocol.PromotionPayload{SourceRepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = (conanprotocol.NativePromotion{Store: store}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	targetRevision, err := store.GetConanRecipeRevision(ctx, target.ID, reference, revision)
+	if err != nil || targetRevision.Digest != digest || targetRevision.State != "visible" {
+		t.Fatalf("target revision=%#v err=%v", targetRevision, err)
+	}
+	if info, err := objects.Stat(ctx, key); err != nil || info.Digest != digest || info.Size != int64(len(body)) {
+		t.Fatalf("MinIO object=%#v err=%v", info, err)
+	}
+}
 
 type failOnceConanReclaimStore struct {
 	OCIObjectStore
