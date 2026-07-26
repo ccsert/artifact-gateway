@@ -108,6 +108,12 @@ type NativeOCIStore interface {
 }
 
 type NativeRawStore interface {
+	CreateRawUpload(context.Context, RawUpload) (RawUpload, error)
+	LockRawUpload(context.Context, string) (func(), error)
+	GetRawUpload(context.Context, string) (RawUpload, error)
+	UpdateRawUpload(context.Context, string, int64) (RawUpload, error)
+	CancelRawUpload(context.Context, string) (RawUpload, error)
+	CompleteRawUpload(context.Context, string, RawAsset) (RawAsset, error)
 	LockRawObject(context.Context, string) (func(), error)
 	StageRawObject(context.Context, RawObject) error
 	PutRawAsset(context.Context, RawAsset) (RawAsset, error)

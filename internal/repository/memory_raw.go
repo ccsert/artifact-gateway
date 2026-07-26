@@ -10,6 +10,68 @@ import (
 
 func rawAssetKey(repositoryID, path string) string { return repositoryID + "\x00" + path }
 
+func (s *MemoryStore) CreateRawUpload(_ context.Context, upload RawUpload) (RawUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rawUploads[upload.ID] = upload
+	return upload, nil
+}
+func (s *MemoryStore) LockRawUpload(_ context.Context, id string) (func(), error) {
+	s.mu.Lock()
+	lock := s.rawUploadLocks[id]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.rawUploadLocks[id] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock, nil
+}
+func (s *MemoryStore) GetRawUpload(_ context.Context, id string) (RawUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.rawUploads[id]
+	if !ok {
+		return RawUpload{}, ErrNotFound
+	}
+	return v, nil
+}
+func (s *MemoryStore) UpdateRawUpload(_ context.Context, id string, offset int64) (RawUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.rawUploads[id]
+	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) {
+		return RawUpload{}, ErrNotFound
+	}
+	v.Offset = offset
+	s.rawUploads[id] = v
+	return v, nil
+}
+func (s *MemoryStore) CancelRawUpload(_ context.Context, id string) (RawUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.rawUploads[id]
+	if !ok || v.State != "open" {
+		return RawUpload{}, ErrNotFound
+	}
+	v.State = "cancelled"
+	s.rawUploads[id] = v
+	return v, nil
+}
+func (s *MemoryStore) CompleteRawUpload(_ context.Context, id string, asset RawAsset) (RawAsset, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.rawUploads[id]
+	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) || v.RepositoryID != asset.RepositoryID || v.Path != asset.Path {
+		return RawAsset{}, ErrNotFound
+	}
+	s.rawObjects[asset.Digest] = RawObject{RepositoryID: asset.RepositoryID, Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: time.Now().UTC()}
+	s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)] = asset
+	v.State = "completed"
+	s.rawUploads[id] = v
+	return asset, nil
+}
+
 func (s *MemoryStore) LockRawObject(_ context.Context, digest string) (func(), error) {
 	s.mu.Lock()
 	lock := s.rawObjectLocks[digest]

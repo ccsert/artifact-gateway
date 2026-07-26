@@ -67,6 +67,11 @@ type RawObject struct {
 	Size                            int64
 	CreatedAt, CollectedAt          time.Time
 }
+type RawUpload struct {
+	ID, RepositoryID, Path, ObjectKey, State string
+	Offset                                   int64
+	ExpiresAt                                time.Time
+}
 
 type OCIUpload struct {
 	ID, RepositoryID, Name, ObjectKey, State string

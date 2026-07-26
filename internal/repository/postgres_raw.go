@@ -7,6 +7,77 @@ import (
 	"time"
 )
 
+func (s *PostgresStore) CreateRawUpload(ctx context.Context, v RawUpload) (RawUpload, error) {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_uploads (id,repository_id,path,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Path, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
+	return v, err
+}
+func (s *PostgresStore) LockRawUpload(ctx context.Context, id string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-raw-upload:"+id); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-raw-upload:"+id)
+		_ = conn.Close()
+	}, nil
+}
+func (s *PostgresStore) GetRawUpload(ctx context.Context, id string) (RawUpload, error) {
+	var v RawUpload
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,path,object_key,byte_offset,state,expires_at FROM native_raw_uploads WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RawUpload{}, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) UpdateRawUpload(ctx context.Context, id string, offset int64) (RawUpload, error) {
+	var v RawUpload
+	err := s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET byte_offset=$2 WHERE id::text=$1 AND state='open' AND expires_at>now() RETURNING id::text,repository_id::text,path,object_key,byte_offset,state,expires_at`, id, offset).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RawUpload{}, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) CancelRawUpload(ctx context.Context, id string) (RawUpload, error) {
+	var v RawUpload
+	err := s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET state='cancelled' WHERE id::text=$1 AND state='open' RETURNING id::text,repository_id::text,path,object_key,byte_offset,state,expires_at`, id).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RawUpload{}, ErrNotFound
+	}
+	return v, err
+}
+func (s *PostgresStore) CompleteRawUpload(ctx context.Context, id string, asset RawAsset) (RawAsset, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return asset, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var repoID, path string
+	err = tx.QueryRowContext(ctx, `SELECT repository_id::text,path FROM native_raw_uploads WHERE id::text=$1 AND state='open' AND expires_at>now() FOR UPDATE`, id).Scan(&repoID, &path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return asset, ErrNotFound
+	}
+	if err != nil {
+		return asset, err
+	}
+	if repoID != asset.RepositoryID || path != asset.Path {
+		return asset, ErrNotFound
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=EXCLUDED.repository_id,collected_at=NULL`, asset.Digest, asset.RepositoryID, asset.ObjectKey, asset.Size); err != nil {
+		return asset, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO UPDATE SET digest=EXCLUDED.digest,content_type=EXCLUDED.content_type,updated_at=now()`, asset.RepositoryID, asset.Path, asset.Digest, asset.ContentType); err != nil {
+		return asset, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_raw_uploads SET state='completed' WHERE id::text=$1`, id); err != nil {
+		return asset, err
+	}
+	return asset, tx.Commit()
+}
+
 func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
