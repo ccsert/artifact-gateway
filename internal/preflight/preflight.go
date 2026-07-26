@@ -165,7 +165,11 @@ func (r Runner) checkOIDC(ctx context.Context, cfg config.Config) Result {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.OIDCJWKSURL, nil)
+	endpoint := cfg.OIDCJWKSURL
+	if endpoint == "" {
+		endpoint = cfg.OIDCIssuer + "/.well-known/openid-configuration"
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err == nil {
 		response, requestErr := client.Do(request)
 		if requestErr != nil {

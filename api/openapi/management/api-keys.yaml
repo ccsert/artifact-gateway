@@ -1,0 +1,41 @@
+---
+api_keys:
+  get:
+    operationId: listApiKeys
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/APIKeyList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createApiKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateAPIKey"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/CreatedAPIKey"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+api_keys_apiKeyId:
+  delete:
+    operationId: revokeApiKey
+    parameters:
+    - name: apiKeyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/APIKey"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

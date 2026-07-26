@@ -23,6 +23,8 @@ type OIDCConfig struct {
 	Audience      string
 	JWKSURL       string
 	AdminSubjects []string
+	// AdminRoles are opt-in Keycloak realm roles that grant administrator access.
+	AdminRoles []string
 }
 
 type OIDCIdentity struct {
@@ -37,6 +39,7 @@ type OIDCValidator struct {
 	mu      sync.Mutex
 	keys    map[string]*rsa.PublicKey
 	expires time.Time
+	jwksURL string
 }
 
 func NewOIDCValidator(config OIDCConfig) *OIDCValidator {
@@ -49,6 +52,13 @@ func NewOIDCValidator(config OIDCConfig) *OIDCValidator {
 			admins = append(admins, subject)
 		}
 	}
+	roles := make([]string, 0, len(config.AdminRoles))
+	for _, role := range config.AdminRoles {
+		if role = strings.TrimSpace(role); role != "" {
+			roles = append(roles, role)
+		}
+	}
+	config.AdminRoles = roles
 	config.AdminSubjects = admins
 	return &OIDCValidator{config: config, client: &http.Client{Timeout: 5 * time.Second}}
 }
@@ -63,10 +73,13 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 		KeyID     string `json:"kid"`
 	}
 	var claims struct {
-		Issuer   string          `json:"iss"`
-		Subject  string          `json:"sub"`
-		Audience json.RawMessage `json:"aud"`
-		Expires  int64           `json:"exp"`
+		Issuer      string          `json:"iss"`
+		Subject     string          `json:"sub"`
+		Audience    json.RawMessage `json:"aud"`
+		Expires     int64           `json:"exp"`
+		RealmAccess struct {
+			Roles []string `json:"roles"`
+		} `json:"realm_access"`
 	}
 	if !decodeJWTPart(parts[0], &header) || !decodeJWTPart(parts[1], &claims) || header.Algorithm != "RS256" || header.KeyID == "" || claims.Subject == "" || claims.Issuer != v.config.Issuer || claims.Expires == 0 || !time.Now().UTC().Before(time.Unix(claims.Expires, 0)) || !audienceContains(claims.Audience, v.config.Audience) {
 		return OIDCIdentity{}, false
@@ -90,6 +103,9 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 			break
 		}
 	}
+	if containsAny(claims.RealmAccess.Roles, v.config.AdminRoles) {
+		identity.Admin = true
+	}
 	return identity, true
 }
 
@@ -101,7 +117,15 @@ func (v *OIDCValidator) key(ctx context.Context, keyID string) (*rsa.PublicKey, 
 			return key, true
 		}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, v.config.JWKSURL, nil)
+	if v.jwksURL == "" {
+		v.jwksURL = v.config.JWKSURL
+		if v.jwksURL == "" {
+			if !v.discoverJWKSURL(ctx) {
+				return nil, false
+			}
+		}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, v.jwksURL, nil)
 	if err != nil {
 		return nil, false
 	}
@@ -151,6 +175,38 @@ func (v *OIDCValidator) key(ctx context.Context, keyID string) (*rsa.PublicKey, 
 	v.expires = time.Now().UTC().Add(oidcJWKSCacheTTL)
 	key, ok := v.keys[keyID]
 	return key, ok
+}
+
+func (v *OIDCValidator) discoverJWKSURL(ctx context.Context) bool {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(v.config.Issuer, "/")+"/.well-known/openid-configuration", nil)
+	if err != nil {
+		return false
+	}
+	response, err := v.client.Do(request)
+	if err != nil || response.StatusCode != http.StatusOK {
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		return false
+	}
+	defer func() { _ = response.Body.Close() }()
+	var document struct {
+		JWKSURL string `json:"jwks_uri"`
+	}
+	if json.NewDecoder(response.Body).Decode(&document) != nil || document.JWKSURL == "" {
+		return false
+	}
+	v.jwksURL = document.JWKSURL
+	return true
+}
+
+func containsAny(values, expected []string) bool {
+	for _, value := range values {
+		if containsRole(expected, value) {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeJWTPart(part string, target any) bool {

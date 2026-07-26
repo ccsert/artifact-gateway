@@ -6,6 +6,67 @@ Format:
   - oci
   - maven
   - conan
+APIKey:
+  type: object
+  required:
+  - id
+  - name
+  - roles
+  - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    roles:
+      type: array
+      items:
+        type: string
+        enum:
+        - admin
+    createdAt:
+      type: string
+      format: date-time
+    revokedAt:
+      type: string
+      format: date-time
+APIKeyList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/APIKey"
+CreateAPIKey:
+  type: object
+  required:
+  - name
+  - roles
+  additionalProperties: false
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 128
+    roles:
+      type: array
+      minItems: 1
+      items:
+        type: string
+        enum:
+        - admin
+CreatedAPIKey:
+  allOf:
+  - "$ref": "#/APIKey"
+  - type: object
+    required:
+    - token
+    properties:
+      token:
+        type: string
 OCITagList:
   type: object
   required:

@@ -19,6 +19,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for APIKeyRoles.
+const (
+	APIKeyRolesAdmin APIKeyRoles = "admin"
+)
+
+// Valid indicates whether the value is a known member of the APIKeyRoles enum.
+func (e APIKeyRoles) Valid() bool {
+	switch e {
+	case APIKeyRolesAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactState.
 const (
 	ArtifactStateDeleted ArtifactState = "deleted"
@@ -37,6 +52,21 @@ func (e ArtifactState) Valid() bool {
 	}
 }
 
+// Defines values for CreateAPIKeyRoles.
+const (
+	CreateAPIKeyRolesAdmin CreateAPIKeyRoles = "admin"
+)
+
+// Valid indicates whether the value is a known member of the CreateAPIKeyRoles enum.
+func (e CreateAPIKeyRoles) Valid() bool {
+	switch e {
+	case CreateAPIKeyRolesAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateMavenPublishSessionFormat.
 const (
 	CreateMavenPublishSessionFormatMaven CreateMavenPublishSessionFormat = "maven"
@@ -46,6 +76,21 @@ const (
 func (e CreateMavenPublishSessionFormat) Valid() bool {
 	switch e {
 	case CreateMavenPublishSessionFormatMaven:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreatedAPIKeyRoles.
+const (
+	CreatedAPIKeyRolesAdmin CreatedAPIKeyRoles = "admin"
+)
+
+// Valid indicates whether the value is a known member of the CreatedAPIKeyRoles enum.
+func (e CreatedAPIKeyRoles) Valid() bool {
+	switch e {
+	case CreatedAPIKeyRolesAdmin:
 		return true
 	default:
 		return false
@@ -370,6 +415,23 @@ func (e RepositoryCapabilitiesType) Valid() bool {
 	}
 }
 
+// APIKey defines model for APIKey.
+type APIKey struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	RevokedAt *time.Time         `json:"revokedAt,omitempty"`
+	Roles     []APIKeyRoles      `json:"roles"`
+}
+
+// APIKeyRoles defines model for APIKey.Roles.
+type APIKeyRoles string
+
+// APIKeyList defines model for APIKeyList.
+type APIKeyList struct {
+	Items []APIKey `json:"items"`
+}
+
 // Artifact defines model for Artifact.
 type Artifact struct {
 	Coordinate string             `json:"coordinate"`
@@ -457,6 +519,15 @@ type ConanReferencePage struct {
 	NextPageToken *string          `json:"nextPageToken,omitempty"`
 }
 
+// CreateAPIKey defines model for CreateAPIKey.
+type CreateAPIKey struct {
+	Name  string              `json:"name"`
+	Roles []CreateAPIKeyRoles `json:"roles"`
+}
+
+// CreateAPIKeyRoles defines model for CreateAPIKey.Roles.
+type CreateAPIKeyRoles string
+
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
 	Format  Format     `json:"format"`
@@ -485,6 +556,19 @@ type CreateRepository struct {
 	Format Format `json:"format"`
 	Name   string `json:"name"`
 }
+
+// CreatedAPIKey defines model for CreatedAPIKey.
+type CreatedAPIKey struct {
+	CreatedAt time.Time            `json:"createdAt"`
+	Id        openapi_types.UUID   `json:"id"`
+	Name      string               `json:"name"`
+	RevokedAt *time.Time           `json:"revokedAt,omitempty"`
+	Roles     []CreatedAPIKeyRoles `json:"roles"`
+	Token     string               `json:"token"`
+}
+
+// CreatedAPIKeyRoles defines model for CreatedAPIKey.Roles.
+type CreatedAPIKeyRoles string
 
 // DeclaredObject defines model for DeclaredObject.
 type DeclaredObject struct {
@@ -912,6 +996,9 @@ type ListRepositoryTombstonesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
+type CreateApiKeyJSONRequestBody = CreateAPIKey
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -983,6 +1070,15 @@ func (t *CreatePublishSession) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /api-keys)
+	ListApiKeys(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api-keys)
+	CreateApiKey(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /api-keys/{apiKeyId})
+	RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyId openapi_types.UUID)
 
 	// (GET /audits)
 	ListAudits(w http.ResponseWriter, r *http.Request, params ListAuditsParams)
@@ -1110,6 +1206,60 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListApiKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApiKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateApiKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateApiKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeApiKey operation middleware
+func (siw *ServerInterfaceWrapper) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "apiKeyId" -------------
+	var apiKeyId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "apiKeyId", r.PathValue("apiKeyId"), &apiKeyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "apiKeyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeApiKey(w, r, apiKeyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAudits operation middleware
 func (siw *ServerInterfaceWrapper) ListAudits(w http.ResponseWriter, r *http.Request) {
@@ -2855,6 +3005,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api-keys", wrapper.ListApiKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api-keys", wrapper.CreateApiKey)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api-keys/{apiKeyId}", wrapper.RevokeApiKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audits", wrapper.ListAudits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
@@ -2898,6 +3051,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
+type APIKeyJSONResponse APIKey
+
+type APIKeyListJSONResponse APIKeyList
+
 type ArtifactJSONResponse Artifact
 
 type ArtifactListJSONResponse ArtifactPage
@@ -2909,6 +3066,8 @@ type ArtifactTombstoneListJSONResponse ArtifactTombstonePage
 type AuditListJSONResponse AuditList
 
 type ConanReferenceListJSONResponse ConanReferencePage
+
+type CreatedAPIKeyJSONResponse CreatedAPIKey
 
 type DeletionJSONResponse Deletion
 
@@ -2948,6 +3107,147 @@ type RepositoryListJSONResponse RepositoryPage
 type RetentionDryRunJSONResponse RetentionDryRun
 
 type RetentionPolicyJSONResponse RetentionPolicy
+
+type ListApiKeysRequestObject struct {
+}
+
+type ListApiKeysResponseObject interface {
+	VisitListApiKeysResponse(w http.ResponseWriter) error
+}
+
+type ListApiKeys200JSONResponse struct{ APIKeyListJSONResponse }
+
+func (response ListApiKeys200JSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApiKeys401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListApiKeys401ApplicationProblemPlusJSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKeyRequestObject struct {
+	Body *CreateApiKeyJSONRequestBody
+}
+
+type CreateApiKeyResponseObject interface {
+	VisitCreateApiKeyResponse(w http.ResponseWriter) error
+}
+
+type CreateApiKey201JSONResponse struct{ CreatedAPIKeyJSONResponse }
+
+func (response CreateApiKey201JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKey400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateApiKey400ApplicationProblemPlusJSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKey401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateApiKey401ApplicationProblemPlusJSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKeyRequestObject struct {
+	ApiKeyId openapi_types.UUID `json:"apiKeyId"`
+}
+
+type RevokeApiKeyResponseObject interface {
+	VisitRevokeApiKeyResponse(w http.ResponseWriter) error
+}
+
+type RevokeApiKey200JSONResponse struct{ APIKeyJSONResponse }
+
+func (response RevokeApiKey200JSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKey401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeApiKey401ApplicationProblemPlusJSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKey404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeApiKey404ApplicationProblemPlusJSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListAuditsRequestObject struct {
 	Params ListAuditsParams
@@ -4372,6 +4672,15 @@ func (response ListRepositoryTombstones200JSONResponse) VisitListRepositoryTombs
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /api-keys)
+	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
+
+	// (POST /api-keys)
+	CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error)
+
+	// (DELETE /api-keys/{apiKeyId})
+	RevokeApiKey(ctx context.Context, request RevokeApiKeyRequestObject) (RevokeApiKeyResponseObject, error)
+
 	// (GET /audits)
 	ListAudits(ctx context.Context, request ListAuditsRequestObject) (ListAuditsResponseObject, error)
 
@@ -4527,6 +4836,87 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListApiKeys operation middleware
+func (sh *strictHandler) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+	var request ListApiKeysRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListApiKeys(ctx, request.(ListApiKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListApiKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListApiKeysResponseObject); ok {
+		if err := validResponse.VisitListApiKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateApiKey operation middleware
+func (sh *strictHandler) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+	var request CreateApiKeyRequestObject
+
+	var body CreateApiKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateApiKey(ctx, request.(CreateApiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateApiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateApiKeyResponseObject); ok {
+		if err := validResponse.VisitCreateApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeApiKey operation middleware
+func (sh *strictHandler) RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyId openapi_types.UUID) {
+	var request RevokeApiKeyRequestObject
+
+	request.ApiKeyId = apiKeyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeApiKey(ctx, request.(RevokeApiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeApiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeApiKeyResponseObject); ok {
+		if err := validResponse.VisitRevokeApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListAudits operation middleware

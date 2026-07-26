@@ -76,6 +76,36 @@ func TestOIDCAuthenticatorRejectsInvalidClaimsAndSignatures(t *testing.T) {
 	}
 }
 
+func TestOIDCAuthenticatorDiscoversJWKS(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyID := "discovery-test-key"
+	jwks := oidcJWKS(t, keyID, &privateKey.PublicKey)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(map[string]string{"jwks_uri": serverURL(r) + "/keys"})
+		case "/keys":
+			_, _ = w.Write(jwks)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	// The request host is the test server, so discovery can derive its JWKS URI
+	// without closing over the server before it has been assigned.
+	issuer := server.URL
+	token := signedOIDCToken(t, privateKey, keyID, issuer, "artifact-gateway", "ci-user", time.Now().Add(time.Minute))
+	authenticator := Authenticator{OIDC: NewOIDCValidator(OIDCConfig{Issuer: issuer, Audience: "artifact-gateway"})}
+	if principal, ok := authenticator.Authenticate("Bearer " + token); !ok || principal.Actor != "ci-user" {
+		t.Fatalf("principal=%#v authenticated=%t", principal, ok)
+	}
+}
+
+func serverURL(r *http.Request) string { return "http://" + r.Host }
+
 func TestOIDCSubjectIsRecordedForDeniedRepositoryRead(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

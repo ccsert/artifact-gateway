@@ -116,7 +116,9 @@ func main() {
 				Audience:      cfg.OIDCAudience,
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
+				AdminRoles:    cfg.OIDCAdminRoles,
 			}),
+			APIKeys: store,
 		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

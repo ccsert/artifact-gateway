@@ -75,7 +75,7 @@ func TestRepositoryCacheQuotasParsesPositiveByteLimits(t *testing.T) {
 	}
 }
 
-func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
+func TestLoadConfiguresOIDCWithHTTPSIssuerAndDiscoveryDefault(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
 	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
@@ -92,7 +92,7 @@ func TestLoadConfiguresOIDCWithHTTPSIssuerAndDefaultJWKS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OIDCIssuer != "https://login.example.test" || cfg.OIDCJWKSURL != "https://login.example.test/.well-known/jwks.json" || strings.Join(cfg.OIDCAdminSubjects, ",") != "ops-admin,release-admin" {
+	if cfg.OIDCIssuer != "https://login.example.test" || cfg.OIDCJWKSURL != "" || strings.Join(cfg.OIDCAdminSubjects, ",") != "ops-admin,release-admin" {
 		t.Fatalf("OIDC config = %#v", cfg)
 	}
 }

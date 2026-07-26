@@ -9,6 +9,10 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/api-keys":
+    "$ref": "./management/api-keys.yaml#/api_keys"
+  "/api-keys/{apiKeyId}":
+    "$ref": "./management/api-keys.yaml#/api_keys_apiKeyId"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
   "/repositories":
@@ -115,6 +119,14 @@ components:
       "$ref": "./components/schemas.yaml#/ArtifactTombstonePage"
     RepositoryCapabilities:
       "$ref": "./components/schemas.yaml#/RepositoryCapabilities"
+    APIKey:
+      "$ref": "./components/schemas.yaml#/APIKey"
+    APIKeyList:
+      "$ref": "./components/schemas.yaml#/APIKeyList"
+    CreateAPIKey:
+      "$ref": "./components/schemas.yaml#/CreateAPIKey"
+    CreatedAPIKey:
+      "$ref": "./components/schemas.yaml#/CreatedAPIKey"
     CreatePublishSession:
       "$ref": "./components/schemas.yaml#/CreatePublishSession"
     CreateMavenPublishSession:

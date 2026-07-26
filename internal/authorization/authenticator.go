@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 type Principal struct {
@@ -31,6 +33,7 @@ type Authenticator struct {
 	// must never turn a download grant into publication authority.
 	RepositoryWriters map[string][]string
 	OIDC              *OIDCValidator
+	APIKeys           repository.APIKeyStore
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
@@ -47,6 +50,12 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	if actor, ok := a.tokenActor(token); ok {
 		return a.PrincipalForActor(actor), true
+	}
+	if a.APIKeys != nil {
+		key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
+		if err == nil {
+			return Principal{Actor: "api-key:" + key.ID, Admin: containsRole(key.Roles, "admin")}, true
+		}
 	}
 	if a.OIDC != nil {
 		if identity, ok := a.OIDC.Validate(context.Background(), token); ok {
@@ -155,4 +164,20 @@ func (a Authenticator) tokenActor(token string) (string, bool) {
 
 func tokenMatches(value, expected string) bool {
 	return expected != "" && len(value) == len(expected) && subtle.ConstantTimeCompare([]byte(value), []byte(expected)) == 1
+}
+
+// HashAPIKey returns the database verifier for a generated high-entropy key.
+// The plaintext key is never persisted.
+func HashAPIKey(token string) string {
+	digest := sha256.Sum256([]byte(token))
+	return base64.RawURLEncoding.EncodeToString(digest[:])
+}
+
+func containsRole(roles []string, expected string) bool {
+	for _, role := range roles {
+		if role == expected {
+			return true
+		}
+	}
+	return false
 }

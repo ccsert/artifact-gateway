@@ -2,14 +2,45 @@ package authorization
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 type grantStoreStub struct {
 	set repository.RepositoryGrantSet
 	err error
+}
+
+func TestAuthenticatorAcceptsActiveAdministrativeAPIKeyAndRejectsRevokedKey(t *testing.T) {
+	store := repository.NewMemoryStore()
+	token := "agk_test-token"
+	key, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: uuid.NewString(), Name: "automation", SecretHash: HashAPIKey(token), Roles: []string{"admin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{APIKeys: store}
+	principal, ok := authenticator.Authenticate("Bearer " + token)
+	if !ok || !principal.Admin || principal.Actor != "api-key:"+key.ID {
+		t.Fatalf("principal=%#v authenticated=%t", principal, ok)
+	}
+	if _, err := store.RevokeAPIKey(context.Background(), key.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := authenticator.Authenticate("Bearer " + token); ok {
+		t.Fatal("revoked API key authenticated")
+	}
+}
+
+func TestHashAPIKeyDoesNotReturnPlaintext(t *testing.T) {
+	token := "agk_test-token"
+	digest := sha256.Sum256([]byte(token))
+	if got, want := HashAPIKey(token), base64.RawURLEncoding.EncodeToString(digest[:]); got != want || got == token {
+		t.Fatalf("hash=%q want=%q", got, want)
+	}
 }
 
 func (s grantStoreStub) GetRepositoryGrants(context.Context, string) (repository.RepositoryGrantSet, error) {

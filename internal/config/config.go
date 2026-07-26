@@ -31,6 +31,7 @@ type Config struct {
 	OIDCAudience             string
 	OIDCJWKSURL              string
 	OIDCAdminSubjects        []string
+	OIDCAdminRoles           []string
 	OTLPHTTPEndpoint         string
 	OTELSamplingRatio        float64
 }
@@ -58,6 +59,7 @@ func Load() (Config, error) {
 		OIDCAudience:             strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
 		OIDCJWKSURL:              strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
 		OIDCAdminSubjects:        splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
+		OIDCAdminRoles:           splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_ROLES")),
 		OTLPHTTPEndpoint:         strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
 		OTELSamplingRatio:        1,
 	}
@@ -75,14 +77,13 @@ func Load() (Config, error) {
 		if cfg.OIDCAudience == "" {
 			return Config{}, fmt.Errorf("GATEWAY_OIDC_AUDIENCE is required when GATEWAY_OIDC_ISSUER is set")
 		}
-		if cfg.OIDCJWKSURL == "" {
-			cfg.OIDCJWKSURL = cfg.OIDCIssuer + "/.well-known/jwks.json"
-		}
 		if parsed, err := url.ParseRequestURI(cfg.OIDCIssuer); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 			return Config{}, fmt.Errorf("GATEWAY_OIDC_ISSUER must be an HTTPS URL")
 		}
-		if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		if cfg.OIDCJWKSURL != "" {
+			if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 			return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
+			}
 		}
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_OTEL_SAMPLING_RATIO")); raw != "" {

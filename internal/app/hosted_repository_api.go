@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
@@ -135,12 +137,88 @@ type generatedRepositoryAPIAdapter struct {
 	replication       repository.ReplicationStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
+	apiKeys           repository.APIKeyStore
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
 	metrics           *Metrics
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
+
+func (h generatedRepositoryAPIAdapter) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	keys, err := h.apiKeys.ListAPIKeys(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list API keys failed")
+		return
+	}
+	items := make([]adminopenapi.APIKey, 0, len(keys))
+	for _, key := range keys {
+		items = append(items, apiKeyResponse(key))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.APIKeyList{Items: items})
+}
+
+func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var request adminopenapi.CreateAPIKey
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" || len(request.Roles) == 0 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name and at least one role are required")
+		return
+	}
+	roles := make([]string, 0, len(request.Roles))
+	for _, role := range request.Roles {
+		if role != adminopenapi.CreateAPIKeyRolesAdmin {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported API key role")
+			return
+		}
+		roles = append(roles, string(role))
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "generate API key failed")
+		return
+	}
+	token := "agk_" + base64.RawURLEncoding.EncodeToString(raw)
+	key, err := h.apiKeys.CreateAPIKey(r.Context(), repository.APIKey{ID: uuid.NewString(), Name: strings.TrimSpace(request.Name), SecretHash: authorization.HashAPIKey(token), Roles: roles})
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create API key failed")
+		return
+	}
+	response := adminopenapi.CreatedAPIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, Token: token, Roles: make([]adminopenapi.CreatedAPIKeyRoles, 0, len(key.Roles))}
+	for _, role := range key.Roles {
+		response.Roles = append(response.Roles, adminopenapi.CreatedAPIKeyRoles(role))
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, response)
+}
+
+func (h generatedRepositoryAPIAdapter) RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyID uuid.UUID) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	key, err := h.apiKeys.RevokeAPIKey(r.Context(), apiKeyID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "API key not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "revoke API key failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, apiKeyResponse(key))
+}
+
+func apiKeyResponse(key repository.APIKey) adminopenapi.APIKey {
+	response := adminopenapi.APIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, RevokedAt: key.RevokedAt, Roles: make([]adminopenapi.APIKeyRoles, 0, len(key.Roles))}
+	for _, role := range key.Roles {
+		response.Roles = append(response.Roles, adminopenapi.APIKeyRoles(role))
+	}
+	return response
+}
 
 func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
 	if _, ok := h.authorize(w, r); ok {

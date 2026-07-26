@@ -9,6 +9,10 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/api-keys":
+    "$ref": "./management/api-keys.yaml#/api_keys"
+  "/api-keys/{apiKeyId}":
+    "$ref": "./management/api-keys.yaml#/api_keys_apiKeyId"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
@@ -89,6 +93,14 @@ components:
       "$ref": "./components/schemas.yaml#/GroupPage"
     ArtifactPage:
       "$ref": "./components/schemas.yaml#/ArtifactPage"
+    APIKey:
+      "$ref": "./components/schemas.yaml#/APIKey"
+    APIKeyList:
+      "$ref": "./components/schemas.yaml#/APIKeyList"
+    CreateAPIKey:
+      "$ref": "./components/schemas.yaml#/CreateAPIKey"
+    CreatedAPIKey:
+      "$ref": "./components/schemas.yaml#/CreatedAPIKey"
   parameters:
     RepositoryId:
       "$ref": "./components/parameters.yaml#/RepositoryId"

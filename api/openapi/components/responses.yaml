@@ -5,6 +5,24 @@ Problem:
     application/problem+json:
       schema:
         "$ref": "../components/schemas.yaml#/Problem"
+APIKey:
+  description: Revocable API key metadata
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/APIKey"
+APIKeyList:
+  description: API key metadata
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/APIKeyList"
+CreatedAPIKey:
+  description: Newly generated API key. The plaintext token is returned only by this response.
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/CreatedAPIKey"
 BinaryObject:
   description: Committed immutable protocol object
   content:
