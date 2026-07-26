@@ -19,6 +19,7 @@ type NativeMaintenance struct {
 	Store   MavenReclaimStore
 	Objects objectstore.Store
 	Now     func() time.Time
+	Metrics repository.BackgroundOperationMetrics
 }
 
 type MavenReclaimStore interface {
@@ -74,13 +75,30 @@ func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error 
 			return nil
 		}
 		for _, job := range jobs {
+			m.beginLifecycle()
 			if err := m.runReclaimJob(ctx, job); err != nil {
+				m.endLifecycle("failed")
 				return err
 			}
+			m.endLifecycle("completed")
 		}
 		remaining -= len(jobs)
 	}
 	return nil
+}
+
+func (m NativeMaintenance) beginLifecycle() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatMaven, "started")
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatMaven, 1)
+	}
+}
+
+func (m NativeMaintenance) endLifecycle(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatMaven, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatMaven, -1)
+	}
 }
 
 func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
@@ -154,7 +172,8 @@ type NativeRetention struct {
 		repository.NativeMavenStore
 		repository.LifecycleJobStore
 	}
-	Now func() time.Time
+	Now     func() time.Time
+	Metrics repository.BackgroundOperationMetrics
 }
 
 // NativePromotion executes immutable Maven metadata promotions through durable
@@ -292,11 +311,28 @@ func (m NativeRetention) RunJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
+		m.beginLifecycle()
 		if err := m.runJob(ctx, job); err != nil {
+			m.endLifecycle("failed")
 			return err
 		}
+		m.endLifecycle("completed")
 	}
 	return nil
+}
+
+func (m NativeRetention) beginLifecycle() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatMaven, "started")
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatMaven, 1)
+	}
+}
+
+func (m NativeRetention) endLifecycle(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatMaven, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatMaven, -1)
+	}
 }
 
 func (m NativeRetention) runJob(ctx context.Context, job repository.LifecycleJob) error {

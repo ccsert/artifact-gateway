@@ -45,7 +45,8 @@ func TestNativeConanMaintenanceRetriesFailedReclaimJob(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeConanMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	metrics := &Metrics{}
+	maintenance := NativeConanMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }, Metrics: metrics}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}
@@ -58,5 +59,11 @@ func TestNativeConanMaintenanceRetriesFailedReclaimJob(t *testing.T) {
 	}
 	if _, err = store.RestoreConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("restore collected revision error=%v", err)
+	}
+	if metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationConan][backgroundOperationStarted].Load() != 2 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationConan][backgroundOperationFailed].Load() != 1 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationConan][backgroundOperationCompleted].Load() != 1 ||
+		metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationConan].Load() != 0 {
+		t.Fatalf("Conan lifecycle metrics were not recorded")
 	}
 }

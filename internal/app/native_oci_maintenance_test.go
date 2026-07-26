@@ -49,7 +49,8 @@ func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 	if err := objects.Put(context.Background(), intent.ObjectKey, []byte("orphan")); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeOCIMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }}
+	metrics := &Metrics{}
+	maintenance := NativeOCIMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }, Metrics: metrics}
 	if err := maintenance.Collect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +60,11 @@ func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 	remaining, err := store.ListUnclaimedOCIObjectIntents(context.Background(), time.Now().UTC().Add(48*time.Hour), 10)
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("unclaimed=%#v err=%v", remaining, err)
+	}
+	if metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationOCI][backgroundOperationStarted].Load() != 1 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationOCI][backgroundOperationCompleted].Load() != 1 ||
+		metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationOCI].Load() != 0 {
+		t.Fatalf("OCI lifecycle metrics were not recorded")
 	}
 }
 

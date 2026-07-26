@@ -16,6 +16,30 @@ func (s *testObjectStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+type testMetrics struct {
+	started   uint64
+	completed uint64
+	inFlight  int64
+}
+
+func (m *testMetrics) RecordBackgroundOperation(kind string, format repository.Format, outcome string) {
+	if kind != "lifecycle" || format != repository.FormatRaw {
+		return
+	}
+	switch outcome {
+	case "started":
+		m.started++
+	case "completed":
+		m.completed++
+	}
+}
+
+func (m *testMetrics) AddBackgroundOperationInFlight(kind string, format repository.Format, delta int64) {
+	if kind == "lifecycle" && format == repository.FormatRaw {
+		m.inFlight += delta
+	}
+}
+
 func TestCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := &testObjectStore{objects: map[string]bool{}}
@@ -31,7 +55,8 @@ func TestCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	objects.objects[key] = true
-	if err := (Collector{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }}).Collect(context.Background()); err != nil {
+	metrics := &testMetrics{}
+	if err := (Collector{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }, Metrics: metrics}).Collect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if objects.objects[key] {
@@ -40,5 +65,8 @@ func TestCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
 	candidates, err := store.ListUnreferencedRawObjects(context.Background(), time.Now().UTC().Add(48*time.Hour), 10)
 	if err != nil || len(candidates) != 0 {
 		t.Fatalf("remaining raw collection candidates=%#v err=%v", candidates, err)
+	}
+	if metrics.started != 1 || metrics.completed != 1 || metrics.inFlight != 0 {
+		t.Fatalf("lifecycle metrics started=%d completed=%d in_flight=%d", metrics.started, metrics.completed, metrics.inFlight)
 	}
 }

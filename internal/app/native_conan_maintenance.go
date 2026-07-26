@@ -17,6 +17,7 @@ type NativeConanMaintenance struct {
 	}
 	Objects OCIObjectStore
 	Now     func() time.Time
+	Metrics repository.BackgroundOperationMetrics
 }
 type conanReclaimPayload struct {
 	Format    repository.Format `json:"format"`
@@ -52,32 +53,55 @@ func (m NativeConanMaintenance) RunReclaimJobs(ctx context.Context, limit int) e
 		return err
 	}
 	for _, job := range jobs {
+		m.begin()
 		var payload conanReclaimPayload
 		if json.Unmarshal(job.Payload, &payload) != nil || payload.ObjectKey == "" {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Conan reclaim payload")
+			m.end("failed")
 			continue
 		}
 		referenced, err := m.Store.ConanObjectHasVisibleReference(ctx, payload.ObjectKey)
 		if err != nil {
+			m.end("failed")
 			return m.fail(ctx, job.ID, "Conan object reference lookup failed")
 		}
 		if referenced {
 			if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+				m.end("failed")
 				return err
 			}
+			m.end("completed")
 			continue
 		}
 		if err = m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
+			m.end("failed")
 			return m.fail(ctx, job.ID, fmt.Sprintf("delete Conan object: %v", err))
 		}
 		if err = m.Store.MarkConanObjectCollected(ctx, payload.ObjectKey); err != nil && err != repository.ErrNotFound {
+			m.end("failed")
 			return m.fail(ctx, job.ID, "mark Conan object collected failed")
 		}
 		if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			m.end("failed")
 			return err
 		}
+		m.end("completed")
 	}
 	return nil
+}
+
+func (m NativeConanMaintenance) begin() {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatConan, "started")
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatConan, 1)
+	}
+}
+
+func (m NativeConanMaintenance) end(outcome string) {
+	if m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatConan, outcome)
+		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatConan, -1)
+	}
 }
 func (m NativeConanMaintenance) fail(ctx context.Context, id, message string) error {
 	_ = m.Store.FailLifecycleJob(ctx, id, message)

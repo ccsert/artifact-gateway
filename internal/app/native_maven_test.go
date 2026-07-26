@@ -673,7 +673,8 @@ func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T
 	if err := store.MarkMavenPublishObject(context.Background(), "expired", "widget-1.0.0.jar", key); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	metrics := &Metrics{}
+	maintenance := NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }, Metrics: metrics}
 	if err := maintenance.Collect(context.Background()); err == nil {
 		t.Fatal("collector must report failed object deletion")
 	}
@@ -683,5 +684,15 @@ func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T
 	}
 	if _, err := objects.Get(context.Background(), key); err == nil {
 		t.Fatal("collector did not retry the retained intent")
+	}
+	if metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationStarted].Load() != 3 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationFailed].Load() != 1 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationCompleted].Load() != 2 ||
+		metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationMaven].Load() != 0 {
+		t.Fatalf("Maven lifecycle metrics started=%d failed=%d completed=%d in_flight=%d",
+			metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationStarted].Load(),
+			metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationFailed].Load(),
+			metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationCompleted].Load(),
+			metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationMaven].Load())
 	}
 }

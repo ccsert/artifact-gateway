@@ -39,7 +39,8 @@ func TestNativeMavenRetentionKeepsMinimumVersionsPerModule(t *testing.T) {
 		t.Fatal(err)
 	}
 	sort.Slice(before, func(i, j int) bool { return before[i].CreatedAt.After(before[j].CreatedAt) })
-	if err = (NativeMavenRetention{Store: store, Now: func() time.Time { return time.Now().Add(48 * time.Hour) }}).Collect(ctx); err != nil {
+	metrics := &Metrics{}
+	if err = (NativeMavenRetention{Store: store, Now: func() time.Time { return time.Now().Add(48 * time.Hour) }, Metrics: metrics}).Collect(ctx); err != nil {
 		t.Fatal(err)
 	}
 	after, err := store.ListMavenArtifacts(ctx, repo.ID)
@@ -51,5 +52,10 @@ func TestNativeMavenRetentionKeepsMinimumVersionsPerModule(t *testing.T) {
 		if getErr != nil || deleted.State != "deleted" {
 			t.Fatalf("artifact=%#v err=%v", deleted, getErr)
 		}
+	}
+	if metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationStarted].Load() != 1 ||
+		metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationCompleted].Load() != 1 ||
+		metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationMaven].Load() != 0 {
+		t.Fatalf("Maven retention lifecycle metrics were not recorded")
 	}
 }

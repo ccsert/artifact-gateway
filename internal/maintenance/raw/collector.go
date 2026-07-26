@@ -37,6 +37,7 @@ type Collector struct {
 	Store   Store
 	Objects ObjectStore
 	Now     func() time.Time
+	Metrics repository.BackgroundOperationMetrics
 }
 
 func (c Collector) Collect(ctx context.Context) error {
@@ -73,11 +74,28 @@ func (c Collector) RunReclaimJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
+		c.begin()
 		if err := c.runReclaimJob(ctx, job); err != nil {
+			c.end("failed")
 			return err
 		}
+		c.end("completed")
 	}
 	return nil
+}
+
+func (c Collector) begin() {
+	if c.Metrics != nil {
+		c.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatRaw, "started")
+		c.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatRaw, 1)
+	}
+}
+
+func (c Collector) end(outcome string) {
+	if c.Metrics != nil {
+		c.Metrics.RecordBackgroundOperation("lifecycle", repository.FormatRaw, outcome)
+		c.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatRaw, -1)
+	}
 }
 
 func (c Collector) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
