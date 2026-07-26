@@ -16,6 +16,7 @@ import (
 	"time"
 
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
+	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -200,6 +201,60 @@ func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("replication audit missing: %#v", store.Audits)
+	}
+}
+
+func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-raw-source", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-raw-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("promoted Raw content")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	objects := NewMemoryOCIObjectStore()
+	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", Digest: digest, ObjectKey: "native/raw/sha256/" + fmt.Sprintf("%x", sum[:]), Size: int64(len(body)), ContentType: "text/plain"}
+	if err = objects.Put(ctx, asset.ObjectKey, body); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	grants := []repository.RepositoryGrant{{Principal: "promoter", Scopes: []string{"repositories:admin", "repositories:read"}}}
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+asset.Path+`","digest":"`+digest+`"}`))
+	authorize(request, authenticator.IssueToken("promoter"))
+	request.Header.Set("Idempotency-Key", "promote-raw-widget")
+	accepted := httptest.NewRecorder()
+	handler.ServeHTTP(accepted, request)
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("enqueue=%d %s", accepted.Code, accepted.Body.String())
+	}
+	if err = (rawprotocol.NativePromotion{Store: store}).RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRequest(http.MethodGet, "/raw/"+target.Name+"/"+asset.Path, nil)
+	read.Header.Set("Authorization", "Bearer "+authenticator.IssueToken("promoter"))
+	resolved := httptest.NewRecorder()
+	handler.ServeHTTP(resolved, read)
+	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+		t.Fatalf("promoted Raw read=%d %q", resolved.Code, resolved.Body.String())
+	}
+	if targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path); err != nil || targetAsset.Digest != digest || targetAsset.ObjectKey != asset.ObjectKey {
+		t.Fatalf("target asset=%#v err=%v", targetAsset, err)
 	}
 }
 

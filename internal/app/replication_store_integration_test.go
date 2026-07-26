@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/replication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -191,5 +192,64 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
 	if err != nil || len(plans) != 1 || plans[0].SourceRepositoryID != source.ID || plans[0].TargetRepositoryID != target.ID || plans[0].Format != repository.FormatRaw {
 		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+}
+
+func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-raw-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-raw-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "promotion-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("Raw promotion backed by MinIO")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", ObjectKey: "native/raw/sha256/" + hex.EncodeToString(sum[:]), Digest: digest, Size: int64(len(body)), ContentType: "text/plain"}
+	if err = objects.PutVerifiedReader(ctx, asset.ObjectKey, strings.NewReader(string(body)), asset.Size, asset.Digest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := (rawprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "minio-raw-promotion", rawprotocol.PromotionPayload{SourceRepositoryID: source.ID, Path: asset.Path, Digest: asset.Digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = (rawprotocol.NativePromotion{Store: store}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path)
+	if err != nil || targetAsset.ObjectKey != asset.ObjectKey || targetAsset.Digest != asset.Digest {
+		t.Fatalf("target asset=%#v err=%v", targetAsset, err)
+	}
+	if info, err := objects.Stat(ctx, asset.ObjectKey); err != nil || info.Size != asset.Size || info.Digest != asset.Digest {
+		t.Fatalf("promoted MinIO object=%#v err=%v", info, err)
 	}
 }
