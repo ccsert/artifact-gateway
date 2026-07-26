@@ -184,6 +184,17 @@ type MavenArtifact struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
+// MavenReplication is the immutable source snapshot and target-owned assets
+// that are published after every replication checkpoint is verified.
+type MavenReplication struct {
+	ID, SourceRepositoryID, TargetRepositoryID, Coordinate, Digest string
+	Assets                                                         []MavenReplicationAsset
+}
+type MavenReplicationAsset struct {
+	Path, SourceObjectKey, ObjectKey, Digest string
+	Size                                     int64
+}
+
 // MavenPromotion snapshots a visible coordinate for immutable promotion into a
 // second Maven Hosted repository.
 type MavenPromotion struct {

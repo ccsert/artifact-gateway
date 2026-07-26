@@ -73,6 +73,7 @@ type LifecycleJobStore interface {
 type ReplicationStore interface {
 	CreateReplicationPlan(context.Context, ReplicationPlan, []ReplicationCheckpoint) (ReplicationPlan, bool, error)
 	ClaimReplicationPlans(context.Context, int) ([]ReplicationPlan, error)
+	ClaimReplicationPlansByFormat(context.Context, Format, int) ([]ReplicationPlan, error)
 	ListReplicationPlans(context.Context, string, int) ([]ReplicationPlan, error)
 	ListReplicationCheckpoints(context.Context, string) ([]ReplicationCheckpoint, error)
 	UpdateReplicationCheckpoint(context.Context, ReplicationCheckpoint) error
@@ -93,6 +94,7 @@ type NativeMavenStore interface {
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	CommitMavenPublishSessionIdempotently(context.Context, string, string, string, []MavenAsset) (MavenArtifact, bool, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
+	ListMavenAssets(context.Context, string, string) ([]MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
 	SearchMavenArtifacts(context.Context, string, string, int, string) ([]MavenArtifact, error)
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
@@ -100,6 +102,7 @@ type NativeMavenStore interface {
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	RestoreMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	PromoteMavenArtifact(context.Context, MavenPromotion) (MavenArtifact, error)
+	PublishReplicatedMavenArtifact(context.Context, MavenReplication) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
 	MavenObjectIntentClaimIsActive(context.Context, string, string) (bool, error)
 	MavenObjectIntentHasReference(context.Context, string) (bool, error)

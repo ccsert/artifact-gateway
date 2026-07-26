@@ -40,6 +40,12 @@ func replicationCheckpointValues(checks map[string]ReplicationCheckpoint) []Repl
 	return values
 }
 func (s *MemoryStore) ClaimReplicationPlans(_ context.Context, limit int) ([]ReplicationPlan, error) {
+	return s.claimReplicationPlans(limit, "")
+}
+func (s *MemoryStore) ClaimReplicationPlansByFormat(_ context.Context, format Format, limit int) ([]ReplicationPlan, error) {
+	return s.claimReplicationPlans(limit, format)
+}
+func (s *MemoryStore) claimReplicationPlans(limit int, format Format) ([]ReplicationPlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []ReplicationPlan{}
@@ -47,7 +53,7 @@ func (s *MemoryStore) ClaimReplicationPlans(_ context.Context, limit int) ([]Rep
 		if len(out) == limit {
 			break
 		}
-		if p.State == "pending" || p.State == "failed" {
+		if (format == "" || p.Format == format) && (p.State == "pending" || p.State == "failed") {
 			p.State = "running"
 			p.StartedAt = time.Now().UTC()
 			p.CompletedAt = time.Time{}

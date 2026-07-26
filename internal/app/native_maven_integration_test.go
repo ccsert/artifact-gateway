@@ -90,6 +90,72 @@ func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testi
 	}
 }
 
+func TestPostgresMinIOMavenReplicationPublishesTargetOwnedCheckpoints(t *testing.T) {
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "maven-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-source-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-target-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("replicated through PostgreSQL and MinIO")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	sourceKey := "native/maven/sha256/" + fmt.Sprintf("%x", sum[:])
+	targetKey := mavenReplicationTargetObjectKey(target.ID, digest)
+	if err = objects.Put(ctx, sourceKey, body); err != nil {
+		t.Fatal(err)
+	}
+	coordinate, assetPath := "org.example:replication:1.0.0", "org/example/replication/1.0.0/replication-1.0.0.jar"
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: source.ID, Coordinate: coordinate, Publisher: "integration", PomObject: "replication-1.0.0.jar", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "replication-1.0.0.jar", Digest: digest, Size: int64(len(body))}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, sourceKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: assetPath, ObjectKey: sourceKey, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, IdempotencyKey: "postgres-minio-maven"}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MavenReplication{Store: store, Source: objects, Destination: objects, ChunkBytes: 5}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := store.GetMavenAsset(ctx, target.ID, assetPath)
+	if err != nil || asset.ObjectKey != targetKey || asset.Digest != digest || asset.Size != int64(len(body)) {
+		t.Fatalf("asset=%#v err=%v", asset, err)
+	}
+	if got, err := objects.Get(ctx, targetKey); err != nil || string(got) != string(body) {
+		t.Fatalf("target object=%q err=%v", got, err)
+	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) == 0 || plans[0].State != "completed" {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+}
+
 func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

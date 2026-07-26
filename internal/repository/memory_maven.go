@@ -218,6 +218,23 @@ func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string
 	}
 	return MavenAsset{}, ErrNotFound
 }
+func (s *MemoryStore) ListMavenAssets(_ context.Context, repositoryID, coordinate string) ([]MavenAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == repositoryID && artifact.Coordinate == coordinate && artifact.State == "visible" {
+			assets := []MavenAsset{}
+			for _, asset := range s.mavenAssets {
+				if asset.RepositoryID == repositoryID && mavenAssetBelongsToArtifact(asset, coordinate) {
+					assets = append(assets, asset)
+				}
+			}
+			sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+			return assets, nil
+		}
+	}
+	return nil, ErrNotFound
+}
 func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string) ([]MavenArtifact, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -357,6 +374,49 @@ func (s *MemoryStore) PromoteMavenArtifact(_ context.Context, promotion MavenPro
 		s.mavenObjectRefs[asset.ObjectKey] = true
 	}
 	artifact := MavenArtifact{ID: promotion.ID, RepositoryID: promotion.TargetRepositoryID, Coordinate: source.Coordinate, Digest: source.Digest, State: "visible", CreatedAt: time.Now().UTC()}
+	s.mavenArtifacts[artifact.ID] = artifact
+	return artifact, nil
+}
+
+func (s *MemoryStore) PublishReplicatedMavenArtifact(_ context.Context, replication MavenReplication) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var source MavenArtifact
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == replication.SourceRepositoryID && artifact.Coordinate == replication.Coordinate && artifact.Digest == replication.Digest && artifact.State == "visible" {
+			source = artifact
+			break
+		}
+	}
+	if source.ID == "" {
+		return MavenArtifact{}, ErrNotFound
+	}
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == replication.TargetRepositoryID && artifact.Coordinate == replication.Coordinate {
+			if artifact.ID == replication.ID && artifact.Digest == replication.Digest {
+				return artifact, nil
+			}
+			return MavenArtifact{}, ErrNameExists
+		}
+	}
+	if len(replication.Assets) == 0 {
+		return MavenArtifact{}, ErrDisabled
+	}
+	for _, copied := range replication.Assets {
+		sourceAsset, ok := s.mavenAssets[replication.SourceRepositoryID+"\x00"+copied.Path]
+		if !ok || !mavenAssetBelongsToArtifact(sourceAsset, source.Coordinate) || sourceAsset.ObjectKey != copied.SourceObjectKey || sourceAsset.Digest != copied.Digest || sourceAsset.Size != copied.Size {
+			return MavenArtifact{}, ErrNotFound
+		}
+		if _, exists := s.mavenAssets[replication.TargetRepositoryID+"\x00"+copied.Path]; exists {
+			return MavenArtifact{}, ErrNameExists
+		}
+	}
+	for _, copied := range replication.Assets {
+		asset := MavenAsset{RepositoryID: replication.TargetRepositoryID, Path: copied.Path, ObjectKey: copied.ObjectKey, Digest: copied.Digest, Size: copied.Size}
+		s.mavenAssets[asset.RepositoryID+"\x00"+asset.Path] = asset
+		s.mavenObjectRefs[asset.ObjectKey] = true
+	}
+	artifact := MavenArtifact{ID: replication.ID, RepositoryID: replication.TargetRepositoryID, Coordinate: source.Coordinate, Digest: source.Digest, State: "visible", CreatedAt: time.Now().UTC()}
 	s.mavenArtifacts[artifact.ID] = artifact
 	return artifact, nil
 }

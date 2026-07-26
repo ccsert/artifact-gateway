@@ -101,6 +101,7 @@ func main() {
 	conanprotocol.NativePromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.OCIReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
+	app.MavenReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{

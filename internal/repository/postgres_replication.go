@@ -58,16 +58,24 @@ func (s *PostgresStore) CreateReplicationPlan(ctx context.Context, plan Replicat
 }
 
 func (s *PostgresStore) ClaimReplicationPlans(ctx context.Context, limit int) ([]ReplicationPlan, error) {
+	return s.claimReplicationPlans(ctx, "", limit)
+}
+
+func (s *PostgresStore) ClaimReplicationPlansByFormat(ctx context.Context, format Format, limit int) ([]ReplicationPlan, error) {
+	return s.claimReplicationPlans(ctx, format, limit)
+}
+
+func (s *PostgresStore) claimReplicationPlans(ctx context.Context, format Format, limit int) ([]ReplicationPlan, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		WITH candidates AS (
-			SELECT id FROM replication_plans WHERE state IN ('pending','failed') ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1
+			SELECT id FROM replication_plans WHERE state IN ('pending','failed') AND ($1='' OR format=$1) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $2
 		)
 		UPDATE replication_plans p SET state='running',started_at=now(),completed_at=NULL,last_error=''
 		FROM candidates WHERE p.id=candidates.id
-		RETURNING p.id::text,p.source_repository_id::text,p.target_repository_id::text,p.format,p.idempotency_key,p.state,p.created_at,p.started_at,p.completed_at,p.last_error`, limit)
+		RETURNING p.id::text,p.source_repository_id::text,p.target_repository_id::text,p.format,p.idempotency_key,p.state,p.created_at,p.started_at,p.completed_at,p.last_error`, format, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -588,8 +588,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "OCI or Raw replication requires a visible coordinate and sha256 digest")
+		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI && source.Format != repository.FormatMaven) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Maven, OCI, or Raw replication requires a visible coordinate and sha256 digest")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
@@ -599,7 +599,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 				return
 			}
 			format := source.Format
-			var checkpoint repository.ReplicationCheckpoint
+			var checkpoints []repository.ReplicationCheckpoint
 			if format == repository.FormatRaw {
 				asset, lookupErr := h.sessions.store.GetRawAsset(r.Context(), source.ID, request.Coordinate)
 				if errors.Is(lookupErr, repository.ErrNotFound) || asset.Digest != request.Digest {
@@ -610,7 +610,31 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Raw artifact failed")
 					return
 				}
-				checkpoint = repository.ReplicationCheckpoint{ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}
+				checkpoints = []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}}
+			} else if format == repository.FormatMaven {
+				artifact, lookupErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), source.ID, request.Coordinate)
+				if errors.Is(lookupErr, repository.ErrNotFound) || artifact.Digest != request.Digest {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Maven artifact is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Maven artifact failed")
+					return
+				}
+				assets, lookupErr := h.sessions.store.ListMavenAssets(r.Context(), source.ID, request.Coordinate)
+				if lookupErr != nil || len(assets) == 0 {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Maven assets are unavailable")
+					return
+				}
+				checkpoints = make([]repository.ReplicationCheckpoint, 0, len(assets))
+				seenSourceKeys := make(map[string]bool, len(assets))
+				for _, asset := range assets {
+					if seenSourceKeys[asset.ObjectKey] {
+						continue
+					}
+					seenSourceKeys[asset.ObjectKey] = true
+					checkpoints = append(checkpoints, repository.ReplicationCheckpoint{SourceObjectKey: asset.ObjectKey, ObjectKey: mavenReplicationTargetObjectKey(target.ID, asset.Digest), Digest: asset.Digest, Size: asset.Size})
+				}
 			} else {
 				manifest, lookupErr := h.sessions.store.GetOCIManifest(r.Context(), source.ID, request.Coordinate, request.Digest)
 				if errors.Is(lookupErr, repository.ErrNotFound) || manifest.Digest != request.Digest {
@@ -621,9 +645,9 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source OCI manifest failed")
 					return
 				}
-				checkpoint = repository.ReplicationCheckpoint{SourceObjectKey: manifest.ObjectKey, ObjectKey: ociReplicationTargetObjectKey(target.ID, manifest.Name, manifest.Digest), Digest: manifest.Digest, Size: manifest.Size}
+				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: manifest.ObjectKey, ObjectKey: ociReplicationTargetObjectKey(target.ID, manifest.Name, manifest.Digest), Digest: manifest.Digest, Size: manifest.Size}}
 			}
-			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, IdempotencyKey: string(params.IdempotencyKey)}, []repository.ReplicationCheckpoint{checkpoint})
+			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing replication plan")
 				return

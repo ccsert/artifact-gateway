@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -333,6 +334,29 @@ func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) 
 	}
 	return a, err
 }
+func (s *PostgresStore) ListMavenAssets(ctx context.Context, repoID, coordinate string) ([]MavenAsset, error) {
+	prefix := mavenArtifactPathPrefix(coordinate)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.coordinate=$2 AND m.state='visible' WHERE a.repository_id::text=$1 AND left(a.path,length($3))=$3 ORDER BY a.path`, repoID, coordinate, prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	assets := []MavenAsset{}
+	for rows.Next() {
+		var asset MavenAsset
+		if err := rows.Scan(&asset.RepositoryID, &asset.Path, &asset.ObjectKey, &asset.Digest, &asset.Size); err != nil {
+			return nil, err
+		}
+		assets = append(assets, asset)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(assets) == 0 {
+		return nil, ErrNotFound
+	}
+	return assets, nil
+}
 func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) ([]MavenArtifact, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' ORDER BY created_at DESC`, repoID)
 	if err != nil {
@@ -503,6 +527,79 @@ func (s *PostgresStore) PromoteMavenArtifact(ctx context.Context, promotion Mave
 		return MavenArtifact{}, err
 	}
 	return MavenArtifact{ID: promotion.ID, RepositoryID: promotion.TargetRepositoryID, Coordinate: source.Coordinate, Digest: source.Digest, State: "visible", CreatedAt: source.CreatedAt}, nil
+}
+
+func (s *PostgresStore) PublishReplicatedMavenArtifact(ctx context.Context, replication MavenReplication) (MavenArtifact, error) {
+	if len(replication.Assets) == 0 {
+		return MavenArtifact{}, ErrDisabled
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var source MavenArtifact
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND digest=$3 AND state='visible' FOR UPDATE`, replication.SourceRepositoryID, replication.Coordinate, replication.Digest).Scan(&source.ID, &source.RepositoryID, &source.Coordinate, &source.Digest, &source.State, &source.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	var existing MavenArtifact
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 FOR UPDATE`, replication.TargetRepositoryID, replication.Coordinate).Scan(&existing.ID, &existing.RepositoryID, &existing.Coordinate, &existing.Digest, &existing.State, &existing.CreatedAt)
+	if err == nil {
+		if existing.ID == replication.ID && existing.Digest == replication.Digest {
+			return existing, tx.Commit()
+		}
+		return MavenArtifact{}, ErrNameExists
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, err
+	}
+	prefix := mavenArtifactPathPrefix(replication.Coordinate)
+	for _, copied := range replication.Assets {
+		var matched bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_assets WHERE repository_id::text=$1 AND path=$2 AND object_key=$3 AND digest=$4 AND size=$5 AND left(path,length($6))=$6)`, replication.SourceRepositoryID, copied.Path, copied.SourceObjectKey, copied.Digest, copied.Size, prefix).Scan(&matched); err != nil {
+			return MavenArtifact{}, err
+		}
+		if !matched {
+			return MavenArtifact{}, ErrNotFound
+		}
+	}
+	declared := make([]MavenDeclaredObject, 0, len(replication.Assets))
+	for _, copied := range replication.Assets {
+		declared = append(declared, MavenDeclaredObject{Name: strings.TrimPrefix(copied.Path, prefix), Digest: copied.Digest, Size: copied.Size})
+	}
+	objects, _ := json.Marshal(declared)
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,'replication',$4,'committed',now(),$5)`, replication.ID, replication.TargetRepositoryID, replication.Coordinate, declared[0].Name, objects); err != nil {
+		return MavenArtifact{}, err
+	}
+	for _, copied := range replication.Assets {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4)`, copied.ObjectKey, replication.ID, copied.Digest, copied.Size); err != nil {
+			return MavenArtifact{}, err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, replication.TargetRepositoryID, copied.Path, copied.ObjectKey, copied.Digest, copied.Size); isUnique(err) {
+			return MavenArtifact{}, ErrNameExists
+		} else if err != nil {
+			return MavenArtifact{}, err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2) ON CONFLICT (object_key) DO NOTHING`, copied.ObjectKey, replication.TargetRepositoryID); err != nil {
+			return MavenArtifact{}, err
+		}
+	}
+	artifact := MavenArtifact{ID: replication.ID, RepositoryID: replication.TargetRepositoryID, Coordinate: replication.Coordinate, Digest: replication.Digest, State: "visible"}
+	err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state) VALUES ($1,$2,$3,$4,'visible') RETURNING created_at`, artifact.ID, artifact.RepositoryID, artifact.Coordinate, artifact.Digest).Scan(&artifact.CreatedAt)
+	if isUnique(err) {
+		return MavenArtifact{}, ErrNameExists
+	}
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return MavenArtifact{}, err
+	}
+	return artifact, nil
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates, native_maven_publish_sessions s WHERE i.object_key=candidates.object_key AND s.id=i.session_id RETURNING s.repository_id::text, i.object_key, i.claimed_token`, before, limit)

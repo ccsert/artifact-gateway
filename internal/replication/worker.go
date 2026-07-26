@@ -21,6 +21,7 @@ type Worker struct {
 	Source      objectstore.Store
 	Destination objectstore.Store
 	ChunkBytes  int64
+	Format      repository.Format
 	// Publish makes verified bytes visible through a format-specific metadata
 	// transaction. It must be idempotent because a publish failure is retried.
 	Publish func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error
@@ -28,7 +29,13 @@ type Worker struct {
 }
 
 func (w Worker) Run(ctx context.Context, limit int) error {
-	plans, err := w.Store.ClaimReplicationPlans(ctx, limit)
+	var plans []repository.ReplicationPlan
+	var err error
+	if w.Format == "" {
+		plans, err = w.Store.ClaimReplicationPlans(ctx, limit)
+	} else {
+		plans, err = w.Store.ClaimReplicationPlansByFormat(ctx, w.Format, limit)
+	}
 	if err != nil {
 		return err
 	}
