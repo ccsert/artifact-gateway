@@ -7,10 +7,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -137,6 +139,66 @@ func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
 			t.Fatalf("put %s=%d", name, response.StatusCode)
 		}
 		_ = response.Body.Close()
+	}
+	started := request(http.MethodPost, serverA.URL+"/raw/"+repo.Name+"/releases/resumable.bin?resumable=1", nil)
+	if started.StatusCode != http.StatusCreated || started.Header.Get("Location") == "" {
+		_ = started.Body.Close()
+		t.Fatalf("start resumable=%d", started.StatusCode)
+	}
+	uploadLocation := started.Header.Get("Location")
+	_ = started.Body.Close()
+	patchRequest, err := http.NewRequest(http.MethodPatch, serverA.URL+uploadLocation, strings.NewReader("hello "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	patchRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	patchRequest.Header.Set("Upload-Offset", "0")
+	patched, err := serverA.Client().Do(patchRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patched.StatusCode != http.StatusNoContent || patched.Header.Get("Upload-Offset") != "6" {
+		_ = patched.Body.Close()
+		t.Fatalf("patch=%d offset=%q", patched.StatusCode, patched.Header.Get("Upload-Offset"))
+	}
+	_ = patched.Body.Close()
+	statusRequest, err := http.NewRequest(http.MethodGet, serverB.URL+uploadLocation, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	status, err := serverB.Client().Do(statusRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.StatusCode != http.StatusNoContent || status.Header.Get("Upload-Offset") != "6" {
+		_ = status.Body.Close()
+		t.Fatalf("status=%d offset=%q", status.StatusCode, status.Header.Get("Upload-Offset"))
+	}
+	_ = status.Body.Close()
+	data := []byte("hello world")
+	dataSum := sha256.Sum256(data)
+	completeRequest, err := http.NewRequest(http.MethodPut, serverB.URL+uploadLocation+"&complete=1", strings.NewReader("world"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	completeRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	completeRequest.Header.Set("Upload-Offset", "6")
+	completeRequest.Header.Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(dataSum[:]))
+	completed, err := serverB.Client().Do(completeRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.StatusCode != http.StatusCreated {
+		_ = completed.Body.Close()
+		t.Fatalf("complete=%d", completed.StatusCode)
+	}
+	_ = completed.Body.Close()
+	readResumable := request(http.MethodGet, serverA.URL+"/raw/"+repo.Name+"/releases/resumable.bin", nil)
+	resumableBody, _ := io.ReadAll(readResumable.Body)
+	_ = readResumable.Body.Close()
+	if readResumable.StatusCode != http.StatusOK || string(resumableBody) != string(data) {
+		t.Fatalf("read resumable=%d %q", readResumable.StatusCode, resumableBody)
 	}
 	checksumRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/raw/"+repo.Name+"/releases/alpha.txt.sha256", nil)
 	if err != nil {
