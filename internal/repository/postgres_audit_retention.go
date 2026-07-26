@@ -71,7 +71,13 @@ func (s *PostgresStore) ClaimAuditCleanupJobs(ctx context.Context, limit int) ([
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT id FROM audit_cleanup_jobs WHERE state IN ('pending','failed') ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1) UPDATE audit_cleanup_jobs j SET state='running',started_at=now(),completed_at=NULL FROM candidates WHERE j.id=candidates.id RETURNING j.id::text,j.idempotency_key,j.policy_version,j.cutoff_at,j.batch_size,j.deleted,j.state,j.created_at,j.started_at,j.completed_at,j.last_error`, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (
+        SELECT id FROM audit_cleanup_jobs
+        WHERE state IN ('pending','failed') OR (state='running' AND started_at < now() - interval '15 minutes')
+        ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1
+    ) UPDATE audit_cleanup_jobs j SET state='running',started_at=now(),completed_at=NULL,last_error=''
+    FROM candidates WHERE j.id=candidates.id
+    RETURNING j.id::text,j.idempotency_key,j.policy_version,j.cutoff_at,j.batch_size,j.deleted,j.state,j.created_at,j.started_at,j.completed_at,j.last_error`, limit)
 	if err != nil {
 		return nil, err
 	}

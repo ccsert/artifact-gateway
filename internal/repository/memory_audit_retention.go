@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const auditCleanupJobLease = 15 * time.Minute
+
 func defaultAuditRetentionPolicy() AuditRetentionPolicy { return AuditRetentionPolicy{Version: "1"} }
 
 func (s *MemoryStore) GetAuditRetentionPolicy(_ context.Context) (AuditRetentionPolicy, error) {
@@ -65,14 +67,16 @@ func (s *MemoryStore) ClaimAuditCleanupJobs(_ context.Context, limit int) ([]Aud
 	if limit <= 0 {
 		limit = 100
 	}
+	now := time.Now().UTC()
+	expiredBefore := now.Add(-auditCleanupJobLease)
 	jobs := make([]AuditCleanupJob, 0, limit)
 	for key, j := range s.auditCleanupJobs {
 		if len(jobs) == limit {
 			break
 		}
-		if j.State == LifecycleJobPending || j.State == LifecycleJobFailed {
+		if j.State == LifecycleJobPending || j.State == LifecycleJobFailed || (j.State == LifecycleJobRunning && !j.StartedAt.IsZero() && j.StartedAt.Before(expiredBefore)) {
 			j.State = LifecycleJobRunning
-			j.StartedAt = time.Now().UTC()
+			j.StartedAt = now
 			j.CompletedAt = time.Time{}
 			s.auditCleanupJobs[key] = j
 			jobs = append(jobs, j)

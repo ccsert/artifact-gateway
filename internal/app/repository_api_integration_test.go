@@ -295,7 +295,7 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	}
 }
 
-func TestPostgresAuditRetentionCleanupIsBoundedAndDurable(t *testing.T) {
+func TestPostgresAuditRetentionCleanupDrainsBatchesAndIsDurable(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
@@ -328,7 +328,7 @@ func TestPostgresAuditRetentionCleanupIsBoundedAndDurable(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobs, err := store.ListAuditCleanupJobs(ctx, 10)
-	if err != nil || len(jobs) == 0 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted || jobs[0].Deleted != 1 {
+	if err != nil || len(jobs) == 0 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted || jobs[0].Deleted != 2 {
 		t.Fatalf("jobs=%#v err=%v", jobs, err)
 	}
 	db, err := sql.Open("pgx", databaseURL)
@@ -340,8 +340,53 @@ func TestPostgresAuditRetentionCleanupIsBoundedAndDurable(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM resolver_audit_log WHERE actor IN ('audit-retention-old-one','audit-retention-old-two')`).Scan(&remaining); err != nil {
 		t.Fatal(err)
 	}
-	if remaining != 1 {
-		t.Fatalf("bounded deletion remaining=%d", remaining)
+	if remaining != 0 {
+		t.Fatalf("drained deletion remaining=%d", remaining)
+	}
+}
+
+func TestPostgresAuditRetentionCleanupReclaimsExpiredRunningJob(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	policy, err := store.GetAuditRetentionPolicy(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err = store.ReplaceAuditRetentionPolicy(ctx, repository.AuditRetentionPolicy{Enabled: true, KeepDays: 1}, policy.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := store.EnqueueAuditCleanupJob(ctx, repository.AuditCleanupJob{ID: uuid.NewString(), IdempotencyKey: "postgres-audit-reclaim-" + uuid.NewString(), PolicyVersion: policy.Version, CutoffAt: time.Now().UTC(), BatchSize: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimAuditCleanupJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != job.ID {
+		t.Fatalf("initial claim=%#v err=%v", claimed, err)
+	}
+	claimed, err = store.ClaimAuditCleanupJobs(ctx, 1)
+	if err != nil || len(claimed) != 0 {
+		t.Fatalf("fresh running claim=%#v err=%v", claimed, err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(ctx, `UPDATE audit_cleanup_jobs SET started_at=now() - interval '16 minutes' WHERE id::text=$1`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = store.ClaimAuditCleanupJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != job.ID || claimed[0].State != repository.LifecycleJobRunning {
+		t.Fatalf("expired claim=%#v err=%v", claimed, err)
 	}
 }
 

@@ -379,23 +379,24 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	resource := mavenResourceFromPath(strings.Join(parts[1:], "/"))
+	assetPath := strings.Join(parts[1:], "/")
+	resource := mavenResourceFromPath(assetPath)
 	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, resource); !decision.Allowed {
 		h.recordAuthorizationDenial(decision)
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: assetPath, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
-	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, strings.Join(parts[1:], "/"))
+	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, assetPath)
 	if err != nil {
-		if snapshotAsset, found := h.snapshotAsset(r.Context(), repo.ID, strings.Join(parts[1:], "/")); found {
+		if snapshotAsset, found := h.snapshotAsset(r.Context(), repo.ID, assetPath); found {
 			asset = snapshotAsset
 			err = nil
 		}
 	}
 	if err != nil {
-		if strings.HasSuffix(strings.Join(parts[1:], "/"), "maven-metadata.xml") {
-			h.metadata(w, r, repo, strings.Join(parts[1:], "/"), user)
+		if strings.HasSuffix(assetPath, "maven-metadata.xml") {
+			h.metadata(w, r, repo, assetPath, user)
 			return
 		}
 		http.NotFound(w, r)
@@ -825,18 +826,25 @@ func mavenCoordinatePath(c string) string {
 func mavenResourceFromPath(path string) string {
 	path = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(path, ".sha512"), ".sha256"), ".sha1"), ".md5")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 2 && parts[len(parts)-1] == "maven-metadata.xml" {
+		if len(parts) >= 4 && strings.HasSuffix(parts[len(parts)-2], "-SNAPSHOT") {
+			version, artifact := parts[len(parts)-2], parts[len(parts)-3]
+			group := strings.Join(parts[:len(parts)-3], ".")
+			if group != "" && artifact != "" && version != "" {
+				return group + ":" + artifact + ":" + version
+			}
+		}
+		artifact := parts[len(parts)-2]
+		group := strings.Join(parts[:len(parts)-2], ".")
+		if group != "" && artifact != "" {
+			return group + ":" + artifact
+		}
+	}
 	if len(parts) >= 4 {
 		version, artifact := parts[len(parts)-2], parts[len(parts)-3]
 		group := strings.Join(parts[:len(parts)-3], ".")
 		if group != "" && artifact != "" && version != "" {
 			return group + ":" + artifact + ":" + version
-		}
-	}
-	if len(parts) >= 2 && parts[len(parts)-1] == "maven-metadata.xml" {
-		artifact := parts[len(parts)-2]
-		group := strings.Join(parts[:len(parts)-2], ".")
-		if group != "" && artifact != "" {
-			return group + ":" + artifact
 		}
 	}
 	return strings.Trim(path, "/")

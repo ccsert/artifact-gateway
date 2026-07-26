@@ -597,6 +597,13 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if got.Code != http.StatusOK || got.Body.String() != "jar" {
 		t.Fatalf("read=%d body=%s", got.Code, got.Body.String())
 	}
+	metadata := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/org/example/widget/maven-metadata.xml", nil)
+	metadata.SetBasicAuth("maven", "resolver-secret")
+	metadataResponse := httptest.NewRecorder()
+	h.ServeHTTP(metadataResponse, metadata)
+	if metadataResponse.Code != http.StatusOK || !strings.Contains(metadataResponse.Body.String(), "<version>1.0.0</version>") {
+		t.Fatalf("metadata=%d body=%s", metadataResponse.Code, metadataResponse.Body.String())
+	}
 	other := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/com/other/widget/1.0.0/widget-1.0.0.jar", nil)
 	other.SetBasicAuth("maven", "resolver-secret")
 	otherResponse := httptest.NewRecorder()

@@ -39,19 +39,30 @@ func (w AuditRetentionWorker) RunJobs(ctx context.Context, limit int) error {
 			_ = w.Store.FailAuditCleanupJob(ctx, j.ID, "audit retention policy changed or is disabled")
 			continue
 		}
-		n, err := w.Store.DeleteAuditsBefore(ctx, j.CutoffAt, j.BatchSize)
-		if err != nil {
-			_ = w.Store.FailAuditCleanupJob(ctx, j.ID, "delete expired audits failed")
-			if w.Metrics != nil {
-				w.Metrics.RecordAuditRetentionCleanup("failed", 0)
+		batchSize := j.BatchSize
+		if batchSize <= 0 || batchSize > 1000 {
+			batchSize = 1000
+		}
+		deleted := 0
+		for {
+			n, err := w.Store.DeleteAuditsBefore(ctx, j.CutoffAt, batchSize)
+			if err != nil {
+				_ = w.Store.FailAuditCleanupJob(ctx, j.ID, "delete expired audits failed")
+				if w.Metrics != nil {
+					w.Metrics.RecordAuditRetentionCleanup("failed", deleted)
+				}
+				break
 			}
-			continue
-		}
-		if err = w.Store.CompleteAuditCleanupJob(ctx, j.ID, n); err != nil {
-			return err
-		}
-		if w.Metrics != nil {
-			w.Metrics.RecordAuditRetentionCleanup("completed", n)
+			deleted += n
+			if n < batchSize {
+				if err = w.Store.CompleteAuditCleanupJob(ctx, j.ID, deleted); err != nil {
+					return err
+				}
+				if w.Metrics != nil {
+					w.Metrics.RecordAuditRetentionCleanup("completed", deleted)
+				}
+				break
+			}
 		}
 	}
 	return nil

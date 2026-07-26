@@ -84,3 +84,35 @@ func TestAuditRetentionWorkerRetriesFailedJob(t *testing.T) {
 		t.Fatalf("jobs=%#v err=%v", jobs, err)
 	}
 }
+
+func TestAuditRetentionWorkerDrainsAllBatchesAndAggregatesDeletedCount(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	old := time.Now().UTC().AddDate(0, 0, -10)
+	store.Audits = []repository.AuditRecord{
+		{Actor: "old-1", OccurredAt: old},
+		{Actor: "old-2", OccurredAt: old},
+		{Actor: "old-3", OccurredAt: old},
+		{Actor: "recent", OccurredAt: time.Now().UTC()},
+	}
+	policy, err := store.ReplaceAuditRetentionPolicy(ctx, repository.AuditRetentionPolicy{Enabled: true, KeepDays: 1}, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.EnqueueAuditCleanupJob(ctx, repository.AuditCleanupJob{ID: "job", IdempotencyKey: "drain", PolicyVersion: policy.Version, CutoffAt: time.Now().UTC().AddDate(0, 0, -1), BatchSize: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (AuditRetentionWorker{Store: store}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Audits) != 1 || store.Audits[0].Actor != "recent" {
+		t.Fatalf("audits after cleanup = %#v", store.Audits)
+	}
+	jobs, err := store.ListAuditCleanupJobs(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].State != repository.LifecycleJobCompleted || jobs[0].Deleted != 3 {
+		t.Fatalf("job=%#v", jobs)
+	}
+}
