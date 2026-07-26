@@ -297,6 +297,22 @@ func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, 
 	}
 	return v, err
 }
+func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name, subject string, limit int, after string) ([]OCIManifest, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,subject_digest,artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND subject_digest=$3 AND digest>$4 ORDER BY digest LIMIT $5`, repositoryID, name, subject, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []OCIManifest
+	for rows.Next() {
+		var v OCIManifest
+		if err := rows.Scan(&v.RepositoryID, &v.Name, &v.Digest, &v.ObjectKey, &v.MediaType, &v.Size, &v.SubjectDigest, &v.ArtifactType); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
 func (s *PostgresStore) ListOCITags(ctx context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
 	if limit <= 0 {
 		limit = 100

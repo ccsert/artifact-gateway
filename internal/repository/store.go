@@ -100,6 +100,7 @@ type NativeOCIStore interface {
 	GetOCIBlob(context.Context, string, string) (OCIBlob, error)
 	PutOCIManifest(context.Context, OCIManifest, string) (OCIManifest, error)
 	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
+	ListOCIReferrers(context.Context, string, string, string, int, string) ([]OCIManifest, error)
 	ListOCITags(context.Context, string, string, int, string) ([]string, error)
 	DeleteOCIManifest(context.Context, string, string, string) error
 }

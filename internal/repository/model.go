@@ -87,6 +87,7 @@ type OCIObjectIntent struct {
 
 type OCIManifest struct {
 	RepositoryID, Name, Digest, ObjectKey, MediaType string
+	SubjectDigest, ArtifactType                      string
 	Size                                             int64
 }
 

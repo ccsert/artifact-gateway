@@ -244,6 +244,21 @@ func (s *MemoryStore) GetOCIManifest(_ context.Context, repositoryID, name, refe
 	}
 	return v, nil
 }
+func (s *MemoryStore) ListOCIReferrers(_ context.Context, repositoryID, name, subject string, limit int, after string) ([]OCIManifest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []OCIManifest
+	for _, item := range s.ociManifests {
+		if item.RepositoryID == repositoryID && item.Name == name && item.SubjectDigest == subject && item.Digest > after {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Digest < out[j].Digest })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
 func (s *MemoryStore) ListOCITags(_ context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
