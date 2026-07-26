@@ -156,7 +156,7 @@ type NativePromotion struct {
 		repository.LifecycleJobStore
 	}
 }
-type promotionPayload struct {
+type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
 	SourceRepositoryID string            `json:"sourceRepositoryId"`
 	Coordinate         string            `json:"coordinate"`
@@ -164,7 +164,7 @@ type promotionPayload struct {
 	PromotionID        string            `json:"promotionId"`
 }
 
-func (m NativePromotion) Enqueue(ctx context.Context, targetRepositoryID, idempotencyKey string, payload promotionPayload) (repository.LifecycleJob, bool, error) {
+func (m NativePromotion) Enqueue(ctx context.Context, targetRepositoryID, idempotencyKey string, payload PromotionPayload) (repository.LifecycleJob, bool, error) {
 	payload.Format = repository.FormatMaven
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -178,7 +178,7 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 		return err
 	}
 	for _, job := range jobs {
-		var p promotionPayload
+		var p PromotionPayload
 		if err := json.Unmarshal(job.Payload, &p); err != nil || p.SourceRepositoryID == "" || p.Coordinate == "" || p.Digest == "" || p.PromotionID == "" {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Maven promotion payload")
 			continue

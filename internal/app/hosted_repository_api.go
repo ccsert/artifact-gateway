@@ -13,6 +13,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -486,6 +487,38 @@ func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.Respons
 			return
 		}
 		writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryPromotionParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
+		if source.Format != repository.FormatMaven {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is currently supported only for Maven repositories")
+			return
+		}
+		var request adminopenapi.PromotionRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validMavenCoordinate(request.Coordinate) || request.Digest == "" {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, Maven coordinate, and digest are required")
+			return
+		}
+		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
+			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
+			if err != nil || target.Format != repository.FormatMaven || target.State != repository.RepositoryActive {
+				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Maven repository")
+				return
+			}
+			job, _, err := (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: uuid.NewString()})
+			if errors.Is(err, repository.ErrIdempotencyConflict) {
+				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
+				return
+			}
+			if err != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "enqueue promotion job failed")
+				return
+			}
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: source.Name, GroupName: source.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: request.Coordinate, Operation: "promote", Status: http.StatusAccepted})
+			writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
+		})
 	})
 }
 

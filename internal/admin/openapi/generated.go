@@ -523,6 +523,13 @@ type Problem struct {
 // ProblemCode defines model for Problem.Code.
 type ProblemCode string
 
+// PromotionRequest defines model for PromotionRequest.
+type PromotionRequest struct {
+	Coordinate         string             `json:"coordinate"`
+	Digest             string             `json:"digest"`
+	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
+}
+
 // PublishSession defines model for PublishSession.
 type PublishSession struct {
 	Coordinate   string              `json:"coordinate"`
@@ -727,6 +734,11 @@ type ListOCIImagesParams struct {
 	PageToken *PageToken      `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// CreateRepositoryPromotionParams defines parameters for CreateRepositoryPromotion.
+type CreateRepositoryPromotionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // CreatePublishSessionParams defines parameters for CreatePublishSession.
 type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -763,6 +775,9 @@ type CreateRepositoryJSONRequestBody = CreateRepository
 
 // ReplaceGrantsJSONRequestBody defines body for ReplaceGrants for application/json ContentType.
 type ReplaceGrantsJSONRequestBody = GrantList
+
+// CreateRepositoryPromotionJSONRequestBody defines body for CreateRepositoryPromotion for application/json ContentType.
+type CreateRepositoryPromotionJSONRequestBody = PromotionRequest
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
@@ -889,6 +904,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIImagesParams)
+
+	// (POST /repositories/{repositoryId}/promotions)
+	CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryPromotionParams)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
@@ -2016,6 +2034,60 @@ func (siw *ServerInterfaceWrapper) ListOCIImages(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CreateRepositoryPromotion operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRepositoryPromotionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepositoryPromotion(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreatePublishSession operation middleware
 func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r *http.Request) {
 
@@ -2470,6 +2542,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/restore", wrapper.RestoreRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
@@ -3487,6 +3560,30 @@ func (response ListOCIImages404ApplicationProblemPlusJSONResponse) VisitListOCII
 	return err
 }
 
+type CreateRepositoryPromotionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       CreateRepositoryPromotionParams
+	Body         *CreateRepositoryPromotionJSONRequestBody
+}
+
+type CreateRepositoryPromotionResponseObject interface {
+	VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error
+}
+
+type CreateRepositoryPromotion202JSONResponse LifecycleJob
+
+func (response CreateRepositoryPromotion202JSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreatePublishSessionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreatePublishSessionParams
@@ -3756,6 +3853,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(ctx context.Context, request ListOCIImagesRequestObject) (ListOCIImagesResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/promotions)
+	CreateRepositoryPromotion(ctx context.Context, request CreateRepositoryPromotionRequestObject) (CreateRepositoryPromotionResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
@@ -4535,6 +4635,40 @@ func (sh *strictHandler) ListOCIImages(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListOCIImagesResponseObject); ok {
 		if err := validResponse.VisitListOCIImagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepositoryPromotion operation middleware
+func (sh *strictHandler) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryPromotionParams) {
+	var request CreateRepositoryPromotionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreateRepositoryPromotionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepositoryPromotion(ctx, request.(CreateRepositoryPromotionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepositoryPromotion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryPromotionResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryPromotionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

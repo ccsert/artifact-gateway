@@ -1,0 +1,21 @@
+---
+repositories_repositoryId_promotions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createRepositoryPromotion
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/PromotionRequest"
+    responses:
+      '202':
+        description: Maven promotion job accepted
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/LifecycleJob"

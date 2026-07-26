@@ -259,6 +259,43 @@
         }
       }
     },
+    "/repositories/{repositoryId}/promotions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "createRepositoryPromotion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Maven promotion job accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/restore": {
       "parameters": [
         {
@@ -2521,6 +2558,27 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/AuditRecord"
+        }
+      },
+      "PromotionRequest": {
+        "type": "object",
+        "required": [
+          "targetRepositoryId",
+          "coordinate",
+          "digest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "targetRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          }
         }
       },
       "RepositoryCapabilities": {

@@ -214,6 +214,14 @@ LifecycleJob:
     lastError:
       type: string
       maxLength: 1024
+PromotionRequest:
+  type: object
+  required: [targetRepositoryId, coordinate, digest]
+  additionalProperties: false
+  properties:
+    targetRepositoryId: {type: string, format: uuid}
+    coordinate: {type: string}
+    digest: {type: string}
 ArtifactTombstone:
   type: object
   required: [coordinate, digest, tombstonedAt]

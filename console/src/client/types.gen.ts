@@ -208,6 +208,12 @@ export type AuditRecord = {
 
 export type AuditList = Array<AuditRecord>;
 
+export type PromotionRequest = {
+    targetRepositoryId: string;
+    coordinate: string;
+    digest: string;
+};
+
 export type RepositoryCapabilities = {
     format: Format;
     type: 'hosted';
@@ -573,6 +579,27 @@ export type ExecuteRepositoryRetentionResponses = {
 };
 
 export type ExecuteRepositoryRetentionResponse = ExecuteRepositoryRetentionResponses[keyof ExecuteRepositoryRetentionResponses];
+
+export type CreateRepositoryPromotionData = {
+    body: PromotionRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/promotions';
+};
+
+export type CreateRepositoryPromotionResponses = {
+    /**
+     * Maven promotion job accepted
+     */
+    202: LifecycleJob;
+};
+
+export type CreateRepositoryPromotionResponse = CreateRepositoryPromotionResponses[keyof CreateRepositoryPromotionResponses];
 
 export type RestoreRepositoryArtifactData = {
     body: RestoreArtifact;
