@@ -52,6 +52,8 @@ COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E
 raw_group="raw-ready-${run_id}"
 conan_group="conan-ready-${run_id}"
 grant_repository="grant-restore-${run_id}"
+replication_target_repository="replication-restore-${run_id}"
+promotion_target_repository="promotion-restore-${run_id}"
 create_repository=$(printf '{"name":"%s","format":"raw"}' "$grant_repository")
 repository=$(curl --silent --show-error --fail \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -69,6 +71,31 @@ status=$(curl --silent --show-error --write-out '%{http_code}' \
   --request PUT -H "Authorization: Bearer $writer_token" --data-binary 'grant restore artifact' \
   "$gateway_url/raw/$grant_repository/releases/app.txt")
 [[ "$status" == 201 ]] || { printf 'Writing grant recovery Raw object returned HTTP %s.\n' "$status" >&2; exit 1; }
+replication_target=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: replication-target-${run_id}" \
+  --data "$(printf '{\"name\":\"%s\",\"format\":\"raw\"}' "$replication_target_repository")" "$gateway_url/api/v2/repositories")
+replication_target_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$replication_target")
+raw_digest="sha256:$(printf '%s' 'grant restore artifact' | shasum -a 256 | awk '{print $1}')"
+replication_plan=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: replication-plan-${run_id}" \
+  --data "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$replication_target_id" "$raw_digest")" \
+  "$gateway_url/api/v2/repositories/$repository_id/replications")
+replication_plan_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$replication_plan")
+[[ -n "$replication_plan_id" ]] || { printf '%s\n' 'Replication recovery plan returned no ID.' >&2; exit 1; }
+promotion_target=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: promotion-target-${run_id}" \
+  --data "$(printf '{\"name\":\"%s\",\"format\":\"raw\"}' "$promotion_target_repository")" "$gateway_url/api/v2/repositories")
+promotion_target_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$promotion_target")
+promotion_job=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: promotion-job-${run_id}" \
+  --data "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$promotion_target_id" "$raw_digest")" \
+  "$gateway_url/api/v2/repositories/$repository_id/promotions")
+promotion_job_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$promotion_job")
+[[ -n "$promotion_job_id" ]] || { printf '%s\n' 'Promotion recovery job returned no ID.' >&2; exit 1; }
 grant_payload='[{"principal":"recovery-reader","scopes":["repositories:read"]}]'
 status=$(curl --silent --show-error --write-out '%{http_code}' \
   --request PUT -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H 'If-Match: 1' \
@@ -121,6 +148,10 @@ restored_grants=$(curl --silent --show-error --fail --dump-header "$grant_header
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id/grants")
 tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Restored Repository grants did not retain version 2.' >&2; exit 1; }
 grep -Fq '"principal":"recovery-reader"' <<<"$restored_grants" || { printf '%s\n' 'Restored Repository grants did not retain recovery-reader.' >&2; exit 1; }
+restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$replication_target_id/replications")
+grep -Fq "\"id\":\"$replication_plan_id\"" <<<"$restored_replications" || { printf '%s\n' 'Restored replication plan is unavailable.' >&2; exit 1; }
+restored_lifecycle_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$promotion_target_id/lifecycle-jobs")
+grep -Fq "\"id\":\"$promotion_job_id\"" <<<"$restored_lifecycle_jobs" || { printf '%s\n' 'Restored promotion lifecycle job is unavailable.' >&2; exit 1; }
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $denied_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
 [[ "$status" == 401 ]] || { printf 'Managed grant denial after restore returned HTTP %s.\n' "$status" >&2; exit 1; }
@@ -135,4 +166,4 @@ grep -Fq '"Format":"conan"' <<<"$audits" || { printf '%s\n' 'Restored Conan audi
 grep -Fq '"Actor":"recovery-denied"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant denial audit is unavailable.' >&2; exit 1; }
 grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant authorization source is unavailable.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved Raw cache, Conan state, Repository grants, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved Raw cache, Conan state, Repository grants, promotion jobs, replication plans, and authorization audits.'
