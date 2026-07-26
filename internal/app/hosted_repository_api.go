@@ -627,12 +627,13 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					return
 				}
 				checkpoints = make([]repository.ReplicationCheckpoint, 0, len(assets))
-				seenSourceKeys := make(map[string]bool, len(assets))
+				seenDigests := make(map[string]bool, len(assets))
 				for _, asset := range assets {
-					if seenSourceKeys[asset.ObjectKey] {
+					key := asset.Digest + "\x00" + strconv.FormatInt(asset.Size, 10)
+					if seenDigests[key] {
 						continue
 					}
-					seenSourceKeys[asset.ObjectKey] = true
+					seenDigests[key] = true
 					checkpoints = append(checkpoints, repository.ReplicationCheckpoint{SourceObjectKey: asset.ObjectKey, ObjectKey: mavenReplicationTargetObjectKey(target.ID, asset.Digest), Digest: asset.Digest, Size: asset.Size})
 				}
 			} else if format == repository.FormatOCI {

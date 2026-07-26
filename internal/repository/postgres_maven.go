@@ -576,7 +576,7 @@ func (s *PostgresStore) PublishReplicatedMavenArtifact(ctx context.Context, repl
 		return MavenArtifact{}, err
 	}
 	for _, copied := range replication.Assets {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4)`, copied.ObjectKey, replication.ID, copied.Digest, copied.Size); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, copied.ObjectKey, replication.ID, copied.Digest, copied.Size); err != nil {
 			return MavenArtifact{}, err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, replication.TargetRepositoryID, copied.Path, copied.ObjectKey, copied.Digest, copied.Size); isUnique(err) {

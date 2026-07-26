@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,31 +72,26 @@ func (r MavenReplication) publish(ctx context.Context, plan repository.Replicati
 }
 
 func mavenReplicationAssets(assets []repository.MavenAsset, checkpoints []repository.ReplicationCheckpoint) ([]repository.MavenReplicationAsset, bool) {
-	bySourceKey := make(map[string]repository.ReplicationCheckpoint, len(checkpoints))
+	byDigest := make(map[string]repository.ReplicationCheckpoint, len(checkpoints))
 	for _, checkpoint := range checkpoints {
-		sourceKey := checkpoint.SourceObjectKey
-		if sourceKey == "" {
-			sourceKey = checkpoint.ObjectKey
-		}
-		if bySourceKey[sourceKey].ObjectKey != "" {
+		key := checkpoint.Digest + "\x00" + strconv.FormatInt(checkpoint.Size, 10)
+		if byDigest[key].ObjectKey != "" {
 			return nil, false
 		}
-		bySourceKey[sourceKey] = checkpoint
-	}
-	if len(bySourceKey) != len(checkpoints) {
-		return nil, false
+		byDigest[key] = checkpoint
 	}
 	copied := make([]repository.MavenReplicationAsset, 0, len(assets))
-	usedSourceKeys := make(map[string]bool, len(checkpoints))
+	usedDigests := make(map[string]bool, len(checkpoints))
 	for _, asset := range assets {
-		checkpoint, ok := bySourceKey[asset.ObjectKey]
-		if !ok || checkpoint.Digest != asset.Digest || checkpoint.Size != asset.Size {
+		key := asset.Digest + "\x00" + strconv.FormatInt(asset.Size, 10)
+		checkpoint, ok := byDigest[key]
+		if !ok {
 			return nil, false
 		}
-		usedSourceKeys[asset.ObjectKey] = true
+		usedDigests[key] = true
 		copied = append(copied, repository.MavenReplicationAsset{Path: asset.Path, SourceObjectKey: asset.ObjectKey, ObjectKey: checkpoint.ObjectKey, Digest: asset.Digest, Size: asset.Size})
 	}
-	if len(usedSourceKeys) != len(checkpoints) {
+	if len(usedDigests) != len(checkpoints) {
 		return nil, false
 	}
 	sort.Slice(copied, func(i, j int) bool { return copied[i].Path < copied[j].Path })

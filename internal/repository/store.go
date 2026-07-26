@@ -133,6 +133,7 @@ type NativeOCIStore interface {
 	MountOCIBlobFrom(context.Context, string, string, string) (OCIBlob, error)
 	GetOCIBlob(context.Context, string, string) (OCIBlob, error)
 	PutOCIManifest(context.Context, OCIManifest, string) (OCIManifest, error)
+	PublishReplicatedOCIManifest(context.Context, OCIReplicationPublication) (OCIManifest, error)
 	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
 	ListOCIReferrers(context.Context, string, string, string, int, string) ([]OCIManifest, error)
 	ListOCIManifestNames(context.Context, string, int, string) ([]string, error)
@@ -207,6 +208,7 @@ type NativeConanStore interface {
 	StageConanObject(context.Context, ConanObjectIntent) error
 	PutConanRecipeRevision(context.Context, ConanRecipeRevision, []ConanAsset) (ConanRecipeRevision, error)
 	PutConanPackageRevision(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)
+	PublishReplicatedConanRevision(context.Context, ConanReplicationPublication) (ConanRecipeRevision, error)
 	GetConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
 	SearchConanReferences(context.Context, string, string, int, string) ([]string, error)

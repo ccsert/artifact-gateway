@@ -78,15 +78,13 @@ func (r OCIReplication) publish(ctx context.Context, plan repository.Replication
 	if err != nil {
 		return fmt.Errorf("read verified target OCI manifest: %w", err)
 	}
-	for _, digest := range replicatedManifestBlobDigests(body) {
-		if _, err := r.Store.MountOCIBlobFrom(ctx, plan.TargetRepositoryID, plan.SourceRepositoryID, digest); err != nil {
-			return fmt.Errorf("source OCI blob is unavailable: %w", err)
-		}
-	}
-	if err := r.Store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: plan.TargetRepositoryID, ObjectKey: checkpoint.ObjectKey, Digest: checkpoint.Digest, Size: checkpoint.Size}); err != nil {
-		return err
-	}
-	_, err = r.Store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: plan.TargetRepositoryID, Name: source.Name, Digest: source.Digest, ObjectKey: checkpoint.ObjectKey, MediaType: source.MediaType, SubjectDigest: source.SubjectDigest, ArtifactType: source.ArtifactType, Size: checkpoint.Size}, source.Digest)
+	_, err = r.Store.PublishReplicatedOCIManifest(ctx, repository.OCIReplicationPublication{
+		SourceRepositoryID: plan.SourceRepositoryID,
+		TargetRepositoryID: plan.TargetRepositoryID,
+		SourceObjectKey:    sourceKey,
+		Manifest:           repository.OCIManifest{RepositoryID: plan.TargetRepositoryID, Name: source.Name, Digest: source.Digest, ObjectKey: checkpoint.ObjectKey, MediaType: source.MediaType, SubjectDigest: source.SubjectDigest, ArtifactType: source.ArtifactType, Size: checkpoint.Size},
+		BlobDigests:        replicatedManifestBlobDigests(body),
+	})
 	return err
 }
 

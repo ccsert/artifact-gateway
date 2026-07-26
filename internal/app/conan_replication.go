@@ -81,15 +81,7 @@ func (r ConanReplication) publish(ctx context.Context, plan repository.Replicati
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
-	for _, check := range checks {
-		if err := r.Store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: plan.TargetRepositoryID, ObjectKey: check.ObjectKey, Digest: check.Digest, Size: check.Size}); err != nil {
-			return err
-		}
-	}
 	recipeAssets := conanTargetAssets(assets, checks, plan.TargetRepositoryID, "", "")
-	if _, err = r.Store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: plan.TargetRepositoryID, Reference: recipe.Reference, Revision: recipe.Revision, Digest: recipe.Digest}, recipeAssets); err != nil {
-		return err
-	}
 	packages, err := conanVisiblePackages(ctx, r.Store, plan.SourceRepositoryID, recipe.Reference, recipe.Revision)
 	if err != nil {
 		return err
@@ -99,16 +91,22 @@ func (r ConanReplication) publish(ctx context.Context, plan repository.Replicati
 	if _, err = conanReplicationAssetsForChecks(ctx, r.Store, plan.SourceRepositoryID, checks); err != nil {
 		return err
 	}
+	targetAssets := append([]repository.ConanAsset(nil), recipeAssets...)
 	for _, pkg := range packages {
 		packageAssets := conanTargetAssets(assets, checks, plan.TargetRepositoryID, pkg.PackageID, pkg.Revision)
 		if len(packageAssets) == 0 {
 			return errors.New("source Conan package assets are unavailable")
 		}
-		if _, err = r.Store.PutConanPackageRevision(ctx, repository.ConanPackageRevision{RepositoryID: plan.TargetRepositoryID, Reference: recipe.Reference, RecipeRevision: recipe.Revision, PackageID: pkg.PackageID, Revision: pkg.Revision, Digest: pkg.Digest}, packageAssets); err != nil {
-			return err
-		}
+		targetAssets = append(targetAssets, packageAssets...)
 	}
-	return nil
+	_, err = r.Store.PublishReplicatedConanRevision(ctx, repository.ConanReplicationPublication{
+		SourceRepositoryID: plan.SourceRepositoryID,
+		Recipe:             repository.ConanRecipeRevision{RepositoryID: plan.TargetRepositoryID, Reference: recipe.Reference, Revision: recipe.Revision, Digest: recipe.Digest},
+		Packages:           packages,
+		SourceAssets:       assets,
+		TargetAssets:       targetAssets,
+	})
+	return err
 }
 
 func conanReplicationAssetsForChecks(ctx context.Context, store repository.NativeConanStore, sourceID string, checks []repository.ReplicationCheckpoint) ([]repository.ConanAsset, error) {

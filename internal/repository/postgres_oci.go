@@ -284,6 +284,58 @@ func (s *PostgresStore) PutOCIManifest(ctx context.Context, v OCIManifest, refer
 	}
 	return v, tx.Commit()
 }
+
+func (s *PostgresStore) PublishReplicatedOCIManifest(ctx context.Context, publication OCIReplicationPublication) (OCIManifest, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var source OCIManifest
+	err = tx.QueryRowContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3 FOR SHARE`, publication.SourceRepositoryID, publication.Manifest.Name, publication.Manifest.Digest).Scan(&source.RepositoryID, &source.Name, &source.Digest, &source.ObjectKey, &source.MediaType, &source.Size, &source.SubjectDigest, &source.ArtifactType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIManifest{}, ErrNotFound
+	}
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	if source.ObjectKey != publication.SourceObjectKey || source.Size != publication.Manifest.Size {
+		return OCIManifest{}, ErrNotFound
+	}
+	var existing OCIManifest
+	err = tx.QueryRowContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3 FOR SHARE`, publication.TargetRepositoryID, publication.Manifest.Name, publication.Manifest.Digest).Scan(&existing.RepositoryID, &existing.Name, &existing.Digest, &existing.ObjectKey, &existing.MediaType, &existing.Size, &existing.SubjectDigest, &existing.ArtifactType)
+	if err == nil {
+		if existing.ObjectKey != publication.Manifest.ObjectKey {
+			return OCIManifest{}, ErrNameExists
+		}
+		return existing, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return OCIManifest{}, err
+	}
+	for _, digest := range publication.BlobDigests {
+		var present bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_oci_repository_blobs WHERE repository_id::text=$1 AND digest=$2)`, publication.SourceRepositoryID, digest).Scan(&present); err != nil {
+			return OCIManifest{}, err
+		}
+		if !present {
+			return OCIManifest{}, ErrNotFound
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_repository_blobs (repository_id,digest) VALUES ($1,$2) ON CONFLICT DO NOTHING`, publication.TargetRepositoryID, digest); err != nil {
+			return OCIManifest{}, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO UPDATE SET repository_id=COALESCE(native_oci_object_intents.repository_id,EXCLUDED.repository_id)`, publication.Manifest.ObjectKey, publication.TargetRepositoryID, publication.Manifest.Digest, publication.Manifest.Size); err != nil {
+		return OCIManifest{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size,subject_digest,artifact_type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, publication.Manifest.RepositoryID, publication.Manifest.Name, publication.Manifest.Digest, publication.Manifest.ObjectKey, publication.Manifest.MediaType, publication.Manifest.Size, nullableString(publication.Manifest.SubjectDigest), publication.Manifest.ArtifactType); err != nil {
+		return OCIManifest{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL`, publication.Manifest.ObjectKey); err != nil {
+		return OCIManifest{}, err
+	}
+	return publication.Manifest, tx.Commit()
+}
 func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, reference string) (OCIManifest, error) {
 	var v OCIManifest
 	query := `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`

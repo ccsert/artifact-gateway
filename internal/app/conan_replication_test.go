@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -84,6 +85,53 @@ func TestConanReplicationRejectsTombstonedSource(t *testing.T) {
 	}
 	if err = (ConanReplication{Store: store, Source: objects, Destination: objects}).publish(ctx, repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatConan}, checks); err == nil {
 		t.Fatal("expected source visibility rejection")
+	}
+}
+
+func TestConanReplicationDoesNotPublishRecipeWhenAnyTargetObjectIsUnavailable(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	reference, revision := "widget/1.0/user/stable", "rrev"
+	recipeBody, packageBody := []byte("recipe"), []byte("package")
+	recipeDigest, packageDigest := conanReplicationDigest(recipeBody), conanReplicationDigest(packageBody)
+	for _, item := range []struct {
+		key    string
+		body   []byte
+		digest string
+	}{{"source-recipe", recipeBody, recipeDigest}, {"source-package", packageBody, packageDigest}} {
+		if err := objects.PutVerifiedReader(ctx, item.key, bytes.NewReader(item.body), int64(len(item.body)), item.digest); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: "source", ObjectKey: item.key, Digest: item.digest, Size: int64(len(item.body))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: "source", Reference: reference, Revision: revision, Digest: recipeDigest}, []repository.ConanAsset{{RepositoryID: "source", Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: "source-recipe", Digest: recipeDigest, Size: int64(len(recipeBody))}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanPackageRevision(ctx, repository.ConanPackageRevision{RepositoryID: "source", Reference: reference, RecipeRevision: revision, PackageID: "id", Revision: "prev", Digest: packageDigest}, []repository.ConanAsset{{RepositoryID: "source", Reference: reference, RecipeRevision: revision, PackageID: "id", PackageRevision: "prev", Path: "package.tgz", ObjectKey: "source-package", Digest: packageDigest, Size: int64(len(packageBody))}}); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := conanReplicationCheckpoints(ctx, store, "source", "target", reference, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Claim one target key through another visible recipe. The replication must
+	// leave no target recipe behind when its atomic publication cannot claim it.
+	blocked := checks[1]
+	if err := store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: "target", ObjectKey: blocked.ObjectKey, Digest: blocked.Digest, Size: blocked.Size}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: "target", Reference: "other/1.0/user/stable", Revision: "rrev", Digest: blocked.Digest}, []repository.ConanAsset{{RepositoryID: "target", Reference: "other/1.0/user/stable", RecipeRevision: "rrev", Path: "blocked", ObjectKey: blocked.ObjectKey, Digest: blocked.Digest, Size: blocked.Size}}); err != nil {
+		t.Fatal(err)
+	}
+	err = (ConanReplication{Store: store, Source: objects, Destination: objects}).publish(ctx, repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatConan}, checks)
+	if err == nil {
+		t.Fatal("expected target object conflict")
+	}
+	if _, err := store.GetConanRecipeRevision(ctx, "target", reference, revision); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("partial target recipe err=%v", err)
 	}
 }
 

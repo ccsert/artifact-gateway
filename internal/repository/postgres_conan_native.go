@@ -123,6 +123,83 @@ func (s *PostgresStore) PutConanPackageRevision(ctx context.Context, revision Co
 	return revision, tx.Commit()
 }
 
+func (s *PostgresStore) PublishReplicatedConanRevision(ctx context.Context, publication ConanReplicationPublication) (ConanRecipeRevision, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var source ConanRecipeRevision
+	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 AND digest=$4 AND state='visible' FOR SHARE`, publication.SourceRepositoryID, publication.Recipe.Reference, publication.Recipe.Revision, publication.Recipe.Digest), &source)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ConanRecipeRevision{}, ErrNotFound
+	}
+	if err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	for _, pkg := range publication.Packages {
+		var visible bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND revision=$5 AND digest=$6 AND state='visible')`, publication.SourceRepositoryID, pkg.Reference, pkg.RecipeRevision, pkg.PackageID, pkg.Revision, pkg.Digest).Scan(&visible); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+		if !visible {
+			return ConanRecipeRevision{}, ErrNotFound
+		}
+	}
+	var sourcePackageCount int
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND state='visible'`, publication.SourceRepositoryID, publication.Recipe.Reference, publication.Recipe.Revision).Scan(&sourcePackageCount); err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	if sourcePackageCount != len(publication.Packages) {
+		return ConanRecipeRevision{}, ErrNotFound
+	}
+	for _, asset := range publication.SourceAssets {
+		var matched bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_conan_assets WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND package_revision=$5 AND path=$6 AND object_key=$7 AND digest=$8 AND size=$9)`, publication.SourceRepositoryID, asset.Reference, asset.RecipeRevision, asset.PackageID, asset.PackageRevision, asset.Path, asset.ObjectKey, asset.Digest, asset.Size).Scan(&matched); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+		if !matched {
+			return ConanRecipeRevision{}, ErrNotFound
+		}
+	}
+	var existing ConanRecipeRevision
+	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 FOR SHARE`, publication.Recipe.RepositoryID, publication.Recipe.Reference, publication.Recipe.Revision), &existing)
+	if err == nil {
+		if existing.Digest != publication.Recipe.Digest {
+			return ConanRecipeRevision{}, ErrNameExists
+		}
+		return existing, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return ConanRecipeRevision{}, err
+	}
+	for _, asset := range publication.TargetAssets {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, asset.ObjectKey, asset.RepositoryID, asset.Digest, asset.Size); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+		if err = claimConanObject(ctx, tx, asset.ObjectKey); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_recipe_revisions (repository_id,reference,revision,digest,state) VALUES ($1,$2,$3,$4,'visible')`, publication.Recipe.RepositoryID, publication.Recipe.Reference, publication.Recipe.Revision, publication.Recipe.Digest); err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	for _, pkg := range publication.Packages {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_package_revisions (repository_id,reference,recipe_revision,package_id,revision,digest,state) VALUES ($1,$2,$3,$4,$5,$6,'visible')`, publication.Recipe.RepositoryID, pkg.Reference, pkg.RecipeRevision, pkg.PackageID, pkg.Revision, pkg.Digest); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+	}
+	for _, asset := range publication.TargetAssets {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_assets (repository_id,reference,recipe_revision,package_id,package_revision,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, asset.RepositoryID, asset.Reference, asset.RecipeRevision, asset.PackageID, asset.PackageRevision, asset.Path, asset.ObjectKey, asset.Digest, asset.Size); err != nil {
+			return ConanRecipeRevision{}, err
+		}
+	}
+	if err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3`, publication.Recipe.RepositoryID, publication.Recipe.Reference, publication.Recipe.Revision), &publication.Recipe); err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	return publication.Recipe, tx.Commit()
+}
+
 func claimConanObject(ctx context.Context, tx *sql.Tx, objectKey string) error {
 	result, err := tx.ExecContext(ctx, `UPDATE native_conan_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL`, objectKey)
 	if err != nil {

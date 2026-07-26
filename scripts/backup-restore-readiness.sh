@@ -67,6 +67,28 @@ enqueue_idempotently() {
   [[ "$replay" == "$first" ]] || { printf 'Idempotency replay changed the response for %s.\n' "$path" >&2; exit 1; }
   python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$first"
 }
+replication_completed() {
+  local repository_id=$1 plan_id=$2 detail
+  for _ in $(seq 1 30); do
+    detail=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+      "$gateway_url/api/v2/repositories/$repository_id/replications/$plan_id") || return 1
+    if python3 -c 'import json, sys; plan=json.load(sys.stdin); sys.exit(not (plan["state"] == "completed" and plan["checkpoints"] and all(checkpoint["state"] == "verified" for checkpoint in plan["checkpoints"])))' <<<"$detail"; then
+      return 0
+    fi
+    sleep 1
+  done
+  printf 'Replication plan %s did not complete with verified checkpoints.\n' "$plan_id" >&2
+  return 1
+}
+assert_restored_replication_completion() {
+  local repository_id=$1 plan_id=$2 detail
+  detail=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+    "$gateway_url/api/v2/repositories/$repository_id/replications/$plan_id") || return 1
+  python3 -c 'import json, sys; plan=json.load(sys.stdin); sys.exit(not (plan["state"] == "completed" and plan["checkpoints"] and all(checkpoint["state"] == "verified" for checkpoint in plan["checkpoints"])))' <<<"$detail" || {
+    printf 'Restored replication plan %s lost completion or checkpoint evidence.\n' "$plan_id" >&2
+    return 1
+  }
+}
 run_id="backup-${RANDOM}"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E_RUN_ID="$run_id" ./scripts/raw-e2e.sh
 raw_group="raw-ready-${run_id}"
@@ -209,6 +231,16 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   "$gateway_url/conan/v2/$conan_group/conans/pkg/1.0/user/stable/revisions")
 [[ "$status" == 502 ]] || { printf 'Recovery Conan audit request returned HTTP %s.\n' "$status" >&2; exit 1; }
 
+for replication in \
+  "$replication_target_id:$replication_plan_id" \
+  "$oci_replication_target_id:$oci_replication_plan_id" \
+  "$maven_replication_target_id:$maven_replication_plan_id" \
+  "$conan_replication_target_id:$conan_replication_plan_id"; do
+  target_id=${replication%%:*}
+  plan_id=${replication#*:}
+  replication_completed "$target_id" "$plan_id"
+done
+
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/backup-drill.sh "$backup_dir"
 mutation_payload=$(printf '{"name":"post-restore-%s","anonymous":false,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":false}]}' "$run_id")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
@@ -233,6 +265,7 @@ tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Restored
 grep -Fq '"principal":"recovery-reader"' <<<"$restored_grants" || { printf '%s\n' 'Restored Repository grants did not retain recovery-reader.' >&2; exit 1; }
 restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$replication_target_id/replications")
 grep -Fq "\"id\":\"$replication_plan_id\"" <<<"$restored_replications" || { printf '%s\n' 'Restored replication plan is unavailable.' >&2; exit 1; }
+assert_restored_replication_completion "$replication_target_id" "$replication_plan_id"
 restored_lifecycle_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$promotion_target_id/lifecycle-jobs")
 grep -Fq "\"id\":\"$promotion_job_id\"" <<<"$restored_lifecycle_jobs" || { printf '%s\n' 'Restored promotion lifecycle job is unavailable.' >&2; exit 1; }
 for replication in \
@@ -243,6 +276,7 @@ for replication in \
   plan_id=${replication#*:}
   restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$target_id/replications")
   grep -Fq "\"id\":\"$plan_id\"" <<<"$restored_replications" || { printf 'Restored replication plan %s is unavailable.\n' "$plan_id" >&2; exit 1; }
+  assert_restored_replication_completion "$target_id" "$plan_id"
 done
 for promotion in \
   "$oci_promotion_target_id:$oci_promotion_job_id" \

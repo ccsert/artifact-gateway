@@ -231,6 +231,36 @@ func (s *MemoryStore) PutOCIManifest(_ context.Context, manifest OCIManifest, re
 	delete(s.ociObjectIntents, manifest.ObjectKey)
 	return manifest, nil
 }
+
+func (s *MemoryStore) PublishReplicatedOCIManifest(_ context.Context, publication OCIReplicationPublication) (OCIManifest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	source, ok := s.ociManifests[ociManifestKey(publication.SourceRepositoryID, publication.Manifest.Name, publication.Manifest.Digest)]
+	if !ok || source.ObjectKey != publication.SourceObjectKey || source.Size != publication.Manifest.Size {
+		return OCIManifest{}, ErrNotFound
+	}
+	key := ociManifestKey(publication.TargetRepositoryID, publication.Manifest.Name, publication.Manifest.Digest)
+	if existing, ok := s.ociManifests[key]; ok {
+		if existing.ObjectKey != publication.Manifest.ObjectKey {
+			return OCIManifest{}, ErrNameExists
+		}
+		return existing, nil
+	}
+	for _, digest := range publication.BlobDigests {
+		if !s.ociRepositoryBlobs[publication.SourceRepositoryID][digest] {
+			return OCIManifest{}, ErrNotFound
+		}
+	}
+	if s.ociRepositoryBlobs[publication.TargetRepositoryID] == nil {
+		s.ociRepositoryBlobs[publication.TargetRepositoryID] = map[string]bool{}
+	}
+	for _, digest := range publication.BlobDigests {
+		s.ociRepositoryBlobs[publication.TargetRepositoryID][digest] = true
+	}
+	s.ociManifests[key] = publication.Manifest
+	delete(s.ociObjectIntents, publication.Manifest.ObjectKey)
+	return publication.Manifest, nil
+}
 func (s *MemoryStore) GetOCIManifest(_ context.Context, repositoryID, name, reference string) (OCIManifest, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

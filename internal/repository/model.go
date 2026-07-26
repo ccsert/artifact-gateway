@@ -195,6 +195,14 @@ type MavenReplicationAsset struct {
 	Size                                     int64
 }
 
+// OCIReplicationPublication atomically rechecks the source manifest and makes
+// its copied manifest and referenced blobs visible in the target Repository.
+type OCIReplicationPublication struct {
+	SourceRepositoryID, TargetRepositoryID, SourceObjectKey string
+	Manifest                                                OCIManifest
+	BlobDigests                                             []string
+}
+
 // MavenPromotion snapshots a visible coordinate for immutable promotion into a
 // second Maven Hosted repository.
 type MavenPromotion struct {
@@ -222,6 +230,16 @@ type ConanRecipeRevision struct {
 type ConanPackageRevision struct {
 	RepositoryID, Reference, RecipeRevision, PackageID, Revision, Digest, State string
 	CreatedAt                                                                   time.Time
+}
+
+// ConanReplicationPublication is the complete target-owned recipe subtree.
+// Publishing it is all-or-nothing so retries never expose a partial revision.
+type ConanReplicationPublication struct {
+	SourceRepositoryID string
+	Recipe             ConanRecipeRevision
+	Packages           []ConanPackageRevision
+	SourceAssets       []ConanAsset
+	TargetAssets       []ConanAsset
 }
 
 // ConanPromotion snapshots a visible recipe revision together with every

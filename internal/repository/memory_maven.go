@@ -413,6 +413,9 @@ func (s *MemoryStore) PublishReplicatedMavenArtifact(_ context.Context, replicat
 	}
 	for _, copied := range replication.Assets {
 		asset := MavenAsset{RepositoryID: replication.TargetRepositoryID, Path: copied.Path, ObjectKey: copied.ObjectKey, Digest: copied.Digest, Size: copied.Size}
+		if _, exists := s.mavenObjectIntents[asset.ObjectKey]; !exists {
+			s.mavenObjectIntents[asset.ObjectKey] = mavenObjectIntent{createdAt: time.Now().UTC()}
+		}
 		s.mavenAssets[asset.RepositoryID+"\x00"+asset.Path] = asset
 		s.mavenObjectRefs[asset.ObjectKey] = true
 	}

@@ -80,6 +80,49 @@ func TestMavenReplicationRejectsTombstonedSourceAndExistingTarget(t *testing.T) 
 	}
 }
 
+func TestMavenReplicationSharesTargetObjectForPathsWithTheSameDigest(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	body := []byte("shared Maven asset")
+	digest := mavenReplicationDigest(body)
+	coordinate := "org.example:shared:1.0.0"
+	first, second := "source-first", "source-second"
+	for _, key := range []string{first, second} {
+		if err := objects.PutVerifiedReader(ctx, key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	session := repository.MavenPublishSession{ID: "shared-source", RepositoryID: "source", Coordinate: coordinate, Publisher: "test", PomObject: "shared.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "shared.pom", Digest: digest, Size: int64(len(body))}, {Name: "shared.jar", Digest: digest, Size: int64(len(body))}}}
+	if _, err := store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(ctx, session.ID, "shared.pom", first); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(ctx, session.ID, "shared.jar", second); err != nil {
+		t.Fatal(err)
+	}
+	assets := []repository.MavenAsset{{RepositoryID: "source", Path: "org/example/shared/1.0.0/shared.pom", ObjectKey: first, Digest: digest, Size: int64(len(body))}, {RepositoryID: "source", Path: "org/example/shared/1.0.0/shared.jar", ObjectKey: second, Digest: digest, Size: int64(len(body))}}
+	if _, err := store.CommitMavenPublishSession(ctx, session.ID, assets); err != nil {
+		t.Fatal(err)
+	}
+	targetKey := mavenReplicationTargetObjectKey("target", digest)
+	plan := repository.ReplicationPlan{ID: "shared-replication", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatMaven, IdempotencyKey: "shared"}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: first, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (MavenReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"org/example/shared/1.0.0/shared.pom", "org/example/shared/1.0.0/shared.jar"} {
+		asset, err := store.GetMavenAsset(ctx, "target", path)
+		if err != nil || asset.ObjectKey != targetKey {
+			t.Fatalf("asset %s = %#v, %v", path, asset, err)
+		}
+	}
+}
+
 func mavenReplicationDigest(body []byte) string {
 	sum := sha256.Sum256(body)
 	return "sha256:" + hex.EncodeToString(sum[:])
