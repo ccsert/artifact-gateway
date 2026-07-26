@@ -33,6 +33,7 @@ func (r RawReplication) Start(ctx context.Context, interval time.Duration) {
 		return
 	}
 	go func() {
+		_ = r.RunJobs(ctx, 100)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
