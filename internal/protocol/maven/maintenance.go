@@ -215,7 +215,7 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			continue
 		}
 		if _, err := m.Store.PromoteMavenArtifact(ctx, repository.MavenPromotion{ID: p.PromotionID, SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Coordinate: p.Coordinate, Digest: p.Digest}); err != nil {
-			_ = m.Store.FailLifecycleJob(ctx, job.ID, "promote Maven artifact failed")
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, fmt.Sprintf("promote Maven artifact failed: %v", err))
 			m.endPromotion("failed")
 			continue
 		}

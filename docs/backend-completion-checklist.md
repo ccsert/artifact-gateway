@@ -48,21 +48,22 @@ goal. It intentionally excludes frontend work.
 - [x] OCI, Raw, and Conan immutable promotion API and worker, including
   authorization, idempotency, audit records, retry behavior, HTTP black-box,
   and PostgreSQL/MinIO evidence.
-- [ ] Replication planning model.
-- [ ] Checkpointed replication worker with retry and integrity checks.
-- [ ] Promotion/replication authorization and audit events.
+- [x] Replication planning model.
+- [x] Checkpointed replication worker with persisted checkpoints, retry, resume,
+  and SHA-256 integrity checks.
+- [x] Promotion/replication authorization and audit events.
 
 ## Operations
 
-- [ ] Repository quota accounting across Hosted formats.
-- [ ] Per-repository concurrency limits for publish/delete/reclaim jobs.
-- [ ] Metrics for lifecycle jobs, tombstones, promotion, and replication.
-- [ ] Backup/restore coverage for all lifecycle states.
-- [ ] Release preflight and evidence coverage for new lifecycle operations.
-- [ ] Black-box protocol tests for publish, resolve, delete, retain, and
+- [x] Repository quota accounting across OCI, Maven, Raw, and Conan Hosted
+  Repositories.
+- [x] Per-repository concurrency limits for lifecycle jobs.
+- [x] Metrics for lifecycle jobs, tombstones, promotion, and replication.
+- [x] Backup/restore coverage for promotion and replication state.
+- [x] Release preflight and evidence coverage for lifecycle operations.
+- [x] Black-box protocol tests for publish, resolve, delete, retain, and
   restore across OCI, Maven, Raw, and Conan.
 
 ## Current Next Slice
 
-Define the immutable-artifact promotion model and worker, including source and
-target authorization, idempotency, audit records, and protocol-level evidence.
+Run the release gates and record their output in the release record.

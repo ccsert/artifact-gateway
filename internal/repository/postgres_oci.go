@@ -286,10 +286,10 @@ func (s *PostgresStore) PutOCIManifest(ctx context.Context, v OCIManifest, refer
 }
 func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, reference string) (OCIManifest, error) {
 	var v OCIManifest
-	query := `SELECT repository_id::text,name,digest,object_key,media_type,size,subject_digest,artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`
+	query := `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND digest=$3`
 	args := []any{repositoryID, name, reference}
 	if !strings.HasPrefix(reference, "sha256:") {
-		query = `SELECT m.repository_id::text,m.name,m.digest,m.object_key,m.media_type,m.size,m.subject_digest,m.artifact_type FROM native_oci_tags t JOIN native_oci_manifests m ON (m.repository_id=t.repository_id AND m.name=t.name AND m.digest=t.digest) WHERE t.repository_id::text=$1 AND t.name=$2 AND t.tag=$3`
+		query = `SELECT m.repository_id::text,m.name,m.digest,m.object_key,m.media_type,m.size,COALESCE(m.subject_digest,''),m.artifact_type FROM native_oci_tags t JOIN native_oci_manifests m ON (m.repository_id=t.repository_id AND m.name=t.name AND m.digest=t.digest) WHERE t.repository_id::text=$1 AND t.name=$2 AND t.tag=$3`
 	}
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(&v.RepositoryID, &v.Name, &v.Digest, &v.ObjectKey, &v.MediaType, &v.Size, &v.SubjectDigest, &v.ArtifactType)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -298,7 +298,7 @@ func (s *PostgresStore) GetOCIManifest(ctx context.Context, repositoryID, name, 
 	return v, err
 }
 func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name, subject string, limit int, after string) ([]OCIManifest, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,subject_digest,artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND subject_digest=$3 AND digest>$4 ORDER BY digest LIMIT $5`, repositoryID, name, subject, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type FROM native_oci_manifests WHERE repository_id::text=$1 AND name=$2 AND subject_digest=$3 AND digest>$4 ORDER BY digest LIMIT $5`, repositoryID, name, subject, after, limit)
 	if err != nil {
 		return nil, err
 	}

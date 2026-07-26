@@ -493,7 +493,7 @@ func (s *PostgresStore) PromoteMavenArtifact(ctx context.Context, promotion Mave
 	if n, _ := result.RowsAffected(); n == 0 {
 		return MavenArtifact{}, ErrDisabled
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) SELECT object_key,$1 FROM native_maven_assets WHERE repository_id::text=$1 AND left(path,length($2))=$2 ON CONFLICT (object_key) DO NOTHING`, promotion.TargetRepositoryID, prefix); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) SELECT object_key,$1::uuid FROM native_maven_assets WHERE repository_id=$1::uuid AND left(path,length($2))=$2 ON CONFLICT (object_key) DO NOTHING`, promotion.TargetRepositoryID, prefix); err != nil {
 		return MavenArtifact{}, err
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT created_at FROM native_maven_artifacts WHERE id=$1`, promotion.ID).Scan(&source.CreatedAt); err != nil {
@@ -505,7 +505,7 @@ func (s *PostgresStore) PromoteMavenArtifact(ctx context.Context, promotion Mave
 	return MavenArtifact{ID: promotion.ID, RepositoryID: promotion.TargetRepositoryID, Coordinate: source.Coordinate, Digest: source.Digest, State: "visible", CreatedAt: source.CreatedAt}, nil
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.object_key=candidates.object_key RETURNING s.repository_id::text, i.object_key, i.claimed_token`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates, native_maven_publish_sessions s WHERE i.object_key=candidates.object_key AND s.id=i.session_id RETURNING s.repository_id::text, i.object_key, i.claimed_token`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +522,7 @@ func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, befo
 }
 func (s *PostgresStore) MavenObjectIntentClaimIsActive(ctx context.Context, key, claimToken string) (bool, error) {
 	var active bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_intents i WHERE i.object_key=$1 AND i.claim_token=$2 AND i.claimed_at IS NOT NULL AND i.claimed_at > now() - interval '5 minutes' AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key))`, key, claimToken).Scan(&active)
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_object_intents i WHERE i.object_key=$1 AND i.claimed_token=$2 AND i.claimed_at IS NOT NULL AND i.claimed_at > now() - interval '5 minutes' AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key))`, key, claimToken).Scan(&active)
 	return active, err
 }
 func (s *PostgresStore) MavenObjectIntentHasReference(ctx context.Context, key string) (bool, error) {

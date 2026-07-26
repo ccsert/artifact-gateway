@@ -1,13 +1,14 @@
-# V2 Release Readiness
+# Full Artifact Repository V1 Release Readiness
 
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw, and
-Conan 2 read paths.
+Conan Hosted lifecycle and distribution paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
 
 ```sh
 make integration-test
+make test
 make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
@@ -36,6 +37,10 @@ storage credentials, or unredacted upstream URLs in that record.
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
       `make native-raw-e2e`, `make native-maven-e2e`, and `make conan-e2e`
       pass.
+- [ ] `make integration-test` includes PostgreSQL and MinIO evidence for OCI,
+      Raw, and Conan promotion plus checkpointed Raw replication. It verifies
+      authorization, idempotency, audit records, retry/resume, and SHA-256
+      verification.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
@@ -72,8 +77,9 @@ storage credentials, or unredacted upstream URLs in that record.
       serve existing OCI Groups.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
       against isolated volumes, verifies restored Raw cache content, Conan
-      Group state, Repository grant version/content, and authorization-denial
-      audit records. It verifies the same Native Raw object remains denied to
+      Group state, Repository grant version/content, promotion jobs,
+      replication plans, and authorization-denial audit records. It verifies
+      the same Native Raw object remains denied to
       an authenticated principal without a grant and readable by the granted
       principal. Run `make backup-drill` against the release environment only
       after the isolated rehearsal passes.
@@ -117,9 +123,9 @@ flowchart LR
 
 ## Known Limitations
 
-- V2 supports OCI, Maven, Raw, and Conan 2 read paths. Publishing, replication,
-  deletion workflows, directory listing, and package formats beyond those four
-  are out of scope.
+- V1 supports OCI, Maven, Raw, and Conan Hosted lifecycle paths. Checkpointed
+  replication currently publishes verified Raw Assets; expanding the same
+  checkpoint worker to OCI, Maven, and Conan publication is a future slice.
 - Raw uses HTTP GET/HEAD only, supports a single byte range, and does not
   generate or reconcile checksum sidecars. Conan supports only Conan 2 v2 REST
   reads; Conan 1, uploads, deletes, copies, and general search are unsupported.

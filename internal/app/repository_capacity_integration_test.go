@@ -41,7 +41,7 @@ func TestPostgresRepositoryCapacityAcrossHostedFormats(t *testing.T) {
 	}
 
 	raw := create(repository.FormatRaw)
-	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: "widget", Digest: "sha256:raw-" + uuid.NewString(), ObjectKey: "native/raw/capacity-" + uuid.NewString(), Size: 3}); err != nil {
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: "widget", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ObjectKey: "native/raw/capacity-" + uuid.NewString(), Size: 3}); err != nil {
 		t.Fatal(err)
 	}
 	assertCapacity(raw, 3, 1)
@@ -119,7 +119,7 @@ func TestPostgresRepositoryCapacityRejectsVisibleWritesAcrossFormats(t *testing.
 	}
 
 	raw := create(repository.FormatRaw)
-	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: "widget", Digest: "sha256:raw-" + uuid.NewString(), ObjectKey: "native/raw/quota-" + uuid.NewString(), Size: 2}); !repository.IsQuotaExceeded(err) {
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: "widget", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ObjectKey: "native/raw/quota-" + uuid.NewString(), Size: 2}); !repository.IsQuotaExceeded(err) {
 		t.Fatalf("raw quota err=%v", err)
 	}
 
