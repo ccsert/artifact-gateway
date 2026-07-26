@@ -37,10 +37,10 @@ storage credentials, or unredacted upstream URLs in that record.
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
       `make native-raw-e2e`, `make native-maven-e2e`, and `make conan-e2e`
       pass.
-- [ ] `make integration-test` includes PostgreSQL and MinIO evidence for OCI,
-      Raw, and Conan promotion plus checkpointed Raw replication. It verifies
-      authorization, idempotency, audit records, retry/resume, and SHA-256
-      verification.
+- [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
+      promotion and checkpointed replication of OCI, Maven, Raw, and Conan
+      Artifacts. It verifies verified-object publication, retry/resume, and
+      SHA-256 verification; it does not run the backup/restore rehearsal.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
@@ -76,13 +76,13 @@ storage credentials, or unredacted upstream URLs in that record.
       migrations are additive: a rollback binary must not need V2 rows to
       serve existing OCI Groups.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
-      against isolated volumes, verifies restored Raw cache content, Conan
-      Group state, Repository grant version/content, promotion jobs,
-      replication plans, and authorization-denial audit records. It verifies
-      the same Native Raw object remains denied to
-      an authenticated principal without a grant and readable by the granted
-      principal. Run `make backup-drill` against the release environment only
-      after the isolated rehearsal passes.
+      against isolated volumes. It creates OCI, Maven, Raw, and Conan source
+      Artifacts through HTTP, creates and replays promotion jobs and replication
+      plans for each format, then verifies all saved instructions and their
+      management audit records after restore. It also verifies restored Raw
+      cache content, Conan Group state, Repository grant version/content, and
+      the Native Raw authorization denial/allow behavior. Run `make backup-drill`
+      against the release environment only after the isolated rehearsal passes.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
       allowlists, Repository grant sets, quotas, and OIDC issuer/audience. For
       a grant rollout, review the bounded authorization signal without adding
@@ -124,8 +124,9 @@ flowchart LR
 ## Known Limitations
 
 - V1 supports OCI, Maven, Raw, and Conan Hosted lifecycle paths. Checkpointed
-  replication currently publishes verified Raw Assets; expanding the same
-  checkpoint worker to OCI, Maven, and Conan publication is a future slice.
+  replication and promotion workers publish verified Artifacts for each of
+  those formats. The backup/restore rehearsal retains their persisted jobs and
+  plans, but does not require a worker to complete them after restore.
 - Raw uses HTTP GET/HEAD only, supports a single byte range, and does not
   generate or reconcile checksum sidecars. Conan supports only Conan 2 v2 REST
   reads; Conan 1, uploads, deletes, copies, and general search are unsupported.

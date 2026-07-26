@@ -20,6 +20,7 @@ project="artifact-gateway-backup-${RANDOM}-${RANDOM}"
 isolated_environment=$(mktemp)
 grant_headers=$(mktemp)
 grant_response=$(mktemp)
+oci_headers=$(mktemp)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
 
@@ -35,6 +36,7 @@ cleanup() {
   rm -f "$isolated_environment"
   rm -f "$grant_headers"
   rm -f "$grant_response"
+  rm -f "$oci_headers"
   rm -rf "$backup_dir"
 }
 trap cleanup EXIT
@@ -47,6 +49,24 @@ gateway_token() {
   curl --silent --show-error --fail --user "$1:$GATEWAY_RESOLVER_TOKEN" "$gateway_url/auth/token" |
     python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
 }
+create_hosted_repository() {
+  local format=$1 name=$2 key=$3 response
+  response=$(curl --silent --show-error --fail \
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: $key" \
+    --data "$(printf '{\"name\":\"%s\",\"format\":\"%s\"}' "$name" "$format")" "$gateway_url/api/v2/repositories")
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$response"
+}
+enqueue_idempotently() {
+  local path=$1 key=$2 payload=$3 first replay
+  first=$(curl --silent --show-error --fail \
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: $key" \
+    --data "$payload" "$gateway_url$path") || return 1
+  replay=$(curl --silent --show-error --fail \
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: $key" \
+    --data "$payload" "$gateway_url$path") || return 1
+  [[ "$replay" == "$first" ]] || { printf 'Idempotency replay changed the response for %s.\n' "$path" >&2; exit 1; }
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$first"
+}
 run_id="backup-${RANDOM}"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E_RUN_ID="$run_id" ./scripts/raw-e2e.sh
 raw_group="raw-ready-${run_id}"
@@ -54,6 +74,9 @@ conan_group="conan-ready-${run_id}"
 grant_repository="grant-restore-${run_id}"
 replication_target_repository="replication-restore-${run_id}"
 promotion_target_repository="promotion-restore-${run_id}"
+oci_source_repository="oci-restore-${run_id}"
+maven_source_repository="maven-restore-${run_id}"
+conan_source_repository="conan-restore-${run_id}"
 create_repository=$(printf '{"name":"%s","format":"raw"}' "$grant_repository")
 repository=$(curl --silent --show-error --fail \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -77,25 +100,85 @@ replication_target=$(curl --silent --show-error --fail \
   --data "$(printf '{\"name\":\"%s\",\"format\":\"raw\"}' "$replication_target_repository")" "$gateway_url/api/v2/repositories")
 replication_target_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$replication_target")
 raw_digest="sha256:$(printf '%s' 'grant restore artifact' | shasum -a 256 | awk '{print $1}')"
-replication_plan=$(curl --silent --show-error --fail \
-  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -H "Idempotency-Key: replication-plan-${run_id}" \
-  --data "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$replication_target_id" "$raw_digest")" \
-  "$gateway_url/api/v2/repositories/$repository_id/replications")
-replication_plan_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$replication_plan")
+replication_plan_id=$(enqueue_idempotently "/api/v2/repositories/$repository_id/replications" "replication-plan-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$replication_target_id" "$raw_digest")")
 [[ -n "$replication_plan_id" ]] || { printf '%s\n' 'Replication recovery plan returned no ID.' >&2; exit 1; }
 promotion_target=$(curl --silent --show-error --fail \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: promotion-target-${run_id}" \
   --data "$(printf '{\"name\":\"%s\",\"format\":\"raw\"}' "$promotion_target_repository")" "$gateway_url/api/v2/repositories")
 promotion_target_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$promotion_target")
-promotion_job=$(curl --silent --show-error --fail \
-  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -H "Idempotency-Key: promotion-job-${run_id}" \
-  --data "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$promotion_target_id" "$raw_digest")" \
-  "$gateway_url/api/v2/repositories/$repository_id/promotions")
-promotion_job_id=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$promotion_job")
+promotion_job_id=$(enqueue_idempotently "/api/v2/repositories/$repository_id/promotions" "promotion-job-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"releases/app.txt\",\"digest\":\"%s\"}' "$promotion_target_id" "$raw_digest")")
 [[ -n "$promotion_job_id" ]] || { printf '%s\n' 'Promotion recovery job returned no ID.' >&2; exit 1; }
+
+# Create visible source Artifacts through each native protocol before snapshotting
+# their idempotent promotion and replication instructions.
+oci_source_id=$(create_hosted_repository oci "$oci_source_repository" "oci-source-${run_id}")
+oci_body='backup restore oci artifact'
+oci_digest="sha256:$(printf '%s' "$oci_body" | shasum -a 256 | awk '{print $1}')"
+status=$(curl --silent --show-error --output /dev/null --dump-header "$oci_headers" --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request POST "$gateway_url/v2/$oci_source_repository/team/widget/blobs/uploads/")
+[[ "$status" == 202 ]] || { printf 'Creating OCI upload returned HTTP %s.\n' "$status" >&2; exit 1; }
+oci_location=$(tr -d '\r' <"$oci_headers" | awk 'tolower($1)=="location:" {print $2}')
+[[ -n "$oci_location" ]] || { printf '%s\n' 'Creating OCI upload returned no Location header.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request PUT --data-binary "$oci_body" "$gateway_url$oci_location?digest=$oci_digest")
+[[ "$status" == 201 ]] || { printf 'Completing OCI upload returned HTTP %s.\n' "$status" >&2; exit 1; }
+oci_manifest=$(printf '{"schemaVersion":2,"config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"%s","size":%s},"layers":[]}' "$oci_digest" "${#oci_body}")
+status=$(curl --silent --show-error --output /dev/null --dump-header "$oci_headers" --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/vnd.oci.image.manifest.v1+json' \
+  --request PUT --data-binary "$oci_manifest" "$gateway_url/v2/$oci_source_repository/team/widget/manifests/backup")
+[[ "$status" == 201 ]] || { printf 'Publishing OCI manifest returned HTTP %s.\n' "$status" >&2; exit 1; }
+oci_manifest_digest=$(tr -d '\r' <"$oci_headers" | awk 'tolower($1)=="docker-content-digest:" {print $2}')
+[[ -n "$oci_manifest_digest" ]] || { printf '%s\n' 'Publishing OCI manifest returned no digest.' >&2; exit 1; }
+
+maven_source_id=$(create_hosted_repository maven "$maven_source_repository" "maven-source-${run_id}")
+maven_coordinate='org.example:restore:1.0.0'
+maven_name='restore-1.0.0.pom'
+maven_body='<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>restore</artifactId><version>1.0.0</version></project>'
+maven_digest="sha256:$(printf '%s' "$maven_body" | shasum -a 256 | awk '{print $1}')"
+maven_session=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: maven-session-${run_id}" \
+  --data "$(printf '{\"format\":\"maven\",\"coordinate\":\"%s\",\"pomObject\":\"%s\",\"objects\":[{\"name\":\"%s\",\"digest\":\"%s\",\"size\":%s}]}' "$maven_coordinate" "$maven_name" "$maven_name" "$maven_digest" "${#maven_body}")" "$gateway_url/api/v2/repositories/$maven_source_id/publish-sessions")
+maven_session_id=$(python3 -c 'import json, sys; data=json.load(sys.stdin); print(data.get("ID", data.get("id", "")))' <<<"$maven_session")
+[[ -n "$maven_session_id" ]] || { printf '%s\n' 'Creating Maven publish session returned no ID.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request PUT --data-binary "$maven_body" "$gateway_url/api/v2/publish-sessions/$maven_session_id/objects/$maven_name")
+[[ "$status" == 204 ]] || { printf 'Uploading Maven object returned HTTP %s.\n' "$status" >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request POST "$gateway_url/api/v2/publish-sessions/$maven_session_id:commit")
+[[ "$status" == 200 ]] || { printf 'Committing Maven publication returned HTTP %s.\n' "$status" >&2; exit 1; }
+
+conan_source_id=$(create_hosted_repository conan "$conan_source_repository" "conan-source-${run_id}")
+conan_reference='restore/1.0/user/stable'
+conan_revision='rrev'
+conan_name='conanfile.py'
+conan_body='backup restore conan artifact'
+conan_object_digest="sha256:$(printf '%s' "$conan_body" | shasum -a 256 | awk '{print $1}')"
+conan_digest=$(python3 -c 'import hashlib, sys; name, digest = sys.argv[1:]; print("sha256:" + hashlib.sha256((name + "\0" + digest + "\0").encode()).hexdigest())' "$conan_name" "$conan_object_digest")
+conan_session=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  --data "$(printf '{\"kind\":\"recipe\",\"reference\":\"%s\",\"recipeRevision\":\"%s\",\"objects\":[{\"name\":\"%s\",\"digest\":\"%s\",\"size\":%s}]}' "$conan_reference" "$conan_revision" "$conan_name" "$conan_object_digest" "${#conan_body}")" "$gateway_url/api/v2/repositories/$conan_source_id/conan-publish-sessions")
+conan_session_id=$(python3 -c 'import json, sys; data=json.load(sys.stdin); print(data.get("ID", data.get("id", "")))' <<<"$conan_session")
+[[ -n "$conan_session_id" ]] || { printf '%s\n' 'Creating Conan publish session returned no ID.' >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request PUT --data-binary "$conan_body" "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id/objects/$conan_name")
+[[ "$status" == 204 ]] || { printf 'Uploading Conan object returned HTTP %s.\n' "$status" >&2; exit 1; }
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request POST "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id:commit")
+[[ "$status" == 200 ]] || { printf 'Committing Conan publication returned HTTP %s.\n' "$status" >&2; exit 1; }
+
+oci_replication_target_id=$(create_hosted_repository oci "oci-replication-restore-${run_id}" "oci-replication-target-${run_id}")
+oci_promotion_target_id=$(create_hosted_repository oci "oci-promotion-restore-${run_id}" "oci-promotion-target-${run_id}")
+maven_replication_target_id=$(create_hosted_repository maven "maven-replication-restore-${run_id}" "maven-replication-target-${run_id}")
+maven_promotion_target_id=$(create_hosted_repository maven "maven-promotion-restore-${run_id}" "maven-promotion-target-${run_id}")
+conan_replication_target_id=$(create_hosted_repository conan "conan-replication-restore-${run_id}" "conan-replication-target-${run_id}")
+conan_promotion_target_id=$(create_hosted_repository conan "conan-promotion-restore-${run_id}" "conan-promotion-target-${run_id}")
+
+oci_replication_plan_id=$(enqueue_idempotently "/api/v2/repositories/$oci_source_id/replications" "oci-replication-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"team/widget\",\"digest\":\"%s\"}' "$oci_replication_target_id" "$oci_manifest_digest")")
+oci_promotion_job_id=$(enqueue_idempotently "/api/v2/repositories/$oci_source_id/promotions" "oci-promotion-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"team/widget\",\"digest\":\"%s\"}' "$oci_promotion_target_id" "$oci_manifest_digest")")
+maven_replication_plan_id=$(enqueue_idempotently "/api/v2/repositories/$maven_source_id/replications" "maven-replication-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s\",\"digest\":\"%s\"}' "$maven_replication_target_id" "$maven_coordinate" "$maven_digest")")
+maven_promotion_job_id=$(enqueue_idempotently "/api/v2/repositories/$maven_source_id/promotions" "maven-promotion-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s\",\"digest\":\"%s\"}' "$maven_promotion_target_id" "$maven_coordinate" "$maven_digest")")
+conan_coordinate="$conan_reference#$conan_revision"
+conan_replication_plan_id=$(enqueue_idempotently "/api/v2/repositories/$conan_source_id/replications" "conan-replication-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s\",\"digest\":\"%s\"}' "$conan_replication_target_id" "$conan_coordinate" "$conan_digest")")
+conan_promotion_job_id=$(enqueue_idempotently "/api/v2/repositories/$conan_source_id/promotions" "conan-promotion-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s\",\"digest\":\"%s\"}' "$conan_promotion_target_id" "$conan_coordinate" "$conan_digest")")
 grant_payload='[{"principal":"recovery-reader","scopes":["repositories:read"]}]'
 status=$(curl --silent --show-error --write-out '%{http_code}' \
   --request PUT -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H 'If-Match: 1' \
@@ -152,6 +235,24 @@ restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bea
 grep -Fq "\"id\":\"$replication_plan_id\"" <<<"$restored_replications" || { printf '%s\n' 'Restored replication plan is unavailable.' >&2; exit 1; }
 restored_lifecycle_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$promotion_target_id/lifecycle-jobs")
 grep -Fq "\"id\":\"$promotion_job_id\"" <<<"$restored_lifecycle_jobs" || { printf '%s\n' 'Restored promotion lifecycle job is unavailable.' >&2; exit 1; }
+for replication in \
+  "$oci_replication_target_id:$oci_replication_plan_id" \
+  "$maven_replication_target_id:$maven_replication_plan_id" \
+  "$conan_replication_target_id:$conan_replication_plan_id"; do
+  target_id=${replication%%:*}
+  plan_id=${replication#*:}
+  restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$target_id/replications")
+  grep -Fq "\"id\":\"$plan_id\"" <<<"$restored_replications" || { printf 'Restored replication plan %s is unavailable.\n' "$plan_id" >&2; exit 1; }
+done
+for promotion in \
+  "$oci_promotion_target_id:$oci_promotion_job_id" \
+  "$maven_promotion_target_id:$maven_promotion_job_id" \
+  "$conan_promotion_target_id:$conan_promotion_job_id"; do
+  target_id=${promotion%%:*}
+  job_id=${promotion#*:}
+  restored_lifecycle_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$target_id/lifecycle-jobs")
+  grep -Fq "\"id\":\"$job_id\"" <<<"$restored_lifecycle_jobs" || { printf 'Restored promotion job %s is unavailable.\n' "$job_id" >&2; exit 1; }
+done
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $denied_token" "$gateway_url/raw/$grant_repository/releases/app.txt")
 [[ "$status" == 401 ]] || { printf 'Managed grant denial after restore returned HTTP %s.\n' "$status" >&2; exit 1; }
@@ -165,5 +266,7 @@ grep -Fq '"Format":"raw"' <<<"$audits" || { printf '%s\n' 'Restored Raw audit is
 grep -Fq '"Format":"conan"' <<<"$audits" || { printf '%s\n' 'Restored Conan audit is unavailable.' >&2; exit 1; }
 grep -Fq '"Actor":"recovery-denied"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant denial audit is unavailable.' >&2; exit 1; }
 grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant authorization source is unavailable.' >&2; exit 1; }
+[[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
+[[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved Raw cache, Conan state, Repository grants, promotion jobs, replication plans, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, Raw cache, Conan state, Repository grants, and authorization audits.'
