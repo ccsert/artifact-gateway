@@ -98,6 +98,7 @@ func main() {
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	conanprotocol.NativePromotion{Store: store}.Start(runtimeContext, time.Minute)
+	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore}.Start(runtimeContext, time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{

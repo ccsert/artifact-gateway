@@ -21,6 +21,9 @@ type Worker struct {
 	Source      objectstore.Store
 	Destination objectstore.Store
 	ChunkBytes  int64
+	// Publish makes verified bytes visible through a format-specific metadata
+	// transaction. It must be idempotent because a publish failure is retried.
+	Publish func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error
 }
 
 func (w Worker) Run(ctx context.Context, limit int) error {
@@ -87,6 +90,11 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 			return w.failPlan(ctx, plan.ID, "replication checkpoint failed: "+checkpoint.ObjectKey)
 		}
 	}
+	if w.Publish != nil {
+		if err := w.Publish(ctx, plan, checks); err != nil {
+			return w.failPlan(ctx, plan.ID, "publish replicated artifacts failed")
+		}
+	}
 	return w.Store.CompleteReplicationPlan(ctx, plan.ID)
 }
 
@@ -98,6 +106,23 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 		return fmt.Errorf("stat source: %w", err)
 	} else if info.Size != checkpoint.Size {
 		return fmt.Errorf("source size mismatch")
+	}
+	if checkpoint.ByteOffset == 0 {
+		existing, err := w.Destination.Get(ctx, checkpoint.ObjectKey)
+		if err == nil && int64(len(existing)) == checkpoint.Size && sha256Digest(existing) == checkpoint.Digest {
+			if err := w.Destination.SetVerifiedDigest(ctx, checkpoint.ObjectKey, checkpoint.Digest); err != nil {
+				return fmt.Errorf("record existing destination digest: %w", err)
+			}
+			checkpoint.State = "verified"
+			checkpoint.VerifiedAt = time.Now().UTC()
+			return w.Store.UpdateReplicationCheckpoint(ctx, checkpoint)
+		}
+		if err != nil && err != objectstore.ErrNotFound {
+			return fmt.Errorf("read destination object: %w", err)
+		}
+		if err == nil {
+			return fmt.Errorf("destination object conflicts with checkpoint")
+		}
 	}
 	if checkpoint.ByteOffset > 0 {
 		partial, err := w.Destination.Get(ctx, checkpoint.ObjectKey)

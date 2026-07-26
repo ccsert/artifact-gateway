@@ -253,3 +253,59 @@ func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
 		t.Fatalf("promoted MinIO object=%#v err=%v", info, err)
 	}
 }
+
+func TestPostgresMinIORawReplicationPublishesTargetAsset(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "replication-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-raw-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-raw-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("Raw replication published after MinIO verification")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", ObjectKey: "native/raw/sha256/" + hex.EncodeToString(sum[:]), Digest: digest, Size: int64(len(body)), ContentType: "text/plain"}
+	if err = objects.PutVerifiedReader(ctx, asset.ObjectKey, strings.NewReader(string(body)), asset.Size, digest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "raw-runtime-" + uuid.NewString()}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: digest, Size: asset.Size}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = (RawReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path)
+	if err != nil || targetAsset.Digest != asset.Digest || targetAsset.ObjectKey != asset.ObjectKey {
+		t.Fatalf("target asset=%#v err=%v", targetAsset, err)
+	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].State != "completed" {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+}
