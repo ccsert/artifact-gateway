@@ -50,6 +50,18 @@ A policy-controlled, auditable creation of a visible Artifact in another
 Hosted Repository without changing the source Artifact.
 _Avoid_: Move, overwrite
 
+**Promotion Request**:
+An idempotent administrative instruction that snapshots one visible source
+Artifact and names a target Hosted Repository. It becomes a durable lifecycle
+job; it is not the promoted Artifact itself.
+_Avoid_: Copy request, move request
+
+**Promotion Snapshot**:
+The immutable source identity recorded by a Promotion Request: source
+Repository, format, coordinate, and digest. The worker rechecks that this
+identity remains visible before creating the target Artifact.
+_Avoid_: Latest version, source selector
+
 **Replication**:
 An asynchronous, checkpointed copy of visible Artifact metadata and bytes to a
 configured destination.

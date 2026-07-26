@@ -53,12 +53,12 @@ V1 is done when all of the following are true:
 
 ## Current Checkpoint
 
-The shared state model, OCI tombstone vertical slice, durable lifecycle-job
-store, OCI/Maven/Raw reclaim workers, and the Conan native artifact state
-model are complete. The current backend backlog is tracked in
-[Backend Completion Checklist](backend-completion-checklist.md). The next
-slice is wiring the Conan model into Hosted publication, resolution, deletion,
-and reclaim work without introducing a separate `/conan/v3` route family.
+The lifecycle foundation, protocol completion work, management browse/search,
+Maven retention execution, and recoverable Maven and Conan tombstones are
+complete. The active backend backlog is distribution workflows, beginning with
+immutable promotion, followed by checkpointed replication and operational
+readiness. Details are tracked in the
+[Backend Completion Checklist](backend-completion-checklist.md).
 
 ## Constraints
 
