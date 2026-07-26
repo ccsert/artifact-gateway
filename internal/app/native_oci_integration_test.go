@@ -6,11 +6,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -221,6 +223,164 @@ func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T)
 	}
 	if read.StatusCode != http.StatusOK || !bytes.Equal(got, manifest) {
 		t.Fatalf("cross-instance manifest read=%d body=%q", read.StatusCode, got)
+	}
+}
+
+func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-oci-referrers-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objectsA, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:18]
+	first, err := storeA.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "catalog-a-" + suffix, Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := storeA.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "catalog-b-" + suffix, Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer serverA.Close()
+	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	defer serverB.Close()
+	request := func(method, address string, body []byte) *http.Response {
+		t.Helper()
+		r, err := http.NewRequest(method, address, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Header.Set("Authorization", "Bearer resolver-secret")
+		response, err := serverA.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	publish := func(repositoryName, image, tag string, body []byte) string {
+		t.Helper()
+		response := request(http.MethodPut, serverA.URL+"/v2/"+repositoryName+"/"+image+"/manifests/"+tag, body)
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusCreated {
+			t.Fatalf("publish %s/%s=%d", repositoryName, image, response.StatusCode)
+		}
+		return response.Header.Get("Docker-Content-Digest")
+	}
+	subject := publish(first.Name, "app", "subject", []byte(`{"schemaVersion":2}`))
+	referrer := publish(first.Name, "app", "signature", []byte(`{"schemaVersion":2,"artifactType":"application/vnd.example.signature","subject":{"digest":"`+subject+`"}}`))
+	publish(second.Name, "other", "latest", []byte(`{"schemaVersion":2}`))
+
+	listReferrers, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/"+first.Name+"/app/referrers/"+subject, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listReferrers.Header.Set("Authorization", "Bearer resolver-secret")
+	referrerResponse, err := serverB.Client().Do(listReferrers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer referrerResponse.Body.Close()
+	var referrerPage struct {
+		Manifests []struct {
+			Digest       string `json:"digest"`
+			ArtifactType string `json:"artifactType"`
+		} `json:"manifests"`
+	}
+	if err := json.NewDecoder(referrerResponse.Body).Decode(&referrerPage); err != nil {
+		t.Fatal(err)
+	}
+	if referrerResponse.StatusCode != http.StatusOK || len(referrerPage.Manifests) != 1 || referrerPage.Manifests[0].Digest != referrer || referrerPage.Manifests[0].ArtifactType != "application/vnd.example.signature" {
+		t.Fatalf("referrers status=%d page=%#v", referrerResponse.StatusCode, referrerPage)
+	}
+
+	catalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	catalogResponse, err := serverB.Client().Do(catalogRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer catalogResponse.Body.Close()
+	var catalogPage struct {
+		Repositories []string `json:"repositories"`
+	}
+	if err := json.NewDecoder(catalogResponse.Body).Decode(&catalogPage); err != nil {
+		t.Fatal(err)
+	}
+	if catalogResponse.StatusCode != http.StatusOK || len(catalogPage.Repositories) != 1 || catalogPage.Repositories[0] != first.Name+"/app" || catalogResponse.Header.Get("Link") == "" {
+		t.Fatalf("catalog status=%d page=%#v link=%q", catalogResponse.StatusCode, catalogPage, catalogResponse.Header.Get("Link"))
+	}
+	nextCatalogRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/_catalog?n=1&last="+url.QueryEscape(catalogPage.Repositories[0]), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextCatalogRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	nextCatalogResponse, err := serverB.Client().Do(nextCatalogRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nextCatalogResponse.Body.Close()
+	var nextCatalogPage struct {
+		Repositories []string `json:"repositories"`
+	}
+	if err := json.NewDecoder(nextCatalogResponse.Body).Decode(&nextCatalogPage); err != nil {
+		t.Fatal(err)
+	}
+	if nextCatalogResponse.StatusCode != http.StatusOK || len(nextCatalogPage.Repositories) != 1 || nextCatalogPage.Repositories[0] != second.Name+"/other" {
+		t.Fatalf("next catalog status=%d page=%#v", nextCatalogResponse.StatusCode, nextCatalogPage)
+	}
+
+	deleted := request(http.MethodDelete, serverA.URL+"/v2/"+first.Name+"/app/manifests/"+referrer, nil)
+	if deleted.StatusCode != http.StatusAccepted {
+		_ = deleted.Body.Close()
+		t.Fatalf("delete=%d", deleted.StatusCode)
+	}
+	_ = deleted.Body.Close()
+	remainingRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/v2/"+first.Name+"/app/referrers/"+subject, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remainingRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	remainingResponse, err := serverB.Client().Do(remainingRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remainingResponse.Body.Close()
+	var remaining struct {
+		Manifests []json.RawMessage `json:"manifests"`
+	}
+	if err := json.NewDecoder(remainingResponse.Body).Decode(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remainingResponse.StatusCode != http.StatusOK || len(remaining.Manifests) != 0 {
+		t.Fatalf("remaining status=%d manifests=%d", remainingResponse.StatusCode, len(remaining.Manifests))
 	}
 }
 

@@ -20,8 +20,8 @@ goal. It intentionally excludes frontend work.
 
 ## Protocol Completion
 
-- [ ] OCI catalog endpoint and pagination.
-- [ ] OCI referrers endpoint.
+- [x] OCI catalog endpoint and pagination.
+- [x] OCI referrers endpoint.
 - [ ] OCI repository browse/search projection.
 - [ ] Maven browse/search projection.
 - [ ] Maven publication companion hardening and black-box fixture coverage.
@@ -61,6 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement Conan Hosted publication/session flow on the existing Conan backend
-surface, using the native Conan lifecycle model and preserving current Group
-read-through behavior.
+Implement OCI Hosted repository browse/search projection, preserving the
+existing Registry V2 API and repository-grant visibility rules.
