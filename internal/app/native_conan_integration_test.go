@@ -4,13 +4,28 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type failOnceConanReclaimStore struct {
+	OCIObjectStore
+	fail bool
+}
+
+func (s *failOnceConanReclaimStore) Delete(ctx context.Context, key string) error {
+	if s.fail {
+		s.fail = false
+		return errors.New("simulated object store delete failure")
+	}
+	return s.OCIObjectStore.Delete(ctx, key)
+}
 
 func TestPostgresNativeConanLifecycleStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -92,5 +107,62 @@ func TestPostgresConanReferenceSearchProjection(t *testing.T) {
 	next, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, references[0])
 	if err != nil || len(next) != 1 || next[0] != "pkg/2.0/user/stable" {
 		t.Fatalf("next=%#v err=%v", next, err)
+	}
+}
+
+func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	bucket := "conan-reclaim-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objects, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-reclaim-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20], Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "native/conan/reclaim/" + uuid.NewString()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.Put(ctx, key, []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+	revision := repository.ConanRecipeRevision{RepositoryID: repo.ID, Reference: "pkg/1.0/user/stable", Revision: "rrev", Digest: digest}
+	asset := repository.ConanAsset{RepositoryID: repo.ID, Reference: revision.Reference, RecipeRevision: revision.Revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 3}
+	if _, err = store.PutConanRecipeRevision(ctx, revision, []repository.ConanAsset{asset}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
+		t.Fatal(err)
+	}
+	maintenance := NativeConanMaintenance{Store: store, Objects: &failOnceConanReclaimStore{OCIObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	if err = maintenance.Collect(ctx); err == nil {
+		t.Fatal("first reclaim must fail")
+	}
+	if err = maintenance.Collect(ctx); err != nil {
+		t.Fatalf("retry reclaim: %v", err)
+	}
+	if _, err = objects.Get(ctx, key); err == nil {
+		t.Fatal("MinIO object remains after reclaim")
+	}
+	if _, err = store.RestoreConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("restore collected revision error=%v", err)
 	}
 }

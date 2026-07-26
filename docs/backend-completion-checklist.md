@@ -16,7 +16,7 @@ goal. It intentionally excludes frontend work.
 - [x] Maven tombstones/retention and Maven reclaim worker.
 - [x] Raw reclaim worker.
 - [x] Conan native recipe/package revision state model.
-- [ ] Conan HTTP Hosted publication, resolution, deletion, and reclaim worker (publication, resolution, and deletion complete; PostgreSQL/MinIO reclaim evidence pending).
+- [x] Conan HTTP Hosted publication, resolution, deletion, and reclaim worker.
 
 ## Protocol Completion
 
@@ -61,6 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Add PostgreSQL/MinIO reclaim-worker evidence for Conan, then start the
-cross-format management API (capabilities, unified browse/search, tombstones,
-lifecycle jobs, retention dry-run, and restore).
+Start the cross-format management API: capabilities, unified browse/search,
+tombstones, lifecycle jobs, retention dry-run, and restore.
