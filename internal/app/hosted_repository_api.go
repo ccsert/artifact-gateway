@@ -698,6 +698,26 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryReplications(w http.Respons
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) GetRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, replicationPlanID adminopenapi.ReplicationPlanId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, _ repository.HostedRepository) {
+		plan, err := h.replication.GetReplicationPlan(r.Context(), repositoryID.String(), replicationPlanID.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "replication plan not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get replication plan failed")
+			return
+		}
+		checkpoints, err := h.replication.ListReplicationCheckpoints(r.Context(), plan.ID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list replication checkpoints failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, toOpenAPIReplicationPlanDetail(plan, checkpoints))
+	})
+}
+
 func validRepositoryDigest(value string) bool {
 	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+64 {
 		return false
@@ -716,6 +736,30 @@ func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.Repl
 	}
 	if plan.LastError != "" {
 		item.LastError = &plan.LastError
+	}
+	return item
+}
+
+func toOpenAPIReplicationPlanDetail(plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) adminopenapi.ReplicationPlanDetail {
+	item := adminopenapi.ReplicationPlanDetail{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanDetailState(plan.State), CreatedAt: plan.CreatedAt, Checkpoints: make([]adminopenapi.ReplicationCheckpointProgress, 0, len(checkpoints))}
+	if !plan.StartedAt.IsZero() {
+		item.StartedAt = &plan.StartedAt
+	}
+	if !plan.CompletedAt.IsZero() {
+		item.CompletedAt = &plan.CompletedAt
+	}
+	if plan.LastError != "" {
+		item.LastError = &plan.LastError
+	}
+	for _, checkpoint := range checkpoints {
+		progress := adminopenapi.ReplicationCheckpointProgress{ObjectKey: checkpoint.ObjectKey, Digest: checkpoint.Digest, Size: checkpoint.Size, ByteOffset: checkpoint.ByteOffset, State: adminopenapi.ReplicationCheckpointProgressState(checkpoint.State), Attempts: checkpoint.Attempts}
+		if checkpoint.LastError != "" {
+			progress.LastError = &checkpoint.LastError
+		}
+		if !checkpoint.VerifiedAt.IsZero() {
+			progress.VerifiedAt = &checkpoint.VerifiedAt
+		}
+		item.Checkpoints = append(item.Checkpoints, progress)
 	}
 	return item
 }

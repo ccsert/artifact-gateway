@@ -247,6 +247,21 @@ export type PromotionRequest = {
     digest: string;
 };
 
+export type ReplicationCheckpointProgress = {
+    objectKey: string;
+    digest: string;
+    size: number;
+    byteOffset: number;
+    state: 'pending' | 'copying' | 'verified' | 'failed';
+    attempts: number;
+    lastError?: string;
+    verifiedAt?: string;
+};
+
+export type ReplicationPlanDetail = ReplicationPlan & {
+    checkpoints: Array<ReplicationCheckpointProgress>;
+};
+
 export type RepositoryCapabilities = {
     format: Format;
     type: 'hosted';
@@ -319,6 +334,8 @@ export type PageToken = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type ReplicationPlanId = string;
 
 /**
  * OCI image-name prefix used to filter the repository projection.
@@ -756,6 +773,38 @@ export type CreateRepositoryReplicationResponses = {
 };
 
 export type CreateRepositoryReplicationResponse = CreateRepositoryReplicationResponses[keyof CreateRepositoryReplicationResponses];
+
+export type GetRepositoryReplicationData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+        replicationPlanId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/replications/{replicationPlanId}';
+};
+
+export type GetRepositoryReplicationErrors = {
+    /**
+     * Problem response
+     */
+    403: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetRepositoryReplicationError = GetRepositoryReplicationErrors[keyof GetRepositoryReplicationErrors];
+
+export type GetRepositoryReplicationResponses = {
+    /**
+     * Replication plan and checkpoint progress for this repository
+     */
+    200: ReplicationPlanDetail;
+};
+
+export type GetRepositoryReplicationResponse = GetRepositoryReplicationResponses[keyof GetRepositoryReplicationResponses];
 
 export type RestoreRepositoryArtifactData = {
     body: RestoreArtifact;

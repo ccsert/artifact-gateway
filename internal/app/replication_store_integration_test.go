@@ -79,6 +79,16 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	if err != nil || len(plans) != 1 || plans[0].ID != plan.ID || plans[0].State != "completed" {
 		t.Fatalf("plans=%#v err=%v", plans, err)
 	}
+	if got, err := store.GetReplicationPlan(ctx, source.ID, plan.ID); err != nil || got.ID != plan.ID {
+		t.Fatalf("source-scoped plan=%#v err=%v", got, err)
+	}
+	other, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-other-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetReplicationPlan(ctx, other.ID, plan.ID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("unrelated scoped plan err=%v", err)
+	}
 }
 
 func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {

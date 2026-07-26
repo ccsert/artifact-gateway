@@ -29,6 +29,8 @@ paths:
     "$ref": "./management/promotion.yaml#/repositories_repositoryId_promotions"
   "/repositories/{repositoryId}/replications":
     "$ref": "./management/replication.yaml#/repositories_repositoryId_replications"
+  "/repositories/{repositoryId}/replications/{replicationPlanId}":
+    "$ref": "./management/replication.yaml#/repositories_repositoryId_replications_replicationPlanId"
   "/repositories/{repositoryId}/restore":
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
@@ -103,6 +105,10 @@ components:
       "$ref": "./components/schemas.yaml#/ReplicationRequest"
     ReplicationPlan:
       "$ref": "./components/schemas.yaml#/ReplicationPlan"
+    ReplicationPlanDetail:
+      "$ref": "./components/schemas.yaml#/ReplicationPlanDetail"
+    ReplicationCheckpointProgress:
+      "$ref": "./components/schemas.yaml#/ReplicationCheckpointProgress"
     ArtifactTombstone:
       "$ref": "./components/schemas.yaml#/ArtifactTombstone"
     ArtifactTombstonePage:
@@ -158,6 +164,8 @@ components:
       "$ref": "./components/parameters.yaml#/GroupId"
     SessionId:
       "$ref": "./components/parameters.yaml#/SessionId"
+    ReplicationPlanId:
+      "$ref": "./components/parameters.yaml#/ReplicationPlanId"
     RepositoryName:
       "$ref": "./components/parameters.yaml#/RepositoryName"
     OCIName:

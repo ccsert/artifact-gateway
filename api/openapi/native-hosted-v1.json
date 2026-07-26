@@ -405,6 +405,37 @@
         }
       }
     },
+    "/repositories/{repositoryId}/replications/{replicationPlanId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/ReplicationPlanId"
+        }
+      ],
+      "get": {
+        "operationId": "getRepositoryReplication",
+        "responses": {
+          "200": {
+            "description": "Replication plan and checkpoint progress for this repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplicationPlanDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/restore": {
       "parameters": [
         {
@@ -2816,6 +2847,78 @@
           }
         }
       },
+      "ReplicationCheckpointProgress": {
+        "type": "object",
+        "required": [
+          "objectKey",
+          "digest",
+          "size",
+          "byteOffset",
+          "state",
+          "attempts"
+        ],
+        "properties": {
+          "objectKey": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "byteOffset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "copying",
+              "verified",
+              "failed"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReplicationPlanDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReplicationPlan"
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkpoints"
+            ],
+            "properties": {
+              "checkpoints": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReplicationCheckpointProgress"
+                }
+              }
+            }
+          }
+        ]
+      },
       "RepositoryCapabilities": {
         "type": "object",
         "required": [
@@ -3089,6 +3192,15 @@
         "required": true,
         "schema": {
           "type": "string"
+        }
+      },
+      "ReplicationPlanId": {
+        "name": "replicationPlanId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
         }
       },
       "OCIImagePrefix": {

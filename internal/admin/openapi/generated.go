@@ -229,6 +229,30 @@ func (e PublishSessionState) Valid() bool {
 	}
 }
 
+// Defines values for ReplicationCheckpointProgressState.
+const (
+	ReplicationCheckpointProgressStateCopying  ReplicationCheckpointProgressState = "copying"
+	ReplicationCheckpointProgressStateFailed   ReplicationCheckpointProgressState = "failed"
+	ReplicationCheckpointProgressStatePending  ReplicationCheckpointProgressState = "pending"
+	ReplicationCheckpointProgressStateVerified ReplicationCheckpointProgressState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationCheckpointProgressState enum.
+func (e ReplicationCheckpointProgressState) Valid() bool {
+	switch e {
+	case ReplicationCheckpointProgressStateCopying:
+		return true
+	case ReplicationCheckpointProgressStateFailed:
+		return true
+	case ReplicationCheckpointProgressStatePending:
+		return true
+	case ReplicationCheckpointProgressStateVerified:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReplicationPlanState.
 const (
 	ReplicationPlanStateCompleted ReplicationPlanState = "completed"
@@ -247,6 +271,30 @@ func (e ReplicationPlanState) Valid() bool {
 	case ReplicationPlanStatePending:
 		return true
 	case ReplicationPlanStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReplicationPlanDetailState.
+const (
+	ReplicationPlanDetailStateCompleted ReplicationPlanDetailState = "completed"
+	ReplicationPlanDetailStateFailed    ReplicationPlanDetailState = "failed"
+	ReplicationPlanDetailStatePending   ReplicationPlanDetailState = "pending"
+	ReplicationPlanDetailStateRunning   ReplicationPlanDetailState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ReplicationPlanDetailState enum.
+func (e ReplicationPlanDetailState) Valid() bool {
+	switch e {
+	case ReplicationPlanDetailStateCompleted:
+		return true
+	case ReplicationPlanDetailStateFailed:
+		return true
+	case ReplicationPlanDetailStatePending:
+		return true
+	case ReplicationPlanDetailStateRunning:
 		return true
 	default:
 		return false
@@ -567,6 +615,21 @@ type PublishSession struct {
 // PublishSessionState defines model for PublishSession.State.
 type PublishSessionState string
 
+// ReplicationCheckpointProgress defines model for ReplicationCheckpointProgress.
+type ReplicationCheckpointProgress struct {
+	Attempts   int                                `json:"attempts"`
+	ByteOffset int64                              `json:"byteOffset"`
+	Digest     string                             `json:"digest"`
+	LastError  *string                            `json:"lastError,omitempty"`
+	ObjectKey  string                             `json:"objectKey"`
+	Size       int64                              `json:"size"`
+	State      ReplicationCheckpointProgressState `json:"state"`
+	VerifiedAt *time.Time                         `json:"verifiedAt,omitempty"`
+}
+
+// ReplicationCheckpointProgressState defines model for ReplicationCheckpointProgress.State.
+type ReplicationCheckpointProgressState string
+
 // ReplicationPlan defines model for ReplicationPlan.
 type ReplicationPlan struct {
 	CompletedAt        *time.Time           `json:"completedAt,omitempty"`
@@ -582,6 +645,23 @@ type ReplicationPlan struct {
 
 // ReplicationPlanState defines model for ReplicationPlan.State.
 type ReplicationPlanState string
+
+// ReplicationPlanDetail defines model for ReplicationPlanDetail.
+type ReplicationPlanDetail struct {
+	Checkpoints        []ReplicationCheckpointProgress `json:"checkpoints"`
+	CompletedAt        *time.Time                      `json:"completedAt,omitempty"`
+	CreatedAt          time.Time                       `json:"createdAt"`
+	Format             Format                          `json:"format"`
+	Id                 openapi_types.UUID              `json:"id"`
+	LastError          *string                         `json:"lastError,omitempty"`
+	SourceRepositoryId openapi_types.UUID              `json:"sourceRepositoryId"`
+	StartedAt          *time.Time                      `json:"startedAt,omitempty"`
+	State              ReplicationPlanDetailState      `json:"state"`
+	TargetRepositoryId openapi_types.UUID              `json:"targetRepositoryId"`
+}
+
+// ReplicationPlanDetailState defines model for ReplicationPlanDetail.State.
+type ReplicationPlanDetailState string
 
 // ReplicationRequest defines model for ReplicationRequest.
 type ReplicationRequest struct {
@@ -682,6 +762,9 @@ type PageSize = int
 
 // PageToken defines model for PageToken.
 type PageToken = string
+
+// ReplicationPlanId defines model for ReplicationPlanId.
+type ReplicationPlanId = openapi_types.UUID
 
 // RepositoryId defines model for RepositoryId.
 type RepositoryId = openapi_types.UUID
@@ -996,6 +1079,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryReplicationParams)
+
+	// (GET /repositories/{repositoryId}/replications/{replicationPlanId})
+	GetRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, replicationPlanId ReplicationPlanId)
 
 	// (POST /repositories/{repositoryId}/restore)
 	RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -2360,6 +2446,41 @@ func (siw *ServerInterfaceWrapper) CreateRepositoryReplication(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// GetRepositoryReplication operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryReplication(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "replicationPlanId" -------------
+	var replicationPlanId ReplicationPlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "replicationPlanId", r.PathValue("replicationPlanId"), &replicationPlanId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "replicationPlanId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryReplication(w, r, repositoryId, replicationPlanId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RestoreRepositoryArtifact operation middleware
 func (siw *ServerInterfaceWrapper) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request) {
 
@@ -2766,6 +2887,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.CreateRepositoryReplication)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications/{replicationPlanId}", wrapper.GetRepositoryReplication)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/restore", wrapper.RestoreRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
@@ -4045,6 +4167,59 @@ func (response CreateRepositoryReplication409ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type GetRepositoryReplicationRequestObject struct {
+	RepositoryId      RepositoryId      `json:"repositoryId"`
+	ReplicationPlanId ReplicationPlanId `json:"replicationPlanId"`
+}
+
+type GetRepositoryReplicationResponseObject interface {
+	VisitGetRepositoryReplicationResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryReplication200JSONResponse ReplicationPlanDetail
+
+func (response GetRepositoryReplication200JSONResponse) VisitGetRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryReplication403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryReplication403ApplicationProblemPlusJSONResponse) VisitGetRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryReplication404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryReplication404ApplicationProblemPlusJSONResponse) VisitGetRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RestoreRepositoryArtifactRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Body         *RestoreRepositoryArtifactJSONRequestBody
@@ -4292,6 +4467,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(ctx context.Context, request CreateRepositoryReplicationRequestObject) (CreateRepositoryReplicationResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/replications/{replicationPlanId})
+	GetRepositoryReplication(ctx context.Context, request GetRepositoryReplicationRequestObject) (GetRepositoryReplicationResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/restore)
 	RestoreRepositoryArtifact(ctx context.Context, request RestoreRepositoryArtifactRequestObject) (RestoreRepositoryArtifactResponseObject, error)
@@ -5255,6 +5433,33 @@ func (sh *strictHandler) CreateRepositoryReplication(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRepositoryReplicationResponseObject); ok {
 		if err := validResponse.VisitCreateRepositoryReplicationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryReplication operation middleware
+func (sh *strictHandler) GetRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, replicationPlanId ReplicationPlanId) {
+	var request GetRepositoryReplicationRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ReplicationPlanId = replicationPlanId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryReplication(ctx, request.(GetRepositoryReplicationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryReplication")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryReplicationResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryReplicationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

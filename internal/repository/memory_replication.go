@@ -81,6 +81,15 @@ func (s *MemoryStore) ListReplicationPlans(_ context.Context, repositoryID strin
 	}
 	return plans, nil
 }
+func (s *MemoryStore) GetReplicationPlan(_ context.Context, repositoryID, id string) (ReplicationPlan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	plan, ok := s.replicationPlans[id]
+	if !ok || (plan.SourceRepositoryID != repositoryID && plan.TargetRepositoryID != repositoryID) {
+		return ReplicationPlan{}, ErrNotFound
+	}
+	return plan, nil
+}
 func (s *MemoryStore) ListReplicationCheckpoints(_ context.Context, id string) ([]ReplicationCheckpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

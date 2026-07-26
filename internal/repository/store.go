@@ -75,6 +75,7 @@ type ReplicationStore interface {
 	ClaimReplicationPlans(context.Context, int) ([]ReplicationPlan, error)
 	ClaimReplicationPlansByFormat(context.Context, Format, int) ([]ReplicationPlan, error)
 	ListReplicationPlans(context.Context, string, int) ([]ReplicationPlan, error)
+	GetReplicationPlan(context.Context, string, string) (ReplicationPlan, error)
 	ListReplicationCheckpoints(context.Context, string) ([]ReplicationCheckpoint, error)
 	UpdateReplicationCheckpoint(context.Context, ReplicationCheckpoint) error
 	CompleteReplicationPlan(context.Context, string) error

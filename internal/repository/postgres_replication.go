@@ -111,6 +111,15 @@ func (s *PostgresStore) ListReplicationPlans(ctx context.Context, repositoryID s
 	return plans, rows.Err()
 }
 
+func (s *PostgresStore) GetReplicationPlan(ctx context.Context, repositoryID, id string) (ReplicationPlan, error) {
+	var plan ReplicationPlan
+	err := scanReplicationPlan(s.db.QueryRowContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error FROM replication_plans WHERE id::text=$1 AND (source_repository_id::text=$2 OR target_repository_id::text=$2)`, id, repositoryID), &plan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ReplicationPlan{}, ErrNotFound
+	}
+	return plan, err
+}
+
 func (s *PostgresStore) ListReplicationCheckpoints(ctx context.Context, planID string) ([]ReplicationCheckpoint, error) {
 	var exists bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM replication_plans WHERE id::text=$1)`, planID).Scan(&exists); err != nil {

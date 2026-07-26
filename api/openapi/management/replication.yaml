@@ -34,3 +34,18 @@ repositories_repositoryId_replications:
               items:
                 "$ref": "../components/schemas.yaml#/ReplicationPlan"
       '403': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_replications_replicationPlanId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/ReplicationPlanId"
+  get:
+    operationId: getRepositoryReplication
+    responses:
+      '200':
+        description: Replication plan and checkpoint progress for this repository
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/ReplicationPlanDetail"
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -193,8 +194,53 @@ func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"sourceRepositoryId":"`+source.ID) {
 		t.Fatalf("list=%d %s", listed.Code, listed.Body.String())
 	}
-	if plans, err := store.ListReplicationPlans(ctx, target.ID, 10); err != nil || len(plans) != 1 || plans[0].Format != repository.FormatRaw {
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].Format != repository.FormatRaw {
 		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+	plan, err := store.GetReplicationPlan(ctx, target.ID, plans[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoints, err := store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checkpoints) != 1 {
+		t.Fatalf("checkpoints=%#v err=%v", checkpoints, err)
+	}
+	checkpoint := checkpoints[0]
+	checkpoint.ByteOffset = checkpoint.Size
+	checkpoint.State = "verified"
+	checkpoint.Attempts = 2
+	checkpoint.LastError = "transient object-store error"
+	checkpoint.VerifiedAt = time.Now().UTC()
+	checkpoint.SourceObjectKey = "internal/source/object-key"
+	if err = store.UpdateReplicationCheckpoint(ctx, checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	detail := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+target.ID+"/replications/"+plan.ID, nil)
+	authorize(detail, authenticator.IssueToken("replicator"))
+	detailed := httptest.NewRecorder()
+	handler.ServeHTTP(detailed, detail)
+	for _, value := range []string{`"objectKey":"` + checkpoint.ObjectKey, `"digest":"` + checkpoint.Digest, `"size":` + strconv.FormatInt(checkpoint.Size, 10), `"byteOffset":` + strconv.FormatInt(checkpoint.ByteOffset, 10), `"state":"verified"`, `"attempts":2`, `"lastError":"transient object-store error"`, `"verifiedAt":`} {
+		if !strings.Contains(detailed.Body.String(), value) {
+			t.Fatalf("detail missing %q: %d %s", value, detailed.Code, detailed.Body.String())
+		}
+	}
+	if detailed.Code != http.StatusOK || strings.Contains(detailed.Body.String(), "sourceObjectKey") || strings.Contains(detailed.Body.String(), checkpoint.SourceObjectKey) {
+		t.Fatalf("detail=%d %s", detailed.Code, detailed.Body.String())
+	}
+	other, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-raw-other", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, other.ID, []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	notFound := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+other.ID+"/replications/"+plan.ID, nil)
+	authorize(notFound, authenticator.IssueToken("replicator"))
+	missing := httptest.NewRecorder()
+	handler.ServeHTTP(missing, notFound)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("unscoped detail=%d %s", missing.Code, missing.Body.String())
 	}
 	found := false
 	for _, audit := range store.Audits {

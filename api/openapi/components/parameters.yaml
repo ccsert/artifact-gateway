@@ -20,6 +20,13 @@ SessionId:
   schema:
     type: string
     format: uuid
+ReplicationPlanId:
+  name: replicationPlanId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
 RepositoryName:
   name: repository
   in: path

@@ -258,6 +258,27 @@ ReplicationPlan:
     startedAt: {type: string, format: date-time}
     completedAt: {type: string, format: date-time}
     lastError: {type: string, maxLength: 1024}
+ReplicationPlanDetail:
+  allOf:
+  - "$ref": "#/ReplicationPlan"
+  - type: object
+    required: [checkpoints]
+    properties:
+      checkpoints:
+        type: array
+        items: {"$ref": "#/ReplicationCheckpointProgress"}
+ReplicationCheckpointProgress:
+  type: object
+  required: [objectKey, digest, size, byteOffset, state, attempts]
+  properties:
+    objectKey: {type: string}
+    digest: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+    size: {type: integer, format: int64, minimum: 0}
+    byteOffset: {type: integer, format: int64, minimum: 0}
+    state: {type: string, enum: [pending, copying, verified, failed]}
+    attempts: {type: integer, minimum: 0}
+    lastError: {type: string, maxLength: 1024}
+    verifiedAt: {type: string, format: date-time}
 ArtifactTombstone:
   type: object
   required: [coordinate, digest, tombstonedAt]
