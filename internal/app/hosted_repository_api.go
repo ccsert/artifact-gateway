@@ -56,6 +56,11 @@ type conanReferencePageCursor struct {
 	ExpiresAt                                 int64
 }
 
+type artifactSearchPageCursor struct {
+	Endpoint, RepositoryID, Format, Query, Coordinate string
+	ExpiresAt                                         int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
@@ -215,6 +220,107 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
 		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		query := ""
+		if params.Q != nil {
+			query = *params.Q
+		}
+		if !validArtifactSearchQuery(repo.Format, query) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q is not a valid artifact prefix for this repository format")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeArtifactSearchCursor(pageToken, repo.ID, repo.Format, query)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		items := make([]adminopenapi.ArtifactSummary, 0, pageSize)
+		var lastCoordinate string
+		hasMore := false
+		switch repo.Format {
+		case repository.FormatOCI:
+			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search OCI artifacts failed")
+				return
+			}
+			hasMore = len(names) > pageSize
+			if hasMore {
+				names = names[:pageSize]
+			}
+			for _, name := range names {
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
+				lastCoordinate = name
+			}
+		case repository.FormatMaven:
+			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, after)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
+				return
+			}
+			hasMore = len(artifacts) > pageSize
+			if hasMore {
+				artifacts = artifacts[:pageSize]
+			}
+			for _, a := range artifacts {
+				d := a.Digest
+				created := a.CreatedAt
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created})
+				lastCoordinate = a.Coordinate
+			}
+		case repository.FormatConan:
+			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search Conan artifacts failed")
+				return
+			}
+			hasMore = len(references) > pageSize
+			if hasMore {
+				references = references[:pageSize]
+			}
+			for _, reference := range references {
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference})
+				lastCoordinate = reference
+			}
+		case repository.FormatRaw:
+			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search Raw artifacts failed")
+				return
+			}
+			hasMore = len(assets) > pageSize
+			if hasMore {
+				assets = assets[:pageSize]
+			}
+			for _, a := range assets {
+				d, ct := a.Digest, a.ContentType
+				size := a.Size
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Path, Digest: &d, ContentType: &ct, Size: &size})
+				lastCoordinate = a.Path
+			}
+		}
+		var next *string
+		if hasMore {
+			token := h.encodeArtifactSearchCursor(repo.ID, repo.Format, query, lastCoordinate)
+			next = &token
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
 	})
 }
 
@@ -938,6 +1044,33 @@ func validConanReferencePrefix(value string) bool {
 	return true
 }
 
+func validRawAssetPrefix(value string) bool {
+	if len(value) > 255 || strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\\\x00") {
+		return false
+	}
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func validArtifactSearchQuery(format repository.Format, query string) bool {
+	switch format {
+	case repository.FormatOCI:
+		return validOCIImagePrefix(query)
+	case repository.FormatMaven:
+		return validMavenCoordinatePrefix(query)
+	case repository.FormatConan:
+		return validConanReferencePrefix(query)
+	case repository.FormatRaw:
+		return validRawAssetPrefix(query)
+	default:
+		return false
+	}
+}
+
 func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
 	payload, _ := json.Marshal(ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
@@ -1020,6 +1153,34 @@ func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repository
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Reference, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string) string {
+	payload, _ := json.Marshal(artifactSearchPageCursor{Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor artifactSearchPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Coordinate, nil
 }
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {

@@ -268,6 +268,21 @@ type ArtifactPage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// ArtifactSummary defines model for ArtifactSummary.
+type ArtifactSummary struct {
+	ContentType *string    `json:"contentType,omitempty"`
+	Coordinate  string     `json:"coordinate"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	Digest      *string    `json:"digest,omitempty"`
+	Size        *int64     `json:"size,omitempty"`
+}
+
+// ArtifactSummaryPage defines model for ArtifactSummaryPage.
+type ArtifactSummaryPage struct {
+	Items         []ArtifactSummary `json:"items"`
+	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
 // AuditList defines model for AuditList.
 type AuditList = []AuditRecord
 
@@ -514,6 +529,9 @@ type SessionId = openapi_types.UUID
 // ArtifactList defines model for ArtifactList.
 type ArtifactList = ArtifactPage
 
+// ArtifactSummaryList defines model for ArtifactSummaryList.
+type ArtifactSummaryList = ArtifactSummaryPage
+
 // ConanReferenceList defines model for ConanReferenceList.
 type ConanReferenceList = ConanReferencePage
 
@@ -566,6 +584,13 @@ type ListRepositoriesParams struct {
 // CreateRepositoryParams defines parameters for CreateRepository.
 type CreateRepositoryParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
+type SearchRepositoryArtifactsParams struct {
+	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListArtifactsParams defines parameters for ListArtifacts.
@@ -717,6 +742,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId})
 	GetRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /repositories/{repositoryId}/artifact-search)
+	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams)
@@ -1321,6 +1349,74 @@ func (siw *ServerInterfaceWrapper) GetRepository(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRepository(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchRepositoryArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchRepositoryArtifactsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchRepositoryArtifacts(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2034,6 +2130,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
@@ -2053,6 +2150,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 type ArtifactJSONResponse Artifact
 
 type ArtifactListJSONResponse ArtifactPage
+
+type ArtifactSummaryListJSONResponse ArtifactSummaryPage
 
 type AuditListJSONResponse AuditList
 
@@ -2635,6 +2734,47 @@ func (response GetRepository404ApplicationProblemPlusJSONResponse) VisitGetRepos
 	return err
 }
 
+type SearchRepositoryArtifactsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       SearchRepositoryArtifactsParams
+}
+
+type SearchRepositoryArtifactsResponseObject interface {
+	VisitSearchRepositoryArtifactsResponse(w http.ResponseWriter) error
+}
+
+type SearchRepositoryArtifacts200JSONResponse struct {
+	ArtifactSummaryListJSONResponse
+}
+
+func (response SearchRepositoryArtifacts200JSONResponse) VisitSearchRepositoryArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchRepositoryArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SearchRepositoryArtifacts400ApplicationProblemPlusJSONResponse) VisitSearchRepositoryArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListArtifactsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListArtifactsParams
@@ -3118,6 +3258,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId})
 	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/artifact-search)
+	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
@@ -3611,6 +3754,33 @@ func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchRepositoryArtifacts operation middleware
+func (sh *strictHandler) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams) {
+	var request SearchRepositoryArtifactsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchRepositoryArtifacts(ctx, request.(SearchRepositoryArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchRepositoryArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchRepositoryArtifactsResponseObject); ok {
+		if err := validResponse.VisitSearchRepositoryArtifactsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

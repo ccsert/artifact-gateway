@@ -297,6 +297,36 @@ Artifact:
       enum:
       - visible
       - deleted
+ArtifactSummary:
+  type: object
+  required:
+  - coordinate
+  properties:
+    coordinate:
+      type: string
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      format: int64
+      minimum: 0
+    contentType:
+      type: string
+    createdAt:
+      type: string
+      format: date-time
+ArtifactSummaryPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/ArtifactSummary"
+    nextPageToken:
+      type: string
 OCIImage:
   type: object
   required:

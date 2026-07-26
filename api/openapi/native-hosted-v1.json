@@ -511,6 +511,40 @@
         }
       }
     },
+    "/repositories/{repositoryId}/artifact-search": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "searchRepositoryArtifacts",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ArtifactSummaryList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/artifacts/{artifactId}": {
       "parameters": [
         {
@@ -2273,6 +2307,50 @@
           }
         }
       },
+      "ArtifactSummary": {
+        "type": "object",
+        "required": [
+          "coordinate"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ArtifactSummaryPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactSummary"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "OCIImage": {
         "type": "object",
         "required": [
@@ -2773,6 +2851,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RepositoryCapabilities"
+            }
+          }
+        }
+      },
+      "ArtifactSummaryList": {
+        "description": "Format-aware artifact browse/search page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ArtifactSummaryPage"
             }
           }
         }

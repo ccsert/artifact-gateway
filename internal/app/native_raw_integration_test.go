@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -139,6 +140,59 @@ func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
 			t.Fatalf("put %s=%d", name, response.StatusCode)
 		}
 		_ = response.Body.Close()
+	}
+	if _, err = storeA.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "search-reader", Scopes: []string{"repositories:read"}},
+		{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	searchRequest, err := http.NewRequest(http.MethodGet, serverB.URL+"/api/v2/repositories/"+repo.ID+"/artifact-search?q=releases%2F&pageSize=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchRequest.Header.Set("Authorization", "Bearer "+testAuthenticator().IssueToken("search-reader"))
+	searchResponse, err := serverB.Client().Do(searchRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var searchPage struct {
+		Items []struct {
+			Coordinate string `json:"coordinate"`
+			Digest     string `json:"digest"`
+			Size       int64  `json:"size"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if err := json.NewDecoder(searchResponse.Body).Decode(&searchPage); err != nil {
+		_ = searchResponse.Body.Close()
+		t.Fatal(err)
+	}
+	_ = searchResponse.Body.Close()
+	if searchResponse.StatusCode != http.StatusOK || len(searchPage.Items) != 1 || searchPage.Items[0].Coordinate != "releases/alpha.txt" || searchPage.Items[0].Digest == "" || searchPage.Items[0].Size != int64(len("releases/alpha.txt")) || searchPage.NextPageToken == "" {
+		t.Fatalf("artifact search=%d page=%#v", searchResponse.StatusCode, searchPage)
+	}
+	nextSearchRequest, err := http.NewRequest(http.MethodGet, serverA.URL+"/api/v2/repositories/"+repo.ID+"/artifact-search?q=releases%2F&pageSize=1&pageToken="+url.QueryEscape(searchPage.NextPageToken), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextSearchRequest.Header.Set("Authorization", "Bearer "+testAuthenticator().IssueToken("search-reader"))
+	nextSearchResponse, err := serverA.Client().Do(nextSearchRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nextSearchPage struct {
+		Items []struct {
+			Coordinate string `json:"coordinate"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(nextSearchResponse.Body).Decode(&nextSearchPage); err != nil {
+		_ = nextSearchResponse.Body.Close()
+		t.Fatal(err)
+	}
+	_ = nextSearchResponse.Body.Close()
+	if nextSearchResponse.StatusCode != http.StatusOK || len(nextSearchPage.Items) != 1 || nextSearchPage.Items[0].Coordinate != "releases/beta.txt" {
+		t.Fatalf("artifact search next=%d page=%#v", nextSearchResponse.StatusCode, nextSearchPage)
 	}
 	started := request(http.MethodPost, serverA.URL+"/raw/"+repo.Name+"/releases/resumable.bin?resumable=1", nil)
 	if started.StatusCode != http.StatusCreated || started.Header.Get("Location") == "" {

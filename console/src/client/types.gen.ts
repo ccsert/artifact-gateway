@@ -180,6 +180,19 @@ export type RepositoryCapabilities = {
     operations: Array<'read' | 'publish' | 'browse' | 'delete' | 'restore' | 'retain' | 'reclaim'>;
 };
 
+export type ArtifactSummary = {
+    coordinate: string;
+    digest?: string;
+    size?: number;
+    contentType?: string;
+    createdAt?: string;
+};
+
+export type ArtifactSummaryPage = {
+    items: Array<ArtifactSummary>;
+    nextPageToken?: string;
+};
+
 export type OciImage = {
     name: string;
 };
@@ -816,6 +829,37 @@ export type ListArtifactsResponses = {
 };
 
 export type ListArtifactsResponse = ListArtifactsResponses[keyof ListArtifactsResponses];
+
+export type SearchRepositoryArtifactsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        q?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/artifact-search';
+};
+
+export type SearchRepositoryArtifactsErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+};
+
+export type SearchRepositoryArtifactsError = SearchRepositoryArtifactsErrors[keyof SearchRepositoryArtifactsErrors];
+
+export type SearchRepositoryArtifactsResponses = {
+    /**
+     * Format-aware artifact browse/search page
+     */
+    200: ArtifactSummaryPage;
+};
+
+export type SearchRepositoryArtifactsResponse = SearchRepositoryArtifactsResponses[keyof SearchRepositoryArtifactsResponses];
 
 export type DeleteArtifactData = {
     body?: never;

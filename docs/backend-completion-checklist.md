@@ -36,7 +36,7 @@ goal. It intentionally excludes frontend work.
 ## Management API
 
 - [x] Repository capability endpoint per format/type.
-- [ ] Cross-format artifact browse/search API.
+- [x] Cross-format artifact browse/search API.
 - [ ] Tombstone inspection API.
 - [ ] Lifecycle job status API.
 - [ ] Retention execution API and dry-run reporting.

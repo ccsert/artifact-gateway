@@ -31,6 +31,8 @@ paths:
     "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
   "/repositories/{repositoryId}/artifacts":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/repositories/{repositoryId}/artifact-search":
+    "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_search"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/repositories/{repositoryId}/oci/images":
@@ -85,6 +87,10 @@ components:
       "$ref": "./components/schemas.yaml#/PublishSession"
     Artifact:
       "$ref": "./components/schemas.yaml#/Artifact"
+    ArtifactSummary:
+      "$ref": "./components/schemas.yaml#/ArtifactSummary"
+    ArtifactSummaryPage:
+      "$ref": "./components/schemas.yaml#/ArtifactSummaryPage"
     Deletion:
       "$ref": "./components/schemas.yaml#/Deletion"
     Problem:
@@ -181,6 +187,8 @@ components:
       "$ref": "./components/responses.yaml#/Artifact"
     ArtifactList:
       "$ref": "./components/responses.yaml#/ArtifactList"
+    ArtifactSummaryList:
+      "$ref": "./components/responses.yaml#/ArtifactSummaryList"
     ConanReferenceList:
       "$ref": "./components/responses.yaml#/ConanReferenceList"
     OCIImageList:

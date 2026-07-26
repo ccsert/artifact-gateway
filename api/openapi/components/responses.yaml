@@ -149,6 +149,12 @@ ArtifactList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/ArtifactPage"
+ArtifactSummaryList:
+  description: Format-aware artifact browse/search page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactSummaryPage"
 OCIImageList:
   description: OCI image-name projection page
   content:

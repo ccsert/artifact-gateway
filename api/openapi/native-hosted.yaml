@@ -37,6 +37,8 @@ paths:
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_commit"
   "/repositories/{repositoryId}/artifacts":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/repositories/{repositoryId}/artifact-search":
+    "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_search"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/repositories/{repositoryId}/oci/images":

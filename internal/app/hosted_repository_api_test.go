@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +77,125 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	handler.ServeHTTP(adminResponse, adminRequest)
 	if adminResponse.Code != http.StatusOK || !strings.Contains(adminResponse.Body.String(), `"retain"`) || strings.Contains(adminResponse.Body.String(), `"restore"`) {
 		t.Fatalf("Maven capabilities=%d %s", adminResponse.Code, adminResponse.Body.String())
+	}
+}
+
+func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	formats := []repository.Format{repository.FormatOCI, repository.FormatMaven, repository.FormatRaw, repository.FormatConan}
+	repositories := make(map[repository.Format]repository.HostedRepository, len(formats))
+	for _, format := range formats {
+		repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "search-" + string(format), Format: format})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "search-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+		repositories[format] = repo
+	}
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	oci := repositories[repository.FormatOCI]
+	for _, name := range []string{"team/alpha", "team/beta"} {
+		if _, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: oci.ID, Name: name, Digest: digest, ObjectKey: "oci/" + name, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1}, "latest"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	maven := repositories[repository.FormatMaven]
+	for i, coordinate := range []string{"org.example:alpha:1.0", "org.example:beta:1.0"} {
+		id := uuid.NewString()
+		objectName := fmt.Sprintf("artifact-%d.pom", i)
+		objectKey := "maven/" + id
+		if _, err := store.CreateMavenPublishSession(ctx, repository.MavenPublishSession{ID: id, RepositoryID: maven.ID, Coordinate: coordinate, Publisher: "search", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: objectName, Digest: digest, Size: 1}}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.MarkMavenPublishObject(ctx, id, objectName, objectKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.CommitMavenPublishSession(ctx, id, []repository.MavenAsset{{RepositoryID: maven.ID, Path: objectName, ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw := repositories[repository.FormatRaw]
+	for i, path := range []string{"releases/alpha.bin", "releases/beta.bin"} {
+		if _, err := store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: path, Digest: digest, ObjectKey: fmt.Sprintf("raw/%d", i), Size: int64(1<<40) + int64(i), ContentType: "application/octet-stream"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conan := repositories[repository.FormatConan]
+	for i, reference := range []string{"pkg/1.0/user/stable", "pkg/2.0/user/stable"} {
+		objectKey := fmt.Sprintf("conan/%d", i)
+		if err := store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: conan.ID, ObjectKey: objectKey, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: conan.ID, Reference: reference, Revision: fmt.Sprintf("rrev-%d", i), Digest: digest}, []repository.ConanAsset{{RepositoryID: conan.ID, Reference: reference, RecipeRevision: fmt.Sprintf("rrev-%d", i), Path: "conanfile.py", ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(repo repository.HostedRepository, q string, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		values := url.Values{"q": {q}, "pageSize": {"1"}}
+		if token != "" {
+			values.Set("pageToken", token)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-search?"+values.Encode(), nil)
+		authorize(req, authenticator.IssueToken("search-reader"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	tests := []struct {
+		format repository.Format
+		query  string
+		want   string
+	}{
+		{repository.FormatOCI, "team/", "team/alpha"},
+		{repository.FormatMaven, "org.example:", "org.example:alpha:1.0"},
+		{repository.FormatRaw, "releases/", "releases/alpha.bin"},
+		{repository.FormatConan, "pkg/", "pkg/1.0/user/stable"},
+	}
+	var rawPage struct {
+		Items []struct {
+			Coordinate  string `json:"coordinate"`
+			Size        int64  `json:"size"`
+			ContentType string `json:"contentType"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	for _, test := range tests {
+		response := request(repositories[test.format], test.query, "")
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), test.want) {
+			t.Fatalf("%s search=%d body=%s", test.format, response.Code, response.Body.String())
+		}
+		if test.format == repository.FormatRaw {
+			if err := json.NewDecoder(response.Body).Decode(&rawPage); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if len(rawPage.Items) != 1 || rawPage.Items[0].Size != 1<<40 || rawPage.Items[0].ContentType != "application/octet-stream" || rawPage.NextPageToken == "" {
+		t.Fatalf("raw page=%#v", rawPage)
+	}
+	next := request(raw, "releases/", rawPage.NextPageToken)
+	if next.Code != http.StatusOK || !strings.Contains(next.Body.String(), "releases/beta.bin") {
+		t.Fatalf("raw next=%d body=%s", next.Code, next.Body.String())
+	}
+	if changedQuery := request(raw, "other/", rawPage.NextPageToken); changedQuery.Code != http.StatusBadRequest || !strings.Contains(changedQuery.Body.String(), "invalid_page_token") {
+		t.Fatalf("changed query=%d body=%s", changedQuery.Code, changedQuery.Body.String())
+	}
+	if wrongRepository := request(maven, "org.example:", rawPage.NextPageToken); wrongRepository.Code != http.StatusBadRequest || !strings.Contains(wrongRepository.Body.String(), "invalid_page_token") {
+		t.Fatalf("wrong repository=%d body=%s", wrongRepository.Code, wrongRepository.Body.String())
+	}
+	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+raw.ID+"/artifact-search", nil)
+	authorize(denied, authenticator.IssueToken("ungranted"))
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, denied)
+	if deniedResponse.Code != http.StatusForbidden {
+		t.Fatalf("denied=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
 	}
 }
 
