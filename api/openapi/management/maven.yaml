@@ -1,0 +1,19 @@
+---
+repositories_repositoryId_maven_coordinates:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listMavenCoordinates
+    description: Lists committed Maven coordinates in lexical order. The optional q
+      parameter is a canonical coordinate prefix used for browse and search.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/MavenCoordinatePrefix"
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/MavenCoordinateList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

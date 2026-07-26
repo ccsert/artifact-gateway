@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -189,6 +190,22 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 		if a.RepositoryID == repositoryID && a.State == "visible" {
 			out = append(out, a)
 		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, prefix string, limit int, after string) ([]MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []MavenArtifact{}
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && strings.HasPrefix(artifact.Coordinate, prefix) && artifact.Coordinate > after {
+			out = append(out, artifact)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Coordinate < out[j].Coordinate })
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

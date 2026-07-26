@@ -149,6 +149,12 @@ OCIImageList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/OCIImagePage"
+MavenCoordinateList:
+  description: Maven committed-coordinate projection page
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/MavenCoordinatePage"
 RawDirectoryList:
   description: Lexicographically ordered Native Raw directory-prefix page
   headers:

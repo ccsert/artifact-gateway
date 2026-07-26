@@ -46,6 +46,11 @@ type ociImagePageCursor struct {
 	ExpiresAt                            int64
 }
 
+type mavenCoordinatePageCursor struct {
+	Endpoint, RepositoryID, Prefix, Coordinate string
+	ExpiresAt                                  int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
@@ -545,6 +550,56 @@ func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *h
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListMavenCoordinatesParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatMaven {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		prefix := ""
+		if params.Q != nil {
+			prefix = string(*params.Q)
+		}
+		if !validMavenCoordinatePrefix(prefix) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be a valid Maven coordinate prefix")
+			return
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeMavenCoordinateCursor(pageToken, repo.ID, prefix)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, prefix, pageSize+1, after)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Maven coordinates failed")
+			return
+		}
+		var next *string
+		if len(artifacts) > pageSize {
+			artifacts = artifacts[:pageSize]
+			token := h.encodeMavenCoordinateCursor(repo.ID, prefix, artifacts[len(artifacts)-1].Coordinate)
+			next = &token
+		}
+		items := make([]adminopenapi.MavenCoordinate, 0, len(artifacts))
+		for _, artifact := range artifacts {
+			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.MavenCoordinatePage{Items: items, NextPageToken: next})
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
@@ -782,6 +837,18 @@ func validOCIImagePrefix(value string) bool {
 	return true
 }
 
+func validMavenCoordinatePrefix(value string) bool {
+	if len(value) > 255 {
+		return false
+	}
+	for _, r := range value {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' || r == ':') {
+			return false
+		}
+	}
+	return true
+}
+
 func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
 	payload, _ := json.Marshal(ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
@@ -808,6 +875,34 @@ func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, pr
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Name, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string) string {
+	payload, _ := json.Marshal(mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositoryID, prefix string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor mavenCoordinatePageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "maven-coordinates" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Coordinate, nil
 }
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {

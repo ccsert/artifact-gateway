@@ -325,6 +325,19 @@ type GroupPage struct {
 	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
+// MavenCoordinate defines model for MavenCoordinate.
+type MavenCoordinate struct {
+	Coordinate string    `json:"coordinate"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Digest     string    `json:"digest"`
+}
+
+// MavenCoordinatePage defines model for MavenCoordinatePage.
+type MavenCoordinatePage struct {
+	Items         []MavenCoordinate `json:"items"`
+	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
 // Member defines model for Member.
 type Member struct {
 	Position     int                `json:"position"`
@@ -405,6 +418,9 @@ type IdempotencyKey = string
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
+// MavenCoordinatePrefix defines model for MavenCoordinatePrefix.
+type MavenCoordinatePrefix = string
+
 // OCIImagePrefix defines model for OCIImagePrefix.
 type OCIImagePrefix = string
 
@@ -425,6 +441,9 @@ type ArtifactList = ArtifactPage
 
 // GroupList defines model for GroupList.
 type GroupList = GroupPage
+
+// MavenCoordinateList defines model for MavenCoordinateList.
+type MavenCoordinateList = MavenCoordinatePage
 
 // OCIImageList defines model for OCIImageList.
 type OCIImageList = OCIImagePage
@@ -480,6 +499,14 @@ type ListArtifactsParams struct {
 // ReplaceGrantsParams defines parameters for ReplaceGrants.
 type ReplaceGrantsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListMavenCoordinatesParams defines parameters for ListMavenCoordinates.
+type ListMavenCoordinatesParams struct {
+	// Q Maven coordinate prefix used to filter the committed-coordinate projection.
+	Q         *MavenCoordinatePrefix `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListOCIImagesParams defines parameters for ListOCIImages.
@@ -619,6 +646,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams)
+
+	// (GET /repositories/{repositoryId}/maven/coordinates)
+	ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListMavenCoordinatesParams)
 
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIImagesParams)
@@ -1413,6 +1443,74 @@ func (siw *ServerInterfaceWrapper) ReplaceGrants(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListMavenCoordinates operation middleware
+func (siw *ServerInterfaceWrapper) ListMavenCoordinates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMavenCoordinatesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMavenCoordinates(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOCIImages operation middleware
 func (siw *ServerInterfaceWrapper) ListOCIImages(w http.ResponseWriter, r *http.Request) {
 
@@ -1755,6 +1853,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
@@ -1783,6 +1882,8 @@ type GrantListJSONResponse struct {
 type GroupJSONResponse Group
 
 type GroupListJSONResponse GroupPage
+
+type MavenCoordinateListJSONResponse MavenCoordinatePage
 
 type MemberListJSONResponse MemberList
 
@@ -2475,6 +2576,61 @@ func (response ReplaceGrants412ApplicationProblemPlusJSONResponse) VisitReplaceG
 	return err
 }
 
+type ListMavenCoordinatesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListMavenCoordinatesParams
+}
+
+type ListMavenCoordinatesResponseObject interface {
+	VisitListMavenCoordinatesResponse(w http.ResponseWriter) error
+}
+
+type ListMavenCoordinates200JSONResponse struct {
+	MavenCoordinateListJSONResponse
+}
+
+func (response ListMavenCoordinates200JSONResponse) VisitListMavenCoordinatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMavenCoordinates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMavenCoordinates400ApplicationProblemPlusJSONResponse) VisitListMavenCoordinatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMavenCoordinates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMavenCoordinates404ApplicationProblemPlusJSONResponse) VisitListMavenCoordinatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListOCIImagesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListOCIImagesParams
@@ -2692,6 +2848,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(ctx context.Context, request ReplaceGrantsRequestObject) (ReplaceGrantsResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/maven/coordinates)
+	ListMavenCoordinates(ctx context.Context, request ListMavenCoordinatesRequestObject) (ListMavenCoordinatesResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(ctx context.Context, request ListOCIImagesRequestObject) (ListOCIImagesResponseObject, error)
@@ -3302,6 +3461,33 @@ func (sh *strictHandler) ReplaceGrants(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGrantsResponseObject); ok {
 		if err := validResponse.VisitReplaceGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMavenCoordinates operation middleware
+func (sh *strictHandler) ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListMavenCoordinatesParams) {
+	var request ListMavenCoordinatesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMavenCoordinates(ctx, request.(ListMavenCoordinatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMavenCoordinates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMavenCoordinatesResponseObject); ok {
+		if err := validResponse.VisitListMavenCoordinatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

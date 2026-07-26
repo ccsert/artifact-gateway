@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +336,94 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("failed upload coordinate read = %d, want 404", response.StatusCode)
+	}
+}
+
+func TestNativeMavenCoordinateBrowseSearchProjection(t *testing.T) {
+	store := repository.NewMemoryStore()
+	mavenRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "maven-browse", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "raw-browse", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), mavenRepo.ID, []repository.RepositoryGrant{
+		{Principal: "maven", Scopes: []string{"repositories:write"}},
+		{Principal: "maven-browser", Scopes: []string{"repositories:read"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	publish := func(version string) {
+		t.Helper()
+		base := "/repository/maven/" + mavenRepo.Name + "/org/example/widget/" + version + "/widget-" + version
+		for name, body := range map[string]string{
+			".pom": "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>" + version + "</version></project>",
+			".jar": "widget-" + version,
+		} {
+			req := httptest.NewRequest(http.MethodPut, base+name, strings.NewReader(body))
+			req.SetBasicAuth("maven", "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != http.StatusCreated {
+				t.Fatalf("stage %s%s=%d %s", version, name, response.Code, response.Body.String())
+			}
+		}
+		commit := httptest.NewRequest(http.MethodPost, "/repository/maven/"+mavenRepo.Name+"/coordinates/org.example:widget:"+version+":commit", strings.NewReader(`{"expectedAssetNames":["widget-`+version+`.pom","widget-`+version+`.jar"]}`))
+		commit.SetBasicAuth("maven", "resolver-secret")
+		commit.Header.Set("Idempotency-Key", "browse-"+version)
+		committed := httptest.NewRecorder()
+		handler.ServeHTTP(committed, commit)
+		if committed.Code != http.StatusOK {
+			t.Fatalf("commit %s=%d %s", version, committed.Code, committed.Body.String())
+		}
+	}
+	publish("1.0.0")
+	publish("2.0.0")
+	browserToken := authenticator.IssueToken("maven-browser")
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+mavenRepo.ID+"/maven/coordinates?q=org.example:widget:&pageSize=1", nil)
+	authorize(request, browserToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var page struct {
+		Items []struct {
+			Coordinate string `json:"coordinate"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Coordinate != "org.example:widget:1.0.0" || page.NextPageToken == "" {
+		t.Fatalf("browse=%d body=%s page=%#v", response.Code, response.Body.String(), page)
+	}
+	next := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+mavenRepo.ID+"/maven/coordinates?q=org.example:widget:&pageSize=1&pageToken="+url.QueryEscape(page.NextPageToken), nil)
+	authorize(next, browserToken)
+	nextResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nextResponse, next)
+	if nextResponse.Code != http.StatusOK || !strings.Contains(nextResponse.Body.String(), `"org.example:widget:2.0.0"`) {
+		t.Fatalf("next=%d %s", nextResponse.Code, nextResponse.Body.String())
+	}
+	crossQuery := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+mavenRepo.ID+"/maven/coordinates?q=other&pageToken="+url.QueryEscape(page.NextPageToken), nil)
+	authorize(crossQuery, browserToken)
+	crossQueryResponse := httptest.NewRecorder()
+	handler.ServeHTTP(crossQueryResponse, crossQuery)
+	if crossQueryResponse.Code != http.StatusBadRequest || !strings.Contains(crossQueryResponse.Body.String(), "invalid_page_token") {
+		t.Fatalf("cross query=%d %s", crossQueryResponse.Code, crossQueryResponse.Body.String())
+	}
+	invalidQuery := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+mavenRepo.ID+"/maven/coordinates?q=../invalid", nil)
+	authorize(invalidQuery, browserToken)
+	invalidQueryResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidQueryResponse, invalidQuery)
+	if invalidQueryResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid query=%d %s", invalidQueryResponse.Code, invalidQueryResponse.Body.String())
+	}
+	nonMaven := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+rawRepo.ID+"/maven/coordinates", nil)
+	authorize(nonMaven, browserToken)
+	nonMavenResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nonMavenResponse, nonMaven)
+	if nonMavenResponse.Code != http.StatusNotFound {
+		t.Fatalf("non Maven=%d %s", nonMavenResponse.Code, nonMavenResponse.Body.String())
 	}
 }
 

@@ -306,6 +306,25 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	}
 	return out, rows.Err()
 }
+func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after string) ([]MavenArtifact, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at
+		FROM native_maven_artifacts
+		WHERE repository_id=$1::uuid AND state='visible' AND substring(coordinate FROM 1 FOR char_length($2))=$2 AND coordinate>$3
+		ORDER BY coordinate ASC LIMIT $4`, repoID, prefix, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []MavenArtifact{}
+	for rows.Next() {
+		var artifact MavenArtifact
+		if err := rows.Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, artifact)
+	}
+	return out, rows.Err()
+}
 func (s *PostgresStore) GetMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	var artifact MavenArtifact
 	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)

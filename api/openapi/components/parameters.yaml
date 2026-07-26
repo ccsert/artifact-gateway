@@ -71,6 +71,13 @@ OCIImagePrefix:
   schema:
     type: string
     maxLength: 255
+MavenCoordinatePrefix:
+  name: q
+  in: query
+  description: Maven coordinate prefix used to filter the committed-coordinate projection.
+  schema:
+    type: string
+    maxLength: 255
 IdempotencyKey:
   name: Idempotency-Key
   in: header

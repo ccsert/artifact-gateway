@@ -7,6 +7,18 @@ export type OciTagList = {
     tags: Array<string>;
 };
 
+export type RawDirectoryEntry = {
+    path: string;
+    digest: string;
+    size: number;
+    contentType: string;
+};
+
+export type RawDirectoryPage = {
+    path: string;
+    items: Array<RawDirectoryEntry>;
+};
+
 export type OciError = {
     errors: Array<{
         code: string;
@@ -162,6 +174,26 @@ export type AuditRecord = {
 
 export type AuditList = Array<AuditRecord>;
 
+export type OciImage = {
+    name: string;
+};
+
+export type OciImagePage = {
+    items: Array<OciImage>;
+    nextPageToken?: string;
+};
+
+export type MavenCoordinate = {
+    coordinate: string;
+    digest: string;
+    createdAt: string;
+};
+
+export type MavenCoordinatePage = {
+    items: Array<MavenCoordinate>;
+    nextPageToken?: string;
+};
+
 export type RepositoryId = string;
 
 export type GroupId = string;
@@ -186,6 +218,16 @@ export type PageToken = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+/**
+ * OCI image-name prefix used to filter the repository projection.
+ */
+export type OciImagePrefix = string;
+
+/**
+ * Maven coordinate prefix used to filter the committed-coordinate projection.
+ */
+export type MavenCoordinatePrefix = string;
 
 export type ListAuditsData = {
     body?: never;
@@ -766,6 +808,82 @@ export type GetArtifactResponses = {
 
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
 
+export type ListOciImagesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        /**
+         * OCI image-name prefix used to filter the repository projection.
+         */
+        q?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/oci/images';
+};
+
+export type ListOciImagesErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListOciImagesError = ListOciImagesErrors[keyof ListOciImagesErrors];
+
+export type ListOciImagesResponses = {
+    /**
+     * OCI image-name projection page
+     */
+    200: OciImagePage;
+};
+
+export type ListOciImagesResponse = ListOciImagesResponses[keyof ListOciImagesResponses];
+
+export type ListMavenCoordinatesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        /**
+         * Maven coordinate prefix used to filter the committed-coordinate projection.
+         */
+        q?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/maven/coordinates';
+};
+
+export type ListMavenCoordinatesErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListMavenCoordinatesError = ListMavenCoordinatesErrors[keyof ListMavenCoordinatesErrors];
+
+export type ListMavenCoordinatesResponses = {
+    /**
+     * Maven committed-coordinate projection page
+     */
+    200: MavenCoordinatePage;
+};
+
+export type ListMavenCoordinatesResponse = ListMavenCoordinatesResponses[keyof ListMavenCoordinatesResponses];
+
 export type DeleteRawHostedContentData = {
     body?: never;
     path: {
@@ -775,7 +893,9 @@ export type DeleteRawHostedContentData = {
          */
         path: string;
     };
-    query?: never;
+    query?: {
+        uploadId?: string;
+    };
     url: '/raw/{repository}/{path}';
 };
 
@@ -808,7 +928,9 @@ export type ReadRawContentData = {
          */
         path: string;
     };
-    query?: never;
+    query?: {
+        uploadId?: string;
+    };
     url: '/raw/{repository}/{path}';
 };
 
@@ -825,12 +947,10 @@ export type ReadRawContentErrors = {
 
 export type ReadRawContentResponses = {
     /**
-     * Committed immutable protocol object
+     * Raw bytes or a Raw directory-prefix JSON page
      */
-    200: Blob | File;
+    200: unknown;
 };
-
-export type ReadRawContentResponse = ReadRawContentResponses[keyof ReadRawContentResponses];
 
 export type HeadRawContentData = {
     body?: never;
@@ -865,8 +985,11 @@ export type HeadRawContentResponses = {
 
 export type HeadRawContentResponse = HeadRawContentResponses[keyof HeadRawContentResponses];
 
-export type PutRawHostedContentData = {
+export type AppendRawHostedResumableUploadData = {
     body: string;
+    headers: {
+        'Upload-Offset': number;
+    };
     path: {
         repository: string;
         /**
@@ -874,7 +997,84 @@ export type PutRawHostedContentData = {
          */
         path: string;
     };
-    query?: never;
+    query: {
+        uploadId: string;
+    };
+    url: '/raw/{repository}/{path}';
+};
+
+export type AppendRawHostedResumableUploadErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+    /**
+     * No committed object is addressable at this protocol path
+     */
+    404: unknown;
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type AppendRawHostedResumableUploadError = AppendRawHostedResumableUploadErrors[keyof AppendRawHostedResumableUploadErrors];
+
+export type AppendRawHostedResumableUploadResponses = {
+    /**
+     * Bytes appended
+     */
+    204: void;
+};
+
+export type AppendRawHostedResumableUploadResponse = AppendRawHostedResumableUploadResponses[keyof AppendRawHostedResumableUploadResponses];
+
+export type StartRawHostedResumableUploadData = {
+    body?: never;
+    path: {
+        repository: string;
+        /**
+         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
+         */
+        path: string;
+    };
+    query: {
+        resumable: '1';
+    };
+    url: '/raw/{repository}/{path}';
+};
+
+export type StartRawHostedResumableUploadErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+};
+
+export type StartRawHostedResumableUploadResponses = {
+    /**
+     * Upload session created
+     */
+    201: unknown;
+};
+
+export type PutRawHostedContentData = {
+    body: string;
+    headers?: {
+        'Upload-Offset'?: number;
+        Digest?: string;
+    };
+    path: {
+        repository: string;
+        /**
+         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
+         */
+        path: string;
+    };
+    query?: {
+        uploadId?: string;
+        complete?: '1';
+    };
     url: '/raw/{repository}/{path}';
 };
 
@@ -897,6 +1097,34 @@ export type PutRawHostedContentResponses = {
      */
     201: unknown;
 };
+
+export type ListRawRootDirectoryData = {
+    body?: never;
+    path: {
+        repository: string;
+    };
+    query?: {
+        n?: number;
+        last?: string;
+    };
+    url: '/raw/{repository}/';
+};
+
+export type ListRawRootDirectoryErrors = {
+    /**
+     * Raw or Maven Basic authentication required when anonymous read policy is disabled
+     */
+    401: unknown;
+};
+
+export type ListRawRootDirectoryResponses = {
+    /**
+     * Lexicographically ordered Native Raw directory-prefix page
+     */
+    200: RawDirectoryPage;
+};
+
+export type ListRawRootDirectoryResponse = ListRawRootDirectoryResponses[keyof ListRawRootDirectoryResponses];
 
 export type StartOciUploadData = {
     body?: never;
@@ -1503,5 +1731,5 @@ export type CommitMavenCoordinateResponses = {
 export type CommitMavenCoordinateResponse = CommitMavenCoordinateResponses[keyof CommitMavenCoordinateResponses];
 
 export type ClientOptions = {
-    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
+    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
 };

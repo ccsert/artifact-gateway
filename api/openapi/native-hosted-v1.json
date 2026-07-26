@@ -556,6 +556,39 @@
         }
       }
     },
+    "/repositories/{repositoryId}/maven/coordinates": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listMavenCoordinates",
+        "description": "Lists committed Maven coordinates in lexical order. The optional q parameter is a canonical coordinate prefix used for browse and search.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MavenCoordinatePrefix"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MavenCoordinateList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/raw/{repository}/{path}": {
       "servers": [
         {
@@ -2183,6 +2216,44 @@
             "type": "string"
           }
         }
+      },
+      "MavenCoordinate": {
+        "type": "object",
+        "required": [
+          "coordinate",
+          "digest",
+          "createdAt"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MavenCoordinatePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MavenCoordinate"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {
@@ -2290,6 +2361,15 @@
         "name": "q",
         "in": "query",
         "description": "OCI image-name prefix used to filter the repository projection.",
+        "schema": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "MavenCoordinatePrefix": {
+        "name": "q",
+        "in": "query",
+        "description": "Maven coordinate prefix used to filter the committed-coordinate projection.",
         "schema": {
           "type": "string",
           "maxLength": 255
@@ -2570,6 +2650,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/OCIImagePage"
+            }
+          }
+        }
+      },
+      "MavenCoordinateList": {
+        "description": "Maven committed-coordinate projection page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MavenCoordinatePage"
             }
           }
         }

@@ -291,6 +291,32 @@ OCIImagePage:
         "$ref": "#/OCIImage"
     nextPageToken:
       type: string
+MavenCoordinate:
+  type: object
+  required:
+  - coordinate
+  - digest
+  - createdAt
+  properties:
+    coordinate:
+      type: string
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    createdAt:
+      type: string
+      format: date-time
+MavenCoordinatePage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/MavenCoordinate"
+    nextPageToken:
+      type: string
 RawDirectoryEntry:
   type: object
   required:

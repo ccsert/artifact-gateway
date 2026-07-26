@@ -64,6 +64,56 @@ func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	}
 }
 
+func TestPostgresMavenCoordinateSearchProjection(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-search-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := func(coordinate string) {
+		t.Helper()
+		id := uuid.NewString()
+		objectKey := "native/maven/sha256/search-" + id
+		digest := "sha256:" + strings.Repeat("a", 64)
+		session := repository.MavenPublishSession{ID: id, RepositoryID: repo.ID, Coordinate: coordinate, Publisher: "searcher", PomObject: "widget.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget.pom", Digest: digest, Size: 1}}}
+		if _, err := store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.MarkMavenPublishObject(ctx, session.ID, "widget.pom", objectKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: strings.ReplaceAll(coordinate, ":", "/") + "/asset.pom", ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commit("org.example:widget:2.0.0")
+	commit("org.example:widget:1.0.0")
+	commit("org.example:other:1.0.0")
+	items, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || items[0].Coordinate != "org.example:widget:1.0.0" || items[1].Coordinate != "org.example:widget:2.0.0" {
+		t.Fatalf("search=%#v", items)
+	}
+	next, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, items[0].Coordinate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next) != 1 || next[0].Coordinate != "org.example:widget:2.0.0" {
+		t.Fatalf("next=%#v", next)
+	}
+}
+
 func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

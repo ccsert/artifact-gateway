@@ -23,7 +23,7 @@ goal. It intentionally excludes frontend work.
 - [x] OCI catalog endpoint and pagination.
 - [x] OCI referrers endpoint.
 - [x] OCI repository browse/search projection.
-- [ ] Maven browse/search projection.
+- [x] Maven browse/search projection.
 - [ ] Maven publication companion hardening and black-box fixture coverage.
 - [x] Raw object listing.
 - [x] Raw checksum metadata and checksum sidecar behavior.
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement Maven Hosted browse/search projection and publication companion
-hardening with black-box fixture coverage.
+Implement Maven Hosted publication companion hardening and black-box fixture
+coverage.

@@ -33,6 +33,8 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/repositories/{repositoryId}/oci/images":
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
+  "/repositories/{repositoryId}/maven/coordinates":
+    "$ref": "./management/maven.yaml#/repositories_repositoryId_maven_coordinates"
   "/publish-sessions/{sessionId}":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
   "/publish-sessions/{sessionId}/objects/{objectName}":
@@ -91,6 +93,10 @@ components:
       "$ref": "./components/schemas.yaml#/OCIImage"
     OCIImagePage:
       "$ref": "./components/schemas.yaml#/OCIImagePage"
+    MavenCoordinate:
+      "$ref": "./components/schemas.yaml#/MavenCoordinate"
+    MavenCoordinatePage:
+      "$ref": "./components/schemas.yaml#/MavenCoordinatePage"
     AuditRecord:
       "$ref": "./components/schemas.yaml#/AuditRecord"
     AuditList:
@@ -116,6 +122,8 @@ components:
       "$ref": "./components/parameters.yaml#/PageToken"
     OCIImagePrefix:
       "$ref": "./components/parameters.yaml#/OCIImagePrefix"
+    MavenCoordinatePrefix:
+      "$ref": "./components/parameters.yaml#/MavenCoordinatePrefix"
     IdempotencyKey:
       "$ref": "./components/parameters.yaml#/IdempotencyKey"
     IfMatch:
@@ -161,6 +169,8 @@ components:
       "$ref": "./components/responses.yaml#/ArtifactList"
     OCIImageList:
       "$ref": "./components/responses.yaml#/OCIImageList"
+    MavenCoordinateList:
+      "$ref": "./components/responses.yaml#/MavenCoordinateList"
     Deletion:
       "$ref": "./components/responses.yaml#/Deletion"
     AuditList:

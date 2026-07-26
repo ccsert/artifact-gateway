@@ -68,6 +68,7 @@ type NativeMavenStore interface {
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
+	SearchMavenArtifacts(context.Context, string, string, int, string) ([]MavenArtifact, error)
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	ClaimExpiredMavenObjectIntents(context.Context, time.Time, int) ([]MavenObjectIntent, error)
