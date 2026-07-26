@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -140,5 +142,54 @@ func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 	info, err := targetObjects.Stat(ctx, key)
 	if err != nil || info.Digest != digest || info.Size != int64(len(body)) {
 		t.Fatalf("target info=%#v err=%v", info, err)
+	}
+}
+
+func TestPostgresRawReplicationManagementAPI(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-api-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-api-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("PostgreSQL managed replication source")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", ObjectKey: "native/raw/sha256/" + hex.EncodeToString(sum[:]), Digest: digest, Size: int64(len(body))}
+	if _, err = store.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	grants := []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}
+	if _, err = store.ReplaceRepositoryGrants(ctx, source.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, grants, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+asset.Path+`","digest":"`+digest+`"}`))
+	authorize(req, authenticator.IssueToken("replicator"))
+	req.Header.Set("Idempotency-Key", "postgres-replication")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("create=%d %s", response.Code, response.Body.String())
+	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].SourceRepositoryID != source.ID || plans[0].TargetRepositoryID != target.ID || plans[0].Format != repository.FormatRaw {
+		t.Fatalf("plans=%#v err=%v", plans, err)
 	}
 }
