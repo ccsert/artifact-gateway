@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -111,6 +112,61 @@ func TestPostgresMavenCoordinateSearchProjection(t *testing.T) {
 	}
 	if len(next) != 1 || next[0].Coordinate != "org.example:widget:2.0.0" {
 		t.Fatalf("next=%#v", next)
+	}
+}
+
+func TestPostgresMavenTombstoneRestoreBeforeAndAfterReclaim(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-restore-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinate := "org.example:restore:1.0.0"
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: "restore", PomObject: "restore-1.0.0.jar", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "restore-1.0.0.jar", Digest: "sha256:restore", Size: 7}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	key := "native/maven/sha256/restore-" + uuid.NewString()
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.PomObject, key); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/restore/1.0.0/restore-1.0.0.jar", ObjectKey: key, Digest: session.Objects[0].Digest, Size: 7}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, key, []byte("restore")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.GetMavenAsset(ctx, repo.ID, "org/example/restore/1.0.0/restore-1.0.0.jar"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("tombstoned asset remained readable: %v", err)
+	}
+	if _, err = store.RestoreMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
+		t.Fatalf("restore before reclaim: %v", err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = (NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}).Collect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = objects.Get(ctx, key); err == nil {
+		t.Fatal("reclaim did not delete Maven object")
+	}
+	if _, err = store.RestoreMavenArtifact(ctx, repo.ID, artifact.ID); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("restore after reclaim err=%v", err)
 	}
 }
 

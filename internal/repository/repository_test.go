@@ -24,6 +24,53 @@ func TestMemoryMavenCommitRejectsCollectorClaim(t *testing.T) {
 	}
 }
 
+func TestMemoryMavenTombstoneRestoresUntilObjectIsCollected(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	key := "native/maven/sha256/restore"
+	session := MavenPublishSession{ID: "restore-session", RepositoryID: "repo", Coordinate: "org.example:widget:1.0.0", Publisher: "alice", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:restore", Size: 3}}}
+	if _, err := store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, key); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(ctx, session.ID, []MavenAsset{{RepositoryID: "repo", Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:restore", Size: 3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, "repo", artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.GetMavenAsset(ctx, "repo", "org/example/widget/1.0.0/widget-1.0.0.jar"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tombstoned asset remained readable: %v", err)
+	}
+	if _, err = store.RestoreMavenArtifact(ctx, "repo", artifact.ID); err != nil {
+		t.Fatalf("restore before collection: %v", err)
+	}
+	if _, err = store.GetMavenAsset(ctx, "repo", "org/example/widget/1.0.0/widget-1.0.0.jar"); err != nil {
+		t.Fatalf("restored asset unavailable: %v", err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, "repo", artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	intent := store.mavenObjectIntents[key]
+	intent.createdAt = time.Now().Add(-25 * time.Hour)
+	store.mavenObjectIntents[key] = intent
+	store.mu.Unlock()
+	claimed, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now(), 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim=%#v err=%v", claimed, err)
+	}
+	if err = store.DeleteClaimedMavenObjectIntent(ctx, key, claimed[0].ClaimToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RestoreMavenArtifact(ctx, "repo", artifact.ID); !errors.Is(err, ErrDisabled) {
+		t.Fatalf("restore after collection err=%v", err)
+	}
+}
+
 func TestMemoryHostedGroupVersionAndIdempotency(t *testing.T) {
 	store := NewMemoryStore()
 	group := HostedGroup{ID: "group-1", Name: "releases", Format: FormatMaven, Members: []GroupMember{{RepositoryID: "repo-2", Position: 1}, {RepositoryID: "repo-1", Position: 0}}}

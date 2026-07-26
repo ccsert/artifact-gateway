@@ -76,7 +76,7 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	authorize(adminRequest, "admin-secret")
 	adminResponse := httptest.NewRecorder()
 	handler.ServeHTTP(adminResponse, adminRequest)
-	if adminResponse.Code != http.StatusOK || !strings.Contains(adminResponse.Body.String(), `"retain"`) || strings.Contains(adminResponse.Body.String(), `"restore"`) {
+	if adminResponse.Code != http.StatusOK || !strings.Contains(adminResponse.Body.String(), `"retain"`) || !strings.Contains(adminResponse.Body.String(), `"restore"`) {
 		t.Fatalf("Maven capabilities=%d %s", adminResponse.Code, adminResponse.Body.String())
 	}
 }
@@ -600,6 +600,42 @@ func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *te
 	}
 	if response := request(conan.ID, "admin-secret", "not-a-coordinate"); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid restore=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRepositoryRestoreRestoresMavenTombstone(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "restore-maven", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinate := "org.example:widget:1.0.0"
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: "admin", PomObject: "widget-1.0.0.jar", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:restore", Size: 1}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	key := "native/maven/restore/" + session.ID
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.PomObject, key); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: session.Objects[0].Digest, Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("restore=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err = store.GetMavenAsset(ctx, repo.ID, "org/example/widget/1.0.0/widget-1.0.0.jar"); err != nil {
+		t.Fatalf("restored Maven asset unavailable: %v", err)
 	}
 }
 

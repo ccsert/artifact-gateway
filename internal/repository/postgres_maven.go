@@ -327,7 +327,7 @@ func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, 
 }
 func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) (MavenAsset, error) {
 	var a MavenAsset
-	err := s.db.QueryRowContext(ctx, `SELECT repository_id::text,path,object_key,digest,size FROM native_maven_assets WHERE repository_id::text=$1 AND path=$2`, repoID, path).Scan(&a.RepositoryID, &a.Path, &a.ObjectKey, &a.Digest, &a.Size)
+	err := s.db.QueryRowContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' WHERE a.repository_id::text=$1 AND a.path=$2`, repoID, path).Scan(&a.RepositoryID, &a.Path, &a.ObjectKey, &a.Digest, &a.Size)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -376,6 +376,15 @@ func (s *PostgresStore) GetMavenArtifact(ctx context.Context, repositoryID, arti
 	}
 	return artifact, err
 }
+
+func (s *PostgresStore) GetMavenArtifactByCoordinate(ctx context.Context, repositoryID, coordinate string) (MavenArtifact, error) {
+	var artifact MavenArtifact
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2`, repositoryID, coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	return artifact, err
+}
 func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -393,20 +402,62 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 	if artifact.State == "deleted" {
 		return artifact, tx.Commit()
 	}
-	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
-	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_assets WHERE repository_id::text=$1 AND left(path, length($2))=$2`, repositoryID, prefix); err != nil {
-		return MavenArtifact{}, err
-	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_object_references r WHERE NOT EXISTS (SELECT 1 FROM native_maven_assets a WHERE a.object_key=r.object_key)`); err != nil {
-		return MavenArtifact{}, err
-	}
 	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_artifacts SET state='deleted' WHERE id::text=$1`, artifactID); err != nil {
 		return MavenArtifact{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest) VALUES ($1,'maven',$2,$3) ON CONFLICT DO NOTHING`, repositoryID, artifact.Coordinate, artifact.Digest); err != nil {
 		return MavenArtifact{}, err
 	}
+	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents i SET created_at=now() WHERE i.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=i.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')`, repositoryID, prefix); err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_object_references r WHERE r.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=r.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')`, repositoryID, prefix); err != nil {
+		return MavenArtifact{}, err
+	}
 	artifact.State = "deleted"
+	if err = tx.Commit(); err != nil {
+		return MavenArtifact{}, err
+	}
+	return artifact, nil
+}
+
+func (s *PostgresStore) RestoreMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var artifact MavenArtifact
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	}
+	if err != nil || artifact.State != "deleted" {
+		if err != nil {
+			return MavenArtifact{}, err
+		}
+		return MavenArtifact{}, ErrNotFound
+	}
+	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
+	var recoverable bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_object_intents i ON i.object_key=a.object_key WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND i.deleted_at IS NOT NULL)`, repositoryID, prefix).Scan(&recoverable)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if !recoverable {
+		return MavenArtifact{}, ErrDisabled
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_artifacts SET state='visible' WHERE id::text=$1`, artifactID); err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='maven' AND coordinate=$2`, repositoryID, artifact.Coordinate); err != nil {
+		return MavenArtifact{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) SELECT object_key,repository_id FROM native_maven_assets WHERE repository_id::text=$1 AND left(path, length($2))=$2 ON CONFLICT (object_key) DO NOTHING`, repositoryID, prefix); err != nil {
+		return MavenArtifact{}, err
+	}
+	artifact.State = "visible"
 	if err = tx.Commit(); err != nil {
 		return MavenArtifact{}, err
 	}

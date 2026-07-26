@@ -211,7 +211,12 @@ func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string
 	if !ok {
 		return MavenAsset{}, ErrNotFound
 	}
-	return v, nil
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifact(v, artifact.Coordinate) {
+			return v, nil
+		}
+	}
+	return MavenAsset{}, ErrNotFound
 }
 func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string) ([]MavenArtifact, error) {
 	s.mu.RLock()
@@ -251,6 +256,17 @@ func (s *MemoryStore) GetMavenArtifact(_ context.Context, repositoryID, artifact
 	return artifact, nil
 }
 
+func (s *MemoryStore) GetMavenArtifactByCoordinate(_ context.Context, repositoryID, coordinate string) (MavenArtifact, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, artifact := range s.mavenArtifacts {
+		if artifact.RepositoryID == repositoryID && artifact.Coordinate == coordinate {
+			return artifact, nil
+		}
+	}
+	return MavenArtifact{}, ErrNotFound
+}
+
 func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -261,33 +277,73 @@ func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, ar
 	if artifact.State == "deleted" {
 		return artifact, nil
 	}
-	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
-	for key, asset := range s.mavenAssets {
-		if asset.RepositoryID == repositoryID && strings.HasPrefix(asset.Path, prefix) {
-			delete(s.mavenAssets, key)
-		}
-	}
-	for key := range s.mavenObjectRefs {
-		stillReferenced := false
-		for _, asset := range s.mavenAssets {
-			if asset.ObjectKey == key {
-				stillReferenced = true
-				break
-			}
-		}
-		if !stillReferenced {
-			delete(s.mavenObjectRefs, key)
-		}
-	}
 	artifact.State = "deleted"
 	s.mavenArtifacts[artifactID] = artifact
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatMaven)+"\x00"+artifact.Coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatMaven, Coordinate: artifact.Coordinate, Digest: artifact.Digest, TombstonedAt: time.Now().UTC()}
+	for _, asset := range s.mavenAssets {
+		if asset.RepositoryID != repositoryID || !mavenAssetBelongsToArtifact(asset, artifact.Coordinate) || s.mavenObjectHasVisibleReference(asset.ObjectKey) {
+			continue
+		}
+		delete(s.mavenObjectRefs, asset.ObjectKey)
+		intent := s.mavenObjectIntents[asset.ObjectKey]
+		intent.createdAt = time.Now().UTC()
+		s.mavenObjectIntents[asset.ObjectKey] = intent
+	}
+	return artifact, nil
+}
+
+func (s *MemoryStore) RestoreMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	artifact, ok := s.mavenArtifacts[artifactID]
+	if !ok || artifact.RepositoryID != repositoryID || artifact.State != "deleted" {
+		return MavenArtifact{}, ErrNotFound
+	}
+	found := false
+	for _, asset := range s.mavenAssets {
+		if !mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+			continue
+		}
+		found = true
+		if intent, ok := s.mavenObjectIntents[asset.ObjectKey]; !ok || !intent.deletedAt.IsZero() {
+			return MavenArtifact{}, ErrDisabled
+		}
+	}
+	if !found {
+		return MavenArtifact{}, ErrDisabled
+	}
+	artifact.State = "visible"
+	s.mavenArtifacts[artifactID] = artifact
+	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatMaven)+"\x00"+artifact.Coordinate)
+	for _, asset := range s.mavenAssets {
+		if mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+			s.mavenObjectRefs[asset.ObjectKey] = true
+		}
+	}
 	return artifact, nil
 }
 
 func mavenArtifactPathPrefix(coordinate string) string {
 	parts := strings.Split(coordinate, ":")
 	return strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/"
+}
+
+func mavenAssetBelongsToArtifact(asset MavenAsset, coordinate string) bool {
+	return strings.HasPrefix(asset.Path, mavenArtifactPathPrefix(coordinate)) || strings.HasPrefix(asset.Path, strings.ReplaceAll(coordinate, ":", "/")+"/")
+}
+
+func (s *MemoryStore) mavenObjectHasVisibleReference(objectKey string) bool {
+	for _, asset := range s.mavenAssets {
+		if asset.ObjectKey != objectKey {
+			continue
+		}
+		for _, artifact := range s.mavenArtifacts {
+			if artifact.RepositoryID == asset.RepositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+				return true
+			}
+		}
+	}
+	return false
 }
 func (s *MemoryStore) ClaimExpiredMavenObjectIntents(_ context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
 	s.mu.Lock()

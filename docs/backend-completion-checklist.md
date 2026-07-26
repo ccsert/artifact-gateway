@@ -13,7 +13,7 @@ goal. It intentionally excludes frontend work.
 
 - [x] Shared artifact state model and lifecycle job store.
 - [x] OCI manifest tombstones and OCI reclaim worker.
-- [x] Maven tombstones/retention and Maven reclaim worker.
+- [x] Maven tombstones/retention, recoverable restore, and Maven reclaim worker.
 - [x] Raw reclaim worker.
 - [x] Conan native recipe/package revision state model.
 - [x] Conan HTTP Hosted publication, resolution, deletion, and reclaim worker.
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Extend recoverable tombstone lifecycles beyond Conan, starting with Maven so
-the retention pipeline can restore a tombstoned coordinate before reclaim.
+Define the immutable-artifact promotion model and worker, including source and
+target authorization, idempotency, audit records, and protocol-level evidence.

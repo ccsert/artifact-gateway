@@ -334,7 +334,7 @@ func repositoryCapabilities(format repository.Format) adminopenapi.RepositoryCap
 	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsPublish, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsDelete, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
 	switch format {
 	case repository.FormatMaven:
-		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain)
+		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	case repository.FormatConan:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	}
@@ -491,15 +491,15 @@ func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.Respons
 
 func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
-		if repo.Format != repository.FormatConan {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is currently supported only for Conan tombstones")
-			return
-		}
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || !validConanRestoreCoordinate(request.Coordinate) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a Conan recipe or package tombstone")
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
+			return
+		}
+		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is currently supported only for Conan and Maven tombstones")
 			return
 		}
 		if _, err := h.tombstones.GetArtifactTombstone(r.Context(), repo.ID, repo.Format, request.Coordinate); errors.Is(err, repository.ErrNotFound) {
@@ -509,13 +509,23 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get tombstone failed")
 			return
 		}
-		err := h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
+		var err error
+		if repo.Format == repository.FormatMaven {
+			artifact, getErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), repo.ID, request.Coordinate)
+			if getErr != nil {
+				err = getErr
+			} else {
+				_, err = h.sessions.store.RestoreMavenArtifact(r.Context(), repo.ID, artifact.ID)
+			}
+		} else {
+			err = h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
+		}
 		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) {
-			writeHostedProblem(w, http.StatusConflict, "restore_unavailable", "Conan revision cannot be restored")
+			writeHostedProblem(w, http.StatusConflict, "restore_unavailable", "artifact cannot be restored")
 			return
 		}
 		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "restore Conan revision failed")
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "restore artifact failed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
