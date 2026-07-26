@@ -102,4 +102,16 @@ func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 	if read.Code != http.StatusNotFound {
 		t.Fatalf("read after delete status=%d body=%s", read.Code, read.Body.String())
 	}
+	restore := httptest.NewRecorder()
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev:restore", nil)
+	restoreRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	handler.ServeHTTP(restore, restoreRequest)
+	if restore.Code != http.StatusNoContent {
+		t.Fatalf("restore status=%d body=%s", restore.Code, restore.Body.String())
+	}
+	read = httptest.NewRecorder()
+	handler.ServeHTTP(read, readRequest)
+	if read.Code != http.StatusOK || read.Body.String() != string(body) {
+		t.Fatalf("read after restore status=%d body=%s", read.Code, read.Body.String())
+	}
 }

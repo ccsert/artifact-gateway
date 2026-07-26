@@ -80,7 +80,8 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.Metrics != nil {
 		h.Metrics.recordConanRequest(r.Method)
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete {
+	restorePath := r.Method == http.MethodPost && strings.HasSuffix(r.URL.EscapedPath(), ":restore")
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && !(r.Method == http.MethodPost && restorePath) {
 		if group, path, ok := conanReadGroupAndPath(r.URL.EscapedPath()); ok {
 			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, path, "", "anonymous", repository.AuditNotFound)
 			http.NotFound(w, r)
@@ -176,6 +177,14 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if r.Method == http.MethodPost {
+		if h.restoreNativeConan(w, r, group, path, p) {
+			return
+		}
+		h.audit(r.Context(), group, path, "", p.Actor, repository.AuditNotFound)
+		http.NotFound(w, r)
+		return
+	}
 	if h.serveNativeConan(w, r, group, path, file, p) {
 		return
 	}
@@ -227,6 +236,43 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		servedBytes = int64(n)
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), content.cacheDisposition), content.status), servedBytes), group, path, content.member, p.Actor, repository.AuditResolved)
+}
+
+func (h ConanHandler) restoreNativeConan(w http.ResponseWriter, r *http.Request, name, path string, principal Principal) bool {
+	if h.NativeStore == nil || h.Repositories == nil {
+		return false
+	}
+	repo, err := h.Repositories.GetHostedRepositoryByName(r.Context(), name)
+	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+		return false
+	}
+	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite)
+	if !decision.Allowed {
+		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
+		http.Error(w, "repository write permission required", http.StatusForbidden)
+		return true
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) == 6 && parts[4] == "revisions" && strings.HasSuffix(parts[5], ":restore") {
+		_, err = h.NativeStore.RestoreConanRecipeRevision(r.Context(), repo.ID, strings.Join(parts[:4], "/"), strings.TrimSuffix(parts[5], ":restore"))
+	} else if len(parts) == 10 && parts[4] == "revisions" && parts[6] == "packages" && parts[8] == "revisions" && strings.HasSuffix(parts[9], ":restore") {
+		_, err = h.NativeStore.RestoreConanPackageRevision(r.Context(), repo.ID, strings.Join(parts[:4], "/"), parts[5], parts[7], strings.TrimSuffix(parts[9], ":restore"))
+	} else {
+		return false
+	}
+	if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditNotFound)
+		http.Error(w, "Conan revision cannot be restored", http.StatusConflict)
+		return true
+	}
+	if err != nil {
+		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditUpstreamError)
+		http.Error(w, "unable to restore native Conan artifact", http.StatusInternalServerError)
+		return true
+	}
+	h.audit(withConanAuditStatus(r.Context(), http.StatusNoContent), name, path, "native", principal.Actor, repository.AuditResolved)
+	w.WriteHeader(http.StatusNoContent)
+	return true
 }
 
 // deleteNativeConan only accepts a fully qualified revision. Deleting a file
@@ -744,7 +790,7 @@ func (h ConanHandler) audit(ctx context.Context, group, path, member, actor stri
 }
 
 func parseConanPath(method, raw string) (group, path, kind, file string, ok bool) {
-	if method != http.MethodGet && method != http.MethodHead && method != http.MethodDelete {
+	if method != http.MethodGet && method != http.MethodHead && method != http.MethodDelete && method != http.MethodPost {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(raw, "/"), "/")
@@ -775,6 +821,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 		return
 	}
 	if len(rest) >= 6 && rest[4] == "revisions" {
+		if method == http.MethodPost && len(rest) == 6 && strings.HasSuffix(rest[5], ":restore") && strings.TrimSuffix(rest[5], ":restore") != "" {
+			path = strings.Join(rest, "/")
+			kind = "revision"
+			ok = true
+			return
+		}
 		if method == http.MethodDelete && len(rest) == 6 {
 			path = strings.Join(rest, "/")
 			kind = "revision"
@@ -815,6 +867,12 @@ func parseConanPath(method, raw string) (group, path, kind, file string, ok bool
 			return
 		}
 		if method == http.MethodDelete && len(rest) == 10 && rest[6] == "packages" && rest[8] == "revisions" {
+			path = strings.Join(rest, "/")
+			kind = "revision"
+			ok = true
+			return
+		}
+		if method == http.MethodPost && len(rest) == 10 && rest[6] == "packages" && rest[8] == "revisions" && strings.HasSuffix(rest[9], ":restore") && strings.TrimSuffix(rest[9], ":restore") != "" {
 			path = strings.Join(rest, "/")
 			kind = "revision"
 			ok = true
