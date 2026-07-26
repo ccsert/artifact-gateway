@@ -176,6 +176,17 @@ type ConanPackageRevision struct {
 	CreatedAt                                                                   time.Time
 }
 
+// ConanPublishSession keeps uploads unaddressable until a complete recipe or
+// package revision is atomically promoted to visible metadata.
+type ConanPublishSession struct {
+	ID, RepositoryID, Publisher, Kind string
+	Reference, RecipeRevision         string
+	PackageID, PackageRevision        string
+	State                             string
+	Objects                           []MavenDeclaredObject
+	ExpiresAt                         time.Time
+}
+
 type MemberType string
 
 const (
