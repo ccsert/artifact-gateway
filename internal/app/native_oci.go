@@ -196,6 +196,10 @@ func (h nativeOCIHandler) referrers(w http.ResponseWriter, r *http.Request, repo
 		out = append(out, descriptor{item.MediaType, item.Digest, item.Size, item.ArtifactType})
 	}
 	w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"schemaVersion": 2, "manifests": out})
 }
 

@@ -216,6 +216,86 @@ func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
 	}
 }
 
+func TestNativeOCIReferrersPaginateAndExcludeDeletedManifests(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	publish := func(tag string, body string) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", tag, response.Code, response.Body.String())
+		}
+		return response.Header().Get("Docker-Content-Digest")
+	}
+
+	subject := publish("subject", `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
+	first := publish("referrer-a", `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","artifactType":"application/vnd.example.signature","subject":{"digest":"`+subject+`"}}`)
+	second := publish("referrer-b", `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","artifactType":"application/vnd.example.attestation","subject":{"digest":"`+subject+`"}}`)
+
+	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/referrers/"+subject+"?n=1", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/vnd.oci.image.index.v1+json" {
+		t.Fatalf("referrers=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+	var page struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Manifests     []struct {
+			Digest       string `json:"digest"`
+			MediaType    string `json:"mediaType"`
+			Size         int64  `json:"size"`
+			ArtifactType string `json:"artifactType"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.SchemaVersion != 2 || len(page.Manifests) != 1 || page.Manifests[0].MediaType != "application/vnd.oci.image.manifest.v1+json" || page.Manifests[0].Size <= 0 || page.Manifests[0].ArtifactType == "" {
+		t.Fatalf("page=%#v", page)
+	}
+	link := response.Header().Get("Link")
+	if !strings.Contains(link, `rel="next"`) || !strings.Contains(link, "last=") {
+		t.Fatalf("link=%q", link)
+	}
+	last := page.Manifests[0].Digest
+	next := httptest.NewRequest(http.MethodGet, "/v2/team/app/referrers/"+subject+"?n=1&last="+url.QueryEscape(last), nil)
+	authorize(next, "resolver-secret")
+	nextResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nextResponse, next)
+	if nextResponse.Code != http.StatusOK || !strings.Contains(nextResponse.Body.String(), first) && !strings.Contains(nextResponse.Body.String(), second) || strings.Contains(nextResponse.Body.String(), last) {
+		t.Fatalf("next=%d %s", nextResponse.Code, nextResponse.Body.String())
+	}
+
+	head := httptest.NewRequest(http.MethodHead, "/v2/team/app/referrers/"+subject, nil)
+	authorize(head, "resolver-secret")
+	headResponse := httptest.NewRecorder()
+	handler.ServeHTTP(headResponse, head)
+	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
+		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/v2/team/app/manifests/"+first, nil)
+	authorize(deleteRequest, "resolver-secret")
+	deleted := httptest.NewRecorder()
+	handler.ServeHTTP(deleted, deleteRequest)
+	if deleted.Code != http.StatusAccepted {
+		t.Fatalf("delete=%d %s", deleted.Code, deleted.Body.String())
+	}
+	remaining := httptest.NewRequest(http.MethodGet, "/v2/team/app/referrers/"+subject, nil)
+	authorize(remaining, "resolver-secret")
+	remainingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(remainingResponse, remaining)
+	if remainingResponse.Code != http.StatusOK || strings.Contains(remainingResponse.Body.String(), first) || !strings.Contains(remainingResponse.Body.String(), second) {
+		t.Fatalf("remaining=%d %s", remainingResponse.Code, remainingResponse.Body.String())
+	}
+}
+
 func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
