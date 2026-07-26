@@ -91,6 +91,7 @@ func main() {
 	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
+	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCaches(dependencies, store, app.TestAdapter{}, app.Authenticator{

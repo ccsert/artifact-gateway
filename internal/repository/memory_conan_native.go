@@ -31,6 +31,64 @@ func (s *MemoryStore) StageConanObject(_ context.Context, object ConanObjectInte
 	return nil
 }
 
+func (s *MemoryStore) ListReclaimableConanObjects(_ context.Context, before time.Time, limit int) ([]ConanObjectIntent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []ConanObjectIntent{}
+	for _, object := range s.conanObjects {
+		if len(out) == limit || !object.CollectedAt.IsZero() || s.conanObjectVisibleLocked(object.ObjectKey) {
+			continue
+		}
+		eligible := false
+		for _, asset := range s.conanAssets {
+			if asset.ObjectKey != object.ObjectKey {
+				continue
+			}
+			if tombstone, ok := s.artifactTombstones[asset.RepositoryID+"\x00"+string(FormatConan)+"\x00"+asset.Reference+"#"+asset.RecipeRevision]; ok && !tombstone.TombstonedAt.After(before) {
+				eligible = true
+			}
+		}
+		if eligible {
+			out = append(out, object)
+		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) ConanObjectHasVisibleReference(_ context.Context, key string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.conanObjectVisibleLocked(key), nil
+}
+func (s *MemoryStore) conanObjectVisibleLocked(key string) bool {
+	for _, asset := range s.conanAssets {
+		if asset.ObjectKey != key {
+			continue
+		}
+		recipe, ok := s.conanRecipes[conanRecipeKey(asset.RepositoryID, asset.Reference, asset.RecipeRevision)]
+		if ok && recipe.State == "visible" {
+			if asset.PackageID == "" {
+				return true
+			}
+			if pkg, ok := s.conanPackages[conanPackageKey(asset.RepositoryID, asset.Reference, asset.RecipeRevision, asset.PackageID, asset.PackageRevision)]; ok && pkg.State == "visible" {
+				return true
+			}
+		}
+	}
+	return false
+}
+func (s *MemoryStore) MarkConanObjectCollected(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	object, ok := s.conanObjects[key]
+	if !ok {
+		return ErrNotFound
+	}
+	object.CollectedAt = time.Now().UTC()
+	s.conanObjects[key] = object
+	return nil
+}
+
 func (s *MemoryStore) PutConanRecipeRevision(_ context.Context, revision ConanRecipeRevision, assets []ConanAsset) (ConanRecipeRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

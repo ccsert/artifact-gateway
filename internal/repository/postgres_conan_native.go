@@ -4,7 +4,47 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 )
+
+func (s *PostgresStore) ListReclaimableConanObjects(ctx context.Context, before time.Time, limit int) ([]ConanObjectIntent, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT i.repository_id::text,i.object_key,i.digest,i.size,i.created_at,i.claimed_at,i.collected_at FROM native_conan_object_intents i WHERE i.collected_at IS NULL AND EXISTS (SELECT 1 FROM native_conan_assets a JOIN artifact_tombstones t ON t.repository_id=a.repository_id AND t.format='conan' AND t.coordinate=a.reference || '#' || a.recipe_revision WHERE a.object_key=i.object_key AND t.tombstoned_at <= $1) AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision WHERE a.object_key=i.object_key AND r.state='visible' AND (a.package_id='' OR p.state='visible')) ORDER BY i.created_at LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ConanObjectIntent{}
+	for rows.Next() {
+		var item ConanObjectIntent
+		var claimedAt, collectedAt sql.NullTime
+		if err := rows.Scan(&item.RepositoryID, &item.ObjectKey, &item.Digest, &item.Size, &item.CreatedAt, &claimedAt, &collectedAt); err != nil {
+			return nil, err
+		}
+		if claimedAt.Valid {
+			item.ClaimedAt = claimedAt.Time
+		}
+		if collectedAt.Valid {
+			item.CollectedAt = collectedAt.Time
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+func (s *PostgresStore) ConanObjectHasVisibleReference(ctx context.Context, key string) (bool, error) {
+	var yes bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision WHERE a.object_key=$1 AND r.state='visible' AND (a.package_id='' OR p.state='visible'))`, key).Scan(&yes)
+	return yes, err
+}
+func (s *PostgresStore) MarkConanObjectCollected(ctx context.Context, key string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_conan_object_intents SET collected_at=now() WHERE object_key=$1 AND collected_at IS NULL`, key)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 
 func (s *PostgresStore) StageConanObject(ctx context.Context, object ConanObjectIntent) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_conan_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, object.ObjectKey, object.RepositoryID, object.Digest, object.Size)
