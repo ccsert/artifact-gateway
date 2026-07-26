@@ -4,12 +4,15 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/replication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -68,5 +71,70 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	}
 	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	sourceRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-minio-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-minio-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	sourceObjects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "replication-source-"+suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetObjects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "replication-target-"+suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = sourceObjects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = targetObjects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("cross-bucket replication through PostgreSQL checkpoints")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	key := "native/raw/sha256/" + hex.EncodeToString(sum[:])
+	if err = sourceObjects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, IdempotencyKey: "minio-" + uuid.NewString()}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = (replication.Worker{Store: store, Source: sourceObjects, Destination: targetObjects, ChunkBytes: 7}).Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 1 || checks[0].State != "verified" || checks[0].ByteOffset != int64(len(body)) || checks[0].VerifiedAt.IsZero() {
+		t.Fatalf("checkpoints=%#v err=%v", checks, err)
+	}
+	copied, err := targetObjects.Get(ctx, key)
+	if err != nil || string(copied) != string(body) {
+		t.Fatalf("target object=%q err=%v", copied, err)
+	}
+	info, err := targetObjects.Stat(ctx, key)
+	if err != nil || info.Digest != digest || info.Size != int64(len(body)) {
+		t.Fatalf("target info=%#v err=%v", info, err)
 	}
 }
