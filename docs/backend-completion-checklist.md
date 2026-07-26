@@ -39,7 +39,7 @@ goal. It intentionally excludes frontend work.
 - [x] Cross-format artifact browse/search API.
 - [x] Tombstone inspection API.
 - [x] Lifecycle job status API.
-- [ ] Retention execution API and dry-run reporting.
+- [x] Maven retention execution API and dry-run reporting.
 - [x] Restore API for supported tombstoned artifacts.
 
 ## Distribution
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Complete the retention execution API, then extend restore support beyond Conan
-as OCI, Maven, and Raw gain recoverable tombstone lifecycles.
+Extend recoverable tombstone lifecycles beyond Conan, starting with Maven so
+the retention pipeline can restore a tombstoned coordinate before reclaim.
