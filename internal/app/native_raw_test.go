@@ -178,6 +178,68 @@ func TestNativeRawHostedGeneratesAndValidatesChecksumSidecars(t *testing.T) {
 	}
 }
 
+func TestNativeRawHostedResumableUploadIsAtomic(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, bytes.NewReader(body))
+		authorize(r, "resolver-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	started := request(http.MethodPost, "/raw/downloads/releases/app.bin?resumable=1", nil)
+	if started.Code != http.StatusCreated || started.Header().Get("Location") == "" || started.Header().Get("Upload-Offset") != "0" {
+		t.Fatalf("start=%d headers=%v", started.Code, started.Header())
+	}
+	location := started.Header().Get("Location")
+	patch := httptest.NewRequest(http.MethodPatch, location, strings.NewReader("hello "))
+	patch.Header.Set("Upload-Offset", "0")
+	authorize(patch, "resolver-secret")
+	patched := httptest.NewRecorder()
+	handler.ServeHTTP(patched, patch)
+	if patched.Code != http.StatusNoContent || patched.Header().Get("Upload-Offset") != "6" {
+		t.Fatalf("patch=%d headers=%v", patched.Code, patched.Header())
+	}
+	missing := request(http.MethodGet, "/raw/downloads/releases/app.bin", nil)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("visible before completion=%d", missing.Code)
+	}
+	conflict := httptest.NewRequest(http.MethodPatch, location, strings.NewReader("x"))
+	conflict.Header.Set("Upload-Offset", "0")
+	authorize(conflict, "resolver-secret")
+	conflicted := httptest.NewRecorder()
+	handler.ServeHTTP(conflicted, conflict)
+	if conflicted.Code != http.StatusConflict {
+		t.Fatalf("conflict=%d", conflicted.Code)
+	}
+	status := request(http.MethodGet, location, nil)
+	if status.Code != http.StatusNoContent || status.Header().Get("Upload-Offset") != "6" {
+		t.Fatalf("status=%d headers=%v", status.Code, status.Header())
+	}
+	body := []byte("world")
+	sum := sha256.Sum256([]byte("hello world"))
+	complete := httptest.NewRequest(http.MethodPut, location+"&complete=1", bytes.NewReader(body))
+	complete.Header.Set("Upload-Offset", "6")
+	complete.Header.Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(sum[:]))
+	authorize(complete, "resolver-secret")
+	completed := httptest.NewRecorder()
+	handler.ServeHTTP(completed, complete)
+	if completed.Code != http.StatusCreated {
+		t.Fatalf("complete=%d %s", completed.Code, completed.Body.String())
+	}
+	read := request(http.MethodGet, "/raw/downloads/releases/app.bin", nil)
+	if read.Code != http.StatusOK || read.Body.String() != "hello world" {
+		t.Fatalf("read=%d %q", read.Code, read.Body.String())
+	}
+	cancelledStart := request(http.MethodPost, "/raw/downloads/releases/cancel.bin?resumable=1", nil)
+	cancelled := request(http.MethodDelete, cancelledStart.Header().Get("Location"), nil)
+	if cancelled.Code != http.StatusNoContent {
+		t.Fatalf("cancel=%d", cancelled.Code)
+	}
+}
+
 func TestNativeRawHostedListsVisibleAssetsWithPagination(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})

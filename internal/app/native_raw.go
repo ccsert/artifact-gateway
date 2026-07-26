@@ -18,6 +18,7 @@ import (
 
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 // nativeRawHandler serves V3 Raw repositories directly from the object store.
@@ -89,6 +90,14 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.list(w, r, repo, prefix)
 		return true
 	}
+	if id := r.URL.Query().Get("uploadId"); id != "" {
+		h.upload(w, r, repo, path, id)
+		return true
+	}
+	if r.Method == http.MethodPost && r.URL.Query().Get("resumable") == "1" {
+		h.startUpload(w, r, repo, path)
+		return true
+	}
 	if rawChecksumExtension(path) != "" {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
@@ -158,6 +167,127 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func (h nativeRawHandler) startUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {
+	id := uuid.NewString()
+	upload := repository.RawUpload{ID: id, RepositoryID: repo.ID, Path: path, ObjectKey: "native/raw/uploads/" + id, State: "open", ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	if _, err := h.store.CreateRawUpload(r.Context(), upload); err != nil {
+		http.Error(w, "create raw upload failed", 500)
+		return
+	}
+	h.uploadHeaders(w, repo.Name, upload)
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, id string) {
+	release, err := h.store.LockRawUpload(r.Context(), id)
+	if err != nil {
+		http.Error(w, "raw upload coordination is unavailable", 503)
+		return
+	}
+	defer release()
+	upload, err := h.store.GetRawUpload(r.Context(), id)
+	if err != nil || upload.RepositoryID != repo.ID || upload.Path != path || upload.State != "open" || time.Now().After(upload.ExpiresAt) {
+		http.NotFound(w, r)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		h.uploadHeaders(w, repo.Name, upload)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		upload, err = h.store.CancelRawUpload(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodPatch:
+		upload, err = h.appendUpload(r.Context(), r, upload)
+		if err != nil {
+			http.Error(w, "upload offset is invalid", http.StatusConflict)
+			return
+		}
+		h.uploadHeaders(w, repo.Name, upload)
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodPut:
+		if r.URL.Query().Get("complete") != "1" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.ContentLength != 0 {
+			upload, err = h.appendUpload(r.Context(), r, upload)
+			if err != nil {
+				http.Error(w, "upload offset is invalid", http.StatusConflict)
+				return
+			}
+		}
+		data, err := h.objects.Get(r.Context(), upload.ObjectKey)
+		if err != nil {
+			http.Error(w, "upload bytes are unavailable", 500)
+			return
+		}
+		sum := sha256.Sum256(data)
+		expected := "sha-256=" + base64.StdEncoding.EncodeToString(sum[:])
+		if r.Header.Get("Digest") != expected {
+			http.Error(w, "digest mismatch", http.StatusUnprocessableEntity)
+			return
+		}
+		digest := "sha256:" + hex.EncodeToString(sum[:])
+		key := "native/raw/sha256/" + strings.TrimPrefix(digest, "sha256:")
+		releaseObject, err := h.store.LockRawObject(r.Context(), digest)
+		if err != nil {
+			http.Error(w, "raw object coordination is unavailable", 503)
+			return
+		}
+		defer releaseObject()
+		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+			http.Error(w, "persist raw object failed", 500)
+			return
+		}
+		contentType := r.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		asset, err := h.store.CompleteRawUpload(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: int64(len(data)), ContentType: contentType})
+		if err != nil {
+			http.Error(w, "raw upload cannot be completed", 409)
+			return
+		}
+		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		w.Header().Set("ETag", `"`+asset.Digest+`"`)
+		w.Header().Set("Digest", expected)
+		w.WriteHeader(http.StatusCreated)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h nativeRawHandler) appendUpload(ctx context.Context, r *http.Request, upload repository.RawUpload) (repository.RawUpload, error) {
+	if raw := r.Header.Get("Upload-Offset"); raw != "" {
+		offset, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || offset != upload.Offset {
+			return upload, errors.New("offset mismatch")
+		}
+	}
+	old, err := h.objects.Get(ctx, upload.ObjectKey)
+	if err != nil {
+		old = nil
+	}
+	chunk, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, 1<<30))
+	if err != nil {
+		return upload, err
+	}
+	if err = h.objects.PutReader(ctx, upload.ObjectKey, bytes.NewReader(append(old, chunk...)), int64(len(old)+len(chunk))); err != nil {
+		return upload, err
+	}
+	return h.store.UpdateRawUpload(ctx, upload.ID, int64(len(old)+len(chunk)))
+}
+func (h nativeRawHandler) uploadHeaders(w http.ResponseWriter, repositoryName string, upload repository.RawUpload) {
+	w.Header().Set("Location", "/raw/"+repositoryName+"/"+upload.Path+"?uploadId="+upload.ID)
+	w.Header().Set("Upload-Offset", strconv.FormatInt(upload.Offset, 10))
 }
 
 func rawChecksumExtension(path string) string {
