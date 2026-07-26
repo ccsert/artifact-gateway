@@ -271,7 +271,7 @@ func (s *PostgresStore) PutOCIManifest(ctx context.Context, v OCIManifest, refer
 		return v, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (repository_id,name,digest) DO NOTHING`, v.RepositoryID, v.Name, v.Digest, v.ObjectKey, v.MediaType, v.Size); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size,subject_digest,artifact_type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (repository_id,name,digest) DO NOTHING`, v.RepositoryID, v.Name, v.Digest, v.ObjectKey, v.MediaType, v.Size, nullableString(v.SubjectDigest), v.ArtifactType); err != nil {
 		return v, err
 	}
 	if !strings.HasPrefix(reference, "sha256:") {

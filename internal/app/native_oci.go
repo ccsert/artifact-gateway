@@ -383,7 +383,18 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 			writeOCIError(w, 500, "UNKNOWN", "persist manifest failed")
 			return
 		}
-		manifest, err := h.store.PutOCIManifest(r.Context(), repository.OCIManifest{RepositoryID: repo.ID, Name: name, Digest: digest, ObjectKey: key, MediaType: mediaType, Size: int64(len(data))}, reference)
+		var envelope struct {
+			Subject struct {
+				Digest string `json:"digest"`
+			} `json:"subject"`
+			ArtifactType string `json:"artifactType"`
+		}
+		_ = json.Unmarshal(data, &envelope)
+		if envelope.Subject.Digest != "" && !validOCIDigest(envelope.Subject.Digest) {
+			writeOCIError(w, http.StatusBadRequest, "MANIFEST_INVALID", "subject digest must be sha256")
+			return
+		}
+		manifest, err := h.store.PutOCIManifest(r.Context(), repository.OCIManifest{RepositoryID: repo.ID, Name: name, Digest: digest, ObjectKey: key, MediaType: mediaType, SubjectDigest: envelope.Subject.Digest, ArtifactType: envelope.ArtifactType, Size: int64(len(data))}, reference)
 		if err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "publish manifest failed")
 			return
