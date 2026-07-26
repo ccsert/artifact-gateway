@@ -338,7 +338,7 @@ func (s *PostgresStore) DeleteHostedGroup(ctx context.Context, id string) error 
 func loadRepositoryGrants(ctx context.Context, query interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, repositoryID, version string) (RepositoryGrantSet, error) {
-	rows, err := query.QueryContext(ctx, `SELECT principal, array_to_json(scopes) FROM repository_grants WHERE repository_id::text=$1 ORDER BY principal`, repositoryID)
+	rows, err := query.QueryContext(ctx, `SELECT principal, array_to_json(scopes), resource_prefix FROM repository_grants WHERE repository_id::text=$1 ORDER BY principal, resource_prefix`, repositoryID)
 	if err != nil {
 		return RepositoryGrantSet{}, err
 	}
@@ -347,7 +347,7 @@ func loadRepositoryGrants(ctx context.Context, query interface {
 	for rows.Next() {
 		var grant RepositoryGrant
 		var scopes []byte
-		if err := rows.Scan(&grant.Principal, &scopes); err != nil {
+		if err := rows.Scan(&grant.Principal, &scopes, &grant.ResourcePrefix); err != nil {
 			return RepositoryGrantSet{}, err
 		}
 		if err := json.Unmarshal(scopes, &grant.Scopes); err != nil {
@@ -405,7 +405,7 @@ func (s *PostgresStore) ReplaceRepositoryGrants(ctx context.Context, repositoryI
 		return RepositoryGrantSet{}, err
 	}
 	for _, grant := range grants {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO repository_grants (repository_id,principal,scopes) VALUES ($1,$2,$3)`, repositoryID, grant.Principal, grant.Scopes); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO repository_grants (repository_id,principal,scopes,resource_prefix) VALUES ($1,$2,$3,$4)`, repositoryID, grant.Principal, grant.Scopes, grant.ResourcePrefix); err != nil {
 			return RepositoryGrantSet{}, err
 		}
 	}

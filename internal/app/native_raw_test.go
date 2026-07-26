@@ -72,7 +72,7 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "releases/"}}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
@@ -84,12 +84,26 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if adminPutResponse.Code != http.StatusCreated {
 		t.Fatalf("admin put=%d body=%s", adminPutResponse.Code, adminPutResponse.Body.String())
 	}
+	adminPutSnapshot := httptest.NewRequest(http.MethodPut, "/raw/downloads/snapshots/app.txt", strings.NewReader("snapshot"))
+	authorize(adminPutSnapshot, "admin-secret")
+	adminPutSnapshotResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminPutSnapshotResponse, adminPutSnapshot)
+	if adminPutSnapshotResponse.Code != http.StatusCreated {
+		t.Fatalf("admin snapshot put=%d body=%s", adminPutSnapshotResponse.Code, adminPutSnapshotResponse.Body.String())
+	}
 	readerGet := httptest.NewRequest(http.MethodGet, "/raw/downloads/releases/app.txt", nil)
 	authorize(readerGet, authenticator.IssueToken("reader"))
 	readerGetResponse := httptest.NewRecorder()
 	handler.ServeHTTP(readerGetResponse, readerGet)
 	if readerGetResponse.Code != http.StatusOK || readerGetResponse.Body.String() != "native raw artifact" {
 		t.Fatalf("reader get=%d body=%s", readerGetResponse.Code, readerGetResponse.Body.String())
+	}
+	readerSnapshot := httptest.NewRequest(http.MethodGet, "/raw/downloads/snapshots/app.txt", nil)
+	authorize(readerSnapshot, authenticator.IssueToken("reader"))
+	readerSnapshotResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerSnapshotResponse, readerSnapshot)
+	if readerSnapshotResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("reader snapshot=%d body=%s", readerSnapshotResponse.Code, readerSnapshotResponse.Body.String())
 	}
 	readerPut := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/denied.txt", strings.NewReader("denied"))
 	authorize(readerPut, authenticator.IssueToken("reader"))
@@ -107,7 +121,7 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	}
 	metrics := httptest.NewRecorder()
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="raw",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
 		t.Fatalf("raw authorization metric=%s", metrics.Body.String())
 	}
 }

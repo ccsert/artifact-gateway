@@ -282,7 +282,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 
 func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, repositoryName, resource, method string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {
 	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatOCI}
-	return access.filterManaged(ctx, principal, members, func(member repository.Member, decision AuthorizationDecision) error {
+	return access.filterManaged(ctx, principal, members, repositoryName, func(member repository.Member, decision AuthorizationDecision) error {
 		return h.Resolver.RecordOCIGrantDenied(ctx, groupName, repositoryName, resource, method, member.Name, principal.Actor, decision)
 	})
 }

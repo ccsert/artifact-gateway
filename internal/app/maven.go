@@ -344,7 +344,7 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 
 func (h MavenHandler) authorizedMavenMembers(ctx context.Context, groupName, artifactPath, actor string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {
 	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatMaven}
-	return access.filterManaged(ctx, principal, members, func(member repository.Member, decision AuthorizationDecision) error {
+	return access.filterManaged(ctx, principal, members, mavenResourceFromPath(artifactPath), func(member repository.Member, decision AuthorizationDecision) error {
 		return h.auditAuthorizationDenied(ctx, groupName, artifactPath, member.Name, actor, decision)
 	})
 }

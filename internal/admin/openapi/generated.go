@@ -591,8 +591,11 @@ type Format string
 
 // Grant defines model for Grant.
 type Grant struct {
-	Principal string        `json:"principal"`
-	Scopes    []GrantScopes `json:"scopes"`
+	Principal string `json:"principal"`
+
+	// ResourcePrefix Optional canonical resource prefix. Empty or omitted grants repository-wide access.
+	ResourcePrefix *string       `json:"resourcePrefix,omitempty"`
+	Scopes         []GrantScopes `json:"scopes"`
 }
 
 // GrantScopes defines model for Grant.Scopes.

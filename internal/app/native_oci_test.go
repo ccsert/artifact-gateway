@@ -116,7 +116,7 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "app"}}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
@@ -145,6 +145,13 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 	if readerGetResponse.Code != http.StatusOK || !bytes.Equal(readerGetResponse.Body.Bytes(), blob) {
 		t.Fatalf("reader get=%d body=%s", readerGetResponse.Code, readerGetResponse.Body.String())
 	}
+	readerOther := httptest.NewRequest(http.MethodGet, "/v2/team/other/blobs/"+digest, nil)
+	authorize(readerOther, authenticator.IssueToken("reader"))
+	readerOtherResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readerOtherResponse, readerOther)
+	if readerOtherResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("reader other=%d body=%s", readerOtherResponse.Code, readerOtherResponse.Body.String())
+	}
 	readerStart := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
 	authorize(readerStart, authenticator.IssueToken("reader"))
 	readerStartResponse := httptest.NewRecorder()
@@ -161,7 +168,7 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 	}
 	metrics := httptest.NewRecorder()
 	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="oci",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="oci",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
 		t.Fatalf("OCI authorization metric=%s", metrics.Body.String())
 	}
 }

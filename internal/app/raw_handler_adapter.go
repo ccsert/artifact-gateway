@@ -56,8 +56,8 @@ func (r rawRuntime) CanRead(principal rawprotocol.Principal, name string) bool {
 	return r.handler.Authenticator.CanReadRepository(p, name)
 }
 
-func (r rawRuntime) ManagedDecision(ctx context.Context, principal rawprotocol.Principal, member repository.Member) (rawprotocol.Decision, bool) {
-	decision, managed := ManagedGroupMemberDecision(ctx, r.handler.Repositories, r.handler.Authorizer, Principal{Actor: principal.Actor, Admin: principal.Admin}, member, repository.FormatRaw)
+func (r rawRuntime) ManagedDecision(ctx context.Context, principal rawprotocol.Principal, member repository.Member, resource string) (rawprotocol.Decision, bool) {
+	decision, managed := ManagedGroupMemberDecision(ctx, r.handler.Repositories, r.handler.Authorizer, Principal{Actor: principal.Actor, Admin: principal.Admin}, member, repository.FormatRaw, resource)
 	return rawprotocol.Decision{Allowed: decision.Allowed, Source: decision.Source, Reason: decision.Reason}, managed
 }
 

@@ -63,25 +63,37 @@ func (h nativeConanPublishHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 }
 
 func (h nativeConanPublishHandler) create(w http.ResponseWriter, r *http.Request, repositoryID string) {
-	h.withRepository(w, r, repositoryID, RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
-		if repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
-			writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
-			return
-		}
-		var body nativeConanPublishRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&body) != nil || !validConanPublishRequest(body) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "valid Conan revision and declared objects are required")
-			return
-		}
-		session, err := h.store.CreateConanPublishSession(r.Context(), repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Publisher: principal.Actor, Kind: body.Kind, Reference: body.Reference, RecipeRevision: body.RecipeRevision, PackageID: body.PackageID, PackageRevision: body.PackageRevision, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)})
-		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create Conan publish session failed")
-			return
-		}
-		writeNativeMavenJSON(w, http.StatusCreated, session)
-	})
+	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
+		return
+	}
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if errors.Is(err, repository.ErrNotFound) || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get repository failed")
+		return
+	}
+	var body nativeConanPublishRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&body) != nil || !validConanPublishRequest(body) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "valid Conan revision and declared objects are required")
+		return
+	}
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, conanPublishResource(body)); !decision.Allowed {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		return
+	}
+	session, err := h.store.CreateConanPublishSession(r.Context(), repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Publisher: principal.Actor, Kind: body.Kind, Reference: body.Reference, RecipeRevision: body.RecipeRevision, PackageID: body.PackageID, PackageRevision: body.PackageRevision, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)})
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create Conan publish session failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, session)
 }
 
 func (h nativeConanPublishHandler) upload(w http.ResponseWriter, r *http.Request, session repository.ConanPublishSession, name string) {
@@ -191,10 +203,14 @@ func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Re
 		writeHostedProblem(w, 500, "internal_error", "load Conan publish session failed")
 		return
 	}
-	h.withRepository(w, r, session.RepositoryID, operation, func(Principal, repository.HostedRepository) { next(session) })
+	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(Principal, repository.HostedRepository) { next(session) })
 }
 
 func (h nativeConanPublishHandler) withRepository(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, next func(Principal, repository.HostedRepository)) {
+	h.withRepositoryResource(w, r, id, operation, "", next)
+}
+
+func (h nativeConanPublishHandler) withRepositoryResource(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, resource string, next func(Principal, repository.HostedRepository)) {
 	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !ok {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
@@ -209,11 +225,23 @@ func (h nativeConanPublishHandler) withRepository(w http.ResponseWriter, r *http
 		writeHostedProblem(w, 500, "internal_error", "get repository failed")
 		return
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, resource); !decision.Allowed {
 		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
 		return
 	}
 	next(principal, repo)
+}
+
+func conanPublishResource(request nativeConanPublishRequest) string {
+	resource := request.Reference + "/revisions/" + request.RecipeRevision
+	if request.Kind == "package" {
+		resource += "/packages/" + request.PackageID + "/revisions/" + request.PackageRevision
+	}
+	return resource
+}
+
+func conanSessionResource(session repository.ConanPublishSession) string {
+	return conanPublishResource(nativeConanPublishRequest{Kind: session.Kind, Reference: session.Reference, RecipeRevision: session.RecipeRevision, PackageID: session.PackageID, PackageRevision: session.PackageRevision})
 }
 
 func validConanPublishRequest(request nativeConanPublishRequest) bool {

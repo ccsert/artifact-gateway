@@ -80,7 +80,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		operation = RepositoryRead
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, strings.TrimSuffix(path, "/")); !decision.Allowed {
 		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)

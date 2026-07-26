@@ -54,8 +54,9 @@ type GroupMember struct {
 }
 
 type RepositoryGrant struct {
-	Principal string   `json:"principal"`
-	Scopes    []string `json:"scopes"`
+	Principal      string   `json:"principal"`
+	Scopes         []string `json:"scopes"`
+	ResourcePrefix string   `json:"resourcePrefix,omitempty"`
 }
 
 type RepositoryGrantSet struct {

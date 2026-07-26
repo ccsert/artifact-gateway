@@ -707,12 +707,12 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	if listed.Code != http.StatusOK || listed.Header().Get("ETag") != "1" || listed.Body.String() != "[]\n" {
 		t.Fatalf("list=%d etag=%q body=%s", listed.Code, listed.Header().Get("ETag"), listed.Body.String())
 	}
-	replace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["repositories:read","repositories:write"]}]`))
+	replace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["repositories:read"],"resourcePrefix":"releases/"},{"principal":"build-agent","scopes":["repositories:write"],"resourcePrefix":"snapshots/"}]`))
 	authorize(replace, "admin-secret")
 	replace.Header.Set("If-Match", "1")
 	replaced := httptest.NewRecorder()
 	handler.ServeHTTP(replaced, replace)
-	if replaced.Code != http.StatusOK || replaced.Header().Get("ETag") != "2" || !strings.Contains(replaced.Body.String(), "build-agent") {
+	if replaced.Code != http.StatusOK || replaced.Header().Get("ETag") != "2" || !strings.Contains(replaced.Body.String(), `"resourcePrefix":"releases/"`) {
 		t.Fatalf("replace=%d etag=%q body=%s", replaced.Code, replaced.Header().Get("ETag"), replaced.Body.String())
 	}
 	stale := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[]`))
@@ -730,6 +730,22 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	handler.ServeHTTP(invalidResult, invalid)
 	if invalidResult.Code != http.StatusBadRequest {
 		t.Fatalf("invalid=%d body=%s", invalidResult.Code, invalidResult.Body.String())
+	}
+	duplicate := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["repositories:read"],"resourcePrefix":"releases/"},{"principal":"build-agent","scopes":["repositories:write"],"resourcePrefix":"releases/"}]`))
+	authorize(duplicate, "admin-secret")
+	duplicate.Header.Set("If-Match", "2")
+	duplicateResult := httptest.NewRecorder()
+	handler.ServeHTTP(duplicateResult, duplicate)
+	if duplicateResult.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate=%d body=%s", duplicateResult.Code, duplicateResult.Body.String())
+	}
+	badPrefix := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants", strings.NewReader(`[{"principal":"build-agent","scopes":["repositories:read"],"resourcePrefix":"/absolute"}]`))
+	authorize(badPrefix, "admin-secret")
+	badPrefix.Header.Set("If-Match", "2")
+	badPrefixResult := httptest.NewRecorder()
+	handler.ServeHTTP(badPrefixResult, badPrefix)
+	if badPrefixResult.Code != http.StatusBadRequest {
+		t.Fatalf("bad prefix=%d body=%s", badPrefixResult.Code, badPrefixResult.Body.String())
 	}
 }
 

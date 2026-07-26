@@ -23,7 +23,7 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}, ResourcePrefix: "pkg/1.0/user/stable"}}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	body := []byte("recipe")
@@ -58,6 +58,12 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), test.want) {
 			t.Fatalf("%s status=%d body=%s", test.path, recorder.Code, recorder.Body.String())
 		}
+	}
+	denied := httptest.NewRecorder()
+	deniedRequest := conanRequest("/conan/v2/conan-hosted/conans/other/1.0/user/stable/revisions/rrev/files/conanfile.py")
+	handler.ServeHTTP(denied, deniedRequest)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("denied status=%d body=%s", denied.Code, denied.Body.String())
 	}
 }
 

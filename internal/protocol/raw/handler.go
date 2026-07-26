@@ -42,7 +42,7 @@ type Runtime interface {
 	Authenticate(string) (Principal, bool)
 	AnonymousAllowed(context.Context, string) bool
 	CanRead(Principal, string) bool
-	ManagedDecision(context.Context, Principal, repository.Member) (Decision, bool)
+	ManagedDecision(context.Context, Principal, repository.Member, string) (Decision, bool)
 	Prioritize([]repository.Member) []repository.Member
 	Audit(context.Context, string, string, AuditEvent)
 	RecordRequest(string, string)
@@ -127,7 +127,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, member := range h.Runtime.Prioritize(members) {
 		managed := false
 		if p.Actor != "anonymous" {
-			if decision, isManaged := h.Runtime.ManagedDecision(r.Context(), p, member); isManaged {
+			if decision, isManaged := h.Runtime.ManagedDecision(r.Context(), p, member, path); isManaged {
 				managed = true
 				if !decision.Allowed {
 					h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditAccessDenied, Status: http.StatusForbidden, CacheDisposition: "bypass", Method: r.Method, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})

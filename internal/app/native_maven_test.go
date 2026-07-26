@@ -569,7 +569,7 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "maven", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "maven", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example"}}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	objects := NewMemoryOCIObjectStore()
@@ -597,6 +597,13 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if got.Code != http.StatusOK || got.Body.String() != "jar" {
 		t.Fatalf("read=%d body=%s", got.Code, got.Body.String())
 	}
+	other := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/com/other/widget/1.0.0/widget-1.0.0.jar", nil)
+	other.SetBasicAuth("maven", "resolver-secret")
+	otherResponse := httptest.NewRecorder()
+	h.ServeHTTP(otherResponse, other)
+	if otherResponse.Code != http.StatusForbidden {
+		t.Fatalf("other read=%d body=%s", otherResponse.Code, otherResponse.Body.String())
+	}
 	put := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", strings.NewReader("replacement"))
 	put.SetBasicAuth("maven", "resolver-secret")
 	denied := httptest.NewRecorder()
@@ -613,7 +620,7 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	}
 	metricResponse := httptest.NewRecorder()
 	metrics.Handler(metricResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="maven",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+	if !strings.Contains(metricResponse.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="maven",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
 		t.Fatalf("Maven authorization metric=%s", metricResponse.Body.String())
 	}
 }

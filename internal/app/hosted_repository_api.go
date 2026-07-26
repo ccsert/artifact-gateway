@@ -439,12 +439,12 @@ func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		var grants []repository.RepositoryGrant
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principals and valid scopes")
+		if err := decoder.Decode(&grants); err != nil || !validRepositoryGrants(grants, repo.Format) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grants must contain unique principal/resource prefixes, valid scopes, and canonical resource prefixes")
 			return
 		}
 		set, err := h.grants.ReplaceRepositoryGrants(r.Context(), repositoryID.String(), grants, string(params.IfMatch))
@@ -465,14 +465,18 @@ func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *h
 	})
 }
 
-func validRepositoryGrants(grants []repository.RepositoryGrant) bool {
+func validRepositoryGrants(grants []repository.RepositoryGrant, format repository.Format) bool {
 	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
-	principals := map[string]bool{}
+	keys := map[string]bool{}
 	for _, grant := range grants {
-		if strings.TrimSpace(grant.Principal) == "" || principals[grant.Principal] || len(grant.Scopes) == 0 {
+		if strings.TrimSpace(grant.Principal) == "" || len(grant.Scopes) == 0 || !validArtifactSearchQuery(format, grant.ResourcePrefix) {
 			return false
 		}
-		principals[grant.Principal] = true
+		key := grant.Principal + "\x00" + grant.ResourcePrefix
+		if keys[key] {
+			return false
+		}
+		keys[key] = true
 		scopes := map[string]bool{}
 		for _, scope := range grant.Scopes {
 			if !validScopes[scope] || scopes[scope] {

@@ -2190,6 +2190,11 @@
                 "repositories:admin"
               ]
             }
+          },
+          "resourcePrefix": {
+            "type": "string",
+            "description": "Optional canonical resource prefix. Empty or omitted grants repository-wide access.",
+            "maxLength": 255
           }
         }
       },

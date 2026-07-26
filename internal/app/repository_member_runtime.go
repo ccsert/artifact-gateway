@@ -12,15 +12,15 @@ type groupMemberAccess struct {
 	Format       repository.Format
 }
 
-func (a groupMemberAccess) managedDecision(ctx context.Context, principal Principal, member repository.Member) (AuthorizationDecision, bool) {
-	return ManagedGroupMemberDecision(ctx, a.Repositories, a.Authorizer, principal, member, a.Format)
+func (a groupMemberAccess) managedDecision(ctx context.Context, principal Principal, member repository.Member, resource string) (AuthorizationDecision, bool) {
+	return ManagedGroupMemberDecision(ctx, a.Repositories, a.Authorizer, principal, member, a.Format, resource)
 }
 
-func (a groupMemberAccess) filterManaged(ctx context.Context, principal Principal, members []repository.Member, deny func(repository.Member, AuthorizationDecision) error) ([]repository.Member, bool, error) {
+func (a groupMemberAccess) filterManaged(ctx context.Context, principal Principal, members []repository.Member, resource string, deny func(repository.Member, AuthorizationDecision) error) ([]repository.Member, bool, error) {
 	eligible := make([]repository.Member, 0, len(members))
 	hadDenied := false
 	for _, member := range members {
-		decision, managed := a.managedDecision(ctx, principal, member)
+		decision, managed := a.managedDecision(ctx, principal, member, resource)
 		if managed && !decision.Allowed {
 			if deny != nil {
 				if err := deny(member, decision); err != nil {

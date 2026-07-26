@@ -379,7 +379,8 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
+	resource := mavenResourceFromPath(strings.Join(parts[1:], "/"))
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, resource); !decision.Allowed {
 		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository read permission required", http.StatusForbidden)
@@ -472,7 +473,7 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, coordinate); !decision.Allowed {
 		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: coordinate, Operation: "commit", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
@@ -588,18 +589,19 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite); !decision.Allowed {
-		h.recordAuthorizationDenial(decision)
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
-		http.Error(w, "repository write permission required", http.StatusForbidden)
-		return
-	}
 	path := parts[1:]
 	version, artifact := path[len(path)-2], path[len(path)-3]
 	group := strings.Join(path[:len(path)-3], ".")
 	name := path[len(path)-1]
 	if group == "" || artifact == "" || version == "" {
 		http.Error(w, "invalid Maven asset path", 400)
+		return
+	}
+	coordinate := group + ":" + artifact + ":" + version
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, coordinate); !decision.Allowed {
+		h.recordAuthorizationDenial(decision)
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
 	// Maven and Gradle upload repository metadata and checksum sidecars as part
@@ -616,7 +618,6 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
-	coordinate := group + ":" + artifact + ":" + version
 	name = canonicalMavenAssetName(artifact, version, name)
 	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}
 	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
@@ -819,6 +820,26 @@ func validDeclaredObjects(objects []repository.MavenDeclaredObject) bool {
 func mavenCoordinatePath(c string) string {
 	p := strings.Split(c, ":")
 	return strings.ReplaceAll(p[0], ".", "/") + "/" + p[1] + "/" + p[2]
+}
+
+func mavenResourceFromPath(path string) string {
+	path = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(path, ".sha512"), ".sha256"), ".sha1"), ".md5")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 4 {
+		version, artifact := parts[len(parts)-2], parts[len(parts)-3]
+		group := strings.Join(parts[:len(parts)-3], ".")
+		if group != "" && artifact != "" && version != "" {
+			return group + ":" + artifact + ":" + version
+		}
+	}
+	if len(parts) >= 2 && parts[len(parts)-1] == "maven-metadata.xml" {
+		artifact := parts[len(parts)-2]
+		group := strings.Join(parts[:len(parts)-2], ".")
+		if group != "" && artifact != "" {
+			return group + ":" + artifact
+		}
+	}
+	return strings.Trim(path, "/")
 }
 
 type mavenChecksum struct{ extension, digest, body string }

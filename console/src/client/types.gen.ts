@@ -63,6 +63,10 @@ export type MemberList = Array<Member>;
 export type Grant = {
     principal: string;
     scopes: Array<'repositories:read' | 'repositories:write' | 'repositories:admin'>;
+    /**
+     * Optional canonical resource prefix. Empty or omitted grants repository-wide access.
+     */
+    resourcePrefix?: string;
 };
 
 export type GrantList = Array<Grant>;

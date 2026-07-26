@@ -79,7 +79,7 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		return true
 	}
 	operation := nativeOCIOperation(resource, r.Method)
-	if decision := h.authorizer.Authorize(r.Context(), p, repo, operation); !decision.Allowed {
+	if decision := h.authorizer.AuthorizeResource(r.Context(), p, repo, operation, imageName); !decision.Allowed {
 		h.recordAuthorizationDenial(r, p, repo, operation, decision)
 		writeOCIChallenge(w, r)
 		return true
@@ -132,8 +132,7 @@ func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, repo := range repos {
-			decision, managed := h.authorizer.ManagedDecision(r.Context(), p, repo, RepositoryRead)
-			if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive || !managed || !decision.Allowed {
+			if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive {
 				continue
 			}
 			localAfter, include := ociCatalogAfter(repo.Name, last)
@@ -146,6 +145,10 @@ func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for _, item := range items {
+				decision, managed := h.authorizer.ManagedResourceDecision(r.Context(), p, repo, RepositoryRead, item)
+				if !managed || !decision.Allowed {
+					continue
+				}
 				names = append(names, repo.Name+"/"+item)
 			}
 		}
@@ -300,7 +303,7 @@ func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 		if sourceRoot, sourceName, found := strings.Cut(r.URL.Query().Get("from"), "/"); found && sourceRoot != "" && sourceName != "" {
 			source, err := h.repos.GetHostedRepositoryByName(r.Context(), sourceRoot)
 			principal, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
-			if err == nil && authenticated && source.Format == repository.FormatOCI && source.State == repository.RepositoryActive && h.authorizer.Authorize(r.Context(), principal, source, RepositoryRead).Allowed {
+			if err == nil && authenticated && source.Format == repository.FormatOCI && source.State == repository.RepositoryActive && h.authorizer.AuthorizeResource(r.Context(), principal, source, RepositoryRead, sourceName).Allowed {
 				blob, err := h.store.MountOCIBlobFrom(r.Context(), repo.ID, source.ID, digest)
 				if err == nil {
 					w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/blobs/"+blob.Digest)

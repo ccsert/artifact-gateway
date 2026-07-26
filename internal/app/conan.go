@@ -246,7 +246,7 @@ func (h ConanHandler) restoreNativeConan(w http.ResponseWriter, r *http.Request,
 	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
 		return false
 	}
-	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite)
+	decision := h.Authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, strings.TrimSuffix(path, ":restore"))
 	if !decision.Allowed {
 		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository write permission required", http.StatusForbidden)
@@ -286,7 +286,7 @@ func (h ConanHandler) deleteNativeConan(w http.ResponseWriter, r *http.Request, 
 	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
 		return false
 	}
-	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryWrite)
+	decision := h.Authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, path)
 	if !decision.Allowed {
 		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository write permission required", http.StatusForbidden)
@@ -325,7 +325,7 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 	if err != nil || repo.Format != repository.FormatConan || repo.State != repository.RepositoryActive {
 		return false
 	}
-	decision := h.Authorizer.Authorize(r.Context(), principal, repo, RepositoryRead)
+	decision := h.Authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, path)
 	if !decision.Allowed {
 		h.audit(withConanAuditAuthorization(r.Context(), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
 		http.Error(w, "repository read permission required", http.StatusForbidden)
@@ -541,7 +541,7 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 	}
 	for _, member := range prioritizeHosted(members) {
 		if actor != "anonymous" {
-			if decision, managed := h.managedConanMemberDecision(ctx, principal, member); managed {
+			if decision, managed := h.managedConanMemberDecision(ctx, principal, member, path); managed {
 				if !decision.Allowed {
 					h.audit(withConanAuditAuthorization(ctx, decision), group.Name, path, member.Name, actor, repository.AuditAccessDenied)
 					accessDenied = true
@@ -681,16 +681,16 @@ func (h ConanHandler) canReadConanGroup(ctx context.Context, principal Principal
 		return true
 	}
 	for _, member := range group.Members {
-		if decision, managed := h.managedConanMemberDecision(ctx, principal, member); managed && decision.Allowed {
+		if decision, managed := h.managedConanMemberDecision(ctx, principal, member, ""); managed && decision.Allowed {
 			return true
 		}
 	}
 	return false
 }
 
-func (h ConanHandler) managedConanMemberDecision(ctx context.Context, principal Principal, member repository.Member) (AuthorizationDecision, bool) {
+func (h ConanHandler) managedConanMemberDecision(ctx context.Context, principal Principal, member repository.Member, resource string) (AuthorizationDecision, bool) {
 	access := groupMemberAccess{Repositories: h.Repositories, Authorizer: h.Authorizer, Format: repository.FormatConan}
-	return access.managedDecision(ctx, principal, member)
+	return access.managedDecision(ctx, principal, member, resource)
 }
 
 func conanCacheSourceMatches(entry conanCacheEntry, member repository.Member) bool {

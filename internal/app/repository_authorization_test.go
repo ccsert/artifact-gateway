@@ -63,6 +63,27 @@ func TestRepositoryAuthorizerManagedEmptySetRevokesLegacyAccess(t *testing.T) {
 	}
 }
 
+func TestRepositoryAuthorizerMatchesManagedGrantResourcePrefixes(t *testing.T) {
+	target := repository.HostedRepository{ID: "repo-id", Name: "releases"}
+	authorizer := RepositoryAuthorizer{Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "2", Grants: []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example"},
+		{Principal: "writer", Scopes: []string{"repositories:write"}, ResourcePrefix: "org.example:widget"},
+	}}}}
+
+	if decision := authorizer.AuthorizeResource(context.Background(), Principal{Actor: "reader"}, target, RepositoryRead, "org.example:widget:1.0.0"); !decision.Allowed {
+		t.Fatalf("reader decision=%+v", decision)
+	}
+	if decision := authorizer.AuthorizeResource(context.Background(), Principal{Actor: "reader"}, target, RepositoryRead, "com.other:widget:1.0.0"); decision.Allowed || decision.Reason != "scope_not_granted" {
+		t.Fatalf("wrong prefix decision=%+v", decision)
+	}
+	if decision := authorizer.Authorize(context.Background(), Principal{Actor: "writer"}, target, RepositoryWrite); decision.Allowed || decision.Reason != "scope_not_granted" {
+		t.Fatalf("repository-wide decision=%+v", decision)
+	}
+	if decision := authorizer.AuthorizeResource(context.Background(), Principal{Actor: "writer"}, target, RepositoryWrite, "org.example:widget:1.0.0"); !decision.Allowed {
+		t.Fatalf("writer decision=%+v", decision)
+	}
+}
+
 func TestRepositoryAuthorizerRetainsLegacyPolicyForDefaultGrantSet(t *testing.T) {
 	authorizer := RepositoryAuthorizer{
 		Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "1"}},

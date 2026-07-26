@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -34,10 +35,14 @@ type RepositoryAuthorizer struct {
 }
 
 func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation) AuthorizationDecision {
+	return a.AuthorizeResource(ctx, principal, target, operation, "")
+}
+
+func (a RepositoryAuthorizer) AuthorizeResource(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) AuthorizationDecision {
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}
 	}
-	if decision, managed := a.ManagedDecision(ctx, principal, target, operation); managed {
+	if decision, managed := a.ManagedResourceDecision(ctx, principal, target, operation, resource); managed {
 		return decision
 	}
 	return a.authorizeLegacyForTarget(principal, target, operation)
@@ -47,6 +52,10 @@ func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal
 // serving legacy Groups use this to distinguish an unbound member from an
 // explicit grant denial without weakening their existing static policy.
 func (a RepositoryAuthorizer) ManagedDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation) (AuthorizationDecision, bool) {
+	return a.ManagedResourceDecision(ctx, principal, target, operation, "")
+}
+
+func (a RepositoryAuthorizer) ManagedResourceDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) (AuthorizationDecision, bool) {
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}, true
 	}
@@ -61,11 +70,18 @@ func (a RepositoryAuthorizer) ManagedDecision(ctx context.Context, principal Pri
 		return AuthorizationDecision{}, false
 	}
 	for _, grant := range set.Grants {
-		if grant.Principal == principal.Actor && grantAllows(grant.Scopes, operation) {
+		if grant.Principal == principal.Actor && grantAllows(grant.Scopes, operation) && grantMatchesResource(grant.ResourcePrefix, resource) {
 			return AuthorizationDecision{Allowed: true, Source: "repository_grants", Reason: "scope_granted"}, true
 		}
 	}
 	return AuthorizationDecision{Source: "repository_grants", Reason: "scope_not_granted"}, true
+}
+
+func grantMatchesResource(prefix, resource string) bool {
+	if prefix == "" {
+		return true
+	}
+	return resource != "" && strings.HasPrefix(resource, prefix)
 }
 
 func (a RepositoryAuthorizer) authorizeLegacyForTarget(principal Principal, target repository.HostedRepository, operation RepositoryOperation) AuthorizationDecision {
@@ -121,7 +137,7 @@ func grantAllows(scopes []string, operation RepositoryOperation) bool {
 
 // ManagedGroupMemberDecision evaluates only an explicit member-to-Repository
 // binding. Empty bindings deliberately retain legacy Group behavior.
-func ManagedGroupMemberDecision(ctx context.Context, repositories repository.HostedRepositoryStore, authorizer RepositoryAuthorizer, principal Principal, member repository.Member, format repository.Format) (AuthorizationDecision, bool) {
+func ManagedGroupMemberDecision(ctx context.Context, repositories repository.HostedRepositoryStore, authorizer RepositoryAuthorizer, principal Principal, member repository.Member, format repository.Format, resource string) (AuthorizationDecision, bool) {
 	if member.RepositoryID == "" {
 		return AuthorizationDecision{}, false
 	}
@@ -132,5 +148,5 @@ func ManagedGroupMemberDecision(ctx context.Context, repositories repository.Hos
 	if err != nil || target.Format != format || target.State != repository.RepositoryActive {
 		return AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}, true
 	}
-	return authorizer.ManagedDecision(ctx, principal, target, RepositoryRead)
+	return authorizer.ManagedResourceDecision(ctx, principal, target, RepositoryRead, resource)
 }
