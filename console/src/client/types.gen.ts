@@ -553,6 +553,27 @@ export type DryRunRepositoryRetentionResponses = {
 
 export type DryRunRepositoryRetentionResponse = DryRunRepositoryRetentionResponses[keyof DryRunRepositoryRetentionResponses];
 
+export type ExecuteRepositoryRetentionData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/retention:execute';
+};
+
+export type ExecuteRepositoryRetentionResponses = {
+    /**
+     * Maven retention job accepted
+     */
+    202: LifecycleJob;
+};
+
+export type ExecuteRepositoryRetentionResponse = ExecuteRepositoryRetentionResponses[keyof ExecuteRepositoryRetentionResponses];
+
 export type RestoreRepositoryArtifactData = {
     body: RestoreArtifact;
     path: {

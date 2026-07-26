@@ -21,6 +21,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
   "/repositories/{repositoryId}/retention:dry-run":
     "$ref": "./management/retention.yaml#/repositories_repositoryId_retention_dry_run"
+  "/repositories/{repositoryId}/retention:execute":
+    "$ref": "./management/retention-execute.yaml#/repositories_repositoryId_retention_execute"
   "/repositories/{repositoryId}/restore":
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":

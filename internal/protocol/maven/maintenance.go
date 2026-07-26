@@ -143,11 +143,21 @@ type NativeRetention struct {
 		repository.HostedRepositoryStore
 		repository.RepositoryRetentionPolicyStore
 		repository.NativeMavenStore
+		repository.LifecycleJobStore
 	}
 	Now func() time.Time
 }
 
+type retentionPayload struct {
+	Format        repository.Format `json:"format"`
+	PolicyVersion string            `json:"policyVersion"`
+}
+
 func (m NativeRetention) Collect(ctx context.Context) error {
+	now := time.Now
+	if m.Now != nil {
+		now = m.Now
+	}
 	after := ""
 	for {
 		repositories, next, err := m.Store.ListHostedRepositories(ctx, 200, after)
@@ -158,21 +168,73 @@ func (m NativeRetention) Collect(ctx context.Context) error {
 			if repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
 				continue
 			}
-			candidates, err := m.PlanRepository(ctx, repo.ID)
-			if err != nil {
+			if _, _, err = m.EnqueueRepository(ctx, repo.ID, "scheduled:"+now().UTC().Format("2006-01-02")); err != nil {
 				return err
-			}
-			for _, artifact := range candidates {
-				if _, err = m.Store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
-					return err
-				}
 			}
 		}
 		if next == "" {
-			return nil
+			return m.RunJobs(ctx, 200)
 		}
 		after = next
 	}
+}
+
+// EnqueueRepository records an idempotent retention execution bound to the
+// current policy version. A worker must reject it if the policy changes first.
+func (m NativeRetention) EnqueueRepository(ctx context.Context, repositoryID, idempotencyKey string) (repository.LifecycleJob, bool, error) {
+	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, repositoryID)
+	if err != nil {
+		return repository.LifecycleJob{}, false, err
+	}
+	payload, err := json.Marshal(retentionPayload{Format: repository.FormatMaven, PolicyVersion: policy.Version})
+	if err != nil {
+		return repository.LifecycleJob{}, false, err
+	}
+	return m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repositoryID, Kind: repository.LifecycleJobRetention, IdempotencyKey: idempotencyKey, Payload: payload})
+}
+
+func (m NativeRetention) RunJobs(ctx context.Context, limit int) error {
+	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobRetention, repository.FormatMaven, limit)
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if err := m.runJob(ctx, job); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m NativeRetention) runJob(ctx context.Context, job repository.LifecycleJob) error {
+	var payload retentionPayload
+	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.Format != repository.FormatMaven || payload.PolicyVersion == "" {
+		return m.failRetentionJob(ctx, job.ID, "invalid Maven retention payload")
+	}
+	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, job.RepositoryID)
+	if err != nil {
+		return m.failRetentionJob(ctx, job.ID, "get Maven retention policy failed")
+	}
+	if policy.Version != payload.PolicyVersion {
+		return m.failRetentionJob(ctx, job.ID, "Maven retention policy changed before execution")
+	}
+	candidates, err := m.PlanRepository(ctx, job.RepositoryID)
+	if err != nil {
+		return m.failRetentionJob(ctx, job.ID, "plan Maven retention failed")
+	}
+	for _, artifact := range candidates {
+		if _, err = m.Store.TombstoneMavenArtifact(ctx, job.RepositoryID, artifact.ID); err != nil {
+			return m.failRetentionJob(ctx, job.ID, "tombstone Maven retention candidate failed")
+		}
+	}
+	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+}
+
+func (m NativeRetention) failRetentionJob(ctx context.Context, id, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+		return err
+	}
+	return fmt.Errorf("%s", message)
 }
 
 // PlanRepository returns the artifacts a retention run would tombstone without

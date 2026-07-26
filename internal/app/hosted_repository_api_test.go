@@ -491,6 +491,46 @@ func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *t
 	}
 }
 
+func TestRepositoryRetentionExecutionEnqueuesIdempotentMavenJob(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	maven, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-execute", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-execute-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(repo string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo+"/retention:execute", nil)
+		authorize(req, "admin-secret")
+		req.Header.Set("Idempotency-Key", "retention-run")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	first := request(maven.ID)
+	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"kind":"retention"`) || !strings.Contains(first.Body.String(), `"state":"pending"`) {
+		t.Fatalf("execute=%d body=%s", first.Code, first.Body.String())
+	}
+	second := request(maven.ID)
+	if second.Code != http.StatusAccepted || second.Body.String() != first.Body.String() {
+		t.Fatalf("replay=%d body=%s", second.Code, second.Body.String())
+	}
+	if err = (NativeMavenRetention{Store: store}).RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, maven.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	if response := request(raw.ID); response.Code != http.StatusConflict {
+		t.Fatalf("raw execute=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

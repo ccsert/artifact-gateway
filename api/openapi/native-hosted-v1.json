@@ -232,6 +232,33 @@
         }
       }
     },
+    "/repositories/{repositoryId}/retention:execute": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "executeRepositoryRetention",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Maven retention job accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/restore": {
       "parameters": [
         {

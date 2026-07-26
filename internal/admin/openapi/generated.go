@@ -737,6 +737,11 @@ type ReplaceRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ExecuteRepositoryRetentionParams defines parameters for ExecuteRepositoryRetention.
+type ExecuteRepositoryRetentionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // ListRepositoryTombstonesParams defines parameters for ListRepositoryTombstones.
 type ListRepositoryTombstonesParams struct {
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
@@ -899,6 +904,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/retention:dry-run)
 	DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/retention:execute)
+	ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ExecuteRepositoryRetentionParams)
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams)
@@ -2194,6 +2202,60 @@ func (siw *ServerInterfaceWrapper) DryRunRepositoryRetention(w http.ResponseWrit
 	handler.ServeHTTP(w, r)
 }
 
+// ExecuteRepositoryRetention operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteRepositoryRetentionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExecuteRepositoryRetention(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryTombstones operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryTombstones(w http.ResponseWriter, r *http.Request) {
 
@@ -2413,6 +2475,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:dry-run", wrapper.DryRunRepositoryRetention)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:execute", wrapper.ExecuteRepositoryRetention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
 
 	return m
@@ -3565,6 +3628,29 @@ func (response DryRunRepositoryRetention200JSONResponse) VisitDryRunRepositoryRe
 	return err
 }
 
+type ExecuteRepositoryRetentionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ExecuteRepositoryRetentionParams
+}
+
+type ExecuteRepositoryRetentionResponseObject interface {
+	VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error
+}
+
+type ExecuteRepositoryRetention202JSONResponse LifecycleJob
+
+func (response ExecuteRepositoryRetention202JSONResponse) VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryTombstonesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListRepositoryTombstonesParams
@@ -3685,6 +3771,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/retention:dry-run)
 	DryRunRepositoryRetention(ctx context.Context, request DryRunRepositoryRetentionRequestObject) (DryRunRepositoryRetentionResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/retention:execute)
+	ExecuteRepositoryRetention(ctx context.Context, request ExecuteRepositoryRetentionRequestObject) (ExecuteRepositoryRetentionResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(ctx context.Context, request ListRepositoryTombstonesRequestObject) (ListRepositoryTombstonesResponseObject, error)
@@ -4599,6 +4688,33 @@ func (sh *strictHandler) DryRunRepositoryRetention(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DryRunRepositoryRetentionResponseObject); ok {
 		if err := validResponse.VisitDryRunRepositoryRetentionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExecuteRepositoryRetention operation middleware
+func (sh *strictHandler) ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ExecuteRepositoryRetentionParams) {
+	var request ExecuteRepositoryRetentionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExecuteRepositoryRetention(ctx, request.(ExecuteRepositoryRetentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExecuteRepositoryRetention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExecuteRepositoryRetentionResponseObject); ok {
+		if err := validResponse.VisitExecuteRepositoryRetentionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

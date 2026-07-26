@@ -470,6 +470,25 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ExecuteRepositoryRetentionParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatMaven {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention execution is currently supported only for Maven repositories")
+			return
+		}
+		job, _, err := (NativeMavenRetention{Store: h.sessions.store}).EnqueueRepository(r.Context(), repo.ID, string(params.IdempotencyKey))
+		if errors.Is(err, repository.ErrIdempotencyConflict) {
+			writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing retention job")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "enqueue retention job failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatConan {
