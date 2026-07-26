@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,10 @@ func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 }
 
 func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool {
+	if r.URL.Path == "/v2/_catalog" {
+		h.catalog(w, r)
+		return true
+	}
 	name, resource, reference, uploadID, ok := parseNativeOCIPath(r.URL.Path)
 	if !ok {
 		return false
@@ -96,6 +101,84 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 	return true
+}
+
+func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	p, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
+	if !authenticated {
+		writeOCIChallenge(w, r)
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 1000 {
+			writeOCIError(w, http.StatusBadRequest, "NAME_INVALID", "catalog page size must be between 1 and 1000")
+			return
+		}
+		limit = n
+	}
+	last := r.URL.Query().Get("last")
+	var names []string
+	afterRepository := ""
+	for {
+		repos, next, err := h.repos.ListHostedRepositories(r.Context(), 200, afterRepository)
+		if err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list repositories")
+			return
+		}
+		for _, repo := range repos {
+			if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive || !h.authorizer.Authorize(r.Context(), p, repo, RepositoryRead).Allowed {
+				continue
+			}
+			localAfter, include := ociCatalogAfter(repo.Name, last)
+			if !include {
+				continue
+			}
+			items, err := h.store.ListOCIManifestNames(r.Context(), repo.ID, limit+1, localAfter)
+			if err != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list catalog")
+				return
+			}
+			for _, item := range items {
+				names = append(names, repo.Name+"/"+item)
+			}
+		}
+		if next == "" {
+			break
+		}
+		afterRepository = next
+	}
+	sort.Strings(names)
+	if len(names) > limit {
+		names = names[:limit]
+		w.Header().Set("Link", "</v2/_catalog?n="+strconv.Itoa(limit)+"&last="+url.QueryEscape(names[len(names)-1])+">; rel=\"next\"")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if names == nil {
+		names = []string{}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"repositories": names})
+}
+
+func ociCatalogAfter(repositoryName, last string) (string, bool) {
+	prefix := repositoryName + "/"
+	if last == "" || last < prefix {
+		return "", true
+	}
+	if strings.HasPrefix(last, prefix) {
+		return strings.TrimPrefix(last, prefix), true
+	}
+	return "", false
 }
 
 func (h nativeOCIHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {

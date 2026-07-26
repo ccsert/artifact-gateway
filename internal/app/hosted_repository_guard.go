@@ -91,5 +91,8 @@ func nativeRepositoryName(format repository.Format, path string) string {
 	if rest == path || rest == "" {
 		return ""
 	}
+	if format == repository.FormatOCI && rest == "_catalog" {
+		return ""
+	}
 	return strings.Split(rest, "/")[0]
 }

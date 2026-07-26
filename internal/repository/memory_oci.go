@@ -259,6 +259,25 @@ func (s *MemoryStore) ListOCIReferrers(_ context.Context, repositoryID, name, su
 	}
 	return out, nil
 }
+func (s *MemoryStore) ListOCIManifestNames(_ context.Context, repositoryID string, limit int, after string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	names := make(map[string]struct{})
+	for _, item := range s.ociManifests {
+		if item.RepositoryID == repositoryID && item.Name > after {
+			names[item.Name] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(names))
+	for name := range names {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
 func (s *MemoryStore) ListOCITags(_ context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

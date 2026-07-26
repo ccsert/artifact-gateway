@@ -296,6 +296,72 @@ func TestNativeOCIReferrersPaginateAndExcludeDeletedManifests(t *testing.T) {
 	}
 }
 
+func TestNativeOCICatalogPaginatesAndFiltersRepositoryGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	visible, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "visible", Name: "catalog-visible", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "hidden", Name: "catalog-hidden", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw", Name: "catalog-raw", Format: repository.FormatRaw})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	publish := func(repositoryName, image string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, "/v2/"+repositoryName+"/"+image+"/manifests/latest", strings.NewReader(`{"schemaVersion":2}`))
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s/%s=%d %s", repositoryName, image, response.Code, response.Body.String())
+		}
+	}
+	publish(visible.Name, "alpha")
+	publish(visible.Name, "beta")
+	publish(hidden.Name, "secret")
+	for _, repo := range []repository.HostedRepository{visible, hidden} {
+		if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "catalog-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), hidden.ID, []repository.RepositoryGrant{{Principal: "other-reader", Scopes: []string{"repositories:read"}}}, "2"); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/v2/_catalog?n=1", nil)
+	authorize(request, testAuthenticator().IssueToken("catalog-reader"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("catalog=%d %s", response.Code, response.Body.String())
+	}
+	var page struct {
+		Repositories []string `json:"repositories"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(page.Repositories, ",") != "catalog-visible/alpha" || !strings.Contains(response.Header().Get("Link"), "last=catalog-visible%2Falpha") {
+		t.Fatalf("page=%#v link=%q", page, response.Header().Get("Link"))
+	}
+	next := httptest.NewRequest(http.MethodGet, "/v2/_catalog?n=1&last="+url.QueryEscape(page.Repositories[0]), nil)
+	authorize(next, testAuthenticator().IssueToken("catalog-reader"))
+	nextResponse := httptest.NewRecorder()
+	handler.ServeHTTP(nextResponse, next)
+	if nextResponse.Code != http.StatusOK || !strings.Contains(nextResponse.Body.String(), "catalog-visible/beta") || strings.Contains(nextResponse.Body.String(), "secret") {
+		t.Fatalf("next=%d %s", nextResponse.Code, nextResponse.Body.String())
+	}
+	head := httptest.NewRequest(http.MethodHead, "/v2/_catalog", nil)
+	authorize(head, testAuthenticator().IssueToken("catalog-reader"))
+	headResponse := httptest.NewRecorder()
+	handler.ServeHTTP(headResponse, head)
+	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
+		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
+	}
+}
+
 func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})

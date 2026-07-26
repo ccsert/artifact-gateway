@@ -313,6 +313,25 @@ func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name
 	}
 	return out, rows.Err()
 }
+func (s *PostgresStore) ListOCIManifestNames(ctx context.Context, repositoryID string, limit int, after string) ([]string, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND name>$2 ORDER BY name LIMIT $3`, repositoryID, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
 func (s *PostgresStore) ListOCITags(ctx context.Context, repositoryID, name string, limit int, after string) ([]string, error) {
 	if limit <= 0 {
 		limit = 100
