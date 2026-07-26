@@ -18,9 +18,92 @@ import (
 	"testing"
 	"time"
 
+	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestPostgresMinIOOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "promotion-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-oci-source-" + uuid.NewString(), Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-oci-target-" + uuid.NewString(), Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("OCI blob promoted with manifest")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	blobKey := "native/oci/blobs/sha256/" + fmt.Sprintf("%x", sum[:])
+	if err = objects.PutVerifiedReader(ctx, blobKey, bytes.NewReader(body), int64(len(body)), digest); err != nil {
+		t.Fatal(err)
+	}
+	upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: source.ID, Name: "team/widget", ObjectKey: blobKey, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: source.ID, ObjectKey: blobKey, Digest: digest, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: digest, ObjectKey: blobKey, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	manifestBody := []byte(`{"schemaVersion":2,"config":{"digest":"` + digest + `"}}`)
+	manifestSum := sha256.Sum256(manifestBody)
+	manifestDigest := "sha256:" + fmt.Sprintf("%x", manifestSum[:])
+	manifestKey := "native/oci/manifests/" + source.ID + "/" + fmt.Sprintf("%x", manifestSum[:])
+	if err = objects.PutVerifiedReader(ctx, manifestKey, bytes.NewReader(manifestBody), int64(len(manifestBody)), manifestDigest); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: source.ID, ObjectKey: manifestKey, Digest: manifestDigest, Size: int64(len(manifestBody))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest, ObjectKey: manifestKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(manifestBody))}, manifestDigest); err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := (ociprotocol.NativePromotion{Store: store, Objects: objects}).Enqueue(ctx, target.ID, "postgres-minio-oci-promotion", ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = (ociprotocol.NativePromotion{Store: store, Objects: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	promoted, err := store.GetOCIManifest(ctx, target.ID, "team/widget", manifestDigest)
+	if err != nil || promoted.ObjectKey == manifestKey || promoted.Digest != manifestDigest {
+		t.Fatalf("manifest=%#v err=%v", promoted, err)
+	}
+	if _, err = store.GetOCIBlob(ctx, target.ID, digest); err != nil {
+		t.Fatalf("mounted blob: %v", err)
+	}
+	if info, err := objects.Stat(ctx, promoted.ObjectKey); err != nil || info.Digest != manifestDigest || info.Size != int64(len(manifestBody)) {
+		t.Fatalf("target manifest object=%#v err=%v", info, err)
+	}
+}
 
 func TestPostgresNativeOCIStateTransitions(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
