@@ -16,9 +16,79 @@ import (
 	"testing"
 	"time"
 
+	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	s3AccessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	s3SecretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || s3AccessKey == "" || s3SecretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-source-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-target-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("promoted from PostgreSQL and MinIO")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
+	objectKey := "native/maven/sha256/" + fmt.Sprintf("%x", sum[:])
+	if err = objects.Put(ctx, objectKey, body); err != nil {
+		t.Fatal(err)
+	}
+	coordinate := "org.example:promotion:1.0.0"
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: source.ID, Coordinate: coordinate, Publisher: "integration", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "promotion-1.0.0.jar", Digest: digest, Size: int64(len(body))}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, objectKey); err != nil {
+		t.Fatal(err)
+	}
+	assetPath := "org/example/promotion/1.0.0/promotion-1.0.0.jar"
+	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: assetPath, ObjectKey: objectKey, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	worker := mavenprotocol.NativePromotion{Store: store}
+	job, _, err := worker.Enqueue(ctx, target.ID, "postgres-minio-promotion", mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: coordinate, Digest: digest, PromotionID: uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = worker.RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("promotion job=%#v err=%v", jobs, err)
+	}
+	asset, err := store.GetMavenAsset(ctx, target.ID, assetPath)
+	if err != nil || asset.ObjectKey != objectKey || asset.Digest != digest {
+		t.Fatalf("promoted asset=%#v err=%v", asset, err)
+	}
+	if _, err = objects.Stat(ctx, objectKey); err != nil {
+		t.Fatalf("promotion must retain the shared MinIO object: %v", err)
+	}
+}
 
 func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")

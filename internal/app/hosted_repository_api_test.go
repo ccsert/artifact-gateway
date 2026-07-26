@@ -15,9 +15,74 @@ import (
 	"testing"
 	"time"
 
+	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-source", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-target", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	body := []byte("promoted jar")
+	digest := sha256.Sum256(body)
+	digestText := "sha256:" + fmt.Sprintf("%x", digest)
+	objectKey := "native/maven/promotion-widget"
+	if err = objects.Put(ctx, objectKey, body); err != nil {
+		t.Fatal(err)
+	}
+	session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: source.ID, Coordinate: "org.example:promotion-widget:1.0.0", Publisher: "test", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "promotion-widget-1.0.0.jar", Digest: digestText, Size: int64(len(body))}}}
+	if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkMavenPublishObject(ctx, session.ID, session.Objects[0].Name, objectKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: "org/example/promotion-widget/1.0.0/promotion-widget-1.0.0.jar", ObjectKey: objectKey, Digest: digestText, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	promote := func(targetID, key string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+targetID+`","coordinate":"`+session.Coordinate+`","digest":"`+digestText+`"}`))
+		authorize(req, "admin-secret")
+		req.Header.Set("Idempotency-Key", key)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	first := promote(target.ID, "promote-widget")
+	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"kind":"promotion"`) {
+		t.Fatalf("enqueue=%d %s", first.Code, first.Body.String())
+	}
+	if replay := promote(target.ID, "promote-widget"); replay.Code != http.StatusAccepted || replay.Body.String() != first.Body.String() {
+		t.Fatalf("idempotent replay=%d %s", replay.Code, replay.Body.String())
+	}
+	if err = (mavenprotocol.NativePromotion{Store: store}).RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRequest(http.MethodGet, "/repository/maven/"+target.Name+"/org/example/promotion-widget/1.0.0/promotion-widget-1.0.0.jar", nil)
+	read.SetBasicAuth("maven", "resolver-secret")
+	resolved := httptest.NewRecorder()
+	handler.ServeHTTP(resolved, read)
+	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+		t.Fatalf("promoted HTTP read=%d %q", resolved.Code, resolved.Body.String())
+	}
+	foundPromotionAudit := false
+	for _, audit := range store.Audits {
+		foundPromotionAudit = foundPromotionAudit || (audit.Operation == "promote" && audit.Repository == source.Name && audit.Status == http.StatusAccepted)
+	}
+	if !foundPromotionAudit {
+		t.Fatalf("promotion audit missing: %#v", store.Audits)
+	}
+}
 
 func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()

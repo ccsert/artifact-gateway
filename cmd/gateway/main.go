@@ -89,6 +89,7 @@ func main() {
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeMavenRetention{Store: store}.Start(runtimeContext, time.Hour)
+	app.NativeMavenPromotion{Store: store}.Start(runtimeContext, time.Minute)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	rawmaintenance.Collector{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)
 	app.NativeConanMaintenance{Store: store, Objects: objectStore}.Start(runtimeContext, time.Hour)

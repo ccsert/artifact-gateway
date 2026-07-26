@@ -194,6 +194,26 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 	return nil
 }
 
+// Start runs durable promotion work outside the management request path. Failed
+// jobs are claimed again by RunJobs, preserving the original idempotency key.
+func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RunJobs(ctx, 100)
+			}
+		}
+	}()
+}
+
 type retentionPayload struct {
 	Format        repository.Format `json:"format"`
 	PolicyVersion string            `json:"policyVersion"`

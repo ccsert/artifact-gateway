@@ -6,3 +6,4 @@ import mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/prot
 // behavior is owned by the Maven protocol module.
 type NativeMavenMaintenance = mavenprotocol.NativeMaintenance
 type NativeMavenRetention = mavenprotocol.NativeRetention
+type NativeMavenPromotion = mavenprotocol.NativePromotion

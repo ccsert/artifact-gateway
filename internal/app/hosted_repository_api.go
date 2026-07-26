@@ -507,7 +507,10 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Maven repository")
 				return
 			}
-			job, _, err := (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: uuid.NewString()})
+			// The promotion identity is part of the durable job payload, so it must
+			// be stable when an HTTP client retries the same idempotency key.
+			promotionID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("maven-promotion:"+target.ID+":"+string(params.IdempotencyKey))).String()
+			job, _, err := (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: promotionID})
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
 				return
