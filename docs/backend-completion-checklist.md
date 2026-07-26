@@ -27,7 +27,7 @@ goal. It intentionally excludes frontend work.
 - [ ] Maven publication companion hardening and black-box fixture coverage.
 - [x] Raw object listing.
 - [x] Raw checksum metadata and checksum sidecar behavior.
-- [ ] Raw resumable upload support.
+- [x] Raw resumable upload support.
 - [x] Conan Hosted publish/session flow.
 - [x] Conan Hosted metadata/file read flow.
 - [ ] Conan Hosted logical delete and restore (logical delete complete; restore pending).
@@ -61,5 +61,5 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Implement Raw Hosted resumable upload support while preserving atomic visibility
-and content-addressed lifecycle ownership.
+Implement Maven Hosted browse/search projection and publication companion
+hardening with black-box fixture coverage.

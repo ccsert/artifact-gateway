@@ -6,6 +6,9 @@ x-gateway-protocol-overlay:
     is a catch-all. GET or HEAD on a trailing-slash directory prefix lists visible
     Hosted assets below that prefix. `.sha256` and `.sha512` paths are derived
     checksum sidecars; PUT validates an assertion and never stores another asset.
+    A resumable Hosted upload starts with POST `?resumable=1`, then uses its
+    `uploadId` with PATCH and Upload-Offset before PUT `?complete=1` with a
+    required sha-256 Digest.
 raw_repository_root_directory:
   servers:
   - url: https://gateway.example.com
@@ -54,6 +57,14 @@ raw_repository_path:
       return a derived lowercase hexadecimal checksum plus newline. When the catch-all path ends
       in `/`, it instead returns a lexicographically ordered listing of visible
       Hosted assets below that canonical prefix; `n` and `last` control pagination.
+      With an `uploadId`, returns no content and the current Upload-Offset for an
+      open resumable upload rather than artifact bytes.
+    parameters:
+    - name: uploadId
+      in: query
+      schema:
+        type: string
+        format: uuid
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -80,10 +91,34 @@ raw_repository_path:
         "$ref": "../components/responses.yaml#/ProtocolNotFound"
   put:
     operationId: putRawHostedContent
-    description: Standard Raw Hosted write. The request body is stored directly under
-      the canonical Raw path; no management publish session is used for Raw. A `.sha256`
-      or `.sha512` target validates that checksum against an existing primary object and
-      returns no content without storing a sidecar asset.
+    description: >
+      Standard Raw Hosted write. The request body is stored directly under the canonical
+      Raw path; no management publish session is used for Raw. A `.sha256` or `.sha512`
+      target validates that checksum against an existing primary object and returns no
+      content without storing a sidecar asset. With `uploadId` and `complete=1`, appends
+      any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically
+      publishes the resumable upload.
+    parameters:
+    - name: uploadId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: complete
+      in: query
+      schema:
+        type: string
+        enum: ['1']
+    - name: Upload-Offset
+      in: header
+      schema:
+        type: integer
+        minimum: 0
+    - name: Digest
+      in: header
+      schema:
+        type: string
+        pattern: '^sha-256=[A-Za-z0-9+/]+={0,2}$'
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -101,8 +136,87 @@ raw_repository_path:
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '422':
         "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: startRawHostedResumableUpload
+    description: Starts an atomically invisible Raw Hosted upload. This operation
+      requires `resumable=1`; the returned Location contains the opaque uploadId.
+    parameters:
+    - name: resumable
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: ['1']
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '201':
+        description: Upload session created
+        headers:
+          Location:
+            schema:
+              type: string
+          Upload-Offset:
+            schema:
+              type: integer
+              minimum: 0
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+  patch:
+    operationId: appendRawHostedResumableUpload
+    description: Appends bytes to an open Raw upload session. Upload-Offset must
+      equal the current offset and the response returns the next offset.
+    parameters:
+    - name: uploadId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: Upload-Offset
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 0
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '204':
+        description: Bytes appended
+        headers:
+          Location:
+            schema:
+              type: string
+          Upload-Offset:
+            schema:
+              type: integer
+              minimum: 0
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
   delete:
     operationId: deleteRawHostedContent
+    description: Deletes a committed Raw asset. With an `uploadId`, cancels the
+      corresponding open resumable upload and discards its staged bytes.
+    parameters:
+    - name: uploadId
+      in: query
+      schema:
+        type: string
+        format: uuid
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []

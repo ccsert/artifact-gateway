@@ -263,7 +263,11 @@ func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
 	if err := json.NewDecoder(remainingResponse.Body).Decode(&remaining); err != nil {
 		t.Fatal(err)
 	}
-	if remainingResponse.StatusCode != http.StatusOK || len(remaining.Items) != 1 || remaining.Items[0].Path != "releases/beta.txt" {
+	remainingPaths := make(map[string]bool, len(remaining.Items))
+	for _, item := range remaining.Items {
+		remainingPaths[item.Path] = true
+	}
+	if remainingResponse.StatusCode != http.StatusOK || len(remainingPaths) != 2 || !remainingPaths["releases/beta.txt"] || !remainingPaths["releases/resumable.bin"] || remainingPaths["releases/alpha.txt"] {
 		t.Fatalf("remaining status=%d page=%#v", remainingResponse.StatusCode, remaining)
 	}
 }

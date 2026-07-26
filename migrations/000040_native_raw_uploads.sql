@@ -11,4 +11,4 @@ CREATE TABLE native_raw_uploads (
 CREATE INDEX native_raw_uploads_open_idx ON native_raw_uploads (repository_id, expires_at) WHERE state='open';
 
 -- +goose Down
-DROP TABLE IF EXISTS native_raw_uploads;
+-- Raw upload sessions are additive; compensate forward rather than removing them.
