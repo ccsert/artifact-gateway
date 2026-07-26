@@ -12,6 +12,7 @@ var (
 	ErrNameExists          = errors.New("group name already exists")
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
 	ErrVersionConflict     = errors.New("resource version conflicts with current state")
+	ErrQuotaExceeded       = errors.New("repository capacity quota exceeded")
 )
 
 type HostedRepositoryStore interface {

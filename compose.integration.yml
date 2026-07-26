@@ -21,7 +21,7 @@ services:
     environment:
       PGPASSWORD: integration-password
     entrypoint: ["/bin/sh", "-ec"]
-    command: ["for migration in /migrations/*.sql; do psql -h postgres -U gateway -d gateway -v ON_ERROR_STOP=1 -f \"$$migration\"; done"]
+    command: ["for migration in /migrations/*.sql; do sed '/-- +goose Down/,$$d' \"$$migration\" | psql -h postgres -U gateway -d gateway -v ON_ERROR_STOP=1; done"]
     volumes:
       - ./migrations:/migrations:ro
 
