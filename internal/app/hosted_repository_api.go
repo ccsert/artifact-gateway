@@ -588,8 +588,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI && source.Format != repository.FormatMaven) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Maven, OCI, or Raw replication requires a visible coordinate and sha256 digest")
+		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI && source.Format != repository.FormatMaven && source.Format != repository.FormatConan) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Maven, OCI, Raw, or Conan replication requires a visible coordinate and sha256 digest")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
@@ -635,7 +635,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					seenSourceKeys[asset.ObjectKey] = true
 					checkpoints = append(checkpoints, repository.ReplicationCheckpoint{SourceObjectKey: asset.ObjectKey, ObjectKey: mavenReplicationTargetObjectKey(target.ID, asset.Digest), Digest: asset.Digest, Size: asset.Size})
 				}
-			} else {
+			} else if format == repository.FormatOCI {
 				manifest, lookupErr := h.sessions.store.GetOCIManifest(r.Context(), source.ID, request.Coordinate, request.Digest)
 				if errors.Is(lookupErr, repository.ErrNotFound) || manifest.Digest != request.Digest {
 					writeHostedProblem(w, http.StatusNotFound, "not_found", "source OCI manifest is unavailable")
@@ -646,6 +646,22 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					return
 				}
 				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: manifest.ObjectKey, ObjectKey: ociReplicationTargetObjectKey(target.ID, manifest.Name, manifest.Digest), Digest: manifest.Digest, Size: manifest.Size}}
+			} else {
+				reference, revision, _ := strings.Cut(request.Coordinate, "#")
+				recipe, lookupErr := h.conan.GetConanRecipeRevision(r.Context(), source.ID, reference, revision)
+				if errors.Is(lookupErr, repository.ErrNotFound) || recipe.Digest != request.Digest || recipe.State != "visible" {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Conan recipe revision is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Conan recipe revision failed")
+					return
+				}
+				checkpoints, lookupErr = conanReplicationCheckpoints(r.Context(), h.conan, source.ID, target.ID, reference, revision)
+				if lookupErr != nil || len(checkpoints) == 0 {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Conan assets are unavailable")
+					return
+				}
 			}
 			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
@@ -660,6 +676,11 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 			writeNativeMavenJSON(w, http.StatusAccepted, toOpenAPIReplicationPlan(plan))
 		})
 	})
+}
+
+func validConanReplicationCoordinate(value string) bool {
+	reference, revision, found := strings.Cut(value, "#")
+	return found && reference != "" && revision != "" && !strings.Contains(revision, "/") && validConanPublishRequest(nativeConanPublishRequest{Kind: "recipe", Reference: reference, RecipeRevision: revision, Objects: []repository.MavenDeclaredObject{{Name: "object", Digest: "sha256:" + strings.Repeat("0", 64), Size: 1}}})
 }
 
 func (h generatedRepositoryAPIAdapter) ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {

@@ -102,6 +102,7 @@ func main() {
 	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.OCIReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.MavenReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
+	app.ConanReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{

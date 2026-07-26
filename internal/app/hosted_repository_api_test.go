@@ -205,6 +205,51 @@ func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
 	}
 }
 
+func TestRepositoryConanReplicationHTTPPlansAllVisibleRevisionAssets(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-conan-source", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-conan-target", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	reference, revision := "widget/1.0/user/stable", "rrev"
+	key := "native/conan/source/conanfile.py"
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: source.ID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: source.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range []repository.HostedRepository{source, target} {
+		if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "replicator", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+reference+`#`+revision+`","digest":"`+digest+`"}`))
+	authorize(request, authenticator.IssueToken("replicator"))
+	request.Header.Set("Idempotency-Key", "conan-copy")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("plan=%d %s", response.Code, response.Body.String())
+	}
+	plans, err := store.ListReplicationPlans(ctx, source.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].Format != repository.FormatConan {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+	checks, err := store.ListReplicationCheckpoints(ctx, plans[0].ID)
+	if err != nil || len(checks) != 1 || checks[0].SourceObjectKey != key || checks[0].ObjectKey != conanReplicationTargetObjectKey(target.ID, key) {
+		t.Fatalf("checkpoints=%#v err=%v", checks, err)
+	}
+}
+
 func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

@@ -82,6 +82,71 @@ func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
 	}
 }
 
+func TestPostgresMinIOConanReplicationPublishesTargetOwnedRevision(t *testing.T) {
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "conan-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-conan-source-" + uuid.NewString(), Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-conan-target-" + uuid.NewString(), Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("Conan replication backed by PostgreSQL and MinIO")
+	sum := sha256.Sum256(body)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	key := "native/conan/source/" + hex.EncodeToString(sum[:])
+	if err = objects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: source.ID, ObjectKey: key, Digest: digest, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	reference, revision := "pkg/1.0/user/stable", "rrev"
+	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: source.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := conanReplicationCheckpoints(ctx, store, source.ID, target.ID, reference, revision)
+	if err != nil || len(checks) != 1 {
+		t.Fatalf("checkpoints=%#v err=%v", checks, err)
+	}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatConan, IdempotencyKey: "postgres-minio-conan-replication"}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, checks); err != nil {
+		t.Fatal(err)
+	}
+	if err = (ConanReplication{Store: store, Source: objects, Destination: objects, ChunkBytes: 5}).RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := store.GetConanRecipeAsset(ctx, target.ID, reference, revision, "conanfile.py")
+	if err != nil || asset.ObjectKey != conanReplicationTargetObjectKey(target.ID, key) || asset.Digest != digest {
+		t.Fatalf("target asset=%#v err=%v", asset, err)
+	}
+	if got, err := objects.Get(ctx, asset.ObjectKey); err != nil || string(got) != string(body) {
+		t.Fatalf("target object=%q err=%v", got, err)
+	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 || plans[0].State != "completed" {
+		t.Fatalf("plans=%#v err=%v", plans, err)
+	}
+}
+
 type failOnceConanReclaimStore struct {
 	OCIObjectStore
 	fail bool
