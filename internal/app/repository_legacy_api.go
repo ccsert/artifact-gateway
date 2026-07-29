@@ -87,6 +87,15 @@ func (a rawAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/raw/groups")
 	if path == "" || path == "/" {
+		if r.Method == http.MethodGet {
+			groups, err := a.store.ListRawGroups(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "unable to list groups")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": groups})
+			return
+		}
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
@@ -225,6 +234,15 @@ func (a conanAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/conan/groups")
 	if path == "" || path == "/" {
+		if r.Method == http.MethodGet {
+			groups, err := a.store.ListConanGroups(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "unable to list groups")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": groups})
+			return
+		}
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
@@ -297,6 +315,15 @@ func (a mavenAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/maven/groups")
 	if path == "" || path == "/" {
+		if r.Method == http.MethodGet {
+			groups, err := a.store.ListMavenGroups(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "unable to list groups")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": groups})
+			return
+		}
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
@@ -372,11 +399,15 @@ func (a apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/oci/groups")
 	if path == "" || path == "/" {
-		if r.Method != http.MethodPost {
+		if r.Method != http.MethodPost && r.Method != http.MethodGet {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 		if !a.requireAdmin(w, principal) {
+			return
+		}
+		if r.Method == http.MethodGet {
+			a.list(w, r)
 			return
 		}
 		a.create(w, r)
@@ -450,6 +481,15 @@ func (a apiHandler) get(w http.ResponseWriter, r *http.Request, name string) {
 		return
 	}
 	writeJSON(w, 200, group)
+}
+
+func (a apiHandler) list(w http.ResponseWriter, r *http.Request) {
+	groups, err := a.store.ListGroups(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "unable to list groups")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": groups})
 }
 func (a apiHandler) disable(w http.ResponseWriter, r *http.Request, name string) {
 	err := a.store.DisableGroup(r.Context(), name)

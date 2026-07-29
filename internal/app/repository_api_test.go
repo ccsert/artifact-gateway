@@ -511,3 +511,87 @@ func TestGroupMemberRepositoryBindingsRequireMatchingFormat(t *testing.T) {
 		t.Fatal("format-mismatched repository binding was accepted")
 	}
 }
+
+func TestListGroupsEndpoints(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	create := func(path, payload string) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(payload))
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create %s status = %d, body=%s", path, response.Code, response.Body.String())
+		}
+	}
+	create("/api/v1/oci/groups", `{"name":"oci-a","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`)
+	create("/api/v1/oci/groups", `{"name":"oci-b","members":[{"name":"proxy","type":"proxy","endpoint":"https://registry.example","position":0}]}`)
+	create("/api/v1/maven/groups", `{"name":"maven-a","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`)
+	create("/api/v1/maven/groups", `{"name":"maven-b","members":[{"name":"proxy","type":"proxy","endpoint":"https://maven.example","position":0}]}`)
+	create("/api/v1/raw/groups", `{"name":"raw-a","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`)
+	create("/api/v1/raw/groups", `{"name":"raw-b","cacheQuotaBytes":5,"members":[{"name":"proxy","type":"proxy","endpoint":"https://raw.example","position":0,"allowedHosts":["raw.example"]}]}`)
+	create("/api/v1/conan/groups", `{"name":"conan-a","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`)
+	create("/api/v1/conan/groups", `{"name":"conan-b","members":[{"name":"proxy","type":"proxy","endpoint":"https://conan.example","position":0,"allowedHosts":["conan.example"]}]}`)
+
+	for _, test := range []struct {
+		path  string
+		names []string
+	}{
+		{"/api/v1/oci/groups", []string{"oci-a", "oci-b"}},
+		{"/api/v1/maven/groups", []string{"maven-a", "maven-b"}},
+		{"/api/v1/raw/groups", []string{"raw-a", "raw-b"}},
+		{"/api/v1/conan/groups", []string{"conan-a", "conan-b"}},
+	} {
+		request := httptest.NewRequest(http.MethodGet, test.path, nil)
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("list %s status = %d, body=%s", test.path, response.Code, response.Body.String())
+		}
+		var body struct {
+			Items []repository.Group `json:"items"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatalf("list %s decode: %v", test.path, err)
+		}
+		if len(body.Items) != len(test.names) {
+			t.Fatalf("list %s returned %d items: %s", test.path, len(body.Items), response.Body.String())
+		}
+		for i, name := range test.names {
+			if body.Items[i].Name != name {
+				t.Fatalf("list %s item %d name = %q, want %q", test.path, i, body.Items[i].Name, name)
+			}
+			if len(body.Items[i].Members) != 1 {
+				t.Fatalf("list %s item %q has %d members", test.path, name, len(body.Items[i].Members))
+			}
+		}
+	}
+}
+
+func TestListGroupsRequiresAdmin(t *testing.T) {
+	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	// rawAPIHandler collapses authentication and admin checks into a single 403.
+	unauthenticatedStatus := map[string]int{
+		"/api/v1/oci/groups":   http.StatusUnauthorized,
+		"/api/v1/maven/groups": http.StatusUnauthorized,
+		"/api/v1/raw/groups":   http.StatusForbidden,
+		"/api/v1/conan/groups": http.StatusUnauthorized,
+	}
+	for path, want := range unauthenticatedStatus {
+		unauthenticated := httptest.NewRecorder()
+		handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, path, nil))
+		if unauthenticated.Code != want {
+			t.Fatalf("unauthenticated list %s status = %d, want %d", path, unauthenticated.Code, want)
+		}
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		authorize(request, "resolver-secret")
+		forbidden := httptest.NewRecorder()
+		handler.ServeHTTP(forbidden, request)
+		if forbidden.Code != http.StatusForbidden {
+			t.Fatalf("non-admin list %s status = %d", path, forbidden.Code)
+		}
+	}
+}

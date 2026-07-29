@@ -26,6 +26,11 @@ func (s *MemoryStore) GetRawGroup(_ context.Context, name string) (Group, error)
 	}
 	return group, nil
 }
+func (s *MemoryStore) ListRawGroups(_ context.Context) ([]Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sortedGroups(s.rawGroups), nil
+}
 func (s *MemoryStore) DisableRawGroup(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,6 +69,11 @@ func (s *MemoryStore) GetConanGroup(_ context.Context, name string) (Group, erro
 	}
 	return group, nil
 }
+func (s *MemoryStore) ListConanGroups(_ context.Context) ([]Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sortedGroups(s.conanGroups), nil
+}
 func (s *MemoryStore) DisableConanGroup(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -93,6 +103,21 @@ func normalizeGroup(group *Group) {
 	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
 }
 
+// sortedGroups returns the groups in the map ordered by name so list
+// endpoints are deterministic. Callers must hold the lock.
+func sortedGroups(groups map[string]Group) []Group {
+	names := make([]string, 0, len(groups))
+	for name := range groups {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	listed := make([]Group, 0, len(groups))
+	for _, name := range names {
+		listed = append(listed, groups[name])
+	}
+	return listed
+}
+
 func (s *MemoryStore) GetGroup(_ context.Context, name string) (Group, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -101,6 +126,12 @@ func (s *MemoryStore) GetGroup(_ context.Context, name string) (Group, error) {
 		return Group{}, ErrNotFound
 	}
 	return group, nil
+}
+
+func (s *MemoryStore) ListGroups(_ context.Context) ([]Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sortedGroups(s.groups), nil
 }
 
 func (s *MemoryStore) DisableGroup(_ context.Context, name string) error {
@@ -135,6 +166,12 @@ func (s *MemoryStore) GetMavenGroup(_ context.Context, name string) (Group, erro
 		return Group{}, ErrNotFound
 	}
 	return group, nil
+}
+
+func (s *MemoryStore) ListMavenGroups(_ context.Context) ([]Group, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sortedGroups(s.mavenGroups), nil
 }
 
 func (s *MemoryStore) DisableMavenGroup(_ context.Context, name string) error {

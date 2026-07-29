@@ -163,6 +163,7 @@ type NativeRawStore interface {
 type Store interface {
 	CreateGroup(context.Context, Group) (Group, error)
 	GetGroup(context.Context, string) (Group, error)
+	ListGroups(context.Context) ([]Group, error)
 	DisableGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
@@ -187,6 +188,7 @@ type AuditRetentionStore interface {
 type MavenStore interface {
 	CreateMavenGroup(context.Context, Group) (Group, error)
 	GetMavenGroup(context.Context, string) (Group, error)
+	ListMavenGroups(context.Context) ([]Group, error)
 	DisableMavenGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 }
@@ -194,6 +196,7 @@ type MavenStore interface {
 type RawStore interface {
 	CreateRawGroup(context.Context, Group) (Group, error)
 	GetRawGroup(context.Context, string) (Group, error)
+	ListRawGroups(context.Context) ([]Group, error)
 	DisableRawGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 }
@@ -203,6 +206,7 @@ type RawStore interface {
 type ConanStore interface {
 	CreateConanGroup(context.Context, Group) (Group, error)
 	GetConanGroup(context.Context, string) (Group, error)
+	ListConanGroups(context.Context) ([]Group, error)
 	DisableConanGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 }
