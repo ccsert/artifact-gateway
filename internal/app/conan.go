@@ -213,6 +213,12 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), status)
 		return
 	}
+	h.serveResolvedConan(w, r, group, g, path, file, content, p)
+}
+
+// serveResolvedConan verifies, caches, and writes resolved Conan content. It
+// is shared by legacy Groups and native proxy repositories.
+func (h ConanHandler) serveResolvedConan(w http.ResponseWriter, r *http.Request, group string, g repository.Group, path, file string, content conanCacheEntry, p Principal) {
 	if file != "" && !h.verifyFile(r.Context(), g, path, file, content, p) {
 		h.audit(withConanAuditChecksum(r.Context()), group, path, content.member, p.Actor, repository.AuditUpstreamError)
 		http.Error(w, "Conan file checksum mismatch", http.StatusBadGateway)
@@ -334,6 +340,14 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return true
 	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		kind := "metadata"
+		if file != "" {
+			kind = "file"
+		}
+		h.serveNativeConanProxy(w, r, repo, path, kind, file, principal)
+		return true
+	}
 	content, ok, err := h.nativeConanContent(r.Context(), repo, path, file)
 	if err != nil {
 		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditUpstreamError)
@@ -354,6 +368,21 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 	}
 	h.audit(withConanAuditBytes(withConanAuditStatus(withConanAuditDisposition(r.Context(), "bypass"), http.StatusOK), servedBytes), name, path, "native", principal.Actor, repository.AuditResolved)
 	return true
+}
+
+// serveNativeConanProxy serves a read against a native proxy repository
+// through the legacy Group proxy fetch and cache path. The repository name is
+// the cache and audit namespace (the group slot); the member binds the
+// repository so grant evaluation stays on the same target.
+func (h ConanHandler) serveNativeConanProxy(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, kind, file string, principal Principal) {
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, RepositoryID: repo.ID}
+	g := repository.Group{Name: repo.Name, Enabled: true, Members: []repository.Member{member}}
+	content, status, err := h.resolve(r.Context(), g, path, kind, r.Header, principal)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	h.serveResolvedConan(w, r, repo.Name, g, path, file, content, principal)
 }
 
 func (h ConanHandler) nativeConanContent(ctx context.Context, repo repository.HostedRepository, path, file string) (conanCacheEntry, bool, error) {

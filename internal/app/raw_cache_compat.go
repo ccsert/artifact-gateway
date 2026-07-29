@@ -11,3 +11,4 @@ var NewRawCache = rawprotocol.NewCache
 var NewDefaultRawCache = rawprotocol.NewDefaultCache
 
 var errRawCacheMiss = rawprotocol.ErrCacheMiss
+var errRawCacheNegative = rawprotocol.ErrNegativeCache

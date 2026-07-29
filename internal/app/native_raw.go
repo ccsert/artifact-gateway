@@ -24,17 +24,27 @@ import (
 // nativeRawHandler serves V3 Raw repositories directly from the object store.
 // Unlike Raw Groups, it never consults an upstream member or cache index.
 type nativeRawHandler struct {
-	store      repository.NativeRawStore
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	metrics    *Metrics
+	store       repository.NativeRawStore
+	repos       repository.HostedRepositoryStore
+	objects     OCIObjectStore
+	auth        Authenticator
+	authorizer  RepositoryAuthorizer
+	audit       repository.Store
+	metrics     *Metrics
+	proxyClient RawClient
+	proxyCache  *RawCache
 }
 
 func (h nativeRawHandler) withMetrics(metrics *Metrics) nativeRawHandler {
 	h.metrics = metrics
+	return h
+}
+
+// withProxy wires the legacy Group proxy fetch path so a native proxy
+// repository is served through the same upstream client and cache.
+func (h nativeRawHandler) withProxy(client RawClient, cache *RawCache) nativeRawHandler {
+	h.proxyClient = client
+	h.proxyCache = cache
 	return h
 }
 
@@ -84,6 +94,10 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return true
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		h.proxyRead(w, r, repo, path, principal)
 		return true
 	}
 	if listing {
@@ -446,6 +460,104 @@ func validRawListCursor(repositoryName, prefix, cursor string) bool {
 	}
 	_, canonical, ok := rawprotocol.ParsePath("/raw/" + repositoryName + "/" + cursor)
 	return ok && canonical == cursor && strings.HasPrefix(cursor, prefix)
+}
+
+// proxyRead serves a read against a native proxy repository through the legacy
+// Group proxy fetch and cache path. The repository name is the cache and audit
+// namespace (the group slot); the upstream object path is the remainder.
+// Proxy repositories are read-only.
+func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.proxyClient == nil {
+		http.NotFound(w, r)
+		return
+	}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	if !rawprotocol.MemberProxyAllowed(member) {
+		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditProxyDenied, http.StatusForbidden, "bypass", 0)
+		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
+		return
+	}
+	key := ""
+	if h.proxyCache != nil {
+		key = h.proxyCache.Key(repo.Name, path, member.Name, member.Endpoint)
+		if content, err := h.proxyCache.Load(r.Context(), key); err == nil {
+			served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Body: content.Body, Digest: content.Digest, ContentType: content.ContentType})
+			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "hit", served.Bytes)
+			return
+		} else if errors.Is(err, errRawCacheNegative) {
+			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "hit", 0)
+			http.NotFound(w, r)
+			return
+		}
+	}
+	response, err := h.proxyClient.FetchRaw(r.Context(), http.MethodGet, member, path, nil)
+	if err != nil {
+		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
+		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+		return
+	}
+	limit := defaultRawMaxObjectBytes
+	if h.proxyCache != nil && h.proxyCache.MaxObjectBytes() > 0 {
+		limit = h.proxyCache.MaxObjectBytes()
+	}
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	_ = response.Body.Close()
+	if readErr != nil || int64(len(body)) > limit || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
+		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
+		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+		return
+	}
+	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
+		if h.proxyCache != nil {
+			_ = h.proxyCache.StoreNegative(r.Context(), key, member)
+		}
+		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "miss", 0)
+		http.NotFound(w, r)
+		return
+	}
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	sum := sha256.Sum256(body)
+	digest := hex.EncodeToString(sum[:])
+	if strings.HasSuffix(path, ".sha256") || strings.HasSuffix(path, ".sha512") {
+		if !rawprotocol.ValidChecksum(path, body) {
+			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
+			http.Error(w, "invalid checksum sidecar", http.StatusBadGateway)
+			return
+		}
+	}
+	if h.proxyCache != nil {
+		content := RawContent{Body: body, Digest: digest, ContentType: contentType, Member: member.Name, Endpoint: member.Endpoint, Repository: repo.Name, Path: path}
+		if err := h.proxyCache.Store(r.Context(), key, content); err != nil && !errors.Is(err, ErrCacheQuotaExceeded) {
+			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusInternalServerError, "bypass", 0)
+			http.Error(w, "unable to cache Raw content", http.StatusInternalServerError)
+			return
+		}
+	}
+	served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Body: body, Digest: digest, ContentType: contentType})
+	h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "miss", served.Bytes)
+}
+
+func (h nativeRawHandler) proxyAudit(r *http.Request, repo repository.HostedRepository, path string, member repository.Member, actor string, outcome repository.AuditOutcome, status int, disposition string, bytes int64) {
+	if h.audit == nil {
+		return
+	}
+	upstreamHost := ""
+	if endpoint, err := url.Parse(member.Endpoint); err == nil {
+		upstreamHost = endpoint.Hostname()
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, MemberName: member.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(),
+		Format: "raw", Resource: path, Representation: "body", MemberType: string(member.Type), UpstreamHost: upstreamHost,
+		Operation: strings.ToLower(r.Method), Status: status, CacheDisposition: disposition, Bytes: bytes,
+		RequestID: rawAuditRequestID(r.Context()), TraceID: rawAuditTraceID(r.Context()),
+	})
 }
 
 func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {

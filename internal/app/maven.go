@@ -91,6 +91,11 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	// details, not distinct repositories for authorization or operations.
 	repositoryName := groupName
 	h.Metrics.recordRequest(repositoryName)
+	// A native proxy repository claims the path before legacy Group resolution:
+	// it is authorized through repository grants and served from its upstream.
+	if h.serveNativeProxy(w, request, groupName, artifactPath, principal) {
+		return
+	}
 	if principal.Actor != "anonymous" && !h.Authenticator.CanReadMavenRepository(principal, repositoryName) {
 		if err := h.audit(request.Context(), groupName, artifactPath, "", actor, repository.AuditAccessDenied); err != nil {
 			h.Metrics.failed.Add(1)
@@ -160,6 +165,14 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.NotFound(w, request)
 		return
 	}
+	h.serveResolvedMembers(w, request, groupName, artifactPath, actor, members)
+}
+
+// serveResolvedMembers serves an artifact read against an ordered member set,
+// applying the read-through cache, upstream fetch with retry, and negative
+// caching. It is shared by legacy Groups and native proxy repositories, which
+// pass a single synthetic proxy member.
+func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.Request, groupName, artifactPath, actor string, members []repository.Member) {
 	cacheKey := ""
 	hasProxy := false
 	hasHosted := false
@@ -340,6 +353,34 @@ func (h MavenHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		_ = h.Cache.StoreNegative(request.Context(), cacheKey, notFoundProxy)
 	}
 	http.NotFound(w, request)
+}
+
+// serveNativeProxy claims the request when the first path segment is an active
+// native Maven proxy repository. It authorizes through repository grants and
+// serves the artifact from the repository's upstream via the shared proxy
+// fetch and cache path, with the repository name as the cache/audit namespace.
+func (h MavenHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, groupName, artifactPath string, principal Principal) bool {
+	if h.Repositories == nil {
+		return false
+	}
+	repo, err := h.Repositories.GetHostedRepositoryByName(request.Context(), groupName)
+	if err != nil || repo.Format != repository.FormatMaven || repo.Type != repository.RepositoryTypeProxy || repo.State != repository.RepositoryActive {
+		return false
+	}
+	resource := mavenResourceFromPath(artifactPath)
+	if decision := h.Authorizer.AuthorizeResource(request.Context(), principal, repo, RepositoryRead, resource); !decision.Allowed {
+		if auditErr := h.auditAuthorizationDenied(request.Context(), groupName, artifactPath, "", principal.Actor, decision); auditErr != nil {
+			h.Metrics.failed.Add(1)
+			http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+			return true
+		}
+		h.Metrics.failed.Add(1)
+		http.Error(w, "repository read permission required", http.StatusForbidden)
+		return true
+	}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	h.serveResolvedMembers(w, request, repo.Name, artifactPath, principal.Actor, []repository.Member{member})
+	return true
 }
 
 func (h MavenHandler) authorizedMavenMembers(ctx context.Context, groupName, artifactPath, actor string, principal Principal, members []repository.Member) ([]repository.Member, bool, error) {

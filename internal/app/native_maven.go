@@ -30,10 +30,20 @@ type nativeMavenHandler struct {
 	authorizer    RepositoryAuthorizer
 	management    hostedRepositoryAPIHandler
 	metrics       *Metrics
+	proxyClient   MavenClient
+	proxyCache    *MavenCache
 }
 
 func (h nativeMavenHandler) withMetrics(metrics *Metrics) nativeMavenHandler {
 	h.metrics = metrics
+	return h
+}
+
+// withProxy wires the legacy Group proxy fetch path so a native proxy
+// repository is served through the same upstream client and cache.
+func (h nativeMavenHandler) withProxy(client MavenClient, cache *MavenCache) nativeMavenHandler {
+	h.proxyClient = client
+	h.proxyCache = cache
 	return h
 }
 
@@ -387,6 +397,10 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		h.proxyRead(w, r, repo, assetPath, principal)
+		return
+	}
 	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, assetPath)
 	if err != nil {
 		if snapshotAsset, found := h.snapshotAsset(r.Context(), repo.ID, assetPath); found {
@@ -413,6 +427,19 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body)
 	}
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
+}
+
+// proxyRead serves a read against a native proxy repository through the legacy
+// Group proxy fetch and cache path. The repository name is the cache and audit
+// namespace (the group slot); the upstream artifact path is the remainder.
+func (h nativeMavenHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, assetPath string, principal Principal) {
+	if h.proxyClient == nil {
+		http.NotFound(w, r)
+		return
+	}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	proxy := MavenHandler{Store: h.store, Repositories: h.store, Authorizer: h.authorizer, Authenticator: h.authenticator, Client: h.proxyClient, Metrics: h.metrics, Cache: h.proxyCache}
+	proxy.serveResolvedMembers(w, r, repo.Name, assetPath, principal.Actor, []repository.Member{member})
 }
 
 // snapshotAsset resolves Maven's timestamped SNAPSHOT filenames to the

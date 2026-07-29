@@ -134,8 +134,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		conanClient = client
 	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: ociClient, Authenticator: authenticator, Cache: cache}
-	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics)
-	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics)
+	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci)
+	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -152,7 +152,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if nativeObjects == nil {
 		nativeObjects = NewMemoryOCIObjectStore()
 	}
-	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics)
+	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics).withProxy(mavenClient, mavenCache)
 	nativeConanObjects := dependencies.NativeConanObjectStore
 	if nativeConanObjects == nil {
 		nativeConanObjects = NewMemoryOCIObjectStore()

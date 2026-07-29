@@ -31,10 +31,18 @@ type nativeOCIHandler struct {
 	authorizer RepositoryAuthorizer
 	audit      repository.Store
 	metrics    *Metrics
+	proxy      *OCIHandler
 }
 
 func (h nativeOCIHandler) withMetrics(metrics *Metrics) nativeOCIHandler {
 	h.metrics = metrics
+	return h
+}
+
+// withProxy wires the legacy Group proxy fetch path so a native proxy
+// repository is served through the same upstream client and cache.
+func (h nativeOCIHandler) withProxy(proxy OCIHandler) nativeOCIHandler {
+	h.proxy = &proxy
 	return h
 }
 
@@ -82,6 +90,10 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	if decision := h.authorizer.AuthorizeResource(r.Context(), p, repo, operation, imageName); !decision.Allowed {
 		h.recordAuthorizationDenial(r, p, repo, operation, decision)
 		writeOCIChallenge(w, r)
+		return true
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		h.proxyRead(w, r, repo, resource, imageName, reference, p.Actor)
 		return true
 	}
 	switch resource {
@@ -209,6 +221,28 @@ func nativeOCIOperation(resource, method string) RepositoryOperation {
 		}
 	}
 	return RepositoryWrite
+}
+
+// proxyRead serves a read against a native proxy repository through the legacy
+// Group proxy fetch and cache path. Proxy repositories are read-only; only
+// manifest and blob reads are proxied, matching the Registry V2 pull flow.
+func (h nativeOCIHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, resource, imageName, reference, actor string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeOCIError(w, http.StatusMethodNotAllowed, "UNSUPPORTED", "method not allowed")
+		return
+	}
+	if resource != "manifest" && resource != "blob" {
+		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
+		return
+	}
+	if h.proxy == nil {
+		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
+		return
+	}
+	// The upstream Registry V2 path uses the plural resource segment, while the
+	// native parser reports the singular resource kind.
+	upstreamResource := map[string]string{"manifest": ociManifest, "blob": ociBlob}[resource]
+	h.proxy.serveNativeProxy(w, r, repo, imageName, upstreamResource, reference, actor)
 }
 
 func parseNativeOCIPath(path string) (name, resource, reference, uploadID string, ok bool) {

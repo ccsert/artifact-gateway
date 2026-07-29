@@ -287,6 +287,72 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 	})
 }
 
+// serveNativeProxy serves a manifest or blob read for a native proxy
+// repository. The repository name is the cache and audit namespace (the group
+// slot), while the upstream image name is the path component after it. It
+// reuses the Group proxy fetch path: upstream client, read-through cache,
+// digest verification and circuit breaking all come from fetchOCIContent.
+func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	members := []repository.Member{member}
+	groupName := repo.Name
+	cacheKey := ""
+	if h.Cache != nil {
+		cacheKey = h.Cache.Key(groupName, imageName, resource, reference)
+	}
+	var content CachedOCIContent
+	var err error
+	if request.Method == http.MethodGet && h.Cache != nil {
+		workCtx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), ociSharedWorkTimeout)
+		defer cancel()
+		content, err = h.Cache.Do(workCtx, cacheKey, func(fetchCtx context.Context) (CachedOCIContent, error) {
+			if cached, loadErr := h.Cache.Load(fetchCtx, cacheKey); loadErr == nil && cached.Endpoint != "" {
+				h.Resolver.Metrics.ociCacheHit.Add(1)
+				h.Resolver.Metrics.recordCache(imageName, true)
+				return cached, nil
+			}
+			fetched, fetchErr := h.fetchOCIContent(fetchCtx, request.Method, members, imageName, resource, reference, request.Header, groupName, actor, cacheKey)
+			if fetchErr != nil {
+				var notFound *ociFetchError
+				if errors.As(fetchErr, &notFound) && notFound.status == http.StatusNotFound {
+					if cacheErr := h.Cache.StoreNegative(fetchCtx, cacheKey, notFound.member); cacheErr != nil {
+						return CachedOCIContent{}, cacheErr
+					}
+				}
+				return CachedOCIContent{}, fetchErr
+			}
+			if fetched.Cacheable() {
+				fetched.Repository = imageName
+				if cacheErr := h.Cache.Store(fetchCtx, cacheKey, fetched); cacheErr != nil {
+					if errors.Is(cacheErr, ErrCacheQuotaExceeded) {
+						h.Resolver.Metrics.cacheQuotaDenied.Add(1)
+						return fetched, nil
+					}
+					fetched.Cleanup()
+					return CachedOCIContent{}, cacheErr
+				}
+				fetched.Cleanup()
+				return h.Cache.Load(fetchCtx, cacheKey)
+			}
+			return fetched, nil
+		})
+	} else {
+		content, err = h.fetchOCIContent(request.Context(), request.Method, members, imageName, resource, reference, request.Header, groupName, actor, cacheKey)
+	}
+	if err != nil {
+		h.Resolver.RecordOCIRequestFailure()
+		var fetchErr *ociFetchError
+		if errors.As(err, &fetchErr) {
+			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
+			return
+		}
+		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
+		return
+	}
+	defer content.Cleanup()
+	serveCachedOCIContent(w, request, reference, content)
+}
+
 type ociFetchError struct {
 	status  int
 	code    string
