@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, Fragment } from 'react';
 import { useAuth } from '../lib/auth';
 import { getGroupOperations, fetchViaProxy, listCacheEntries } from '../lib/v1proxy';
 import type { ProxyFormat, V1Group, GroupOperations, CacheEntry } from '../lib/v1proxy';
@@ -6,6 +6,48 @@ import { Card, DataTable, inputClass, btnSecondary } from './Layout';
 import { ErrorBanner, EmptyState } from './Feedback';
 import { StateBadge, Badge } from './Badge';
 import { formatBytes, formatNumber, shortDigest } from '../lib/format';
+
+// 单个缓存制品的使用方法（通过代理组拉取）
+function ProxyEntryUsage({ format, group, entry }: { format: ProxyFormat; group: string; entry: CacheEntry }) {
+  const base = window.location.origin;
+  const host = window.location.host;
+  const path = entry.repository;
+  const snippets: { label: string; code: string }[] = [];
+  if (format === 'oci') {
+    snippets.push(
+      { label: 'Docker 拉取', code: `docker pull ${host}/${group}/${path}:<tag>` },
+      { label: 'manifest URL', code: `${base}/v2/${group}/${path}/manifests/<tag>` },
+    );
+  } else if (format === 'maven') {
+    snippets.push({ label: '下载 URL', code: `${base}/maven/${group}/${path}` });
+    // 从路径反推 GAV
+    const m = path.match(/^(.+)\/([^/]+)\/([^/]+)\/[^/]+$/);
+    if (m) {
+      const [, g, a, v] = m;
+      snippets.push({
+        label: 'Maven 依赖',
+        code: `<dependency>\n  <groupId>${g.replaceAll('/', '.')}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${v}</version>\n</dependency>`,
+      });
+    }
+  } else if (format === 'raw') {
+    snippets.push({ label: '下载 URL', code: `${base}/raw/${group}/${path}` });
+  } else if (format === 'conan') {
+    snippets.push({ label: '引用路径', code: `${base}/conan/v2/${group}/conans/${path}` });
+  }
+  return (
+    <div className="space-y-2">
+      {snippets.map((s) => (
+        <div key={s.label} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500">{s.label}</span>
+            <CopyButton text={s.code} />
+          </div>
+          <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">{s.code}</code>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -34,7 +76,7 @@ function CommandBlock({ label, command }: { label: string; command: string }) {
         <span className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</span>
         <CopyButton text={command} />
       </div>
-      <code className="block break-all font-mono text-xs leading-5 text-cyan-300">{command}</code>
+      <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">{command}</code>
     </div>
   );
 }
@@ -65,6 +107,7 @@ export function ProxyGroupDetail({ format, group }: { format: ProxyFormat; group
   const { token } = useAuth();
   const [ops, setOps] = useState<GroupOperations | null>(null);
   const [entries, setEntries] = useState<CacheEntry[] | null>(null);
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [coordinate, setCoordinate] = useState('');
   const [fetching, setFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{ status: number; bytes: number } | null>(null);
@@ -254,23 +297,39 @@ export function ProxyGroupDetail({ format, group }: { format: ProxyFormat; group
         ) : (
           <Card>
             <DataTable columns={['制品坐标', '摘要', '大小', '类型', '来源']}>
-              {entries.map((e, i) => (
-                <tr key={`${e.repository}-${e.digest}-${i}`} className="hover:bg-zinc-800/30">
-                  <td className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200" title={e.repository}>
-                    {e.repository}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-zinc-500" title={e.digest}>
-                    {shortDigest(e.digest)}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-zinc-400">{formatBytes(e.size)}</td>
-                  <td className="max-w-40 truncate px-4 py-2.5 text-xs text-zinc-500" title={e.contentType}>
-                    {e.contentType ?? '—'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Badge tone="amber">{e.member ?? 'proxy'}</Badge>
-                  </td>
-                </tr>
-              ))}
+              {entries.map((e, i) => {
+                const expanded = expandedEntry === `${e.repository}-${i}`;
+                return (
+                  <Fragment key={`${e.repository}-${e.digest}-${i}`}>
+                    <tr
+                      className="cursor-pointer hover:bg-zinc-800/30"
+                      onClick={() => setExpandedEntry(expanded ? null : `${e.repository}-${i}`)}
+                    >
+                      <td className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200" title={e.repository}>
+                        <span className="mr-1.5 text-zinc-600">{expanded ? '▾' : '▸'}</span>
+                        {e.repository}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-zinc-500" title={e.digest}>
+                        {shortDigest(e.digest)}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-zinc-400">{formatBytes(e.size)}</td>
+                      <td className="max-w-40 truncate px-4 py-2.5 text-xs text-zinc-500" title={e.contentType}>
+                        {e.contentType ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge tone="amber">{e.member ?? 'proxy'}</Badge>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="bg-zinc-900/50">
+                        <td colSpan={5} className="px-4 py-3">
+                          <ProxyEntryUsage format={format} group={group.name} entry={e} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </DataTable>
           </Card>
         )}
