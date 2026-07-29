@@ -18,6 +18,9 @@ export type Repository = {
     id: string;
     name: string;
     format: Format;
+    type?: 'hosted' | 'proxy';
+    endpoint?: string;
+    allowedHosts?: Array<string>;
     state: 'active' | 'deleting' | 'deleted';
     version: string;
 };
@@ -25,6 +28,15 @@ export type Repository = {
 export type CreateRepository = {
     name: string;
     format: Format;
+    type?: 'hosted' | 'proxy';
+    /**
+     * Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
+     */
+    endpoint?: string;
+    /**
+     * Hosts the proxy may egress to. Required for raw and conan proxies.
+     */
+    allowedHosts?: Array<string>;
 };
 
 export type Group = {
@@ -149,7 +161,7 @@ export type ArtifactTombstonePage = {
 
 export type RepositoryCapabilities = {
     format: Format;
-    type: 'hosted';
+    type: 'hosted' | 'proxy';
     operations: Array<'read' | 'publish' | 'browse' | 'delete' | 'restore' | 'retain' | 'reclaim'>;
 };
 

@@ -3,6 +3,16 @@ import type { Repository } from '../client';
 // 成员排序选择器：左侧候选仓库（点击添加），右侧已选成员（上下移动调序、移除）。
 // 比"按点击顺序编号"更直观——顺序就是列表顺序，可直接调整。
 
+function TypeDot({ type }: { type?: 'hosted' | 'proxy' }) {
+  const proxy = type === 'proxy';
+  return (
+    <span
+      title={proxy ? 'proxy' : 'hosted'}
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${proxy ? 'bg-amber-400' : 'bg-cyan-400'}`}
+    />
+  );
+}
+
 export function MemberOrderPicker({
   candidates,
   memberIds,
@@ -12,7 +22,8 @@ export function MemberOrderPicker({
   memberIds: string[];
   onChange: (ids: string[]) => void;
 }) {
-  const repoName = (id: string) => candidates.find((r) => r.id === id)?.name ?? id.slice(0, 8) + '…';
+  const repoOf = (id: string) => candidates.find((r) => r.id === id);
+  const repoName = (id: string) => repoOf(id)?.name ?? id.slice(0, 8) + '…';
   const available = candidates.filter((r) => !memberIds.includes(r.id));
 
   const move = (index: number, dir: -1 | 1) => {
@@ -42,7 +53,10 @@ export function MemberOrderPicker({
               onClick={() => add(r.id)}
               className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
             >
-              <span className="font-mono">{r.name}</span>
+              <span className="flex items-center gap-1.5 font-mono">
+                <TypeDot type={r.type} />
+                {r.name}
+              </span>
               <span className="text-zinc-600">+</span>
             </button>
           ))}
@@ -63,6 +77,7 @@ export function MemberOrderPicker({
               className="flex items-center gap-1 rounded-md bg-cyan-500/5 px-2 py-1.5"
             >
               <span className="w-5 shrink-0 text-center font-mono text-[10px] text-cyan-400">{i + 1}</span>
+              <TypeDot type={repoOf(id)?.type} />
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-200" title={repoName(id)}>
                 {repoName(id)}
               </span>
