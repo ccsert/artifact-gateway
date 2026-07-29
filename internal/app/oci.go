@@ -294,8 +294,16 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 // digest verification and circuit breaking all come from fetchOCIContent.
 func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
 	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor)
+}
+
+// serveV2GroupProxy serves a manifest or blob read against a single proxy
+// member of a V2 HostedGroup. The group name is the cache and audit namespace,
+// while the upstream image name is the path component after it. It reuses the
+// Group proxy fetch path: upstream client, read-through cache, digest
+// verification and circuit breaking all come from fetchOCIContent.
+func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Request, groupName string, member repository.Member, imageName, resource, reference, actor string) {
 	members := []repository.Member{member}
-	groupName := repo.Name
 	cacheKey := ""
 	if h.Cache != nil {
 		cacheKey = h.Cache.Key(groupName, imageName, resource, reference)

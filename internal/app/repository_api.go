@@ -178,22 +178,35 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
-	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if nativeOCI.ServeHTTP(w, r) {
-			return
-		}
-		oci.ServeHTTP(w, r)
-	})})
+	ociGroupRouter := v2GroupRouter{format: repository.FormatOCI, groups: store, repos: store, audit: store, auth: authenticator,
+		oci: &v2GroupOCIHandler{native: &nativeOCI, proxy: &oci, auth: authenticator},
+		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if nativeOCI.ServeHTTP(w, r) {
+				return
+			}
+			oci.ServeHTTP(w, r)
+		})}
+	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: ociGroupRouter})
 	mux.Handle("/repository/maven/", nativeMaven)
-	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}})
-	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if nativeRaw.ServeHTTP(w, r) {
-			return
-		}
-		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
-	})})
+	mavenLegacy := MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}
+	mavenGroupRouter := v2GroupRouter{format: repository.FormatMaven, groups: store, repos: store, audit: store, auth: authenticator,
+		maven: &v2GroupMavenHandler{native: &nativeMaven, proxy: &mavenLegacy, auth: authenticator},
+		next:  mavenLegacy}
+	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter})
+	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
+		raw: &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
+		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if nativeRaw.ServeHTTP(w, r) {
+				return
+			}
+			RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
+		})}
+	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter})
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
-	mux.Handle("/conan/v2/", conan)
+	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
+		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},
+		next:  conan}
+	mux.Handle("/conan/v2/", conanGroupRouter)
 	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	return tracedHTTPHandler(mux)
