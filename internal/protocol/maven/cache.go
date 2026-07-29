@@ -88,6 +88,15 @@ func (c *Cache) WithCoordinator(coordinator cache.Coordinator) *Cache {
 	return c
 }
 
+// WithTTL overrides the component cache TTL; metadata and negative entries
+// keep their shorter lifetimes.
+func (c *Cache) WithTTL(ttl time.Duration) *Cache {
+	if ttl > 0 {
+		c.componentTTL = ttl
+	}
+	return c
+}
+
 func (c *Cache) Key(group, artifactPath string) string {
 	sum := sha256.Sum256([]byte(group + "\x00" + artifactPath))
 	return "maven/index/" + hex.EncodeToString(sum[:]) + ".json"

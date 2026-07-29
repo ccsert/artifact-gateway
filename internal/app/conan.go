@@ -651,7 +651,7 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 			}
 		}
 		if h.Cache != nil && kind != "file" {
-			ttl := 15 * time.Minute
+			ttl := h.Cache.TTL()
 			if metadata {
 				ttl = time.Minute
 			}

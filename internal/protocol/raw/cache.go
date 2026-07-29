@@ -108,6 +108,15 @@ func (c *Cache) WithMaxObjectBytes(limit int64) *Cache {
 	return c
 }
 
+// WithTTL overrides the positive cache TTL; negative entries keep their
+// shorter lifetime.
+func (c *Cache) WithTTL(ttl time.Duration) *Cache {
+	if ttl > 0 {
+		c.ttl = ttl
+	}
+	return c
+}
+
 func (c *Cache) MaxObjectBytes() int64 { return c.maxObjectBytes }
 
 func (c *Cache) Key(group, path, member, endpoint string) string {

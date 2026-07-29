@@ -18,6 +18,7 @@ import (
 )
 
 const defaultMaxObjectBytes = int64(1 << 30)
+const defaultTTL = 15 * time.Minute
 
 type Content struct {
 	Body                          []byte
@@ -35,6 +36,7 @@ type cacheIndex struct {
 // Cache owns the Conan cache index, its object lifetime, and cross-instance coordination.
 type Cache struct {
 	store          objectstore.Store
+	ttl            time.Duration
 	quota          *cache.Quota
 	maxObjectBytes int64
 	coordinator    cache.Coordinator
@@ -42,7 +44,7 @@ type Cache struct {
 }
 
 func NewCache(store objectstore.Store) *Cache {
-	return &Cache{store: store, maxObjectBytes: defaultMaxObjectBytes}
+	return &Cache{store: store, ttl: defaultTTL, maxObjectBytes: defaultMaxObjectBytes}
 }
 func NewDefaultCache(store objectstore.Store, _ []string) *Cache { return NewCache(store) }
 func (c *Cache) WithQuota(q *cache.Quota) *Cache                 { c.quota = q; return c }
@@ -53,6 +55,18 @@ func (c *Cache) WithMaxObjectBytes(limit int64) *Cache {
 	}
 	return c
 }
+
+// WithTTL overrides the positive cache TTL; metadata and negative entries
+// keep their shorter lifetimes.
+func (c *Cache) WithTTL(ttl time.Duration) *Cache {
+	if ttl > 0 {
+		c.ttl = ttl
+	}
+	return c
+}
+
+// TTL returns the configured positive cache TTL.
+func (c *Cache) TTL() time.Duration    { return c.ttl }
 func (c *Cache) MaxObjectBytes() int64 { return c.maxObjectBytes }
 
 func (c *Cache) Key(group, path string, member repository.Member, representation ...string) string {

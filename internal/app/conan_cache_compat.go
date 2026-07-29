@@ -33,6 +33,10 @@ func (c *ConanCache) WithMaxObjectBytes(limit int64) *ConanCache {
 	c.Cache.WithMaxObjectBytes(limit)
 	return c
 }
+func (c *ConanCache) WithTTL(ttl time.Duration) *ConanCache {
+	c.Cache.WithTTL(ttl)
+	return c
+}
 func (c *ConanCache) load(ctx context.Context, key string) (conanCacheEntry, bool) {
 	content, ok := c.Load(ctx, key)
 	return conanCacheEntry{body: content.Body, contentType: content.ContentType, member: content.Member, endpoint: content.Endpoint, status: content.Status}, ok

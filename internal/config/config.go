@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -21,6 +22,10 @@ type Config struct {
 	RawProxyAllowedHosts     []string
 	RawCacheMaxObjectBytes   int64
 	ConanCacheMaxObjectBytes int64
+	OCICacheTTL              time.Duration
+	MavenCacheTTL            time.Duration
+	RawCacheTTL              time.Duration
+	ConanCacheTTL            time.Duration
 	AdminToken               string
 	ResolverToken            string
 	AdminActor               string
@@ -49,6 +54,10 @@ func Load() (Config, error) {
 		RawProxyAllowedHosts:     splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
 		RawCacheMaxObjectBytes:   1 << 30,
 		ConanCacheMaxObjectBytes: 1 << 30,
+		OCICacheTTL:              15 * time.Minute,
+		MavenCacheTTL:            15 * time.Minute,
+		RawCacheTTL:              15 * time.Minute,
+		ConanCacheTTL:            15 * time.Minute,
 		AdminToken:               os.Getenv("GATEWAY_ADMIN_TOKEN"),
 		ResolverToken:            os.Getenv("GATEWAY_RESOLVER_TOKEN"),
 		AdminActor:               value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
@@ -107,7 +116,48 @@ func Load() (Config, error) {
 		}
 		cfg.ConanCacheMaxObjectBytes = bytes
 	}
+	if ttl, err := durationEnv("GATEWAY_OCI_CACHE_TTL", cfg.OCICacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.OCICacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_MAVEN_CACHE_TTL", cfg.MavenCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.MavenCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_RAW_CACHE_TTL", cfg.RawCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.RawCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_CONAN_CACHE_TTL", cfg.ConanCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.ConanCacheTTL = ttl
+	}
 	return cfg, nil
+}
+
+// durationEnv parses a cache TTL override. The value is either a Go duration
+// string ("30m", "1h30m") or a positive integer number of seconds ("900").
+// An unset variable retains the fallback.
+func durationEnv(name string, fallback time.Duration) (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	if seconds, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if seconds <= 0 {
+			return 0, fmt.Errorf("%s must be a positive duration", name)
+		}
+		return time.Duration(seconds) * time.Second, nil
+	}
+	ttl, err := time.ParseDuration(raw)
+	if err != nil || ttl <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration", name)
+	}
+	return ttl, nil
 }
 
 func splitCSV(raw string) []string {

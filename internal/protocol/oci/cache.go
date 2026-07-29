@@ -166,6 +166,16 @@ func (c *Cache) WithQuota(quota *cache.Quota) *Cache {
 	return c
 }
 
+// WithTTL overrides the positive cache TTL. The garbage-collection grace
+// tracks the TTL so objects outlive the index that references them.
+func (c *Cache) WithTTL(ttl time.Duration) *Cache {
+	if ttl > 0 {
+		c.ttl = ttl
+		c.gcGrace = ttl
+	}
+	return c
+}
+
 func (c *Cache) WithLockTiming(lease, renewEvery time.Duration) *Cache {
 	if lease > 0 {
 		c.lockLease = lease
