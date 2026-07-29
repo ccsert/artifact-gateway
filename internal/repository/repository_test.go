@@ -249,3 +249,50 @@ func TestMemoryStorePreservesLegacyGroupMemberRepositoryBindings(t *testing.T) {
 		})
 	}
 }
+
+func TestMemoryHostedRepositoryProxyFieldsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	proxy := HostedRepository{
+		ID:           "proxy-raw",
+		Name:         "proxy-raw",
+		Format:       FormatRaw,
+		Type:         RepositoryTypeProxy,
+		Endpoint:     "https://upstream.example",
+		AllowedHosts: []string{"upstream.example", "cdn.example"},
+	}
+	created, err := store.CreateHostedRepository(ctx, proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Type != RepositoryTypeProxy || created.Endpoint != proxy.Endpoint || len(created.AllowedHosts) != 2 {
+		t.Fatalf("created=%#v", created)
+	}
+	loaded, err := store.GetHostedRepository(ctx, proxy.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Type != RepositoryTypeProxy || loaded.Endpoint != proxy.Endpoint || loaded.AllowedHosts[0] != "upstream.example" || loaded.AllowedHosts[1] != "cdn.example" {
+		t.Fatalf("loaded=%#v", loaded)
+	}
+	byName, err := store.GetHostedRepositoryByName(ctx, proxy.Name)
+	if err != nil || byName.Type != RepositoryTypeProxy || byName.Endpoint != proxy.Endpoint {
+		t.Fatalf("byName=%#v err=%v", byName, err)
+	}
+	listed, _, err := store.ListHostedRepositories(ctx, 10, "")
+	if err != nil || len(listed) != 1 || listed[0].Type != RepositoryTypeProxy || len(listed[0].AllowedHosts) != 2 {
+		t.Fatalf("listed=%#v err=%v", listed, err)
+	}
+}
+
+func TestMemoryHostedRepositoryDefaultsToHostedType(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	created, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "hosted", Name: "hosted", Format: FormatRaw, Type: RepositoryTypeHosted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Type != RepositoryTypeHosted || created.Endpoint != "" || len(created.AllowedHosts) != 0 {
+		t.Fatalf("created=%#v", created)
+	}
+}

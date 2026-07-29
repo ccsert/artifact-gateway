@@ -20,13 +20,23 @@ const (
 	RepositoryDeleting RepositoryState = "deleting"
 )
 
+type RepositoryType string
+
+const (
+	RepositoryTypeHosted RepositoryType = "hosted"
+	RepositoryTypeProxy  RepositoryType = "proxy"
+)
+
 type HostedRepository struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Format    Format          `json:"format"`
-	State     RepositoryState `json:"state"`
-	Version   string          `json:"version"`
-	CreatedAt time.Time       `json:"-"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Format       Format          `json:"format"`
+	Type         RepositoryType  `json:"type"`
+	Endpoint     string          `json:"endpoint,omitempty"`
+	AllowedHosts []string        `json:"allowedHosts,omitempty"`
+	State        RepositoryState `json:"state"`
+	Version      string          `json:"version"`
+	CreatedAt    time.Time       `json:"-"`
 }
 
 // RepositoryCapacity is logical usage attributed to one Hosted repository.

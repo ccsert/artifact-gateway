@@ -9,7 +9,7 @@ import (
 )
 
 func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
-	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, state, version) VALUES ($1,$2,$3,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, state, version) VALUES ($1,$2,$3,$4,$5,$6,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
 	}
@@ -43,7 +43,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 		if storedPayload != payload {
 			return HostedRepository{}, false, ErrIdempotencyConflict
 		}
-		err = tx.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE id::text=$1`, repositoryID).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+		err = scanHostedRepository(tx.QueryRowContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE id::text=$1`, repositoryID), &repo)
 		if err != nil {
 			return HostedRepository{}, false, err
 		}
@@ -55,7 +55,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, false, err
 	}
-	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, state, version) VALUES ($1,$2,$3,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, state, version) VALUES ($1,$2,$3,$4,$5,$6,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, false, ErrNameExists
 	}
@@ -72,6 +72,19 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	return repo, false, nil
 }
 
+// hostedRepositoryColumns is the canonical projection for hosted_repositories
+// reads. allowed_hosts is projected through array_to_json so it scans into
+// []byte and decodes into []string without a pq dependency.
+const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), state, version::text, created_at`
+
+func scanHostedRepository(row interface{ Scan(...any) error }, repo *HostedRepository) error {
+	var allowedHosts []byte
+	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
+		return err
+	}
+	return json.Unmarshal(allowedHosts, &repo.AllowedHosts)
+}
+
 func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, after string) ([]HostedRepository, string, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -85,7 +98,7 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 			return nil, "", ErrNotFound
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE ($1 = '' OR id::text > $1) ORDER BY id LIMIT $2`, after, limit+1)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE ($1 = '' OR id::text > $1) ORDER BY id LIMIT $2`, after, limit+1)
 	if err != nil {
 		return nil, "", err
 	}
@@ -93,7 +106,7 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 	items := make([]HostedRepository, 0, limit)
 	for rows.Next() {
 		var repo HostedRepository
-		if err := rows.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
+		if err := scanHostedRepository(rows, &repo); err != nil {
 			return nil, "", err
 		}
 		items = append(items, repo)
@@ -111,7 +124,7 @@ func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, a
 
 func (s *PostgresStore) GetHostedRepositoryByName(ctx context.Context, name string) (HostedRepository, error) {
 	var repo HostedRepository
-	err := s.db.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE name=$1`, name).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE name=$1`, name), &repo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, ErrNotFound
 	}
@@ -123,7 +136,7 @@ func (s *PostgresStore) GetHostedRepositoryByName(ctx context.Context, name stri
 
 func (s *PostgresStore) GetHostedRepository(ctx context.Context, id string) (HostedRepository, error) {
 	var repo HostedRepository
-	err := s.db.QueryRowContext(ctx, `SELECT id::text, name, format, state, version::text, created_at FROM hosted_repositories WHERE id::text=$1`, id).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE id::text=$1`, id), &repo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, ErrNotFound
 	}
@@ -135,7 +148,7 @@ func (s *PostgresStore) GetHostedRepository(ctx context.Context, id string) (Hos
 
 func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) (HostedRepository, error) {
 	var repo HostedRepository
-	err := s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET state='deleting', version=version+1 WHERE id::text=$1 AND state='active' RETURNING id::text, name, format, state, version::text, created_at`, id).Scan(&repo.ID, &repo.Name, &repo.Format, &repo.State, &repo.Version, &repo.CreatedAt)
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET state='deleting', version=version+1 WHERE id::text=$1 AND state='active' RETURNING `+hostedRepositoryColumns, id), &repo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, ErrNotFound
 	}
