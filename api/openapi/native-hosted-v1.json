@@ -2070,6 +2070,22 @@
           "format": {
             "$ref": "#/components/schemas/Format"
           },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -2096,6 +2112,25 @@
           },
           "format": {
             "$ref": "#/components/schemas/Format"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ],
+            "default": "hosted"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Upstream base URL. Required when type is proxy; must be empty for hosted repositories."
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
           }
         }
       },
@@ -2937,7 +2972,10 @@
           },
           "type": {
             "type": "string",
-            "const": "hosted"
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
           },
           "operations": {
             "type": "array",

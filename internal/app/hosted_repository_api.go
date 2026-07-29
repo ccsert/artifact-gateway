@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,8 +35,11 @@ type hostedRepositoryAPIHandler struct {
 }
 
 type createHostedRepositoryRequest struct {
-	Name   string            `json:"name"`
-	Format repository.Format `json:"format"`
+	Name         string            `json:"name"`
+	Format       repository.Format `json:"format"`
+	Type         string            `json:"type,omitempty"`
+	Endpoint     string            `json:"endpoint,omitempty"`
+	AllowedHosts []string          `json:"allowedHosts,omitempty"`
 }
 
 type repositoryPage struct {
@@ -401,7 +405,7 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 
 func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
-		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format))
+		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format, repo.Type))
 	})
 }
 
@@ -506,7 +510,11 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 	})
 }
 
-func repositoryCapabilities(format repository.Format) adminopenapi.RepositoryCapabilities {
+func repositoryCapabilities(format repository.Format, repoType repository.RepositoryType) adminopenapi.RepositoryCapabilities {
+	if repoType == repository.RepositoryTypeProxy {
+		operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
+		return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeProxy, Operations: operations}
+	}
 	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsPublish, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsDelete, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
 	switch format {
 	case repository.FormatMaven:
@@ -514,7 +522,7 @@ func repositoryCapabilities(format repository.Format) adminopenapi.RepositoryCap
 	case repository.FormatConan:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	}
-	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.Hosted, Operations: operations}
+	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeHosted, Operations: operations}
 }
 
 func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
@@ -1533,12 +1541,16 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 	decoder.DisallowUnknownFields()
 	var request createHostedRepositoryRequest
 	if err := decoder.Decode(&request); err != nil || !validHostedRepository(request) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name and format must be valid")
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name, format, type, endpoint, and allowedHosts must be valid")
 		return
+	}
+	repoType := repository.RepositoryTypeHosted
+	if request.Type != "" {
+		repoType = repository.RepositoryType(request.Type)
 	}
 	payload, _ := json.Marshal(request)
 	digest := sha256.Sum256(payload)
-	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 		return
@@ -1908,7 +1920,36 @@ func (h hostedRepositoryAPIHandler) disable(w http.ResponseWriter, r *http.Reque
 }
 
 func validHostedRepository(request createHostedRepositoryRequest) bool {
-	return hostedRepositoryName.MatchString(request.Name) && (request.Format == repository.FormatRaw || request.Format == repository.FormatOCI || request.Format == repository.FormatMaven || request.Format == repository.FormatConan)
+	if !hostedRepositoryName.MatchString(request.Name) || (request.Format != repository.FormatRaw && request.Format != repository.FormatOCI && request.Format != repository.FormatMaven && request.Format != repository.FormatConan) {
+		return false
+	}
+	repoType := request.Type
+	if repoType == "" {
+		repoType = string(repository.RepositoryTypeHosted)
+	}
+	switch repository.RepositoryType(repoType) {
+	case repository.RepositoryTypeHosted:
+		// Hosted repositories serve local content only; an upstream endpoint or
+		// egress allow-list would be meaningless and likely a client mistake.
+		return request.Endpoint == "" && len(request.AllowedHosts) == 0
+	case repository.RepositoryTypeProxy:
+		if !validProxyEndpoint(request.Endpoint) {
+			return false
+		}
+		// Raw and Conan proxies resolve upstream assets by host, so they must
+		// declare which hosts they may egress to.
+		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan) && len(request.AllowedHosts) == 0 {
+			return false
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func validProxyEndpoint(endpoint string) bool {
+	parsed, err := url.Parse(endpoint)
+	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
 }
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {

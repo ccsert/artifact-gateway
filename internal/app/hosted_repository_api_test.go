@@ -470,6 +470,95 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	}
 }
 
+func TestHostedRepositoryManagementCreatesProxyRepository(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	create := func(body, key string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
+		authorize(r, "admin-secret")
+		r.Header.Set("Idempotency-Key", key)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+
+	created := create(`{"name":"raw-proxy","format":"raw","type":"proxy","endpoint":"https://upstream.example","allowedHosts":["upstream.example","cdn.example"]}`, "create-raw-proxy")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create proxy=%d body=%s", created.Code, created.Body.String())
+	}
+	for _, fragment := range []string{`"type":"proxy"`, `"endpoint":"https://upstream.example"`, `"allowedHosts":["upstream.example","cdn.example"]`} {
+		if !strings.Contains(created.Body.String(), fragment) {
+			t.Fatalf("proxy response missing %s: %s", fragment, created.Body.String())
+		}
+	}
+	id := strings.Split(strings.Split(created.Body.String(), `"id":"`)[1], `"`)[0]
+
+	// The proxy shape persists through the read path.
+	get := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+id, nil)
+	authorize(get, "admin-secret")
+	loaded := httptest.NewRecorder()
+	handler.ServeHTTP(loaded, get)
+	if loaded.Code != http.StatusOK || !strings.Contains(loaded.Body.String(), `"type":"proxy"`) || !strings.Contains(loaded.Body.String(), `"endpoint":"https://upstream.example"`) {
+		t.Fatalf("get proxy=%d body=%s", loaded.Code, loaded.Body.String())
+	}
+
+	// Proxy capabilities are read-only plus cache reclaim: no publish, delete,
+	// restore, or retain.
+	capabilitiesRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+id+"/capabilities", nil)
+	authorize(capabilitiesRequest, "admin-secret")
+	capabilities := httptest.NewRecorder()
+	handler.ServeHTTP(capabilities, capabilitiesRequest)
+	body := capabilities.Body.String()
+	if capabilities.Code != http.StatusOK || !strings.Contains(body, `"type":"proxy"`) {
+		t.Fatalf("proxy capabilities=%d %s", capabilities.Code, body)
+	}
+	for _, operation := range []string{`"read"`, `"browse"`, `"reclaim"`} {
+		if !strings.Contains(body, operation) {
+			t.Fatalf("proxy capabilities missing %s: %s", operation, body)
+		}
+	}
+	for _, operation := range []string{`"publish"`, `"delete"`, `"restore"`, `"retain"`} {
+		if strings.Contains(body, operation) {
+			t.Fatalf("proxy capabilities must not contain %s: %s", operation, body)
+		}
+	}
+
+	// Hosted remains the default when type is omitted.
+	hosted := create(`{"name":"plain-hosted","format":"raw"}`, "create-plain-hosted")
+	if hosted.Code != http.StatusCreated || !strings.Contains(hosted.Body.String(), `"type":"hosted"`) {
+		t.Fatalf("default hosted=%d body=%s", hosted.Code, hosted.Body.String())
+	}
+}
+
+func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
+	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	create := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
+		authorize(r, "admin-secret")
+		r.Header.Set("Idempotency-Key", "key-"+body)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	cases := map[string]string{
+		"proxy without endpoint":        `{"name":"proxy-no-endpoint","format":"raw","type":"proxy"}`,
+		"proxy with http endpoint":      `{"name":"proxy-http","format":"raw","type":"proxy","endpoint":"http://upstream.example","allowedHosts":["upstream.example"]}`,
+		"proxy with malformed endpoint": `{"name":"proxy-bad-url","format":"raw","type":"proxy","endpoint":"not a url","allowedHosts":["upstream.example"]}`,
+		"raw proxy without allowedHosts": `{"name":"proxy-no-hosts","format":"raw","type":"proxy","endpoint":"https://upstream.example"}`,
+		"conan proxy without allowedHosts": `{"name":"proxy-conan-no-hosts","format":"conan","type":"proxy","endpoint":"https://upstream.example"}`,
+		"hosted with endpoint":          `{"name":"hosted-endpoint","format":"raw","endpoint":"https://upstream.example"}`,
+		"hosted with allowedHosts":      `{"name":"hosted-hosts","format":"raw","allowedHosts":["upstream.example"]}`,
+		"unknown type":                  `{"name":"unknown-type","format":"raw","type":"virtual"}`,
+	}
+	for name, body := range cases {
+		if response := create(body); response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status=%d body=%s", name, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

@@ -106,6 +106,24 @@ func (e CreateMavenPublishSessionFormat) Valid() bool {
 	}
 }
 
+// Defines values for CreateRepositoryType.
+const (
+	CreateRepositoryTypeHosted CreateRepositoryType = "hosted"
+	CreateRepositoryTypeProxy  CreateRepositoryType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the CreateRepositoryType enum.
+func (e CreateRepositoryType) Valid() bool {
+	switch e {
+	case CreateRepositoryTypeHosted:
+		return true
+	case CreateRepositoryTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreatedAPIKeyRoles.
 const (
 	CreatedAPIKeyRolesAdmin CreatedAPIKeyRoles = "admin"
@@ -391,6 +409,24 @@ func (e RepositoryState) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryType.
+const (
+	RepositoryTypeHosted RepositoryType = "hosted"
+	RepositoryTypeProxy  RepositoryType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryType enum.
+func (e RepositoryType) Valid() bool {
+	switch e {
+	case RepositoryTypeHosted:
+		return true
+	case RepositoryTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositoryCapabilitiesOperations.
 const (
 	RepositoryCapabilitiesOperationsBrowse  RepositoryCapabilitiesOperations = "browse"
@@ -426,13 +462,16 @@ func (e RepositoryCapabilitiesOperations) Valid() bool {
 
 // Defines values for RepositoryCapabilitiesType.
 const (
-	Hosted RepositoryCapabilitiesType = "hosted"
+	RepositoryCapabilitiesTypeHosted RepositoryCapabilitiesType = "hosted"
+	RepositoryCapabilitiesTypeProxy  RepositoryCapabilitiesType = "proxy"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryCapabilitiesType enum.
 func (e RepositoryCapabilitiesType) Valid() bool {
 	switch e {
-	case Hosted:
+	case RepositoryCapabilitiesTypeHosted:
+		return true
+	case RepositoryCapabilitiesTypeProxy:
 		return true
 	default:
 		return false
@@ -603,9 +642,18 @@ type CreatePublishSession struct {
 
 // CreateRepository defines model for CreateRepository.
 type CreateRepository struct {
-	Format Format `json:"format"`
-	Name   string `json:"name"`
+	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
+	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
+
+	// Endpoint Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
+	Endpoint *string               `json:"endpoint,omitempty"`
+	Format   Format                `json:"format"`
+	Name     string                `json:"name"`
+	Type     *CreateRepositoryType `json:"type,omitempty"`
 }
+
+// CreateRepositoryType defines model for CreateRepository.Type.
+type CreateRepositoryType string
 
 // CreatedAPIKey defines model for CreatedAPIKey.
 type CreatedAPIKey struct {
@@ -812,15 +860,21 @@ type ReplicationRequest struct {
 
 // Repository defines model for Repository.
 type Repository struct {
-	Format  Format          `json:"format"`
-	Id      string          `json:"id"`
-	Name    string          `json:"name"`
-	State   RepositoryState `json:"state"`
-	Version string          `json:"version"`
+	AllowedHosts *[]string       `json:"allowedHosts,omitempty"`
+	Endpoint     *string         `json:"endpoint,omitempty"`
+	Format       Format          `json:"format"`
+	Id           string          `json:"id"`
+	Name         string          `json:"name"`
+	State        RepositoryState `json:"state"`
+	Type         *RepositoryType `json:"type,omitempty"`
+	Version      string          `json:"version"`
 }
 
 // RepositoryState defines model for Repository.State.
 type RepositoryState string
+
+// RepositoryType defines model for Repository.Type.
+type RepositoryType string
 
 // RepositoryCapabilities defines model for RepositoryCapabilities.
 type RepositoryCapabilities struct {

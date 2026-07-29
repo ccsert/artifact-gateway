@@ -112,6 +112,17 @@ Repository:
       pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
     format:
       "$ref": "#/Format"
+    type:
+      type: string
+      enum:
+      - hosted
+      - proxy
+    endpoint:
+      type: string
+    allowedHosts:
+      type: array
+      items:
+        type: string
     state:
       type: string
       enum:
@@ -131,6 +142,22 @@ CreateRepository:
       type: string
     format:
       "$ref": "#/Format"
+    type:
+      type: string
+      enum:
+      - hosted
+      - proxy
+      default: hosted
+    endpoint:
+      type: string
+      description: Upstream base URL. Required when type is proxy; must be empty
+        for hosted repositories.
+    allowedHosts:
+      type: array
+      items:
+        type: string
+      description: Hosts the proxy may egress to. Required for raw and conan
+        proxies.
 Group:
   type: object
   required:
@@ -392,7 +419,9 @@ RepositoryCapabilities:
       "$ref": "#/Format"
     type:
       type: string
-      const: hosted
+      enum:
+      - hosted
+      - proxy
     operations:
       type: array
       uniqueItems: true
