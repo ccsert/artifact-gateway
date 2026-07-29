@@ -7,18 +7,6 @@ export type OciTagList = {
     tags: Array<string>;
 };
 
-export type RawDirectoryEntry = {
-    path: string;
-    digest: string;
-    size: number;
-    contentType: string;
-};
-
-export type RawDirectoryPage = {
-    path: string;
-    items: Array<RawDirectoryEntry>;
-};
-
 export type OciError = {
     errors: Array<{
         code: string;
@@ -133,6 +121,21 @@ export type ReplicationPlan = {
     lastError?: string;
 };
 
+export type ReplicationPlanDetail = ReplicationPlan & {
+    checkpoints: Array<ReplicationCheckpointProgress>;
+};
+
+export type ReplicationCheckpointProgress = {
+    objectKey: string;
+    digest: string;
+    size: number;
+    byteOffset: number;
+    state: 'pending' | 'copying' | 'verified' | 'failed';
+    attempts: number;
+    lastError?: string;
+    verifiedAt?: string;
+};
+
 export type ArtifactTombstone = {
     coordinate: string;
     digest: string;
@@ -142,6 +145,33 @@ export type ArtifactTombstone = {
 export type ArtifactTombstonePage = {
     items: Array<ArtifactTombstone>;
     nextPageToken?: string;
+};
+
+export type RepositoryCapabilities = {
+    format: Format;
+    type: 'hosted';
+    operations: Array<'read' | 'publish' | 'browse' | 'delete' | 'restore' | 'retain' | 'reclaim'>;
+};
+
+export type ApiKey = {
+    id: string;
+    name: string;
+    roles: Array<'admin'>;
+    createdAt: string;
+    revokedAt?: string;
+};
+
+export type ApiKeyList = {
+    items: Array<ApiKey>;
+};
+
+export type CreateApiKey = {
+    name: string;
+    roles: Array<'admin'>;
+};
+
+export type CreatedApiKey = ApiKey & {
+    token: string;
 };
 
 /**
@@ -186,6 +216,19 @@ export type Artifact = {
     state: 'visible' | 'deleted';
 };
 
+export type ArtifactSummary = {
+    coordinate: string;
+    digest?: string;
+    size?: number;
+    contentType?: string;
+    createdAt?: string;
+};
+
+export type ArtifactSummaryPage = {
+    items: Array<ArtifactSummary>;
+    nextPageToken?: string;
+};
+
 export type Deletion = {
     id: string;
     state: 'pending';
@@ -212,6 +255,43 @@ export type GroupPage = {
 
 export type ArtifactPage = {
     items: Array<Artifact>;
+    nextPageToken?: string;
+};
+
+export type OciImage = {
+    name: string;
+};
+
+export type OciImagePage = {
+    items: Array<OciImage>;
+    nextPageToken?: string;
+};
+
+export type MavenCoordinate = {
+    coordinate: string;
+    digest: string;
+    createdAt: string;
+    /**
+     * Publisher actor of the most recent committed publish session for this coordinate. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
+     */
+    publisher?: string;
+};
+
+export type MavenCoordinatePage = {
+    items: Array<MavenCoordinate>;
+    nextPageToken?: string;
+};
+
+export type ConanReference = {
+    reference: string;
+    /**
+     * Publisher actor of the most recent committed publish session for this reference. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
+     */
+    publisher?: string;
+};
+
+export type ConanReferencePage = {
+    items: Array<ConanReference>;
     nextPageToken?: string;
 };
 
@@ -245,73 +325,29 @@ export type AuditRecord = {
 
 export type AuditList = Array<AuditRecord>;
 
+export type AuditRetentionPolicy = {
+    version: string;
+    enabled: boolean;
+    keepDays: number;
+};
+
+export type AuditCleanupJob = {
+    id: string;
+    policyVersion: string;
+    cutoffAt: string;
+    batchSize: number;
+    deleted: number;
+    state: 'pending' | 'running' | 'completed' | 'failed';
+    createdAt: string;
+    startedAt?: string;
+    completedAt?: string;
+    lastError?: string;
+};
+
 export type PromotionRequest = {
     targetRepositoryId: string;
     coordinate: string;
     digest: string;
-};
-
-export type ReplicationCheckpointProgress = {
-    objectKey: string;
-    digest: string;
-    size: number;
-    byteOffset: number;
-    state: 'pending' | 'copying' | 'verified' | 'failed';
-    attempts: number;
-    lastError?: string;
-    verifiedAt?: string;
-};
-
-export type ReplicationPlanDetail = ReplicationPlan & {
-    checkpoints: Array<ReplicationCheckpointProgress>;
-};
-
-export type RepositoryCapabilities = {
-    format: Format;
-    type: 'hosted';
-    operations: Array<'read' | 'publish' | 'browse' | 'delete' | 'restore' | 'retain' | 'reclaim'>;
-};
-
-export type ArtifactSummary = {
-    coordinate: string;
-    digest?: string;
-    size?: number;
-    contentType?: string;
-    createdAt?: string;
-};
-
-export type ArtifactSummaryPage = {
-    items: Array<ArtifactSummary>;
-    nextPageToken?: string;
-};
-
-export type OciImage = {
-    name: string;
-};
-
-export type OciImagePage = {
-    items: Array<OciImage>;
-    nextPageToken?: string;
-};
-
-export type MavenCoordinate = {
-    coordinate: string;
-    digest: string;
-    createdAt: string;
-};
-
-export type MavenCoordinatePage = {
-    items: Array<MavenCoordinate>;
-    nextPageToken?: string;
-};
-
-export type ConanReference = {
-    reference: string;
-};
-
-export type ConanReferencePage = {
-    items: Array<ConanReference>;
-    nextPageToken?: string;
 };
 
 export type RepositoryId = string;
@@ -319,6 +355,8 @@ export type RepositoryId = string;
 export type GroupId = string;
 
 export type SessionId = string;
+
+export type ReplicationPlanId = string;
 
 export type RepositoryName = string;
 
@@ -335,12 +373,6 @@ export type PageSize = number;
 
 export type PageToken = string;
 
-export type IdempotencyKey = string;
-
-export type IfMatch = string;
-
-export type ReplicationPlanId = string;
-
 /**
  * OCI image-name prefix used to filter the repository projection.
  */
@@ -355,6 +387,95 @@ export type MavenCoordinatePrefix = string;
  * Conan recipe-reference prefix used to filter the visible-reference projection.
  */
 export type ConanReferencePrefix = string;
+
+export type IdempotencyKey = string;
+
+export type IfMatch = string;
+
+export type ListApiKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api-keys';
+};
+
+export type ListApiKeysErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+};
+
+export type ListApiKeysError = ListApiKeysErrors[keyof ListApiKeysErrors];
+
+export type ListApiKeysResponses = {
+    /**
+     * API key metadata
+     */
+    200: ApiKeyList;
+};
+
+export type ListApiKeysResponse = ListApiKeysResponses[keyof ListApiKeysResponses];
+
+export type CreateApiKeyData = {
+    body: CreateApiKey;
+    path?: never;
+    query?: never;
+    url: '/api-keys';
+};
+
+export type CreateApiKeyErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    401: Problem;
+};
+
+export type CreateApiKeyError = CreateApiKeyErrors[keyof CreateApiKeyErrors];
+
+export type CreateApiKeyResponses = {
+    /**
+     * Newly generated API key. The plaintext token is returned only by this response.
+     */
+    201: CreatedApiKey;
+};
+
+export type CreateApiKeyResponse = CreateApiKeyResponses[keyof CreateApiKeyResponses];
+
+export type RevokeApiKeyData = {
+    body?: never;
+    path: {
+        apiKeyId: string;
+    };
+    query?: never;
+    url: '/api-keys/{apiKeyId}';
+};
+
+export type RevokeApiKeyErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type RevokeApiKeyError = RevokeApiKeyErrors[keyof RevokeApiKeyErrors];
+
+export type RevokeApiKeyResponses = {
+    /**
+     * Revocable API key metadata
+     */
+    200: ApiKey;
+};
+
+export type RevokeApiKeyResponse = RevokeApiKeyResponses[keyof RevokeApiKeyResponses];
 
 export type ListAuditsData = {
     body?: never;
@@ -384,6 +505,94 @@ export type ListAuditsResponses = {
 };
 
 export type ListAuditsResponse = ListAuditsResponses[keyof ListAuditsResponses];
+
+export type GetAuditRetentionPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/audit-retention-policy';
+};
+
+export type GetAuditRetentionPolicyResponses = {
+    /**
+     * Global audit retention policy
+     */
+    200: AuditRetentionPolicy;
+};
+
+export type GetAuditRetentionPolicyResponse = GetAuditRetentionPolicyResponses[keyof GetAuditRetentionPolicyResponses];
+
+export type ReplaceAuditRetentionPolicyData = {
+    body: AuditRetentionPolicy;
+    headers: {
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/audit-retention-policy';
+};
+
+export type ReplaceAuditRetentionPolicyErrors = {
+    /**
+     * Problem response
+     */
+    412: Problem;
+};
+
+export type ReplaceAuditRetentionPolicyError = ReplaceAuditRetentionPolicyErrors[keyof ReplaceAuditRetentionPolicyErrors];
+
+export type ReplaceAuditRetentionPolicyResponses = {
+    /**
+     * Global audit retention policy
+     */
+    200: AuditRetentionPolicy;
+};
+
+export type ReplaceAuditRetentionPolicyResponse = ReplaceAuditRetentionPolicyResponses[keyof ReplaceAuditRetentionPolicyResponses];
+
+export type ExecuteAuditRetentionData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/audit-retention:execute';
+};
+
+export type ExecuteAuditRetentionErrors = {
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type ExecuteAuditRetentionError = ExecuteAuditRetentionErrors[keyof ExecuteAuditRetentionErrors];
+
+export type ExecuteAuditRetentionResponses = {
+    /**
+     * Audit cleanup job
+     */
+    202: AuditCleanupJob;
+};
+
+export type ExecuteAuditRetentionResponse = ExecuteAuditRetentionResponses[keyof ExecuteAuditRetentionResponses];
+
+export type ListAuditRetentionJobsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/audit-retention/jobs';
+};
+
+export type ListAuditRetentionJobsResponses = {
+    /**
+     * Audit cleanup jobs, newest first
+     */
+    200: Array<AuditCleanupJob>;
+};
+
+export type ListAuditRetentionJobsResponse = ListAuditRetentionJobsResponses[keyof ListAuditRetentionJobsResponses];
 
 export type ListRepositoriesData = {
     body?: never;
@@ -1095,96 +1304,6 @@ export type CreatePublishSessionResponses = {
 
 export type CreatePublishSessionResponse = CreatePublishSessionResponses[keyof CreatePublishSessionResponses];
 
-export type GetPublishSessionData = {
-    body?: never;
-    path: {
-        sessionId: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}';
-};
-
-export type GetPublishSessionErrors = {
-    /**
-     * Problem response
-     */
-    404: Problem;
-};
-
-export type GetPublishSessionError = GetPublishSessionErrors[keyof GetPublishSessionErrors];
-
-export type GetPublishSessionResponses = {
-    /**
-     * Publish session
-     */
-    200: PublishSession;
-};
-
-export type GetPublishSessionResponse = GetPublishSessionResponses[keyof GetPublishSessionResponses];
-
-export type UploadPublishObjectData = {
-    body: string;
-    path: {
-        sessionId: string;
-        objectName: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}/objects/{objectName}';
-};
-
-export type UploadPublishObjectErrors = {
-    /**
-     * Problem response
-     */
-    409: Problem;
-    /**
-     * Problem response
-     */
-    422: Problem;
-};
-
-export type UploadPublishObjectError = UploadPublishObjectErrors[keyof UploadPublishObjectErrors];
-
-export type UploadPublishObjectResponses = {
-    /**
-     * Verified and staged
-     */
-    204: void;
-};
-
-export type UploadPublishObjectResponse = UploadPublishObjectResponses[keyof UploadPublishObjectResponses];
-
-export type CommitPublishSessionData = {
-    body?: never;
-    path: {
-        sessionId: string;
-    };
-    query?: never;
-    url: '/publish-sessions/{sessionId}:commit';
-};
-
-export type CommitPublishSessionErrors = {
-    /**
-     * Problem response
-     */
-    409: Problem;
-    /**
-     * Problem response
-     */
-    422: Problem;
-};
-
-export type CommitPublishSessionError = CommitPublishSessionErrors[keyof CommitPublishSessionErrors];
-
-export type CommitPublishSessionResponses = {
-    /**
-     * Artifact
-     */
-    200: Artifact;
-};
-
-export type CommitPublishSessionResponse = CommitPublishSessionResponses[keyof CommitPublishSessionResponses];
-
 export type ListArtifactsData = {
     body?: never;
     path: {
@@ -1389,798 +1508,44 @@ export type ListConanReferencesResponses = {
 
 export type ListConanReferencesResponse = ListConanReferencesResponses[keyof ListConanReferencesResponses];
 
-export type DeleteRawHostedContentData = {
+export type GetPublishSessionData = {
     body?: never;
     path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
-    };
-    query?: {
-        uploadId?: string;
-    };
-    url: '/raw/{repository}/{path}';
-};
-
-export type DeleteRawHostedContentErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type DeleteRawHostedContentResponses = {
-    /**
-     * Deleted
-     */
-    204: void;
-};
-
-export type DeleteRawHostedContentResponse = DeleteRawHostedContentResponses[keyof DeleteRawHostedContentResponses];
-
-export type ReadRawContentData = {
-    body?: never;
-    path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
-    };
-    query?: {
-        uploadId?: string;
-    };
-    url: '/raw/{repository}/{path}';
-};
-
-export type ReadRawContentErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type ReadRawContentResponses = {
-    /**
-     * Raw bytes or a Raw directory-prefix JSON page
-     */
-    200: unknown;
-};
-
-export type HeadRawContentData = {
-    body?: never;
-    path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
+        sessionId: string;
     };
     query?: never;
-    url: '/raw/{repository}/{path}';
+    url: '/publish-sessions/{sessionId}';
 };
 
-export type HeadRawContentErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type HeadRawContentResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type HeadRawContentResponse = HeadRawContentResponses[keyof HeadRawContentResponses];
-
-export type AppendRawHostedResumableUploadData = {
-    body: string;
-    headers: {
-        'Upload-Offset': number;
-    };
-    path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
-    };
-    query: {
-        uploadId: string;
-    };
-    url: '/raw/{repository}/{path}';
-};
-
-export type AppendRawHostedResumableUploadErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
+export type GetPublishSessionErrors = {
     /**
      * Problem response
      */
-    409: Problem;
+    404: Problem;
 };
 
-export type AppendRawHostedResumableUploadError = AppendRawHostedResumableUploadErrors[keyof AppendRawHostedResumableUploadErrors];
+export type GetPublishSessionError = GetPublishSessionErrors[keyof GetPublishSessionErrors];
 
-export type AppendRawHostedResumableUploadResponses = {
+export type GetPublishSessionResponses = {
     /**
-     * Bytes appended
+     * Publish session
      */
-    204: void;
+    200: PublishSession;
 };
 
-export type AppendRawHostedResumableUploadResponse = AppendRawHostedResumableUploadResponses[keyof AppendRawHostedResumableUploadResponses];
+export type GetPublishSessionResponse = GetPublishSessionResponses[keyof GetPublishSessionResponses];
 
-export type StartRawHostedResumableUploadData = {
-    body?: never;
-    path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
-    };
-    query: {
-        resumable: '1';
-    };
-    url: '/raw/{repository}/{path}';
-};
-
-export type StartRawHostedResumableUploadErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-};
-
-export type StartRawHostedResumableUploadResponses = {
-    /**
-     * Upload session created
-     */
-    201: unknown;
-};
-
-export type PutRawHostedContentData = {
-    body: string;
-    headers?: {
-        'Upload-Offset'?: number;
-        Digest?: string;
-    };
-    path: {
-        repository: string;
-        /**
-         * Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.
-         */
-        path: string;
-    };
-    query?: {
-        uploadId?: string;
-        complete?: '1';
-    };
-    url: '/raw/{repository}/{path}';
-};
-
-export type PutRawHostedContentErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * Problem response
-     */
-    422: Problem;
-};
-
-export type PutRawHostedContentError = PutRawHostedContentErrors[keyof PutRawHostedContentErrors];
-
-export type PutRawHostedContentResponses = {
-    /**
-     * Stored and immediately addressable at this Raw path
-     */
-    201: unknown;
-};
-
-export type ListRawRootDirectoryData = {
-    body?: never;
-    path: {
-        repository: string;
-    };
-    query?: {
-        n?: number;
-        last?: string;
-    };
-    url: '/raw/{repository}/';
-};
-
-export type ListRawRootDirectoryErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-};
-
-export type ListRawRootDirectoryResponses = {
-    /**
-     * Lexicographically ordered Native Raw directory-prefix page
-     */
-    200: RawDirectoryPage;
-};
-
-export type ListRawRootDirectoryResponse = ListRawRootDirectoryResponses[keyof ListRawRootDirectoryResponses];
-
-export type StartOciUploadData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-    };
-    query?: {
-        mount?: string;
-        from?: string;
-    };
-    url: '/v2/{name}/blobs/uploads/';
-};
-
-export type StartOciUploadErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-};
-
-export type StartOciUploadError = StartOciUploadErrors[keyof StartOciUploadErrors];
-
-export type StartOciUploadResponses = {
-    /**
-     * Blob mounted
-     */
-    201: unknown;
-    /**
-     * Registry V2 upload in progress
-     */
-    202: unknown;
-};
-
-export type CancelOciUploadData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        uuid: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/uploads/{uuid}';
-};
-
-export type CancelOciUploadErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    404: OciError;
-};
-
-export type CancelOciUploadError = CancelOciUploadErrors[keyof CancelOciUploadErrors];
-
-export type CancelOciUploadResponses = {
-    /**
-     * Upload cancelled
-     */
-    204: void;
-};
-
-export type CancelOciUploadResponse = CancelOciUploadResponses[keyof CancelOciUploadResponses];
-
-export type GetOciUploadStatusData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        uuid: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/uploads/{uuid}';
-};
-
-export type GetOciUploadStatusErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    404: OciError;
-};
-
-export type GetOciUploadStatusError = GetOciUploadStatusErrors[keyof GetOciUploadStatusErrors];
-
-export type GetOciUploadStatusResponses = {
-    /**
-     * Registry V2 upload in progress
-     */
-    204: void;
-};
-
-export type GetOciUploadStatusResponse = GetOciUploadStatusResponses[keyof GetOciUploadStatusResponses];
-
-export type AppendOciUploadData = {
+export type UploadPublishObjectData = {
     body: string;
     path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        uuid: string;
+        sessionId: string;
+        objectName: string;
     };
     query?: never;
-    url: '/v2/{name}/blobs/uploads/{uuid}';
+    url: '/publish-sessions/{sessionId}/objects/{objectName}';
 };
 
-export type AppendOciUploadErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    404: OciError;
-    /**
-     * OCI Registry error response
-     */
-    416: OciError;
-};
-
-export type AppendOciUploadError = AppendOciUploadErrors[keyof AppendOciUploadErrors];
-
-export type AppendOciUploadResponses = {
-    /**
-     * Registry V2 upload in progress
-     */
-    202: unknown;
-};
-
-export type CompleteOciUploadData = {
-    body?: string;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        uuid: string;
-    };
-    query: {
-        digest: string;
-    };
-    url: '/v2/{name}/blobs/uploads/{uuid}';
-};
-
-export type CompleteOciUploadErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    404: OciError;
-    /**
-     * OCI Registry error response
-     */
-    409: OciError;
-    /**
-     * OCI Registry error response
-     */
-    416: OciError;
-};
-
-export type CompleteOciUploadError = CompleteOciUploadErrors[keyof CompleteOciUploadErrors];
-
-export type CompleteOciUploadResponses = {
-    /**
-     * Blob completed
-     */
-    201: unknown;
-};
-
-export type ReadOciBlobData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        digest: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/{digest}';
-};
-
-export type ReadOciBlobErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type ReadOciBlobResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type ReadOciBlobResponse = ReadOciBlobResponses[keyof ReadOciBlobResponses];
-
-export type HeadOciBlobData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        digest: string;
-    };
-    query?: never;
-    url: '/v2/{name}/blobs/{digest}';
-};
-
-export type HeadOciBlobErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type HeadOciBlobResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type HeadOciBlobResponse = HeadOciBlobResponses[keyof HeadOciBlobResponses];
-
-export type DeleteOciManifestData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        reference: string;
-    };
-    query?: never;
-    url: '/v2/{name}/manifests/{reference}';
-};
-
-export type DeleteOciManifestErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    404: OciError;
-};
-
-export type DeleteOciManifestError = DeleteOciManifestErrors[keyof DeleteOciManifestErrors];
-
-export type DeleteOciManifestResponses = {
-    /**
-     * Manifest deleted
-     */
-    202: unknown;
-};
-
-export type ReadOciManifestData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        reference: string;
-    };
-    query?: never;
-    url: '/v2/{name}/manifests/{reference}';
-};
-
-export type ReadOciManifestErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-    /**
-     * OCI Registry error response
-     */
-    406: OciError;
-};
-
-export type ReadOciManifestError = ReadOciManifestErrors[keyof ReadOciManifestErrors];
-
-export type ReadOciManifestResponses = {
-    /**
-     * Committed OCI manifest, returned with Docker-Content-Digest
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-
-export type ReadOciManifestResponse = ReadOciManifestResponses[keyof ReadOciManifestResponses];
-
-export type HeadOciManifestData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        reference: string;
-    };
-    query?: never;
-    url: '/v2/{name}/manifests/{reference}';
-};
-
-export type HeadOciManifestErrors = {
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-    /**
-     * OCI Registry error response
-     */
-    406: OciError;
-};
-
-export type HeadOciManifestError = HeadOciManifestErrors[keyof HeadOciManifestErrors];
-
-export type HeadOciManifestResponses = {
-    /**
-     * Committed OCI manifest, returned with Docker-Content-Digest
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-
-export type HeadOciManifestResponse = HeadOciManifestResponses[keyof HeadOciManifestResponses];
-
-export type PutOciManifestData = {
-    body: {
-        [key: string]: unknown;
-    };
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-        reference: string;
-    };
-    query?: never;
-    url: '/v2/{name}/manifests/{reference}';
-};
-
-export type PutOciManifestErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * OCI Registry error response
-     */
-    413: OciError;
-};
-
-export type PutOciManifestError = PutOciManifestErrors[keyof PutOciManifestErrors];
-
-export type PutOciManifestResponses = {
-    /**
-     * Manifest published
-     */
-    201: unknown;
-};
-
-export type ListOciTagsData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-    };
-    query?: {
-        n?: number;
-        last?: string;
-    };
-    url: '/v2/{name}/tags/list';
-};
-
-export type ListOciTagsErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type ListOciTagsError = ListOciTagsErrors[keyof ListOciTagsErrors];
-
-export type ListOciTagsResponses = {
-    /**
-     * OCI tag list ordered lexicographically. A Link header with rel=next is returned when more tags are available.
-     */
-    200: OciTagList;
-};
-
-export type ListOciTagsResponse = ListOciTagsResponses[keyof ListOciTagsResponses];
-
-export type HeadOciTagsData = {
-    body?: never;
-    path: {
-        /**
-         * OCI repository name. The gateway resolves slash-separated OCI names without decoding encoded separators.
-         */
-        name: string;
-    };
-    query?: {
-        n?: number;
-        last?: string;
-    };
-    url: '/v2/{name}/tags/list';
-};
-
-export type HeadOciTagsErrors = {
-    /**
-     * OCI Registry error response
-     */
-    400: OciError;
-    /**
-     * OCI Bearer authentication challenge
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type HeadOciTagsError = HeadOciTagsErrors[keyof HeadOciTagsErrors];
-
-export type HeadOciTagsResponses = {
-    /**
-     * OCI tag list ordered lexicographically. A Link header with rel=next is returned when more tags are available.
-     */
-    200: OciTagList;
-};
-
-export type HeadOciTagsResponse = HeadOciTagsResponses[keyof HeadOciTagsResponses];
-
-export type ReadMavenAssetData = {
-    body?: never;
-    path: {
-        repository: string;
-        /**
-         * Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.
-         */
-        assetPath: string;
-    };
-    query?: never;
-    url: '/repository/maven/{repository}/{assetPath}';
-};
-
-export type ReadMavenAssetErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
-    /**
-     * No committed object is addressable at this protocol path
-     */
-    404: unknown;
-};
-
-export type ReadMavenAssetResponses = {
-    /**
-     * Committed immutable protocol object
-     */
-    200: Blob | File;
-};
-
-export type ReadMavenAssetResponse = ReadMavenAssetResponses[keyof ReadMavenAssetResponses];
-
-export type StageMavenProtocolAssetData = {
-    body: string;
-    path: {
-        repository: string;
-        /**
-         * Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.
-         */
-        assetPath: string;
-    };
-    query?: never;
-    url: '/repository/maven/{repository}/{assetPath}';
-};
-
-export type StageMavenProtocolAssetErrors = {
-    /**
-     * Raw or Maven Basic authentication required when anonymous read policy is disabled
-     */
-    401: unknown;
+export type UploadPublishObjectErrors = {
     /**
      * Problem response
      */
@@ -2191,29 +1556,27 @@ export type StageMavenProtocolAssetErrors = {
     422: Problem;
 };
 
-export type StageMavenProtocolAssetError = StageMavenProtocolAssetErrors[keyof StageMavenProtocolAssetErrors];
+export type UploadPublishObjectError = UploadPublishObjectErrors[keyof UploadPublishObjectErrors];
 
-export type StageMavenProtocolAssetResponses = {
+export type UploadPublishObjectResponses = {
     /**
-     * Staged or idempotently replayed; not readable until coordinate commit
+     * Verified and staged
      */
-    201: unknown;
+    204: void;
 };
 
-export type CommitMavenCoordinateData = {
-    body: CommitMavenCoordinate;
-    headers: {
-        'Idempotency-Key': string;
-    };
+export type UploadPublishObjectResponse = UploadPublishObjectResponses[keyof UploadPublishObjectResponses];
+
+export type CommitPublishSessionData = {
+    body?: never;
     path: {
-        repository: string;
-        coordinate: string;
+        sessionId: string;
     };
     query?: never;
-    url: '/repository/maven/{repository}/coordinates/{coordinate}:commit';
+    url: '/publish-sessions/{sessionId}:commit';
 };
 
-export type CommitMavenCoordinateErrors = {
+export type CommitPublishSessionErrors = {
     /**
      * Problem response
      */
@@ -2224,17 +1587,17 @@ export type CommitMavenCoordinateErrors = {
     422: Problem;
 };
 
-export type CommitMavenCoordinateError = CommitMavenCoordinateErrors[keyof CommitMavenCoordinateErrors];
+export type CommitPublishSessionError = CommitPublishSessionErrors[keyof CommitPublishSessionErrors];
 
-export type CommitMavenCoordinateResponses = {
+export type CommitPublishSessionResponses = {
     /**
      * Artifact
      */
     200: Artifact;
 };
 
-export type CommitMavenCoordinateResponse = CommitMavenCoordinateResponses[keyof CommitMavenCoordinateResponses];
+export type CommitPublishSessionResponse = CommitPublishSessionResponses[keyof CommitPublishSessionResponses];
 
 export type ClientOptions = {
-    baseUrl: 'https://gateway.example.com/api/v2' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | 'https://gateway.example.com' | (string & {});
+    baseUrl: 'https://gateway.example.com/api/v2' | (string & {});
 };
