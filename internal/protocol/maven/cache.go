@@ -27,6 +27,7 @@ type cachedMavenIndex struct {
 	Object       string    `json:"object,omitempty"`
 	Digest       string    `json:"digest,omitempty"`
 	Repository   string    `json:"repository,omitempty"`
+	Path         string    `json:"path,omitempty"`
 	Size         int64     `json:"size,omitempty"`
 	ContentType  string    `json:"content_type,omitempty"`
 	ETag         string    `json:"etag,omitempty"`
@@ -136,7 +137,7 @@ func (c *Cache) storeAdmitted(ctx context.Context, key, artifactPath string, con
 	if isMavenMetadata(artifactPath) {
 		ttl = c.metadataTTL
 	}
-	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, Repository: content.Repository, Size: int64(len(content.Body)), ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
+	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, Repository: content.Repository, Path: artifactPath, Size: int64(len(content.Body)), ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
 	if err != nil {
 		return err
 	}

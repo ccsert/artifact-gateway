@@ -174,6 +174,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("GET /api/v1/audits", auditAPIHandler{store: store, authenticator: authenticator})
 	if maintenance != nil {
 		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
+		mux.Handle("GET /api/v1/operations/cache/entries", cacheEntriesHandler{store: store, maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}

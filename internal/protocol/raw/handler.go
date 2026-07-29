@@ -197,7 +197,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: cacheDisposition(h.Cache), Method: r.Method})
 			continue
 		}
-		content := CachedContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group, CacheQuotaBytes: g.CacheQuotaBytes}
+		content := CachedContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group, Path: path, CacheQuotaBytes: g.CacheQuotaBytes}
 		if content.ContentType == "" {
 			content.ContentType = "application/octet-stream"
 		}

@@ -33,6 +33,7 @@ type cacheIndex struct {
 	Member      string    `json:"member"`
 	Endpoint    string    `json:"endpoint"`
 	Repository  string    `json:"repository"`
+	Path        string    `json:"path,omitempty"`
 	Size        int64     `json:"size"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Negative    bool      `json:"negative"`
@@ -46,10 +47,10 @@ func (i *cacheIndex) UnmarshalJSON(data []byte) error {
 	}
 	if decoded.ExpiresAt.IsZero() {
 		var legacy struct {
-			Object, Digest, ContentType, Member, Endpoint, Repository string
-			Size                                                      int64
-			ExpiresAt                                                 time.Time
-			Negative                                                  bool
+			Object, Digest, ContentType, Member, Endpoint, Repository, Path string
+			Size                                                            int64
+			ExpiresAt                                                       time.Time
+			Negative                                                        bool
 		}
 		if err := json.Unmarshal(data, &legacy); err != nil {
 			return err
@@ -63,6 +64,7 @@ func (i *cacheIndex) UnmarshalJSON(data []byte) error {
 type CachedContent struct {
 	Body                                              []byte
 	Digest, ContentType, Member, Endpoint, Repository string
+	Path                                              string
 	CacheQuotaBytes                                   int64
 }
 
@@ -150,7 +152,7 @@ func (c *Cache) Store(ctx context.Context, key string, content CachedContent) er
 			if err := c.store.Put(workCtx, object, content.Body); err != nil {
 				return err
 			}
-			encoded, err := json.Marshal(cacheIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Size: int64(len(content.Body)), ExpiresAt: time.Now().UTC().Add(c.ttl)})
+			encoded, err := json.Marshal(cacheIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Path: content.Path, Size: int64(len(content.Body)), ExpiresAt: time.Now().UTC().Add(c.ttl)})
 			if err != nil {
 				return err
 			}
