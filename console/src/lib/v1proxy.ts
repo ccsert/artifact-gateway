@@ -68,6 +68,15 @@ export async function disableV1Group(token: string, format: ProxyFormat, name: s
   if (!res.ok) throw await parseError(res);
 }
 
+// 列出某格式全部 group（v1 list 端点）
+export async function listV1Groups(token: string, format: ProxyFormat): Promise<V1Group[]> {
+  const res = await v1Fetch(token, `${format}/groups`);
+  if (!res.ok) throw await parseError(res);
+  const data = await res.json();
+  const items = Array.isArray(data) ? data : (data?.items ?? []);
+  return items as V1Group[];
+}
+
 // ---- 运营指标（/api/v1/operations/repositories?repository=<group>） ----
 
 export interface GroupMetrics {
@@ -138,55 +147,14 @@ export async function listCacheEntries(token: string, format: ProxyFormat, group
   return Array.isArray(data) ? data : [];
 }
 
-// ---- 已知名录持久化（v1 无 list 端点） ----
-
-const REGISTRY_KEY = 'ag.console.v1groups';
-
-type Registry = Record<ProxyFormat, string[]>;
-
-function readRegistry(): Registry {
-  try {
-    const raw = localStorage.getItem(REGISTRY_KEY);
-    if (raw) return { oci: [], maven: [], raw: [], conan: [], ...JSON.parse(raw) };
-  } catch {
-    /* ignore */
-  }
-  return { oci: [], maven: [], raw: [], conan: [] };
-}
-
-function writeRegistry(r: Registry) {
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(r));
-}
-
-export function listKnownGroupNames(format: ProxyFormat): string[] {
-  return readRegistry()[format] ?? [];
-}
-
-export function rememberGroupName(format: ProxyFormat, name: string) {
-  const r = readRegistry();
-  if (!r[format].includes(name)) {
-    r[format] = [...r[format], name];
-    writeRegistry(r);
-  }
-}
-
-export function forgetGroupName(format: ProxyFormat, name: string) {
-  const r = readRegistry();
-  r[format] = r[format].filter((n) => n !== name);
-  writeRegistry(r);
-}
-
 export async function listKnownGroups(token: string): Promise<{ format: ProxyFormat; group: V1Group }[]> {
   const out: { format: ProxyFormat; group: V1Group }[] = [];
   for (const format of V1_FORMATS) {
-    for (const name of listKnownGroupNames(format)) {
-      try {
-        const group = await getV1Group(token, format, name);
-        if (group) out.push({ format, group });
-        else forgetGroupName(format, name);
-      } catch {
-        /* 单个失败不阻塞 */
-      }
+    try {
+      const groups = await listV1Groups(token, format);
+      for (const group of groups) out.push({ format, group });
+    } catch {
+      /* 单格式失败不阻塞其他格式 */
     }
   }
   return out;

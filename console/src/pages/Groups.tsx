@@ -13,6 +13,7 @@ import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary,
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { FormatBadge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
+import { MemberOrderPicker } from '../components/MemberOrderPicker';
 
 const FORMATS: Format[] = ['oci', 'maven', 'conan', 'raw'];
 
@@ -91,33 +92,14 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
               ))}
             </div>
           </Field>
-          <Field label="成员仓库（按选择顺序排序）" hint="分组按成员顺序解析制品">
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 p-2">
-              {candidates.length === 0 && <div className="px-2 py-3 text-center text-xs text-zinc-600">该格式下暂无活跃仓库</div>}
-              {candidates.map((r) => {
-                const idx = memberIds.indexOf(r.id);
-                const selected = idx >= 0;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() =>
-                      setMemberIds((ids) => (selected ? ids.filter((id) => id !== r.id) : [...ids, r.id]))
-                    }
-                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                      selected ? 'bg-cyan-500/10 text-cyan-200' : 'text-zinc-400 hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span className="font-mono text-xs">{r.name}</span>
-                    {selected && (
-                      <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-300">
-                        #{idx + 1}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          <Field label="成员仓库" hint="分组按成员顺序（自上而下）解析制品">
+            {candidates.length === 0 ? (
+              <div className="rounded-lg border border-zinc-800 px-2 py-3 text-center text-xs text-zinc-600">
+                该格式下暂无活跃仓库
+              </div>
+            ) : (
+              <MemberOrderPicker candidates={candidates} memberIds={memberIds} onChange={setMemberIds} />
+            )}
           </Field>
         </div>
       </Modal>
@@ -192,7 +174,6 @@ function MembersDialog({ group, repos, onSaved }: { group: Group; repos: Reposit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  const repoName = (id: string) => repos.find((r) => r.id === id)?.name ?? id.slice(0, 8) + '…';
   const candidates = repos.filter((r) => r.format === group.format && r.state === 'active');
 
   const open = async () => {
@@ -250,35 +231,8 @@ function MembersDialog({ group, repos, onSaved }: { group: Group; repos: Reposit
       >
         <div className="space-y-3">
           {error !== null && <ErrorBanner error={error} />}
-          <p className="text-xs text-zinc-500">按选择顺序确定成员优先级（position）。</p>
-          <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 p-2">
-            {candidates.map((r) => {
-              const idx = memberIds.indexOf(r.id);
-              const selected = idx >= 0;
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() =>
-                    setMemberIds((ids) => (selected ? ids.filter((id) => id !== r.id) : [...ids, r.id]))
-                  }
-                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                    selected ? 'bg-cyan-500/10 text-cyan-200' : 'text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <span className="font-mono text-xs">{r.name}</span>
-                  {selected && (
-                    <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-300">#{idx + 1}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {memberIds.length > 0 && (
-            <p className="text-xs text-zinc-500">
-              当前顺序：{memberIds.map((id) => repoName(id)).join(' → ')}
-            </p>
-          )}
+          <p className="text-xs text-zinc-500">调整成员及其优先级顺序（position 自上而下）。</p>
+          <MemberOrderPicker candidates={candidates} memberIds={memberIds} onChange={setMemberIds} />
         </div>
       </Modal>
     </>

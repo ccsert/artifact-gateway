@@ -5,7 +5,6 @@ import {
   createV1Group,
   disableV1Group,
   listKnownGroups,
-  rememberGroupName,
 } from '../lib/v1proxy';
 import type { ProxyFormat, V1Group, V1Member } from '../lib/v1proxy';
 import { PageHeader, Card, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
@@ -43,13 +42,12 @@ function CreateProxyGroupDialog({ onCreated }: { onCreated: () => void }) {
       ...(hosts.length > 0 ? { allowedHosts: hosts } : {}),
     };
     try {
-      const g = await createV1Group(token, format, {
+      await createV1Group(token, format, {
         name: name.trim(),
         enabled: true,
         cacheQuotaBytes: quotaGiB * 2 ** 30,
         members: [member],
       });
-      rememberGroupName(format, g.name);
       dialog.hide();
       setName('');
       setEndpoint('');
