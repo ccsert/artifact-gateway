@@ -558,7 +558,9 @@ type AuditRetentionPolicy struct {
 
 // ConanReference defines model for ConanReference.
 type ConanReference struct {
-	Reference string `json:"reference"`
+	// Publisher Publisher actor of the most recent committed publish session for this reference. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
+	Publisher *string `json:"publisher,omitempty"`
+	Reference string  `json:"reference"`
 }
 
 // ConanReferencePage defines model for ConanReferencePage.
@@ -689,6 +691,9 @@ type MavenCoordinate struct {
 	Coordinate string    `json:"coordinate"`
 	CreatedAt  time.Time `json:"createdAt"`
 	Digest     string    `json:"digest"`
+
+	// Publisher Publisher actor of the most recent committed publish session for this coordinate. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
+	Publisher *string `json:"publisher,omitempty"`
 }
 
 // MavenCoordinatePage defines model for MavenCoordinatePage.

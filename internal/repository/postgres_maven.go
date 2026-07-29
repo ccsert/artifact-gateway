@@ -374,10 +374,15 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	return out, rows.Err()
 }
 func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after string) ([]MavenArtifact, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at
-		FROM native_maven_artifacts
-		WHERE repository_id=$1::uuid AND state='visible' AND substring(coordinate FROM 1 FOR char_length($2))=$2 AND coordinate>$3
-		ORDER BY coordinate ASC LIMIT $4`, repoID, prefix, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id::text,a.repository_id::text,a.coordinate,a.digest,a.state,a.created_at,COALESCE(p.publisher,'')
+		FROM native_maven_artifacts a
+		LEFT JOIN LATERAL (
+			SELECT s.publisher FROM native_maven_publish_sessions s
+			WHERE s.repository_id=a.repository_id AND s.coordinate=a.coordinate AND s.state='committed'
+			ORDER BY s.expires_at DESC LIMIT 1
+		) p ON true
+		WHERE a.repository_id=$1::uuid AND a.state='visible' AND substring(a.coordinate FROM 1 FOR char_length($2))=$2 AND a.coordinate>$3
+		ORDER BY a.coordinate ASC LIMIT $4`, repoID, prefix, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +390,7 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 	out := []MavenArtifact{}
 	for rows.Next() {
 		var artifact MavenArtifact
-		if err := rows.Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt); err != nil {
+		if err := rows.Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.Publisher); err != nil {
 			return nil, err
 		}
 		out = append(out, artifact)

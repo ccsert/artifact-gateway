@@ -253,11 +253,11 @@ func TestPostgresConanReferenceSearchProjection(t *testing.T) {
 		}
 	}
 	references, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, "")
-	if err != nil || len(references) != 2 || references[0] != "pkg/1.0/user/stable" || references[1] != "pkg/2.0/user/stable" {
+	if err != nil || len(references) != 2 || references[0].Reference != "pkg/1.0/user/stable" || references[1].Reference != "pkg/2.0/user/stable" {
 		t.Fatalf("references=%#v err=%v", references, err)
 	}
-	next, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, references[0])
-	if err != nil || len(next) != 1 || next[0] != "pkg/2.0/user/stable" {
+	next, err := store.SearchConanReferences(ctx, repo.ID, "pkg/", 2, references[0].Reference)
+	if err != nil || len(next) != 1 || next[0].Reference != "pkg/2.0/user/stable" {
 		t.Fatalf("next=%#v err=%v", next, err)
 	}
 }

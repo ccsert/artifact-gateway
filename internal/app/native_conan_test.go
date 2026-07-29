@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -150,6 +151,16 @@ func TestNativeConanReferenceBrowseSearchProjection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	session := repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: conanRepo.ID, Publisher: "conan-publisher", Kind: "recipe", Reference: "pkg/1.0/user/stable", RecipeRevision: "rrev", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "conanfile.py", Digest: "sha256:" + strings.Repeat("a", 64), Size: 1}}}
+	if _, err = store.CreateConanPublishSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.MarkConanPublishObject(ctx, session.ID, "conanfile.py", "native/conan/search/a"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CommitConanPublishSession(ctx, session.ID); err != nil {
+		t.Fatal(err)
+	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
 	browserToken := authenticator.IssueToken("conan-browser")
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conanRepo.ID+"/conan/references?q=pkg%2F&pageSize=1", nil)
@@ -159,11 +170,15 @@ func TestNativeConanReferenceBrowseSearchProjection(t *testing.T) {
 	var page struct {
 		Items []struct {
 			Reference string `json:"reference"`
+			Publisher string `json:"publisher"`
 		} `json:"items"`
 		NextPageToken string `json:"nextPageToken"`
 	}
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Reference != "pkg/1.0/user/stable" || page.NextPageToken == "" {
 		t.Fatalf("browse=%d body=%s page=%#v", response.Code, response.Body.String(), page)
+	}
+	if page.Items[0].Publisher != "conan-publisher" {
+		t.Fatalf("publisher=%q body=%s", page.Items[0].Publisher, response.Body.String())
 	}
 	next := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conanRepo.ID+"/conan/references?q=pkg%2F&pageSize=1&pageToken="+url.QueryEscape(page.NextPageToken), nil)
 	authorize(next, browserToken)

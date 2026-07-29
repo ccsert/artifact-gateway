@@ -477,8 +477,8 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				references = references[:pageSize]
 			}
 			for _, reference := range references {
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference})
-				lastCoordinate = reference
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference})
+				lastCoordinate = reference.Reference
 			}
 		case repository.FormatRaw:
 			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after)
@@ -1362,7 +1362,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 		}
 		items := make([]adminopenapi.MavenCoordinate, 0, len(artifacts))
 		for _, artifact := range artifacts {
-			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt})
+			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt, Publisher: optionalPublisher(artifact.Publisher)})
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.MavenCoordinatePage{Items: items, NextPageToken: next})
 	})
@@ -1407,12 +1407,12 @@ func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter
 		var next *string
 		if len(references) > pageSize {
 			references = references[:pageSize]
-			token := h.encodeConanReferenceCursor(repo.ID, prefix, references[len(references)-1])
+			token := h.encodeConanReferenceCursor(repo.ID, prefix, references[len(references)-1].Reference)
 			next = &token
 		}
 		items := make([]adminopenapi.ConanReference, 0, len(references))
 		for _, reference := range references {
-			items = append(items, adminopenapi.ConanReference{Reference: reference})
+			items = append(items, adminopenapi.ConanReference{Reference: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanReferencePage{Items: items, NextPageToken: next})
 	})
@@ -1667,8 +1667,17 @@ func validMavenCoordinatePrefix(value string) bool {
 	return true
 }
 
-func validConanReferencePrefix(value string) bool {
-	if len(value) > 255 || strings.ContainsAny(value, "\\\x00#") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%23") {
+// optionalPublisher maps an empty publisher (no committed publish session was
+// recorded, for example replicated or pre-session artifacts) to nil so the
+// field is omitted from the JSON response.
+func optionalPublisher(publisher string) *string {
+	if publisher == "" {
+		return nil
+	}
+	return &publisher
+}
+
+func validConanReferencePrefix(value string) bool {	if len(value) > 255 || strings.ContainsAny(value, "\\\x00#") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%23") {
 		return false
 	}
 	parts := strings.Split(value, "/")

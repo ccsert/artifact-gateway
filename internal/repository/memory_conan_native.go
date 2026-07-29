@@ -245,7 +245,7 @@ func (s *MemoryStore) GetConanPackageRevision(_ context.Context, repositoryID, r
 	return item, nil
 }
 
-func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
+func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, prefix string, limit int, after string) ([]ConanReference, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	seen := make(map[string]struct{})
@@ -254,15 +254,34 @@ func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, pre
 			seen[item.Reference] = struct{}{}
 		}
 	}
-	refs := make([]string, 0, len(seen))
+	names := make([]string, 0, len(seen))
 	for reference := range seen {
-		refs = append(refs, reference)
+		names = append(names, reference)
 	}
-	sort.Strings(refs)
-	if len(refs) > limit {
-		refs = refs[:limit]
+	sort.Strings(names)
+	if len(names) > limit {
+		names = names[:limit]
+	}
+	refs := make([]ConanReference, 0, len(names))
+	for _, reference := range names {
+		refs = append(refs, ConanReference{Reference: reference, Publisher: s.latestCommittedConanPublisherLocked(repositoryID, reference)})
 	}
 	return refs, nil
+}
+
+// latestCommittedConanPublisherLocked returns the publisher of the most
+// recently committed publish session for the reference, approximated by the
+// session expiry to mirror the PostgreSQL query. It returns "" when no
+// committed session was recorded.
+func (s *MemoryStore) latestCommittedConanPublisherLocked(repositoryID, reference string) string {
+	publisher := ""
+	var latest time.Time
+	for _, session := range s.conanSessions {
+		if session.RepositoryID == repositoryID && session.Reference == reference && session.State == "committed" && session.ExpiresAt.After(latest) {
+			latest, publisher = session.ExpiresAt, session.Publisher
+		}
+	}
+	return publisher
 }
 
 func (s *MemoryStore) ListConanRecipeRevisions(_ context.Context, repositoryID, reference string) ([]ConanRecipeRevision, error) {

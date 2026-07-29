@@ -259,19 +259,26 @@ func (s *PostgresStore) GetConanPackageRevision(ctx context.Context, repositoryI
 	return item, err
 }
 
-func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' AND reference > $3 ORDER BY reference LIMIT $4`, repositoryID, prefix, after, limit)
+func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]ConanReference, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT r.reference, COALESCE(p.publisher,'')
+		FROM (SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' AND reference > $3 ORDER BY reference LIMIT $4) r
+		LEFT JOIN LATERAL (
+			SELECT s.publisher FROM native_conan_publish_sessions s
+			WHERE s.repository_id::text=$1 AND s.reference=r.reference AND s.state='committed'
+			ORDER BY s.expires_at DESC LIMIT 1
+		) p ON true
+		ORDER BY r.reference`, repositoryID, prefix, after, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	refs := []string{}
+	refs := []ConanReference{}
 	for rows.Next() {
-		var reference string
-		if err = rows.Scan(&reference); err != nil {
+		var ref ConanReference
+		if err = rows.Scan(&ref.Reference, &ref.Publisher); err != nil {
 			return nil, err
 		}
-		refs = append(refs, reference)
+		refs = append(refs, ref)
 	}
 	return refs, rows.Err()
 }

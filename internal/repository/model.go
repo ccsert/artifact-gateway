@@ -182,6 +182,7 @@ type MavenArtifact struct {
 	Coordinate   string    `json:"coordinate"`
 	Digest       string    `json:"digest"`
 	State        string    `json:"state"`
+	Publisher    string    `json:"publisher,omitempty"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
@@ -226,6 +227,13 @@ type ConanAsset struct {
 type ConanRecipeRevision struct {
 	RepositoryID, Reference, Revision, Digest, State string
 	CreatedAt                                        time.Time
+}
+
+// ConanReference is a visible recipe reference together with the publisher of
+// its most recent committed publish session. Publisher is empty when no
+// publish session was recorded (replicated, promoted, or pre-session data).
+type ConanReference struct {
+	Reference, Publisher string
 }
 
 type ConanPackageRevision struct {

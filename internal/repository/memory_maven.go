@@ -253,6 +253,7 @@ func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, pref
 	out := []MavenArtifact{}
 	for _, artifact := range s.mavenArtifacts {
 		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && strings.HasPrefix(artifact.Coordinate, prefix) && artifact.Coordinate > after {
+			artifact.Publisher = s.latestCommittedMavenPublisherLocked(repositoryID, artifact.Coordinate)
 			out = append(out, artifact)
 		}
 	}
@@ -261,6 +262,21 @@ func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, pref
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// latestCommittedMavenPublisherLocked returns the publisher of the most
+// recently committed publish session for the coordinate, approximated by the
+// session expiry to mirror the PostgreSQL query. It returns "" when no
+// committed session was recorded.
+func (s *MemoryStore) latestCommittedMavenPublisherLocked(repositoryID, coordinate string) string {
+	publisher := ""
+	var latest time.Time
+	for _, session := range s.mavenSessions {
+		if session.RepositoryID == repositoryID && session.Coordinate == coordinate && session.State == "committed" && session.ExpiresAt.After(latest) {
+			latest, publisher = session.ExpiresAt, session.Publisher
+		}
+	}
+	return publisher
 }
 
 func (s *MemoryStore) GetMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {

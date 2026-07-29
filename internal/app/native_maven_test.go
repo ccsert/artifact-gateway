@@ -402,11 +402,15 @@ func TestNativeMavenCoordinateBrowseSearchProjection(t *testing.T) {
 	var page struct {
 		Items []struct {
 			Coordinate string `json:"coordinate"`
+			Publisher  string `json:"publisher"`
 		} `json:"items"`
 		NextPageToken string `json:"nextPageToken"`
 	}
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Coordinate != "org.example:widget:1.0.0" || page.NextPageToken == "" {
 		t.Fatalf("browse=%d body=%s page=%#v", response.Code, response.Body.String(), page)
+	}
+	if page.Items[0].Publisher != "maven" {
+		t.Fatalf("publisher=%q body=%s", page.Items[0].Publisher, response.Body.String())
 	}
 	next := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+mavenRepo.ID+"/maven/coordinates?q=org.example:widget:&pageSize=1&pageToken="+url.QueryEscape(page.NextPageToken), nil)
 	authorize(next, browserToken)

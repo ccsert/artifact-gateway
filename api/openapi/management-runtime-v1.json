@@ -16,6 +16,70 @@
     }
   ],
   "paths": {
+    "/api-keys": {
+      "get": {
+        "operationId": "listApiKeys",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/APIKeyList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApiKey",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAPIKey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/CreatedAPIKey"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api-keys/{apiKeyId}": {
+      "delete": {
+        "operationId": "revokeApiKey",
+        "parameters": [
+          {
+            "name": "apiKeyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/APIKey"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/audits": {
       "get": {
         "operationId": "listAudits",
@@ -52,6 +116,70 @@
           },
           "401": {
             "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit-retention-policy": {
+      "get": {
+        "operationId": "getAuditRetentionPolicy",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuditRetentionPolicy"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceAuditRetentionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditRetentionPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuditRetentionPolicy"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit-retention:execute": {
+      "post": {
+        "operationId": "executeAuditRetention",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/AuditCleanupJob"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit-retention/jobs": {
+      "get": {
+        "operationId": "listAuditRetentionJobs",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuditCleanupJobList"
           }
         }
       }
@@ -701,86 +829,6 @@
         }
       }
     },
-    "/publish-sessions/{sessionId}": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/SessionId"
-        }
-      ],
-      "get": {
-        "operationId": "getPublishSession",
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/PublishSession"
-          },
-          "404": {
-            "$ref": "#/components/responses/Problem"
-          }
-        }
-      }
-    },
-    "/publish-sessions/{sessionId}/objects/{objectName}": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/SessionId"
-        },
-        {
-          "name": "objectName",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "pattern": "^[^/]+$"
-          }
-        }
-      ],
-      "put": {
-        "operationId": "uploadPublishObject",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Verified and staged"
-          },
-          "409": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "422": {
-            "$ref": "#/components/responses/Problem"
-          }
-        }
-      }
-    },
-    "/publish-sessions/{sessionId}:commit": {
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/SessionId"
-        }
-      ],
-      "post": {
-        "operationId": "commitPublishSession",
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Artifact"
-          },
-          "409": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "422": {
-            "$ref": "#/components/responses/Problem"
-          }
-        }
-      }
-    },
     "/repositories/{repositoryId}/artifacts": {
       "parameters": [
         {
@@ -968,908 +1016,55 @@
         }
       }
     },
-    "/raw/{repository}/{path}": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
+    "/publish-sessions/{sessionId}": {
       "parameters": [
         {
-          "$ref": "#/components/parameters/RepositoryName"
-        },
-        {
-          "name": "path",
-          "in": "path",
-          "required": true,
-          "allowReserved": true,
-          "description": "Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.",
-          "schema": {
-            "type": "string",
-            "minLength": 1
-          }
+          "$ref": "#/components/parameters/SessionId"
         }
       ],
       "get": {
-        "operationId": "readRawContent",
-        "description": "Returns Raw bytes for a file path. `.sha256` and `.sha512` suffixes return a derived lowercase hexadecimal checksum plus newline. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination. With an `uploadId`, returns no content and the current Upload-Offset for an open resumable upload rather than artifact bytes.",
-        "parameters": [
-          {
-            "name": "uploadId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          },
-          {}
-        ],
+        "operationId": "getPublishSession",
         "responses": {
           "200": {
-            "description": "Raw bytes or a Raw directory-prefix JSON page"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
+            "$ref": "#/components/responses/PublishSession"
           },
           "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "head": {
-        "operationId": "headRawContent",
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/BinaryObject"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "put": {
-        "operationId": "putRawHostedContent",
-        "description": "Standard Raw Hosted write. The request body is stored directly under the canonical Raw path; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset. With `uploadId` and `complete=1`, appends any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically publishes the resumable upload.\n",
-        "parameters": [
-          {
-            "name": "uploadId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "complete",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            }
-          },
-          {
-            "name": "Upload-Offset",
-            "in": "header",
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "Digest",
-            "in": "header",
-            "schema": {
-              "type": "string",
-              "pattern": "^sha-256=[A-Za-z0-9+/]+={0,2}$"
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Stored and immediately addressable at this Raw path"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          },
-          "422": {
             "$ref": "#/components/responses/Problem"
           }
         }
-      },
-      "post": {
-        "operationId": "startRawHostedResumableUpload",
-        "description": "Starts an atomically invisible Raw Hosted upload. This operation requires `resumable=1`; the returned Location contains the opaque uploadId.",
-        "parameters": [
-          {
-            "name": "resumable",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Upload session created",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Upload-Offset": {
-                "schema": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          }
-        }
-      },
-      "patch": {
-        "operationId": "appendRawHostedResumableUpload",
-        "description": "Appends bytes to an open Raw upload session. Upload-Offset must equal the current offset and the response returns the next offset.",
-        "parameters": [
-          {
-            "name": "uploadId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "Upload-Offset",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Bytes appended",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Upload-Offset": {
-                "schema": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Problem"
-          }
-        }
-      },
-      "delete": {
-        "operationId": "deleteRawHostedContent",
-        "description": "Deletes a committed Raw asset. With an `uploadId`, cancels the corresponding open resumable upload and discards its staged bytes.",
-        "parameters": [
-          {
-            "name": "uploadId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Deleted"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "x-gateway-catchAll": "path",
-      "x-gateway-visibility": "committed_only"
-    },
-    "/raw/{repository}/": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/RepositoryName"
-        }
-      ],
-      "get": {
-        "operationId": "listRawRootDirectory",
-        "parameters": [
-          {
-            "name": "n",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1000,
-              "default": 100
-            }
-          },
-          {
-            "name": "last",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/RawDirectoryList"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          }
-        }
       }
     },
-    "/v2/{name}/blobs/uploads/": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
+    "/publish-sessions/{sessionId}/objects/{objectName}": {
       "parameters": [
         {
-          "$ref": "#/components/parameters/OCIName"
-        }
-      ],
-      "post": {
-        "operationId": "startOCIUpload",
-        "description": "Starts a Registry V2 blob upload. mount and from request a cross-repository mount when the source blob is available to the Gateway.",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "mount",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^sha256:[a-f0-9]{64}$"
-            }
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Blob mounted",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Docker-Content-Digest": {
-                "schema": {
-                  "type": "string",
-                  "pattern": "^sha256:[a-f0-9]{64}$"
-                }
-              }
-            }
-          },
-          "202": {
-            "$ref": "#/components/responses/OCIUploadAccepted"
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          }
-        }
-      }
-    },
-    "/v2/{name}/blobs/uploads/{uuid}": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/OCIName"
+          "$ref": "#/components/parameters/SessionId"
         },
         {
-          "name": "uuid",
+          "name": "objectName",
           "in": "path",
           "required": true,
           "schema": {
             "type": "string",
-            "format": "uuid"
+            "pattern": "^[^/]+$"
           }
         }
       ],
-      "get": {
-        "operationId": "getOCIUploadStatus",
-        "security": [
-          {
-            "ociBearerAuth": []
+      "put": {
+        "operationId": "uploadPublishObject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "204": {
-            "$ref": "#/components/responses/OCIUploadAccepted"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "patch": {
-        "operationId": "appendOCIUpload",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "$ref": "#/components/responses/OCIUploadAccepted"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "416": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "put": {
-        "operationId": "completeOCIUpload",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "digest",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^sha256:[a-f0-9]{64}$"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Blob completed",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Docker-Content-Digest": {
-                "schema": {
-                  "type": "string",
-                  "pattern": "^sha256:[a-f0-9]{64}$"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "409": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "416": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "delete": {
-        "operationId": "cancelOCIUpload",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Upload cancelled"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      }
-    },
-    "/v2/{name}/blobs/{digest}": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/OCIName"
-        },
-        {
-          "$ref": "#/components/parameters/Digest"
-        }
-      ],
-      "get": {
-        "operationId": "readOCIBlob",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/BinaryObject"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "head": {
-        "operationId": "headOCIBlob",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/BinaryObject"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "x-gateway-visibility": "committed_only"
-    },
-    "/v2/{name}/manifests/{reference}": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/OCIName"
-        },
-        {
-          "$ref": "#/components/parameters/OCIReference"
-        }
-      ],
-      "get": {
-        "operationId": "readOCIManifest",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/OCIManifest"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          },
-          "406": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "head": {
-        "operationId": "headOCIManifest",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/OCIManifest"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          },
-          "406": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "put": {
-        "operationId": "putOCIManifest",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/vnd.oci.image.manifest.v1+json": {
-              "schema": {
-                "type": "object"
-              }
-            },
-            "application/vnd.oci.image.index.v1+json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Manifest published",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Docker-Content-Digest": {
-                "schema": {
-                  "type": "string",
-                  "pattern": "^sha256:[a-f0-9]{64}$"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "413": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "delete": {
-        "operationId": "deleteOCIManifest",
-        "description": "Deletes an OCI manifest by digest. Deleting by a mutable tag is not supported.",
-        "security": [
-          {
-            "ociBearerAuth": []
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Manifest deleted"
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/OCIError"
-          }
-        }
-      },
-      "x-gateway-visibility": "committed_only"
-    },
-    "/v2/{name}/tags/list": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/OCIName"
-        },
-        {
-          "name": "n",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 1000,
-            "default": 100
-          }
-        },
-        {
-          "name": "last",
-          "in": "query",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "get": {
-        "operationId": "listOCITags",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/OCITagList"
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "head": {
-        "operationId": "headOCITags",
-        "security": [
-          {
-            "ociBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/OCITagList"
-          },
-          "400": {
-            "$ref": "#/components/responses/OCIError"
-          },
-          "401": {
-            "$ref": "#/components/responses/OCIUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "x-gateway-visibility": "committed_only"
-    },
-    "/repository/maven/{repository}/{assetPath}": {
-      "servers": [
-        {
-          "url": "https://gateway.example.com"
-        }
-      ],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/RepositoryName"
-        },
-        {
-          "name": "assetPath",
-          "in": "path",
-          "required": true,
-          "allowReserved": true,
-          "description": "Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.",
-          "schema": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      ],
-      "get": {
-        "operationId": "readMavenAsset",
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/BinaryObject"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/ProtocolNotFound"
-          }
-        }
-      },
-      "put": {
-        "operationId": "stageMavenProtocolAsset",
-        "description": "Standard Maven/Gradle deploy upload. The Gateway derives coordinate and verified object facts from this request and stages it only. Client checksum sidecars are assertions and client metadata is a compatibility no-op; the Gateway generates both from committed coordinates.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "string",
-                "contentEncoding": "binary"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Staged or idempotently replayed; not readable until coordinate commit"
-          },
-          "401": {
-            "$ref": "#/components/responses/BasicUnauthorized"
+            "description": "Verified and staged"
           },
           "409": {
             "$ref": "#/components/responses/Problem"
@@ -1877,57 +1072,17 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           }
-        },
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ]
-      },
-      "x-gateway-catchAll": "assetPath",
-      "x-gateway-visibility": "committed_only",
-      "x-gateway-publication": "stage_only_until_explicit_coordinate_commit"
+        }
+      }
     },
-    "/repository/maven/{repository}/coordinates/{coordinate}:commit": {
-      "servers": [
+    "/publish-sessions/{sessionId}:commit": {
+      "parameters": [
         {
-          "url": "https://gateway.example.com"
+          "$ref": "#/components/parameters/SessionId"
         }
       ],
       "post": {
-        "operationId": "commitMavenCoordinate",
-        "description": "Called by the Gateway Maven/Gradle publisher extension after normal deploy uploads. It is the only Maven coordinate visibility signal; request ordering, client checksums, client metadata, and quiet time are never completion signals.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/IdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/RepositoryName"
-          },
-          {
-            "name": "coordinate",
-            "in": "path",
-            "required": true,
-            "allowReserved": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommitMavenCoordinate"
-              }
-            }
-          }
-        },
+        "operationId": "commitPublishSession",
         "responses": {
           "200": {
             "$ref": "#/components/responses/Artifact"
@@ -1938,18 +1093,8 @@
           "422": {
             "$ref": "#/components/responses/Problem"
           }
-        },
-        "security": [
-          {
-            "protocolBasicAuth": []
-          },
-          {
-            "protocolBearerAuth": []
-          }
-        ]
-      },
-      "x-gateway-visibility-transition": "single_postgres_transaction",
-      "x-gateway-client-authority": "asset_names_only"
+        }
+      }
     }
   },
   "components": {
@@ -1977,49 +1122,6 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
-          }
-        }
-      },
-      "RawDirectoryEntry": {
-        "type": "object",
-        "required": [
-          "path",
-          "digest",
-          "size",
-          "contentType"
-        ],
-        "properties": {
-          "path": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string",
-            "pattern": "^sha256:[a-f0-9]{64}$"
-          },
-          "size": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "contentType": {
-            "type": "string"
-          }
-        }
-      },
-      "RawDirectoryPage": {
-        "type": "object",
-        "required": [
-          "path",
-          "items"
-        ],
-        "properties": {
-          "path": {
-            "type": "string"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RawDirectoryEntry"
             }
           }
         }
@@ -2448,6 +1550,78 @@
           }
         }
       },
+      "ReplicationPlanDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReplicationPlan"
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkpoints"
+            ],
+            "properties": {
+              "checkpoints": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReplicationCheckpointProgress"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ReplicationCheckpointProgress": {
+        "type": "object",
+        "required": [
+          "objectKey",
+          "digest",
+          "size",
+          "byteOffset",
+          "state",
+          "attempts"
+        ],
+        "properties": {
+          "objectKey": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "byteOffset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "copying",
+              "verified",
+              "failed"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ArtifactTombstone": {
         "type": "object",
         "required": [
@@ -2484,6 +1658,131 @@
             "type": "string"
           }
         }
+      },
+      "RepositoryCapabilities": {
+        "type": "object",
+        "required": [
+          "format",
+          "type",
+          "operations"
+        ],
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "type": {
+            "type": "string",
+            "const": "hosted"
+          },
+          "operations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "publish",
+                "browse",
+                "delete",
+                "restore",
+                "retain",
+                "reclaim"
+              ]
+            }
+          }
+        }
+      },
+      "APIKey": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "roles",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "admin"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "APIKeyList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/APIKey"
+            }
+          }
+        }
+      },
+      "CreateAPIKey": {
+        "type": "object",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      "CreatedAPIKey": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/APIKey"
+          },
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          }
+        ]
       },
       "CreatePublishSession": {
         "oneOf": [
@@ -2642,6 +1941,50 @@
           }
         }
       },
+      "ArtifactSummary": {
+        "type": "object",
+        "required": [
+          "coordinate"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ArtifactSummaryPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactSummary"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "Deletion": {
         "type": "object",
         "required": [
@@ -2755,252 +2098,6 @@
           }
         }
       },
-      "AuditRecord": {
-        "type": "object",
-        "required": [
-          "outcome",
-          "occurredAt"
-        ],
-        "properties": {
-          "groupName": {
-            "type": "string"
-          },
-          "repository": {
-            "type": "string"
-          },
-          "memberName": {
-            "type": "string"
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "actor": {
-            "type": "string"
-          },
-          "occurredAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "format": {
-            "type": "string"
-          },
-          "resource": {
-            "type": "string"
-          },
-          "representation": {
-            "type": "string"
-          },
-          "memberType": {
-            "type": "string"
-          },
-          "upstreamHost": {
-            "type": "string"
-          },
-          "operation": {
-            "type": "string"
-          },
-          "status": {
-            "type": "integer"
-          },
-          "cacheDisposition": {
-            "type": "string"
-          },
-          "bytes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "authorizationSource": {
-            "type": "string",
-            "description": "Optional bounded authorization decision source. Current values include repository_grants, legacy_static, legacy_protocol, and administrator; consumers must accept future bounded values."
-          },
-          "authorizationReason": {
-            "type": "string",
-            "description": "Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values."
-          },
-          "requestId": {
-            "type": "string"
-          },
-          "traceId": {
-            "type": "string"
-          }
-        }
-      },
-      "AuditList": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/AuditRecord"
-        }
-      },
-      "PromotionRequest": {
-        "type": "object",
-        "required": [
-          "targetRepositoryId",
-          "coordinate",
-          "digest"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "targetRepositoryId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "coordinate": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string"
-          }
-        }
-      },
-      "ReplicationCheckpointProgress": {
-        "type": "object",
-        "required": [
-          "objectKey",
-          "digest",
-          "size",
-          "byteOffset",
-          "state",
-          "attempts"
-        ],
-        "properties": {
-          "objectKey": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string",
-            "pattern": "^sha256:[a-f0-9]{64}$"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "byteOffset": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "copying",
-              "verified",
-              "failed"
-            ]
-          },
-          "attempts": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "lastError": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "verifiedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "ReplicationPlanDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ReplicationPlan"
-          },
-          {
-            "type": "object",
-            "required": [
-              "checkpoints"
-            ],
-            "properties": {
-              "checkpoints": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ReplicationCheckpointProgress"
-                }
-              }
-            }
-          }
-        ]
-      },
-      "RepositoryCapabilities": {
-        "type": "object",
-        "required": [
-          "format",
-          "type",
-          "operations"
-        ],
-        "properties": {
-          "format": {
-            "$ref": "#/components/schemas/Format"
-          },
-          "type": {
-            "type": "string",
-            "const": "hosted"
-          },
-          "operations": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "enum": [
-                "read",
-                "publish",
-                "browse",
-                "delete",
-                "restore",
-                "retain",
-                "reclaim"
-              ]
-            }
-          }
-        }
-      },
-      "ArtifactSummary": {
-        "type": "object",
-        "required": [
-          "coordinate"
-        ],
-        "properties": {
-          "coordinate": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string",
-            "pattern": "^sha256:[a-f0-9]{64}$"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "ArtifactSummaryPage": {
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ArtifactSummary"
-            }
-          },
-          "nextPageToken": {
-            "type": "string"
-          }
-        }
-      },
       "OCIImage": {
         "type": "object",
         "required": [
@@ -3104,6 +2201,184 @@
             "type": "string"
           }
         }
+      },
+      "AuditRecord": {
+        "type": "object",
+        "required": [
+          "outcome",
+          "occurredAt"
+        ],
+        "properties": {
+          "groupName": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "memberName": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "format": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "representation": {
+            "type": "string"
+          },
+          "memberType": {
+            "type": "string"
+          },
+          "upstreamHost": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "cacheDisposition": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "authorizationSource": {
+            "type": "string",
+            "description": "Optional bounded authorization decision source. Current values include repository_grants, legacy_static, legacy_protocol, and administrator; consumers must accept future bounded values."
+          },
+          "authorizationReason": {
+            "type": "string",
+            "description": "Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values."
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          }
+        }
+      },
+      "AuditList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AuditRecord"
+        }
+      },
+      "AuditRetentionPolicy": {
+        "type": "object",
+        "required": [
+          "version",
+          "enabled",
+          "keepDays"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "keepDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36500
+          }
+        }
+      },
+      "AuditCleanupJob": {
+        "type": "object",
+        "required": [
+          "id",
+          "policyVersion",
+          "cutoffAt",
+          "batchSize",
+          "deleted",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "cutoffAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "batchSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "deleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "PromotionRequest": {
+        "type": "object",
+        "required": [
+          "targetRepositoryId",
+          "coordinate",
+          "digest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "targetRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {
@@ -3127,6 +2402,15 @@
       },
       "SessionId": {
         "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ReplicationPlanId": {
+        "name": "replicationPlanId",
         "in": "path",
         "required": true,
         "schema": {
@@ -3189,33 +2473,6 @@
           "type": "string"
         }
       },
-      "IdempotencyKey": {
-        "name": "Idempotency-Key",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        }
-      },
-      "IfMatch": {
-        "name": "If-Match",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string"
-        }
-      },
-      "ReplicationPlanId": {
-        "name": "replicationPlanId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "format": "uuid"
-        }
-      },
       "OCIImagePrefix": {
         "name": "q",
         "in": "query",
@@ -3241,6 +2498,24 @@
         "schema": {
           "type": "string",
           "maxLength": 255
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
         }
       }
     },
@@ -3326,23 +2601,6 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/OCITagList"
-            }
-          }
-        }
-      },
-      "RawDirectoryList": {
-        "description": "Lexicographically ordered Native Raw directory-prefix page",
-        "headers": {
-          "Link": {
-            "schema": {
-              "type": "string"
-            }
-          }
-        },
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/RawDirectoryPage"
             }
           }
         }
@@ -3505,6 +2763,16 @@
           }
         }
       },
+      "RepositoryCapabilities": {
+        "description": "Operations supported by a Hosted repository format",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryCapabilities"
+            }
+          }
+        }
+      },
       "PublishSession": {
         "description": "Publish session",
         "content": {
@@ -3535,42 +2803,22 @@
           }
         }
       },
-      "Deletion": {
-        "description": "Accepted deletion",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Deletion"
-            }
-          }
-        }
-      },
-      "AuditList": {
-        "description": "Administrative audit records, ordered newest first",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/AuditList"
-            }
-          }
-        }
-      },
-      "RepositoryCapabilities": {
-        "description": "Operations supported by a Hosted repository format",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/RepositoryCapabilities"
-            }
-          }
-        }
-      },
       "ArtifactSummaryList": {
         "description": "Format-aware artifact browse/search page",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ArtifactSummaryPage"
+            }
+          }
+        }
+      },
+      "ConanReferenceList": {
+        "description": "Conan visible recipe-reference projection page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanReferencePage"
             }
           }
         }
@@ -3595,12 +2843,85 @@
           }
         }
       },
-      "ConanReferenceList": {
-        "description": "Conan visible recipe-reference projection page",
+      "Deletion": {
+        "description": "Accepted deletion",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ConanReferencePage"
+              "$ref": "#/components/schemas/Deletion"
+            }
+          }
+        }
+      },
+      "AuditList": {
+        "description": "Administrative audit records, ordered newest first",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuditList"
+            }
+          }
+        }
+      },
+      "AuditRetentionPolicy": {
+        "description": "Global audit retention policy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuditRetentionPolicy"
+            }
+          }
+        }
+      },
+      "AuditCleanupJob": {
+        "description": "Audit cleanup job",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuditCleanupJob"
+            }
+          }
+        }
+      },
+      "AuditCleanupJobList": {
+        "description": "Audit cleanup jobs, newest first",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/AuditCleanupJob"
+              }
+            }
+          }
+        }
+      },
+      "APIKeyList": {
+        "description": "API key metadata",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIKeyList"
+            }
+          }
+        }
+      },
+      "CreatedAPIKey": {
+        "description": "Newly generated API key. The plaintext token is returned only by this response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreatedAPIKey"
+            }
+          }
+        }
+      },
+      "APIKey": {
+        "description": "Revocable API key metadata",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIKey"
             }
           }
         }

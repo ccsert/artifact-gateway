@@ -127,12 +127,12 @@ func conanReplicationMatchingAssets(ctx context.Context, store repository.Native
 		return nil, err
 	}
 	for _, reference := range refs {
-		revisions, err := store.ListConanRecipeRevisions(ctx, sourceID, reference)
+		revisions, err := store.ListConanRecipeRevisions(ctx, sourceID, reference.Reference)
 		if err != nil {
 			return nil, err
 		}
 		for _, revision := range revisions {
-			assets, err := conanReplicationAssets(ctx, store, sourceID, reference, revision.Revision)
+			assets, err := conanReplicationAssets(ctx, store, sourceID, reference.Reference, revision.Revision)
 			if err != nil {
 				return nil, err
 			}
