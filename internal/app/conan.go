@@ -25,6 +25,9 @@ type ConanClient interface {
 
 func (c UpstreamClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	if member.Type == repository.MemberProxy {
+		if egressProxyEnabled() {
+			return c.fetchConan(ctx, rawProxyEgressClient(c.HTTPClient), method, member, path, headers)
+		}
 		proxyURL, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
 		if err != nil {
 			return nil, err
@@ -956,6 +959,20 @@ func validConanSegment(s string) bool {
 	decoded, err := url.PathUnescape(s)
 	return err == nil && decoded != "" && decoded != "." && decoded != ".." && !strings.ContainsAny(decoded, "/\\\x00#") && !strings.Contains(strings.ToLower(s), "%2f") && !strings.Contains(strings.ToLower(s), "%23")
 }
+
+// parseConanTime accepts both RFC3339 timestamps (with a colon in the zone
+// offset) and the Conan Center form that omits the colon (e.g. +0000).
+func parseConanTime(value string) bool {
+	if value == "" {
+		return false
+	}
+	if _, err := time.Parse(time.RFC3339, value); err == nil {
+		return true
+	}
+	_, err := time.Parse("2006-01-02T15:04:05.999999999-0700", value)
+	return err == nil
+}
+
 func validConanMetadata(path string, body []byte) bool {
 	if strings.HasSuffix(path, "/latest") {
 		var latest struct {
@@ -965,8 +982,7 @@ func validConanMetadata(path string, body []byte) bool {
 		if json.Unmarshal(body, &latest) != nil || !validConanSegment(latest.Revision) {
 			return false
 		}
-		_, err := time.Parse(time.RFC3339, latest.Time)
-		return err == nil
+		return parseConanTime(latest.Time)
 	}
 	if strings.HasSuffix(path, "/search") {
 		var search struct {
@@ -1014,7 +1030,7 @@ func validConanMetadata(path string, body []byte) bool {
 			if json.Unmarshal(revision.Time, &timestamp) != nil || timestamp == "" {
 				return false
 			}
-			if _, err := time.Parse(time.RFC3339, timestamp); err != nil {
+			if !parseConanTime(timestamp) {
 				return false
 			}
 			continue

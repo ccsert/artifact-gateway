@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -29,13 +30,19 @@ type RawClient = rawprotocol.Client
 func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	client := c.HTTPClient
 	if member.Type == repository.MemberProxy {
-		u, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
-		if err != nil {
-			return nil, err
-		}
-		client, err = rawProxyHTTPClient(client, u.Hostname(), u.Port(), ips)
-		if err != nil {
-			return nil, err
+		if egressProxyEnabled() {
+			// 走 HTTP(S)_PROXY 时，由代理服务器负责 DNS 解析与 outbound 连接，
+			// IP-pinning 既不必要也会绕过代理，因此改用标准代理 Transport。
+			client = rawProxyEgressClient(client)
+		} else {
+			u, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
+			if err != nil {
+				return nil, err
+			}
+			client, err = rawProxyHTTPClient(client, u.Hostname(), u.Port(), ips)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	u, err := url.Parse(member.Endpoint)
@@ -76,6 +83,32 @@ func resolveRawProxyEndpoint(ctx context.Context, endpoint string) (*url.URL, []
 		}
 	}
 	return u, ips, nil
+}
+
+// egressProxyEnabled reports whether an outbound HTTP(S) proxy is configured.
+// When set, the upstream request must go through that proxy instead of dialing
+// the upstream host directly.
+func egressProxyEnabled() bool {
+	return os.Getenv("HTTPS_PROXY") != "" || os.Getenv("https_proxy") != "" || os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != ""
+}
+
+// rawProxyEgressClient returns a client that honors the configured HTTP(S)_PROXY
+// for upstream requests. DNS resolution and the private-network check are
+// delegated to the egress proxy, so no IP-pinning is applied locally.
+func rawProxyEgressClient(client *http.Client) *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	} else {
+		transport = transport.Clone()
+	}
+	transport.Proxy = http.ProxyFromEnvironment
+	copy := *client
+	copy.Transport = transport
+	return &copy
 }
 
 // rawProxyHTTPClient pins the TCP connection to the address that passed the
