@@ -32,6 +32,10 @@ services:
       GATEWAY_OIDC_ADMIN_SUBJECTS: ${GATEWAY_OIDC_ADMIN_SUBJECTS:-}
       GATEWAY_OTLP_HTTP_ENDPOINT: ${GATEWAY_OTLP_HTTP_ENDPOINT:-}
       GATEWAY_OTEL_SAMPLING_RATIO: ${GATEWAY_OTEL_SAMPLING_RATIO:-1}
+      # 出网代理：让 proxy 仓库的上游请求走宿主机代理（容器经 host-gateway 访问）
+      HTTP_PROXY: ${GATEWAY_EGRESS_PROXY:-}
+      HTTPS_PROXY: ${GATEWAY_EGRESS_PROXY:-}
+      NO_PROXY: postgres,minio,127.0.0.1,localhost
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
     extra_hosts:
