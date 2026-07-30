@@ -271,6 +271,13 @@ referenced commits.
   repository-count and storage movement from a throttled localStorage sample.
   This is a stopgap for "no storage-growth history" until a metrics
   time-series endpoint exists. (`f0abdd12`)
+- **API key roles — first RBAC slice (P0/P3).** A coarse global `Role`
+  (reader/writer/admin) on the principal is honored by the authorizer and the
+  legacy Authenticator methods before per-repository grants, so API keys can be
+  issued with bounded scope instead of always `admin`. Reader grants read,
+  writer grants read+write, admin grants all; the empty role leaves existing
+  behavior unchanged. Includes OpenAPI enum values, a create-key role picker,
+  and authorization + end-to-end tests. (`01651d84`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
@@ -289,10 +296,10 @@ backend API additions listed below.
   lifecycle contract requires a tombstone, a grace period, and a reference
   recheck before any bytes are reclaimed, so an operator "purge now" button
   would violate that safety model.
-- **API key scoping beyond `admin`** requires new roles and authorization-model
-  changes; the store already persists `Roles` and the create handler already
-  validates them, but only `admin` is a defined role today. This overlaps with
-  the P0 RBAC work.
+- **API key scoping beyond `admin`** is partly delivered: `reader`/`writer`/
+  `admin` roles now exist and are enforced (see `01651d84`). A full
+  user/role/privilege management surface (users, teams, content selectors,
+  role assignment UI) remains future work and overlaps with the P0 RBAC item.
 
 ## Prioritized Backlog
 
