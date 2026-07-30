@@ -5,6 +5,29 @@ import { PageHeader, Card, DataTable, inputClass, btnSecondary } from '../compon
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { StateBadge, FormatBadge } from '../components/Badge';
 import { formatBytes, formatDate } from '../lib/format';
+import { toCsv, downloadCsv } from '../lib/csv';
+
+const AUDIT_CSV_COLUMNS = [
+  '时间',
+  '操作',
+  '结果',
+  '仓库',
+  '分组',
+  '格式',
+  '状态',
+  '流量',
+  'Actor',
+  '资源',
+  '表示',
+  '成员',
+  '成员类型',
+  '上游主机',
+  '缓存',
+  '授权来源',
+  '授权原因',
+  'Request ID',
+  'Trace ID',
+];
 
 export function AuditsPage() {
   const [records, setRecords] = useState<AuditRecord[] | null>(null);
@@ -125,6 +148,36 @@ export function AuditsPage() {
         </label>
         <button onClick={() => void load()} className={btnSecondary}>
           刷新
+        </button>
+        <button
+          onClick={() => {
+            const rows = filtered.map((a) => [
+              a.occurredAt,
+              a.operation,
+              a.outcome,
+              a.repository,
+              a.groupName,
+              a.format,
+              a.status,
+              a.bytes,
+              a.actor,
+              a.resource,
+              a.representation,
+              a.memberName,
+              a.memberType,
+              a.upstreamHost,
+              a.cacheDisposition,
+              a.authorizationSource,
+              a.authorizationReason,
+              a.requestId,
+              a.traceId,
+            ]);
+            downloadCsv(`audits-${new Date().toISOString().slice(0, 19)}.csv`, toCsv(AUDIT_CSV_COLUMNS, rows));
+          }}
+          disabled={!filtered.length}
+          className={btnSecondary}
+        >
+          导出 CSV
         </button>
       </div>
       {error !== null ? (
