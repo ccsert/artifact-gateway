@@ -81,6 +81,7 @@ type ReplicationStore interface {
 	UpdateReplicationCheckpoint(context.Context, ReplicationCheckpoint) error
 	CompleteReplicationPlan(context.Context, string) error
 	FailReplicationPlan(context.Context, string, string) error
+	CancelReplicationPlan(context.Context, string, string) error
 }
 
 type NativeMavenStore interface {

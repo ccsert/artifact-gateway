@@ -24,6 +24,7 @@ import {
   listRepositoryReplications,
   createRepositoryReplication,
   getRepositoryReplication,
+  deleteRepositoryReplication,
 } from '../client';
 import type {
   Repository,
@@ -773,6 +774,17 @@ function DistributeTab({ repo }: { repo: Repository }) {
     void load();
   }, [load]);
 
+  const cancelPlan = async (planId: string) => {
+    setActionError(null);
+    const { error: err } = await deleteRepositoryReplication({ path: { repositoryId: repo.id, replicationPlanId: planId } });
+    if (err) {
+      setActionError(err);
+      return;
+    }
+    setNotice('已取消复制计划，工作进程不再重试。');
+    void load();
+  };
+
   const submit = async (kind: 'promote' | 'replicate') => {
     setBusy(kind);
     setActionError(null);
@@ -889,12 +901,22 @@ function DistributeTab({ repo }: { repo: Repository }) {
                 <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(p.createdAt)}</td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(p.completedAt)}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <button
-                    onClick={() => showDetail(p.id)}
-                    className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                  >
-                    进度
-                  </button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => showDetail(p.id)}
+                      className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                    >
+                      进度
+                    </button>
+                    {(p.state === 'pending' || p.state === 'failed') && (
+                      <button
+                        onClick={() => void cancelPlan(p.id)}
+                        className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
+                      >
+                        取消
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

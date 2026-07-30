@@ -914,6 +914,35 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryReplication(w http.ResponseW
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) DeleteRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, replicationPlanID adminopenapi.ReplicationPlanId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, _ repository.HostedRepository) {
+		plan, err := h.replication.GetReplicationPlan(r.Context(), repositoryID.String(), replicationPlanID.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "replication plan not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get replication plan failed")
+			return
+		}
+		// Only pending or failed plans can be cancelled: the worker owns a
+		// running plan mid-flight, and completed/cancelled plans are terminal.
+		if plan.State != "pending" && plan.State != "failed" {
+			writeHostedProblem(w, http.StatusConflict, "invalid_state", "only pending or failed replication plans can be cancelled")
+			return
+		}
+		if err := h.replication.CancelReplicationPlan(r.Context(), repositoryID.String(), replicationPlanID.String()); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeHostedProblem(w, http.StatusConflict, "invalid_state", "replication plan was claimed or completed before cancellation")
+				return
+			}
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "cancel replication plan failed")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
 func validRepositoryDigest(value string) bool {
 	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+64 {
 		return false

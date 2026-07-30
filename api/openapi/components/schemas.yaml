@@ -388,7 +388,7 @@ ReplicationPlan:
     sourceRepositoryId: {type: string, format: uuid}
     targetRepositoryId: {type: string, format: uuid}
     format: {"$ref": "#/Format"}
-    state: {type: string, enum: [pending, running, completed, failed]}
+    state: {type: string, enum: [pending, running, completed, failed, cancelled]}
     createdAt: {type: string, format: date-time}
     startedAt: {type: string, format: date-time}
     completedAt: {type: string, format: date-time}

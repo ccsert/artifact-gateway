@@ -360,6 +360,7 @@ func (e ReplicationCheckpointProgressState) Valid() bool {
 
 // Defines values for ReplicationPlanState.
 const (
+	ReplicationPlanStateCancelled ReplicationPlanState = "cancelled"
 	ReplicationPlanStateCompleted ReplicationPlanState = "completed"
 	ReplicationPlanStateFailed    ReplicationPlanState = "failed"
 	ReplicationPlanStatePending   ReplicationPlanState = "pending"
@@ -369,6 +370,8 @@ const (
 // Valid indicates whether the value is a known member of the ReplicationPlanState enum.
 func (e ReplicationPlanState) Valid() bool {
 	switch e {
+	case ReplicationPlanStateCancelled:
+		return true
 	case ReplicationPlanStateCompleted:
 		return true
 	case ReplicationPlanStateFailed:
@@ -384,6 +387,7 @@ func (e ReplicationPlanState) Valid() bool {
 
 // Defines values for ReplicationPlanDetailState.
 const (
+	ReplicationPlanDetailStateCancelled ReplicationPlanDetailState = "cancelled"
 	ReplicationPlanDetailStateCompleted ReplicationPlanDetailState = "completed"
 	ReplicationPlanDetailStateFailed    ReplicationPlanDetailState = "failed"
 	ReplicationPlanDetailStatePending   ReplicationPlanDetailState = "pending"
@@ -393,6 +397,8 @@ const (
 // Valid indicates whether the value is a known member of the ReplicationPlanDetailState enum.
 func (e ReplicationPlanDetailState) Valid() bool {
 	switch e {
+	case ReplicationPlanDetailStateCancelled:
+		return true
 	case ReplicationPlanDetailStateCompleted:
 		return true
 	case ReplicationPlanDetailStateFailed:
@@ -1353,6 +1359,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryReplicationParams)
+	// DeleteRepositoryReplication Cancel a pending or failed replication plan
+	// (DELETE /repositories/{repositoryId}/replications/{replicationPlanId})
+	DeleteRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, replicationPlanId ReplicationPlanId)
 
 	// (GET /repositories/{repositoryId}/replications/{replicationPlanId})
 	GetRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, replicationPlanId ReplicationPlanId)
@@ -2946,6 +2955,41 @@ func (siw *ServerInterfaceWrapper) CreateRepositoryReplication(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteRepositoryReplication operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRepositoryReplication(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "replicationPlanId" -------------
+	var replicationPlanId ReplicationPlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "replicationPlanId", r.PathValue("replicationPlanId"), &replicationPlanId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "replicationPlanId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRepositoryReplication(w, r, repositoryId, replicationPlanId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRepositoryReplication operation middleware
 func (siw *ServerInterfaceWrapper) GetRepositoryReplication(w http.ResponseWriter, r *http.Request) {
 
@@ -3395,6 +3439,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.CreateRepositoryReplication)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/replications/{replicationPlanId}", wrapper.DeleteRepositoryReplication)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications/{replicationPlanId}", wrapper.GetRepositoryReplication)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/restore", wrapper.RestoreRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.GetRetentionPolicy)
@@ -5021,6 +5066,67 @@ func (response CreateRepositoryReplication409ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type DeleteRepositoryReplicationRequestObject struct {
+	RepositoryId      RepositoryId      `json:"repositoryId"`
+	ReplicationPlanId ReplicationPlanId `json:"replicationPlanId"`
+}
+
+type DeleteRepositoryReplicationResponseObject interface {
+	VisitDeleteRepositoryReplicationResponse(w http.ResponseWriter) error
+}
+
+type DeleteRepositoryReplication204Response struct {
+}
+
+func (response DeleteRepositoryReplication204Response) VisitDeleteRepositoryReplicationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRepositoryReplication403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteRepositoryReplication403ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryReplication404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryReplication404ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryReplication409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryReplication409ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRepositoryReplicationRequestObject struct {
 	RepositoryId      RepositoryId      `json:"repositoryId"`
 	ReplicationPlanId ReplicationPlanId `json:"replicationPlanId"`
@@ -5345,6 +5451,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(ctx context.Context, request CreateRepositoryReplicationRequestObject) (CreateRepositoryReplicationResponseObject, error)
+	// DeleteRepositoryReplication Cancel a pending or failed replication plan
+	// (DELETE /repositories/{repositoryId}/replications/{replicationPlanId})
+	DeleteRepositoryReplication(ctx context.Context, request DeleteRepositoryReplicationRequestObject) (DeleteRepositoryReplicationResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/replications/{replicationPlanId})
 	GetRepositoryReplication(ctx context.Context, request GetRepositoryReplicationRequestObject) (GetRepositoryReplicationResponseObject, error)
@@ -6533,6 +6642,33 @@ func (sh *strictHandler) CreateRepositoryReplication(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRepositoryReplicationResponseObject); ok {
 		if err := validResponse.VisitCreateRepositoryReplicationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRepositoryReplication operation middleware
+func (sh *strictHandler) DeleteRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, replicationPlanId ReplicationPlanId) {
+	var request DeleteRepositoryReplicationRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ReplicationPlanId = replicationPlanId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRepositoryReplication(ctx, request.(DeleteRepositoryReplicationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRepositoryReplication")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRepositoryReplicationResponseObject); ok {
+		if err := validResponse.VisitDeleteRepositoryReplicationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

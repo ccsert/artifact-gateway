@@ -49,3 +49,17 @@ repositories_repositoryId_replications_replicationPlanId:
               "$ref": "../components/schemas.yaml#/ReplicationPlanDetail"
       '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
+  delete:
+    operationId: deleteRepositoryReplication
+    summary: Cancel a pending or failed replication plan
+    description: |
+      Stops a pending or failed replication plan from being claimed again. A
+      running plan cannot be cancelled because the worker owns it mid-flight;
+      such a request fails with 409. Completed and already-cancelled plans are
+      also not cancellable. The plan record is retained for audit.
+    responses:
+      '204':
+        description: Replication plan cancelled
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}

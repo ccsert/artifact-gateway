@@ -1632,3 +1632,54 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		}
 	}
 }
+
+func TestRepositoryManagementCancelsReplicationPlan(t *testing.T) {
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "repl-src", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "repl-tgt", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, _, err := store.CreateReplicationPlan(context.Background(), repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "cancel-key",
+	}, []repository.ReplicationCheckpoint{{PlanID: uuid.NewString(), SourceObjectKey: "a", ObjectKey: "a", Digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Size: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	cancel := func(repoID, planID string) int {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+repoID+"/replications/"+planID, nil)
+		authorize(req, "admin-secret")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := cancel(source.ID, plan.ID); code != http.StatusNoContent {
+		t.Fatalf("cancel pending=%d want 204", code)
+	}
+	persisted, _ := store.GetReplicationPlan(context.Background(), source.ID, plan.ID)
+	if persisted.State != "cancelled" {
+		t.Fatalf("state=%q want cancelled", persisted.State)
+	}
+	// Already cancelled is not cancellable.
+	if code := cancel(source.ID, plan.ID); code != http.StatusConflict {
+		t.Fatalf("cancel cancelled=%d want 409", code)
+	}
+	// Unknown plan id is not found.
+	if code := cancel(source.ID, uuid.NewString()); code != http.StatusNotFound {
+		t.Fatalf("cancel missing=%d want 404", code)
+	}
+	// Plan scoped to a different repository is not found through this path.
+	other, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "repl-other", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := cancel(other.ID, plan.ID); code != http.StatusNotFound {
+		t.Fatalf("cancel wrong repo=%d want 404", code)
+	}
+}

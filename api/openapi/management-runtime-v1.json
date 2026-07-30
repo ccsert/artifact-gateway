@@ -594,6 +594,25 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteRepositoryReplication",
+        "summary": "Cancel a pending or failed replication plan",
+        "description": "Stops a pending or failed replication plan from being claimed again. A\nrunning plan cannot be cancelled because the worker owns it mid-flight;\nsuch a request fails with 409. Completed and already-cancelled plans are\nalso not cancellable. The plan record is retained for audit.\n",
+        "responses": {
+          "204": {
+            "description": "Replication plan cancelled"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/repositories/{repositoryId}/restore": {
@@ -1596,7 +1615,8 @@
               "pending",
               "running",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "createdAt": {

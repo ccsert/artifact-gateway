@@ -126,7 +126,7 @@ export type ReplicationPlan = {
     sourceRepositoryId: string;
     targetRepositoryId: string;
     format: Format;
-    state: 'pending' | 'running' | 'completed' | 'failed';
+    state: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
     createdAt: string;
     startedAt?: string;
     completedAt?: string;
@@ -1054,6 +1054,42 @@ export type CreateRepositoryReplicationResponses = {
 };
 
 export type CreateRepositoryReplicationResponse = CreateRepositoryReplicationResponses[keyof CreateRepositoryReplicationResponses];
+
+export type DeleteRepositoryReplicationData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+        replicationPlanId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/replications/{replicationPlanId}';
+};
+
+export type DeleteRepositoryReplicationErrors = {
+    /**
+     * Problem response
+     */
+    403: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type DeleteRepositoryReplicationError = DeleteRepositoryReplicationErrors[keyof DeleteRepositoryReplicationErrors];
+
+export type DeleteRepositoryReplicationResponses = {
+    /**
+     * Replication plan cancelled
+     */
+    204: void;
+};
+
+export type DeleteRepositoryReplicationResponse = DeleteRepositoryReplicationResponses[keyof DeleteRepositoryReplicationResponses];
 
 export type GetRepositoryReplicationData = {
     body?: never;

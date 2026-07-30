@@ -135,3 +135,19 @@ func (s *MemoryStore) finishReplication(id, state, msg string) error {
 	s.replicationPlans[id] = p
 	return nil
 }
+
+func (s *MemoryStore) CancelReplicationPlan(_ context.Context, repositoryID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.replicationPlans[id]
+	if !ok || (p.SourceRepositoryID != repositoryID && p.TargetRepositoryID != repositoryID) {
+		return ErrNotFound
+	}
+	if p.State != "pending" && p.State != "failed" {
+		return ErrNotFound
+	}
+	p.State = "cancelled"
+	p.CompletedAt = time.Now().UTC()
+	s.replicationPlans[id] = p
+	return nil
+}

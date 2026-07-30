@@ -167,6 +167,21 @@ func (s *PostgresStore) finishReplicationPlan(ctx context.Context, id, state, me
 	return nil
 }
 
+// CancelReplicationPlan stops a pending or failed plan from being claimed again.
+// Running plans are not cancellable because the worker owns them mid-flight;
+// the caller is expected to have checked the state, so any zero-row result
+// (missing or not pending/failed) is reported as ErrNotFound.
+func (s *PostgresStore) CancelReplicationPlan(ctx context.Context, repositoryID, id string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE replication_plans SET state='cancelled',completed_at=now(),last_error='' WHERE id::text=$1 AND (source_repository_id::text=$2 OR target_repository_id::text=$2) AND state IN ('pending','failed')`, id, repositoryID)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 type replicationPlanScanner interface{ Scan(...any) error }
 
 func scanReplicationPlan(scanner replicationPlanScanner, plan *ReplicationPlan) error {
