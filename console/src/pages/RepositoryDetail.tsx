@@ -45,6 +45,7 @@ import { Modal, useDisclosure } from '../components/Modal';
 import { OciImageDetail } from '../components/OciImageDetail';
 import { MavenPublishWizard } from '../components/MavenPublishWizard';
 import { MavenArtifactDetail, ConanArtifactDetail, RawArtifactDetail } from '../components/ArtifactRowDetail';
+import { RawUploadDialog } from '../components/RawUploadDialog';
 import { mavenGA, mavenVersion } from '../lib/usage';
 import { formatBytes, formatDate, formatNumber, shortDigest } from '../lib/format';
 
@@ -87,6 +88,7 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const format = repo.format;
+  const canUploadRaw = format === 'raw' && repo.type !== 'proxy';
 
   const load = useCallback(
     async (query: string, pageToken?: string) => {
@@ -207,6 +209,7 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
             搜索
           </button>
         </form>
+        {canUploadRaw && <RawUploadDialog repo={repo} onUploaded={() => load(q)} />}
         {q && (
           <button
             onClick={() => {
