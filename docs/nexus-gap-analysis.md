@@ -278,6 +278,11 @@ referenced commits.
   writer grants read+write, admin grants all; the empty role leaves existing
   behavior unchanged. Includes OpenAPI enum values, a create-key role picker,
   and authorization + end-to-end tests. (`01651d84`)
+- **Replication cancel (P3).** `DELETE /api/v2/repositories/{id}/replications/{planId}`
+  moves a pending or failed replication plan to a terminal `cancelled` state so
+  the worker stops retrying it; running plans are not cancellable (409) and the
+  record is retained for audit. Adds the store method (Postgres + Memory), the
+  `cancelled` state, a console cancel button, and black-box tests. (`481d7c5b`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
