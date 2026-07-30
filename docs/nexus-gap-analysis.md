@@ -266,7 +266,11 @@ referenced commits.
   records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
 - **Dashboard storage-by-format donut (P2).** The overview page renders a
   reusable SVG `Donut` of per-format storage usage from existing capacity
-  data. Time-series trends still require a metrics source. (`b7a0beb8`)
+  data. (`b7a0beb8`)
+- **Dashboard trends (P2).** A reusable SVG `Sparkline` renders recent
+  repository-count and storage movement from a throttled localStorage sample.
+  This is a stopgap for "no storage-growth history" until a metrics
+  time-series endpoint exists. (`f0abdd12`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
@@ -278,6 +282,17 @@ The OpenAPI contract generation pipeline was verified reproducible (regenerating
 `internal/admin/openapi/generated.go`, `console/src/client`, and
 `management-runtime-v1.json` from source produces no diff), which de-risks the
 backend API additions listed below.
+
+### Findings that constrain later work
+
+- **Tombstone hard-purge on demand** is out of scope by design: the artifact
+  lifecycle contract requires a tombstone, a grace period, and a reference
+  recheck before any bytes are reclaimed, so an operator "purge now" button
+  would violate that safety model.
+- **API key scoping beyond `admin`** requires new roles and authorization-model
+  changes; the store already persists `Roles` and the create handler already
+  validates them, but only `admin` is a defined role today. This overlaps with
+  the P0 RBAC work.
 
 ## Prioritized Backlog
 
