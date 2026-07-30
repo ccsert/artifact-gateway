@@ -8,12 +8,14 @@ import { AuditsPage } from '../pages/Audits';
 import { ApiKeysPage } from '../pages/ApiKeys';
 import { AuditRetentionPage } from '../pages/AuditRetention';
 import { ProxyGroupsPage } from '../pages/ProxyGroups';
+import { SearchPage } from '../pages/Search';
 
 export const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
       { path: '/', element: <DashboardPage /> },
+      { path: '/search', element: <SearchPage /> },
       { path: '/repositories', element: <RepositoriesPage /> },
       { path: '/repositories/:repositoryId', element: <RepositoryDetailPage /> },
       { path: '/groups', element: <GroupsPage /> },

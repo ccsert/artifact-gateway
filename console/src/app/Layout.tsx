@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { Modal, useDisclosure } from '../components/Modal';
 import { Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
@@ -70,6 +70,42 @@ function IconProxy() {
       <circle cx="12" cy="12" r="10" />
       <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
+  );
+}
+
+function GlobalSearchBox() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const [value, setValue] = useState(params.get('q') ?? '');
+  useEffect(() => {
+    setValue(params.get('q') ?? '');
+  }, [params]);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const query = value.trim();
+        if (query) navigate(`/search?q=${encodeURIComponent(query)}`);
+      }}
+      className="relative w-full max-w-md"
+    >
+      <input
+        className={`${inputClass} pr-9`}
+        placeholder="跨仓库搜索制品…"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <button
+        type="submit"
+        aria-label="搜索"
+        className="absolute inset-y-0 right-2 my-auto flex h-7 items-center text-zinc-500 hover:text-zinc-300"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+        </svg>
+      </button>
+    </form>
   );
 }
 
@@ -176,8 +212,11 @@ export function AppLayout() {
         </div>
       </aside>
       <div className="ml-56 flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center justify-end gap-3 border-b border-zinc-800/80 bg-zinc-950/80 px-6 py-3 backdrop-blur">
-          <TokenDialog />
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/80 px-6 py-3 backdrop-blur">
+          <GlobalSearchBox />
+          <div className="ml-auto">
+            <TokenDialog />
+          </div>
         </header>
         <main className="flex-1 px-6 py-6">
           <Outlet />
