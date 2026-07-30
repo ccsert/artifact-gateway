@@ -43,6 +43,7 @@ import { Modal, useDisclosure } from '../components/Modal';
 import { OciImageDetail } from '../components/OciImageDetail';
 import { MavenPublishWizard } from '../components/MavenPublishWizard';
 import { MavenArtifactDetail, ConanArtifactDetail, RawArtifactDetail } from '../components/ArtifactRowDetail';
+import { mavenGA, mavenVersion } from '../lib/usage';
 import { formatBytes, formatDate, formatNumber, shortDigest } from '../lib/format';
 
 type Tab = 'artifacts' | 'publish' | 'grants' | 'retention' | 'capacity' | 'distribute' | 'jobs' | 'tombstones';
@@ -70,6 +71,9 @@ interface ArtifactRow {
   size?: number;
   contentType?: string;
   publisher?: string;
+  // maven 聚合：同 group:artifact 的版本数与最新版本
+  versionCount?: number;
+  latestVersion?: string;
 }
 
 function ArtifactsTab({ repo }: { repo: Repository }) {
@@ -114,13 +118,26 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
         } else {
           const r = await listMavenCoordinates({ path: { repositoryId: repo.id }, query: page });
           err = r.error;
-          items = (r.data?.items ?? []).map((x) => ({
-            key: x.coordinate,
-            coordinate: x.coordinate,
-            digest: x.digest,
-            createdAt: x.createdAt,
-            publisher: x.publisher,
-          }));
+          // 按 group:artifact 聚合：每个制品一行，显示版本数与最新版本
+          const byGA = new Map<string, { versions: { coordinate: string; digest?: string; createdAt?: string; publisher?: string }[] }>();
+          for (const x of r.data?.items ?? []) {
+            const ga = mavenGA(x.coordinate) ?? x.coordinate;
+            if (!byGA.has(ga)) byGA.set(ga, { versions: [] });
+            byGA.get(ga)!.versions.push(x);
+          }
+          items = Array.from(byGA.entries()).map(([ga, { versions }]) => {
+            const sorted = [...versions].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+            const latest = sorted[0];
+            return {
+              key: ga,
+              coordinate: ga,
+              digest: latest?.digest,
+              createdAt: latest?.createdAt,
+              publisher: latest?.publisher,
+              versionCount: versions.length,
+              latestVersion: mavenVersion(latest?.coordinate ?? '') ?? undefined,
+            };
+          });
           next = r.data?.nextPageToken;
         }
       } else if (format === 'conan') {
@@ -215,7 +232,7 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
         />
       ) : (
         <>
-          <DataTable columns={format === 'oci' || format === 'conan' ? ['名称'] : ['坐标', '摘要', '大小', '创建时间']}>
+          <DataTable columns={format === 'oci' || format === 'conan' ? ['名称'] : format === 'maven' ? ['制品', '版本', '最新版本', '更新时间'] : ['坐标', '摘要', '大小', '创建时间']}>
             {rows.map((r) => {
               const colCount = format === 'oci' || format === 'conan' ? 1 : 4;
               const expanded = expandedImage === r.coordinate;
@@ -229,7 +246,16 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
                       <span className="mr-1.5 text-zinc-600">{expanded ? '▾' : '▸'}</span>
                       {r.coordinate}
                     </td>
-                    {format !== 'oci' && format !== 'conan' && (
+                    {format === 'maven' && (
+                      <>
+                        <td className="px-4 py-2.5">
+                          <Badge tone="zinc">{r.versionCount ?? 1} 个版本</Badge>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-cyan-300">{r.latestVersion ?? '—'}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(r.createdAt)}</td>
+                      </>
+                    )}
+                    {format !== 'oci' && format !== 'conan' && format !== 'maven' && (
                       <>
                         <td className="px-4 py-2.5 font-mono text-xs text-zinc-500" title={r.digest}>
                           {shortDigest(r.digest)}
