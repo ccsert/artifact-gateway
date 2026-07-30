@@ -9,6 +9,7 @@ import (
 )
 
 func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
+	repo = normalizeHostedRepository(repo)
 	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, state, version) VALUES ($1,$2,$3,$4,$5,$6,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
@@ -20,6 +21,7 @@ func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedR
 }
 
 func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
+	repo = normalizeHostedRepository(repo)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return HostedRepository{}, false, err
@@ -70,6 +72,16 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 		return HostedRepository{}, false, err
 	}
 	return repo, false, nil
+}
+
+func normalizeHostedRepository(repo HostedRepository) HostedRepository {
+	if repo.Type == "" {
+		repo.Type = RepositoryTypeHosted
+	}
+	if repo.AllowedHosts == nil {
+		repo.AllowedHosts = []string{}
+	}
+	return repo
 }
 
 // hostedRepositoryColumns is the canonical projection for hosted_repositories
