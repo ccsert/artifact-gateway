@@ -6,7 +6,9 @@ import { PageHeader, StatCard, Card, CardHeader, DataTable } from '../components
 import { Loading, ErrorBanner, isNotFound } from '../components/Feedback';
 import { FormatBadge, StateBadge } from '../components/Badge';
 import { Donut } from '../components/Donut';
+import { Sparkline } from '../components/Sparkline';
 import { formatBytes, formatDate, formatNumber } from '../lib/format';
+import { loadDashboardHistory, recordDashboardSample, type DashboardSample } from '../lib/history';
 
 const FORMAT_COLORS: Record<string, string> = {
   oci: '#22d3ee',
@@ -23,6 +25,7 @@ export function DashboardPage() {
   const [totalBytes, setTotalBytes] = useState<number | null>(null);
   const [totalObjects, setTotalObjects] = useState<number | null>(null);
   const [bytesByFormat, setBytesByFormat] = useState<Record<string, number> | null>(null);
+  const [history, setHistory] = useState<DashboardSample[]>(() => loadDashboardHistory());
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
@@ -62,6 +65,7 @@ export function DashboardPage() {
       setTotalBytes(any ? bytes : null);
       setTotalObjects(any ? objects : null);
       setBytesByFormat(any ? byFormat : null);
+      setHistory(recordDashboardSample({ t: Date.now(), repos: repoList.length, bytes: any ? bytes : null, objects: any ? objects : null }));
     } catch (e) {
       setError(e);
     }
@@ -135,6 +139,37 @@ export function DashboardPage() {
               <div className="py-8 text-center text-sm text-zinc-600">容量统计未启用或暂无数据</div>
             )}
           </div>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader
+            title="近期趋势"
+            extra={
+              history.length > 0 ? (
+                <span className="text-[11px] text-zinc-600">自 {formatDate(new Date(history[0].t).toISOString())}</span>
+              ) : undefined
+            }
+          />
+          <div className="grid grid-cols-1 gap-6 px-5 py-6 sm:grid-cols-2">
+            <div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">仓库数</div>
+              <Sparkline data={history.map((s) => s.repos)} color="#22d3ee" format={(n) => `${n}`} />
+            </div>
+            <div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">存储占用</div>
+              <Sparkline
+                data={history.map((s) => s.bytes).filter((b): b is number => b !== null)}
+                color="#fbbf24"
+                format={(n) => formatBytes(n)}
+                label="容量未启用"
+              />
+            </div>
+          </div>
+          <p className="px-5 pb-4 text-[11px] text-zinc-600">
+            基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。
+          </p>
         </Card>
       </div>
 
