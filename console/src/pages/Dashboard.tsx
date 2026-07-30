@@ -5,7 +5,16 @@ import type { Repository, Group, AuditRecord } from '../client';
 import { PageHeader, StatCard, Card, CardHeader, DataTable } from '../components/Layout';
 import { Loading, ErrorBanner, isNotFound } from '../components/Feedback';
 import { FormatBadge, StateBadge } from '../components/Badge';
+import { Donut } from '../components/Donut';
 import { formatBytes, formatDate, formatNumber } from '../lib/format';
+
+const FORMAT_COLORS: Record<string, string> = {
+  oci: '#22d3ee',
+  maven: '#fbbf24',
+  conan: '#a78bfa',
+  raw: '#38bdf8',
+};
+const FORMAT_ORDER = ['oci', 'maven', 'conan', 'raw'] as const;
 
 export function DashboardPage() {
   const [repos, setRepos] = useState<Repository[] | null>(null);
@@ -13,6 +22,7 @@ export function DashboardPage() {
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
   const [totalBytes, setTotalBytes] = useState<number | null>(null);
   const [totalObjects, setTotalObjects] = useState<number | null>(null);
+  const [bytesByFormat, setBytesByFormat] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
@@ -38,15 +48,20 @@ export function DashboardPage() {
       let bytes = 0;
       let objects = 0;
       let any = false;
-      for (const c of caps) {
+      const byFormat: Record<string, number> = {};
+      for (let i = 0; i < activeRepos.length; i++) {
+        const c = caps[i];
         if (c.data) {
           bytes += c.data.usedBytes;
           objects += c.data.objectCount;
           any = true;
+          const f = activeRepos[i].format;
+          byFormat[f] = (byFormat[f] ?? 0) + c.data.usedBytes;
         }
       }
       setTotalBytes(any ? bytes : null);
       setTotalObjects(any ? objects : null);
+      setBytesByFormat(any ? byFormat : null);
     } catch (e) {
       setError(e);
     }
@@ -92,6 +107,35 @@ export function DashboardPage() {
           sub={totalObjects !== null ? `${formatNumber(totalObjects)} 个对象` : '容量未启用'}
         />
         <StatCard label="最近审计" value={audits.length} sub="最新记录条数" />
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader
+            title="存储占用（按格式）"
+            extra={
+              <Link to="/repositories" className="text-xs text-cyan-400 hover:text-cyan-300">
+                查看仓库 →
+              </Link>
+            }
+          />
+          <div className="px-5 py-6">
+            {bytesByFormat && totalBytes ? (
+              <Donut
+                segments={FORMAT_ORDER.map((f) => ({
+                  label: f,
+                  value: bytesByFormat[f] ?? 0,
+                  color: FORMAT_COLORS[f] ?? '#71717a',
+                }))}
+                format={(n) => formatBytes(n)}
+                centerLabel={formatBytes(totalBytes)}
+                centerSub="合计"
+              />
+            ) : (
+              <div className="py-8 text-center text-sm text-zinc-600">容量统计未启用或暂无数据</div>
+            )}
+          </div>
+        </Card>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
