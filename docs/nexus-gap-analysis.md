@@ -253,6 +253,32 @@ behind; several design decisions are stricter or more modern than Nexus:
 - **Modern stack.** React 19, Vite, and Tailwind 4 against Nexus 3's older UI
   substrate.
 
+## Delivered Progress
+
+Work shipped against this analysis. Items are partial unless noted; see the
+referenced commits.
+
+- **Global cross-repository artifact search (P1).** A header search bar and a
+  `/search` results page fan the existing per-repository `artifact-search`
+  endpoint across every readable repository and aggregate hits. Server-side
+  cross-repo search remains a future enhancement. (`6dc6dace`)
+- **Audit CSV export (P3).** The audits page exports the currently filtered
+  records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
+- **Dashboard storage-by-format donut (P2).** The overview page renders a
+  reusable SVG `Donut` of per-format storage usage from existing capacity
+  data. Time-series trends still require a metrics source. (`b7a0beb8`)
+- **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
+  `If-Match` guard updates a proxy repository's upstream endpoint and egress
+  allowlist; the store, Postgres/Memory implementations, generated contracts,
+  console edit dialog, and black-box tests are included. Proxy routing reads
+  the fields per request, so edits hot-apply. Rename, format, and type remain
+  immutable. (`5bf1db09`)
+
+The OpenAPI contract generation pipeline was verified reproducible (regenerating
+`internal/admin/openapi/generated.go`, `console/src/client`, and
+`management-runtime-v1.json` from source produces no diff), which de-risks the
+backend API additions listed below.
+
 ## Prioritized Backlog
 
 A suggested sequence for closing the gaps, scoped so each item is
