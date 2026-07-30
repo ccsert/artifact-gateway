@@ -158,6 +158,21 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 	return repo, nil
 }
 
+func (s *PostgresStore) UpdateHostedRepository(ctx context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
+	var updated HostedRepository
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=$3, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$4 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, expectedVersion), &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		if _, getErr := s.GetHostedRepository(ctx, repo.ID); errors.Is(getErr, ErrNotFound) {
+			return HostedRepository{}, ErrNotFound
+		}
+		return HostedRepository{}, ErrVersionConflict
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return updated, nil
+}
+
 func scanHostedGroupMembers(ctx context.Context, query interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, group *HostedGroup) error {

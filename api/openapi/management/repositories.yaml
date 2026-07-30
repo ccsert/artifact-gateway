@@ -44,6 +44,25 @@ repositories_repositoryId:
         "$ref": "../components/responses.yaml#/Deletion"
       '409':
         "$ref": "../components/responses.yaml#/Problem"
+  patch:
+    operationId: updateRepository
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/UpdateRepository"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Repository"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId_grants:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, Fragment } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getRepository,
+  updateRepository,
   searchRepositoryArtifacts,
   listOciImages,
   listMavenCoordinates,
@@ -1080,6 +1081,86 @@ function NotEnabled({ feature }: { feature: string }) {
   );
 }
 
+function EditRepositoryDialog({ repo, onUpdated }: { repo: Repository; onUpdated: () => void }) {
+  const dialog = useDisclosure();
+  const [endpoint, setEndpoint] = useState(repo.endpoint ?? '');
+  const [hosts, setHosts] = useState((repo.allowedHosts ?? []).join(', '));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const requiresHosts = repo.format === 'raw' || repo.format === 'conan';
+
+  const submit = async () => {
+    setSaving(true);
+    setError(null);
+    const allowedHosts = hosts
+      .split(',')
+      .map((h) => h.trim())
+      .filter(Boolean);
+    const { error: err } = await updateRepository({
+      path: { repositoryId: repo.id },
+      headers: { 'If-Match': repo.version },
+      body: { endpoint: endpoint.trim(), allowedHosts },
+    });
+    setSaving(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    dialog.hide();
+    onUpdated();
+  };
+
+  return (
+    <>
+      <button onClick={dialog.show} className={btnSecondary}>
+        编辑
+      </button>
+      <Modal
+        open={dialog.open}
+        title="编辑代理配置"
+        onClose={dialog.hide}
+        footer={
+          <>
+            <button onClick={dialog.hide} className={btnSecondary}>
+              取消
+            </button>
+            <button onClick={submit} disabled={saving} className={btnPrimary}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field
+            label="上游地址"
+            hint="https 基础地址，修改后立即生效（按请求读取）。"
+          >
+            <input
+              className={inputClass}
+              placeholder="https://upstream.example"
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="允许主机"
+            hint={requiresHosts ? '逗号分隔，raw / conan 代理必填。' : '逗号分隔；oci / maven 代理可留空。'}
+          >
+            <input
+              className={inputClass}
+              placeholder="upstream.example, mirror.example"
+              value={hosts}
+              onChange={(e) => setHosts(e.target.value)}
+            />
+          </Field>
+          {error ? <ErrorBanner error={error} /> : null}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 export function RepositoryDetailPage() {
   const { repositoryId = '' } = useParams();
   const [repo, setRepo] = useState<Repository | null>(null);
@@ -1127,6 +1208,7 @@ export function RepositoryDetailPage() {
         description={`ID: ${repo.id} · 版本 v${repo.version}`}
         actions={
           <div className="flex items-center gap-2">
+            {repo.type === 'proxy' && <EditRepositoryDialog repo={repo} onUpdated={load} />}
             <FormatBadge format={repo.format} />
             <StateBadge state={repo.state} />
           </div>

@@ -22,6 +22,7 @@ type HostedRepositoryStore interface {
 	GetHostedRepository(context.Context, string) (HostedRepository, error)
 	GetHostedRepositoryByName(context.Context, string) (HostedRepository, error)
 	DisableHostedRepository(context.Context, string) (HostedRepository, error)
+	UpdateHostedRepository(context.Context, HostedRepository, string) (HostedRepository, error)
 }
 
 type HostedGroupStore interface {

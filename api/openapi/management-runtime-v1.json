@@ -261,6 +261,38 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "patch": {
+        "operationId": "updateRepository",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRepository"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Repository"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/repositories/{repositoryId}/grants": {
@@ -2398,6 +2430,27 @@
           "lastError": {
             "type": "string",
             "maxLength": 1024
+          }
+        }
+      },
+      "UpdateRepository": {
+        "type": "object",
+        "description": "Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.",
+        "required": [
+          "endpoint"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Upstream base URL (https). Required for proxy repositories."
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
           }
         }
       },

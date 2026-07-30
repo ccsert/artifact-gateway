@@ -1486,3 +1486,66 @@ func TestMemoryHostedRepositoryHonorsPageSize200(t *testing.T) {
 		t.Fatalf("items=%d next=%q err=%v", len(items), next, err)
 	}
 }
+
+func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID:           uuid.NewString(),
+		Name:         "raw-proxy",
+		Format:       repository.FormatRaw,
+		Type:         repository.RepositoryTypeProxy,
+		Endpoint:     "https://upstream.example",
+		AllowedHosts: []string{"upstream.example"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	patch := func(version, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(body))
+		authorize(r, "admin-secret")
+		r.Header.Set("If-Match", version)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, r)
+		return rec
+	}
+
+	updated := patch("1", `{"endpoint":"https://cdn.example","allowedHosts":["cdn.example"]}`)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("update=%d body=%s", updated.Code, updated.Body.String())
+	}
+	if etag := updated.Header().Get("ETag"); etag != "2" {
+		t.Fatalf("etag=%q want 2", etag)
+	}
+	if !strings.Contains(updated.Body.String(), `"endpoint":"https://cdn.example"`) {
+		t.Fatalf("body=%s", updated.Body.String())
+	}
+	persisted, _ := store.GetHostedRepository(context.Background(), repo.ID)
+	if persisted.Endpoint != "https://cdn.example" || persisted.AllowedHosts[0] != "cdn.example" {
+		t.Fatalf("persisted endpoint=%q hosts=%v", persisted.Endpoint, persisted.AllowedHosts)
+	}
+
+	if stale := patch("1", `{"endpoint":"https://other.example","allowedHosts":["other.example"]}`); stale.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale=%d body=%s", stale.Code, stale.Body.String())
+	}
+	if invalid := patch("2", `{"endpoint":"not-a-url","allowedHosts":["x"]}`); invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	if missingHosts := patch("2", `{"endpoint":"https://cdn.example"}`); missingHosts.Code != http.StatusBadRequest {
+		t.Fatalf("missing hosts=%d body=%s", missingHosts.Code, missingHosts.Body.String())
+	}
+
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "raw-hosted", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostedPatch := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+hosted.ID, strings.NewReader(`{"endpoint":"https://x.example"}`))
+	authorize(hostedPatch, "admin-secret")
+	hostedPatch.Header.Set("If-Match", "1")
+	hostedRec := httptest.NewRecorder()
+	handler.ServeHTTP(hostedRec, hostedPatch)
+	if hostedRec.Code != http.StatusBadRequest {
+		t.Fatalf("hosted update=%d body=%s", hostedRec.Code, hostedRec.Body.String())
+	}
+}

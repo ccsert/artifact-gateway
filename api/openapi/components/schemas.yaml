@@ -158,6 +158,23 @@ CreateRepository:
         type: string
       description: Hosts the proxy may egress to. Required for raw and conan
         proxies.
+UpdateRepository:
+  type: object
+  description: Editable proxy repository configuration. Only proxy repositories
+    are mutable; name, format, and type are immutable after creation.
+  required:
+  - endpoint
+  additionalProperties: false
+  properties:
+    endpoint:
+      type: string
+      description: Upstream base URL (https). Required for proxy repositories.
+    allowedHosts:
+      type: array
+      items:
+        type: string
+      description: Hosts the proxy may egress to. Required for raw and conan
+        proxies.
 Group:
   type: object
   required:

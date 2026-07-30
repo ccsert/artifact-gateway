@@ -42,6 +42,11 @@ type createHostedRepositoryRequest struct {
 	AllowedHosts []string          `json:"allowedHosts,omitempty"`
 }
 
+type updateHostedRepositoryRequest struct {
+	Endpoint     string   `json:"endpoint"`
+	AllowedHosts []string `json:"allowedHosts,omitempty"`
+}
+
 type repositoryPage struct {
 	Items         []repository.HostedRepository `json:"items"`
 	NextPageToken string                        `json:"nextPageToken,omitempty"`
@@ -401,6 +406,12 @@ func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r
 func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.get(w, r, id.String())
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) UpdateRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId, params adminopenapi.UpdateRepositoryParams) {
+	h.withRepositoryScope(w, r, id.String(), RepositoryWrite, func(_ Principal, repo repository.HostedRepository) {
+		h.update(w, r, repo, string(params.IfMatch))
 	})
 }
 
@@ -1931,6 +1942,40 @@ func (h hostedRepositoryAPIHandler) disable(w http.ResponseWriter, r *http.Reque
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "state": "pending"})
 }
 
+// update applies mutable proxy configuration. Hosted repositories, identity
+// fields (name, format, type), and version-skewed updates are rejected; proxy
+// routing reads the stored endpoint and allowedHosts on every request, so a
+// successful update takes effect without a restart.
+func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, ifMatch string) {
+	if repo.Type != repository.RepositoryTypeProxy {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "only proxy repositories can be updated")
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	var request updateHostedRepositoryRequest
+	if err := decoder.Decode(&request); err != nil || !validProxyUpdate(repo.Format, request.Endpoint, request.AllowedHosts) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw and conan proxies")
+		return
+	}
+	updated, err := h.store.UpdateHostedRepository(r.Context(), repository.HostedRepository{ID: repo.ID, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts}, ifMatch)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update repository failed")
+		return
+	}
+	w.Header().Set("ETag", updated.Version)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+}
+
 func validHostedRepository(request createHostedRepositoryRequest) bool {
 	if !hostedRepositoryName.MatchString(request.Name) || (request.Format != repository.FormatRaw && request.Format != repository.FormatOCI && request.Format != repository.FormatMaven && request.Format != repository.FormatConan) {
 		return false
@@ -1962,6 +2007,16 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 func validProxyEndpoint(endpoint string) bool {
 	parsed, err := url.Parse(endpoint)
 	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
+}
+
+func validProxyUpdate(format repository.Format, endpoint string, allowedHosts []string) bool {
+	if !validProxyEndpoint(endpoint) {
+		return false
+	}
+	if (format == repository.FormatRaw || format == repository.FormatConan) && len(allowedHosts) == 0 {
+		return false
+	}
+	return true
 }
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {

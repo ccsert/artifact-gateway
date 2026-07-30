@@ -935,6 +935,15 @@ type RetentionPolicy struct {
 	Version         string `json:"version"`
 }
 
+// UpdateRepository Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.
+type UpdateRepository struct {
+	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
+	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
+
+	// Endpoint Upstream base URL (https). Required for proxy repositories.
+	Endpoint string `json:"endpoint"`
+}
+
 // ConanReferencePrefix defines model for ConanReferencePrefix.
 type ConanReferencePrefix = string
 
@@ -1047,6 +1056,11 @@ type CreateRepositoryParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// UpdateRepositoryParams defines parameters for UpdateRepository.
+type UpdateRepositoryParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
 type SearchRepositoryArtifactsParams struct {
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
@@ -1138,6 +1152,9 @@ type ReplaceGroupMembersJSONRequestBody = MemberList
 
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
+
+// UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
+type UpdateRepositoryJSONRequestBody = UpdateRepository
 
 // ReplaceRepositoryCapacityJSONRequestBody defines body for ReplaceRepositoryCapacity for application/json ContentType.
 type ReplaceRepositoryCapacityJSONRequestBody = RepositoryCapacityQuota
@@ -1264,6 +1281,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId})
 	GetRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PATCH /repositories/{repositoryId})
+	UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
@@ -2076,6 +2096,60 @@ func (siw *ServerInterfaceWrapper) GetRepository(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRepository(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRepository operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateRepositoryParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRepository(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3285,6 +3359,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
@@ -4182,6 +4257,74 @@ func (response GetRepository404ApplicationProblemPlusJSONResponse) VisitGetRepos
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       UpdateRepositoryParams
+	Body         *UpdateRepositoryJSONRequestBody
+}
+
+type UpdateRepositoryResponseObject interface {
+	VisitUpdateRepositoryResponse(w http.ResponseWriter) error
+}
+
+type UpdateRepository200JSONResponse struct{ RepositoryJSONResponse }
+
+func (response UpdateRepository200JSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateRepository400ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository404ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository412ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5131,6 +5274,9 @@ type StrictServerInterface interface {
 	// (GET /repositories/{repositoryId})
 	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
 
+	// (PATCH /repositories/{repositoryId})
+	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
 
@@ -5847,6 +5993,40 @@ func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateRepository operation middleware
+func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams) {
+	var request UpdateRepositoryRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body UpdateRepositoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateRepository(ctx, request.(UpdateRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateRepositoryResponseObject); ok {
+		if err := validResponse.VisitUpdateRepositoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

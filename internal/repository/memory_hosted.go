@@ -115,6 +115,23 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 	return repo, nil
 }
 
+func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.hostedRepositories[repo.ID]
+	if !ok {
+		return HostedRepository{}, ErrNotFound
+	}
+	if current.Version != expectedVersion || current.State != RepositoryActive {
+		return HostedRepository{}, ErrVersionConflict
+	}
+	current.Endpoint = repo.Endpoint
+	current.AllowedHosts = append([]string(nil), repo.AllowedHosts...)
+	current.Version = nextHostedGroupVersion(current.Version)
+	s.hostedRepositories[repo.ID] = current
+	return current, nil
+}
+
 func cloneHostedGroup(group HostedGroup) HostedGroup {
 	group.Members = append([]GroupMember(nil), group.Members...)
 	return group

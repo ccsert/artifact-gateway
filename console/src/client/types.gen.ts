@@ -360,6 +360,20 @@ export type AuditCleanupJob = {
     lastError?: string;
 };
 
+/**
+ * Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.
+ */
+export type UpdateRepository = {
+    /**
+     * Upstream base URL (https). Required for proxy repositories.
+     */
+    endpoint: string;
+    /**
+     * Hosts the proxy may egress to. Required for raw and conan proxies.
+     */
+    allowedHosts?: Array<string>;
+};
+
 export type PromotionRequest = {
     targetRepositoryId: string;
     coordinate: string;
@@ -723,6 +737,44 @@ export type GetRepositoryResponses = {
 };
 
 export type GetRepositoryResponse = GetRepositoryResponses[keyof GetRepositoryResponses];
+
+export type UpdateRepositoryData = {
+    body: UpdateRepository;
+    headers: {
+        'If-Match': string;
+    };
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}';
+};
+
+export type UpdateRepositoryErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+    /**
+     * Problem response
+     */
+    412: Problem;
+};
+
+export type UpdateRepositoryError = UpdateRepositoryErrors[keyof UpdateRepositoryErrors];
+
+export type UpdateRepositoryResponses = {
+    /**
+     * Repository
+     */
+    200: Repository;
+};
+
+export type UpdateRepositoryResponse = UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
 
 export type ListGrantsData = {
     body?: never;
