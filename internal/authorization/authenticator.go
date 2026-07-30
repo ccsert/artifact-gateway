@@ -18,6 +18,7 @@ import (
 type Principal struct {
 	Actor              string
 	Admin              bool
+	Role               Role
 	RepositoryPatterns []string
 }
 
@@ -54,7 +55,8 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	if a.APIKeys != nil {
 		key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
 		if err == nil {
-			return Principal{Actor: "api-key:" + key.ID, Admin: containsRole(key.Roles, "admin")}, true
+			role := RoleFromRoles(key.Roles)
+			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role}, true
 		}
 	}
 	if a.OIDC != nil {
@@ -87,7 +89,7 @@ func (a Authenticator) PrincipalForActor(actor string) Principal {
 }
 
 func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
-	if p.Admin || !policyConfigured {
+	if p.Admin || RoleAllows(p.Role, RepositoryRead) || !policyConfigured {
 		return true
 	}
 	for _, pattern := range p.RepositoryPatterns {
@@ -118,7 +120,7 @@ func (a Authenticator) CanReadMavenRepository(principal Principal, groupName str
 }
 
 func (a Authenticator) CanWriteMavenRepository(principal Principal, repositoryName string) bool {
-	if principal.Admin {
+	if principal.Admin || RoleAllows(principal.Role, RepositoryWrite) {
 		return true
 	}
 	for _, pattern := range a.RepositoryWriters[principal.Actor] {

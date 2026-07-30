@@ -1549,3 +1549,86 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 		t.Fatalf("hosted update=%d body=%s", hostedRec.Code, hostedRec.Body.String())
 	}
 }
+
+func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID:           uuid.NewString(),
+		Name:         "ci-proxy",
+		Format:       repository.FormatRaw,
+		Type:         repository.RepositoryTypeProxy,
+		Endpoint:     "https://upstream.example",
+		AllowedHosts: []string{"upstream.example"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	authenticator.APIKeys = store
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+
+	createKey := func(t *testing.T, roles string) string {
+		t.Helper()
+		body := `{"name":"` + roles + `","roles":["` + roles + `"]}"`
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", strings.NewReader(body))
+		authorize(req, "admin-secret")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create %s key=%d body=%s", roles, rec.Code, rec.Body.String())
+		}
+		var created struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil || created.Token == "" {
+			t.Fatalf("parse %s key token: %s", roles, rec.Body.String())
+		}
+		return created.Token
+	}
+
+	readerToken := createKey(t, "reader")
+	writerToken := createKey(t, "writer")
+
+	patch := func(token string) int {
+		req := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(`{"endpoint":"https://cdn.example","allowedHosts":["cdn.example"]}`))
+		authorize(req, token)
+		req.Header.Set("If-Match", "1")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	get := func(token string) int {
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID, nil)
+		authorize(req, token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Reader: read allowed by role, write denied.
+	if code := get(readerToken); code != http.StatusOK {
+		t.Fatalf("reader get=%d", code)
+	}
+	if code := patch(readerToken); code != http.StatusForbidden {
+		t.Fatalf("reader patch=%d want 403", code)
+	}
+
+	// Writer: read and write allowed by role.
+	if code := get(writerToken); code != http.StatusOK {
+		t.Fatalf("writer get=%d", code)
+	}
+	if code := patch(writerToken); code != http.StatusOK {
+		t.Fatalf("writer patch=%d want 200", code)
+	}
+
+	// Neither reader nor writer may mint new keys (administrator-only).
+	for _, token := range []string{readerToken, writerToken} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", strings.NewReader(`{"name":"x","roles":["admin"]}`))
+		authorize(req, token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s role minted key=%d want 401", token, rec.Code)
+		}
+	}
+}

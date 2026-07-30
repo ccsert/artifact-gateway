@@ -10,6 +10,7 @@ import { formatDate } from '../lib/format';
 function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => void }) {
   const dialog = useDisclosure();
   const [name, setName] = useState('');
+  const [role, setRole] = useState<'reader' | 'writer' | 'admin'>('reader');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -17,7 +18,7 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
     setBusy(true);
     setError(null);
     const { data, error: err } = await createApiKey({
-      body: { name: name.trim(), roles: ['admin'] },
+      body: { name: name.trim(), roles: [role] },
     });
     setBusy(false);
     if (err) {
@@ -27,6 +28,7 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
     if (data) {
       dialog.hide();
       setName('');
+      setRole('reader');
       onCreated(data);
     }
   };
@@ -60,6 +62,13 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+          </Field>
+          <Field label="角色" hint="按最小权限选择。角色在全仓库范围内生效，优先于逐仓库授权。">
+            <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value as 'reader' | 'writer' | 'admin')}>
+              <option value="reader">reader · 只读（浏览 / 搜索 / 拉取）</option>
+              <option value="writer">writer · 读写（可发布 / 编辑，不可管理密钥与仓库删除外的管理操作）</option>
+              <option value="admin">admin · 管理员（全部权限）</option>
+            </select>
           </Field>
           <p className="text-xs text-zinc-500">创建后只会显示一次明文 Token，请立即保存。</p>
         </div>
@@ -137,7 +146,7 @@ export function ApiKeysPage() {
     <div>
       <PageHeader
         title="API 密钥"
-        description="管理可调管理 API 的访问密钥（admin 角色）"
+        description="管理可调用管理 API 的访问密钥（reader / writer / admin）"
         actions={<CreateKeyDialog onCreated={setReveal} />}
       />
       {error !== null ? (

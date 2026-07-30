@@ -25,6 +25,8 @@ APIKey:
         type: string
         enum:
         - admin
+        - writer
+        - reader
     createdAt:
       type: string
       format: date-time
@@ -58,6 +60,8 @@ CreateAPIKey:
         type: string
         enum:
         - admin
+        - writer
+        - reader
 CreatedAPIKey:
   allOf:
   - "$ref": "#/APIKey"

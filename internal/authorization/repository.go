@@ -17,6 +17,54 @@ const (
 	RepositoryAdmin RepositoryOperation = "admin"
 )
 
+// Role is a coarse, globally-scoped capability granted to a credential such as
+// an API key or OIDC identity. It is evaluated before per-repository grants so
+// an administrator can issue a bounded credential without enumerating every
+// repository. The empty value means no role-derived capability, which keeps
+// existing static-token and grant behavior unchanged.
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleWriter Role = "writer"
+	RoleReader Role = "reader"
+)
+
+// RoleAllows reports whether a role grants the operation. Admin grants all,
+// writer grants read and write, reader grants read only.
+func RoleAllows(role Role, operation RepositoryOperation) bool {
+	switch role {
+	case RoleAdmin:
+		return true
+	case RoleWriter:
+		return operation == RepositoryRead || operation == RepositoryWrite
+	case RoleReader:
+		return operation == RepositoryRead
+	}
+	return false
+}
+
+// RoleFromRoles picks the most privileged recognized role from a credential's
+// role list. Unrecognized roles are ignored.
+func RoleFromRoles(roles []string) Role {
+	best := Role("")
+	for _, r := range roles {
+		switch Role(r) {
+		case RoleAdmin:
+			return RoleAdmin
+		case RoleWriter:
+			if best != RoleAdmin {
+				best = RoleWriter
+			}
+		case RoleReader:
+			if best == "" {
+				best = RoleReader
+			}
+		}
+	}
+	return best
+}
+
 // AuthorizationDecision explains an authorization result without tying policy
 // evaluation to a protocol's HTTP error representation.
 type AuthorizationDecision struct {
@@ -41,6 +89,9 @@ func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal
 func (a RepositoryAuthorizer) AuthorizeResource(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) AuthorizationDecision {
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}
+	}
+	if RoleAllows(principal.Role, operation) {
+		return AuthorizationDecision{Allowed: true, Source: "role", Reason: "role_" + string(principal.Role)}
 	}
 	if decision, managed := a.ManagedResourceDecision(ctx, principal, target, operation, resource); managed {
 		return decision

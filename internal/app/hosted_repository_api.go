@@ -183,7 +183,9 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 	}
 	roles := make([]string, 0, len(request.Roles))
 	for _, role := range request.Roles {
-		if role != adminopenapi.CreateAPIKeyRolesAdmin {
+		switch role {
+		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesWriter, adminopenapi.CreateAPIKeyRolesReader:
+		default:
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported API key role")
 			return
 		}

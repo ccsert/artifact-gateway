@@ -1783,7 +1783,9 @@
             "items": {
               "type": "string",
               "enum": [
-                "admin"
+                "admin",
+                "writer",
+                "reader"
               ]
             }
           },
@@ -1830,7 +1832,9 @@
             "items": {
               "type": "string",
               "enum": [
-                "admin"
+                "admin",
+                "writer",
+                "reader"
               ]
             }
           }

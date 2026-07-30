@@ -21,13 +21,19 @@ import (
 
 // Defines values for APIKeyRoles.
 const (
-	APIKeyRolesAdmin APIKeyRoles = "admin"
+	APIKeyRolesAdmin  APIKeyRoles = "admin"
+	APIKeyRolesReader APIKeyRoles = "reader"
+	APIKeyRolesWriter APIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the APIKeyRoles enum.
 func (e APIKeyRoles) Valid() bool {
 	switch e {
 	case APIKeyRolesAdmin:
+		return true
+	case APIKeyRolesReader:
+		return true
+	case APIKeyRolesWriter:
 		return true
 	default:
 		return false
@@ -78,13 +84,19 @@ func (e AuditCleanupJobState) Valid() bool {
 
 // Defines values for CreateAPIKeyRoles.
 const (
-	CreateAPIKeyRolesAdmin CreateAPIKeyRoles = "admin"
+	CreateAPIKeyRolesAdmin  CreateAPIKeyRoles = "admin"
+	CreateAPIKeyRolesReader CreateAPIKeyRoles = "reader"
+	CreateAPIKeyRolesWriter CreateAPIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CreateAPIKeyRoles enum.
 func (e CreateAPIKeyRoles) Valid() bool {
 	switch e {
 	case CreateAPIKeyRolesAdmin:
+		return true
+	case CreateAPIKeyRolesReader:
+		return true
+	case CreateAPIKeyRolesWriter:
 		return true
 	default:
 		return false
@@ -126,13 +138,19 @@ func (e CreateRepositoryType) Valid() bool {
 
 // Defines values for CreatedAPIKeyRoles.
 const (
-	CreatedAPIKeyRolesAdmin CreatedAPIKeyRoles = "admin"
+	CreatedAPIKeyRolesAdmin  CreatedAPIKeyRoles = "admin"
+	CreatedAPIKeyRolesReader CreatedAPIKeyRoles = "reader"
+	CreatedAPIKeyRolesWriter CreatedAPIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CreatedAPIKeyRoles enum.
 func (e CreatedAPIKeyRoles) Valid() bool {
 	switch e {
 	case CreatedAPIKeyRolesAdmin:
+		return true
+	case CreatedAPIKeyRolesReader:
+		return true
+	case CreatedAPIKeyRolesWriter:
 		return true
 	default:
 		return false

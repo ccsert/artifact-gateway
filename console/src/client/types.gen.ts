@@ -168,7 +168,7 @@ export type RepositoryCapabilities = {
 export type ApiKey = {
     id: string;
     name: string;
-    roles: Array<'admin'>;
+    roles: Array<'admin' | 'writer' | 'reader'>;
     createdAt: string;
     revokedAt?: string;
 };
@@ -179,7 +179,7 @@ export type ApiKeyList = {
 
 export type CreateApiKey = {
     name: string;
-    roles: Array<'admin'>;
+    roles: Array<'admin' | 'writer' | 'reader'>;
 };
 
 export type CreatedApiKey = ApiKey & {
