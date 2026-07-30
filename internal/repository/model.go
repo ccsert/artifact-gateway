@@ -1,6 +1,9 @@
 package repository
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type Format string
 
@@ -187,13 +190,23 @@ type MavenAsset struct {
 	Size                                  int64
 }
 type MavenArtifact struct {
-	ID           string    `json:"id"`
-	RepositoryID string    `json:"repositoryId"`
-	Coordinate   string    `json:"coordinate"`
-	Digest       string    `json:"digest"`
-	State        string    `json:"state"`
-	Publisher    string    `json:"publisher,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ID           string `json:"id"`
+	RepositoryID string `json:"repositoryId"`
+	Coordinate   string `json:"coordinate"`
+	Digest       string `json:"digest"`
+	State        string `json:"state"`
+	Publisher    string `json:"publisher,omitempty"`
+	// BuildNumber is 0 for immutable releases and the 1-based publish sequence
+	// for SNAPSHOT coordinates, which keep one row per timestamped build.
+	BuildNumber int       `json:"buildNumber,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// IsMavenSnapshotCoordinate reports whether the coordinate's version segment
+// ends in -SNAPSHOT, making the coordinate eligible for multi-build publishes.
+func IsMavenSnapshotCoordinate(coordinate string) bool {
+	parts := strings.Split(coordinate, ":")
+	return len(parts) >= 3 && strings.HasSuffix(parts[2], "-SNAPSHOT")
 }
 
 // MavenReplication is the immutable source snapshot and target-owned assets

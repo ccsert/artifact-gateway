@@ -337,6 +337,10 @@ func (h nativeMavenHandler) promoteWithIdempotency(ctx context.Context, s reposi
 		return repository.MavenArtifact{}, false, err
 	}
 	base := mavenCoordinatePath(s.Coordinate)
+	// SNAPSHOT assets are passed under their canonical -SNAPSHOT names; the
+	// store rewrites them to the build's timestamped names inside the commit
+	// transaction so the filename timestamp and the allocated build number
+	// always agree.
 	assets := make([]repository.MavenAsset, 0, len(s.Objects)*4)
 	for _, o := range s.Objects {
 		key := "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:")
@@ -442,8 +446,10 @@ func (h nativeMavenHandler) proxyRead(w http.ResponseWriter, r *http.Request, re
 	proxy.serveResolvedMembers(w, r, repo.Name, assetPath, principal.Actor, []repository.Member{member})
 }
 
-// snapshotAsset resolves Maven's timestamped SNAPSHOT filenames to the
-// immutable SNAPSHOT coordinate that produced the generated metadata.
+// snapshotAsset resolves Maven's timestamped SNAPSHOT filenames to the build
+// whose allocated timestamp/buildNumber prefix the request carries. Assets are
+// stored under those timestamped names, so a matching prefix routes directly
+// to the stored path.
 func (h nativeMavenHandler) snapshotAsset(ctx context.Context, repositoryID, path string) (repository.MavenAsset, bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) < 4 {
@@ -460,19 +466,24 @@ func (h nativeMavenHandler) snapshotAsset(ctx context.Context, repositoryID, pat
 		return repository.MavenAsset{}, false
 	}
 	for _, item := range items {
-		if item.Coordinate != coordinate {
+		if item.Coordinate != coordinate || item.BuildNumber <= 0 {
 			continue
 		}
-		timestamped := strings.TrimSuffix(version, "-SNAPSHOT") + "-" + item.CreatedAt.UTC().Format("20060102.150405") + "-1"
-		prefix := artifact + "-" + timestamped
+		prefix := mavenSnapshotBuildNamePrefix(coordinate, item.CreatedAt, item.BuildNumber)
 		if !strings.HasPrefix(name, prefix) {
-			return repository.MavenAsset{}, false
+			continue
 		}
-		logicalPath := strings.Join(append(parts[:len(parts)-1], artifact+"-"+version+strings.TrimPrefix(name, prefix)), "/")
-		asset, err := h.store.GetMavenAsset(ctx, repositoryID, logicalPath)
+		asset, err := h.store.GetMavenAsset(ctx, repositoryID, path)
 		return asset, err == nil
 	}
 	return repository.MavenAsset{}, false
+}
+
+// mavenSnapshotBuildNamePrefix is the filename prefix of one SNAPSHOT build:
+// "<artifact>-<baseVersion>-<timestamp>-<buildNumber>".
+func mavenSnapshotBuildNamePrefix(coordinate string, createdAt time.Time, buildNumber int) string {
+	parts := strings.Split(coordinate, ":")
+	return parts[1] + "-" + strings.TrimSuffix(parts[2], "-SNAPSHOT") + "-" + createdAt.UTC().Format("20060102.150405") + "-" + strconv.Itoa(buildNumber)
 }
 
 func mavenCoordinateCommitPath(path string) (repositoryName, coordinate string, ok bool) {
@@ -755,21 +766,68 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		group := strings.Join(parts[:len(parts)-2], ".")
 		artifact, version := parts[len(parts)-2], parts[len(parts)-1]
 		coordinate := group + ":" + artifact + ":" + version
+		builds := []repository.MavenArtifact{}
 		for _, item := range items {
-			if item.Coordinate != coordinate {
-				continue
+			if item.Coordinate == coordinate && item.BuildNumber > 0 {
+				builds = append(builds, item)
 			}
-			timestamp := item.CreatedAt.UTC().Format("20060102.150405")
-			base := strings.TrimSuffix(version, "-SNAPSHOT") + "-" + timestamp + "-1"
-			body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><version>" + version + "</version><versioning><snapshot><timestamp>" + timestamp + "</timestamp><buildNumber>1</buildNumber></snapshot><snapshotVersions><snapshotVersion><extension>pom</extension><value>" + base + "</value><updated>" + strings.ReplaceAll(timestamp, ".", "") + "</updated></snapshotVersion><snapshotVersion><extension>jar</extension><value>" + base + "</value><updated>" + strings.ReplaceAll(timestamp, ".", "") + "</updated></snapshotVersion></snapshotVersions></versioning></metadata>")
-			w.Header().Set("Content-Type", "application/xml")
-			if r.Method == http.MethodGet {
-				_, _ = w.Write(body)
-			}
-			_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
+		}
+		if len(builds) == 0 {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		sort.Slice(builds, func(i, j int) bool { return builds[i].BuildNumber < builds[j].BuildNumber })
+		latest := builds[len(builds)-1]
+		latestTimestamp := latest.CreatedAt.UTC().Format("20060102.150405")
+		assets, err := h.store.ListMavenAssets(r.Context(), repo.ID, coordinate)
+		if err != nil {
+			http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var body strings.Builder
+		body.WriteString("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><version>" + version + "</version><versioning><snapshot><timestamp>" + latestTimestamp + "</timestamp><buildNumber>" + strconv.Itoa(latest.BuildNumber) + "</buildNumber></snapshot><snapshotVersions>")
+		for _, build := range builds {
+			// One snapshotVersion per build and extension, derived from the
+			// build's stored asset paths rather than a hardcoded pom+jar set.
+			value := mavenSnapshotBuildNamePrefix(coordinate, build.CreatedAt, build.BuildNumber)
+			updated := build.CreatedAt.UTC().Format("20060102150405")
+			extensions := map[string]bool{}
+			for _, asset := range assets {
+				slash := strings.LastIndexByte(asset.Path, '/')
+				name := asset.Path
+				if slash >= 0 {
+					name = asset.Path[slash+1:]
+				}
+				if !strings.HasPrefix(name, value) {
+					continue
+				}
+				extension := strings.TrimPrefix(name, value)
+				extension = strings.TrimPrefix(extension, ".")
+				// Checksum sidecars are served next to their asset, not listed.
+				base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(extension, ".sha512"), ".sha256"), ".sha1"), ".md5")
+				if base != extension {
+					continue
+				}
+				if extension != "" && !extensions[extension] {
+					extensions[extension] = true
+				}
+			}
+			ordered := make([]string, 0, len(extensions))
+			for extension := range extensions {
+				ordered = append(ordered, extension)
+			}
+			sort.Strings(ordered)
+			for _, extension := range ordered {
+				body.WriteString("<snapshotVersion><extension>" + extension + "</extension><value>" + value + "</value><updated>" + updated + "</updated></snapshotVersion>")
+			}
+		}
+		body.WriteString("</snapshotVersions></versioning></metadata>")
+		w.Header().Set("Content-Type", "application/xml")
+		out := []byte(body.String())
+		if r.Method == http.MethodGet {
+			_, _ = w.Write(out)
+		}
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(out))})
 		return
 	}
 	versions := []string{}

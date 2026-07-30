@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -301,7 +302,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 		t.Fatalf("snapshot metadata lacks timestamped value: %s", metadata)
 	}
 	timestamped := metadata[start+len("<value>") : end]
-	if code, response := read("org/example/widget/2.0.0-SNAPSHOT/widget-" + timestamped + ".jar"); code != http.StatusOK || response != "snapshot jar" {
+	if code, response := read("org/example/widget/2.0.0-SNAPSHOT/" + timestamped + ".jar"); code != http.StatusOK || response != "snapshot jar" {
 		t.Fatalf("timestamped SNAPSHOT JAR = %d %q", code, response)
 	}
 
@@ -712,5 +713,221 @@ func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T
 			metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationFailed].Load(),
 			metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationCompleted].Load(),
 			metrics.backgroundInFlight[backgroundOperationLifecycle][backgroundOperationMaven].Load())
+	}
+}
+
+func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven}); err != nil {
+		t.Fatal(err)
+	}
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+
+	request := func(method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.SetBasicAuth("maven", "resolver-secret")
+		for key, value := range headers {
+			r.Header.Set(key, value)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	put := func(version, name, content string) {
+		t.Helper()
+		if w := request(http.MethodPut, "/repository/maven/deploys/org/example/widget/"+version+"/"+name, content, nil); w.Code != http.StatusCreated {
+			t.Fatalf("PUT %s = %d %s", name, w.Code, w.Body.String())
+		}
+	}
+	commit := func(version string, assets []string, key string) *httptest.ResponseRecorder {
+		t.Helper()
+		encoded, _ := json.Marshal(nativeMavenCoordinateCommitRequest{ExpectedAssetNames: assets})
+		return request(http.MethodPost, "/repository/maven/deploys/coordinates/org.example:widget:"+version+":commit", string(encoded), map[string]string{"Idempotency-Key": key})
+	}
+	read := func(path string) (int, string) {
+		w := request(http.MethodGet, "/repository/maven/deploys/"+path, "", nil)
+		return w.Code, w.Body.String()
+	}
+
+	// Two publishes of the same -SNAPSHOT coordinate produce two builds.
+	const snapshot = "1.0-SNAPSHOT"
+	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>" + snapshot + "</version></project>"
+	put(snapshot, "widget-1.0-SNAPSHOT.pom", pom)
+	put(snapshot, "widget-1.0-SNAPSHOT.jar", "snapshot jar build one")
+	first := commit(snapshot, []string{"widget-1.0-SNAPSHOT.pom", "widget-1.0-SNAPSHOT.jar"}, "snapshot-build-1")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first snapshot commit = %d %s", first.Code, first.Body.String())
+	}
+	var firstArtifact repository.MavenArtifact
+	if err := json.Unmarshal(first.Body.Bytes(), &firstArtifact); err != nil {
+		t.Fatal(err)
+	}
+	if firstArtifact.BuildNumber != 1 {
+		t.Fatalf("first build number = %d, want 1 (%s)", firstArtifact.BuildNumber, first.Body.String())
+	}
+
+	put(snapshot, "widget-1.0-SNAPSHOT.pom", pom)
+	put(snapshot, "widget-1.0-SNAPSHOT.jar", "snapshot jar build two")
+	second := commit(snapshot, []string{"widget-1.0-SNAPSHOT.pom", "widget-1.0-SNAPSHOT.jar"}, "snapshot-build-2")
+	if second.Code != http.StatusOK {
+		t.Fatalf("second snapshot commit = %d %s", second.Code, second.Body.String())
+	}
+	var secondArtifact repository.MavenArtifact
+	if err := json.Unmarshal(second.Body.Bytes(), &secondArtifact); err != nil {
+		t.Fatal(err)
+	}
+	if secondArtifact.BuildNumber != 2 {
+		t.Fatalf("second build number = %d, want 2 (%s)", secondArtifact.BuildNumber, second.Body.String())
+	}
+
+	// Version-level metadata lists both builds with their own timestamped
+	// values, and <snapshot> points at the newest build.
+	code, metadata := read("org/example/widget/1.0-SNAPSHOT/maven-metadata.xml")
+	if code != http.StatusOK {
+		t.Fatalf("snapshot metadata = %d %s", code, metadata)
+	}
+	if !strings.Contains(metadata, "<buildNumber>2</buildNumber>") {
+		t.Fatalf("metadata lacks latest buildNumber 2: %s", metadata)
+	}
+	var values []string
+	rest := metadata
+	for {
+		start := strings.Index(rest, "<value>")
+		if start < 0 {
+			break
+		}
+		rest = rest[start+len("<value>"):]
+		end := strings.Index(rest, "</value>")
+		if end < 0 {
+			break
+		}
+		values = append(values, rest[:end])
+		rest = rest[end:]
+	}
+	if len(values) != 4 {
+		t.Fatalf("metadata snapshotVersion values = %v, want 4 (2 builds x pom+jar)", values)
+	}
+	buildValues := map[string]bool{}
+	for _, value := range values {
+		buildValues[value] = true
+	}
+	if len(buildValues) != 2 {
+		t.Fatalf("metadata lists %d distinct builds, want 2: %v", len(buildValues), values)
+	}
+
+	// Each build's timestamped JAR serves its own bytes. The metadata <value>
+	// already carries the artifactId prefix.
+	buildJars := map[string]string{}
+	for value := range buildValues {
+		code, body := read("org/example/widget/1.0-SNAPSHOT/" + value + ".jar")
+		if code != http.StatusOK {
+			t.Fatalf("timestamped jar %s = %d", value, code)
+		}
+		buildJars[value] = body
+	}
+	served := map[string]bool{}
+	for _, body := range buildJars {
+		served[body] = true
+	}
+	if !served["snapshot jar build one"] || !served["snapshot jar build two"] {
+		t.Fatalf("timestamped jars = %v, want both builds' bytes", buildJars)
+	}
+
+	// Releases stay immutable: a second commit of the same release coordinate
+	// is still rejected with 409 coordinate_exists.
+	const release = "1.0.0"
+	releasePOM := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>" + release + "</version></project>"
+	put(release, "widget-1.0.0.pom", releasePOM)
+	put(release, "widget-1.0.0.jar", "release jar")
+	if w := commit(release, []string{"widget-1.0.0.pom", "widget-1.0.0.jar"}, "release-1"); w.Code != http.StatusOK {
+		t.Fatalf("release commit = %d %s", w.Code, w.Body.String())
+	}
+	put(release, "widget-1.0.0.pom", releasePOM)
+	put(release, "widget-1.0.0.jar", "release jar changed")
+	if w := commit(release, []string{"widget-1.0.0.pom", "widget-1.0.0.jar"}, "release-2"); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "coordinate_exists") {
+		t.Fatalf("release republish = %d %s, want 409 coordinate_exists", w.Code, w.Body.String())
+	}
+}
+
+func TestNativeMavenSnapshotTombstoneScopesToSingleBuild(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	h := newNativeMavenHandler(store, objects, testAuthenticator())
+
+	publish := func(jarBody, key string) repository.MavenArtifact {
+		t.Helper()
+		pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0-SNAPSHOT</version></project>")
+		pomSum := sha256.Sum256(pom)
+		jarSum := sha256.Sum256([]byte(jarBody))
+		pomKey := "native/maven/sha256/" + hex.EncodeToString(pomSum[:])
+		jarKey := "native/maven/sha256/" + hex.EncodeToString(jarSum[:])
+		if err := objects.Put(context.Background(), pomKey, pom); err != nil {
+			t.Fatal(err)
+		}
+		if err := objects.Put(context.Background(), jarKey, []byte(jarBody)); err != nil {
+			t.Fatal(err)
+		}
+		session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0-SNAPSHOT", Publisher: "maven", PomObject: "widget-1.0-SNAPSHOT.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{
+			{Name: "widget-1.0-SNAPSHOT.pom", Digest: "sha256:" + hex.EncodeToString(pomSum[:]), Size: int64(len(pom))},
+			{Name: "widget-1.0-SNAPSHOT.jar", Digest: "sha256:" + hex.EncodeToString(jarSum[:]), Size: int64(len(jarBody))},
+		}}
+		if _, err := store.CreateMavenPublishSession(context.Background(), session); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.MarkMavenPublishObject(context.Background(), session.ID, "widget-1.0-SNAPSHOT.pom", pomKey); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.MarkMavenPublishObject(context.Background(), session.ID, "widget-1.0-SNAPSHOT.jar", jarKey); err != nil {
+			t.Fatal(err)
+		}
+		artifact, err := store.CommitMavenPublishSession(context.Background(), session.ID, []repository.MavenAsset{
+			{RepositoryID: repo.ID, Path: "org/example/widget/1.0-SNAPSHOT/widget-1.0-SNAPSHOT.pom", ObjectKey: pomKey, Digest: "sha256:" + hex.EncodeToString(pomSum[:]), Size: int64(len(pom))},
+			{RepositoryID: repo.ID, Path: "org/example/widget/1.0-SNAPSHOT/widget-1.0-SNAPSHOT.jar", ObjectKey: jarKey, Digest: "sha256:" + hex.EncodeToString(jarSum[:]), Size: int64(len(jarBody))},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return artifact
+	}
+	first := publish("build one jar", "one")
+	second := publish("build two jar", "two")
+	if first.BuildNumber != 1 || second.BuildNumber != 2 {
+		t.Fatalf("build numbers = %d/%d, want 1/2", first.BuildNumber, second.BuildNumber)
+	}
+
+	read := func(path string) (int, string) {
+		r := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/"+path, nil)
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code, w.Body.String()
+	}
+	prefix := func(build repository.MavenArtifact) string {
+		return "org/example/widget/1.0-SNAPSHOT/widget-1.0-" + build.CreatedAt.UTC().Format("20060102.150405") + "-" + strconv.Itoa(build.BuildNumber)
+	}
+	if code, body := read(prefix(first) + ".jar"); code != http.StatusOK || body != "build one jar" {
+		t.Fatalf("build 1 jar = %d %q", code, body)
+	}
+	if code, body := read(prefix(second) + ".jar"); code != http.StatusOK || body != "build two jar" {
+		t.Fatalf("build 2 jar = %d %q", code, body)
+	}
+
+	// Tombstoning build 1 leaves build 2 fully readable.
+	if _, err := store.TombstoneMavenArtifact(context.Background(), repo.ID, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := read(prefix(first) + ".jar"); code != http.StatusNotFound {
+		t.Fatalf("tombstoned build 1 jar = %d, want 404", code)
+	}
+	if code, body := read(prefix(second) + ".jar"); code != http.StatusOK || body != "build two jar" {
+		t.Fatalf("surviving build 2 jar = %d %q", code, body)
+	}
+	if code, body := read(prefix(second) + ".pom"); code != http.StatusOK {
+		t.Fatalf("surviving build 2 pom = %d %q", code, body)
 	}
 }

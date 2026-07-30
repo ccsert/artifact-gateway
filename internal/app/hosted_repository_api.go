@@ -59,6 +59,7 @@ type ociImagePageCursor struct {
 
 type mavenCoordinatePageCursor struct {
 	Endpoint, RepositoryID, Prefix, Coordinate string
+	BuildNumber                                int
 	ExpiresAt                                  int64
 }
 
@@ -1365,7 +1366,8 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 		var next *string
 		if len(artifacts) > pageSize {
 			artifacts = artifacts[:pageSize]
-			token := h.encodeMavenCoordinateCursor(repo.ID, prefix, artifacts[len(artifacts)-1].Coordinate)
+			last := artifacts[len(artifacts)-1]
+			token := h.encodeMavenCoordinateCursor(repo.ID, prefix, last.Coordinate, last.BuildNumber)
 			next = &token
 		}
 		items := make([]adminopenapi.MavenCoordinate, 0, len(artifacts))
@@ -1689,7 +1691,8 @@ func optionalPublisher(publisher string) *string {
 	return &publisher
 }
 
-func validConanReferencePrefix(value string) bool {	if len(value) > 255 || strings.ContainsAny(value, "\\\x00#") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%23") {
+func validConanReferencePrefix(value string) bool {
+	if len(value) > 255 || strings.ContainsAny(value, "\\\x00#") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%23") {
 		return false
 	}
 	parts := strings.Split(value, "/")
@@ -1782,8 +1785,8 @@ func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, pr
 	return cursor.Name, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string) string {
-	payload, _ := json.Marshal(mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string, buildNumber int) string {
+	payload, _ := json.Marshal(mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
 	_, _ = mac.Write(payload)
 	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))

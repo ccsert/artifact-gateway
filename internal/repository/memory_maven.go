@@ -182,14 +182,32 @@ func (s *MemoryStore) commitMavenPublishSessionLocked(id string, assets []MavenA
 			return MavenArtifact{}, ErrDisabled
 		}
 	}
-	for _, existing := range s.mavenArtifacts {
-		if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
-			return MavenArtifact{}, ErrNameExists
+	buildNumber := 0
+	if IsMavenSnapshotCoordinate(session.Coordinate) {
+		for _, existing := range s.mavenArtifacts {
+			if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate && existing.BuildNumber >= buildNumber {
+				buildNumber = existing.BuildNumber + 1
+			}
+		}
+		if buildNumber == 0 {
+			buildNumber = 1
+		}
+	} else {
+		for _, existing := range s.mavenArtifacts {
+			if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+				return MavenArtifact{}, ErrNameExists
+			}
 		}
 	}
+	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", BuildNumber: buildNumber, CreatedAt: time.Now().UTC()}
 	for _, a := range assets {
 		if intent := s.mavenObjectIntents[a.ObjectKey]; !intent.claimedAt.IsZero() || !intent.deletedAt.IsZero() {
 			return MavenArtifact{}, ErrDisabled
+		}
+		// SNAPSHOT builds are stored under their timestamped filenames, derived
+		// from the same artifact row that allocated the build number.
+		if artifact.BuildNumber > 0 {
+			a.Path = mavenSnapshotTimestampedPath(a.Path, artifact.Coordinate, artifact.CreatedAt, artifact.BuildNumber)
 		}
 		k := a.RepositoryID + "\x00" + a.Path
 		if _, exists := s.mavenAssets[k]; exists {
@@ -198,7 +216,6 @@ func (s *MemoryStore) commitMavenPublishSessionLocked(id string, assets []MavenA
 		s.mavenAssets[k] = a
 		s.mavenObjectRefs[a.ObjectKey] = true
 	}
-	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
 	s.mavenArtifacts[id] = artifact
 	session.State = "committed"
 	s.mavenSessions[id] = session
@@ -212,7 +229,7 @@ func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string
 		return MavenAsset{}, ErrNotFound
 	}
 	for _, artifact := range s.mavenArtifacts {
-		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifact(v, artifact.Coordinate) {
+		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifactBuild(v, artifact) {
 			return v, nil
 		}
 	}
@@ -221,19 +238,22 @@ func (s *MemoryStore) GetMavenAsset(_ context.Context, repositoryID, path string
 func (s *MemoryStore) ListMavenAssets(_ context.Context, repositoryID, coordinate string) ([]MavenAsset, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	assets := []MavenAsset{}
 	for _, artifact := range s.mavenArtifacts {
-		if artifact.RepositoryID == repositoryID && artifact.Coordinate == coordinate && artifact.State == "visible" {
-			assets := []MavenAsset{}
-			for _, asset := range s.mavenAssets {
-				if asset.RepositoryID == repositoryID && mavenAssetBelongsToArtifact(asset, coordinate) {
-					assets = append(assets, asset)
-				}
+		if artifact.RepositoryID != repositoryID || artifact.Coordinate != coordinate || artifact.State != "visible" {
+			continue
+		}
+		for _, asset := range s.mavenAssets {
+			if asset.RepositoryID == repositoryID && mavenAssetBelongsToArtifactBuild(asset, artifact) {
+				assets = append(assets, asset)
 			}
-			sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
-			return assets, nil
 		}
 	}
-	return nil, ErrNotFound
+	if len(assets) == 0 {
+		return nil, ErrNotFound
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+	return assets, nil
 }
 func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string) ([]MavenArtifact, error) {
 	s.mu.RLock()
@@ -257,7 +277,12 @@ func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, pref
 			out = append(out, artifact)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Coordinate < out[j].Coordinate })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Coordinate != out[j].Coordinate {
+			return out[i].Coordinate < out[j].Coordinate
+		}
+		return out[i].BuildNumber < out[j].BuildNumber
+	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
@@ -292,12 +317,17 @@ func (s *MemoryStore) GetMavenArtifact(_ context.Context, repositoryID, artifact
 func (s *MemoryStore) GetMavenArtifactByCoordinate(_ context.Context, repositoryID, coordinate string) (MavenArtifact, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	var best MavenArtifact
+	found := false
 	for _, artifact := range s.mavenArtifacts {
-		if artifact.RepositoryID == repositoryID && artifact.Coordinate == coordinate {
-			return artifact, nil
+		if artifact.RepositoryID == repositoryID && artifact.Coordinate == coordinate && (!found || artifact.BuildNumber > best.BuildNumber) {
+			best, found = artifact, true
 		}
 	}
-	return MavenArtifact{}, ErrNotFound
+	if !found {
+		return MavenArtifact{}, ErrNotFound
+	}
+	return best, nil
 }
 
 func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
@@ -314,7 +344,7 @@ func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, ar
 	s.mavenArtifacts[artifactID] = artifact
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatMaven)+"\x00"+artifact.Coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatMaven, Coordinate: artifact.Coordinate, Digest: artifact.Digest, TombstonedAt: time.Now().UTC()}
 	for _, asset := range s.mavenAssets {
-		if asset.RepositoryID != repositoryID || !mavenAssetBelongsToArtifact(asset, artifact.Coordinate) || s.mavenObjectHasVisibleReference(asset.ObjectKey) {
+		if asset.RepositoryID != repositoryID || !mavenAssetBelongsToArtifactBuild(asset, artifact) || s.mavenObjectHasVisibleReference(asset.ObjectKey) {
 			continue
 		}
 		delete(s.mavenObjectRefs, asset.ObjectKey)
@@ -334,7 +364,7 @@ func (s *MemoryStore) RestoreMavenArtifact(_ context.Context, repositoryID, arti
 	}
 	found := false
 	for _, asset := range s.mavenAssets {
-		if !mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+		if asset.RepositoryID != repositoryID || !mavenAssetBelongsToArtifactBuild(asset, artifact) {
 			continue
 		}
 		found = true
@@ -349,7 +379,7 @@ func (s *MemoryStore) RestoreMavenArtifact(_ context.Context, repositoryID, arti
 	s.mavenArtifacts[artifactID] = artifact
 	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatMaven)+"\x00"+artifact.Coordinate)
 	for _, asset := range s.mavenAssets {
-		if mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+		if asset.RepositoryID == repositoryID && mavenAssetBelongsToArtifactBuild(asset, artifact) {
 			s.mavenObjectRefs[asset.ObjectKey] = true
 		}
 	}
@@ -359,6 +389,10 @@ func (s *MemoryStore) RestoreMavenArtifact(_ context.Context, repositoryID, arti
 func (s *MemoryStore) PromoteMavenArtifact(_ context.Context, promotion MavenPromotion) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Cross-repository SNAPSHOT promotion is out of scope.
+	if IsMavenSnapshotCoordinate(promotion.Coordinate) {
+		return MavenArtifact{}, ErrDisabled
+	}
 	var source MavenArtifact
 	found := false
 	for _, artifact := range s.mavenArtifacts {
@@ -397,6 +431,10 @@ func (s *MemoryStore) PromoteMavenArtifact(_ context.Context, promotion MavenPro
 func (s *MemoryStore) PublishReplicatedMavenArtifact(_ context.Context, replication MavenReplication) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Cross-repository SNAPSHOT replication is out of scope.
+	if IsMavenSnapshotCoordinate(replication.Coordinate) {
+		return MavenArtifact{}, ErrDisabled
+	}
 	var source MavenArtifact
 	for _, artifact := range s.mavenArtifacts {
 		if artifact.RepositoryID == replication.SourceRepositoryID && artifact.Coordinate == replication.Coordinate && artifact.Digest == replication.Digest && artifact.State == "visible" {
@@ -449,13 +487,26 @@ func mavenAssetBelongsToArtifact(asset MavenAsset, coordinate string) bool {
 	return strings.HasPrefix(asset.Path, mavenArtifactPathPrefix(coordinate)) || strings.HasPrefix(asset.Path, strings.ReplaceAll(coordinate, ":", "/")+"/")
 }
 
+// mavenAssetBelongsToArtifactBuild narrows asset ownership to a single build:
+// SNAPSHOT builds own only their timestamped filenames so tombstoning one
+// build never touches the sibling builds sharing the version directory.
+func mavenAssetBelongsToArtifactBuild(asset MavenAsset, artifact MavenArtifact) bool {
+	if artifact.BuildNumber > 0 {
+		parts := strings.Split(artifact.Coordinate, ":")
+		base := strings.TrimSuffix(parts[2], "-SNAPSHOT")
+		prefix := mavenArtifactPathPrefix(artifact.Coordinate) + parts[1] + "-" + base + "-" + artifact.CreatedAt.UTC().Format("20060102.150405") + "-" + strconv.Itoa(artifact.BuildNumber)
+		return strings.HasPrefix(asset.Path, prefix)
+	}
+	return mavenAssetBelongsToArtifact(asset, artifact.Coordinate)
+}
+
 func (s *MemoryStore) mavenObjectHasVisibleReference(objectKey string) bool {
 	for _, asset := range s.mavenAssets {
 		if asset.ObjectKey != objectKey {
 			continue
 		}
 		for _, artifact := range s.mavenArtifacts {
-			if artifact.RepositoryID == asset.RepositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifact(asset, artifact.Coordinate) {
+			if artifact.RepositoryID == asset.RepositoryID && artifact.State == "visible" && mavenAssetBelongsToArtifactBuild(asset, artifact) {
 				return true
 			}
 		}
