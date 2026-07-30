@@ -18,24 +18,30 @@ export function MavenArtifactDetail({ repoId, repoName, meta }: { repoId: string
     // 用 group:artifact 前缀搜同族所有版本
     listMavenCoordinates({ path: { repositoryId: repoId }, query: { q: ga, pageSize: 100 } }).then(({ data }) => {
       const vs = (data?.items ?? [])
-        .map((x) => ({
-          label: mavenVersion(x.coordinate) ?? x.coordinate,
-          hint: formatDate(x.createdAt),
-          coordinate: x.coordinate,
-          publisher: x.publisher,
-          createdAt: x.createdAt,
-        }))
+        .map((x) => {
+          const version = mavenVersion(x.coordinate) ?? x.coordinate;
+          const build = x.buildNumber ?? 0;
+          // SNAPSHOT 的多个构建：label 带构建号区分（release build 0 不带）
+          const label = build > 0 ? `${version} #${build}` : version;
+          return {
+            label,
+            hint: formatDate(x.createdAt),
+            coordinate: x.coordinate,
+            publisher: x.publisher,
+            createdAt: x.createdAt,
+          };
+        })
         .filter((v) => v.label);
       const uniq = Array.from(new Map(vs.map((v) => [v.label, v])).values());
       setVersions(uniq);
       // 默认选最新（createdAt 最大）
       const latest = [...uniq].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0];
-      setSelected((prev) => prev ?? latest?.coordinate ?? null);
+      setSelected((prev) => prev ?? latest?.label ?? null);
     });
   }, [repoId, ga]);
 
-  // 当前选中的完整坐标（用于使用方法）；若无选择则用 meta.coordinate（已是完整 GAV 的情况）
-  const selectedMeta = versions.find((v) => v.coordinate === selected);
+  // 当前选中的版本（用 label 标识，SNAPSHOT 多构建 label 唯一）；coordinate 用于使用方法
+  const selectedMeta = versions.find((v) => v.label === selected);
   const effectiveMeta: ArtifactMeta = selectedMeta
     ? { ...meta, coordinate: selectedMeta.coordinate, publisher: selectedMeta.publisher ?? meta.publisher, createdAt: selectedMeta.createdAt ?? meta.createdAt }
     : meta;
@@ -51,10 +57,7 @@ export function MavenArtifactDetail({ repoId, repoName, meta }: { repoId: string
           title={`版本（${ga ?? ''}）`}
           items={versions}
           current={currentVersion}
-          onSelect={(label) => {
-            const v = versions.find((x) => x.label === label);
-            if (v) setSelected(v.coordinate);
-          }}
+          onSelect={(label) => setSelected(label)}
         />
       }
     />

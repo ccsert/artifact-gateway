@@ -287,6 +287,10 @@ export type MavenCoordinate = {
      * Publisher actor of the most recent committed publish session for this coordinate. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
      */
     publisher?: string;
+    /**
+     * Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate.
+     */
+    buildNumber?: number;
 };
 
 export type MavenCoordinatePage = {

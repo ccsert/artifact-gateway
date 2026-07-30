@@ -736,9 +736,11 @@ type LifecycleJobState string
 
 // MavenCoordinate defines model for MavenCoordinate.
 type MavenCoordinate struct {
-	Coordinate string    `json:"coordinate"`
-	CreatedAt  time.Time `json:"createdAt"`
-	Digest     string    `json:"digest"`
+	// BuildNumber Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate.
+	BuildNumber *int      `json:"buildNumber,omitempty"`
+	Coordinate  string    `json:"coordinate"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Digest      string    `json:"digest"`
 
 	// Publisher Publisher actor of the most recent committed publish session for this coordinate. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
 	Publisher *string `json:"publisher,omitempty"`

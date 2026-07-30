@@ -1372,7 +1372,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 		}
 		items := make([]adminopenapi.MavenCoordinate, 0, len(artifacts))
 		for _, artifact := range artifacts {
-			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt, Publisher: optionalPublisher(artifact.Publisher)})
+			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt, Publisher: optionalPublisher(artifact.Publisher), BuildNumber: optionalBuildNumber(artifact.BuildNumber)})
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.MavenCoordinatePage{Items: items, NextPageToken: next})
 	})
@@ -1689,6 +1689,15 @@ func optionalPublisher(publisher string) *string {
 		return nil
 	}
 	return &publisher
+}
+
+// optionalBuildNumber omits the build number for release coordinates (build 0)
+// so only SNAPSHOT builds carry it in responses.
+func optionalBuildNumber(buildNumber int) *int {
+	if buildNumber <= 0 {
+		return nil
+	}
+	return &buildNumber
 }
 
 func validConanReferencePrefix(value string) bool {
