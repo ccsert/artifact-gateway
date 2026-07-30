@@ -283,6 +283,10 @@ referenced commits.
   the worker stops retrying it; running plans are not cancellable (409) and the
   record is retained for audit. Adds the store method (Postgres + Memory), the
   `cancelled` state, a console cancel button, and black-box tests. (`481d7c5b`)
+- **Raw upload UI (P2).** The Raw repository artifacts tab gains an upload
+  button that PUTs a chosen file to `/raw/<repository>/<path>` with the bearer
+  token; the server computes the sha256 digest. This is the first publish UI
+  for a non-Maven format. (`7317e072`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
