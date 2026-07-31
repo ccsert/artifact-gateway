@@ -193,7 +193,7 @@ func TestCacheEntriesListsMavenEntriesAndSkipsExpired(t *testing.T) {
 func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 	handler, store, objectStore, _, mavenCache, _, _ := newCacheEntriesTestHandler(t)
 	ctx := context.Background()
-	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-proxy", Format: repository.FormatMaven, Type: repository.RepositoryTypeProxy, Endpoint: "https://repo.maven.apache.org/maven2"})
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-proxy", Format: repository.FormatMaven, Type: repository.RepositoryTypeProxy, Endpoint: "https://repo.maven.apache.org/maven2", AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,6 +233,12 @@ func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 	}
 	if err := mavenCache.StoreNegativeForRepository(ctx, mavenCache.Key(repo.Name, "missing/example/1.0/example-1.0.pom"), repo.Name, repository.Member{Name: "central", Endpoint: repo.Endpoint}); err != nil {
 		t.Fatal(err)
+	}
+	anonymousBrowse := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/cache/entries?groupBy=version&assetFilter=all&pageSize=1", nil)
+	anonymousBrowseResponse := httptest.NewRecorder()
+	handler.ServeHTTP(anonymousBrowseResponse, anonymousBrowse)
+	if anonymousBrowseResponse.Code != http.StatusOK {
+		t.Fatalf("anonymous browse = %d %s", anonymousBrowseResponse.Code, anonymousBrowseResponse.Body.String())
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/cache/entries?groupBy=version&assetFilter=all&pageSize=1", nil)

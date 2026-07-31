@@ -87,11 +87,6 @@ type mavenCacheCoordinate struct {
 }
 
 func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
-	if !ok {
-		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
-		return
-	}
 	if h.maintenance == nil {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "cache browsing is not enabled")
 		return
@@ -110,9 +105,21 @@ func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_repository", "cache browse is only available for proxy repositories")
 		return
 	}
-	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
-		return
+	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	if !ok {
+		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
+			return
+		}
+	}
+	if !isAnonymous(principal) {
+		decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead)
+		if !decision.Allowed {
+			writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
+			return
+		}
 	}
 
 	pageSize := 50

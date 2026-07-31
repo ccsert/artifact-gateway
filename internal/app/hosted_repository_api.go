@@ -135,6 +135,40 @@ func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.
 	return principal, true
 }
 
+func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
+		return principal, true
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return h.authenticate(w, r)
+	}
+	repositoryID, browse := managementBrowseRepositoryID(r.URL.Path)
+	if !browse {
+		return h.authenticate(w, r)
+	}
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if err == nil && anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		return anonymousPrincipal(), true
+	}
+	return h.authenticate(w, r)
+}
+
+func managementBrowseRepositoryID(path string) (string, bool) {
+	const prefix = "/api/v2/repositories/"
+	rest := strings.TrimPrefix(path, prefix)
+	if rest == path {
+		return "", false
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search") {
+		return parts[0], true
+	}
+	if len(parts) == 3 && ((parts[1] == "oci" && parts[2] == "images") || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && parts[2] == "references")) {
+		return parts[0], true
+	}
+	return "", false
+}
+
 // generatedRepositoryAPIAdapter keeps authorization and domain behavior in the
 // existing handler while the generated OpenAPI wrapper owns route and parameter
 // binding for the active repository-management surface.
@@ -625,7 +659,7 @@ func anonymousRepositoryReason(repo repository.HostedRepository) string {
 }
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		query := ""
 		if params.Q != nil {
 			query = *params.Q
@@ -1524,13 +1558,13 @@ func (h generatedRepositoryAPIAdapter) CreatePublishSession(w http.ResponseWrite
 }
 
 func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(Principal, repository.HostedRepository) {
 		h.sessions.listArtifacts(w, r, repositoryID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIImagesParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatOCI {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "OCI repository not found")
 			return
@@ -1580,7 +1614,7 @@ func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *h
 }
 
 func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListMavenCoordinatesParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatMaven {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
 			return
@@ -1631,7 +1665,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 }
 
 func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanReferencesParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatConan {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
 			return
@@ -1726,6 +1760,33 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
 		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		return
+	}
+	handler(principal, repo)
+}
+
+func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.ResponseWriter, r *http.Request, repositoryID string, handler func(Principal, repository.HostedRepository)) {
+	principal, authenticated := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return
+	}
+	if !authenticated {
+		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+			handler(anonymousPrincipal(), repo)
+			return
+		}
+		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
+		return
+	}
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
+		h.recordAuthorizationDenial(r, principal, repo, RepositoryRead, decision)
 		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
 		return
 	}

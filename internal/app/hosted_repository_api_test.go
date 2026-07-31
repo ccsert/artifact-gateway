@@ -1641,6 +1641,42 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	}
 }
 
+func TestAnonymousRepositoryBrowseAllowsReadOnlyQueries(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "public-oci", Format: repository.FormatOCI, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
+	put := httptest.NewRequest(http.MethodPut, "/v2/public-oci/app/manifests/latest", strings.NewReader(string(manifest)))
+	put.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+	authorize(put, "resolver-secret")
+	published := httptest.NewRecorder()
+	handler.ServeHTTP(published, put)
+	if published.Code != http.StatusCreated {
+		t.Fatalf("publish = %d %s", published.Code, published.Body.String())
+	}
+
+	browse := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/oci/images", nil)
+	browseResponse := httptest.NewRecorder()
+	handler.ServeHTTP(browseResponse, browse)
+	if browseResponse.Code != http.StatusOK || !strings.Contains(browseResponse.Body.String(), `"app"`) {
+		t.Fatalf("anonymous browse = %d %s", browseResponse.Code, browseResponse.Body.String())
+	}
+
+	private, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "private-oci", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateBrowse := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+private.ID+"/oci/images", nil)
+	privateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(privateResponse, privateBrowse)
+	if privateResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("private browse = %d %s", privateResponse.Code, privateResponse.Body.String())
+	}
+}
+
 func TestGroupManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-policy-repo", Format: repository.FormatRaw})
