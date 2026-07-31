@@ -33,10 +33,22 @@ interface OciConfig {
 const MANIFEST_ACCEPT =
   'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json';
 
+async function ociRegistryToken(token: string): Promise<string> {
+  const response = await fetch('/auth/token', { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) {
+    throw new Error(`${response.status}: ${(await response.text()).slice(0, 120)}`);
+  }
+  const body = (await response.json()) as { token?: string; access_token?: string };
+  const registryToken = body.token ?? body.access_token;
+  if (!registryToken) throw new Error('Registry token missing');
+  return registryToken;
+}
+
 async function ociFetch(token: string, path: string, accept?: string): Promise<Response> {
+  const registryToken = await ociRegistryToken(token);
   const res = await fetch(`/v2/${path}`, {
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${registryToken}`,
       ...(accept ? { Accept: accept } : {}),
     },
   });
@@ -152,9 +164,10 @@ export function OciImageDetail({
     if (!selectedTag) return;
     setDeleting(true);
     try {
+      const registryToken = await ociRegistryToken(token);
       const res = await fetch(`/v2/${name}/manifests/${selectedTag}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${registryToken}` },
       });
       if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 120)}`);
       const remaining = (tags ?? []).filter((t) => t !== selectedTag);

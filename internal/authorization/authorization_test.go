@@ -185,3 +185,23 @@ func TestAuthenticatorMapsAPIKeyRolesToPrincipal(t *testing.T) {
 		t.Fatal("reader allowed write")
 	}
 }
+
+func TestAuthenticatorRestoresUserRoleForIssuedProtocolToken(t *testing.T) {
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(context.Background(), repository.User{ID: "user-id", Name: "test", Role: string(RoleAdmin)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", Users: store}
+	session := authenticator.IssueUserSession(user.ID)
+	principal, ok := authenticator.Authenticate("Bearer " + session)
+	if !ok || !principal.Admin || principal.Role != RoleAdmin {
+		t.Fatalf("session principal = %#v, ok=%v", principal, ok)
+	}
+
+	protocolToken := authenticator.IssueToken(principal.Actor)
+	protocolPrincipal, ok := authenticator.Authenticate("Bearer " + protocolToken)
+	if !ok || !protocolPrincipal.Admin || protocolPrincipal.Role != RoleAdmin {
+		t.Fatalf("protocol principal = %#v, ok=%v", protocolPrincipal, ok)
+	}
+}

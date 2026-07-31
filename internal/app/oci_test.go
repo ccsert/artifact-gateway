@@ -58,6 +58,14 @@ func TestOCILegacyGroupServesManifestAndRange(t *testing.T) {
 	}
 	clientToken := ociToken(t, token)
 
+	managementToken := httptest.NewRecorder()
+	managementRequest := httptest.NewRequest(http.MethodGet, "/auth/token", nil)
+	managementRequest.Header.Set("Authorization", "Bearer "+testAuthenticator().AdminToken)
+	handler.ServeHTTP(managementToken, managementRequest)
+	if managementToken.Code != http.StatusOK {
+		t.Fatalf("management token = %d %s", managementToken.Code, managementToken.Body.String())
+	}
+
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/"+digest, nil)
 	authorize(request, clientToken)
 	response := httptest.NewRecorder()
@@ -496,6 +504,56 @@ func TestOCITokensAuditLoginSubject(t *testing.T) {
 	}
 	if len(store.Audits) != 2 || store.Audits[0].Actor != "alice" || store.Audits[1].Actor != "bob" {
 		t.Fatalf("audits = %#v", store.Audits)
+	}
+}
+
+func TestOCILocalAdminSessionExchangesForRegistryToken(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+
+	createUser := httptest.NewRequest(http.MethodPost, "/api/v2/users", strings.NewReader(`{"name":"root","password":"supersecret","role":"admin"}`))
+	authorize(createUser, "admin-secret")
+	createdUser := httptest.NewRecorder()
+	handler.ServeHTTP(createdUser, createUser)
+	if createdUser.Code != http.StatusCreated {
+		t.Fatalf("create user = %d %s", createdUser.Code, createdUser.Body.String())
+	}
+
+	manifest := `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`
+	publish := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/latest", strings.NewReader(manifest))
+	publish.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+	authorize(publish, "admin-secret")
+	published := httptest.NewRecorder()
+	handler.ServeHTTP(published, publish)
+	if published.Code != http.StatusCreated {
+		t.Fatalf("publish manifest = %d %s", published.Code, published.Body.String())
+	}
+
+	login := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"root","password":"supersecret"}`))
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	if loginResponse.Code != http.StatusOK {
+		t.Fatalf("login = %d %s", loginResponse.Code, loginResponse.Body.String())
+	}
+
+	exchange := httptest.NewRequest(http.MethodGet, "/auth/token", nil)
+	authorize(exchange, ociToken(t, loginResponse))
+	exchangeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(exchangeResponse, exchange)
+	if exchangeResponse.Code != http.StatusOK {
+		t.Fatalf("token exchange = %d %s", exchangeResponse.Code, exchangeResponse.Body.String())
+	}
+
+	tags := httptest.NewRequest(http.MethodGet, "/v2/team/app/tags/list", nil)
+	authorize(tags, ociToken(t, exchangeResponse))
+	tagsResponse := httptest.NewRecorder()
+	handler.ServeHTTP(tagsResponse, tags)
+	if tagsResponse.Code != http.StatusOK || !strings.Contains(tagsResponse.Body.String(), `"latest"`) {
+		t.Fatalf("tags = %d %s", tagsResponse.Code, tagsResponse.Body.String())
 	}
 }
 

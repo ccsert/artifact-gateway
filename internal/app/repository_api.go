@@ -118,6 +118,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
 	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
+	authenticator.Users = store
 	ociClient := OCIClient(UpstreamClient{})
 	if len(ociClients) > 0 {
 		ociClient = ociClients[0]
@@ -160,7 +161,6 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
-	authenticator.Users = store
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
 	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",

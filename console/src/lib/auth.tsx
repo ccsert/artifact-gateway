@@ -41,6 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState('');
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    void fetch('/api/v2/repositories?pageSize=1', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((response) => {
+      if (!cancelled && response.status === 401) {
+        clearToken();
+      }
+    }).catch(() => {
+      // A temporary network failure should not log the operator out.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, clearToken]);
+
   return (
     <AuthContext.Provider value={{ token, setToken, clearToken }}>
       {children}

@@ -51,7 +51,8 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		return a.PrincipalForActor(a.ResolverActor), true
 	}
 	if actor, ok := a.tokenActor(token); ok {
-		return a.PrincipalForActor(actor), true
+		principal, active := a.principalForTokenActor(actor)
+		return principal, active
 	}
 	if a.APIKeys != nil {
 		key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
@@ -75,6 +76,19 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		}
 	}
 	return Principal{}, false
+}
+
+func (a Authenticator) principalForTokenActor(actor string) (Principal, bool) {
+	if !strings.HasPrefix(actor, "user:") || a.Users == nil {
+		return a.PrincipalForActor(actor), true
+	}
+	name := strings.TrimPrefix(actor, "user:")
+	user, err := a.Users.GetUserByName(context.Background(), name)
+	if err != nil || user.State != repository.UserActive {
+		return Principal{}, false
+	}
+	role := Role(user.Role)
+	return Principal{Actor: actor, Admin: role == RoleAdmin, Role: role, RepositoryPatterns: a.RepositoryReaders[actor]}, true
 }
 
 // AuthenticateBasic validates the resolver credential used by Maven, Conan,
