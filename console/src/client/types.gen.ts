@@ -186,6 +186,31 @@ export type CreatedApiKey = ApiKey & {
     token: string;
 };
 
+export type User = {
+    id: string;
+    name: string;
+    role: 'admin' | 'writer' | 'reader';
+    state: 'active' | 'disabled';
+    createdAt: string;
+    updatedAt?: string;
+    version: string;
+};
+
+export type UserList = {
+    items: Array<User>;
+};
+
+export type CreateUser = {
+    name: string;
+    password: string;
+    role: 'admin' | 'writer' | 'reader';
+};
+
+export type UpdateUser = {
+    role?: 'admin' | 'writer' | 'reader';
+    state?: 'active' | 'disabled';
+};
+
 /**
  * Maven-only management publish session. Raw Hosted writes use PUT /raw/{repository}/{path}; OCI Hosted writes use Registry V2 upload and manifest routes.
  */
@@ -506,6 +531,164 @@ export type RevokeApiKeyResponses = {
 };
 
 export type RevokeApiKeyResponse = RevokeApiKeyResponses[keyof RevokeApiKeyResponses];
+
+export type ListUsersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/users';
+};
+
+export type ListUsersErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+};
+
+export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
+
+export type ListUsersResponses = {
+    /**
+     * User account metadata
+     */
+    200: UserList;
+};
+
+export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
+
+export type CreateUserData = {
+    body: CreateUser;
+    path?: never;
+    query?: never;
+    url: '/users';
+};
+
+export type CreateUserErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    409: Problem;
+};
+
+export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
+
+export type CreateUserResponses = {
+    /**
+     * User account metadata. The password hash is never returned.
+     */
+    201: User;
+};
+
+export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
+
+export type DeleteUserData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/users/{userId}';
+};
+
+export type DeleteUserErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type DeleteUserError = DeleteUserErrors[keyof DeleteUserErrors];
+
+export type DeleteUserResponses = {
+    /**
+     * User deleted
+     */
+    204: void;
+};
+
+export type DeleteUserResponse = DeleteUserResponses[keyof DeleteUserResponses];
+
+export type GetUserData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/users/{userId}';
+};
+
+export type GetUserErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetUserError = GetUserErrors[keyof GetUserErrors];
+
+export type GetUserResponses = {
+    /**
+     * User account metadata. The password hash is never returned.
+     */
+    200: User;
+};
+
+export type GetUserResponse = GetUserResponses[keyof GetUserResponses];
+
+export type UpdateUserData = {
+    body: UpdateUser;
+    headers: {
+        'If-Match': string;
+    };
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/users/{userId}';
+};
+
+export type UpdateUserErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+    /**
+     * Problem response
+     */
+    412: Problem;
+};
+
+export type UpdateUserError = UpdateUserErrors[keyof UpdateUserErrors];
+
+export type UpdateUserResponses = {
+    /**
+     * User account metadata. The password hash is never returned.
+     */
+    200: User;
+};
+
+export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
 
 export type ListAuditsData = {
     body?: never;

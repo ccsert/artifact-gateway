@@ -35,6 +35,7 @@ type Authenticator struct {
 	RepositoryWriters map[string][]string
 	OIDC              *OIDCValidator
 	APIKeys           repository.APIKeyStore
+	Users             repository.UserStore
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
@@ -57,6 +58,13 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		if err == nil {
 			role := RoleFromRoles(key.Roles)
 			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role}, true
+		}
+	}
+	if userID, ok := a.userSessionActor(token); ok && a.Users != nil {
+		user, err := a.Users.GetUser(context.Background(), userID)
+		if err == nil && user.State == repository.UserActive {
+			role := Role(user.Role)
+			return Principal{Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role}, true
 		}
 	}
 	if a.OIDC != nil {
@@ -137,6 +145,43 @@ func (a Authenticator) IssueToken(actor string) string {
 	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
 	_, _ = mac.Write([]byte(payload))
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// IssueUserSession mints a stateless session token for a local user. The token
+// carries only the user id and an expiry; the user's current role and active
+// state are rechecked on every authenticated request, so role changes and
+// disabling take effect without a session store.
+func (a Authenticator) IssueUserSession(userID string) string {
+	expiresAt := time.Now().UTC().Add(12 * time.Hour).Unix()
+	payload := "us." + base64.RawURLEncoding.EncodeToString([]byte(userID)) + "." + strconv.FormatInt(expiresAt, 10)
+	mac := hmac.New(sha256.New, []byte(a.AdminToken))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (a Authenticator) userSessionActor(token string) (string, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 || parts[0] != "us" || a.AdminToken == "" {
+		return "", false
+	}
+	userID, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || len(userID) == 0 {
+		return "", false
+	}
+	expiresAt, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().UTC().Unix() >= expiresAt {
+		return "", false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[3])
+	if err != nil {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, []byte(a.AdminToken))
+	_, _ = mac.Write([]byte(strings.Join(parts[:3], ".")))
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", false
+	}
+	return string(userID), true
 }
 
 func (a Authenticator) tokenActor(token string) (string, bool) {

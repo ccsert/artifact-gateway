@@ -78,6 +78,7 @@ type GatewayStore interface {
 	repository.NativeRawStore
 	repository.NativeConanStore
 	repository.APIKeyStore
+	repository.UserStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -159,8 +160,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
+	authenticator.Users = store
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, replication: store, oci: store, conan: store, apiKeys: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticate},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -209,5 +211,6 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/conan/v2/", conanGroupRouter)
 	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)
+	mux.HandleFunc("POST /auth/login", userLoginHandler(store, authenticator))
 	return tracedHTTPHandler(mux)
 }

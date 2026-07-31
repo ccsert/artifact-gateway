@@ -13,6 +13,10 @@ paths:
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":
     "$ref": "./management/api-keys.yaml#/api_keys_apiKeyId"
+  "/users":
+    "$ref": "./management/users.yaml#/users"
+  "/users/{userId}":
+    "$ref": "./management/users.yaml#/users_userId"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
   "/audit-retention-policy":
@@ -133,6 +137,14 @@ components:
       "$ref": "./components/schemas.yaml#/CreateAPIKey"
     CreatedAPIKey:
       "$ref": "./components/schemas.yaml#/CreatedAPIKey"
+    User:
+      "$ref": "./components/schemas.yaml#/User"
+    UserList:
+      "$ref": "./components/schemas.yaml#/UserList"
+    CreateUser:
+      "$ref": "./components/schemas.yaml#/CreateUser"
+    UpdateUser:
+      "$ref": "./components/schemas.yaml#/UpdateUser"
     CreatePublishSession:
       "$ref": "./components/schemas.yaml#/CreatePublishSession"
     CreateMavenPublishSession:
@@ -269,6 +281,10 @@ components:
       "$ref": "./components/responses.yaml#/MavenCoordinateList"
     Deletion:
       "$ref": "./components/responses.yaml#/Deletion"
+    User:
+      "$ref": "./components/responses.yaml#/User"
+    UserList:
+      "$ref": "./components/responses.yaml#/UserList"
     AuditList:
       "$ref": "./components/responses.yaml#/AuditList"
     AuditRetentionPolicy:

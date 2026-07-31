@@ -180,6 +180,25 @@ type MavenDeclaredObject struct {
 	Name, Digest string
 	Size         int64
 }
+
+// User is a local account that authenticates with a username and password and
+// carries a coarse role (reader/writer/admin). SecretHash is a bcrypt hash and
+// is never returned by management responses.
+type User struct {
+	ID         string
+	Name       string
+	SecretHash string
+	Role       string
+	State      string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Version    string
+}
+
+const (
+	UserActive   = "active"
+	UserDisabled = "disabled"
+)
 type MavenPublishSession struct {
 	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
 	Objects                                                   []MavenDeclaredObject

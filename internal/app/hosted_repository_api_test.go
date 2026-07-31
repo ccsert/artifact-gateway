@@ -1683,3 +1683,100 @@ func TestRepositoryManagementCancelsReplicationPlan(t *testing.T) {
 		t.Fatalf("cancel wrong repo=%d want 404", code)
 	}
 }
+
+func TestUserManagementLoginAndSessionAuth(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	createUser := func(body string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/users", strings.NewReader(body))
+		authorize(req, "admin-secret")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if code := createUser(`{"name":"alice","password":"supersecret","role":"reader"}`); code != http.StatusCreated {
+		t.Fatalf("create alice=%d", code)
+	}
+	if code := createUser(`{"name":"alice","password":"supersecret","role":"reader"}`); code != http.StatusConflict {
+		t.Fatalf("duplicate alice=%d want 409", code)
+	}
+	if code := createUser(`{"name":"bob","password":"short","role":"admin"}`); code != http.StatusBadRequest {
+		t.Fatalf("short password=%d want 400", code)
+	}
+	if code := createUser(`{"name":"root","password":"supersecret","role":"admin"}`); code != http.StatusCreated {
+		t.Fatalf("create root=%d", code)
+	}
+
+	list := httptest.NewRequest(http.MethodGet, "/api/v2/users", nil)
+	authorize(list, "admin-secret")
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, list)
+	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), `"name":"root"`) {
+		t.Fatalf("list users=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	login := func(body string) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		var resp struct {
+			Token string `json:"token"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		return rec.Code, resp.Token
+	}
+	if code, _ := login(`{"username":"root","password":"wrong"}`); code != http.StatusUnauthorized {
+		t.Fatalf("wrong password login=%d want 401", code)
+	}
+	code, token := login(`{"username":"root","password":"supersecret"}`)
+	if code != http.StatusOK || token == "" {
+		t.Fatalf("root login=%d token=%q", code, token)
+	}
+
+	// The admin session token can call an admin-only endpoint; a reader cannot.
+	asSession := func(target string) int {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		authorize(req, token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if code := asSession("/api/v2/users"); code != http.StatusOK {
+		t.Fatalf("admin session list users=%d want 200", code)
+	}
+
+	_, readerToken := login(`{"username":"alice","password":"supersecret"}`)
+	readerReq := httptest.NewRequest(http.MethodGet, "/api/v2/users", nil)
+	authorize(readerReq, readerToken)
+	readerRec := httptest.NewRecorder()
+	handler.ServeHTTP(readerRec, readerReq)
+	if readerRec.Code != http.StatusUnauthorized {
+		t.Fatalf("reader session list users=%d want 401", readerRec.Code)
+	}
+
+	// Disabling a user blocks both new logins and the existing session.
+	root, _ := store.GetUserByName(context.Background(), "root")
+	patch := httptest.NewRequest(http.MethodPatch, "/api/v2/users/"+root.ID, strings.NewReader(`{"state":"disabled"}`))
+	authorize(patch, "admin-secret")
+	patch.Header.Set("If-Match", root.Version)
+	patchRec := httptest.NewRecorder()
+	handler.ServeHTTP(patchRec, patch)
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("disable root=%d body=%s", patchRec.Code, patchRec.Body.String())
+	}
+	if code, _ := login(`{"username":"root","password":"supersecret"}`); code != http.StatusUnauthorized {
+		t.Fatalf("disabled login=%d want 401", code)
+	}
+	if code := asSession("/api/v2/users"); code != http.StatusUnauthorized {
+		t.Fatalf("disabled session=%d want 401", code)
+	}
+
+	del := httptest.NewRequest(http.MethodDelete, "/api/v2/users/"+root.ID, nil)
+	authorize(del, "admin-secret")
+	delRec := httptest.NewRecorder()
+	handler.ServeHTTP(delRec, del)
+	if delRec.Code != http.StatusNoContent {
+		t.Fatalf("delete root=%d want 204", delRec.Code)
+	}
+}

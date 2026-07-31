@@ -149,6 +149,7 @@ type generatedRepositoryAPIAdapter struct {
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
 	apiKeys           repository.APIKeyStore
+	users             repository.UserStore
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
 	metrics           *Metrics
@@ -231,6 +232,141 @@ func apiKeyResponse(key repository.APIKey) adminopenapi.APIKey {
 		response.Roles = append(response.Roles, adminopenapi.APIKeyRoles(role))
 	}
 	return response
+}
+
+func userResponse(user repository.User) adminopenapi.User {
+	response := adminopenapi.User{CreatedAt: user.CreatedAt, Id: uuid.MustParse(user.ID), Name: user.Name, Role: adminopenapi.UserRole(user.Role), State: adminopenapi.UserState(user.State), Version: user.Version}
+	if !user.UpdatedAt.IsZero() {
+		updated := user.UpdatedAt
+		response.UpdatedAt = &updated
+	}
+	return response
+}
+
+func validUserRole(role string) bool {
+	return role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
+}
+
+func (h generatedRepositoryAPIAdapter) ListUsers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	users, err := h.users.ListUsers(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list users failed")
+		return
+	}
+	items := make([]adminopenapi.User, 0, len(users))
+	for _, user := range users {
+		items = append(items, userResponse(user))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.UserList{Items: items})
+}
+
+func (h generatedRepositoryAPIAdapter) CreateUser(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	var request adminopenapi.CreateUser
+	if err := decoder.Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" || len(request.Password) < 8 || !validUserRole(string(request.Role)) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name, a password of at least 8 characters, and a valid role are required")
+		return
+	}
+	hash, err := authorization.HashPassword(request.Password)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "hash password failed")
+		return
+	}
+	user, err := h.users.CreateUser(r.Context(), repository.User{ID: uuid.NewString(), Name: strings.TrimSpace(request.Name), SecretHash: hash, Role: string(request.Role)})
+	if errors.Is(err, repository.ErrNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "version_conflict", "user name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create user failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, userResponse(user))
+}
+
+func (h generatedRepositoryAPIAdapter) GetUser(w http.ResponseWriter, r *http.Request, userID string) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	user, err := h.users.GetUser(r.Context(), userID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get user failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, userResponse(user))
+}
+
+func (h generatedRepositoryAPIAdapter) UpdateUser(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.UpdateUserParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	var request adminopenapi.UpdateUser
+	if err := decoder.Decode(&request); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid user update body")
+		return
+	}
+	role := ""
+	if request.Role != nil {
+		role = string(*request.Role)
+	}
+	if role != "" && !validUserRole(role) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported user role")
+		return
+	}
+	state := ""
+	if request.State != nil {
+		state = string(*request.State)
+	}
+	if state != "" && state != repository.UserActive && state != repository.UserDisabled {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported user state")
+		return
+	}
+	if role == "" && state == "" {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "provide a role or state to update")
+		return
+	}
+	updated, err := h.users.UpdateUser(r.Context(), repository.User{ID: userID, Role: role, State: state}, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update user failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, userResponse(updated))
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteUser(w http.ResponseWriter, r *http.Request, userID string) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	if err := h.users.DeleteUser(r.Context(), userID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "user not found")
+			return
+		}
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete user failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {

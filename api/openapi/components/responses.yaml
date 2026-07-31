@@ -23,6 +23,18 @@ CreatedAPIKey:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/CreatedAPIKey"
+User:
+  description: User account metadata. The password hash is never returned.
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/User"
+UserList:
+  description: User account metadata
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/UserList"
 BinaryObject:
   description: Committed immutable protocol object
   content:

@@ -71,6 +71,86 @@ CreatedAPIKey:
     properties:
       token:
         type: string
+User:
+  type: object
+  required:
+  - id
+  - name
+  - role
+  - state
+  - createdAt
+  - version
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    role:
+      type: string
+      enum:
+      - admin
+      - writer
+      - reader
+    state:
+      type: string
+      enum:
+      - active
+      - disabled
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    version:
+      type: string
+UserList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/User"
+CreateUser:
+  type: object
+  required:
+  - name
+  - password
+  - role
+  additionalProperties: false
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 128
+    password:
+      type: string
+      format: password
+      minLength: 8
+    role:
+      type: string
+      enum:
+      - admin
+      - writer
+      - reader
+UpdateUser:
+  type: object
+  additionalProperties: false
+  properties:
+    role:
+      type: string
+      enum:
+      - admin
+      - writer
+      - reader
+    state:
+      type: string
+      enum:
+      - active
+      - disabled
 OCITagList:
   type: object
   required:

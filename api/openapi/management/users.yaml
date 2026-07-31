@@ -1,0 +1,70 @@
+---
+users:
+  get:
+    operationId: listUsers
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/UserList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createUser
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateUser"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/User"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+  get:
+    operationId: getUser
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/User"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  patch:
+    operationId: updateUser
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/UpdateUser"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/User"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteUser
+    responses:
+      '204':
+        description: User deleted
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
