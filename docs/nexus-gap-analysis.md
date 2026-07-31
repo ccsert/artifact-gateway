@@ -287,6 +287,11 @@ referenced commits.
   button that PUTs a chosen file to `/raw/<repository>/<path>` with the bearer
   token; the server computes the sha256 digest. This is the first publish UI
   for a non-Maven format. (`7317e072`)
+- **Login page (P0).** A standalone `/login` route verifies the pasted bearer
+  against the management API before persisting it, an auth guard redirects
+  unauthenticated visits with a return path, and the header gains a logout
+  button. The token-paste dialog remains for switching credentials. The OIDC
+  single-sign-on (auth-code) flow remains a backend follow-up. (`66eb4684`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
