@@ -11,6 +11,7 @@ import { ProxyGroupsPage } from '../pages/ProxyGroups';
 import { SearchPage } from '../pages/Search';
 import { LoginPage } from '../pages/Login';
 import { AccessControlPage } from '../pages/AccessControl';
+import { UsersPage } from '../pages/Users';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: '/proxy', element: <ProxyGroupsPage /> },
       { path: '/audits', element: <AuditsPage /> },
       { path: '/keys', element: <ApiKeysPage /> },
+      { path: '/users', element: <UsersPage /> },
       { path: '/audit-retention', element: <AuditRetentionPage /> },
     ],
   },

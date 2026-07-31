@@ -13,6 +13,7 @@ const navItems = [
   { to: '/audits', label: '审计日志', end: false, icon: IconAudit },
   { to: '/audit-retention', label: '审计保留', end: false, icon: IconRetention },
   { to: '/keys', label: 'API 密钥', end: false, icon: IconKey },
+  { to: '/users', label: '用户', end: false, icon: IconUser },
 ];
 
 function IconDashboard() {
@@ -62,6 +63,14 @@ function IconKey() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+    </svg>
+  );
+}
+function IconUser() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
