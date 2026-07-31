@@ -298,6 +298,12 @@ referenced commits.
   reference, and deep-links each row to the repository's grants tab. This is the
   RBAC management surface built over the existing grant and role model; a full
   user/privilege CRUD and OIDC role mapping remain future work. (`e228311b`)
+- **Local user management (P0).** A `users` table with bcrypt password hashing,
+  a UserStore (Postgres + Memory), admin-only `/api/v2/users` CRUD (the hash is
+  never returned), `POST /auth/login` that mints a stateless 12-hour session
+  token, and per-request recheck of role and active state. Includes a console
+  Users page and a username/password login mode. (`535c51e3` backend,
+  `bf22725a` console)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
@@ -317,9 +323,10 @@ backend API additions listed below.
   recheck before any bytes are reclaimed, so an operator "purge now" button
   would violate that safety model.
 - **API key scoping beyond `admin`** is partly delivered: `reader`/`writer`/
-  `admin` roles now exist and are enforced (see `01651d84`). A full
-  user/role/privilege management surface (users, teams, content selectors,
-  role assignment UI) remains future work and overlaps with the P0 RBAC item.
+  `admin` roles now exist and are enforced, and local user accounts with the
+  same roles are managed via `/api/v2/users` (see `535c51e3` and `bf22725a`).
+  OIDC role mapping and a full privilege/content-selector model remain future
+  work.
 
 ## Prioritized Backlog
 
