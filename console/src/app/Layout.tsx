@@ -8,6 +8,7 @@ const navItems = [
   { to: '/', label: '总览', end: true, icon: IconDashboard },
   { to: '/repositories', label: '仓库', end: false, icon: IconRepo },
   { to: '/groups', label: '分组', end: false, icon: IconGroup },
+  { to: '/access', label: '访问控制', end: false, icon: IconAccess },
   { to: '/proxy', label: '代理组', end: false, icon: IconProxy },
   { to: '/audits', label: '审计日志', end: false, icon: IconAudit },
   { to: '/audit-retention', label: '审计保留', end: false, icon: IconRetention },
@@ -61,6 +62,13 @@ function IconKey() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+    </svg>
+  );
+}
+function IconAccess() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }

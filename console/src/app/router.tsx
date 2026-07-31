@@ -10,6 +10,7 @@ import { AuditRetentionPage } from '../pages/AuditRetention';
 import { ProxyGroupsPage } from '../pages/ProxyGroups';
 import { SearchPage } from '../pages/Search';
 import { LoginPage } from '../pages/Login';
+import { AccessControlPage } from '../pages/AccessControl';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: '/repositories', element: <RepositoriesPage /> },
       { path: '/repositories/:repositoryId', element: <RepositoryDetailPage /> },
       { path: '/groups', element: <GroupsPage /> },
+      { path: '/access', element: <AccessControlPage /> },
       { path: '/proxy', element: <ProxyGroupsPage /> },
       { path: '/audits', element: <AuditsPage /> },
       { path: '/keys', element: <ApiKeysPage /> },
