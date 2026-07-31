@@ -39,6 +39,8 @@ paths:
     "$ref": "./management/tombstones.yaml#/repositories_repositoryId_tombstones"
   "/repositories/{repositoryId}/capabilities":
     "$ref": "./management/capabilities.yaml#/repositories_repositoryId_capabilities"
+  "/repositories/{repositoryId}/effective-access":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_effective_access"
   "/groups":
     "$ref": "./management/groups.yaml#/groups"
   "/groups/{groupId}":

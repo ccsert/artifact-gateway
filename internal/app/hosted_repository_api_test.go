@@ -1594,6 +1594,53 @@ func TestRepositoryManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T)
 	}
 }
 
+func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "effective-raw", Format: repository.FormatRaw, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
+	authorize(request, authenticator.IssueToken("reader"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("effective access = %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Actor         string `json:"actor"`
+		AnonymousRead struct {
+			Allowed bool   `json:"allowed"`
+			Reason  string `json:"reason"`
+		} `json:"anonymousRead"`
+		Permissions struct {
+			Read  struct{ Allowed bool } `json:"read"`
+			Write struct{ Allowed bool } `json:"write"`
+			Admin struct{ Allowed bool } `json:"admin"`
+		} `json:"permissions"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Actor != "reader" || !body.AnonymousRead.Allowed || body.AnonymousRead.Reason != "repository_anonymous_read_enabled" || !body.Permissions.Read.Allowed || body.Permissions.Write.Allowed || body.Permissions.Admin.Allowed {
+		t.Fatalf("effective access body=%#v", body)
+	}
+
+	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
+	authorize(denied, authenticator.IssueToken("stranger"))
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, denied)
+	if deniedResponse.Code != http.StatusForbidden {
+		t.Fatalf("denied effective access = %d %s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+}
+
 func TestGroupManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-policy-repo", Format: repository.FormatRaw})

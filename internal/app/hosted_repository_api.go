@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -560,6 +561,67 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.Response
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
 		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format, repo.Type))
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
+	}
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return
+	}
+	readDecision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead)
+	if !readDecision.Allowed {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, h.repositoryEffectiveAccess(r.Context(), principal, repo))
+}
+
+func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository) adminopenapi.RepositoryEffectiveAccess {
+	decision := func(operation RepositoryOperation) adminopenapi.EffectiveAccessDecision {
+		return effectiveAccessDecision(h.authorizer.Authorize(ctx, principal, repo, operation))
+	}
+	response := adminopenapi.RepositoryEffectiveAccess{
+		Actor: principal.Actor,
+		AnonymousRead: adminopenapi.EffectiveAccessDecision{
+			Allowed: anonymousHostedRepositoryReadAllowed(repo, http.MethodGet),
+			Source:  "anonymous_policy",
+			Reason:  anonymousRepositoryReason(repo),
+		},
+		Permissions: adminopenapi.EffectiveAccessPermissions{
+			Read:  decision(RepositoryRead),
+			Write: decision(RepositoryWrite),
+			Admin: decision(RepositoryAdmin),
+		},
+	}
+	response.Repository.Id = uuid.MustParse(repo.ID)
+	response.Repository.Name = repo.Name
+	response.Repository.Format = adminopenapi.Format(repo.Format)
+	response.Repository.Type = adminopenapi.RepositoryEffectiveAccessRepositoryType(repo.Type)
+	response.Repository.State = adminopenapi.RepositoryEffectiveAccessRepositoryState(repo.State)
+	return response
+}
+
+func effectiveAccessDecision(decision AuthorizationDecision) adminopenapi.EffectiveAccessDecision {
+	return adminopenapi.EffectiveAccessDecision{Allowed: decision.Allowed, Source: decision.Source, Reason: decision.Reason}
+}
+
+func anonymousRepositoryReason(repo repository.HostedRepository) string {
+	if repo.State != repository.RepositoryActive {
+		return "repository_not_active"
+	}
+	if !repo.AnonymousRead {
+		return "repository_anonymous_read_disabled"
+	}
+	return "repository_anonymous_read_enabled"
 }
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {

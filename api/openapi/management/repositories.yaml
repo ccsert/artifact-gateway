@@ -86,6 +86,18 @@ repositories_repositoryId_grants:
         "$ref": "../components/responses.yaml#/GrantList"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_effective_access:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getRepositoryEffectiveAccess
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryEffectiveAccess"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId_retention_policy:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

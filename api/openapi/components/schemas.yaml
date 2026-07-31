@@ -379,6 +379,40 @@ RepositoryCapacityQuota:
   additionalProperties: false
   properties:
     quotaBytes: {type: integer, format: int64, minimum: 0}
+EffectiveAccessDecision:
+  type: object
+  required: [allowed, source, reason]
+  properties:
+    allowed: {type: boolean}
+    source: {type: string}
+    reason: {type: string}
+EffectiveAccessPermissions:
+  type: object
+  required: [read, write, admin]
+  properties:
+    read: {"$ref": "#/EffectiveAccessDecision"}
+    write: {"$ref": "#/EffectiveAccessDecision"}
+    admin: {"$ref": "#/EffectiveAccessDecision"}
+RepositoryEffectiveAccess:
+  type: object
+  required: [actor, repository, anonymousRead, permissions]
+  properties:
+    actor: {type: string}
+    repository:
+      type: object
+      required: [id, name, format, type, state]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        format: {"$ref": "#/Format"}
+        type:
+          type: string
+          enum: [hosted, proxy]
+        state:
+          type: string
+          enum: [active, deleting, deleted]
+    anonymousRead: {"$ref": "#/EffectiveAccessDecision"}
+    permissions: {"$ref": "#/EffectiveAccessPermissions"}
 RetentionDryRun:
   type: object
   required: [policyVersion, candidates]

@@ -178,6 +178,12 @@ RepositoryCapacity:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RepositoryCapacity"
+RepositoryEffectiveAccess:
+  description: Effective repository access decisions for the authenticated actor and anonymous read policy
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryEffectiveAccess"
 RetentionDryRun:
   description: Maven retention candidates without state changes
   content:
