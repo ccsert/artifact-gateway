@@ -113,6 +113,19 @@ func (h nativeMavenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.management.ServeHTTP(w, r)
 }
 
+func (h nativeMavenHandler) ServeRepositoryHTTP(w http.ResponseWriter, r *http.Request) bool {
+	repositoryName, _, ok := nativeMavenReadPath(r.URL.Path)
+	if !ok {
+		return false
+	}
+	repo, err := h.store.GetHostedRepositoryByName(r.Context(), repositoryName)
+	if err != nil || repo.Format != repository.FormatMaven {
+		return false
+	}
+	h.read(w, r)
+	return true
+}
+
 func (h nativeMavenHandler) artifacts(w http.ResponseWriter, r *http.Request, repoID string) {
 	if _, ok := h.admin(r); !ok {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
@@ -376,30 +389,35 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	principal, ok := h.protocolPrincipal(r)
+	repositoryName, assetPath, ok := nativeMavenReadPath(r.URL.Path)
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	user := principal.Actor
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/repository/maven/"), "/")
-	if len(parts) < 2 || parts[0] == "" {
 		http.NotFound(w, r)
 		return
 	}
-	repo, err := h.store.GetHostedRepositoryByName(r.Context(), parts[0])
+	repo, err := h.store.GetHostedRepositoryByName(r.Context(), repositoryName)
 	if err != nil || repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
 		http.NotFound(w, r)
 		return
 	}
-	assetPath := strings.Join(parts[1:], "/")
+	principal, ok := h.protocolPrincipal(r)
+	if !ok {
+		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
+	user := principal.Actor
 	resource := mavenResourceFromPath(assetPath)
-	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, resource); !decision.Allowed {
-		h.recordAuthorizationDenial(decision)
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: assetPath, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
-		http.Error(w, "repository read permission required", http.StatusForbidden)
-		return
+	if !isAnonymous(principal) {
+		if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, resource); !decision.Allowed {
+			h.recordAuthorizationDenial(decision)
+			_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: assetPath, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+			http.Error(w, "repository read permission required", http.StatusForbidden)
+			return
+		}
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		h.proxyRead(w, r, repo, assetPath, principal)
@@ -431,6 +449,21 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body)
 	}
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
+}
+
+func nativeMavenReadPath(path string) (string, string, bool) {
+	for _, prefix := range []string{"/repository/maven/", "/maven/"} {
+		rest := strings.TrimPrefix(path, prefix)
+		if rest == path {
+			continue
+		}
+		parts := strings.Split(rest, "/")
+		if len(parts) < 2 || parts[0] == "" || strings.Join(parts[1:], "/") == "" {
+			return "", "", false
+		}
+		return parts[0], strings.Join(parts[1:], "/"), true
+	}
+	return "", "", false
 }
 
 // proxyRead serves a read against a native proxy repository through the legacy
@@ -830,13 +863,18 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(out))})
 		return
 	}
-	versions := []string{}
+	versions := map[string]bool{}
+	releases := []string{}
 	for _, a := range items {
 		base := mavenCoordinatePath(a.Coordinate)
 		if strings.HasPrefix(base, prefix) {
 			p := strings.Split(a.Coordinate, ":")
 			if len(p) >= 3 {
-				versions = append(versions, p[2])
+				version := p[2]
+				versions[version] = true
+				if !repository.IsMavenSnapshotCoordinate(a.Coordinate) {
+					releases = append(releases, version)
+				}
 			}
 		}
 	}
@@ -844,13 +882,23 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		http.NotFound(w, r)
 		return
 	}
-	sort.Strings(versions)
+	orderedVersions := make([]string, 0, len(versions))
+	for version := range versions {
+		orderedVersions = append(orderedVersions, version)
+	}
+	sort.Strings(orderedVersions)
+	sort.Strings(releases)
 	p := strings.Split(prefix, "/")
 	group := strings.Join(p[:len(p)-1], ".")
 	artifact := p[len(p)-1]
-	body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><versioning><latest>" + versions[len(versions)-1] + "</latest><release>" + versions[len(versions)-1] + "</release><versions>" + strings.Join(func() []string {
-		v := make([]string, len(versions))
-		for i, x := range versions {
+	body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><versioning><latest>" + orderedVersions[len(orderedVersions)-1] + "</latest>" + func() string {
+		if len(releases) == 0 {
+			return ""
+		}
+		return "<release>" + releases[len(releases)-1] + "</release>"
+	}() + "<versions>" + strings.Join(func() []string {
+		v := make([]string, len(orderedVersions))
+		for i, x := range orderedVersions {
 			v[i] = "<version>" + x + "</version>"
 		}
 		return v

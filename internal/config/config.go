@@ -24,6 +24,8 @@ type Config struct {
 	ConanCacheMaxObjectBytes int64
 	OCICacheTTL              time.Duration
 	MavenCacheTTL            time.Duration
+	MavenMetadataCacheTTL    time.Duration
+	MavenNegativeCacheTTL    time.Duration
 	RawCacheTTL              time.Duration
 	ConanCacheTTL            time.Duration
 	AdminToken               string
@@ -55,7 +57,9 @@ func Load() (Config, error) {
 		RawCacheMaxObjectBytes:   1 << 30,
 		ConanCacheMaxObjectBytes: 1 << 30,
 		OCICacheTTL:              15 * time.Minute,
-		MavenCacheTTL:            15 * time.Minute,
+		MavenCacheTTL:            24 * time.Hour,
+		MavenMetadataCacheTTL:    15 * time.Minute,
+		MavenNegativeCacheTTL:    10 * time.Minute,
 		RawCacheTTL:              15 * time.Minute,
 		ConanCacheTTL:            15 * time.Minute,
 		AdminToken:               os.Getenv("GATEWAY_ADMIN_TOKEN"),
@@ -91,7 +95,7 @@ func Load() (Config, error) {
 		}
 		if cfg.OIDCJWKSURL != "" {
 			if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-			return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
+				return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
 			}
 		}
 	}
@@ -125,6 +129,16 @@ func Load() (Config, error) {
 		return Config{}, err
 	} else {
 		cfg.MavenCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_MAVEN_METADATA_CACHE_TTL", cfg.MavenMetadataCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.MavenMetadataCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_MAVEN_NEGATIVE_CACHE_TTL", cfg.MavenNegativeCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.MavenNegativeCacheTTL = ttl
 	}
 	if ttl, err := durationEnv("GATEWAY_RAW_CACHE_TTL", cfg.RawCacheTTL); err != nil {
 		return Config{}, err

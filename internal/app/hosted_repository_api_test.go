@@ -543,14 +543,14 @@ func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
 		return w
 	}
 	cases := map[string]string{
-		"proxy without endpoint":        `{"name":"proxy-no-endpoint","format":"raw","type":"proxy"}`,
-		"proxy with http endpoint":      `{"name":"proxy-http","format":"raw","type":"proxy","endpoint":"http://upstream.example","allowedHosts":["upstream.example"]}`,
-		"proxy with malformed endpoint": `{"name":"proxy-bad-url","format":"raw","type":"proxy","endpoint":"not a url","allowedHosts":["upstream.example"]}`,
-		"raw proxy without allowedHosts": `{"name":"proxy-no-hosts","format":"raw","type":"proxy","endpoint":"https://upstream.example"}`,
+		"proxy without endpoint":           `{"name":"proxy-no-endpoint","format":"raw","type":"proxy"}`,
+		"proxy with http endpoint":         `{"name":"proxy-http","format":"raw","type":"proxy","endpoint":"http://upstream.example","allowedHosts":["upstream.example"]}`,
+		"proxy with malformed endpoint":    `{"name":"proxy-bad-url","format":"raw","type":"proxy","endpoint":"not a url","allowedHosts":["upstream.example"]}`,
+		"raw proxy without allowedHosts":   `{"name":"proxy-no-hosts","format":"raw","type":"proxy","endpoint":"https://upstream.example"}`,
 		"conan proxy without allowedHosts": `{"name":"proxy-conan-no-hosts","format":"conan","type":"proxy","endpoint":"https://upstream.example"}`,
-		"hosted with endpoint":          `{"name":"hosted-endpoint","format":"raw","endpoint":"https://upstream.example"}`,
-		"hosted with allowedHosts":      `{"name":"hosted-hosts","format":"raw","allowedHosts":["upstream.example"]}`,
-		"unknown type":                  `{"name":"unknown-type","format":"raw","type":"virtual"}`,
+		"hosted with endpoint":             `{"name":"hosted-endpoint","format":"raw","endpoint":"https://upstream.example"}`,
+		"hosted with allowedHosts":         `{"name":"hosted-hosts","format":"raw","allowedHosts":["upstream.example"]}`,
+		"unknown type":                     `{"name":"unknown-type","format":"raw","type":"virtual"}`,
 	}
 	for name, body := range cases {
 		if response := create(body); response.Code != http.StatusBadRequest {
@@ -1447,18 +1447,18 @@ func TestHostedRepositoryIdempotencyAndPagination(t *testing.T) {
 	}
 }
 
-func TestNativeRepositoryGuardDeniesAnonymousAndDisabledProtocols(t *testing.T) {
+func TestNativeRepositoryGuardAllowsAnonymousReadPolicyAndDeniesDisabledProtocols(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
 	for _, format := range []repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven} {
-		repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: string(format) + "-native", Format: format})
+		repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: string(format) + "-native", Format: format, AnonymousRead: true})
 		if err != nil {
 			t.Fatal(err)
 		}
-		path := map[repository.Format]string{repository.FormatRaw: "/raw/raw-native/a", repository.FormatOCI: "/v2/oci-native/manifests/latest", repository.FormatMaven: "/maven/maven-native/a.pom"}[format]
+		path := map[repository.Format]string{repository.FormatRaw: "/raw/raw-native/a", repository.FormatOCI: "/v2/oci-native/app/manifests/latest", repository.FormatMaven: "/maven/maven-native/a.pom"}[format]
 		anonymous := httptest.NewRecorder()
 		handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, path, nil))
-		if anonymous.Code != http.StatusUnauthorized {
+		if anonymous.Code == http.StatusUnauthorized {
 			t.Fatalf("%s anonymous=%d", format, anonymous.Code)
 		}
 		if _, err := store.DisableHostedRepository(context.Background(), repo.ID); err != nil {
@@ -1532,7 +1532,7 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 	if invalid := patch("2", `{"endpoint":"not-a-url","allowedHosts":["x"]}`); invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid=%d body=%s", invalid.Code, invalid.Body.String())
 	}
-	if missingHosts := patch("2", `{"endpoint":"https://cdn.example"}`); missingHosts.Code != http.StatusBadRequest {
+	if missingHosts := patch("2", `{"endpoint":"https://cdn.example","allowedHosts":[]}`); missingHosts.Code != http.StatusBadRequest {
 		t.Fatalf("missing hosts=%d body=%s", missingHosts.Code, missingHosts.Body.String())
 	}
 
@@ -1547,6 +1547,90 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 	handler.ServeHTTP(hostedRec, hostedPatch)
 	if hostedRec.Code != http.StatusBadRequest {
 		t.Fatalf("hosted update=%d body=%s", hostedRec.Code, hostedRec.Body.String())
+	}
+}
+
+func TestRepositoryManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	create := func(body, key string) repository.HostedRepository {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
+		authorize(req, "admin-secret")
+		req.Header.Set("Idempotency-Key", key)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var repo repository.HostedRepository
+		if err := json.NewDecoder(rec.Body).Decode(&repo); err != nil {
+			t.Fatal(err)
+		}
+		return repo
+	}
+
+	private := create(`{"name":"private-hosted","format":"raw"}`, "private-hosted")
+	if private.AnonymousRead {
+		t.Fatalf("anonymousRead defaulted to true: %#v", private)
+	}
+	public := create(`{"name":"public-hosted","format":"raw","anonymousRead":true}`, "public-hosted")
+	if !public.AnonymousRead {
+		t.Fatalf("anonymousRead was not returned on create: %#v", public)
+	}
+
+	patch := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+private.ID, strings.NewReader(`{"anonymousRead":true}`))
+	authorize(patch, "admin-secret")
+	patch.Header.Set("If-Match", "1")
+	patched := httptest.NewRecorder()
+	handler.ServeHTTP(patched, patch)
+	if patched.Code != http.StatusOK || !strings.Contains(patched.Body.String(), `"anonymousRead":true`) || patched.Header().Get("ETag") != "2" {
+		t.Fatalf("patch=%d etag=%q body=%s", patched.Code, patched.Header().Get("ETag"), patched.Body.String())
+	}
+	stored, err := store.GetHostedRepository(context.Background(), private.ID)
+	if err != nil || !stored.AnonymousRead {
+		t.Fatalf("stored=%#v err=%v", stored, err)
+	}
+}
+
+func TestGroupManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "group-policy-repo", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	create := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"group-policy","format":"raw","members":[{"repositoryId":"`+repo.ID+`","position":0}]}`))
+	authorize(create, "admin-secret")
+	create.Header.Set("Idempotency-Key", "group-policy")
+	created := httptest.NewRecorder()
+	handler.ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create=%d body=%s", created.Code, created.Body.String())
+	}
+	var group repository.HostedGroup
+	if err := json.NewDecoder(created.Body).Decode(&group); err != nil || group.AnonymousRead {
+		t.Fatalf("group=%#v err=%v", group, err)
+	}
+
+	replace := httptest.NewRequest(http.MethodPut, "/api/v2/groups/"+group.ID, strings.NewReader(`{"name":"group-policy","format":"raw","anonymousRead":true,"members":[{"repositoryId":"`+repo.ID+`","position":0}]}`))
+	authorize(replace, "admin-secret")
+	replace.Header.Set("If-Match", "1")
+	replaced := httptest.NewRecorder()
+	handler.ServeHTTP(replaced, replace)
+	if replaced.Code != http.StatusOK || !strings.Contains(replaced.Body.String(), `"anonymousRead":true`) {
+		t.Fatalf("replace=%d body=%s", replaced.Code, replaced.Body.String())
+	}
+
+	membersOnly := httptest.NewRequest(http.MethodPut, "/api/v2/groups/"+group.ID+"/members", strings.NewReader(`[{"repositoryId":"`+repo.ID+`","position":0}]`))
+	authorize(membersOnly, "admin-secret")
+	membersOnly.Header.Set("If-Match", "2")
+	membersOnlyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(membersOnlyResponse, membersOnly)
+	if membersOnlyResponse.Code != http.StatusOK || !strings.Contains(membersOnlyResponse.Body.String(), `"anonymousRead":true`) {
+		t.Fatalf("members replace=%d body=%s", membersOnlyResponse.Code, membersOnlyResponse.Body.String())
 	}
 }
 

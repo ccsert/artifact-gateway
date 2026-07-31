@@ -1321,6 +1321,7 @@
           "id",
           "name",
           "format",
+          "anonymousRead",
           "state",
           "version"
         ],
@@ -1350,6 +1351,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "state": {
             "type": "string",
@@ -1396,6 +1401,11 @@
               "type": "string"
             },
             "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false,
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           }
         }
       },
@@ -1405,6 +1415,7 @@
           "id",
           "name",
           "format",
+          "anonymousRead",
           "members",
           "version"
         ],
@@ -1418,6 +1429,10 @@
           },
           "format": {
             "$ref": "#/components/schemas/Format"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "members": {
             "$ref": "#/components/schemas/MemberList"
@@ -1441,6 +1456,11 @@
           },
           "format": {
             "$ref": "#/components/schemas/Format"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false,
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "members": {
             "$ref": "#/components/schemas/MemberList"
@@ -2681,10 +2701,7 @@
       },
       "UpdateRepository": {
         "type": "object",
-        "description": "Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.",
-        "required": [
-          "endpoint"
-        ],
+        "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
         "additionalProperties": false,
         "properties": {
           "endpoint": {
@@ -2697,6 +2714,10 @@
               "type": "string"
             },
             "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           }
         }
       },

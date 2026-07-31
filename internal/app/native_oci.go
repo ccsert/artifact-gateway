@@ -83,14 +83,21 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	p, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !authenticated {
-		writeOCIChallenge(w, r)
-		return true
+		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+			p = anonymousPrincipal()
+		} else {
+			writeOCIChallenge(w, r)
+			return true
+		}
 	}
 	operation := nativeOCIOperation(resource, r.Method)
-	if decision := h.authorizer.AuthorizeResource(r.Context(), p, repo, operation, imageName); !decision.Allowed {
-		h.recordAuthorizationDenial(r, p, repo, operation, decision)
-		writeOCIChallenge(w, r)
-		return true
+	if !isAnonymous(p) {
+		decision := h.authorizer.AuthorizeResource(r.Context(), p, repo, operation, imageName)
+		if !decision.Allowed {
+			h.recordAuthorizationDenial(r, p, repo, operation, decision)
+			writeOCIChallenge(w, r)
+			return true
+		}
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		h.proxyRead(w, r, repo, resource, imageName, reference, p.Actor)

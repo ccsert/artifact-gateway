@@ -18,6 +18,8 @@ type MavenClient interface {
 	FetchMaven(context.Context, string, repository.Member, string, http.Header) (*http.Response, error)
 }
 
+const mavenProxyUserAgent = "Apache-Maven/3.9 Artifact-Gateway/1.0"
+
 func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
 	endpoint, err := url.Parse(member.Endpoint)
 	if err != nil {
@@ -29,6 +31,7 @@ func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member re
 	if err != nil {
 		return nil, fmt.Errorf("create Maven request: %w", err)
 	}
+	request.Header.Set("User-Agent", mavenProxyUserAgent)
 	for _, name := range []string{"Accept", "If-Modified-Since", "If-None-Match", "Range"} {
 		if value := headers.Get(name); value != "" {
 			request.Header.Set(name, value)
@@ -350,7 +353,7 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 		return
 	}
 	if h.Cache != nil && notFoundProxy.Name != "" && !hadFailure && request.Method == http.MethodGet {
-		_ = h.Cache.StoreNegative(request.Context(), cacheKey, notFoundProxy)
+		_ = h.Cache.StoreNegativeForRepositoryPath(request.Context(), cacheKey, groupName, artifactPath, notFoundProxy)
 	}
 	http.NotFound(w, request)
 }

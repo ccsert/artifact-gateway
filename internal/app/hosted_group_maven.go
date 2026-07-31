@@ -34,9 +34,13 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	}
 	principal, ok := h.native.protocolPrincipal(r)
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
+		if group.AnonymousRead && anonymousReadMethod(r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 	members, err := resolver.resolveMembers(r.Context(), group)
 	if err != nil {
@@ -46,6 +50,15 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatMaven, assetPath, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 		http.NotFound(w, r)
+		return
+	}
+	if isAnonymous(principal) {
+		members = anonymousHostedGroupMembers(group, members)
+	}
+	if len(members) == 0 {
+		resolver.auditResolution(r.Context(), group, repository.FormatMaven, assetPath, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	for _, member := range members {

@@ -33,9 +33,13 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	}
 	principal, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !authenticated {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
+		if group.AnonymousRead && anonymousReadMethod(r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 	}
 	members, err := resolver.resolveMembers(r.Context(), group)
 	if err != nil {
@@ -45,6 +49,15 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 		http.NotFound(w, r)
+		return
+	}
+	if isAnonymous(principal) {
+		members = anonymousHostedGroupMembers(group, members)
+	}
+	if len(members) == 0 {
+		resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
+		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
+		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
 	for _, member := range members {

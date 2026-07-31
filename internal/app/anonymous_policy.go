@@ -1,6 +1,42 @@
 package app
 
-import "context"
+import (
+	"context"
+	"net/http"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+)
+
+const anonymousActor = "anonymous"
+
+func anonymousPrincipal() Principal {
+	return Principal{Actor: anonymousActor}
+}
+
+func isAnonymous(principal Principal) bool {
+	return principal.Actor == anonymousActor
+}
+
+func anonymousReadMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+func anonymousHostedRepositoryReadAllowed(repo repository.HostedRepository, method string) bool {
+	return anonymousReadMethod(method) && repo.AnonymousRead
+}
+
+func anonymousHostedGroupMembers(group repository.HostedGroup, members []repository.Member) []repository.Member {
+	if !group.AnonymousRead {
+		return nil
+	}
+	allowed := make([]repository.Member, 0, len(members))
+	for _, member := range members {
+		if member.Anonymous {
+			allowed = append(allowed, member)
+		}
+	}
+	return allowed
+}
 
 func (h OCIHandler) anonymousOCIAllowed(ctx context.Context, groupName string) bool {
 	if h.Resolver.Store == nil {

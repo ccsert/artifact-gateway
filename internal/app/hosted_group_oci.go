@@ -40,8 +40,12 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	}
 	principal, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !authenticated {
-		writeOCIChallenge(w, r)
-		return
+		if group.AnonymousRead && anonymousReadMethod(r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			writeOCIChallenge(w, r)
+			return
+		}
 	}
 	members, err := resolver.resolveMembers(r.Context(), group)
 	if err != nil {
@@ -51,6 +55,14 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
+		return
+	}
+	if isAnonymous(principal) {
+		members = anonymousHostedGroupMembers(group, members)
+	}
+	if len(members) == 0 {
+		resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
+		writeOCIChallenge(w, r)
 		return
 	}
 	upstreamResource := map[string]string{"manifest": ociManifest, "blob": ociBlob}[resource]

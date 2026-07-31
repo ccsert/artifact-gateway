@@ -66,6 +66,40 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	}
 }
 
+func TestNativeRawHostedAnonymousReadPolicy(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-public", Name: "public", Format: repository.FormatRaw, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-private", Name: "private", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	for _, repo := range []string{"public", "private"} {
+		put := httptest.NewRequest(http.MethodPut, "/raw/"+repo+"/release/app.txt", strings.NewReader("raw"))
+		put.Header.Set("Content-Type", "text/plain")
+		authorize(put, "resolver-secret")
+		published := httptest.NewRecorder()
+		handler.ServeHTTP(published, put)
+		if published.Code != http.StatusCreated {
+			t.Fatalf("put %s=%d %s", repo, published.Code, published.Body.String())
+		}
+	}
+
+	publicRead := httptest.NewRecorder()
+	handler.ServeHTTP(publicRead, httptest.NewRequest(http.MethodGet, "/raw/public/release/app.txt", nil))
+	if publicRead.Code != http.StatusOK || publicRead.Body.String() != "raw" {
+		t.Fatalf("public anonymous=%d body=%q", publicRead.Code, publicRead.Body.String())
+	}
+	privateRead := httptest.NewRecorder()
+	handler.ServeHTTP(privateRead, httptest.NewRequest(http.MethodGet, "/raw/private/release/app.txt", nil))
+	if privateRead.Code != http.StatusUnauthorized {
+		t.Fatalf("private anonymous=%d body=%s", privateRead.Code, privateRead.Body.String())
+	}
+}
+
 func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})

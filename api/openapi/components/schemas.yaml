@@ -186,6 +186,7 @@ Repository:
   - id
   - name
   - format
+  - anonymousRead
   - state
   - version
   properties:
@@ -207,6 +208,9 @@ Repository:
       type: array
       items:
         type: string
+    anonymousRead:
+      type: boolean
+      description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
     state:
       type: string
       enum:
@@ -242,12 +246,13 @@ CreateRepository:
         type: string
       description: Hosts the proxy may egress to. Required for raw and conan
         proxies.
+    anonymousRead:
+      type: boolean
+      default: false
+      description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
 UpdateRepository:
   type: object
-  description: Editable proxy repository configuration. Only proxy repositories
-    are mutable; name, format, and type are immutable after creation.
-  required:
-  - endpoint
+  description: Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
   additionalProperties: false
   properties:
     endpoint:
@@ -259,12 +264,16 @@ UpdateRepository:
         type: string
       description: Hosts the proxy may egress to. Required for raw and conan
         proxies.
+    anonymousRead:
+      type: boolean
+      description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
 Group:
   type: object
   required:
   - id
   - name
   - format
+  - anonymousRead
   - members
   - version
   properties:
@@ -275,6 +284,9 @@ Group:
       type: string
     format:
       "$ref": "#/Format"
+    anonymousRead:
+      type: boolean
+      description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
     members:
       "$ref": "#/MemberList"
     version:
@@ -291,6 +303,10 @@ CreateGroup:
       type: string
     format:
       "$ref": "#/Format"
+    anonymousRead:
+      type: boolean
+      default: false
+      description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
     members:
       "$ref": "#/MemberList"
 Member:

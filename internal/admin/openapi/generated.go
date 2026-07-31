@@ -742,9 +742,11 @@ type CreateAPIKeyRoles string
 
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
-	Format  Format     `json:"format"`
-	Members MemberList `json:"members"`
-	Name    string     `json:"name"`
+	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+	AnonymousRead *bool      `json:"anonymousRead,omitempty"`
+	Format        Format     `json:"format"`
+	Members       MemberList `json:"members"`
+	Name          string     `json:"name"`
 }
 
 // CreateMavenPublishSession defines model for CreateMavenPublishSession.
@@ -767,6 +769,9 @@ type CreatePublishSession struct {
 type CreateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
+
+	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+	AnonymousRead *bool `json:"anonymousRead,omitempty"`
 
 	// Endpoint Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
 	Endpoint *string               `json:"endpoint,omitempty"`
@@ -837,11 +842,13 @@ type GrantList = []Grant
 
 // Group defines model for Group.
 type Group struct {
-	Format  Format             `json:"format"`
-	Id      openapi_types.UUID `json:"id"`
-	Members MemberList         `json:"members"`
-	Name    string             `json:"name"`
-	Version string             `json:"version"`
+	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+	AnonymousRead bool               `json:"anonymousRead"`
+	Format        Format             `json:"format"`
+	Id            openapi_types.UUID `json:"id"`
+	Members       MemberList         `json:"members"`
+	Name          string             `json:"name"`
+	Version       string             `json:"version"`
 }
 
 // GroupPage defines model for GroupPage.
@@ -995,14 +1002,17 @@ type ReplicationRequest struct {
 
 // Repository defines model for Repository.
 type Repository struct {
-	AllowedHosts *[]string       `json:"allowedHosts,omitempty"`
-	Endpoint     *string         `json:"endpoint,omitempty"`
-	Format       Format          `json:"format"`
-	Id           string          `json:"id"`
-	Name         string          `json:"name"`
-	State        RepositoryState `json:"state"`
-	Type         *RepositoryType `json:"type,omitempty"`
-	Version      string          `json:"version"`
+	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
+
+	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+	AnonymousRead bool            `json:"anonymousRead"`
+	Endpoint      *string         `json:"endpoint,omitempty"`
+	Format        Format          `json:"format"`
+	Id            string          `json:"id"`
+	Name          string          `json:"name"`
+	State         RepositoryState `json:"state"`
+	Type          *RepositoryType `json:"type,omitempty"`
+	Version       string          `json:"version"`
 }
 
 // RepositoryState defines model for Repository.State.
@@ -1068,13 +1078,16 @@ type RetentionPolicy struct {
 	Version         string `json:"version"`
 }
 
-// UpdateRepository Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.
+// UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
 
+	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+	AnonymousRead *bool `json:"anonymousRead,omitempty"`
+
 	// Endpoint Upstream base URL (https). Required for proxy repositories.
-	Endpoint string `json:"endpoint"`
+	Endpoint *string `json:"endpoint,omitempty"`
 }
 
 // UpdateUser defines model for UpdateUser.

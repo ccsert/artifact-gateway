@@ -292,6 +292,16 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if code, response := commit(snapshot, []string{"widget-2.0.0-SNAPSHOT.pom", "widget-2.0.0-SNAPSHOT.jar"}); code != http.StatusOK {
 		t.Fatalf("snapshot commit = %d %s", code, response)
 	}
+	code, rootMetadata := read("org/example/widget/maven-metadata.xml")
+	if code != http.StatusOK {
+		t.Fatalf("root metadata = %d %s", code, rootMetadata)
+	}
+	if !strings.Contains(rootMetadata, "<latest>2.0.0-SNAPSHOT</latest>") || !strings.Contains(rootMetadata, "<release>1.2.3</release>") {
+		t.Fatalf("root metadata must keep SNAPSHOT out of release: %s", rootMetadata)
+	}
+	if strings.Count(rootMetadata, "<version>2.0.0-SNAPSHOT</version>") != 1 {
+		t.Fatalf("root metadata must list a SNAPSHOT version once: %s", rootMetadata)
+	}
 	code, metadata := read("org/example/widget/2.0.0-SNAPSHOT/maven-metadata.xml")
 	if code != http.StatusOK {
 		t.Fatalf("snapshot metadata = %d %s", code, metadata)
@@ -547,22 +557,31 @@ func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testi
 	}
 }
 
-func TestNativeMavenRejectsAnonymousReads(t *testing.T) {
+func TestNativeMavenAnonymousReadPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "anonymous", Format: repository.FormatMaven})
+	publicRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "public", Format: repository.FormatMaven, AnonymousRead: true})
+	privateRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "private", Format: repository.FormatMaven})
 	objects := NewMemoryOCIObjectStore()
 	asset := []byte("jar")
 	sum := sha256.Sum256(asset)
 	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
 	_ = objects.Put(context.Background(), key, asset)
-	if _, err := store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "session", RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
-		t.Fatal(err)
+	for _, repo := range []repository.HostedRepository{publicRepo, privateRepo} {
+		sessionID := "session-" + repo.Name
+		if _, err := store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: sessionID, RepositoryID: repo.ID, Coordinate: "org.example:widget:1.0.0", State: "open", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.jar", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		_ = store.MarkMavenPublishObject(context.Background(), sessionID, "widget-1.0.0.jar", key)
+		_, _ = store.CommitMavenPublishSession(context.Background(), sessionID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}})
 	}
-	_ = store.MarkMavenPublishObject(context.Background(), "session", "widget-1.0.0.jar", key)
-	_, _ = store.CommitMavenPublishSession(context.Background(), "session", []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: key, Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(asset))}})
 	open := newNativeMavenHandler(store, objects, Authenticator{})
+	public := httptest.NewRecorder()
+	open.ServeHTTP(public, httptest.NewRequest(http.MethodGet, "/repository/maven/public/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
+	if public.Code != http.StatusOK || public.Body.String() != "jar" {
+		t.Fatalf("public anonymous=%d body=%q", public.Code, public.Body.String())
+	}
 	w := httptest.NewRecorder()
-	open.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/anonymous/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
+	open.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/repository/maven/private/org/example/widget/1.0.0/widget-1.0.0.jar", nil))
 	if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") == "" {
 		t.Fatalf("anonymous read=%d", w.Code)
 	}

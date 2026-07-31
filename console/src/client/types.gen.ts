@@ -21,6 +21,10 @@ export type Repository = {
     type?: 'hosted' | 'proxy';
     endpoint?: string;
     allowedHosts?: Array<string>;
+    /**
+     * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+     */
+    anonymousRead: boolean;
     state: 'active' | 'deleting' | 'deleted';
     version: string;
 };
@@ -37,12 +41,20 @@ export type CreateRepository = {
      * Hosts the proxy may egress to. Required for raw and conan proxies.
      */
     allowedHosts?: Array<string>;
+    /**
+     * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+     */
+    anonymousRead?: boolean;
 };
 
 export type Group = {
     id: string;
     name: string;
     format: Format;
+    /**
+     * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+     */
+    anonymousRead: boolean;
     members: MemberList;
     version: string;
 };
@@ -50,6 +62,10 @@ export type Group = {
 export type CreateGroup = {
     name: string;
     format: Format;
+    /**
+     * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+     */
+    anonymousRead?: boolean;
     members: MemberList;
 };
 
@@ -386,17 +402,21 @@ export type AuditCleanupJob = {
 };
 
 /**
- * Editable proxy repository configuration. Only proxy repositories are mutable; name, format, and type are immutable after creation.
+ * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
  */
 export type UpdateRepository = {
     /**
      * Upstream base URL (https). Required for proxy repositories.
      */
-    endpoint: string;
+    endpoint?: string;
     /**
      * Hosts the proxy may egress to. Required for raw and conan proxies.
      */
     allowedHosts?: Array<string>;
+    /**
+     * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+     */
+    anonymousRead?: boolean;
 };
 
 export type PromotionRequest = {

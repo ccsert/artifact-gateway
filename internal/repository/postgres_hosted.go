@@ -9,7 +9,7 @@ import (
 )
 
 func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
-	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, state, version) VALUES ($1,$2,$3,$4,$5,$6,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
 	}
@@ -55,7 +55,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, false, err
 	}
-	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, state, version) VALUES ($1,$2,$3,$4,$5,$6,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, false, ErrNameExists
 	}
@@ -75,11 +75,11 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 // hostedRepositoryColumns is the canonical projection for hosted_repositories
 // reads. allowed_hosts is projected through array_to_json so it scans into
 // []byte and decodes into []string without a pq dependency.
-const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), state, version::text, created_at`
+const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), anonymous_read, state, version::text, created_at`
 
 func scanHostedRepository(row interface{ Scan(...any) error }, repo *HostedRepository) error {
 	var allowedHosts []byte
-	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
+	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.AnonymousRead, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
 		return err
 	}
 	return json.Unmarshal(allowedHosts, &repo.AllowedHosts)
@@ -160,7 +160,7 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 
 func (s *PostgresStore) UpdateHostedRepository(ctx context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
 	var updated HostedRepository
-	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=$3, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$4 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, expectedVersion), &updated)
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=$3, anonymous_read=$4, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$5 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, expectedVersion), &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetHostedRepository(ctx, repo.ID); errors.Is(getErr, ErrNotFound) {
 			return HostedRepository{}, ErrNotFound
@@ -197,7 +197,7 @@ func (s *PostgresStore) getHostedGroup(ctx context.Context, query interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, id string) (HostedGroup, error) {
 	var group HostedGroup
-	err := query.QueryRowContext(ctx, `SELECT id::text, name, format, version::text FROM hosted_groups WHERE id::text=$1`, id).Scan(&group.ID, &group.Name, &group.Format, &group.Version)
+	err := query.QueryRowContext(ctx, `SELECT id::text, name, format, anonymous_read, version::text FROM hosted_groups WHERE id::text=$1`, id).Scan(&group.ID, &group.Name, &group.Format, &group.AnonymousRead, &group.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return HostedGroup{}, ErrNotFound
 	}
@@ -241,7 +241,7 @@ func (s *PostgresStore) CreateHostedGroupIdempotently(ctx context.Context, group
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedGroup{}, false, err
 	}
-	if err = tx.QueryRowContext(ctx, `INSERT INTO hosted_groups (id,name,format,version) VALUES ($1,$2,$3,1) RETURNING version::text`, group.ID, group.Name, group.Format).Scan(&group.Version); err != nil {
+	if err = tx.QueryRowContext(ctx, `INSERT INTO hosted_groups (id,name,format,anonymous_read,version) VALUES ($1,$2,$3,$4,1) RETURNING version::text`, group.ID, group.Name, group.Format, group.AnonymousRead).Scan(&group.Version); err != nil {
 		if isUnique(err) {
 			return HostedGroup{}, false, ErrNameExists
 		}
@@ -268,7 +268,7 @@ func (s *PostgresStore) ListHostedGroups(ctx context.Context, limit int, after s
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, version::text FROM hosted_groups WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`, after, limit+1)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text, name, format, anonymous_read, version::text FROM hosted_groups WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`, after, limit+1)
 	if err != nil {
 		return nil, "", err
 	}
@@ -276,7 +276,7 @@ func (s *PostgresStore) ListHostedGroups(ctx context.Context, limit int, after s
 	groups := make([]HostedGroup, 0, limit)
 	for rows.Next() {
 		var group HostedGroup
-		if err := rows.Scan(&group.ID, &group.Name, &group.Format, &group.Version); err != nil {
+		if err := rows.Scan(&group.ID, &group.Name, &group.Format, &group.AnonymousRead, &group.Version); err != nil {
 			return nil, "", err
 		}
 		if err := scanHostedGroupMembers(ctx, s.db, &group); err != nil {
@@ -299,7 +299,7 @@ func (s *PostgresStore) GetHostedGroup(ctx context.Context, id string) (HostedGr
 	return s.getHostedGroup(ctx, s.db, id)
 }
 
-func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string, format Format, members []GroupMember, expectedVersion string, replaceMetadata bool) (HostedGroup, error) {
+func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string, format Format, anonymousRead bool, members []GroupMember, expectedVersion string, replaceMetadata bool) (HostedGroup, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return HostedGroup{}, err
@@ -308,12 +308,12 @@ func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string,
 	query := `UPDATE hosted_groups SET version=version+1`
 	args := []any{id, expectedVersion}
 	if replaceMetadata {
-		query += `, name=$3, format=$4`
-		args = []any{id, expectedVersion, name, format}
+		query += `, name=$3, format=$4, anonymous_read=$5`
+		args = []any{id, expectedVersion, name, format, anonymousRead}
 	}
-	query += ` WHERE id::text=$1 AND version::text=$2 RETURNING id::text,name,format,version::text`
+	query += ` WHERE id::text=$1 AND version::text=$2 RETURNING id::text,name,format,anonymous_read,version::text`
 	var group HostedGroup
-	err = tx.QueryRowContext(ctx, query, args...).Scan(&group.ID, &group.Name, &group.Format, &group.Version)
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&group.ID, &group.Name, &group.Format, &group.AnonymousRead, &group.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.getHostedGroup(ctx, tx, id); errors.Is(getErr, ErrNotFound) {
 			return HostedGroup{}, ErrNotFound
@@ -339,14 +339,14 @@ func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string,
 }
 
 func (s *PostgresStore) ReplaceHostedGroup(ctx context.Context, group HostedGroup, expectedVersion string) (HostedGroup, error) {
-	return s.replaceHostedGroup(ctx, group.ID, group.Name, group.Format, group.Members, expectedVersion, true)
+	return s.replaceHostedGroup(ctx, group.ID, group.Name, group.Format, group.AnonymousRead, group.Members, expectedVersion, true)
 }
 func (s *PostgresStore) ReplaceHostedGroupMembers(ctx context.Context, id string, members []GroupMember, expectedVersion string) (HostedGroup, error) {
 	current, err := s.GetHostedGroup(ctx, id)
 	if err != nil {
 		return HostedGroup{}, err
 	}
-	return s.replaceHostedGroup(ctx, id, current.Name, current.Format, members, expectedVersion, false)
+	return s.replaceHostedGroup(ctx, id, current.Name, current.Format, current.AnonymousRead, members, expectedVersion, false)
 }
 func (s *PostgresStore) DeleteHostedGroup(ctx context.Context, id string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM hosted_groups WHERE id::text=$1`, id)

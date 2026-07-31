@@ -439,6 +439,41 @@ func TestNativeOCIImageBrowseSearchProjection(t *testing.T) {
 	}
 }
 
+func TestNativeOCIHostedAnonymousReadPolicy(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-public", Name: "public", Format: repository.FormatOCI, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-private", Name: "private", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
+	for _, repo := range []string{"public", "private"} {
+		put := httptest.NewRequest(http.MethodPut, "/v2/"+repo+"/app/manifests/latest", bytes.NewReader(manifest))
+		put.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		authorize(put, "resolver-secret")
+		published := httptest.NewRecorder()
+		handler.ServeHTTP(published, put)
+		if published.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", repo, published.Code, published.Body.String())
+		}
+	}
+
+	publicRead := httptest.NewRecorder()
+	handler.ServeHTTP(publicRead, httptest.NewRequest(http.MethodGet, "/v2/public/app/manifests/latest", nil))
+	if publicRead.Code != http.StatusOK || publicRead.Body.String() != string(manifest) {
+		t.Fatalf("public anonymous=%d body=%s", publicRead.Code, publicRead.Body.String())
+	}
+	privateRead := httptest.NewRecorder()
+	handler.ServeHTTP(privateRead, httptest.NewRequest(http.MethodGet, "/v2/private/app/manifests/latest", nil))
+	if privateRead.Code != http.StatusUnauthorized {
+		t.Fatalf("private anonymous=%d body=%s", privateRead.Code, privateRead.Body.String())
+	}
+}
+
 func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})

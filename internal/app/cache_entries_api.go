@@ -76,19 +76,31 @@ func (h cacheEntriesHandler) entries(ctx context.Context, groupName, format stri
 	case string(repository.FormatOCI):
 		group, err := h.store.GetGroup(ctx, groupName)
 		if err != nil {
-			return nil, err
+			endpoints, proxyErr := h.proxyRepositoryEndpoints(ctx, groupName, repository.FormatOCI)
+			if proxyErr != nil {
+				return nil, err
+			}
+			return h.listOCI(ctx, endpoints)
 		}
 		return h.listOCI(ctx, memberEndpoints(group))
 	case string(repository.FormatMaven):
 		group, err := h.store.GetMavenGroup(ctx, groupName)
 		if err != nil {
-			return nil, err
+			endpoints, proxyErr := h.proxyRepositoryEndpoints(ctx, groupName, repository.FormatMaven)
+			if proxyErr != nil {
+				return nil, err
+			}
+			return h.listMaven(ctx, endpoints)
 		}
 		return h.listMaven(ctx, memberEndpoints(group))
 	case string(repository.FormatRaw):
 		group, err := h.store.GetRawGroup(ctx, groupName)
 		if err != nil {
-			return nil, err
+			endpoints, proxyErr := h.proxyRepositoryEndpoints(ctx, groupName, repository.FormatRaw)
+			if proxyErr != nil {
+				return nil, err
+			}
+			return h.listRaw(ctx, endpoints)
 		}
 		return h.listRaw(ctx, memberEndpoints(group))
 	case string(repository.FormatConan):
@@ -99,6 +111,17 @@ func (h cacheEntriesHandler) entries(ctx context.Context, groupName, format stri
 	default:
 		return nil, errUnsupportedCacheFormat
 	}
+}
+
+func (h cacheEntriesHandler) proxyRepositoryEndpoints(ctx context.Context, name string, format repository.Format) (map[string]bool, error) {
+	repo, err := h.store.GetHostedRepositoryByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if repo.Format != format || repo.Type != repository.RepositoryTypeProxy || strings.TrimSpace(repo.Endpoint) == "" {
+		return nil, repository.ErrNotFound
+	}
+	return map[string]bool{repo.Endpoint: true}, nil
 }
 
 // memberEndpoints matches index records to a group because OCI, Maven, and
@@ -251,7 +274,14 @@ func (h cacheEntriesHandler) listOCI(ctx context.Context, endpoints map[string]b
 }
 
 func (h cacheEntriesHandler) listMaven(ctx context.Context, endpoints map[string]bool) ([]CacheEntry, error) {
+	return h.listMavenForRepository(ctx, "", endpoints)
+}
+
+func (h cacheEntriesHandler) listMavenForRepository(ctx context.Context, repositoryName string, endpoints map[string]bool) ([]CacheEntry, error) {
 	return h.list(ctx, "maven/index/", string(repository.FormatMaven), func(index cacheIndexRecord) bool {
+		if repositoryName != "" && index.repository() != repositoryName {
+			return false
+		}
 		return endpoints[index.endpoint()]
 	})
 }

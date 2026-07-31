@@ -18,9 +18,9 @@ import (
 var ErrCacheMiss = errors.New("maven cache miss")
 var ErrNegativeCache = errors.New("maven negative cache hit")
 
-const defaultMavenComponentCacheTTL = 15 * time.Minute
-const defaultMavenMetadataCacheTTL = time.Minute
-const defaultMavenNegativeCacheTTL = time.Minute
+const defaultMavenComponentCacheTTL = 24 * time.Hour
+const defaultMavenMetadataCacheTTL = 15 * time.Minute
+const defaultMavenNegativeCacheTTL = 10 * time.Minute
 const defaultMavenProxyBreakerTTL = 30 * time.Second
 
 type cachedMavenIndex struct {
@@ -88,11 +88,26 @@ func (c *Cache) WithCoordinator(coordinator cache.Coordinator) *Cache {
 	return c
 }
 
-// WithTTL overrides the component cache TTL; metadata and negative entries
-// keep their shorter lifetimes.
+// WithTTL overrides the component cache TTL. Prefer WithTTLs in runtime
+// configuration so metadata and negative entries can be tuned independently.
 func (c *Cache) WithTTL(ttl time.Duration) *Cache {
 	if ttl > 0 {
 		c.componentTTL = ttl
+	}
+	return c
+}
+
+// WithTTLs overrides the positive component, metadata, and negative cache
+// lifetimes independently. A non-positive value leaves that lifetime unchanged.
+func (c *Cache) WithTTLs(componentTTL, metadataTTL, negativeTTL time.Duration) *Cache {
+	if componentTTL > 0 {
+		c.componentTTL = componentTTL
+	}
+	if metadataTTL > 0 {
+		c.metadataTTL = metadataTTL
+	}
+	if negativeTTL > 0 {
+		c.negativeTTL = negativeTTL
 	}
 	return c
 }
@@ -154,7 +169,15 @@ func (c *Cache) storeAdmitted(ctx context.Context, key, artifactPath string, con
 }
 
 func (c *Cache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
-	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
+	return c.StoreNegativeForRepositoryPath(ctx, key, "", "", member)
+}
+
+func (c *Cache) StoreNegativeForRepository(ctx context.Context, key, repositoryName string, member repository.Member) error {
+	return c.StoreNegativeForRepositoryPath(ctx, key, repositoryName, "", member)
+}
+
+func (c *Cache) StoreNegativeForRepositoryPath(ctx context.Context, key, repositoryName, artifactPath string, member repository.Member) error {
+	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, Repository: repositoryName, Path: artifactPath, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
 		return err
 	}

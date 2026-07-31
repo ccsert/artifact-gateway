@@ -139,6 +139,8 @@ func TestLoadParsesCacheTTLs(t *testing.T) {
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_OCI_CACHE_TTL", "30m")
 	t.Setenv("GATEWAY_MAVEN_CACHE_TTL", "900")
+	t.Setenv("GATEWAY_MAVEN_METADATA_CACHE_TTL", "20m")
+	t.Setenv("GATEWAY_MAVEN_NEGATIVE_CACHE_TTL", "120")
 	t.Setenv("GATEWAY_RAW_CACHE_TTL", "1h30m")
 	t.Setenv("GATEWAY_CONAN_CACHE_TTL", "")
 	cfg, err := Load()
@@ -151,11 +153,38 @@ func TestLoadParsesCacheTTLs(t *testing.T) {
 	if cfg.MavenCacheTTL != 15*time.Minute {
 		t.Fatalf("MavenCacheTTL = %v", cfg.MavenCacheTTL)
 	}
+	if cfg.MavenMetadataCacheTTL != 20*time.Minute {
+		t.Fatalf("MavenMetadataCacheTTL = %v", cfg.MavenMetadataCacheTTL)
+	}
+	if cfg.MavenNegativeCacheTTL != 2*time.Minute {
+		t.Fatalf("MavenNegativeCacheTTL = %v", cfg.MavenNegativeCacheTTL)
+	}
 	if cfg.RawCacheTTL != 90*time.Minute {
 		t.Fatalf("RawCacheTTL = %v", cfg.RawCacheTTL)
 	}
 	if cfg.ConanCacheTTL != 15*time.Minute {
 		t.Fatalf("ConanCacheTTL = %v", cfg.ConanCacheTTL)
+	}
+}
+
+func TestLoadUsesMavenCacheDefaultsSuitedToImmutableComponents(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_MAVEN_CACHE_TTL", "")
+	t.Setenv("GATEWAY_MAVEN_METADATA_CACHE_TTL", "")
+	t.Setenv("GATEWAY_MAVEN_NEGATIVE_CACHE_TTL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MavenCacheTTL != 24*time.Hour || cfg.MavenMetadataCacheTTL != 15*time.Minute || cfg.MavenNegativeCacheTTL != 10*time.Minute {
+		t.Fatalf("Maven cache TTLs = component:%v metadata:%v negative:%v", cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL)
 	}
 }
 
@@ -167,7 +196,7 @@ func TestLoadRejectsInvalidCacheTTL(t *testing.T) {
 	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
-	for _, name := range []string{"GATEWAY_OCI_CACHE_TTL", "GATEWAY_MAVEN_CACHE_TTL", "GATEWAY_RAW_CACHE_TTL", "GATEWAY_CONAN_CACHE_TTL"} {
+	for _, name := range []string{"GATEWAY_OCI_CACHE_TTL", "GATEWAY_MAVEN_CACHE_TTL", "GATEWAY_MAVEN_METADATA_CACHE_TTL", "GATEWAY_MAVEN_NEGATIVE_CACHE_TTL", "GATEWAY_RAW_CACHE_TTL", "GATEWAY_CONAN_CACHE_TTL"} {
 		for _, value := range []string{"nope", "-5m", "0"} {
 			t.Setenv(name, value)
 			if _, err := Load(); err == nil {

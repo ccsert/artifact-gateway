@@ -127,6 +127,7 @@ func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepos
 	}
 	current.Endpoint = repo.Endpoint
 	current.AllowedHosts = append([]string(nil), repo.AllowedHosts...)
+	current.AnonymousRead = repo.AnonymousRead
 	current.Version = nextHostedGroupVersion(current.Version)
 	s.hostedRepositories[repo.ID] = current
 	return current, nil

@@ -35,16 +35,18 @@ type hostedRepositoryAPIHandler struct {
 }
 
 type createHostedRepositoryRequest struct {
-	Name         string            `json:"name"`
-	Format       repository.Format `json:"format"`
-	Type         string            `json:"type,omitempty"`
-	Endpoint     string            `json:"endpoint,omitempty"`
-	AllowedHosts []string          `json:"allowedHosts,omitempty"`
+	Name          string            `json:"name"`
+	Format        repository.Format `json:"format"`
+	Type          string            `json:"type,omitempty"`
+	Endpoint      string            `json:"endpoint,omitempty"`
+	AllowedHosts  []string          `json:"allowedHosts,omitempty"`
+	AnonymousRead bool              `json:"anonymousRead,omitempty"`
 }
 
 type updateHostedRepositoryRequest struct {
-	Endpoint     string   `json:"endpoint"`
-	AllowedHosts []string `json:"allowedHosts,omitempty"`
+	Endpoint      *string  `json:"endpoint,omitempty"`
+	AllowedHosts  []string `json:"allowedHosts,omitempty"`
+	AnonymousRead *bool    `json:"anonymousRead,omitempty"`
 }
 
 type repositoryPage struct {
@@ -153,6 +155,7 @@ type generatedRepositoryAPIAdapter struct {
 	authorizer        RepositoryAuthorizer
 	audit             repository.Store
 	metrics           *Metrics
+	maintenance       *CacheMaintenance
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -775,7 +778,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWri
 }
 
 func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, _ repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
 		capacity, err := h.capacities.GetRepositoryCapacity(r.Context(), repositoryID.String())
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
@@ -784,6 +787,14 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWrit
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository capacity failed")
 			return
+		}
+		if repo.Type == repository.RepositoryTypeProxy && h.maintenance != nil {
+			// Proxy repositories do not own Hosted artifacts, but they do own
+			// read-through cache bytes. Keep quota from the capacity store and
+			// replace usage with live cache usage so the Console does not show 0.
+			if proxyCapacity, err := (proxyCacheBrowseHandler{store: h.store, maintenance: h.maintenance, authenticator: h.authenticator, authorizer: h.authorizer}).proxyCacheCapacity(r.Context(), repo, capacity); err == nil {
+				capacity = proxyCapacity
+			}
 		}
 		writeNativeMavenJSON(w, http.StatusOK, capacity)
 	})
@@ -1293,10 +1304,11 @@ func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *htt
 	}
 	group.ID = uuid.NewString()
 	payload, _ := json.Marshal(struct {
-		Name    string                   `json:"name"`
-		Format  repository.Format        `json:"format"`
-		Members []repository.GroupMember `json:"members"`
-	}{group.Name, group.Format, group.Members})
+		Name          string                   `json:"name"`
+		Format        repository.Format        `json:"format"`
+		AnonymousRead bool                     `json:"anonymousRead"`
+		Members       []repository.GroupMember `json:"members"`
+	}{group.Name, group.Format, group.AnonymousRead, group.Members})
 	digest := sha256.Sum256(payload)
 	created, _, err := h.groups.CreateHostedGroupIdempotently(r.Context(), group, principal.Actor, string(params.IdempotencyKey), base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
@@ -1730,7 +1742,7 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 	}
 	payload, _ := json.Marshal(request)
 	digest := sha256.Sum256(payload)
-	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, AnonymousRead: request.AnonymousRead}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 		return
@@ -2109,23 +2121,43 @@ func (h hostedRepositoryAPIHandler) disable(w http.ResponseWriter, r *http.Reque
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "state": "pending"})
 }
 
-// update applies mutable proxy configuration. Hosted repositories, identity
-// fields (name, format, type), and version-skewed updates are rejected; proxy
-// routing reads the stored endpoint and allowedHosts on every request, so a
-// successful update takes effect without a restart.
+// update applies mutable management policy and proxy configuration. Protocol
+// handlers do not consume anonymousRead yet, so this only changes management
+// state until the protocol slice is implemented.
 func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, ifMatch string) {
-	if repo.Type != repository.RepositoryTypeProxy {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "only proxy repositories can be updated")
-		return
-	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	var request updateHostedRepositoryRequest
-	if err := decoder.Decode(&request); err != nil || !validProxyUpdate(repo.Format, request.Endpoint, request.AllowedHosts) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw and conan proxies")
+	if err := decoder.Decode(&request); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repository update body must be valid")
 		return
 	}
-	updated, err := h.store.UpdateHostedRepository(r.Context(), repository.HostedRepository{ID: repo.ID, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts}, ifMatch)
+	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), AnonymousRead: repo.AnonymousRead}
+	if request.AnonymousRead != nil {
+		updatedRepo.AnonymousRead = *request.AnonymousRead
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		if request.Endpoint != nil {
+			updatedRepo.Endpoint = *request.Endpoint
+		}
+		if request.AllowedHosts != nil {
+			updatedRepo.AllowedHosts = request.AllowedHosts
+		}
+		if !validProxyUpdate(repo.Format, updatedRepo.Endpoint, updatedRepo.AllowedHosts) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw and conan proxies")
+			return
+		}
+	} else {
+		if request.Endpoint != nil || request.AllowedHosts != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead updates")
+			return
+		}
+		if request.AnonymousRead == nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "anonymousRead is required for hosted repository updates")
+			return
+		}
+	}
+	updated, err := h.store.UpdateHostedRepository(r.Context(), updatedRepo, ifMatch)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 		return

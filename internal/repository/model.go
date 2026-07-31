@@ -31,34 +31,41 @@ const (
 )
 
 type HostedRepository struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Format       Format          `json:"format"`
-	Type         RepositoryType  `json:"type"`
-	Endpoint     string          `json:"endpoint,omitempty"`
-	AllowedHosts []string        `json:"allowedHosts,omitempty"`
-	State        RepositoryState `json:"state"`
-	Version      string          `json:"version"`
-	CreatedAt    time.Time       `json:"-"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Format        Format          `json:"format"`
+	Type          RepositoryType  `json:"type"`
+	Endpoint      string          `json:"endpoint,omitempty"`
+	AllowedHosts  []string        `json:"allowedHosts,omitempty"`
+	AnonymousRead bool            `json:"anonymousRead"`
+	State         RepositoryState `json:"state"`
+	Version       string          `json:"version"`
+	CreatedAt     time.Time       `json:"-"`
 }
 
 // RepositoryCapacity is logical usage attributed to one Hosted repository.
 // Shared content-addressed bytes are counted once for each visible repository
 // reference so quotas remain meaningful after promotion.
 type RepositoryCapacity struct {
-	RepositoryID string `json:"repositoryId"`
-	Format       Format `json:"format"`
-	UsedBytes    int64  `json:"usedBytes"`
-	ObjectCount  int64  `json:"objectCount"`
-	QuotaBytes   int64  `json:"quotaBytes"` // zero means no configured quota
+	RepositoryID       string `json:"repositoryId"`
+	Format             Format `json:"format"`
+	UsedBytes          int64  `json:"usedBytes"`
+	ObjectCount        int64  `json:"objectCount"`
+	QuotaBytes         int64  `json:"quotaBytes"` // zero means no configured quota
+	PrimaryBytes       int64  `json:"primaryBytes,omitempty"`
+	SidecarBytes       int64  `json:"sidecarBytes,omitempty"`
+	NegativeCount      int64  `json:"negativeCount,omitempty"`
+	ExpiredObjectCount int64  `json:"expiredObjectCount,omitempty"`
+	ReclaimableBytes   int64  `json:"reclaimableBytes,omitempty"`
 }
 
 type HostedGroup struct {
-	ID      string        `json:"id"`
-	Name    string        `json:"name"`
-	Format  Format        `json:"format"`
-	Members []GroupMember `json:"members"`
-	Version string        `json:"version"`
+	ID            string        `json:"id"`
+	Name          string        `json:"name"`
+	Format        Format        `json:"format"`
+	AnonymousRead bool          `json:"anonymousRead"`
+	Members       []GroupMember `json:"members"`
+	Version       string        `json:"version"`
 }
 
 type GroupMember struct {
@@ -199,6 +206,7 @@ const (
 	UserActive   = "active"
 	UserDisabled = "disabled"
 )
+
 type MavenPublishSession struct {
 	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
 	Objects                                                   []MavenDeclaredObject

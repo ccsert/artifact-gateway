@@ -133,6 +133,38 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "patch": {
+        "operationId": "updateRepository",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRepository"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Repository"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/repositories/{repositoryId}/grants": {
@@ -431,6 +463,25 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteRepositoryReplication",
+        "summary": "Cancel a pending or failed replication plan",
+        "description": "Stops a pending or failed replication plan from being claimed again. A\nrunning plan cannot be cancelled because the worker owns it mid-flight;\nsuch a request fails with 409. Completed and already-cancelled plans are\nalso not cancellable. The plan record is retained for audit.\n",
+        "responses": {
+          "204": {
+            "description": "Replication plan cancelled"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -2056,6 +2107,7 @@
           "id",
           "name",
           "format",
+          "anonymousRead",
           "state",
           "version"
         ],
@@ -2085,6 +2137,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "state": {
             "type": "string",
@@ -2131,6 +2187,11 @@
               "type": "string"
             },
             "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false,
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           }
         }
       },
@@ -2140,6 +2201,7 @@
           "id",
           "name",
           "format",
+          "anonymousRead",
           "members",
           "version"
         ],
@@ -2153,6 +2215,10 @@
           },
           "format": {
             "$ref": "#/components/schemas/Format"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "members": {
             "$ref": "#/components/schemas/MemberList"
@@ -2176,6 +2242,11 @@
           },
           "format": {
             "$ref": "#/components/schemas/Format"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false,
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
           "members": {
             "$ref": "#/components/schemas/MemberList"
@@ -2462,7 +2533,8 @@
               "pending",
               "running",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "createdAt": {
@@ -2864,6 +2936,28 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/AuditRecord"
+        }
+      },
+      "UpdateRepository": {
+        "type": "object",
+        "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Upstream base URL (https). Required for proxy repositories."
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts the proxy may egress to. Required for raw and conan proxies."
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          }
         }
       },
       "PromotionRequest": {

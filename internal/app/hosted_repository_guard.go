@@ -10,8 +10,8 @@ import (
 
 // hostedRepositoryGuard prevents a Native Hosted Repository from falling back
 // into legacy Group resolution after it leaves the active state. Native
-// repositories are private unless a future grants implementation says
-// otherwise, so anonymous protocol requests are rejected here as well.
+// repositories are private by default; anonymous protocol reads are admitted
+// only when the addressed Hosted Repository explicitly enables anonymousRead.
 type hostedRepositoryGuard struct {
 	store         repository.HostedRepositoryStore
 	authenticator Authenticator
@@ -42,7 +42,7 @@ func (h hostedRepositoryGuard) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		h.reject(w, r, http.StatusForbidden)
 		return
 	}
-	if !h.authenticated(r) {
+	if !h.authenticated(r) && !anonymousHostedRepositoryReadAllowed(repo, r.Method) {
 		h.reject(w, r, http.StatusUnauthorized)
 		return
 	}

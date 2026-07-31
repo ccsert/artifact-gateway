@@ -82,19 +82,25 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return true
+		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+			principal = anonymousPrincipal()
+		} else {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return true
+		}
 	}
 	operation := RepositoryWrite
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		operation = RepositoryRead
 	}
-	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, strings.TrimSuffix(path, "/")); !decision.Allowed {
-		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
-		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return true
+	if !isAnonymous(principal) {
+		if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, strings.TrimSuffix(path, "/")); !decision.Allowed {
+			h.recordAuthorizationDenial(r, principal, repo, operation, decision)
+			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return true
+		}
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		h.proxyRead(w, r, repo, path, principal)

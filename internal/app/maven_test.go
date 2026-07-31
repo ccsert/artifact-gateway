@@ -48,6 +48,25 @@ func (c *countingMavenClient) Members() []string {
 	return append([]string(nil), c.members...)
 }
 
+func TestUpstreamMavenClientSendsMavenUserAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ua := r.Header.Get("User-Agent"); !strings.Contains(ua, "Apache-Maven/") || !strings.Contains(ua, "Artifact-Gateway/") {
+			t.Fatalf("User-Agent = %q", ua)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	response, err := (UpstreamClient{HTTPClient: server.Client()}).FetchMaven(context.Background(), http.MethodGet, repository.Member{Endpoint: server.URL}, "org/example/widget/1.0/widget-1.0.pom", nil)
+	if err != nil {
+		t.Fatalf("FetchMaven returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", response.StatusCode)
+	}
+}
+
 func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
