@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useSearchParams, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { Modal, useDisclosure } from '../components/Modal';
 import { Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
@@ -176,6 +176,12 @@ function TokenDialog() {
 }
 
 export function AppLayout() {
+  const { token, clearToken } = useAuth();
+  const location = useLocation();
+  if (!token) {
+    const target = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?redirect=${target}`} replace />;
+  }
   return (
     <div className="flex min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-zinc-800/80 bg-zinc-925 bg-zinc-900/40">
@@ -214,8 +220,15 @@ export function AppLayout() {
       <div className="ml-56 flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/80 px-6 py-3 backdrop-blur">
           <GlobalSearchBox />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <TokenDialog />
+            <button
+              onClick={() => clearToken()}
+              className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              title="退出登录"
+            >
+              退出
+            </button>
           </div>
         </header>
         <main className="flex-1 px-6 py-6">

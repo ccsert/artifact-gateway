@@ -9,8 +9,10 @@ import { ApiKeysPage } from '../pages/ApiKeys';
 import { AuditRetentionPage } from '../pages/AuditRetention';
 import { ProxyGroupsPage } from '../pages/ProxyGroups';
 import { SearchPage } from '../pages/Search';
+import { LoginPage } from '../pages/Login';
 
 export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
   {
     element: <AppLayout />,
     children: [
