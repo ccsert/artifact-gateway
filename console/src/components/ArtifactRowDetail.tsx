@@ -5,7 +5,7 @@ import type { ArtifactMeta } from './ArtifactDetail';
 import { mavenGA, mavenVersion } from '../lib/usage';
 import { formatDate } from '../lib/format';
 
-// Maven 制品详情：使用方法 + 同 group:artifact 的版本列表
+// Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
 export function MavenArtifactDetail({ repoId, repoName, meta }: { repoId: string; repoName: string; meta: ArtifactMeta }) {
   const [versions, setVersions] = useState<{ label: string; hint?: string; coordinate: string; publisher?: string; createdAt?: string }[]>([]);
@@ -46,19 +46,20 @@ export function MavenArtifactDetail({ repoId, repoName, meta }: { repoId: string
     ? { ...meta, coordinate: selectedMeta.coordinate, publisher: selectedMeta.publisher ?? meta.publisher, createdAt: selectedMeta.createdAt ?? meta.createdAt }
     : meta;
   const currentVersion = selectedMeta?.label ?? mavenVersion(meta.coordinate) ?? undefined;
+	const releases = versions.filter((version) => !version.label.includes('-SNAPSHOT'));
+	const snapshots = versions.filter((version) => version.label.includes('-SNAPSHOT'));
 
   return (
     <ArtifactDetailView
       format="maven"
       repoName={repoName}
       meta={effectiveMeta}
+
       versions={
-        <VersionList
-          title={`版本（${ga ?? ''}）`}
-          items={versions}
-          current={currentVersion}
-          onSelect={(label) => setSelected(label)}
-        />
+        <div className="space-y-5">
+          <VersionList title={`发布版本（${ga ?? ''}）`} items={releases} current={currentVersion} onSelect={setSelected} />
+          <VersionList title="快照构建" items={snapshots} current={currentVersion} onSelect={setSelected} />
+        </div>
       }
     />
   );

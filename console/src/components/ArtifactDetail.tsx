@@ -109,14 +109,16 @@ export function ArtifactDetailView({
 
       {/* 使用方法 */}
       {snippets.length > 0 && (
-        <div>
-          <div className="mb-2 text-sm font-medium text-zinc-200">使用方法</div>
-          <div className="space-y-2">
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-medium text-zinc-200 hover:text-cyan-300">
+            使用方法 <span className="text-xs text-zinc-600 group-open:hidden">（展开）</span>
+          </summary>
+          <div className="mt-2 space-y-2">
             {snippets.map((s) => (
               <Snippet key={s.label} snippet={s} />
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {/* 版本列表（由父组件提供） */}
