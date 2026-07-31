@@ -1,7 +1,7 @@
 -- Durable work queue for cache maintenance. Workers claim work with
 -- FOR UPDATE SKIP LOCKED so any Gateway instance can resume after another
 -- instance exits or loses its database connection.
-CREATE TABLE cache_tasks (
+CREATE TABLE IF NOT EXISTS cache_tasks (
     id UUID PRIMARY KEY,
     task_type TEXT NOT NULL,
     dedupe_key TEXT NOT NULL,
@@ -13,5 +13,5 @@ CREATE TABLE cache_tasks (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX cache_tasks_active_dedupe_idx ON cache_tasks (dedupe_key) WHERE completed_at IS NULL;
-CREATE INDEX cache_tasks_claim_idx ON cache_tasks (task_type, available_at, created_at) WHERE completed_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS cache_tasks_active_dedupe_idx ON cache_tasks (dedupe_key) WHERE completed_at IS NULL;
+CREATE INDEX IF NOT EXISTS cache_tasks_claim_idx ON cache_tasks (task_type, available_at, created_at) WHERE completed_at IS NULL;

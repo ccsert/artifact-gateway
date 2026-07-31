@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE replication_plans (
+CREATE TABLE IF NOT EXISTS replication_plans (
     id UUID PRIMARY KEY,
     source_repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     target_repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
@@ -13,7 +13,7 @@ CREATE TABLE replication_plans (
     UNIQUE (target_repository_id, idempotency_key)
 );
 
-CREATE TABLE replication_checkpoints (
+CREATE TABLE IF NOT EXISTS replication_checkpoints (
     plan_id UUID NOT NULL REFERENCES replication_plans(id) ON DELETE CASCADE,
     object_key TEXT NOT NULL,
     digest TEXT NOT NULL CHECK (digest ~ '^sha256:[0-9a-f]{64}$'),
@@ -26,8 +26,8 @@ CREATE TABLE replication_checkpoints (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (plan_id, object_key)
 );
-CREATE INDEX replication_plans_claim_idx ON replication_plans (created_at) WHERE state IN ('pending', 'failed');
-CREATE INDEX replication_checkpoints_pending_idx ON replication_checkpoints (plan_id, state, updated_at);
+CREATE INDEX IF NOT EXISTS replication_plans_claim_idx ON replication_plans (created_at) WHERE state IN ('pending', 'failed');
+CREATE INDEX IF NOT EXISTS replication_checkpoints_pending_idx ON replication_checkpoints (plan_id, state, updated_at);
 
 -- +goose Down
 DROP TABLE replication_checkpoints;

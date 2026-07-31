@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE native_conan_publish_sessions (
+CREATE TABLE IF NOT EXISTS native_conan_publish_sessions (
     id UUID PRIMARY KEY,
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     publisher TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE native_conan_publish_sessions (
     objects JSONB NOT NULL
 );
 
-CREATE TABLE native_conan_publish_uploads (
+CREATE TABLE IF NOT EXISTS native_conan_publish_uploads (
     session_id UUID NOT NULL REFERENCES native_conan_publish_sessions(id) ON DELETE CASCADE,
     object_name TEXT NOT NULL,
     object_key TEXT NOT NULL,

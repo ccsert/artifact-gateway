@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE audit_retention_policy (
+CREATE TABLE IF NOT EXISTS audit_retention_policy (
     singleton BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton),
     version BIGINT NOT NULL DEFAULT 1,
     enabled BOOLEAN NOT NULL DEFAULT false,
@@ -7,7 +7,7 @@ CREATE TABLE audit_retention_policy (
 );
 INSERT INTO audit_retention_policy (singleton) VALUES (true) ON CONFLICT DO NOTHING;
 
-CREATE TABLE audit_cleanup_jobs (
+CREATE TABLE IF NOT EXISTS audit_cleanup_jobs (
     id UUID PRIMARY KEY,
     idempotency_key TEXT NOT NULL UNIQUE,
     policy_version BIGINT NOT NULL,
@@ -20,5 +20,5 @@ CREATE TABLE audit_cleanup_jobs (
     completed_at TIMESTAMPTZ,
     last_error TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX audit_cleanup_jobs_claim_idx ON audit_cleanup_jobs (created_at) WHERE state IN ('pending', 'failed');
-CREATE INDEX resolver_audit_log_occurred_at_idx ON resolver_audit_log (occurred_at);
+CREATE INDEX IF NOT EXISTS audit_cleanup_jobs_claim_idx ON audit_cleanup_jobs (created_at) WHERE state IN ('pending', 'failed');
+CREATE INDEX IF NOT EXISTS resolver_audit_log_occurred_at_idx ON resolver_audit_log (occurred_at);

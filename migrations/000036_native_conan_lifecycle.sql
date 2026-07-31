@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE native_conan_object_intents (
+CREATE TABLE IF NOT EXISTS native_conan_object_intents (
     object_key TEXT PRIMARY KEY,
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     digest TEXT NOT NULL CHECK (digest ~ '^sha256:[0-9a-f]{64}$'),
@@ -8,7 +8,7 @@ CREATE TABLE native_conan_object_intents (
     claimed_at TIMESTAMPTZ
 );
 
-CREATE TABLE native_conan_recipe_revisions (
+CREATE TABLE IF NOT EXISTS native_conan_recipe_revisions (
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     reference TEXT NOT NULL,
     revision TEXT NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE native_conan_recipe_revisions (
     PRIMARY KEY (repository_id, reference, revision)
 );
 
-CREATE TABLE native_conan_package_revisions (
+CREATE TABLE IF NOT EXISTS native_conan_package_revisions (
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     reference TEXT NOT NULL,
     recipe_revision TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE native_conan_package_revisions (
         REFERENCES native_conan_recipe_revisions(repository_id, reference, revision)
 );
 
-CREATE TABLE native_conan_assets (
+CREATE TABLE IF NOT EXISTS native_conan_assets (
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     reference TEXT NOT NULL,
     recipe_revision TEXT NOT NULL,
@@ -45,4 +45,4 @@ CREATE TABLE native_conan_assets (
     PRIMARY KEY (repository_id, reference, recipe_revision, package_id, package_revision, path)
 );
 
-CREATE INDEX native_conan_assets_object_key_idx ON native_conan_assets (object_key);
+CREATE INDEX IF NOT EXISTS native_conan_assets_object_key_idx ON native_conan_assets (object_key);

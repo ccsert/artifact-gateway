@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE native_oci_uploads (
+CREATE TABLE IF NOT EXISTS native_oci_uploads (
     id UUID PRIMARY KEY,
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     name TEXT NOT NULL,
@@ -9,20 +9,20 @@ CREATE TABLE native_oci_uploads (
     expires_at TIMESTAMPTZ NOT NULL,
     collected_at TIMESTAMPTZ
 );
-CREATE INDEX native_oci_uploads_expiry_idx ON native_oci_uploads (expires_at) WHERE state = 'open';
+CREATE INDEX IF NOT EXISTS native_oci_uploads_expiry_idx ON native_oci_uploads (expires_at) WHERE state = 'open';
 
-CREATE TABLE native_oci_blobs (
+CREATE TABLE IF NOT EXISTS native_oci_blobs (
     digest TEXT PRIMARY KEY CHECK (digest ~ '^sha256:[0-9a-f]{64}$'),
     object_key TEXT NOT NULL UNIQUE,
     size BIGINT NOT NULL CHECK (size >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE TABLE native_oci_repository_blobs (
+CREATE TABLE IF NOT EXISTS native_oci_repository_blobs (
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     digest TEXT NOT NULL REFERENCES native_oci_blobs(digest),
     PRIMARY KEY (repository_id, digest)
 );
-CREATE TABLE native_oci_manifests (
+CREATE TABLE IF NOT EXISTS native_oci_manifests (
     repository_id UUID NOT NULL REFERENCES hosted_repositories(id),
     name TEXT NOT NULL,
     digest TEXT NOT NULL CHECK (digest ~ '^sha256:[0-9a-f]{64}$'),
@@ -32,7 +32,7 @@ CREATE TABLE native_oci_manifests (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (repository_id, name, digest)
 );
-CREATE TABLE native_oci_tags (
+CREATE TABLE IF NOT EXISTS native_oci_tags (
     repository_id UUID NOT NULL,
     name TEXT NOT NULL,
     tag TEXT NOT NULL,

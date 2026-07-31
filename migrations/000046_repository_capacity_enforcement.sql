@@ -35,15 +35,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER repository_capacity_quota_check AFTER INSERT OR UPDATE OF quota_bytes ON repository_capacity_quotas FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER raw_asset_capacity_check AFTER INSERT OR UPDATE ON native_raw_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER maven_asset_capacity_check AFTER INSERT OR UPDATE ON native_maven_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER maven_artifact_capacity_check AFTER INSERT OR UPDATE OF state ON native_maven_artifacts FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER oci_blob_capacity_check AFTER INSERT OR UPDATE ON native_oci_repository_blobs FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER oci_manifest_capacity_check AFTER INSERT OR UPDATE ON native_oci_manifests FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER conan_asset_capacity_check AFTER INSERT OR UPDATE ON native_conan_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER conan_recipe_capacity_check AFTER INSERT OR UPDATE OF state ON native_conan_recipe_revisions FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
-CREATE TRIGGER conan_package_capacity_check AFTER INSERT OR UPDATE OF state ON native_conan_package_revisions FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER repository_capacity_quota_check AFTER INSERT OR UPDATE OF quota_bytes ON repository_capacity_quotas FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER raw_asset_capacity_check AFTER INSERT OR UPDATE ON native_raw_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER maven_asset_capacity_check AFTER INSERT OR UPDATE ON native_maven_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER maven_artifact_capacity_check AFTER INSERT OR UPDATE OF state ON native_maven_artifacts FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER oci_blob_capacity_check AFTER INSERT OR UPDATE ON native_oci_repository_blobs FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER oci_manifest_capacity_check AFTER INSERT OR UPDATE ON native_oci_manifests FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER conan_asset_capacity_check AFTER INSERT OR UPDATE ON native_conan_assets FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER conan_recipe_capacity_check AFTER INSERT OR UPDATE OF state ON native_conan_recipe_revisions FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
+CREATE OR REPLACE TRIGGER conan_package_capacity_check AFTER INSERT OR UPDATE OF state ON native_conan_package_revisions FOR EACH ROW EXECUTE FUNCTION assert_hosted_repository_capacity_trigger();
 
 -- +goose Down
 DROP TRIGGER conan_package_capacity_check ON native_conan_package_revisions;
