@@ -4,7 +4,11 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const target = env.VITE_GATEWAY_PROXY_TARGET ?? 'http://127.0.0.1:8080';
+  const rootEnv = loadEnv(mode, '..', '');
+  const target =
+    env.VITE_GATEWAY_PROXY_TARGET ??
+    rootEnv.VITE_GATEWAY_PROXY_TARGET ??
+    `http://127.0.0.1:${rootEnv.GATEWAY_HTTP_PORT || '8080'}`;
   const gateway = { changeOrigin: true, target };
 
   return {

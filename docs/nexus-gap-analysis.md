@@ -5,7 +5,9 @@ Sonatype Nexus Repository Manager. This document owns the cross-product gap
 view; the per-protocol compatibility baseline lives in
 [the protocol compatibility matrix](protocol-compatibility.md) and the V1
 delivery objective lives in
-[the full repository goal](full-artifact-repository-goal.md).
+[the full repository goal](full-artifact-repository-goal.md). The concrete
+Repository/Group/Hosted/Proxy Console improvement backlog lives in
+[the repository Console experience roadmap](repository-console-experience-roadmap.md).
 
 ## Scope
 

@@ -215,6 +215,9 @@ malformed POM leaves the session open and invisible and returns `422` or `409`.
 Expired sessions return `409 session_expired` and require a fresh upload session.
 Promotion never overwrites a release; snapshots create a new immutable
 timestamped coordinate and move generated metadata in the same transaction.
+Root-level `maven-metadata.xml` lists each visible version once. Its `latest`
+value may name a SNAPSHOT, but its `release` value is the latest visible
+non-SNAPSHOT version and is omitted when no release exists.
 Rollback before visibility is abort plus orphan collection. After visibility it
 is a logical tombstone or a new promotion under retention policy, never mutation
 or deletion of S3 bytes.

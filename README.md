@@ -84,6 +84,10 @@ for their respective formats (both default to 1 GiB). Configure OCI, Maven,
 and Raw Proxy host allowlists with their matching
 `GATEWAY_{OCI,MAVEN,RAW}_PROXY_ALLOWED_HOSTS` variables. Conan uses the
 allowlist attached to its bound Group member, so it has no global host variable.
+Maven Proxy caches immutable components for 24 hours by default; its metadata
+and negative-cache lifetimes default to 15 and 10 minutes and can be overridden
+with `GATEWAY_MAVEN_CACHE_TTL`, `GATEWAY_MAVEN_METADATA_CACHE_TTL`, and
+`GATEWAY_MAVEN_NEGATIVE_CACHE_TTL`.
 For OIDC, configure `GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`; the JWKS
 URL defaults to the issuer's standard path.
 
