@@ -292,6 +292,12 @@ referenced commits.
   unauthenticated visits with a return path, and the header gains a logout
   button. The token-paste dialog remains for switching credentials. The OIDC
   single-sign-on (auth-code) flow remains a backend follow-up. (`66eb4684`)
+- **Access-control overview (P0/P3).** A central `/access` page aggregates every
+  repository's managed grant set into one filterable view (principal, repository,
+  scope, resource prefix), pairs it with a reader/writer/admin role-capability
+  reference, and deep-links each row to the repository's grants tab. This is the
+  RBAC management surface built over the existing grant and role model; a full
+  user/privilege CRUD and OIDC role mapping remain future work. (`e228311b`)
 - **Proxy repository editing (P1).** `PATCH /api/v2/repositories/{id}` with an
   `If-Match` guard updates a proxy repository's upstream endpoint and egress
   allowlist; the store, Postgres/Memory implementations, generated contracts,
