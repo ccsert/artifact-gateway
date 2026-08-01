@@ -61,6 +61,15 @@ make openapi-check
 client, and the generated repository-management Go contract; it then fails if
 any generated artifact differs from the worktree.
 
+After a Gateway route or generated management contract changes, rebuild the
+running development service before testing the Console. Vite reloads the
+Console independently and can otherwise call a stale Gateway image.
+
+```sh
+docker compose up --build -d gateway
+docker compose ps gateway
+```
+
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an

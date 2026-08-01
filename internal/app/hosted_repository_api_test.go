@@ -1382,6 +1382,10 @@ func TestConanRevisionManagementListsAndTombstonesSelectedRevisions(t *testing.T
 	if packageIDs.Code != http.StatusOK || !strings.Contains(packageIDs.Body.String(), packageID) {
 		t.Fatalf("package ids=%d body=%s", packageIDs.Code, packageIDs.Body.String())
 	}
+	emptyPackageIDs := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/package-ids?reference="+url.QueryEscape(reference)+"&recipeRevision=missing")
+	if emptyPackageIDs.Code != http.StatusOK || !strings.Contains(emptyPackageIDs.Body.String(), `"items":[]`) {
+		t.Fatalf("empty package ids=%d body=%s", emptyPackageIDs.Code, emptyPackageIDs.Body.String())
+	}
 	packageList := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/package-revisions?reference="+url.QueryEscape(reference)+"&recipeRevision="+recipeRevision+"&packageId="+packageID)
 	if packageList.Code != http.StatusOK || !strings.Contains(packageList.Body.String(), `"revision":"package-r1"`) {
 		t.Fatalf("package list=%d body=%s", packageList.Code, packageList.Body.String())

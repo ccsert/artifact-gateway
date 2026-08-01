@@ -1844,6 +1844,9 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan package IDs failed")
 			return
 		}
+		if items == nil {
+			items = []string{}
+		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanPackageIdList{Items: items})
 	})
 }
