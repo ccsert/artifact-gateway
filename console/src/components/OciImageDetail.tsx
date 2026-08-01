@@ -90,7 +90,6 @@ export function OciImageDetail({
   const [tags, setTags] = useState<string[] | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [manifest, setManifest] = useState<OciManifest | null>(null);
-  const [manifestDigest, setManifestDigest] = useState<string | null>(null);
   const [config, setConfig] = useState<OciConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [manifestLoading, setManifestLoading] = useState(false);
@@ -128,13 +127,11 @@ export function OciImageDetail({
     async (tag: string) => {
       setManifestLoading(true);
       setManifest(null);
-      setManifestDigest(null);
       setConfig(null);
       try {
         const res = await ociFetch(token, `${name}/manifests/${tag}`, MANIFEST_ACCEPT);
         const m = (await res.json()) as OciManifest;
         setManifest(m);
-        setManifestDigest(res.headers.get('Docker-Content-Digest'));
         if (m.config?.digest) {
           try {
             const cfgRes = await ociFetch(token, `${name}/blobs/${m.config.digest}`);
@@ -164,11 +161,11 @@ export function OciImageDetail({
   const totalSize = (manifest?.layers ?? []).reduce((n, l) => n + l.size, 0) + (manifest?.config?.size ?? 0);
 
   const deleteTag = async () => {
-    if (!selectedTag || !manifestDigest) return;
+    if (!selectedTag) return;
     setDeleting(true);
     try {
       const registryToken = await ociRegistryToken(token);
-      const res = await fetch(`/v2/${name}/manifests/${manifestDigest}`, {
+      const res = await fetch(`/v2/${name}/manifests/${encodeURIComponent(selectedTag)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${registryToken}` },
       });
@@ -177,7 +174,6 @@ export function OciImageDetail({
       setTags(remaining);
       setSelectedTag(remaining[0] ?? null);
       setManifest(null);
-      setManifestDigest(null);
       setConfig(null);
       if (remaining.length === 0) onDeleted?.();
     } catch (e) {
@@ -208,7 +204,7 @@ export function OciImageDetail({
         {selectedTag && (
           <button
             onClick={deleteTag}
-            disabled={deleting || !manifestDigest}
+            disabled={deleting}
             className="ml-auto rounded border border-rose-500/40 px-2.5 py-0.5 text-[11px] text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
           >
             {deleting ? '删除中…' : `删除标签 ${selectedTag}`}

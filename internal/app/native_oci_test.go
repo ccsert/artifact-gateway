@@ -224,6 +224,47 @@ func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
 	}
 }
 
+func TestNativeOCIDeleteTagDoesNotDeleteSharedManifest(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	manifest := `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`
+	for _, tag := range []string{"one", "two"} {
+		request := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(manifest))
+		request.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		authorize(request, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", tag, response.Code, response.Body.String())
+		}
+	}
+
+	deleteTag := httptest.NewRequest(http.MethodDelete, "/v2/team/app/manifests/one", nil)
+	authorize(deleteTag, "resolver-secret")
+	deleted := httptest.NewRecorder()
+	handler.ServeHTTP(deleted, deleteTag)
+	if deleted.Code != http.StatusAccepted {
+		t.Fatalf("delete tag=%d %s", deleted.Code, deleted.Body.String())
+	}
+
+	missingTag := httptest.NewRecorder()
+	missingRequest := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/one", nil)
+	authorize(missingRequest, "resolver-secret")
+	handler.ServeHTTP(missingTag, missingRequest)
+	if missingTag.Code != http.StatusNotFound {
+		t.Fatalf("deleted tag read=%d %s", missingTag.Code, missingTag.Body.String())
+	}
+
+	remainingTag := httptest.NewRecorder()
+	remainingRequest := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/two", nil)
+	authorize(remainingRequest, "resolver-secret")
+	handler.ServeHTTP(remainingTag, remainingRequest)
+	if remainingTag.Code != http.StatusOK || remainingTag.Body.String() != manifest {
+		t.Fatalf("remaining tag=%d %s", remainingTag.Code, remainingTag.Body.String())
+	}
+}
+
 func TestNativeOCIReferrersPaginateAndExcludeDeletedManifests(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})

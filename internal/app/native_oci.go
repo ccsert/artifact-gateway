@@ -591,7 +591,11 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 		w.WriteHeader(http.StatusCreated)
 	case http.MethodDelete:
 		if !validOCIDigest(reference) {
-			writeOCIError(w, 400, "DIGEST_INVALID", "manifest deletion requires a digest")
+			if err := h.store.DeleteOCITag(r.Context(), repo.ID, name, reference); err != nil {
+				writeOCIError(w, 404, "MANIFEST_UNKNOWN", "tag unknown to registry")
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 		if err := h.store.DeleteOCIManifest(r.Context(), repo.ID, name, reference); err != nil {

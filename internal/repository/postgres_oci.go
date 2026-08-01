@@ -411,6 +411,16 @@ func (s *PostgresStore) ListOCITags(ctx context.Context, repositoryID, name stri
 	}
 	return tags, rows.Err()
 }
+func (s *PostgresStore) DeleteOCITag(ctx context.Context, repositoryID, name, tag string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM native_oci_tags WHERE repository_id::text=$1 AND name=$2 AND tag=$3`, repositoryID, name, tag)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
 func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, name, digest string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

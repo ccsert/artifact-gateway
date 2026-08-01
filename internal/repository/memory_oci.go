@@ -338,6 +338,16 @@ func (s *MemoryStore) ListOCITags(_ context.Context, repositoryID, name string, 
 	}
 	return tags, nil
 }
+func (s *MemoryStore) DeleteOCITag(_ context.Context, repositoryID, name, tag string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := ociTagKey(repositoryID, name, tag)
+	if _, ok := s.ociTags[key]; !ok {
+		return ErrNotFound
+	}
+	delete(s.ociTags, key)
+	return nil
+}
 func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, digest string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
