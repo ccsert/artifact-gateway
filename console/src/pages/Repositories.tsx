@@ -218,7 +218,7 @@ export function RepositoriesPage() {
     <div>
       <PageHeader
         title="仓库"
-        description="托管仓库（hosted）与代理组（proxy）的统一视图"
+        description="Hosted 与 Proxy Repository 的统一视图"
         actions={<CreateRepositoryDialog onCreated={load} />}
       />
       <div className="mb-4">
@@ -239,7 +239,7 @@ export function RepositoriesPage() {
         </Card>
       ) : (
         <Card>
-          <DataTable columns={['名称', '类型', '格式', '状态', '版本/上游', 'ID', '']}>
+          <DataTable columns={['名称', '类型', '格式', '状态', '配置', 'ID', '']}>
             {visible.map((r) => {
               const isProxy = r.type === 'proxy';
               return (
