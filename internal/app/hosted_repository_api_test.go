@@ -1369,6 +1369,10 @@ func TestConanRevisionManagementListsAndTombstonesSelectedRevisions(t *testing.T
 	if recipeList.Code != http.StatusOK || !strings.Contains(recipeList.Body.String(), `"revision":"recipe-r1"`) {
 		t.Fatalf("recipe list=%d body=%s", recipeList.Code, recipeList.Body.String())
 	}
+	recipeListWithTrailingSlash := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference+"/"))
+	if recipeListWithTrailingSlash.Code != http.StatusOK || !strings.Contains(recipeListWithTrailingSlash.Body.String(), `"revision":"recipe-r1"`) {
+		t.Fatalf("recipe list with trailing slash=%d body=%s", recipeListWithTrailingSlash.Code, recipeListWithTrailingSlash.Body.String())
+	}
 	anonymousRecipeList := httptest.NewRecorder()
 	handler.ServeHTTP(anonymousRecipeList, httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference), nil))
 	if anonymousRecipeList.Code != http.StatusOK {

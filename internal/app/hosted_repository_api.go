@@ -1794,7 +1794,7 @@ func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter
 
 func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanRecipeRevisionsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
-		reference := strings.TrimSpace(params.Reference)
+		reference := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/")
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference must be a valid Conan recipe reference")
 			return
@@ -1814,7 +1814,7 @@ func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseW
 
 func (h generatedRepositoryAPIAdapter) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageRevisionsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
-		reference, recipeRevision, packageID := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
+		reference, recipeRevision, packageID := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference, recipeRevision, and packageId must identify a Conan package")
 			return
@@ -1834,7 +1834,7 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageRevisions(w http.Response
 
 func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageIdsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
-		reference, recipeRevision := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision)
+		reference, recipeRevision := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference and recipeRevision must identify a Conan recipe revision")
 			return
@@ -1850,7 +1850,7 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter
 
 func (h generatedRepositoryAPIAdapter) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, revision string, params adminopenapi.DeleteConanPackageRevisionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
-		reference, recipeRevision, packageID := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
+		reference, recipeRevision, packageID := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) || !validConanSegment(revision) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference, recipeRevision, packageId, and revision must identify a Conan package revision")
 			return
