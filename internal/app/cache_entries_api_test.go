@@ -29,6 +29,30 @@ func newCacheEntriesTestHandler(t *testing.T) (http.Handler, *repository.MemoryS
 	return handler, store, objectStore, ociCache, mavenCache, rawCache, conanCache
 }
 
+func TestProxyCacheInvalidationTargetPresets(t *testing.T) {
+	tests := []struct {
+		name    string
+		request proxyCacheInvalidateRequest
+		path    string
+		prefix  bool
+		ok      bool
+	}{
+		{"exact path", proxyCacheInvalidateRequest{Path: "org/example/widget/1.0/widget-1.0.jar"}, "org/example/widget/1.0/widget-1.0.jar", false, true},
+		{"version", proxyCacheInvalidateRequest{Scope: "version", Path: "org.example:widget:1.0"}, "org/example/widget/1.0", true, true},
+		{"component", proxyCacheInvalidateRequest{Scope: "component", Path: "org.example:widget"}, "org/example/widget", true, true},
+		{"repository", proxyCacheInvalidateRequest{Scope: "repository"}, "", true, true},
+		{"invalid component", proxyCacheInvalidateRequest{Scope: "component", Path: "org.example"}, "", false, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path, prefix, ok := proxyCacheInvalidationTarget(test.request)
+			if path != test.path || prefix != test.prefix || ok != test.ok {
+				t.Fatalf("target=%q prefix=%t ok=%t", path, prefix, ok)
+			}
+		})
+	}
+}
+
 func getCacheEntries(t *testing.T, handler http.Handler, token, query string) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/operations/cache/entries"+query, nil)
@@ -306,7 +330,6 @@ func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 		t.Fatalf("invalidate = %d %s", invalidateResponse.Code, invalidateResponse.Body.String())
 	}
 }
-
 
 func TestV2MavenProxyNegativeCacheClearScopesAndPreservesPositiveEntries(t *testing.T) {
 	handler, store, objectStore, _, mavenCache, _, _ := newCacheEntriesTestHandler(t)

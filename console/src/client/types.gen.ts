@@ -390,8 +390,9 @@ export type ProxyCacheBrowsePage = {
 };
 
 export type ProxyCacheInvalidateRequest = {
-    path: string;
+    path?: string;
     prefix?: boolean;
+    scope?: 'path' | 'version' | 'component' | 'repository';
 };
 
 export type ProxyCacheInvalidateResult = {

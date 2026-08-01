@@ -406,6 +406,30 @@ func (e ProxyCacheBrowsePageGroupBy) Valid() bool {
 	}
 }
 
+// Defines values for ProxyCacheInvalidateRequestScope.
+const (
+	ProxyCacheInvalidateRequestScopeComponent  ProxyCacheInvalidateRequestScope = "component"
+	ProxyCacheInvalidateRequestScopePath       ProxyCacheInvalidateRequestScope = "path"
+	ProxyCacheInvalidateRequestScopeRepository ProxyCacheInvalidateRequestScope = "repository"
+	ProxyCacheInvalidateRequestScopeVersion    ProxyCacheInvalidateRequestScope = "version"
+)
+
+// Valid indicates whether the value is a known member of the ProxyCacheInvalidateRequestScope enum.
+func (e ProxyCacheInvalidateRequestScope) Valid() bool {
+	switch e {
+	case ProxyCacheInvalidateRequestScopeComponent:
+		return true
+	case ProxyCacheInvalidateRequestScopePath:
+		return true
+	case ProxyCacheInvalidateRequestScopeRepository:
+		return true
+	case ProxyCacheInvalidateRequestScopeVersion:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PublishSessionState.
 const (
 	Aborted   PublishSessionState = "aborted"
@@ -1251,9 +1275,13 @@ type ProxyCacheBrowsePageGroupBy string
 
 // ProxyCacheInvalidateRequest defines model for ProxyCacheInvalidateRequest.
 type ProxyCacheInvalidateRequest struct {
-	Path   string `json:"path"`
-	Prefix *bool  `json:"prefix,omitempty"`
+	Path   *string                           `json:"path,omitempty"`
+	Prefix *bool                             `json:"prefix,omitempty"`
+	Scope  *ProxyCacheInvalidateRequestScope `json:"scope,omitempty"`
 }
+
+// ProxyCacheInvalidateRequestScope defines model for ProxyCacheInvalidateRequest.Scope.
+type ProxyCacheInvalidateRequestScope string
 
 // ProxyCacheInvalidateResult defines model for ProxyCacheInvalidateResult.
 type ProxyCacheInvalidateResult struct {

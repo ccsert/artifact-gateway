@@ -926,11 +926,11 @@ ProxyCacheBrowsePage:
     groupBy: {type: string, enum: [version, component, asset]}
 ProxyCacheInvalidateRequest:
   type: object
-  required: [path]
   additionalProperties: false
   properties:
-    path: {type: string, minLength: 1}
+    path: {type: string}
     prefix: {type: boolean, default: false}
+    scope: {type: string, enum: [path, version, component, repository], default: path}
 ProxyCacheNegativeClearRequest:
   type: object
   additionalProperties: false

@@ -27,6 +27,7 @@ type proxyCacheBrowseHandler struct {
 type proxyCacheInvalidateRequest struct {
 	Path   string `json:"path"`
 	Prefix bool   `json:"prefix"`
+	Scope  string `json:"scope"`
 }
 
 type proxyCacheInvalidateResponse struct {
@@ -211,11 +212,15 @@ func (h proxyCacheBrowseHandler) Invalidate(w http.ResponseWriter, r *http.Reque
 	var request proxyCacheInvalidateRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil || strings.TrimSpace(request.Path) == "" {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "path is required")
+	if err := decoder.Decode(&request); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "request must be valid JSON")
 		return
 	}
-	path := strings.Trim(strings.TrimSpace(request.Path), "/")
+	path, prefix, ok := proxyCacheInvalidationTarget(request)
+	if !ok {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "path and scope must identify a Maven cache target")
+		return
+	}
 	keys, err := h.maintenance.store.List(r.Context(), "maven/index/")
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "storage_error", "unable to inspect proxy cache")
@@ -232,8 +237,8 @@ func (h proxyCacheBrowseHandler) Invalidate(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 		cachedPath := strings.Trim(index.path(), "/")
-		matches := cachedPath == path
-		if request.Prefix {
+		matches := path == "" || cachedPath == path
+		if prefix && path != "" {
 			matches = cachedPath == path || strings.HasPrefix(cachedPath, path+"/")
 		}
 		if matches {
@@ -243,6 +248,29 @@ func (h proxyCacheBrowseHandler) Invalidate(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	writeNativeMavenJSON(w, http.StatusOK, proxyCacheInvalidateResponse{Invalidated: invalidated})
+}
+
+func proxyCacheInvalidationTarget(request proxyCacheInvalidateRequest) (path string, prefix, ok bool) {
+	value := strings.Trim(strings.TrimSpace(request.Path), "/")
+	switch strings.TrimSpace(request.Scope) {
+	case "", "path":
+		return value, request.Prefix, value != ""
+	case "version":
+		if !validMavenCoordinate(value) {
+			return "", false, false
+		}
+		return mavenCoordinatePath(value), true, true
+	case "component":
+		parts := strings.Split(value, ":")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !validMavenCoordinatePrefix(value) {
+			return "", false, false
+		}
+		return strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1], true, true
+	case "repository":
+		return "", true, value == ""
+	default:
+		return "", false, false
+	}
 }
 
 func (h proxyCacheBrowseHandler) ClearNegative(w http.ResponseWriter, r *http.Request) {

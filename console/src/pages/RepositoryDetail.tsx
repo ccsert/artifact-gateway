@@ -162,6 +162,7 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
   const [health, setHealth] = useState<ProxyHealth | null>(null);
   const [healthError, setHealthError] = useState('');
   const [invalidateInput, setInvalidateInput] = useState('');
+  const [invalidateScope, setInvalidateScope] = useState<'path' | 'version' | 'component' | 'repository'>('path');
   const [invalidatePrefix, setInvalidatePrefix] = useState(false);
   const [invalidating, setInvalidating] = useState(false);
   const [invalidateResult, setInvalidateResult] = useState<number | null>(null);
@@ -253,16 +254,17 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
   };
 
   const invalidate = async () => {
-    const path = mavenWarmPath(invalidateInput);
-    if (!path) {
-      setInvalidateError('请输入 Maven GAV 或缓存路径。');
+    const value = invalidateInput.trim();
+    if (invalidateScope !== 'repository' && !value) {
+      setInvalidateError('请输入失效目标。');
       return;
     }
     setInvalidating(true);
     setInvalidateError('');
     setInvalidateResult(null);
     try {
-      const { data: result, error } = await invalidateProxyCache({ path: { repositoryId: repoId }, body: { path, prefix: invalidatePrefix } });
+      const body = { path: value, scope: invalidateScope, prefix: invalidateScope === 'path' && invalidatePrefix };
+      const { data: result, error } = await invalidateProxyCache({ path: { repositoryId: repoId }, body });
       if (error || !result) throw new Error('失效缓存失败');
       setInvalidateResult(result.invalidated);
       onWarmed();
@@ -363,24 +365,28 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3">
         <div className="mb-2 text-sm font-medium text-zinc-200">失效缓存</div>
         <div className="flex flex-wrap items-center gap-2">
+          <select className={`${inputClass} w-28`} value={invalidateScope} onChange={(e) => setInvalidateScope(e.target.value as typeof invalidateScope)}>
+            <option value="path">路径</option>
+            <option value="version">版本</option>
+            <option value="component">组件</option>
+            <option value="repository">全部</option>
+          </select>
           <input
             className={`${inputClass} min-w-80 flex-1 font-mono text-xs`}
-            placeholder="org/springframework/boot/spring-boot/3.4.4"
+            placeholder={invalidateScope === 'component' ? 'org.springframework.boot:spring-boot' : invalidateScope === 'version' ? 'org.springframework.boot:spring-boot:3.4.4' : 'org/springframework/boot/spring-boot/3.4.4'}
             value={invalidateInput}
             onChange={(e) => setInvalidateInput(e.target.value)}
+            disabled={invalidateScope === 'repository'}
           />
-          <label className="flex items-center gap-1.5 text-xs text-zinc-400">
-            <input type="checkbox" checked={invalidatePrefix} onChange={(e) => setInvalidatePrefix(e.target.checked)} />
-            按前缀
-          </label>
-          <button onClick={invalidate} disabled={invalidating || !invalidateInput.trim()} className={btnSecondary}>
+          {invalidateScope === 'path' && <label className="flex items-center gap-1.5 text-xs text-zinc-400"><input type="checkbox" checked={invalidatePrefix} onChange={(e) => setInvalidatePrefix(e.target.checked)} />按前缀</label>}
+          <button onClick={invalidate} disabled={invalidating || (invalidateScope !== 'repository' && !invalidateInput.trim())} className={btnSecondary}>
             {invalidating ? '处理中…' : '失效'}
           </button>
           <button onClick={clearNegative} disabled={clearingNegative} className={btnSecondary}>
             {clearingNegative ? '处理中…' : '清理负缓存'}
           </button>
         </div>
-        <div className="mt-1 text-[11px] text-zinc-600">只删除缓存索引，字节对象由 Orphan Collector 延迟回收。</div>
+        <div className="mt-1 text-[11px] text-zinc-600">版本、组件和全部会按对应 Maven 缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。</div>
         {invalidateError && <div className="mt-2 text-xs text-rose-300">{invalidateError}</div>}
         {invalidateResult !== null && <div className="mt-2 text-xs text-emerald-300">已失效 {invalidateResult} 个缓存条目。</div>}
         {negativeError && <div className="mt-2 text-xs text-rose-300">{negativeError}</div>}

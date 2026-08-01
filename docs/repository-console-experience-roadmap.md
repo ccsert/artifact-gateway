@@ -352,7 +352,7 @@ Group-only interactions:
 
 - [x] Warm cache by coordinate/path/reference.
 - [x] Invalidate cache by path and prefix.
-- [ ] Extend invalidation to component, version, or whole repository presets.
+- [x] Extend invalidation to component, version, or whole repository presets.
 - [x] Refresh selected cache entries from upstream.
 - [x] Show upstream health and circuit-breaker state.
 - [x] Clear negative cache.
