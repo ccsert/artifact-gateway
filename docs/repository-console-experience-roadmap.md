@@ -16,10 +16,9 @@ Progress update 2026-07-31:
   uses this endpoint instead of the legacy V1 operations cache list.
 - Usage snippets currently reflect authenticated Maven Proxy access. Anonymous
   variants remain blocked on Phase 5 anonymous-access policy.
-- Remaining Phase 2 work is to broaden the endpoint beyond Maven and document it
-  in the formal OpenAPI contract. Current Proxy cache browse/refresh/health/
-  invalidate/negative-clear endpoints are implemented and tested, but still use
-  hand-written handlers and Console fetch calls outside the generated client.
+- Remaining Phase 2 work is to broaden the endpoint beyond Maven. Maven Proxy
+  cache browse/refresh/health/invalidate/negative-clear endpoints are now in
+  the formal management OpenAPI contract and use the generated Console client.
 - Phase 3 has started: Proxy capacity now reports live cache bytes and cache
   object counts through the existing repository capacity endpoint, and the
   Console explains Hosted storage versus Proxy cache storage.
@@ -334,8 +333,8 @@ Group-only interactions:
 - [x] Add Maven `groupBy` modes.
 - [x] Add tests for page-token scoping and query consistency.
 - [x] Migrate Console away from legacy V1 operations cache endpoint.
-- [ ] Add formal OpenAPI schema and generated client coverage for the V2 Proxy
-  browse endpoint.
+- [x] Add formal OpenAPI schema and generated client coverage for the V2 Proxy
+  browse endpoint and operations.
 - [ ] Extend V2 Proxy browse endpoint beyond Maven.
 
 ### Phase 3: Capacity And Storage
@@ -365,7 +364,7 @@ Group-only interactions:
 - [x] Support Repository anonymous browse/query where policy allows.
 - [ ] Hide privileged Console controls for anonymous users.
 - [ ] Audit all anonymous reads as `anonymous`.
-- [ ] Add safe Conan revision delete/tombstone management actions.
+- [x] Add safe Conan revision delete/tombstone management actions.
 
 ### Phase 6: Documentation And Product Copy
 

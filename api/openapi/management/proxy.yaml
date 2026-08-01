@@ -1,0 +1,74 @@
+---
+repositories_repositoryId_cache_entries:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listProxyCacheEntries
+    description: Lists cached Maven Proxy entries grouped for operator browsing.
+    parameters:
+    - name: q
+      in: query
+      schema: {type: string, maxLength: 255}
+    - name: groupBy
+      in: query
+      schema: {type: string, enum: [version, component, asset], default: version}
+    - name: assetFilter
+      in: query
+      schema: {type: string, enum: [primary, all, jar, pom], default: primary}
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ProxyCacheBrowsePage"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_cache_invalidate:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: invalidateProxyCache
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ProxyCacheInvalidateRequest"}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ProxyCacheInvalidateResult"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_cache_negative_clear:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: clearProxyNegativeCache
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ProxyCacheNegativeClearRequest"}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ProxyCacheNegativeClearResult"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_cache_refresh:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: refreshProxyCache
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/MavenCacheRefreshRequest"}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/MavenCacheRefreshResult"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_proxy_health:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getProxyHealth
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/MavenProxyHealth"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}

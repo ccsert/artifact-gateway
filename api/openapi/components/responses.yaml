@@ -252,6 +252,46 @@ ConanReferenceList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/ConanReferencePage"
+ConanRecipeRevisionList:
+  description: Conan recipe revisions for one reference
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ConanRecipeRevisionList"}
+ConanPackageRevisionList:
+  description: Conan package revisions for one package ID
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ConanPackageRevisionList"}
+ConanPackageIdList:
+  description: Conan package IDs for one recipe revision
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ConanPackageIdList"}
+ProxyCacheBrowsePage:
+  description: Maven Proxy cache browse page
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ProxyCacheBrowsePage"}
+ProxyCacheInvalidateResult:
+  description: Number of invalidated positive cache indexes
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ProxyCacheInvalidateResult"}
+ProxyCacheNegativeClearResult:
+  description: Number of cleared negative cache indexes
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ProxyCacheNegativeClearResult"}
+MavenCacheRefreshResult:
+  description: Maven Proxy cache refresh result
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/MavenCacheRefreshResult"}
+MavenProxyHealth:
+  description: Maven Proxy upstream health
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/MavenProxyHealth"}
 RawDirectoryList:
   description: Lexicographically ordered Native Raw directory-prefix page
   headers:

@@ -156,6 +156,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics).withProxy(mavenClient, mavenCache)
 	mavenProxyOperations := mavenProxyOperationsHandler{store: store, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, client: mavenClient, cache: mavenCache, maintenance: maintenance}
+	proxyCacheBrowse := proxyCacheBrowseHandler{store: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
 	nativeConanObjects := dependencies.NativeConanObjectStore
 	if nativeConanObjects == nil {
 		nativeConanObjects = NewMemoryOCIObjectStore()
@@ -163,15 +164,13 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 		},
 	})
-	mux.HandleFunc("POST /api/v2/repositories/{repositoryId}/cache/refresh", mavenProxyOperations.Refresh)
-	mux.HandleFunc("GET /api/v2/repositories/{repositoryId}/proxy/health", mavenProxyOperations.Health)
 	mux.Handle("/api/v2/repositories/", publishRouter)
 	mux.Handle("/api/v2/publish-sessions/", nativeMaven)
 	mux.Handle("/api/v2/conan-publish-sessions/", nativeConanPublish)
@@ -180,10 +179,6 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if maintenance != nil {
 		mux.Handle("GET /api/v1/operations/cache", cacheOperationsHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/cache/entries", cacheEntriesHandler{store: store, maintenance: maintenance, authenticator: authenticator})
-		mux.Handle("GET /api/v2/repositories/{repositoryId}/cache/entries", proxyCacheBrowseHandler{store: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}})
-		proxyCacheBrowse := proxyCacheBrowseHandler{store: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
-		mux.HandleFunc("POST /api/v2/repositories/{repositoryId}/cache/invalidate", proxyCacheBrowse.Invalidate)
-		mux.HandleFunc("POST /api/v2/repositories/{repositoryId}/cache/negative:clear", proxyCacheBrowse.ClearNegative)
 		mux.Handle("POST /api/v1/operations/cache/collect", cacheCollectionHandler{maintenance: maintenance, authenticator: authenticator})
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}

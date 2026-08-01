@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deleteArtifact, listArtifacts, listMavenCoordinates, listConanReferences } from '../client';
+import { deleteArtifact, deleteConanPackageRevision, listArtifacts, listConanPackageIds, listConanPackageRevisions, listConanRecipeRevisions, listMavenCoordinates } from '../client';
 import { ArtifactDetailView, VersionList } from './ArtifactDetail';
 import type { ArtifactMeta } from './ArtifactDetail';
 import { useAuth } from '../lib/auth';
@@ -102,25 +102,85 @@ export function MavenArtifactDetail({ repoId, repoName, meta, onDeleted }: { rep
 }
 
 // Conan 制品详情：使用方法 + revisions 列表
-export function ConanArtifactDetail({ repoId, repoName, meta }: { repoId: string; repoName: string; meta: ArtifactMeta }) {
-  const [revisions, setRevisions] = useState<{ label: string; hint?: string }[]>([]);
+export function ConanArtifactDetail({ repoId, repoName, meta, managed, canDelete, onDeleted }: { repoId: string; repoName: string; meta: ArtifactMeta; managed: boolean; canDelete: boolean; onDeleted?: () => void }) {
+  const [recipeRevisions, setRecipeRevisions] = useState<{ revision: string; digest: string; createdAt: string }[]>([]);
+  const [selectedRecipe, setSelectedRecipe] = useState('');
+  const [packageRevisions, setPackageRevisions] = useState<{ recipeRevision: string; packageId: string; revision: string; digest: string; createdAt: string }[]>([]);
+  const [deleting, setDeleting] = useState('');
+  const [error, setError] = useState('');
+
+  const loadRecipeRevisions = async () => {
+    const { data, error: requestError } = await listConanRecipeRevisions({ path: { repositoryId: repoId }, query: { reference: meta.coordinate } });
+    if (requestError || !data) {
+      setError('读取 Conan recipe revisions 失败');
+      return;
+    }
+    const items = data.items.filter((item) => item.state === 'visible');
+    setRecipeRevisions(items);
+    setSelectedRecipe((current) => current || items[0]?.revision || '');
+  };
 
   useEffect(() => {
-    listConanReferences({ path: { repositoryId: repoId }, query: { pageSize: 100 } }).then(({ data }) => {
-      // 同 reference 的 revisions 在协议端点，这里先列出同族引用
-      const rs = (data?.items ?? [])
-        .filter((x) => x.reference === meta.coordinate)
-        .map((x) => ({ label: x.reference, hint: x.publisher }));
-      setRevisions(rs);
-    });
-  }, [repoId, meta.coordinate]);
+    if (!managed) return;
+    void loadRecipeRevisions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId, meta.coordinate, managed]);
+
+  useEffect(() => {
+    if (!managed || !selectedRecipe) {
+      setPackageRevisions([]);
+      return;
+    }
+    let cancelled = false;
+    setPackageRevisions([]);
+    setError('');
+    void (async () => {
+      const { data: ids, error: idsError } = await listConanPackageIds({ path: { repositoryId: repoId }, query: { reference: meta.coordinate, recipeRevision: selectedRecipe } });
+      if (cancelled) return;
+      if (idsError || !ids) {
+        setError('读取 Conan package IDs 失败');
+        return;
+      }
+      const pages = await Promise.all(ids.items.map((packageId) => listConanPackageRevisions({ path: { repositoryId: repoId }, query: { reference: meta.coordinate, recipeRevision: selectedRecipe, packageId } })));
+      if (cancelled) return;
+      if (pages.some((page) => page.error)) {
+        setError('读取 Conan package revisions 失败');
+        return;
+      }
+      setPackageRevisions(pages.flatMap((page) => page.data?.items ?? []).filter((item) => item.state === 'visible'));
+    })();
+    return () => { cancelled = true; };
+  }, [repoId, meta.coordinate, managed, selectedRecipe]);
+
+  const deletePackage = async (item: { recipeRevision: string; packageId: string; revision: string }) => {
+    setDeleting(`package:${item.recipeRevision}:${item.packageId}:${item.revision}`);
+    setError('');
+    const { error: requestError } = await deleteConanPackageRevision({ path: { repositoryId: repoId, revision: item.revision }, query: { reference: meta.coordinate, recipeRevision: item.recipeRevision, packageId: item.packageId } });
+    if (requestError) setError('删除 Conan package revision 失败');
+    else {
+      setPackageRevisions((items) => items.filter((candidate) => candidate.recipeRevision !== item.recipeRevision || candidate.packageId !== item.packageId || candidate.revision !== item.revision));
+      onDeleted?.();
+    }
+    setDeleting('');
+  };
 
   return (
     <ArtifactDetailView
       format="conan"
       repoName={repoName}
       meta={meta}
-      versions={revisions.length > 0 ? <VersionList title="引用" items={revisions} current={meta.coordinate} /> : undefined}
+      versions={managed ? (
+        <div className="space-y-4">
+          {error && <div className="text-xs text-rose-300">{error}</div>}
+          <VersionList title="Recipe revisions" items={recipeRevisions.map((item) => ({ label: item.revision, hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt)}` }))} current={selectedRecipe} onSelect={setSelectedRecipe} />
+          {packageRevisions.length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-zinc-800">
+              <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200">Package revisions</div>
+              {packageRevisions.map((item) => <div key={`${item.recipeRevision}:${item.packageId}:${item.revision}`} className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0"><div className="min-w-0"><div className="font-mono text-xs text-zinc-200">{item.packageId}#{item.revision}</div><div className="mt-0.5 text-[11px] text-zinc-500">{item.digest.slice(0, 18)} · {formatDate(item.createdAt)}</div></div>{canDelete && <button onClick={() => void deletePackage(item)} disabled={deleting === `package:${item.recipeRevision}:${item.packageId}:${item.revision}`} className="shrink-0 rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">删除</button>}</div>)}
+            </div>
+          )}
+        </div>
+      ) : undefined}
     />
   );
 }

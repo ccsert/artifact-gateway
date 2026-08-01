@@ -16,3 +16,83 @@ repositories_repositoryId_conan_references:
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_conan_recipe_revisions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listConanRecipeRevisions
+    parameters:
+    - name: reference
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ConanRecipeRevisionList"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_conan_package_revisions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listConanPackageRevisions
+    parameters:
+    - name: reference
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    - name: recipeRevision
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    - name: packageId
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ConanPackageRevisionList"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_conan_package_ids:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listConanPackageIds
+    parameters:
+    - name: reference
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    - name: recipeRevision
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ConanPackageIdList"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_conan_package_revisions_revision:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - name: revision
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  delete:
+    operationId: deleteConanPackageRevision
+    parameters:
+    - name: reference
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    - name: recipeRevision
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    - name: packageId
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 255}
+    responses:
+      '204': {description: Package revision tombstoned}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}

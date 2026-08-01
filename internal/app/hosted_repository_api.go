@@ -163,7 +163,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search") {
 		return parts[0], true
 	}
-	if len(parts) == 3 && ((parts[1] == "oci" && parts[2] == "images") || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && parts[2] == "references")) {
+	if len(parts) == 3 && ((parts[1] == "oci" && parts[2] == "images") || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && (parts[2] == "references" || parts[2] == "recipe-revisions" || parts[2] == "package-revisions" || parts[2] == "package-ids")) || (parts[1] == "cache" && parts[2] == "entries")) {
 		return parts[0], true
 	}
 	return "", false
@@ -191,6 +191,8 @@ type generatedRepositoryAPIAdapter struct {
 	audit             repository.Store
 	metrics           *Metrics
 	maintenance       *CacheMaintenance
+	proxyCache        proxyCacheBrowseHandler
+	mavenProxy        mavenProxyOperationsHandler
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -1712,6 +1714,101 @@ func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanReferencePage{Items: items, NextPageToken: next})
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanRecipeRevisionsParams) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		reference := strings.TrimSpace(params.Reference)
+		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference must be a valid Conan recipe reference")
+			return
+		}
+		revisions, err := h.conan.ListConanRecipeRevisions(r.Context(), repo.ID, reference)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan recipe revisions failed")
+			return
+		}
+		items := make([]adminopenapi.ConanRecipeRevision, 0, len(revisions))
+		for _, revision := range revisions {
+			items = append(items, adminopenapi.ConanRecipeRevision{Reference: revision.Reference, Revision: revision.Revision, Digest: revision.Digest, State: adminopenapi.ConanRecipeRevisionState(revision.State), CreatedAt: revision.CreatedAt})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanRecipeRevisionList{Items: items})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageRevisionsParams) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		reference, recipeRevision, packageID := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
+		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference, recipeRevision, and packageId must identify a Conan package")
+			return
+		}
+		revisions, err := h.conan.ListConanPackageRevisions(r.Context(), repo.ID, reference, recipeRevision, packageID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan package revisions failed")
+			return
+		}
+		items := make([]adminopenapi.ConanPackageRevision, 0, len(revisions))
+		for _, revision := range revisions {
+			items = append(items, adminopenapi.ConanPackageRevision{Reference: revision.Reference, RecipeRevision: revision.RecipeRevision, PackageId: revision.PackageID, Revision: revision.Revision, Digest: revision.Digest, State: adminopenapi.ConanPackageRevisionState(revision.State), CreatedAt: revision.CreatedAt})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanPackageRevisionList{Items: items})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageIdsParams) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		reference, recipeRevision := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision)
+		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference and recipeRevision must identify a Conan recipe revision")
+			return
+		}
+		items, err := h.conan.ListConanPackageIDs(r.Context(), repo.ID, reference, recipeRevision)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan package IDs failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanPackageIdList{Items: items})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, revision string, params adminopenapi.DeleteConanPackageRevisionParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
+		reference, recipeRevision, packageID := strings.TrimSpace(params.Reference), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
+		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) || !validConanSegment(revision) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference, recipeRevision, packageId, and revision must identify a Conan package revision")
+			return
+		}
+		if _, err := h.conan.TombstoneConanPackageRevision(r.Context(), repo.ID, reference, recipeRevision, packageID, revision); errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan package revision not found")
+			return
+		} else if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "tombstone Conan package revision failed")
+			return
+		}
+		_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: reference + "#" + recipeRevision + "/" + packageID + "#" + revision, Operation: "conan.package_revision.tombstone", Status: http.StatusNoContent})
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId, _ adminopenapi.ListProxyCacheEntriesParams) {
+	h.proxyCache.ServeHTTP(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) InvalidateProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+	h.proxyCache.Invalidate(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+	h.proxyCache.ClearNegative(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) RefreshProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+	h.mavenProxy.Refresh(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) GetProxyHealth(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+	h.mavenProxy.Health(w, r)
 }
 
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {

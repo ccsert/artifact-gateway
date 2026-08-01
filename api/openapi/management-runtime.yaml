@@ -75,6 +75,24 @@ paths:
     "$ref": "./management/maven.yaml#/repositories_repositoryId_maven_coordinates"
   "/repositories/{repositoryId}/conan/references":
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_references"
+  "/repositories/{repositoryId}/conan/recipe-revisions":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_recipe_revisions"
+  "/repositories/{repositoryId}/conan/package-revisions":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_package_revisions"
+  "/repositories/{repositoryId}/conan/package-ids":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_package_ids"
+  "/repositories/{repositoryId}/conan/package-revisions/{revision}":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_package_revisions_revision"
+  "/repositories/{repositoryId}/cache/entries":
+    "$ref": "./management/proxy.yaml#/repositories_repositoryId_cache_entries"
+  "/repositories/{repositoryId}/cache/invalidate":
+    "$ref": "./management/proxy.yaml#/repositories_repositoryId_cache_invalidate"
+  "/repositories/{repositoryId}/cache/negative:clear":
+    "$ref": "./management/proxy.yaml#/repositories_repositoryId_cache_negative_clear"
+  "/repositories/{repositoryId}/cache/refresh":
+    "$ref": "./management/proxy.yaml#/repositories_repositoryId_cache_refresh"
+  "/repositories/{repositoryId}/proxy/health":
+    "$ref": "./management/proxy.yaml#/repositories_repositoryId_proxy_health"
   "/publish-sessions/{sessionId}":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId"
   "/publish-sessions/{sessionId}/objects/{objectName}":
@@ -185,6 +203,32 @@ components:
       "$ref": "./components/schemas.yaml#/ConanReference"
     ConanReferencePage:
       "$ref": "./components/schemas.yaml#/ConanReferencePage"
+    ConanRecipeRevision:
+      "$ref": "./components/schemas.yaml#/ConanRecipeRevision"
+    ConanRecipeRevisionList:
+      "$ref": "./components/schemas.yaml#/ConanRecipeRevisionList"
+    ConanPackageRevision:
+      "$ref": "./components/schemas.yaml#/ConanPackageRevision"
+    ConanPackageRevisionList:
+      "$ref": "./components/schemas.yaml#/ConanPackageRevisionList"
+    ConanPackageIdList:
+      "$ref": "./components/schemas.yaml#/ConanPackageIdList"
+    ProxyCacheBrowsePage:
+      "$ref": "./components/schemas.yaml#/ProxyCacheBrowsePage"
+    ProxyCacheInvalidateRequest:
+      "$ref": "./components/schemas.yaml#/ProxyCacheInvalidateRequest"
+    ProxyCacheInvalidateResult:
+      "$ref": "./components/schemas.yaml#/ProxyCacheInvalidateResult"
+    ProxyCacheNegativeClearRequest:
+      "$ref": "./components/schemas.yaml#/ProxyCacheNegativeClearRequest"
+    ProxyCacheNegativeClearResult:
+      "$ref": "./components/schemas.yaml#/ProxyCacheNegativeClearResult"
+    MavenCacheRefreshRequest:
+      "$ref": "./components/schemas.yaml#/MavenCacheRefreshRequest"
+    MavenCacheRefreshResult:
+      "$ref": "./components/schemas.yaml#/MavenCacheRefreshResult"
+    MavenProxyHealth:
+      "$ref": "./components/schemas.yaml#/MavenProxyHealth"
     AuditRecord:
       "$ref": "./components/schemas.yaml#/AuditRecord"
     AuditList:
@@ -277,6 +321,22 @@ components:
       "$ref": "./components/responses.yaml#/ArtifactSummaryList"
     ConanReferenceList:
       "$ref": "./components/responses.yaml#/ConanReferenceList"
+    ConanRecipeRevisionList:
+      "$ref": "./components/responses.yaml#/ConanRecipeRevisionList"
+    ConanPackageRevisionList:
+      "$ref": "./components/responses.yaml#/ConanPackageRevisionList"
+    ConanPackageIdList:
+      "$ref": "./components/responses.yaml#/ConanPackageIdList"
+    ProxyCacheBrowsePage:
+      "$ref": "./components/responses.yaml#/ProxyCacheBrowsePage"
+    ProxyCacheInvalidateResult:
+      "$ref": "./components/responses.yaml#/ProxyCacheInvalidateResult"
+    ProxyCacheNegativeClearResult:
+      "$ref": "./components/responses.yaml#/ProxyCacheNegativeClearResult"
+    MavenCacheRefreshResult:
+      "$ref": "./components/responses.yaml#/MavenCacheRefreshResult"
+    MavenProxyHealth:
+      "$ref": "./components/responses.yaml#/MavenProxyHealth"
     OCIImageList:
       "$ref": "./components/responses.yaml#/OCIImageList"
     MavenCoordinateList:

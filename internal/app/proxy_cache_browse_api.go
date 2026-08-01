@@ -101,8 +101,8 @@ func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
 		return
 	}
-	if repo.Type != repository.RepositoryTypeProxy {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_repository", "cache browse is only available for proxy repositories")
+	if repo.Type != repository.RepositoryTypeProxy || repo.Format != repository.FormatMaven {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_repository", "cache browse is only available for Maven proxy repositories")
 		return
 	}
 	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))

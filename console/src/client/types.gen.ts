@@ -352,6 +352,92 @@ export type ConanReferencePage = {
     nextPageToken?: string;
 };
 
+export type ConanRecipeRevision = {
+    reference: string;
+    revision: string;
+    digest: string;
+    state: 'visible' | 'deleted';
+    createdAt: string;
+};
+
+export type ConanRecipeRevisionList = {
+    items: Array<ConanRecipeRevision>;
+};
+
+export type ConanPackageRevision = {
+    reference: string;
+    recipeRevision: string;
+    packageId: string;
+    revision: string;
+    digest: string;
+    state: 'visible' | 'deleted';
+    createdAt: string;
+};
+
+export type ConanPackageRevisionList = {
+    items: Array<ConanPackageRevision>;
+};
+
+export type ConanPackageIdList = {
+    items: Array<string>;
+};
+
+export type ProxyCacheBrowsePage = {
+    items: Array<ProxyCacheBrowseItem>;
+    nextPageToken?: string;
+    totalEstimate: number;
+    groupBy: 'version' | 'component' | 'asset';
+};
+
+export type ProxyCacheInvalidateRequest = {
+    path: string;
+    prefix?: boolean;
+};
+
+export type ProxyCacheInvalidateResult = {
+    invalidated: number;
+};
+
+export type ProxyCacheNegativeClearRequest = {
+    path?: string;
+    prefix?: boolean;
+};
+
+export type ProxyCacheNegativeClearResult = {
+    cleared: number;
+};
+
+export type MavenCacheRefreshRequest = {
+    path?: string;
+    gav?: string;
+};
+
+export type MavenCacheRefreshResult = {
+    repositoryId: string;
+    repository: string;
+    path: string;
+    status: number;
+    refreshed: boolean;
+    cacheKey?: string;
+    contentType?: string;
+    size?: number;
+    etag?: string;
+    lastModified?: string;
+};
+
+export type MavenProxyHealth = {
+    repositoryId: string;
+    repository: string;
+    endpoint: string;
+    reachable: boolean;
+    status?: number;
+    error?: string;
+    proxyAllowed: boolean;
+    circuitOpen: boolean;
+    cacheEnabled: boolean;
+    checkedAt: string;
+};
+
 export type AuditRecord = {
     groupName?: string;
     repository?: string;
@@ -448,6 +534,34 @@ export type RepositoryEffectiveAccess = {
     };
     anonymousRead: EffectiveAccessDecision;
     permissions: EffectiveAccessPermissions;
+};
+
+export type ProxyCacheAsset = {
+    path: string;
+    name: string;
+    digest?: string;
+    size?: number;
+    contentType?: string;
+    member?: string;
+    sidecar: boolean;
+};
+
+export type ProxyCacheBrowseItem = {
+    key: string;
+    coordinate: string;
+    groupId?: string;
+    artifactId?: string;
+    version?: string;
+    path?: string;
+    digest?: string;
+    size?: number;
+    contentType?: string;
+    member?: string;
+    assetCount?: number;
+    primaryAssetCount?: number;
+    sidecarCount?: number;
+    extensions?: Array<string>;
+    assets?: Array<ProxyCacheAsset>;
 };
 
 export type RepositoryId = string;
@@ -1870,6 +1984,305 @@ export type ListConanReferencesResponses = {
 };
 
 export type ListConanReferencesResponse = ListConanReferencesResponses[keyof ListConanReferencesResponses];
+
+export type ListConanRecipeRevisionsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query: {
+        reference: string;
+    };
+    url: '/repositories/{repositoryId}/conan/recipe-revisions';
+};
+
+export type ListConanRecipeRevisionsErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListConanRecipeRevisionsError = ListConanRecipeRevisionsErrors[keyof ListConanRecipeRevisionsErrors];
+
+export type ListConanRecipeRevisionsResponses = {
+    /**
+     * Conan recipe revisions for one reference
+     */
+    200: ConanRecipeRevisionList;
+};
+
+export type ListConanRecipeRevisionsResponse = ListConanRecipeRevisionsResponses[keyof ListConanRecipeRevisionsResponses];
+
+export type ListConanPackageRevisionsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query: {
+        reference: string;
+        recipeRevision: string;
+        packageId: string;
+    };
+    url: '/repositories/{repositoryId}/conan/package-revisions';
+};
+
+export type ListConanPackageRevisionsErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListConanPackageRevisionsError = ListConanPackageRevisionsErrors[keyof ListConanPackageRevisionsErrors];
+
+export type ListConanPackageRevisionsResponses = {
+    /**
+     * Conan package revisions for one package ID
+     */
+    200: ConanPackageRevisionList;
+};
+
+export type ListConanPackageRevisionsResponse = ListConanPackageRevisionsResponses[keyof ListConanPackageRevisionsResponses];
+
+export type ListConanPackageIdsData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query: {
+        reference: string;
+        recipeRevision: string;
+    };
+    url: '/repositories/{repositoryId}/conan/package-ids';
+};
+
+export type ListConanPackageIdsErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListConanPackageIdsError = ListConanPackageIdsErrors[keyof ListConanPackageIdsErrors];
+
+export type ListConanPackageIdsResponses = {
+    /**
+     * Conan package IDs for one recipe revision
+     */
+    200: ConanPackageIdList;
+};
+
+export type ListConanPackageIdsResponse = ListConanPackageIdsResponses[keyof ListConanPackageIdsResponses];
+
+export type DeleteConanPackageRevisionData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+        revision: string;
+    };
+    query: {
+        reference: string;
+        recipeRevision: string;
+        packageId: string;
+    };
+    url: '/repositories/{repositoryId}/conan/package-revisions/{revision}';
+};
+
+export type DeleteConanPackageRevisionErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type DeleteConanPackageRevisionError = DeleteConanPackageRevisionErrors[keyof DeleteConanPackageRevisionErrors];
+
+export type DeleteConanPackageRevisionResponses = {
+    /**
+     * Package revision tombstoned
+     */
+    204: void;
+};
+
+export type DeleteConanPackageRevisionResponse = DeleteConanPackageRevisionResponses[keyof DeleteConanPackageRevisionResponses];
+
+export type ListProxyCacheEntriesData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: {
+        q?: string;
+        groupBy?: 'version' | 'component' | 'asset';
+        assetFilter?: 'primary' | 'all' | 'jar' | 'pom';
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/repositories/{repositoryId}/cache/entries';
+};
+
+export type ListProxyCacheEntriesErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ListProxyCacheEntriesError = ListProxyCacheEntriesErrors[keyof ListProxyCacheEntriesErrors];
+
+export type ListProxyCacheEntriesResponses = {
+    /**
+     * Maven Proxy cache browse page
+     */
+    200: ProxyCacheBrowsePage;
+};
+
+export type ListProxyCacheEntriesResponse = ListProxyCacheEntriesResponses[keyof ListProxyCacheEntriesResponses];
+
+export type InvalidateProxyCacheData = {
+    body: ProxyCacheInvalidateRequest;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/cache/invalidate';
+};
+
+export type InvalidateProxyCacheErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type InvalidateProxyCacheError = InvalidateProxyCacheErrors[keyof InvalidateProxyCacheErrors];
+
+export type InvalidateProxyCacheResponses = {
+    /**
+     * Number of invalidated positive cache indexes
+     */
+    200: ProxyCacheInvalidateResult;
+};
+
+export type InvalidateProxyCacheResponse = InvalidateProxyCacheResponses[keyof InvalidateProxyCacheResponses];
+
+export type ClearProxyNegativeCacheData = {
+    body?: ProxyCacheNegativeClearRequest;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/cache/negative:clear';
+};
+
+export type ClearProxyNegativeCacheErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type ClearProxyNegativeCacheError = ClearProxyNegativeCacheErrors[keyof ClearProxyNegativeCacheErrors];
+
+export type ClearProxyNegativeCacheResponses = {
+    /**
+     * Number of cleared negative cache indexes
+     */
+    200: ProxyCacheNegativeClearResult;
+};
+
+export type ClearProxyNegativeCacheResponse = ClearProxyNegativeCacheResponses[keyof ClearProxyNegativeCacheResponses];
+
+export type RefreshProxyCacheData = {
+    body: MavenCacheRefreshRequest;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/cache/refresh';
+};
+
+export type RefreshProxyCacheErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type RefreshProxyCacheError = RefreshProxyCacheErrors[keyof RefreshProxyCacheErrors];
+
+export type RefreshProxyCacheResponses = {
+    /**
+     * Maven Proxy cache refresh result
+     */
+    200: MavenCacheRefreshResult;
+};
+
+export type RefreshProxyCacheResponse = RefreshProxyCacheResponses[keyof RefreshProxyCacheResponses];
+
+export type GetProxyHealthData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/proxy/health';
+};
+
+export type GetProxyHealthErrors = {
+    /**
+     * Problem response
+     */
+    400: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetProxyHealthError = GetProxyHealthErrors[keyof GetProxyHealthErrors];
+
+export type GetProxyHealthResponses = {
+    /**
+     * Maven Proxy upstream health
+     */
+    200: MavenProxyHealth;
+};
+
+export type GetProxyHealthResponse = GetProxyHealthResponses[keyof GetProxyHealthResponses];
 
 export type GetPublishSessionData = {
     body?: never;

@@ -1200,6 +1200,377 @@
         }
       }
     },
+    "/repositories/{repositoryId}/conan/recipe-revisions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listConanRecipeRevisions",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ConanRecipeRevisionList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/conan/package-revisions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listConanPackageRevisions",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "recipeRevision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "packageId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ConanPackageRevisionList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/conan/package-ids": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listConanPackageIds",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "recipeRevision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ConanPackageIdList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/conan/package-revisions/{revision}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "name": "revision",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteConanPackageRevision",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "recipeRevision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "packageId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Package revision tombstoned"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/cache/entries": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listProxyCacheEntries",
+        "description": "Lists cached Maven Proxy entries grouped for operator browsing.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "version",
+                "component",
+                "asset"
+              ],
+              "default": "version"
+            }
+          },
+          {
+            "name": "assetFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "primary",
+                "all",
+                "jar",
+                "pom"
+              ],
+              "default": "primary"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ProxyCacheBrowsePage"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/cache/invalidate": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "invalidateProxyCache",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyCacheInvalidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ProxyCacheInvalidateResult"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/cache/negative:clear": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "clearProxyNegativeCache",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyCacheNegativeClearRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ProxyCacheNegativeClearResult"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/cache/refresh": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "refreshProxyCache",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MavenCacheRefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MavenCacheRefreshResult"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/proxy/health": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getProxyHealth",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MavenProxyHealth"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/publish-sessions/{sessionId}": {
       "parameters": [
         {
@@ -2563,6 +2934,308 @@
           }
         }
       },
+      "ConanRecipeRevision": {
+        "type": "object",
+        "required": [
+          "reference",
+          "revision",
+          "digest",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "deleted"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConanRecipeRevisionList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConanRecipeRevision"
+            }
+          }
+        }
+      },
+      "ConanPackageRevision": {
+        "type": "object",
+        "required": [
+          "reference",
+          "recipeRevision",
+          "packageId",
+          "revision",
+          "digest",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "recipeRevision": {
+            "type": "string"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "deleted"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConanPackageRevisionList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConanPackageRevision"
+            }
+          }
+        }
+      },
+      "ConanPackageIdList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ProxyCacheBrowsePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalEstimate",
+          "groupBy"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProxyCacheBrowseItem"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          },
+          "totalEstimate": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "version",
+              "component",
+              "asset"
+            ]
+          }
+        }
+      },
+      "ProxyCacheInvalidateRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prefix": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ProxyCacheInvalidateResult": {
+        "type": "object",
+        "required": [
+          "invalidated"
+        ],
+        "properties": {
+          "invalidated": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ProxyCacheNegativeClearRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prefix": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ProxyCacheNegativeClearResult": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MavenCacheRefreshRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "gav": {
+            "type": "string"
+          }
+        }
+      },
+      "MavenCacheRefreshResult": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "repository",
+          "path",
+          "status",
+          "refreshed"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "refreshed": {
+            "type": "boolean"
+          },
+          "cacheKey": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "etag": {
+            "type": "string"
+          },
+          "lastModified": {
+            "type": "string"
+          }
+        }
+      },
+      "MavenProxyHealth": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "repository",
+          "endpoint",
+          "reachable",
+          "proxyAllowed",
+          "circuitOpen",
+          "cacheEnabled",
+          "checkedAt"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "proxyAllowed": {
+            "type": "boolean"
+          },
+          "circuitOpen": {
+            "type": "boolean"
+          },
+          "cacheEnabled": {
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "AuditRecord": {
         "type": "object",
         "required": [
@@ -2855,6 +3528,104 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/EffectiveAccessPermissions"
+          }
+        }
+      },
+      "ProxyCacheAsset": {
+        "type": "object",
+        "required": [
+          "path",
+          "name",
+          "sidecar"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "sidecar": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ProxyCacheBrowseItem": {
+        "type": "object",
+        "required": [
+          "key",
+          "coordinate"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "artifactId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "assetCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "primaryAssetCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sidecarCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProxyCacheAsset"
+            }
           }
         }
       }
@@ -3297,6 +4068,86 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ConanReferencePage"
+            }
+          }
+        }
+      },
+      "ConanRecipeRevisionList": {
+        "description": "Conan recipe revisions for one reference",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanRecipeRevisionList"
+            }
+          }
+        }
+      },
+      "ConanPackageRevisionList": {
+        "description": "Conan package revisions for one package ID",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanPackageRevisionList"
+            }
+          }
+        }
+      },
+      "ConanPackageIdList": {
+        "description": "Conan package IDs for one recipe revision",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanPackageIdList"
+            }
+          }
+        }
+      },
+      "ProxyCacheBrowsePage": {
+        "description": "Maven Proxy cache browse page",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProxyCacheBrowsePage"
+            }
+          }
+        }
+      },
+      "ProxyCacheInvalidateResult": {
+        "description": "Number of invalidated positive cache indexes",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProxyCacheInvalidateResult"
+            }
+          }
+        }
+      },
+      "ProxyCacheNegativeClearResult": {
+        "description": "Number of cleared negative cache indexes",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProxyCacheNegativeClearResult"
+            }
+          }
+        }
+      },
+      "MavenCacheRefreshResult": {
+        "description": "Maven Proxy cache refresh result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MavenCacheRefreshResult"
+            }
+          }
+        }
+      },
+      "MavenProxyHealth": {
+        "description": "Maven Proxy upstream health",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MavenProxyHealth"
             }
           }
         }

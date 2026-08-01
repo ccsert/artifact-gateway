@@ -26,6 +26,11 @@ import {
   getRepositoryReplication,
   deleteRepositoryReplication,
   getRepositoryEffectiveAccess,
+  listProxyCacheEntries,
+  invalidateProxyCache,
+  clearProxyNegativeCache,
+  refreshProxyCache,
+  getProxyHealth,
 } from '../client';
 import type {
   Repository,
@@ -39,6 +44,7 @@ import type {
   RepositoryEffectiveAccess,
   ReplicationPlan,
   ReplicationPlanDetail,
+  ProxyCacheAsset,
 } from '../client';
 import { PageHeader, Card, CardHeader, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, btnDanger } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
@@ -49,7 +55,6 @@ import { MavenPublishWizard } from '../components/MavenPublishWizard';
 import { MavenArtifactDetail, ConanArtifactDetail, RawArtifactDetail } from '../components/ArtifactRowDetail';
 import { RawUploadDialog } from '../components/RawUploadDialog';
 import { useAuth } from '../lib/auth';
-import { listProxyCacheEntries, type ProxyCacheAsset, type ProxyCacheAssetFilter } from '../lib/proxyCache';
 import { mavenGA, mavenUsage, mavenVersion } from '../lib/usage';
 import { formatBytes, formatDate, formatNumber, shortDigest } from '../lib/format';
 
@@ -89,7 +94,7 @@ interface ArtifactRow {
 type ProxyMavenFile = ProxyCacheAsset;
 
 const PROXY_MAVEN_PAGE_SIZE = 50;
-type ProxyMavenAssetFilter = ProxyCacheAssetFilter;
+type ProxyMavenAssetFilter = 'primary' | 'all' | 'jar' | 'pom';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -191,11 +196,9 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
   const loadHealth = useCallback(async () => {
     setHealthError('');
     try {
-      const response = await fetch(`/api/v2/repositories/${encodeURIComponent(repoId)}/proxy/health`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-      setHealth((await response.json()) as ProxyHealth);
+      const { data, error } = await getProxyHealth({ path: { repositoryId: repoId } });
+      if (error || !data) throw new Error('读取上游状态失败');
+      setHealth(data);
     } catch (error) {
       setHealthError(error instanceof Error ? error.message : '读取上游状态失败');
     }
@@ -237,14 +240,8 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
     setRefreshResult(null);
     try {
       const body = value.includes('/') ? { path: value.replace(/^\/+/, '') } : { gav: value };
-      const response = await fetch(`/api/v2/repositories/${encodeURIComponent(repoId)}/cache/refresh`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const text = await response.text();
-      if (!response.ok) throw new Error(`${response.status}: ${text}`);
-      const result = JSON.parse(text) as { status: number; size?: number; refreshed: boolean };
+      const { data: result, error } = await refreshProxyCache({ path: { repositoryId: repoId }, body });
+      if (error || !result) throw new Error('刷新缓存失败');
       setRefreshResult(result);
       onWarmed();
       void loadHealth();
@@ -265,16 +262,9 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
     setInvalidateError('');
     setInvalidateResult(null);
     try {
-      const response = await fetch(`/api/v2/repositories/${encodeURIComponent(repoId)}/cache/invalidate`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, prefix: invalidatePrefix }),
-      });
-      if (!response.ok) {
-        throw new Error(`${response.status}: ${await response.text()}`);
-      }
-      const result = (await response.json()) as { invalidated?: number };
-      setInvalidateResult(result.invalidated ?? 0);
+      const { data: result, error } = await invalidateProxyCache({ path: { repositoryId: repoId }, body: { path, prefix: invalidatePrefix } });
+      if (error || !result) throw new Error('失效缓存失败');
+      setInvalidateResult(result.invalidated);
       onWarmed();
     } catch (error) {
       setInvalidateError(error instanceof Error ? error.message : '失效缓存失败');
@@ -293,14 +283,9 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
     setNegativeError('');
     setNegativeResult(null);
     try {
-      const response = await fetch(`/api/v2/repositories/${encodeURIComponent(repoId)}/cache/negative:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...(path ? { path } : {}), prefix: invalidatePrefix }),
-      });
-      if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-      const result = (await response.json()) as { cleared?: number };
-      setNegativeResult(result.cleared ?? 0);
+      const { data: result, error } = await clearProxyNegativeCache({ path: { repositoryId: repoId }, body: { ...(path ? { path } : {}), prefix: invalidatePrefix } });
+      if (error || !result) throw new Error('清理负缓存失败');
+      setNegativeResult(result.cleared);
       onWarmed();
     } catch (error) {
       setNegativeError(error instanceof Error ? error.message : '清理负缓存失败');
@@ -504,7 +489,7 @@ function ProxyMavenCacheDetail({ repoName, meta }: { repoName: string; meta: Art
   );
 }
 
-function ArtifactsTab({ repo }: { repo: Repository }) {
+function ArtifactsTab({ repo, canWrite }: { repo: Repository; canWrite: boolean }) {
   const { token } = useAuth();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<ArtifactRow[]>([]);
@@ -539,14 +524,17 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
       } else if (format === 'maven') {
         if (proxyMaven) {
           try {
-            const pageData = await listProxyCacheEntries(token, repo.id, {
-              format: 'maven',
+            const { data: pageData, error: requestError } = await listProxyCacheEntries({
+              path: { repositoryId: repo.id },
+              query: {
               groupBy: 'version',
               assetFilter: proxyAssetFilter,
               q: query || undefined,
               pageSize: PROXY_MAVEN_PAGE_SIZE,
               pageToken,
+              },
             });
+            if (requestError || !pageData) throw new Error('读取 Proxy 缓存失败');
             setProxyTotal(pageData.totalEstimate);
             items = pageData.items.map((item) => {
               const primary = item.assets?.filter((asset) => !asset.sidecar) ?? [];
@@ -790,6 +778,9 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
                           <ConanArtifactDetail
                             repoId={repo.id}
                             repoName={repo.name}
+                            managed={repo.type !== 'proxy'}
+                            canDelete={repo.type !== 'proxy' && canWrite}
+                            onDeleted={() => void load(q)}
                             meta={{ coordinate: r.coordinate, publisher: r.publisher }}
                           />
                         )}
@@ -1857,7 +1848,7 @@ export function RepositoryDetailPage() {
         ))}
       </div>
       <Card className="p-4">
-        {tab === 'artifacts' && <ArtifactsTab repo={repo} />}
+        {tab === 'artifacts' && <ArtifactsTab repo={repo} canWrite={effectiveAccess?.permissions.write.allowed === true} />}
         {tab === 'publish' && repo.format === 'maven' && repo.type !== 'proxy' && (
           <MavenPublishWizard repositoryId={repo.id} onPublished={() => setTab('artifacts')} />
         )}

@@ -82,6 +82,42 @@ func (e AuditCleanupJobState) Valid() bool {
 	}
 }
 
+// Defines values for ConanPackageRevisionState.
+const (
+	ConanPackageRevisionStateDeleted ConanPackageRevisionState = "deleted"
+	ConanPackageRevisionStateVisible ConanPackageRevisionState = "visible"
+)
+
+// Valid indicates whether the value is a known member of the ConanPackageRevisionState enum.
+func (e ConanPackageRevisionState) Valid() bool {
+	switch e {
+	case ConanPackageRevisionStateDeleted:
+		return true
+	case ConanPackageRevisionStateVisible:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConanRecipeRevisionState.
+const (
+	ConanRecipeRevisionStateDeleted ConanRecipeRevisionState = "deleted"
+	ConanRecipeRevisionStateVisible ConanRecipeRevisionState = "visible"
+)
+
+// Valid indicates whether the value is a known member of the ConanRecipeRevisionState enum.
+func (e ConanRecipeRevisionState) Valid() bool {
+	switch e {
+	case ConanRecipeRevisionStateDeleted:
+		return true
+	case ConanRecipeRevisionStateVisible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateAPIKeyRoles.
 const (
 	CreateAPIKeyRolesAdmin  CreateAPIKeyRoles = "admin"
@@ -325,6 +361,27 @@ func (e ProblemCode) Valid() bool {
 	case SessionClosed:
 		return true
 	case VersionConflict:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyCacheBrowsePageGroupBy.
+const (
+	ProxyCacheBrowsePageGroupByAsset     ProxyCacheBrowsePageGroupBy = "asset"
+	ProxyCacheBrowsePageGroupByComponent ProxyCacheBrowsePageGroupBy = "component"
+	ProxyCacheBrowsePageGroupByVersion   ProxyCacheBrowsePageGroupBy = "version"
+)
+
+// Valid indicates whether the value is a known member of the ProxyCacheBrowsePageGroupBy enum.
+func (e ProxyCacheBrowsePageGroupBy) Valid() bool {
+	switch e {
+	case ProxyCacheBrowsePageGroupByAsset:
+		return true
+	case ProxyCacheBrowsePageGroupByComponent:
+		return true
+	case ProxyCacheBrowsePageGroupByVersion:
 		return true
 	default:
 		return false
@@ -640,6 +697,51 @@ func (e UserState) Valid() bool {
 	}
 }
 
+// Defines values for ListProxyCacheEntriesParamsGroupBy.
+const (
+	ListProxyCacheEntriesParamsGroupByAsset     ListProxyCacheEntriesParamsGroupBy = "asset"
+	ListProxyCacheEntriesParamsGroupByComponent ListProxyCacheEntriesParamsGroupBy = "component"
+	ListProxyCacheEntriesParamsGroupByVersion   ListProxyCacheEntriesParamsGroupBy = "version"
+)
+
+// Valid indicates whether the value is a known member of the ListProxyCacheEntriesParamsGroupBy enum.
+func (e ListProxyCacheEntriesParamsGroupBy) Valid() bool {
+	switch e {
+	case ListProxyCacheEntriesParamsGroupByAsset:
+		return true
+	case ListProxyCacheEntriesParamsGroupByComponent:
+		return true
+	case ListProxyCacheEntriesParamsGroupByVersion:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListProxyCacheEntriesParamsAssetFilter.
+const (
+	All     ListProxyCacheEntriesParamsAssetFilter = "all"
+	Jar     ListProxyCacheEntriesParamsAssetFilter = "jar"
+	Pom     ListProxyCacheEntriesParamsAssetFilter = "pom"
+	Primary ListProxyCacheEntriesParamsAssetFilter = "primary"
+)
+
+// Valid indicates whether the value is a known member of the ListProxyCacheEntriesParamsAssetFilter enum.
+func (e ListProxyCacheEntriesParamsAssetFilter) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case Jar:
+		return true
+	case Pom:
+		return true
+	case Primary:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIKey defines model for APIKey.
 type APIKey struct {
 	CreatedAt time.Time          `json:"createdAt"`
@@ -755,6 +857,47 @@ type AuditRetentionPolicy struct {
 	Enabled  bool   `json:"enabled"`
 	KeepDays int    `json:"keepDays"`
 	Version  string `json:"version"`
+}
+
+// ConanPackageIdList defines model for ConanPackageIdList.
+type ConanPackageIdList struct {
+	Items []string `json:"items"`
+}
+
+// ConanPackageRevision defines model for ConanPackageRevision.
+type ConanPackageRevision struct {
+	CreatedAt      time.Time                 `json:"createdAt"`
+	Digest         string                    `json:"digest"`
+	PackageId      string                    `json:"packageId"`
+	RecipeRevision string                    `json:"recipeRevision"`
+	Reference      string                    `json:"reference"`
+	Revision       string                    `json:"revision"`
+	State          ConanPackageRevisionState `json:"state"`
+}
+
+// ConanPackageRevisionState defines model for ConanPackageRevision.State.
+type ConanPackageRevisionState string
+
+// ConanPackageRevisionList defines model for ConanPackageRevisionList.
+type ConanPackageRevisionList struct {
+	Items []ConanPackageRevision `json:"items"`
+}
+
+// ConanRecipeRevision defines model for ConanRecipeRevision.
+type ConanRecipeRevision struct {
+	CreatedAt time.Time                `json:"createdAt"`
+	Digest    string                   `json:"digest"`
+	Reference string                   `json:"reference"`
+	Revision  string                   `json:"revision"`
+	State     ConanRecipeRevisionState `json:"state"`
+}
+
+// ConanRecipeRevisionState defines model for ConanRecipeRevision.State.
+type ConanRecipeRevisionState string
+
+// ConanRecipeRevisionList defines model for ConanRecipeRevisionList.
+type ConanRecipeRevisionList struct {
+	Items []ConanRecipeRevision `json:"items"`
 }
 
 // ConanReference defines model for ConanReference.
@@ -927,6 +1070,26 @@ type LifecycleJobKind string
 // LifecycleJobState defines model for LifecycleJob.State.
 type LifecycleJobState string
 
+// MavenCacheRefreshRequest defines model for MavenCacheRefreshRequest.
+type MavenCacheRefreshRequest struct {
+	Gav  *string `json:"gav,omitempty"`
+	Path *string `json:"path,omitempty"`
+}
+
+// MavenCacheRefreshResult defines model for MavenCacheRefreshResult.
+type MavenCacheRefreshResult struct {
+	CacheKey     *string `json:"cacheKey,omitempty"`
+	ContentType  *string `json:"contentType,omitempty"`
+	Etag         *string `json:"etag,omitempty"`
+	LastModified *string `json:"lastModified,omitempty"`
+	Path         string  `json:"path"`
+	Refreshed    bool    `json:"refreshed"`
+	Repository   string  `json:"repository"`
+	RepositoryId string  `json:"repositoryId"`
+	Size         *int64  `json:"size,omitempty"`
+	Status       int     `json:"status"`
+}
+
 // MavenCoordinate defines model for MavenCoordinate.
 type MavenCoordinate struct {
 	// BuildNumber Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate.
@@ -943,6 +1106,20 @@ type MavenCoordinate struct {
 type MavenCoordinatePage struct {
 	Items         []MavenCoordinate `json:"items"`
 	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
+// MavenProxyHealth defines model for MavenProxyHealth.
+type MavenProxyHealth struct {
+	CacheEnabled bool      `json:"cacheEnabled"`
+	CheckedAt    time.Time `json:"checkedAt"`
+	CircuitOpen  bool      `json:"circuitOpen"`
+	Endpoint     string    `json:"endpoint"`
+	Error        *string   `json:"error,omitempty"`
+	ProxyAllowed bool      `json:"proxyAllowed"`
+	Reachable    bool      `json:"reachable"`
+	Repository   string    `json:"repository"`
+	RepositoryId string    `json:"repositoryId"`
+	Status       *int      `json:"status,omitempty"`
 }
 
 // Member defines model for Member.
@@ -983,6 +1160,69 @@ type PromotionRequest struct {
 	Coordinate         string             `json:"coordinate"`
 	Digest             string             `json:"digest"`
 	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
+}
+
+// ProxyCacheAsset defines model for ProxyCacheAsset.
+type ProxyCacheAsset struct {
+	ContentType *string `json:"contentType,omitempty"`
+	Digest      *string `json:"digest,omitempty"`
+	Member      *string `json:"member,omitempty"`
+	Name        string  `json:"name"`
+	Path        string  `json:"path"`
+	Sidecar     bool    `json:"sidecar"`
+	Size        *int64  `json:"size,omitempty"`
+}
+
+// ProxyCacheBrowseItem defines model for ProxyCacheBrowseItem.
+type ProxyCacheBrowseItem struct {
+	ArtifactId        *string            `json:"artifactId,omitempty"`
+	AssetCount        *int               `json:"assetCount,omitempty"`
+	Assets            *[]ProxyCacheAsset `json:"assets,omitempty"`
+	ContentType       *string            `json:"contentType,omitempty"`
+	Coordinate        string             `json:"coordinate"`
+	Digest            *string            `json:"digest,omitempty"`
+	Extensions        *[]string          `json:"extensions,omitempty"`
+	GroupId           *string            `json:"groupId,omitempty"`
+	Key               string             `json:"key"`
+	Member            *string            `json:"member,omitempty"`
+	Path              *string            `json:"path,omitempty"`
+	PrimaryAssetCount *int               `json:"primaryAssetCount,omitempty"`
+	SidecarCount      *int               `json:"sidecarCount,omitempty"`
+	Size              *int64             `json:"size,omitempty"`
+	Version           *string            `json:"version,omitempty"`
+}
+
+// ProxyCacheBrowsePage defines model for ProxyCacheBrowsePage.
+type ProxyCacheBrowsePage struct {
+	GroupBy       ProxyCacheBrowsePageGroupBy `json:"groupBy"`
+	Items         []ProxyCacheBrowseItem      `json:"items"`
+	NextPageToken *string                     `json:"nextPageToken,omitempty"`
+	TotalEstimate int                         `json:"totalEstimate"`
+}
+
+// ProxyCacheBrowsePageGroupBy defines model for ProxyCacheBrowsePage.GroupBy.
+type ProxyCacheBrowsePageGroupBy string
+
+// ProxyCacheInvalidateRequest defines model for ProxyCacheInvalidateRequest.
+type ProxyCacheInvalidateRequest struct {
+	Path   string `json:"path"`
+	Prefix *bool  `json:"prefix,omitempty"`
+}
+
+// ProxyCacheInvalidateResult defines model for ProxyCacheInvalidateResult.
+type ProxyCacheInvalidateResult struct {
+	Invalidated int `json:"invalidated"`
+}
+
+// ProxyCacheNegativeClearRequest defines model for ProxyCacheNegativeClearRequest.
+type ProxyCacheNegativeClearRequest struct {
+	Path   *string `json:"path,omitempty"`
+	Prefix *bool   `json:"prefix,omitempty"`
+}
+
+// ProxyCacheNegativeClearResult defines model for ProxyCacheNegativeClearResult.
+type ProxyCacheNegativeClearResult struct {
+	Cleared int `json:"cleared"`
 }
 
 // PublishSession defines model for PublishSession.
@@ -1327,6 +1567,46 @@ type ListArtifactsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListProxyCacheEntriesParams defines parameters for ListProxyCacheEntries.
+type ListProxyCacheEntriesParams struct {
+	Q           *string                                 `form:"q,omitempty" json:"q,omitempty"`
+	GroupBy     *ListProxyCacheEntriesParamsGroupBy     `form:"groupBy,omitempty" json:"groupBy,omitempty"`
+	AssetFilter *ListProxyCacheEntriesParamsAssetFilter `form:"assetFilter,omitempty" json:"assetFilter,omitempty"`
+	PageSize    *PageSize                               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken   *PageToken                              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListProxyCacheEntriesParamsGroupBy defines parameters for ListProxyCacheEntries.
+type ListProxyCacheEntriesParamsGroupBy string
+
+// ListProxyCacheEntriesParamsAssetFilter defines parameters for ListProxyCacheEntries.
+type ListProxyCacheEntriesParamsAssetFilter string
+
+// ListConanPackageIdsParams defines parameters for ListConanPackageIds.
+type ListConanPackageIdsParams struct {
+	Reference      string `form:"reference" json:"reference"`
+	RecipeRevision string `form:"recipeRevision" json:"recipeRevision"`
+}
+
+// ListConanPackageRevisionsParams defines parameters for ListConanPackageRevisions.
+type ListConanPackageRevisionsParams struct {
+	Reference      string `form:"reference" json:"reference"`
+	RecipeRevision string `form:"recipeRevision" json:"recipeRevision"`
+	PackageId      string `form:"packageId" json:"packageId"`
+}
+
+// DeleteConanPackageRevisionParams defines parameters for DeleteConanPackageRevision.
+type DeleteConanPackageRevisionParams struct {
+	Reference      string `form:"reference" json:"reference"`
+	RecipeRevision string `form:"recipeRevision" json:"recipeRevision"`
+	PackageId      string `form:"packageId" json:"packageId"`
+}
+
+// ListConanRecipeRevisionsParams defines parameters for ListConanRecipeRevisions.
+type ListConanRecipeRevisionsParams struct {
+	Reference string `form:"reference" json:"reference"`
+}
+
 // ListConanReferencesParams defines parameters for ListConanReferences.
 type ListConanReferencesParams struct {
 	// Q Conan recipe-reference prefix used to filter the visible-reference projection.
@@ -1413,6 +1693,15 @@ type CreateRepositoryJSONRequestBody = CreateRepository
 
 // UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
 type UpdateRepositoryJSONRequestBody = UpdateRepository
+
+// InvalidateProxyCacheJSONRequestBody defines body for InvalidateProxyCache for application/json ContentType.
+type InvalidateProxyCacheJSONRequestBody = ProxyCacheInvalidateRequest
+
+// ClearProxyNegativeCacheJSONRequestBody defines body for ClearProxyNegativeCache for application/json ContentType.
+type ClearProxyNegativeCacheJSONRequestBody = ProxyCacheNegativeClearRequest
+
+// RefreshProxyCacheJSONRequestBody defines body for RefreshProxyCache for application/json ContentType.
+type RefreshProxyCacheJSONRequestBody = MavenCacheRefreshRequest
 
 // ReplaceRepositoryCapacityJSONRequestBody defines body for ReplaceRepositoryCapacity for application/json ContentType.
 type ReplaceRepositoryCapacityJSONRequestBody = RepositoryCapacityQuota
@@ -1561,6 +1850,18 @@ type ServerInterface interface {
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
 
+	// (GET /repositories/{repositoryId}/cache/entries)
+	ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListProxyCacheEntriesParams)
+
+	// (POST /repositories/{repositoryId}/cache/invalidate)
+	InvalidateProxyCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/cache/negative:clear)
+	ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/cache/refresh)
+	RefreshProxyCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
 	// (GET /repositories/{repositoryId}/capabilities)
 	GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
@@ -1569,6 +1870,18 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/capacity)
 	ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /repositories/{repositoryId}/conan/package-ids)
+	ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanPackageIdsParams)
+
+	// (GET /repositories/{repositoryId}/conan/package-revisions)
+	ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanPackageRevisionsParams)
+
+	// (DELETE /repositories/{repositoryId}/conan/package-revisions/{revision})
+	DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, revision string, params DeleteConanPackageRevisionParams)
+
+	// (GET /repositories/{repositoryId}/conan/recipe-revisions)
+	ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanRecipeRevisionsParams)
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
@@ -1593,6 +1906,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/promotions)
 	CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryPromotionParams)
+
+	// (GET /repositories/{repositoryId}/proxy/health)
+	GetProxyHealth(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
@@ -2637,6 +2953,178 @@ func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListProxyCacheEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListProxyCacheEntries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProxyCacheEntriesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "groupBy" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "groupBy", r.URL.Query(), &params.GroupBy, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "groupBy"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupBy", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "assetFilter" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "assetFilter", r.URL.Query(), &params.AssetFilter, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "assetFilter"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetFilter", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProxyCacheEntries(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InvalidateProxyCache operation middleware
+func (siw *ServerInterfaceWrapper) InvalidateProxyCache(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InvalidateProxyCache(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearProxyNegativeCache operation middleware
+func (siw *ServerInterfaceWrapper) ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearProxyNegativeCache(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshProxyCache operation middleware
+func (siw *ServerInterfaceWrapper) RefreshProxyCache(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshProxyCache(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRepositoryCapabilities operation middleware
 func (siw *ServerInterfaceWrapper) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request) {
 
@@ -2706,6 +3194,248 @@ func (siw *ServerInterfaceWrapper) ReplaceRepositoryCapacity(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceRepositoryCapacity(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConanPackageIds operation middleware
+func (siw *ServerInterfaceWrapper) ListConanPackageIds(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConanPackageIdsParams
+
+	// ------------- Required query parameter "reference" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reference", r.URL.Query(), &params.Reference, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reference"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reference", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "recipeRevision" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "recipeRevision", r.URL.Query(), &params.RecipeRevision, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recipeRevision"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRevision", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConanPackageIds(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConanPackageRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConanPackageRevisionsParams
+
+	// ------------- Required query parameter "reference" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reference", r.URL.Query(), &params.Reference, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reference"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reference", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "recipeRevision" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "recipeRevision", r.URL.Query(), &params.RecipeRevision, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recipeRevision"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRevision", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "packageId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "packageId", r.URL.Query(), &params.PackageId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConanPackageRevisions(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteConanPackageRevision operation middleware
+func (siw *ServerInterfaceWrapper) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revision" -------------
+	var revision string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revision", r.PathValue("revision"), &revision, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revision", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteConanPackageRevisionParams
+
+	// ------------- Required query parameter "reference" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reference", r.URL.Query(), &params.Reference, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reference"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reference", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "recipeRevision" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "recipeRevision", r.URL.Query(), &params.RecipeRevision, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recipeRevision"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRevision", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "packageId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "packageId", r.URL.Query(), &params.PackageId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteConanPackageRevision(w, r, repositoryId, revision, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConanRecipeRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConanRecipeRevisionsParams
+
+	// ------------- Required query parameter "reference" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "reference", r.URL.Query(), &params.Reference, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reference"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reference", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConanRecipeRevisions(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3096,6 +3826,32 @@ func (siw *ServerInterfaceWrapper) CreateRepositoryPromotion(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRepositoryPromotion(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProxyHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetProxyHealth(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProxyHealth(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3844,9 +4600,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/cache/entries", wrapper.ListProxyCacheEntries)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/cache/invalidate", wrapper.InvalidateProxyCache)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/cache/negative:clear", wrapper.ClearProxyNegativeCache)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/cache/refresh", wrapper.RefreshProxyCache)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capabilities", wrapper.GetRepositoryCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.GetRepositoryCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.ReplaceRepositoryCapacity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-ids", wrapper.ListConanPackageIds)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-revisions", wrapper.ListConanPackageRevisions)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-revisions/{revision}", wrapper.DeleteConanPackageRevision)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/recipe-revisions", wrapper.ListConanRecipeRevisions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/effective-access", wrapper.GetRepositoryEffectiveAccess)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
@@ -3855,6 +4619,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/proxy/health", wrapper.GetProxyHealth)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.CreateRepositoryReplication)
@@ -3895,6 +4660,12 @@ type AuditListJSONResponse AuditList
 
 type AuditRetentionPolicyJSONResponse AuditRetentionPolicy
 
+type ConanPackageIdListJSONResponse ConanPackageIdList
+
+type ConanPackageRevisionListJSONResponse ConanPackageRevisionList
+
+type ConanRecipeRevisionListJSONResponse ConanRecipeRevisionList
+
 type ConanReferenceListJSONResponse ConanReferencePage
 
 type CreatedAPIKeyJSONResponse CreatedAPIKey
@@ -3916,13 +4687,23 @@ type GroupListJSONResponse GroupPage
 
 type LifecycleJobListJSONResponse []LifecycleJob
 
+type MavenCacheRefreshResultJSONResponse MavenCacheRefreshResult
+
 type MavenCoordinateListJSONResponse MavenCoordinatePage
+
+type MavenProxyHealthJSONResponse MavenProxyHealth
 
 type MemberListJSONResponse MemberList
 
 type OCIImageListJSONResponse OCIImagePage
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ProxyCacheBrowsePageJSONResponse ProxyCacheBrowsePage
+
+type ProxyCacheInvalidateResultJSONResponse ProxyCacheInvalidateResult
+
+type ProxyCacheNegativeClearResultJSONResponse ProxyCacheNegativeClearResult
 
 type PublishSessionJSONResponse PublishSession
 
@@ -4932,6 +5713,226 @@ func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.Respo
 	return err
 }
 
+type ListProxyCacheEntriesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListProxyCacheEntriesParams
+}
+
+type ListProxyCacheEntriesResponseObject interface {
+	VisitListProxyCacheEntriesResponse(w http.ResponseWriter) error
+}
+
+type ListProxyCacheEntries200JSONResponse struct {
+	ProxyCacheBrowsePageJSONResponse
+}
+
+func (response ListProxyCacheEntries200JSONResponse) VisitListProxyCacheEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProxyCacheEntries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListProxyCacheEntries400ApplicationProblemPlusJSONResponse) VisitListProxyCacheEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProxyCacheEntries404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListProxyCacheEntries404ApplicationProblemPlusJSONResponse) VisitListProxyCacheEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InvalidateProxyCacheRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *InvalidateProxyCacheJSONRequestBody
+}
+
+type InvalidateProxyCacheResponseObject interface {
+	VisitInvalidateProxyCacheResponse(w http.ResponseWriter) error
+}
+
+type InvalidateProxyCache200JSONResponse struct {
+	ProxyCacheInvalidateResultJSONResponse
+}
+
+func (response InvalidateProxyCache200JSONResponse) VisitInvalidateProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InvalidateProxyCache400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response InvalidateProxyCache400ApplicationProblemPlusJSONResponse) VisitInvalidateProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InvalidateProxyCache404ApplicationProblemPlusJSONResponse Problem
+
+func (response InvalidateProxyCache404ApplicationProblemPlusJSONResponse) VisitInvalidateProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearProxyNegativeCacheRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *ClearProxyNegativeCacheJSONRequestBody
+}
+
+type ClearProxyNegativeCacheResponseObject interface {
+	VisitClearProxyNegativeCacheResponse(w http.ResponseWriter) error
+}
+
+type ClearProxyNegativeCache200JSONResponse struct {
+	ProxyCacheNegativeClearResultJSONResponse
+}
+
+func (response ClearProxyNegativeCache200JSONResponse) VisitClearProxyNegativeCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearProxyNegativeCache400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ClearProxyNegativeCache400ApplicationProblemPlusJSONResponse) VisitClearProxyNegativeCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearProxyNegativeCache404ApplicationProblemPlusJSONResponse Problem
+
+func (response ClearProxyNegativeCache404ApplicationProblemPlusJSONResponse) VisitClearProxyNegativeCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshProxyCacheRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *RefreshProxyCacheJSONRequestBody
+}
+
+type RefreshProxyCacheResponseObject interface {
+	VisitRefreshProxyCacheResponse(w http.ResponseWriter) error
+}
+
+type RefreshProxyCache200JSONResponse struct {
+	MavenCacheRefreshResultJSONResponse
+}
+
+func (response RefreshProxyCache200JSONResponse) VisitRefreshProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshProxyCache400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RefreshProxyCache400ApplicationProblemPlusJSONResponse) VisitRefreshProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshProxyCache404ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshProxyCache404ApplicationProblemPlusJSONResponse) VisitRefreshProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRepositoryCapabilitiesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -5052,6 +6053,217 @@ func (response ReplaceRepositoryCapacity400ApplicationProblemPlusJSONResponse) V
 type ReplaceRepositoryCapacity404ApplicationProblemPlusJSONResponse Problem
 
 func (response ReplaceRepositoryCapacity404ApplicationProblemPlusJSONResponse) VisitReplaceRepositoryCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageIdsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListConanPackageIdsParams
+}
+
+type ListConanPackageIdsResponseObject interface {
+	VisitListConanPackageIdsResponse(w http.ResponseWriter) error
+}
+
+type ListConanPackageIds200JSONResponse struct{ ConanPackageIdListJSONResponse }
+
+func (response ListConanPackageIds200JSONResponse) VisitListConanPackageIdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageIds400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListConanPackageIds400ApplicationProblemPlusJSONResponse) VisitListConanPackageIdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageIds404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanPackageIds404ApplicationProblemPlusJSONResponse) VisitListConanPackageIdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageRevisionsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListConanPackageRevisionsParams
+}
+
+type ListConanPackageRevisionsResponseObject interface {
+	VisitListConanPackageRevisionsResponse(w http.ResponseWriter) error
+}
+
+type ListConanPackageRevisions200JSONResponse struct {
+	ConanPackageRevisionListJSONResponse
+}
+
+func (response ListConanPackageRevisions200JSONResponse) VisitListConanPackageRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageRevisions400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListConanPackageRevisions400ApplicationProblemPlusJSONResponse) VisitListConanPackageRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageRevisions404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanPackageRevisions404ApplicationProblemPlusJSONResponse) VisitListConanPackageRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConanPackageRevisionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Revision     string       `json:"revision"`
+	Params       DeleteConanPackageRevisionParams
+}
+
+type DeleteConanPackageRevisionResponseObject interface {
+	VisitDeleteConanPackageRevisionResponse(w http.ResponseWriter) error
+}
+
+type DeleteConanPackageRevision204Response struct {
+}
+
+func (response DeleteConanPackageRevision204Response) VisitDeleteConanPackageRevisionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteConanPackageRevision400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteConanPackageRevision400ApplicationProblemPlusJSONResponse) VisitDeleteConanPackageRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConanPackageRevision404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteConanPackageRevision404ApplicationProblemPlusJSONResponse) VisitDeleteConanPackageRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanRecipeRevisionsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListConanRecipeRevisionsParams
+}
+
+type ListConanRecipeRevisionsResponseObject interface {
+	VisitListConanRecipeRevisionsResponse(w http.ResponseWriter) error
+}
+
+type ListConanRecipeRevisions200JSONResponse struct {
+	ConanRecipeRevisionListJSONResponse
+}
+
+func (response ListConanRecipeRevisions200JSONResponse) VisitListConanRecipeRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanRecipeRevisions400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListConanRecipeRevisions400ApplicationProblemPlusJSONResponse) VisitListConanRecipeRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanRecipeRevisions404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanRecipeRevisions404ApplicationProblemPlusJSONResponse) VisitListConanRecipeRevisionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5400,6 +6612,58 @@ func (response CreateRepositoryPromotion202JSONResponse) VisitCreateRepositoryPr
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProxyHealthRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetProxyHealthResponseObject interface {
+	VisitGetProxyHealthResponse(w http.ResponseWriter) error
+}
+
+type GetProxyHealth200JSONResponse struct{ MavenProxyHealthJSONResponse }
+
+func (response GetProxyHealth200JSONResponse) VisitGetProxyHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProxyHealth400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetProxyHealth400ApplicationProblemPlusJSONResponse) VisitGetProxyHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProxyHealth404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetProxyHealth404ApplicationProblemPlusJSONResponse) VisitGetProxyHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6166,6 +7430,18 @@ type StrictServerInterface interface {
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/cache/entries)
+	ListProxyCacheEntries(ctx context.Context, request ListProxyCacheEntriesRequestObject) (ListProxyCacheEntriesResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/cache/invalidate)
+	InvalidateProxyCache(ctx context.Context, request InvalidateProxyCacheRequestObject) (InvalidateProxyCacheResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/cache/negative:clear)
+	ClearProxyNegativeCache(ctx context.Context, request ClearProxyNegativeCacheRequestObject) (ClearProxyNegativeCacheResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/cache/refresh)
+	RefreshProxyCache(ctx context.Context, request RefreshProxyCacheRequestObject) (RefreshProxyCacheResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/capabilities)
 	GetRepositoryCapabilities(ctx context.Context, request GetRepositoryCapabilitiesRequestObject) (GetRepositoryCapabilitiesResponseObject, error)
 
@@ -6174,6 +7450,18 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/capacity)
 	ReplaceRepositoryCapacity(ctx context.Context, request ReplaceRepositoryCapacityRequestObject) (ReplaceRepositoryCapacityResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/conan/package-ids)
+	ListConanPackageIds(ctx context.Context, request ListConanPackageIdsRequestObject) (ListConanPackageIdsResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/conan/package-revisions)
+	ListConanPackageRevisions(ctx context.Context, request ListConanPackageRevisionsRequestObject) (ListConanPackageRevisionsResponseObject, error)
+
+	// (DELETE /repositories/{repositoryId}/conan/package-revisions/{revision})
+	DeleteConanPackageRevision(ctx context.Context, request DeleteConanPackageRevisionRequestObject) (DeleteConanPackageRevisionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/conan/recipe-revisions)
+	ListConanRecipeRevisions(ctx context.Context, request ListConanRecipeRevisionsRequestObject) (ListConanRecipeRevisionsResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
@@ -6198,6 +7486,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/promotions)
 	CreateRepositoryPromotion(ctx context.Context, request CreateRepositoryPromotionRequestObject) (CreateRepositoryPromotionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/proxy/health)
+	GetProxyHealth(ctx context.Context, request GetProxyHealthRequestObject) (GetProxyHealthResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
@@ -7040,6 +8331,135 @@ func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, rep
 	}
 }
 
+// ListProxyCacheEntries operation middleware
+func (sh *strictHandler) ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListProxyCacheEntriesParams) {
+	var request ListProxyCacheEntriesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProxyCacheEntries(ctx, request.(ListProxyCacheEntriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProxyCacheEntries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListProxyCacheEntriesResponseObject); ok {
+		if err := validResponse.VisitListProxyCacheEntriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// InvalidateProxyCache operation middleware
+func (sh *strictHandler) InvalidateProxyCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request InvalidateProxyCacheRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body InvalidateProxyCacheJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.InvalidateProxyCache(ctx, request.(InvalidateProxyCacheRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "InvalidateProxyCache")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(InvalidateProxyCacheResponseObject); ok {
+		if err := validResponse.VisitInvalidateProxyCacheResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ClearProxyNegativeCache operation middleware
+func (sh *strictHandler) ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ClearProxyNegativeCacheRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ClearProxyNegativeCacheJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClearProxyNegativeCache(ctx, request.(ClearProxyNegativeCacheRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClearProxyNegativeCache")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClearProxyNegativeCacheResponseObject); ok {
+		if err := validResponse.VisitClearProxyNegativeCacheResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshProxyCache operation middleware
+func (sh *strictHandler) RefreshProxyCache(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request RefreshProxyCacheRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body RefreshProxyCacheJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshProxyCache(ctx, request.(RefreshProxyCacheRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshProxyCache")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshProxyCacheResponseObject); ok {
+		if err := validResponse.VisitRefreshProxyCacheResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetRepositoryCapabilities operation middleware
 func (sh *strictHandler) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
 	var request GetRepositoryCapabilitiesRequestObject
@@ -7118,6 +8538,115 @@ func (sh *strictHandler) ReplaceRepositoryCapacity(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceRepositoryCapacityResponseObject); ok {
 		if err := validResponse.VisitReplaceRepositoryCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConanPackageIds operation middleware
+func (sh *strictHandler) ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanPackageIdsParams) {
+	var request ListConanPackageIdsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConanPackageIds(ctx, request.(ListConanPackageIdsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConanPackageIds")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConanPackageIdsResponseObject); ok {
+		if err := validResponse.VisitListConanPackageIdsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConanPackageRevisions operation middleware
+func (sh *strictHandler) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanPackageRevisionsParams) {
+	var request ListConanPackageRevisionsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConanPackageRevisions(ctx, request.(ListConanPackageRevisionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConanPackageRevisions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConanPackageRevisionsResponseObject); ok {
+		if err := validResponse.VisitListConanPackageRevisionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteConanPackageRevision operation middleware
+func (sh *strictHandler) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, revision string, params DeleteConanPackageRevisionParams) {
+	var request DeleteConanPackageRevisionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Revision = revision
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteConanPackageRevision(ctx, request.(DeleteConanPackageRevisionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteConanPackageRevision")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteConanPackageRevisionResponseObject); ok {
+		if err := validResponse.VisitDeleteConanPackageRevisionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConanRecipeRevisions operation middleware
+func (sh *strictHandler) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanRecipeRevisionsParams) {
+	var request ListConanRecipeRevisionsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConanRecipeRevisions(ctx, request.(ListConanRecipeRevisionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConanRecipeRevisions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConanRecipeRevisionsResponseObject); ok {
+		if err := validResponse.VisitListConanRecipeRevisionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7345,6 +8874,32 @@ func (sh *strictHandler) CreateRepositoryPromotion(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRepositoryPromotionResponseObject); ok {
 		if err := validResponse.VisitCreateRepositoryPromotionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProxyHealth operation middleware
+func (sh *strictHandler) GetProxyHealth(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetProxyHealthRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProxyHealth(ctx, request.(GetProxyHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProxyHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProxyHealthResponseObject); ok {
+		if err := validResponse.VisitGetProxyHealthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

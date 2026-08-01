@@ -810,6 +810,148 @@ ConanReferencePage:
         "$ref": "#/ConanReference"
     nextPageToken:
       type: string
+ConanRecipeRevision:
+  type: object
+  required: [reference, revision, digest, state, createdAt]
+  properties:
+    reference: {type: string}
+    revision: {type: string}
+    digest: {type: string}
+    state: {type: string, enum: [visible, deleted]}
+    createdAt: {type: string, format: date-time}
+ConanRecipeRevisionList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ConanRecipeRevision"}
+ConanPackageRevision:
+  type: object
+  required: [reference, recipeRevision, packageId, revision, digest, state, createdAt]
+  properties:
+    reference: {type: string}
+    recipeRevision: {type: string}
+    packageId: {type: string}
+    revision: {type: string}
+    digest: {type: string}
+    state: {type: string, enum: [visible, deleted]}
+    createdAt: {type: string, format: date-time}
+ConanPackageRevisionList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ConanPackageRevision"}
+ConanPackageIdList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {type: string}
+ProxyCacheAsset:
+  type: object
+  required: [path, name, sidecar]
+  properties:
+    path: {type: string}
+    name: {type: string}
+    digest: {type: string}
+    size: {type: integer, format: int64, minimum: 0}
+    contentType: {type: string}
+    member: {type: string}
+    sidecar: {type: boolean}
+ProxyCacheBrowseItem:
+  type: object
+  required: [key, coordinate]
+  properties:
+    key: {type: string}
+    coordinate: {type: string}
+    groupId: {type: string}
+    artifactId: {type: string}
+    version: {type: string}
+    path: {type: string}
+    digest: {type: string}
+    size: {type: integer, format: int64, minimum: 0}
+    contentType: {type: string}
+    member: {type: string}
+    assetCount: {type: integer, minimum: 0}
+    primaryAssetCount: {type: integer, minimum: 0}
+    sidecarCount: {type: integer, minimum: 0}
+    extensions:
+      type: array
+      items: {type: string}
+    assets:
+      type: array
+      items: {"$ref": "#/ProxyCacheAsset"}
+ProxyCacheBrowsePage:
+  type: object
+  required: [items, totalEstimate, groupBy]
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ProxyCacheBrowseItem"}
+    nextPageToken: {type: string}
+    totalEstimate: {type: integer, minimum: 0}
+    groupBy: {type: string, enum: [version, component, asset]}
+ProxyCacheInvalidateRequest:
+  type: object
+  required: [path]
+  additionalProperties: false
+  properties:
+    path: {type: string, minLength: 1}
+    prefix: {type: boolean, default: false}
+ProxyCacheNegativeClearRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    path: {type: string, minLength: 1}
+    prefix: {type: boolean, default: false}
+ProxyCacheInvalidateResult:
+  type: object
+  required: [invalidated]
+  properties:
+    invalidated: {type: integer, minimum: 0}
+ProxyCacheNegativeClearResult:
+  type: object
+  required: [cleared]
+  properties:
+    cleared: {type: integer, minimum: 0}
+MavenCacheRefreshRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    path: {type: string}
+    gav: {type: string}
+MavenCacheRefreshResult:
+  type: object
+  required: [repositoryId, repository, path, status, refreshed]
+  properties:
+    repositoryId: {type: string}
+    repository: {type: string}
+    path: {type: string}
+    status: {type: integer}
+    refreshed: {type: boolean}
+    cacheKey: {type: string}
+    contentType: {type: string}
+    size: {type: integer, format: int64, minimum: 0}
+    etag: {type: string}
+    lastModified: {type: string}
+MavenProxyHealth:
+  type: object
+  required: [repositoryId, repository, endpoint, reachable, proxyAllowed, circuitOpen, cacheEnabled, checkedAt]
+  properties:
+    repositoryId: {type: string}
+    repository: {type: string}
+    endpoint: {type: string}
+    reachable: {type: boolean}
+    status: {type: integer}
+    error: {type: string}
+    proxyAllowed: {type: boolean}
+    circuitOpen: {type: boolean}
+    cacheEnabled: {type: boolean}
+    checkedAt: {type: string, format: date-time}
 RawDirectoryEntry:
   type: object
   required:

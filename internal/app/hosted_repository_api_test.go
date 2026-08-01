@@ -1332,6 +1332,77 @@ func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 	}
 }
 
+func TestConanRevisionManagementListsAndTombstonesSelectedRevisions(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-revisions", Format: repository.FormatConan, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const reference = "widget/1.0/user/stable"
+	const recipeRevision = "recipe-r1"
+	const packageID = "package-a"
+	const packageRevision = "package-r1"
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: "native/conan/recipe", Digest: digest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: repo.ID, Reference: reference, Revision: recipeRevision, Digest: digest}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, Path: "conanfile.py", ObjectKey: "native/conan/recipe", Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: "native/conan/package", Digest: digest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutConanPackageRevision(ctx, repository.ConanPackageRevision{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, Revision: packageRevision, Digest: digest}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, PackageRevision: packageRevision, Path: "package.tgz", ObjectKey: "native/conan/package", Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		authorize(req, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	recipeList := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference))
+	if recipeList.Code != http.StatusOK || !strings.Contains(recipeList.Body.String(), `"revision":"recipe-r1"`) {
+		t.Fatalf("recipe list=%d body=%s", recipeList.Code, recipeList.Body.String())
+	}
+	anonymousRecipeList := httptest.NewRecorder()
+	handler.ServeHTTP(anonymousRecipeList, httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference), nil))
+	if anonymousRecipeList.Code != http.StatusOK {
+		t.Fatalf("anonymous recipe list=%d body=%s", anonymousRecipeList.Code, anonymousRecipeList.Body.String())
+	}
+	packageIDs := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/package-ids?reference="+url.QueryEscape(reference)+"&recipeRevision="+recipeRevision)
+	if packageIDs.Code != http.StatusOK || !strings.Contains(packageIDs.Body.String(), packageID) {
+		t.Fatalf("package ids=%d body=%s", packageIDs.Code, packageIDs.Body.String())
+	}
+	packageList := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/package-revisions?reference="+url.QueryEscape(reference)+"&recipeRevision="+recipeRevision+"&packageId="+packageID)
+	if packageList.Code != http.StatusOK || !strings.Contains(packageList.Body.String(), `"revision":"package-r1"`) {
+		t.Fatalf("package list=%d body=%s", packageList.Code, packageList.Body.String())
+	}
+	packageDelete := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID+"/conan/package-revisions/"+packageRevision+"?reference="+url.QueryEscape(reference)+"&recipeRevision="+recipeRevision+"&packageId="+packageID)
+	if packageDelete.Code != http.StatusNoContent {
+		t.Fatalf("package delete=%d body=%s", packageDelete.Code, packageDelete.Body.String())
+	}
+	packageItem, err := store.GetConanPackageRevision(ctx, repo.ID, reference, recipeRevision, packageID, packageRevision)
+	if err != nil || packageItem.State != "deleted" {
+		t.Fatalf("package=%#v err=%v", packageItem, err)
+	}
+	recipe, err := store.GetConanRecipeRevision(ctx, repo.ID, reference, recipeRevision)
+	if err != nil || recipe.State != "visible" {
+		t.Fatalf("recipe=%#v err=%v", recipe, err)
+	}
+	proxy, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-revisions-proxy", Format: repository.FormatConan, Type: repository.RepositoryTypeProxy, Endpoint: "https://conan.example", AllowedHosts: []string{"conan.example"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxyDelete := request(http.MethodDelete, "/api/v2/repositories/"+proxy.ID+"/conan/package-revisions/"+packageRevision+"?reference="+url.QueryEscape(reference)+"&recipeRevision="+recipeRevision+"&packageId="+packageID)
+	if proxyDelete.Code != http.StatusBadRequest {
+		t.Fatalf("proxy delete=%d body=%s", proxyDelete.Code, proxyDelete.Body.String())
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()
