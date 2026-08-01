@@ -184,7 +184,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		mux.Handle("GET /api/v1/operations/repositories", repositoryOperationsHandler{maintenance: maintenance, metrics: metrics, authenticator: authenticator})
 	}
 	ociGroupRouter := v2GroupRouter{format: repository.FormatOCI, groups: store, repos: store, audit: store, auth: authenticator,
-		oci: &v2GroupOCIHandler{native: &nativeOCI, proxy: &oci, auth: authenticator},
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		oci:        &v2GroupOCIHandler{native: &nativeOCI, proxy: &oci, auth: authenticator},
 		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if nativeOCI.ServeHTTP(w, r) {
 				return
@@ -195,7 +196,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/repository/maven/", nativeMaven)
 	mavenLegacy := MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}
 	mavenGroupRouter := v2GroupRouter{format: repository.FormatMaven, groups: store, repos: store, audit: store, auth: authenticator,
-		maven: &v2GroupMavenHandler{native: &nativeMaven, proxy: &mavenLegacy, auth: authenticator},
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		maven:      &v2GroupMavenHandler{native: &nativeMaven, proxy: &mavenLegacy, auth: authenticator},
 		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if nativeMaven.ServeRepositoryHTTP(w, r) {
 				return
@@ -204,7 +206,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		})}
 	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter})
 	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
-		raw: &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
 		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if nativeRaw.ServeHTTP(w, r) {
 				return

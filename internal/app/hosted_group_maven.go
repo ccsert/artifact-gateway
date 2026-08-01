@@ -55,6 +55,12 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	if isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
+	var denied bool
+	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatMaven, assetPath, members)
+	if denied && len(members) == 0 {
+		http.Error(w, "repository read permission required", http.StatusForbidden)
+		return
+	}
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatMaven, assetPath, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)

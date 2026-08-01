@@ -16,9 +16,28 @@ import (
 // Group semantics: every hosted member is tried before any proxy member, and
 // members of the same kind keep their configured position order.
 type v2GroupResolver struct {
-	groups repository.HostedGroupStore
-	repos  repository.HostedRepositoryStore
-	audit  repository.Store
+	groups     repository.HostedGroupStore
+	repos      repository.HostedRepositoryStore
+	audit      repository.Store
+	authorizer RepositoryAuthorizer
+}
+
+func (r v2GroupResolver) authorizeMembers(ctx context.Context, principal Principal, format repository.Format, resource string, members []repository.Member) ([]repository.Member, bool) {
+	if isAnonymous(principal) || r.authorizer.Grants == nil {
+		return members, false
+	}
+	access := groupMemberAccess{Repositories: r.repos, Authorizer: r.authorizer, Format: format}
+	filtered, denied, err := access.filterManaged(ctx, principal, members, resource, func(member repository.Member, decision AuthorizationDecision) error {
+		return r.auditAuthorizationDenied(ctx, format, resource, member.Name, principal.Actor, decision)
+	})
+	return filtered, denied || err != nil
+}
+
+func (r v2GroupResolver) auditAuthorizationDenied(ctx context.Context, format repository.Format, resource, member, actor string, decision AuthorizationDecision) error {
+	if r.audit == nil {
+		return nil
+	}
+	return r.audit.RecordAudit(ctx, repository.AuditRecord{Actor: actor, MemberName: member, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(format), Resource: resource, Operation: "get", Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 }
 
 // v2GroupName extracts the first path segment after the format's protocol
@@ -130,16 +149,17 @@ func (r v2GroupResolver) auditResolution(ctx context.Context, group repository.H
 // the request is resolved against the group's members; anything else falls
 // through to the next handler unchanged.
 type v2GroupRouter struct {
-	format repository.Format
-	groups repository.HostedGroupStore
-	repos  repository.HostedRepositoryStore
-	audit  repository.Store
-	auth   Authenticator
-	oci    *v2GroupOCIHandler
-	maven  *v2GroupMavenHandler
-	raw    *v2GroupRawHandler
-	conan  *v2GroupConanHandler
-	next   http.Handler
+	format     repository.Format
+	groups     repository.HostedGroupStore
+	repos      repository.HostedRepositoryStore
+	audit      repository.Store
+	auth       Authenticator
+	authorizer RepositoryAuthorizer
+	oci        *v2GroupOCIHandler
+	maven      *v2GroupMavenHandler
+	raw        *v2GroupRawHandler
+	conan      *v2GroupConanHandler
+	next       http.Handler
 }
 
 func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -148,7 +168,7 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.next.ServeHTTP(w, req)
 		return
 	}
-	resolver := v2GroupResolver{groups: r.groups, repos: r.repos, audit: r.audit}
+	resolver := v2GroupResolver{groups: r.groups, repos: r.repos, audit: r.audit, authorizer: r.authorizer}
 	group, err := resolver.resolveHostedGroup(req.Context(), name, r.format)
 	if errors.Is(err, repository.ErrNotFound) {
 		r.next.ServeHTTP(w, req)

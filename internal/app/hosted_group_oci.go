@@ -60,6 +60,12 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
+	var denied bool
+	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatOCI, imageName, members)
+	if denied && len(members) == 0 {
+		writeOCIError(w, http.StatusForbidden, "DENIED", "requested access to the resource is denied")
+		return
+	}
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
 		writeOCIChallenge(w, r)
