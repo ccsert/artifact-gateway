@@ -17,7 +17,9 @@ Progress update 2026-07-31:
 - Usage snippets currently reflect authenticated Maven Proxy access. Anonymous
   variants remain blocked on Phase 5 anonymous-access policy.
 - Remaining Phase 2 work is to broaden the endpoint beyond Maven and document it
-  in the formal OpenAPI contract.
+  in the formal OpenAPI contract. Current Proxy cache browse/refresh/health/
+  invalidate/negative-clear endpoints are implemented and tested, but still use
+  hand-written handlers and Console fetch calls outside the generated client.
 - Phase 3 has started: Proxy capacity now reports live cache bytes and cache
   object counts through the existing repository capacity endpoint, and the
   Console explains Hosted storage versus Proxy cache storage.
@@ -354,9 +356,9 @@ Group-only interactions:
 - [ ] Add global anonymous-access setting.
 - [x] Add Repository anonymous read policy.
 - [x] Add Group anonymous read policy and member eligibility view.
-- [ ] Add anonymous effective-access explanation endpoint.
+- [x] Add Repository anonymous effective-access explanation endpoint.
 - [x] Support anonymous protocol reads where policy allows.
-- [ ] Support anonymous browse/query where policy allows.
+- [x] Support Repository anonymous browse/query where policy allows.
 - [ ] Hide privileged Console controls for anonymous users.
 - [ ] Audit all anonymous reads as `anonymous`.
 
