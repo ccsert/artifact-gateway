@@ -307,6 +307,7 @@ func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 	}
 }
 
+
 func TestV2MavenProxyNegativeCacheClearScopesAndPreservesPositiveEntries(t *testing.T) {
 	handler, store, objectStore, _, mavenCache, _, _ := newCacheEntriesTestHandler(t)
 	ctx := context.Background()

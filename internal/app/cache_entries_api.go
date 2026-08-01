@@ -28,9 +28,17 @@ type CacheEntry struct {
 }
 
 type cacheEntriesHandler struct {
-	store         GatewayStore
+	store         cacheEntriesStore
 	maintenance   *CacheMaintenance
 	authenticator Authenticator
+}
+
+type cacheEntriesStore interface {
+	repository.Store
+	repository.MavenStore
+	repository.RawStore
+	repository.ConanStore
+	repository.HostedRepositoryStore
 }
 
 func (h cacheEntriesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -17,6 +17,7 @@ import (
 
 type proxyCacheBrowseHandler struct {
 	store         repository.HostedRepositoryStore
+	entriesStore  cacheEntriesStore
 	audit         repository.Store
 	maintenance   *CacheMaintenance
 	authenticator Authenticator
@@ -102,8 +103,8 @@ func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
 		return
 	}
-	if repo.Type != repository.RepositoryTypeProxy || repo.Format != repository.FormatMaven {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_repository", "cache browse is only available for Maven proxy repositories")
+	if repo.Type != repository.RepositoryTypeProxy {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_repository", "cache browse is only available for proxy repositories")
 		return
 	}
 	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
@@ -312,16 +313,54 @@ func (h proxyCacheBrowseHandler) ClearNegative(w http.ResponseWriter, r *http.Re
 }
 
 func (h proxyCacheBrowseHandler) proxyCacheItems(ctx context.Context, repo repository.HostedRepository, query, groupBy, assetFilter string) ([]proxyCacheBrowseItem, error) {
+	entriesHandler := cacheEntriesHandler{store: h.entriesStore, maintenance: h.maintenance, authenticator: h.authenticator}
 	switch repo.Format {
 	case repository.FormatMaven:
-		entries, err := (cacheEntriesHandler{maintenance: h.maintenance, authenticator: h.authenticator}).listMavenForRepository(ctx, repo.Name, map[string]bool{repo.Endpoint: true})
+		entries, err := entriesHandler.listMavenForRepository(ctx, repo.Name, map[string]bool{repo.Endpoint: true})
 		if err != nil {
 			return nil, err
 		}
 		return mavenProxyCacheBrowseItems(entries, query, groupBy, assetFilter), nil
+	case repository.FormatOCI:
+		entries, err := entriesHandler.listOCI(ctx, map[string]bool{repo.Endpoint: true})
+		if err != nil {
+			return nil, err
+		}
+		return genericProxyCacheBrowseItems(entries, query), nil
+	case repository.FormatRaw:
+		entries, err := entriesHandler.listRaw(ctx, map[string]bool{repo.Endpoint: true})
+		if err != nil {
+			return nil, err
+		}
+		return genericProxyCacheBrowseItems(entries, query), nil
+	case repository.FormatConan:
+		entries, err := entriesHandler.listConan(ctx, repo.Name)
+		if err != nil {
+			return nil, err
+		}
+		return genericProxyCacheBrowseItems(entries, query), nil
 	default:
 		return nil, errUnsupportedCacheFormat
 	}
+}
+
+func genericProxyCacheBrowseItems(entries []CacheEntry, query string) []proxyCacheBrowseItem {
+	q := strings.ToLower(strings.TrimSpace(query))
+	items := make([]proxyCacheBrowseItem, 0, len(entries))
+	for _, entry := range entries {
+		coordinate := entry.Repository
+		if q != "" && !strings.Contains(strings.ToLower(coordinate), q) {
+			continue
+		}
+		items = append(items, proxyCacheBrowseItem{
+			Key: coordinate, Coordinate: coordinate, Path: coordinate, Digest: entry.Digest,
+			Size: entry.Size, ContentType: entry.ContentType, Member: entry.Member,
+			AssetCount: 1, PrimaryAssetCount: 1,
+			Assets: []proxyCacheAsset{{Path: coordinate, Name: coordinate, Digest: entry.Digest, Size: entry.Size, ContentType: entry.ContentType, Member: entry.Member}},
+		})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Coordinate < items[j].Coordinate })
+	return items
 }
 
 func (h proxyCacheBrowseHandler) proxyCacheCapacity(ctx context.Context, repo repository.HostedRepository, capacity repository.RepositoryCapacity) (repository.RepositoryCapacity, error) {

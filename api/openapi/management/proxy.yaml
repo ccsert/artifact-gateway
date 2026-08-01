@@ -4,7 +4,7 @@ repositories_repositoryId_cache_entries:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   get:
     operationId: listProxyCacheEntries
-    description: Lists cached Maven Proxy entries grouped for operator browsing.
+    description: Lists cached Proxy assets with format-aware operator browsing projections.
     parameters:
     - name: q
       in: query
