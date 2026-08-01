@@ -775,6 +775,7 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
                           <MavenArtifactDetail
                             repoId={repo.id}
                             repoName={repo.name}
+                            onDeleted={() => void load(q)}
                             meta={{
                               coordinate: r.coordinate,
                               digest: r.digest,
