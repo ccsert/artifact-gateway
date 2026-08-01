@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "generate:api": "openapi-ts -f hey-api.config.ts",
+    "check:api": "npm run generate:api",
     "preview": "vite preview"
   },
   "dependencies": {

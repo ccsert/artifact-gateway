@@ -53,10 +53,12 @@ extension point for later management route migrations.
 
 ## Management runtime coverage
 
-`management.yaml` is the complete reviewed management contract; it is not a
-claim that every operation has a runtime implementation. The generated runtime
-projection intentionally contains only operations with an equivalent,
-production-backed `/api/v2` handler:
+`management.yaml` is the complete reviewed management design; it is not a
+runtime authority. `management-runtime.yaml` is the authoritative contract for
+the production-backed `/api/v2` surface. Its versioned bundle, generated
+server/client code, and assembled-handler conformance tests must change
+together. The runtime projection intentionally contains only operations with
+an equivalent handler:
 
 | Contract area | Runtime status | Reason |
 | --- | --- | --- |
@@ -73,6 +75,14 @@ corresponding domain aggregate, persistence operations in both memory and
 Postgres stores, authorization behavior, and a handler-level contract test.
 The generated wrapper then owns route and parameter binding; it must not be
 used to publish an unsupported route.
+
+`internal/app/openapi_runtime_contract_test.go` executes a representative
+matrix through the assembled Gateway handler and validates route reachability,
+declared response status, headers, and JSON response schema against
+`management-runtime-v1.json`. Add a matrix entry whenever a route family is
+introduced or its response shape changes. Feature tests remain responsible for
+domain scenarios and authorization branches not represented by that compact
+matrix.
 
 Protocol APIs are not handler-generated. OCI Registry V2, Raw, Maven, and
 Conan behavior is defined first by official specifications and ecosystem client

@@ -16,13 +16,14 @@ openapi-bundle:
 	@$(OPENAPI_TOOLS)/node_modules/.bin/redocly bundle $(OPENAPI_SOURCE) --output $(OPENAPI_BUNDLE) --ext json
 
 openapi-generate-admin: openapi-bundle
+	@$(OPENAPI_TOOLS)/node_modules/.bin/redocly bundle api/openapi/management-runtime.yaml --output api/openapi/management-runtime-v1.json --ext json
 	@./scripts/generate-admin-openapi.sh
 
 openapi-check: openapi-generate-admin
 	@npm --prefix console ci --ignore-scripts --no-audit --no-fund
 	@npm --prefix console run check:api
 	@go test ./contracts
-	@git diff --exit-code -- $(OPENAPI_BUNDLE) console/src/client internal/admin/openapi/generated.go
+	@git diff --exit-code -- $(OPENAPI_BUNDLE) api/openapi/management-runtime-v1.json console/src/client internal/admin/openapi/generated.go
 
 console-build:
 	@cd console && npm run build
