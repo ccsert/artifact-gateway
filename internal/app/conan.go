@@ -25,7 +25,14 @@ type ConanClient interface {
 
 func (c UpstreamClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	if member.Type == repository.MemberProxy {
-		if egressProxyEnabled() {
+		if rawProxyTLSOverride(c.HTTPClient) {
+			return nil, errors.New("raw proxy HTTP client must not override TLS dialing")
+		}
+		useEgressProxy, err := rawProxyApplies(member.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+		if useEgressProxy {
 			return c.fetchConan(ctx, rawProxyEgressClient(c.HTTPClient), method, member, path, headers)
 		}
 		proxyURL, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)

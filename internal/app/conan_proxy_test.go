@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -80,6 +82,35 @@ func TestConanProxyRedirectIsNotFollowed(t *testing.T) {
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusFound || redirected.Load() != 0 {
 		t.Fatalf("status=%d redirected=%d", response.StatusCode, redirected.Load())
+	}
+}
+
+func TestConanProxyRejectsTLSOverrideWithoutDialing(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		transport func(*bool) *http.Transport
+	}{
+		{"DialTLSContext", func(called *bool) *http.Transport {
+			return &http.Transport{DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
+				*called = true
+				return nil, errors.New("unexpected TLS dial")
+			}}
+		}},
+		{"DialTLS", func(called *bool) *http.Transport {
+			return &http.Transport{DialTLS: func(string, string) (net.Conn, error) {
+				*called = true
+				return nil, errors.New("unexpected TLS dial")
+			}}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called := false
+			client := &http.Client{Transport: test.transport(&called)}
+			_, err := (UpstreamClient{HTTPClient: client}).FetchConan(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}}, "pkg/1.0/user/stable/revisions", nil)
+			if err == nil || !strings.Contains(err.Error(), "must not override TLS dialing") || called {
+				t.Fatalf("err=%v TLS dial called=%t", err, called)
+			}
+		})
 	}
 }
 

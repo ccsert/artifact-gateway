@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +138,44 @@ func TestRawProxyPolicyRejectsPrivateAddresses(t *testing.T) {
 		if cache.ProxyAllowed(endpoint) {
 			t.Fatalf("proxy endpoint %q was allowed", endpoint)
 		}
+	}
+}
+
+func TestRawProxyValidatesDirectRequestsWhenEgressIsBypassed(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		proxy func(*http.Request) (*url.URL, error)
+	}{
+		{"HTTP proxy does not apply to HTTPS", func(*http.Request) (*url.URL, error) { return nil, nil }},
+		{"NO_PROXY bypass", func(*http.Request) (*url.URL, error) { return nil, nil }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			previousLookup := rawProxyLookupIP
+			previousProxy := rawProxyFromEnvironment
+			rawProxyLookupIP = func(_ context.Context, network, name string) ([]net.IP, error) {
+				if network != "ip" || name != "private.example" {
+					t.Fatalf("lookup=%s %s", network, name)
+				}
+				return []net.IP{net.ParseIP("127.0.0.1")}, nil
+			}
+			rawProxyFromEnvironment = test.proxy
+			t.Cleanup(func() {
+				rawProxyLookupIP = previousLookup
+				rawProxyFromEnvironment = previousProxy
+			})
+			_, err := (UpstreamClient{}).FetchRaw(context.Background(), http.MethodGet, repository.Member{Type: repository.MemberProxy, Endpoint: "https://private.example", AllowedHosts: []string{"private.example"}}, "artifact", nil)
+			if err == nil || !strings.Contains(err.Error(), "private address") {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestRawProxyEgressClientClearsCustomDialers(t *testing.T) {
+	client := rawProxyEgressClient(&http.Client{Transport: &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) { return nil, nil }, Dial: func(string, string) (net.Conn, error) { return nil, nil }}})
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport.DialContext != nil || transport.Dial != nil || transport.Proxy == nil {
+		t.Fatalf("egress transport did not use standard proxy dialing")
 	}
 }
 
@@ -349,9 +388,17 @@ func rawTLSServerAddress(t *testing.T, rawURL string) (string, string) {
 
 func withRawProxyNetwork(t *testing.T, lookup func(context.Context, string, string) ([]net.IP, error), dial func(context.Context, string, string) (net.Conn, error)) {
 	t.Helper()
-	previousLookup, previousDial := rawProxyLookupIP, rawProxyDialContext
+	// These tests exercise direct, DNS-pinned dialing. Isolate them from a
+	// developer or CI egress proxy that deliberately selects a different path.
+	for _, key := range []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"} {
+		t.Setenv(key, "")
+	}
+	previousLookup, previousDial, previousProxy := rawProxyLookupIP, rawProxyDialContext, rawProxyFromEnvironment
 	rawProxyLookupIP, rawProxyDialContext = lookup, dial
-	t.Cleanup(func() { rawProxyLookupIP, rawProxyDialContext = previousLookup, previousDial })
+	rawProxyFromEnvironment = func(*http.Request) (*url.URL, error) { return nil, nil }
+	t.Cleanup(func() {
+		rawProxyLookupIP, rawProxyDialContext, rawProxyFromEnvironment = previousLookup, previousDial, previousProxy
+	})
 }
 
 func TestRawCacheCollectorKeepsLiveReferences(t *testing.T) {
