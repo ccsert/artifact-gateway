@@ -16,6 +16,48 @@
     }
   ],
   "paths": {
+    "/anonymous-access-policy": {
+      "get": {
+        "operationId": "getAnonymousAccessPolicy",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AnonymousAccessPolicy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceAnonymousAccessPolicy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnonymousAccessPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AnonymousAccessPolicy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api-keys": {
       "get": {
         "operationId": "listApiKeys",
@@ -3334,6 +3376,23 @@
           }
         }
       },
+      "AnonymousAccessPolicy": {
+        "type": "object",
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Permits unauthenticated protocol reads only when the Repository or Group policy also allows them."
+          }
+        }
+      },
       "AuditCleanupJob": {
         "type": "object",
         "required": [
@@ -4218,6 +4277,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuditRetentionPolicy"
+            }
+          }
+        }
+      },
+      "AnonymousAccessPolicy": {
+        "description": "Global anonymous protocol-read policy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AnonymousAccessPolicy"
             }
           }
         }

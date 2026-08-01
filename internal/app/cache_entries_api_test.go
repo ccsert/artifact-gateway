@@ -192,6 +192,7 @@ func TestCacheEntriesListsMavenEntriesAndSkipsExpired(t *testing.T) {
 
 func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 	handler, store, objectStore, _, mavenCache, _, _ := newCacheEntriesTestHandler(t)
+	enableAnonymousAccess(t, store)
 	ctx := context.Background()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-proxy", Format: repository.FormatMaven, Type: repository.RepositoryTypeProxy, Endpoint: "https://repo.maven.apache.org/maven2", AnonymousRead: true})
 	if err != nil {

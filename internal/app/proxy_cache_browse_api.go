@@ -107,7 +107,7 @@ func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
 	if !ok {
-		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			principal = anonymousPrincipal()
 		} else {
 			writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")

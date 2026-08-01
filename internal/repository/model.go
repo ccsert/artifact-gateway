@@ -43,6 +43,13 @@ type HostedRepository struct {
 	CreatedAt     time.Time       `json:"-"`
 }
 
+// AnonymousAccessPolicy controls whether any unauthenticated protocol read may
+// be admitted. Repository and Group anonymous settings remain required gates.
+type AnonymousAccessPolicy struct {
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
+}
+
 // RepositoryCapacity is logical usage attributed to one Hosted repository.
 // Shared content-addressed bytes are counted once for each visible repository
 // reference so quotas remain meaningful after promotion.

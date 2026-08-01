@@ -83,7 +83,7 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	p, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !authenticated {
-		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			p = anonymousPrincipal()
 		} else {
 			writeOCIChallenge(w, r)

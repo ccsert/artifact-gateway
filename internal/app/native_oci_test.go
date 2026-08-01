@@ -482,6 +482,7 @@ func TestNativeOCIImageBrowseSearchProjection(t *testing.T) {
 
 func TestNativeOCIHostedAnonymousReadPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-public", Name: "public", Format: repository.FormatOCI, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)

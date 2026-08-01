@@ -759,6 +759,13 @@ type APIKeyList struct {
 	Items []APIKey `json:"items"`
 }
 
+// AnonymousAccessPolicy defines model for AnonymousAccessPolicy.
+type AnonymousAccessPolicy struct {
+	// Enabled Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
+}
+
 // Artifact defines model for Artifact.
 type Artifact struct {
 	Coordinate string             `json:"coordinate"`
@@ -1500,6 +1507,11 @@ type OCIImageList = OCIImagePage
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
 
+// ReplaceAnonymousAccessPolicyParams defines parameters for ReplaceAnonymousAccessPolicy.
+type ReplaceAnonymousAccessPolicyParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ReplaceAuditRetentionPolicyParams defines parameters for ReplaceAuditRetentionPolicy.
 type ReplaceAuditRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -1673,6 +1685,9 @@ type UpdateUserParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ReplaceAnonymousAccessPolicyJSONRequestBody defines body for ReplaceAnonymousAccessPolicy for application/json ContentType.
+type ReplaceAnonymousAccessPolicyJSONRequestBody = AnonymousAccessPolicy
+
 // CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
 type CreateApiKeyJSONRequestBody = CreateAPIKey
 
@@ -1768,6 +1783,12 @@ func (t *CreatePublishSession) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /anonymous-access-policy)
+	GetAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /anonymous-access-policy)
+	ReplaceAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request, params ReplaceAnonymousAccessPolicyParams)
 
 	// (GET /api-keys)
 	ListApiKeys(w http.ResponseWriter, r *http.Request)
@@ -1967,6 +1988,65 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAnonymousAccessPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnonymousAccessPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceAnonymousAccessPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceAnonymousAccessPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceAnonymousAccessPolicy(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListApiKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListApiKeys(w http.ResponseWriter, r *http.Request) {
@@ -4573,6 +4653,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/anonymous-access-policy", wrapper.GetAnonymousAccessPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/anonymous-access-policy", wrapper.ReplaceAnonymousAccessPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api-keys", wrapper.CreateApiKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api-keys/{apiKeyId}", wrapper.RevokeApiKey)
@@ -4643,6 +4725,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 type APIKeyJSONResponse APIKey
 
 type APIKeyListJSONResponse APIKeyList
+
+type AnonymousAccessPolicyJSONResponse AnonymousAccessPolicy
 
 type ArtifactJSONResponse Artifact
 
@@ -4724,6 +4808,100 @@ type RetentionPolicyJSONResponse RetentionPolicy
 type UserJSONResponse User
 
 type UserListJSONResponse UserList
+
+type GetAnonymousAccessPolicyRequestObject struct {
+}
+
+type GetAnonymousAccessPolicyResponseObject interface {
+	VisitGetAnonymousAccessPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetAnonymousAccessPolicy200JSONResponse struct {
+	AnonymousAccessPolicyJSONResponse
+}
+
+func (response GetAnonymousAccessPolicy200JSONResponse) VisitGetAnonymousAccessPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnonymousAccessPolicy401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnonymousAccessPolicy401ApplicationProblemPlusJSONResponse) VisitGetAnonymousAccessPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceAnonymousAccessPolicyRequestObject struct {
+	Params ReplaceAnonymousAccessPolicyParams
+	Body   *ReplaceAnonymousAccessPolicyJSONRequestBody
+}
+
+type ReplaceAnonymousAccessPolicyResponseObject interface {
+	VisitReplaceAnonymousAccessPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceAnonymousAccessPolicy200JSONResponse struct {
+	AnonymousAccessPolicyJSONResponse
+}
+
+func (response ReplaceAnonymousAccessPolicy200JSONResponse) VisitReplaceAnonymousAccessPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceAnonymousAccessPolicy401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceAnonymousAccessPolicy401ApplicationProblemPlusJSONResponse) VisitReplaceAnonymousAccessPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceAnonymousAccessPolicy412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceAnonymousAccessPolicy412ApplicationProblemPlusJSONResponse) VisitReplaceAnonymousAccessPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListApiKeysRequestObject struct {
 }
@@ -7349,6 +7527,12 @@ func (response UpdateUser412ApplicationProblemPlusJSONResponse) VisitUpdateUserR
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /anonymous-access-policy)
+	GetAnonymousAccessPolicy(ctx context.Context, request GetAnonymousAccessPolicyRequestObject) (GetAnonymousAccessPolicyResponseObject, error)
+
+	// (PUT /anonymous-access-policy)
+	ReplaceAnonymousAccessPolicy(ctx context.Context, request ReplaceAnonymousAccessPolicyRequestObject) (ReplaceAnonymousAccessPolicyResponseObject, error)
+
 	// (GET /api-keys)
 	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
 
@@ -7576,6 +7760,63 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetAnonymousAccessPolicy operation middleware
+func (sh *strictHandler) GetAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request) {
+	var request GetAnonymousAccessPolicyRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnonymousAccessPolicy(ctx, request.(GetAnonymousAccessPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnonymousAccessPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnonymousAccessPolicyResponseObject); ok {
+		if err := validResponse.VisitGetAnonymousAccessPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceAnonymousAccessPolicy operation middleware
+func (sh *strictHandler) ReplaceAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request, params ReplaceAnonymousAccessPolicyParams) {
+	var request ReplaceAnonymousAccessPolicyRequestObject
+
+	request.Params = params
+
+	var body ReplaceAnonymousAccessPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceAnonymousAccessPolicy(ctx, request.(ReplaceAnonymousAccessPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceAnonymousAccessPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceAnonymousAccessPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceAnonymousAccessPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListApiKeys operation middleware

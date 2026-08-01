@@ -559,6 +559,7 @@ func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testi
 
 func TestNativeMavenAnonymousReadPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	publicRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "public", Format: repository.FormatMaven, AnonymousRead: true})
 	privateRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "private", Format: repository.FormatMaven})
 	objects := NewMemoryOCIObjectStore()

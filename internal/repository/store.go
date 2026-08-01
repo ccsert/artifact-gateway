@@ -25,6 +25,11 @@ type HostedRepositoryStore interface {
 	UpdateHostedRepository(context.Context, HostedRepository, string) (HostedRepository, error)
 }
 
+type AnonymousAccessPolicyStore interface {
+	GetAnonymousAccessPolicy(context.Context) (AnonymousAccessPolicy, error)
+	ReplaceAnonymousAccessPolicy(context.Context, AnonymousAccessPolicy, string) (AnonymousAccessPolicy, error)
+}
+
 type HostedGroupStore interface {
 	CreateHostedGroupIdempotently(context.Context, HostedGroup, string, string, string) (HostedGroup, bool, error)
 	ListHostedGroups(context.Context, int, string) ([]HostedGroup, string, error)

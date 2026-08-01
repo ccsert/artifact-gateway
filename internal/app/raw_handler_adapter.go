@@ -35,7 +35,7 @@ func (r rawRuntime) Authenticate(header string) (rawprotocol.Principal, bool) {
 }
 
 func (r rawRuntime) AnonymousAllowed(ctx context.Context, groupName string) bool {
-	if r.handler.Store == nil {
+	if r.handler.Store == nil || !anonymousAccessAllowed(ctx, r.handler.Store) {
 		return false
 	}
 	group, err := r.handler.Store.GetRawGroup(ctx, groupName)

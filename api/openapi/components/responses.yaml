@@ -160,6 +160,11 @@ AuditRetentionPolicy:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/AuditRetentionPolicy"}
+AnonymousAccessPolicy:
+  description: Global anonymous protocol-read policy
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/AnonymousAccessPolicy"}
 AuditCleanupJob:
   description: Audit cleanup job
   content:

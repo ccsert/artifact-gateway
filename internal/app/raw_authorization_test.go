@@ -36,6 +36,7 @@ func TestRawRejectsUnsafePathsAndUnauthorizedRequests(t *testing.T) {
 
 func TestRawAnonymousPolicyRequiresPublicGroupAndMember(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	for _, group := range []repository.Group{
 		{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}},
 		{Name: "member-private", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},

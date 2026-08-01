@@ -36,10 +36,8 @@ Progress update 2026-07-31:
 - V2 Repository and Group management now include `anonymousRead`; native OCI,
   Maven, and Raw protocol reads honor Repository policy, and V2 Groups only
   expose anonymous members whose backing Repository also allows anonymous read.
-- Deletion UX is partially complete: OCI tag deletion now unlinks only the
-  selected tag, Maven Hosted exposes per-version tombstone actions, and Raw
-  Hosted exposes path deletion. Conan still needs revision-level selection in
-  the Console before safe delete buttons can be shown.
+- Deletion UX now covers OCI tag unlink, Maven version tombstones, Raw path
+  deletion, and selected Conan package revision tombstones.
 
 ## Goals
 
@@ -356,7 +354,7 @@ Group-only interactions:
 
 ### Phase 5: Anonymous Access
 
-- [ ] Add global anonymous-access setting.
+- [x] Add global anonymous-access setting.
 - [x] Add Repository anonymous read policy.
 - [x] Add Group anonymous read policy and member eligibility view.
 - [x] Add Repository anonymous effective-access explanation endpoint.

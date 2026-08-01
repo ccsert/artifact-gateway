@@ -34,7 +34,7 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	}
 	principal, ok := h.native.protocolPrincipal(r)
 	if !ok {
-		if group.AnonymousRead && anonymousReadMethod(r.Method) {
+		if group.AnonymousRead && anonymousReadMethod(r.Method) && anonymousAccessAllowed(r.Context(), resolver.groups) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)

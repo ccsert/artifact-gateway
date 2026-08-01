@@ -82,7 +82,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !ok {
-		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)

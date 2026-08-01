@@ -474,6 +474,14 @@ export type AuditRetentionPolicy = {
     keepDays: number;
 };
 
+export type AnonymousAccessPolicy = {
+    version: string;
+    /**
+     * Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
+     */
+    enabled: boolean;
+};
+
 export type AuditCleanupJob = {
     id: string;
     policyVersion: string;
@@ -605,6 +613,63 @@ export type ConanReferencePrefix = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type GetAnonymousAccessPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/anonymous-access-policy';
+};
+
+export type GetAnonymousAccessPolicyErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+};
+
+export type GetAnonymousAccessPolicyError = GetAnonymousAccessPolicyErrors[keyof GetAnonymousAccessPolicyErrors];
+
+export type GetAnonymousAccessPolicyResponses = {
+    /**
+     * Global anonymous protocol-read policy
+     */
+    200: AnonymousAccessPolicy;
+};
+
+export type GetAnonymousAccessPolicyResponse = GetAnonymousAccessPolicyResponses[keyof GetAnonymousAccessPolicyResponses];
+
+export type ReplaceAnonymousAccessPolicyData = {
+    body: AnonymousAccessPolicy;
+    headers: {
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/anonymous-access-policy';
+};
+
+export type ReplaceAnonymousAccessPolicyErrors = {
+    /**
+     * Problem response
+     */
+    401: Problem;
+    /**
+     * Problem response
+     */
+    412: Problem;
+};
+
+export type ReplaceAnonymousAccessPolicyError = ReplaceAnonymousAccessPolicyErrors[keyof ReplaceAnonymousAccessPolicyErrors];
+
+export type ReplaceAnonymousAccessPolicyResponses = {
+    /**
+     * Global anonymous protocol-read policy
+     */
+    200: AnonymousAccessPolicy;
+};
+
+export type ReplaceAnonymousAccessPolicyResponse = ReplaceAnonymousAccessPolicyResponses[keyof ReplaceAnonymousAccessPolicyResponses];
 
 export type ListApiKeysData = {
     body?: never;

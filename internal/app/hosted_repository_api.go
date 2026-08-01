@@ -147,7 +147,7 @@ func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.Respons
 		return h.authenticate(w, r)
 	}
 	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
-	if err == nil && anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+	if err == nil && anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 		return anonymousPrincipal(), true
 	}
 	return h.authenticate(w, r)
@@ -182,6 +182,7 @@ type generatedRepositoryAPIAdapter struct {
 	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
 	auditRetention    repository.AuditRetentionStore
+	anonymousAccess   repository.AnonymousAccessPolicyStore
 	replication       repository.ReplicationStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore
@@ -446,6 +447,45 @@ func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
+func (h generatedRepositoryAPIAdapter) GetAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	policy, err := h.anonymousAccess.GetAnonymousAccessPolicy(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get anonymous access policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, anonymousAccessPolicyResponse(policy))
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request, params adminopenapi.ReplaceAnonymousAccessPolicyParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var request adminopenapi.AnonymousAccessPolicy
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil || request.Version == "" {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version and enabled are required")
+		return
+	}
+	policy, err := h.anonymousAccess.ReplaceAnonymousAccessPolicy(r.Context(), repository.AnonymousAccessPolicy{Enabled: request.Enabled}, string(params.IfMatch))
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace anonymous access policy failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, anonymousAccessPolicyResponse(policy))
+}
+
+func anonymousAccessPolicyResponse(policy repository.AnonymousAccessPolicy) adminopenapi.AnonymousAccessPolicy {
+	return adminopenapi.AnonymousAccessPolicy{Enabled: policy.Enabled, Version: policy.Version}
+}
+
 func (h generatedRepositoryAPIAdapter) GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
@@ -628,9 +668,9 @@ func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Con
 	response := adminopenapi.RepositoryEffectiveAccess{
 		Actor: principal.Actor,
 		AnonymousRead: adminopenapi.EffectiveAccessDecision{
-			Allowed: anonymousHostedRepositoryReadAllowed(repo, http.MethodGet),
+			Allowed: anonymousHostedRepositoryReadAllowed(ctx, h.store, repo, http.MethodGet),
 			Source:  "anonymous_policy",
-			Reason:  anonymousRepositoryReason(repo),
+			Reason:  anonymousRepositoryReason(ctx, h.store, repo),
 		},
 		Permissions: adminopenapi.EffectiveAccessPermissions{
 			Read:  decision(RepositoryRead),
@@ -650,9 +690,12 @@ func effectiveAccessDecision(decision AuthorizationDecision) adminopenapi.Effect
 	return adminopenapi.EffectiveAccessDecision{Allowed: decision.Allowed, Source: decision.Source, Reason: decision.Reason}
 }
 
-func anonymousRepositoryReason(repo repository.HostedRepository) string {
+func anonymousRepositoryReason(ctx context.Context, source any, repo repository.HostedRepository) string {
 	if repo.State != repository.RepositoryActive {
 		return "repository_not_active"
+	}
+	if !anonymousAccessAllowed(ctx, source) {
+		return "global_anonymous_access_disabled"
 	}
 	if !repo.AnonymousRead {
 		return "repository_anonymous_read_disabled"
@@ -1875,7 +1918,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.Response
 		return
 	}
 	if !authenticated {
-		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			handler(anonymousPrincipal(), repo)
 			return
 		}

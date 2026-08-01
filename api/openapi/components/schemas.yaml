@@ -480,6 +480,15 @@ AuditRetentionPolicy:
     version: {type: string}
     enabled: {type: boolean}
     keepDays: {type: integer, minimum: 0, maximum: 36500}
+AnonymousAccessPolicy:
+  type: object
+  required: [version, enabled]
+  additionalProperties: false
+  properties:
+    version: {type: string}
+    enabled:
+      type: boolean
+      description: Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
 AuditCleanupJob:
   type: object
   required: [id, policyVersion, cutoffAt, batchSize, deleted, state, createdAt]

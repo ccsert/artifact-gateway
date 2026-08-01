@@ -21,8 +21,17 @@ func anonymousReadMethod(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead
 }
 
-func anonymousHostedRepositoryReadAllowed(repo repository.HostedRepository, method string) bool {
-	return anonymousReadMethod(method) && repo.AnonymousRead
+func anonymousAccessAllowed(ctx context.Context, source any) bool {
+	store, ok := source.(repository.AnonymousAccessPolicyStore)
+	if !ok {
+		return false
+	}
+	policy, err := store.GetAnonymousAccessPolicy(ctx)
+	return err == nil && policy.Enabled
+}
+
+func anonymousHostedRepositoryReadAllowed(ctx context.Context, source any, repo repository.HostedRepository, method string) bool {
+	return anonymousReadMethod(method) && repo.AnonymousRead && anonymousAccessAllowed(ctx, source)
 }
 
 func anonymousHostedGroupMembers(group repository.HostedGroup, members []repository.Member) []repository.Member {
@@ -39,7 +48,7 @@ func anonymousHostedGroupMembers(group repository.HostedGroup, members []reposit
 }
 
 func (h OCIHandler) anonymousOCIAllowed(ctx context.Context, groupName string) bool {
-	if h.Resolver.Store == nil {
+	if h.Resolver.Store == nil || !anonymousAccessAllowed(ctx, h.Resolver.Store) {
 		return false
 	}
 	group, err := h.Resolver.Store.GetGroup(ctx, groupName)
@@ -55,7 +64,7 @@ func (h OCIHandler) anonymousOCIAllowed(ctx context.Context, groupName string) b
 }
 
 func (h MavenHandler) anonymousMavenAllowed(ctx context.Context, groupName string) bool {
-	if h.Store == nil {
+	if h.Store == nil || !anonymousAccessAllowed(ctx, h.Store) {
 		return false
 	}
 	group, err := h.Store.GetMavenGroup(ctx, groupName)
@@ -71,7 +80,7 @@ func (h MavenHandler) anonymousMavenAllowed(ctx context.Context, groupName strin
 }
 
 func (h ConanHandler) anonymousConanAllowed(ctx context.Context, groupName string) bool {
-	if h.Store == nil {
+	if h.Store == nil || !anonymousAccessAllowed(ctx, h.Store) {
 		return false
 	}
 	group, err := h.Store.GetConanGroup(ctx, groupName)

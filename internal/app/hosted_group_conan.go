@@ -33,7 +33,7 @@ func (h v2GroupConanHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	}
 	principal, authenticated := h.conan.authenticate(r)
 	if !authenticated {
-		if group.AnonymousRead && anonymousReadMethod(r.Method) {
+		if group.AnonymousRead && anonymousReadMethod(r.Method) && anonymousAccessAllowed(r.Context(), resolver.groups) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)

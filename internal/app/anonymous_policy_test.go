@@ -10,6 +10,17 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
+func enableAnonymousAccess(t *testing.T, store *repository.MemoryStore) {
+	t.Helper()
+	policy, err := store.GetAnonymousAccessPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, policy.Version); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAnonymousPolicyRequiresGroupAndMember(t *testing.T) {
 	store := repository.NewMemoryStore()
 	groups := []repository.Group{
@@ -27,6 +38,10 @@ func TestAnonymousPolicyRequiresGroupAndMember(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := OCIHandler{Resolver: Resolver{Store: store}}
+	if h.anonymousOCIAllowed(context.Background(), "public") {
+		t.Fatal("anonymous reads allowed while global policy is disabled")
+	}
+	enableAnonymousAccess(t, store)
 	for _, tc := range []struct {
 		group string
 		want  bool
@@ -34,6 +49,18 @@ func TestAnonymousPolicyRequiresGroupAndMember(t *testing.T) {
 		if got := h.anonymousOCIAllowed(context.Background(), tc.group); got != tc.want {
 			t.Errorf("group %s: got %v want %v", tc.group, got, tc.want)
 		}
+	}
+}
+
+func TestAnonymousHostedRepositoryReadRequiresGlobalPolicy(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo := repository.HostedRepository{AnonymousRead: true}
+	if anonymousHostedRepositoryReadAllowed(context.Background(), store, repo, http.MethodGet) {
+		t.Fatal("repository policy bypassed disabled global policy")
+	}
+	enableAnonymousAccess(t, store)
+	if !anonymousHostedRepositoryReadAllowed(context.Background(), store, repo, http.MethodGet) {
+		t.Fatal("global and repository policies did not admit anonymous read")
 	}
 }
 
@@ -83,5 +110,26 @@ func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
 	}
 	if got := metrics.anonymousReads.Load(); got != 0 {
 		t.Fatalf("anonymous reads=%d want=0", got)
+	}
+}
+
+func TestAnonymousConanPolicyNeverAllowsWrites(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateConanGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}}); err != nil {
+		t.Fatal(err)
+	}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Cache: NewConanCache(nil)}
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodDelete, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev", nil),
+		httptest.NewRequest(http.MethodPost, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev:restore", nil),
+	} {
+		response := httptest.NewRecorder()
+		h.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s status=%d body=%s", request.Method, response.Code, response.Body.String())
+		}
 	}
 }

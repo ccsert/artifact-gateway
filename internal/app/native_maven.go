@@ -401,7 +401,7 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, ok := h.protocolPrincipal(r)
 	if !ok {
-		if anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Maven"`)

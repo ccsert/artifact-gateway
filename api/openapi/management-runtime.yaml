@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/anonymous-access-policy":
+    "$ref": "./management/anonymous-access.yaml#/anonymous_access_policy"
   "/api-keys":
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":
@@ -235,6 +237,8 @@ components:
       "$ref": "./components/schemas.yaml#/AuditList"
     AuditRetentionPolicy:
       "$ref": "./components/schemas.yaml#/AuditRetentionPolicy"
+    AnonymousAccessPolicy:
+      "$ref": "./components/schemas.yaml#/AnonymousAccessPolicy"
     AuditCleanupJob:
       "$ref": "./components/schemas.yaml#/AuditCleanupJob"
   parameters:
@@ -351,6 +355,8 @@ components:
       "$ref": "./components/responses.yaml#/AuditList"
     AuditRetentionPolicy:
       "$ref": "./components/responses.yaml#/AuditRetentionPolicy"
+    AnonymousAccessPolicy:
+      "$ref": "./components/responses.yaml#/AnonymousAccessPolicy"
     AuditCleanupJob:
       "$ref": "./components/responses.yaml#/AuditCleanupJob"
     AuditCleanupJobList:

@@ -68,6 +68,7 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 
 func TestNativeRawHostedAnonymousReadPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-public", Name: "public", Format: repository.FormatRaw, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)

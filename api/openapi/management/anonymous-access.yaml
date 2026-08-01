@@ -1,0 +1,26 @@
+---
+anonymous_access_policy:
+  get:
+    operationId: getAnonymousAccessPolicy
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AnonymousAccessPolicy"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: replaceAnonymousAccessPolicy
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/AnonymousAccessPolicy"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AnonymousAccessPolicy"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"

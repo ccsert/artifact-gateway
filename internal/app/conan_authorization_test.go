@@ -24,6 +24,7 @@ func (c conanStatusClient) FetchConan(_ context.Context, _ string, _ repository.
 
 func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	for _, group := range []repository.Group{
 		{Name: "private", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}},
 		{Name: "partial", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},
@@ -52,6 +53,7 @@ func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
 
 func TestConanAnonymousReadDoesNotUsePrivateMemberCache(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	private := repository.Member{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example"}
 	public := repository.Member{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Anonymous: true}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{private, public}})

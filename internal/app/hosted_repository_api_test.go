@@ -1335,6 +1335,7 @@ func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 func TestConanRevisionManagementListsAndTombstonesSelectedRevisions(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-revisions", Format: repository.FormatConan, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)
@@ -1520,6 +1521,7 @@ func TestHostedRepositoryIdempotencyAndPagination(t *testing.T) {
 
 func TestNativeRepositoryGuardAllowsAnonymousReadPolicyAndDeniesDisabledProtocols(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
 	for _, format := range []repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven} {
 		repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: string(format) + "-native", Format: format, AnonymousRead: true})
@@ -1667,6 +1669,7 @@ func TestRepositoryManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T)
 
 func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "effective-raw", Format: repository.FormatRaw, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)
@@ -1714,6 +1717,7 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 
 func TestAnonymousRepositoryBrowseAllowsReadOnlyQueries(t *testing.T) {
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "public-oci", Format: repository.FormatOCI, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)

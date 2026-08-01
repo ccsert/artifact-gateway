@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listRepositories, listGrants } from '../client';
-import type { Repository, Grant } from '../client';
+import { getAnonymousAccessPolicy, listRepositories, listGrants, replaceAnonymousAccessPolicy } from '../client';
+import type { AnonymousAccessPolicy, Repository, Grant } from '../client';
 import { PageHeader, Card, CardHeader, DataTable, inputClass } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, Badge } from '../components/Badge';
@@ -37,6 +37,9 @@ export function AccessControlPage() {
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState('');
   const [repoFilter, setRepoFilter] = useState('');
+  const [anonymousPolicy, setAnonymousPolicy] = useState<AnonymousAccessPolicy | null>(null);
+  const [anonymousPolicyError, setAnonymousPolicyError] = useState<unknown>(null);
+  const [savingAnonymousPolicy, setSavingAnonymousPolicy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +80,44 @@ export function AccessControlPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setAnonymousPolicyError(null);
+      const { data, error: err } = await getAnonymousAccessPolicy();
+      if (cancelled) return;
+      if (err || !data) {
+        setAnonymousPolicyError(err ?? new Error('加载匿名访问策略失败'));
+        return;
+      }
+      setAnonymousPolicy(data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateAnonymousPolicy = async (enabled: boolean) => {
+    if (!anonymousPolicy || savingAnonymousPolicy) return;
+    const warning = enabled
+      ? '启用后，满足仓库或组匿名读取策略的制品可被未认证客户端读取。是否继续？'
+      : '停用后，所有未认证协议读取将立即被拒绝，即使仓库或组允许匿名读取。是否继续？';
+    if (!window.confirm(warning)) return;
+
+    setSavingAnonymousPolicy(true);
+    setAnonymousPolicyError(null);
+    const { data, error: err } = await replaceAnonymousAccessPolicy({
+      body: { ...anonymousPolicy, enabled },
+      headers: { 'If-Match': anonymousPolicy.version },
+    });
+    setSavingAnonymousPolicy(false);
+    if (err || !data) {
+      setAnonymousPolicyError(err ?? new Error('保存匿名访问策略失败'));
+      return;
+    }
+    setAnonymousPolicy(data);
+  };
+
   const filtered = (rows ?? []).filter(
     (r) =>
       (!principalFilter || r.principal.toLowerCase().includes(principalFilter.toLowerCase())) &&
@@ -89,6 +130,31 @@ export function AccessControlPage() {
         title="访问控制"
         description="跨仓库的授权总览与角色能力说明。逐仓库的细粒度授权在各仓库的「访问授权」Tab 编辑。"
       />
+
+      <Card className="mb-6 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-zinc-200">全局匿名读取</div>
+            <p className="mt-1 text-xs text-zinc-500">仅为已启用匿名读取的仓库和组开放未认证协议读取。</p>
+          </div>
+          {anonymousPolicy ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={anonymousPolicy.enabled}
+              aria-label="切换全局匿名读取"
+              disabled={savingAnonymousPolicy}
+              onClick={() => void updateAnonymousPolicy(!anonymousPolicy.enabled)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${anonymousPolicy.enabled ? 'bg-cyan-600' : 'bg-zinc-700'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${anonymousPolicy.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          ) : (
+            <span className="text-xs text-zinc-500">加载中…</span>
+          )}
+        </div>
+        {anonymousPolicyError !== null && <div className="mt-3"><ErrorBanner error={anonymousPolicyError} /></div>}
+      </Card>
 
       <Card className="mb-6 px-5 py-4">
         <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">角色能力</div>

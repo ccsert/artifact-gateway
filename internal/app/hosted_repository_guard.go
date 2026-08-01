@@ -42,7 +42,7 @@ func (h hostedRepositoryGuard) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		h.reject(w, r, http.StatusForbidden)
 		return
 	}
-	if !h.authenticated(r) && !anonymousHostedRepositoryReadAllowed(repo, r.Method) {
+	if !h.authenticated(r) && !anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 		h.reject(w, r, http.StatusUnauthorized)
 		return
 	}

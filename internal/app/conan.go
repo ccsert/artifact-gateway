@@ -169,7 +169,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, authenticated := h.authenticate(r)
-	if !authenticated && h.anonymousConanAllowed(r.Context(), group) {
+	if !authenticated && anonymousReadMethod(r.Method) && h.anonymousConanAllowed(r.Context(), group) {
 		p = Principal{Actor: "anonymous"}
 		authenticated = true
 	}
