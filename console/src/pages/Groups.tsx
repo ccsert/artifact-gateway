@@ -11,7 +11,7 @@ import {
 import type { Group, Format, Member, Repository } from '../client';
 import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
-import { FormatBadge } from '../components/Badge';
+import { Badge, FormatBadge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
 import { MemberOrderPicker } from '../components/MemberOrderPicker';
 
@@ -22,6 +22,7 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
   const [name, setName] = useState('');
   const [format, setFormat] = useState<Format>('oci');
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [anonymousRead, setAnonymousRead] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -32,7 +33,7 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
     setError(null);
     const members: Member[] = memberIds.map((repositoryId, position) => ({ repositoryId, position }));
     const { error: err } = await createGroup({
-      body: { name: name.trim(), format, members },
+      body: { name: name.trim(), format, anonymousRead, members },
       headers: { 'Idempotency-Key': crypto.randomUUID() },
     });
     setBusy(false);
@@ -43,6 +44,7 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
     dialog.hide();
     setName('');
     setMemberIds([]);
+    setAnonymousRead(false);
     onCreated();
   };
 
@@ -101,6 +103,13 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
               <MemberOrderPicker candidates={candidates} memberIds={memberIds} onChange={setMemberIds} />
             )}
           </Field>
+          <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+            <input type="checkbox" checked={anonymousRead} onChange={(e) => setAnonymousRead(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="block text-sm font-medium text-zinc-200">允许匿名读取</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。</span>
+            </span>
+          </label>
         </div>
       </Modal>
     </>
@@ -110,6 +119,7 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
 function RenameGroupDialog({ group, onSaved }: { group: Group; onSaved: () => void }) {
   const dialog = useDisclosure();
   const [name, setName] = useState(group.name);
+  const [anonymousRead, setAnonymousRead] = useState(group.anonymousRead);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -118,7 +128,7 @@ function RenameGroupDialog({ group, onSaved }: { group: Group; onSaved: () => vo
     setError(null);
     const { error: err } = await replaceGroup({
       path: { groupId: group.id },
-      body: { ...group, name: name.trim() },
+      body: { ...group, name: name.trim(), anonymousRead },
       headers: { 'If-Match': group.version },
     });
     setBusy(false);
@@ -135,15 +145,16 @@ function RenameGroupDialog({ group, onSaved }: { group: Group; onSaved: () => vo
       <button
         onClick={() => {
           setName(group.name);
+          setAnonymousRead(group.anonymousRead);
           dialog.show();
         }}
         className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
       >
-        重命名
+        设置
       </button>
       <Modal
         open={dialog.open}
-        title={`重命名分组：${group.name}`}
+        title={`设置分组：${group.name}`}
         onClose={dialog.hide}
         footer={
           <>
@@ -161,6 +172,13 @@ function RenameGroupDialog({ group, onSaved }: { group: Group; onSaved: () => vo
           <Field label="分组名称">
             <input className={`${inputClass} font-mono`} value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
+          <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+            <input type="checkbox" checked={anonymousRead} onChange={(e) => setAnonymousRead(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="block text-sm font-medium text-zinc-200">允许匿名读取</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">仍需成员 Repository 自身允许匿名读取。</span>
+            </span>
+          </label>
         </div>
       </Modal>
     </>
@@ -249,6 +267,7 @@ export function GroupsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const repoName = (id: string) => repos.find((r) => r.id === id)?.name ?? id.slice(0, 8) + '…';
+  const repoById = (id: string) => repos.find((r) => r.id === id);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -312,26 +331,32 @@ export function GroupsPage() {
         </Card>
       ) : (
         <Card>
-          <DataTable columns={['名称', '格式', '成员（按优先级）', '版本', '']}>
+          <DataTable columns={['名称', '格式', '访问', '成员（按优先级）', '版本', '']}>
             {groups.map((g) => (
               <tr key={g.id} className="group hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{g.name}</td>
                 <td className="px-4 py-3">
                   <FormatBadge format={g.format} />
                 </td>
+                <td className="px-4 py-3">
+                  <Badge tone={g.anonymousRead ? 'green' : 'zinc'}>{g.anonymousRead ? 'anonymous read' : 'private'}</Badge>
+                </td>
                 <td className="max-w-md px-4 py-3">
                   <div className="flex flex-wrap gap-1">
                     {[...(g.members ?? [])]
                       .sort((a, b) => a.position - b.position)
-                      .map((m) => (
-                        <span
-                          key={m.repositoryId}
-                          className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300"
-                          title={m.repositoryId}
-                        >
-                          {m.position}. {repoName(m.repositoryId)}
-                        </span>
-                      ))}
+                      .map((m) => {
+                        const repo = repoById(m.repositoryId);
+                        return (
+                          <span
+                            key={m.repositoryId}
+                            className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+                            title={m.repositoryId}
+                          >
+                            {m.position}. {repoName(m.repositoryId)} · {repo?.type ?? 'hosted'} · {repo?.anonymousRead ? 'anon' : 'private'}
+                          </span>
+                        );
+                      })}
                     {(g.members ?? []).length === 0 && <span className="text-xs text-zinc-600">无成员</span>}
                   </div>
                 </td>

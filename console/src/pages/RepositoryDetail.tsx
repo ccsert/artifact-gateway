@@ -25,6 +25,7 @@ import {
   createRepositoryReplication,
   getRepositoryReplication,
   deleteRepositoryReplication,
+  getRepositoryEffectiveAccess,
 } from '../client';
 import type {
   Repository,
@@ -35,6 +36,7 @@ import type {
   ArtifactTombstone,
   RetentionDryRun,
   RepositoryCapabilities,
+  RepositoryEffectiveAccess,
   ReplicationPlan,
   ReplicationPlanDetail,
 } from '../client';
@@ -1743,6 +1745,7 @@ export function RepositoryDetailPage() {
   const { repositoryId = '' } = useParams();
   const [repo, setRepo] = useState<Repository | null>(null);
   const [caps, setCaps] = useState<RepositoryCapabilities | null>(null);
+  const [effectiveAccess, setEffectiveAccess] = useState<RepositoryEffectiveAccess | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>('artifacts');
 
@@ -1754,8 +1757,12 @@ export function RepositoryDetailPage() {
       return;
     }
     setRepo(data ?? null);
-    const capsRes = await getRepositoryCapabilities({ path: { repositoryId } });
+    const [capsRes, accessRes] = await Promise.all([
+      getRepositoryCapabilities({ path: { repositoryId } }),
+      getRepositoryEffectiveAccess({ path: { repositoryId } }),
+    ]);
     if (!capsRes.error) setCaps(capsRes.data ?? null);
+    if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
   }, [repositoryId]);
 
   useEffect(() => {
@@ -1807,6 +1814,28 @@ export function RepositoryDetailPage() {
             <Badge key={op} tone="zinc">
               {op}
             </Badge>
+          ))}
+        </div>
+      )}
+      {effectiveAccess && (
+        <div className="mb-5 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs sm:grid-cols-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Actor</div>
+            <div className="mt-1 font-mono text-zinc-200">{effectiveAccess.actor}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Anonymous</div>
+            <div className={effectiveAccess.anonymousRead.allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>
+              {effectiveAccess.anonymousRead.allowed ? '允许' : '拒绝'} · {effectiveAccess.anonymousRead.reason}
+            </div>
+          </div>
+          {(['read', 'write'] as const).map((key) => (
+            <div key={key}>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">{key}</div>
+              <div className={effectiveAccess.permissions[key].allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>
+                {effectiveAccess.permissions[key].allowed ? '允许' : '拒绝'} · {effectiveAccess.permissions[key].reason}
+              </div>
+            </div>
           ))}
         </div>
       )}
