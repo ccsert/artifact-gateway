@@ -109,10 +109,20 @@ export function ConanArtifactDetail({ repoId, repoName, meta, managed, canDelete
   const [deleting, setDeleting] = useState('');
   const [error, setError] = useState('');
 
+  const reference = meta.coordinate.trim().replace(/\/$/, '').split('#', 1)[0];
+
+  const requestErrorMessage = (label: string, requestError: unknown) => {
+    if (!requestError) return label;
+    const detail = typeof requestError === 'object' && requestError !== null
+      ? ('detail' in requestError ? String(requestError.detail) : 'message' in requestError ? String(requestError.message) : '')
+      : String(requestError);
+    return detail ? `${label}: ${detail}` : label;
+  };
+
   const loadRecipeRevisions = async () => {
-    const { data, error: requestError } = await listConanRecipeRevisions({ path: { repositoryId: repoId }, query: { reference: meta.coordinate } });
+    const { data, error: requestError } = await listConanRecipeRevisions({ path: { repositoryId: repoId }, query: { reference } });
     if (requestError || !data) {
-      setError('读取 Conan recipe revisions 失败');
+      setError(requestErrorMessage('读取 Conan recipe revisions 失败', requestError));
       return;
     }
     const items = data.items.filter((item) => item.state === 'visible');
@@ -124,7 +134,7 @@ export function ConanArtifactDetail({ repoId, repoName, meta, managed, canDelete
     if (!managed) return;
     void loadRecipeRevisions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId, meta.coordinate, managed]);
+  }, [repoId, reference, managed]);
 
   useEffect(() => {
     if (!managed || !selectedRecipe) {
@@ -135,28 +145,28 @@ export function ConanArtifactDetail({ repoId, repoName, meta, managed, canDelete
     setPackageRevisions([]);
     setError('');
     void (async () => {
-      const { data: ids, error: idsError } = await listConanPackageIds({ path: { repositoryId: repoId }, query: { reference: meta.coordinate, recipeRevision: selectedRecipe } });
+      const { data: ids, error: idsError } = await listConanPackageIds({ path: { repositoryId: repoId }, query: { reference, recipeRevision: selectedRecipe } });
       if (cancelled) return;
       if (idsError || !ids) {
-        setError('读取 Conan package IDs 失败');
+        setError(requestErrorMessage('读取 Conan package IDs 失败', idsError));
         return;
       }
-      const pages = await Promise.all(ids.items.map((packageId) => listConanPackageRevisions({ path: { repositoryId: repoId }, query: { reference: meta.coordinate, recipeRevision: selectedRecipe, packageId } })));
+      const pages = await Promise.all(ids.items.map((packageId) => listConanPackageRevisions({ path: { repositoryId: repoId }, query: { reference, recipeRevision: selectedRecipe, packageId } })));
       if (cancelled) return;
       if (pages.some((page) => page.error)) {
-        setError('读取 Conan package revisions 失败');
+        setError(requestErrorMessage('读取 Conan package revisions 失败', pages.find((page) => page.error)?.error));
         return;
       }
       setPackageRevisions(pages.flatMap((page) => page.data?.items ?? []).filter((item) => item.state === 'visible'));
     })();
     return () => { cancelled = true; };
-  }, [repoId, meta.coordinate, managed, selectedRecipe]);
+  }, [repoId, reference, managed, selectedRecipe]);
 
   const deletePackage = async (item: { recipeRevision: string; packageId: string; revision: string }) => {
     setDeleting(`package:${item.recipeRevision}:${item.packageId}:${item.revision}`);
     setError('');
-    const { error: requestError } = await deleteConanPackageRevision({ path: { repositoryId: repoId, revision: item.revision }, query: { reference: meta.coordinate, recipeRevision: item.recipeRevision, packageId: item.packageId } });
-    if (requestError) setError('删除 Conan package revision 失败');
+    const { error: requestError } = await deleteConanPackageRevision({ path: { repositoryId: repoId, revision: item.revision }, query: { reference, recipeRevision: item.recipeRevision, packageId: item.packageId } });
+    if (requestError) setError(requestErrorMessage('删除 Conan package revision 失败', requestError));
     else {
       setPackageRevisions((items) => items.filter((candidate) => candidate.recipeRevision !== item.recipeRevision || candidate.packageId !== item.packageId || candidate.revision !== item.revision));
       onDeleted?.();

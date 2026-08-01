@@ -16,9 +16,10 @@ Progress update 2026-07-31:
   uses this endpoint instead of the legacy V1 operations cache list.
 - Usage snippets currently reflect authenticated Maven Proxy access. Anonymous
   variants remain blocked on Phase 5 anonymous-access policy.
-- Remaining Phase 2 work is to broaden the endpoint beyond Maven. Maven Proxy
-  cache browse/refresh/health/invalidate/negative-clear endpoints are now in
-  the formal management OpenAPI contract and use the generated Console client.
+- V2 Proxy cache browse now supports Maven, OCI, Raw, and Conan cache indexes.
+  Maven retains its component/version projections; the other formats use the
+  format-neutral Asset projection. Cache operations use the formal management
+  OpenAPI contract and generated Console client.
 - Phase 3 has started: Proxy capacity now reports live cache bytes and cache
   object counts through the existing repository capacity endpoint, and the
   Console explains Hosted storage versus Proxy cache storage.
@@ -38,6 +39,10 @@ Progress update 2026-07-31:
   expose anonymous members whose backing Repository also allows anonymous read.
 - Deletion UX now covers OCI tag unlink, Maven version tombstones, Raw path
   deletion, and selected Conan package revision tombstones.
+- Group capacity reports member Repository contributions and never represents a
+  Group as owning Artifact or cache bytes.
+- Anonymous read decisions are recorded with the anonymous actor and bounded
+  authorization source/reason values across protocol and management browse paths.
 
 ## Goals
 
@@ -333,14 +338,14 @@ Group-only interactions:
 - [x] Migrate Console away from legacy V1 operations cache endpoint.
 - [x] Add formal OpenAPI schema and generated client coverage for the V2 Proxy
   browse endpoint and operations.
-- [ ] Extend V2 Proxy browse endpoint beyond Maven.
+- [x] Extend V2 Proxy browse endpoint beyond Maven.
 
 ### Phase 3: Capacity And Storage
 
 - [x] Proxy capacity reports cache bytes and entry counts.
 - [x] Sidecar bytes and primary bytes are separated.
 - [x] Expired and reclaimable cache bytes are reported.
-- [ ] Group capacity reports member contribution, not owned bytes.
+- [x] Group capacity reports member contribution, not owned bytes.
 - [x] Console explains Hosted vs Proxy vs Group storage semantics.
 
 ### Phase 4: Proxy Operations
@@ -361,7 +366,7 @@ Group-only interactions:
 - [x] Support anonymous protocol reads where policy allows.
 - [x] Support Repository anonymous browse/query where policy allows.
 - [ ] Hide privileged Console controls for anonymous users.
-- [ ] Audit all anonymous reads as `anonymous`.
+- [x] Audit all anonymous reads as `anonymous`.
 - [x] Add safe Conan revision delete/tombstone management actions.
 
 ### Phase 6: Documentation And Product Copy
