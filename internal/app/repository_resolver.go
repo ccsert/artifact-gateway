@@ -90,10 +90,12 @@ func (r Resolver) RecordOCIRequestFailure() {
 }
 
 func (r Resolver) RecordOCIAnonymousDenied(ctx context.Context, groupName, repositoryName, resource, method string, status int) error {
-	if err := r.Store.RecordAudit(ctx, repository.AuditRecord{
+	audit := repository.AuditRecord{
 		GroupName: groupName, Repository: repositoryName, Actor: "anonymous", Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
 		Format: "oci", Resource: resource, Representation: resource, Operation: strings.ToLower(method), Status: status, CacheDisposition: "bypass",
-	}); err != nil {
+		AuthorizationSource: anonymousAuthorizationSource, AuthorizationReason: "global_or_resource_policy_denied",
+	}
+	if err := r.Store.RecordAudit(ctx, audit); err != nil {
 		return fmt.Errorf("record OCI anonymous denial: %w", err)
 	}
 	r.Metrics.recordAudit(repositoryName, repository.AuditAccessDenied)

@@ -9,6 +9,11 @@ import (
 
 const anonymousActor = "anonymous"
 
+const (
+	anonymousAuthorizationSource = "anonymous_policy"
+	anonymousAuthorizationReason = "global_and_resource_policy_enabled"
+)
+
 func anonymousPrincipal() Principal {
 	return Principal{Actor: anonymousActor}
 }

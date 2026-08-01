@@ -558,12 +558,16 @@ func (h nativeRawHandler) proxyAudit(r *http.Request, repo repository.HostedRepo
 	if endpoint, err := url.Parse(member.Endpoint); err == nil {
 		upstreamHost = endpoint.Hostname()
 	}
-	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+	audit := repository.AuditRecord{
 		GroupName: repo.Name, Repository: repo.Name, MemberName: member.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(),
 		Format: "raw", Resource: path, Representation: "body", MemberType: string(member.Type), UpstreamHost: upstreamHost,
 		Operation: strings.ToLower(r.Method), Status: status, CacheDisposition: disposition, Bytes: bytes,
 		RequestID: rawAuditRequestID(r.Context()), TraceID: rawAuditTraceID(r.Context()),
-	})
+	}
+	if actor == anonymousActor {
+		audit.AuthorizationSource, audit.AuthorizationReason = anonymousAuthorizationSource, anonymousAuthorizationReason
+	}
+	_ = h.audit.RecordAudit(r.Context(), audit)
 }
 
 func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {

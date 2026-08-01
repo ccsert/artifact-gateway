@@ -448,7 +448,11 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(body)
 	}
-	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size})
+	audit := repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: user, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: asset.Path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: asset.Size}
+	if isAnonymous(principal) {
+		audit.AuthorizationSource, audit.AuthorizationReason = anonymousAuthorizationSource, anonymousAuthorizationReason
+	}
+	_ = h.store.RecordAudit(r.Context(), audit)
 }
 
 func nativeMavenReadPath(path string) (string, string, bool) {

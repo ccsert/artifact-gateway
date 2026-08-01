@@ -114,10 +114,15 @@ func (r v2GroupResolver) auditResolution(ctx context.Context, group repository.H
 	if r.audit == nil {
 		return
 	}
-	_ = r.audit.RecordAudit(ctx, repository.AuditRecord{
+	audit := repository.AuditRecord{
 		GroupName: group.Name, Repository: group.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(),
 		Format: string(format), Resource: resource, Operation: operation, Status: status, CacheDisposition: "bypass",
-	})
+	}
+	if actor == anonymousActor {
+		audit.AuthorizationSource = anonymousAuthorizationSource
+		audit.AuthorizationReason = anonymousAuthorizationReason
+	}
+	_ = r.audit.RecordAudit(ctx, audit)
 }
 
 // v2GroupRouter sits between the hosted repository guard and the legacy

@@ -17,6 +17,7 @@ import (
 
 type proxyCacheBrowseHandler struct {
 	store         repository.HostedRepositoryStore
+	audit         repository.Store
 	maintenance   *CacheMaintenance
 	authenticator Authenticator
 	authorizer    RepositoryAuthorizer
@@ -120,6 +121,9 @@ func (h proxyCacheBrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
 			return
 		}
+	}
+	if isAnonymous(principal) && h.audit != nil {
+		_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: anonymousActor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: string(repo.Format), Resource: r.URL.Path, Operation: strings.ToLower(r.Method), Status: http.StatusOK, CacheDisposition: "bypass", AuthorizationSource: anonymousAuthorizationSource, AuthorizationReason: anonymousAuthorizationReason})
 	}
 
 	pageSize := 50

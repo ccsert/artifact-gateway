@@ -113,6 +113,12 @@ func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
 	}
 }
 
+func TestAnonymousPolicyAuditReasonValuesAreStable(t *testing.T) {
+	if anonymousAuthorizationSource != "anonymous_policy" || anonymousAuthorizationReason != "global_and_resource_policy_enabled" {
+		t.Fatalf("unexpected anonymous audit vocabulary: %q %q", anonymousAuthorizationSource, anonymousAuthorizationReason)
+	}
+}
+
 func TestAnonymousConanPolicyNeverAllowsWrites(t *testing.T) {
 	store := repository.NewMemoryStore()
 	if _, err := store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {

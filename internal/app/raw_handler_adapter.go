@@ -109,13 +109,17 @@ func (r rawRuntime) Audit(ctx context.Context, group, path string, event rawprot
 	if endpoint, err := url.Parse(event.Member.Endpoint); err == nil {
 		upstreamHost = endpoint.Hostname()
 	}
-	_ = r.handler.Store.RecordAudit(ctx, repository.AuditRecord{
+	audit := repository.AuditRecord{
 		GroupName: group, Repository: group, MemberName: event.Member.Name, Actor: event.Actor, Outcome: event.Outcome, OccurredAt: time.Now().UTC(),
 		Format: "raw", Resource: path, Representation: "body", MemberType: string(event.Member.Type), UpstreamHost: upstreamHost,
 		Operation: strings.ToLower(event.Method), Status: event.Status, CacheDisposition: event.CacheDisposition, Bytes: event.Bytes,
 		AuthorizationSource: event.AuthorizationSource, AuthorizationReason: event.AuthorizationReason,
 		RequestID: rawAuditRequestID(ctx), TraceID: rawAuditTraceID(ctx),
-	})
+	}
+	if event.Actor == anonymousActor {
+		audit.AuthorizationSource, audit.AuthorizationReason = anonymousAuthorizationSource, anonymousAuthorizationReason
+	}
+	_ = r.handler.Store.RecordAudit(ctx, audit)
 	if r.handler.Metrics != nil {
 		r.handler.Metrics.recordRawAudit(event.Outcome, event.Bytes, event.ChecksumFailure)
 		r.handler.Metrics.recordRepositoryAuthorizationDenied("raw", event.AuthorizationSource, event.AuthorizationReason)
