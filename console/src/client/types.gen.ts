@@ -425,6 +425,31 @@ export type PromotionRequest = {
     digest: string;
 };
 
+export type EffectiveAccessDecision = {
+    allowed: boolean;
+    source: string;
+    reason: string;
+};
+
+export type EffectiveAccessPermissions = {
+    read: EffectiveAccessDecision;
+    write: EffectiveAccessDecision;
+    admin: EffectiveAccessDecision;
+};
+
+export type RepositoryEffectiveAccess = {
+    actor: string;
+    repository: {
+        id: string;
+        name: string;
+        format: Format;
+        type: 'hosted' | 'proxy';
+        state: 'active' | 'deleting' | 'deleted';
+    };
+    anonymousRead: EffectiveAccessDecision;
+    permissions: EffectiveAccessPermissions;
+};
+
 export type RepositoryId = string;
 
 export type GroupId = string;
@@ -1419,6 +1444,37 @@ export type GetRepositoryCapabilitiesResponses = {
 };
 
 export type GetRepositoryCapabilitiesResponse = GetRepositoryCapabilitiesResponses[keyof GetRepositoryCapabilitiesResponses];
+
+export type GetRepositoryEffectiveAccessData = {
+    body?: never;
+    path: {
+        repositoryId: string;
+    };
+    query?: never;
+    url: '/repositories/{repositoryId}/effective-access';
+};
+
+export type GetRepositoryEffectiveAccessErrors = {
+    /**
+     * Problem response
+     */
+    403: Problem;
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetRepositoryEffectiveAccessError = GetRepositoryEffectiveAccessErrors[keyof GetRepositoryEffectiveAccessErrors];
+
+export type GetRepositoryEffectiveAccessResponses = {
+    /**
+     * Effective repository access decisions for the authenticated actor and anonymous read policy
+     */
+    200: RepositoryEffectiveAccess;
+};
+
+export type GetRepositoryEffectiveAccessResponse = GetRepositoryEffectiveAccessResponses[keyof GetRepositoryEffectiveAccessResponses];
 
 export type ListGroupsData = {
     body?: never;

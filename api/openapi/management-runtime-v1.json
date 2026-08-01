@@ -820,6 +820,27 @@
         }
       }
     },
+    "/repositories/{repositoryId}/effective-access": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getRepositoryEffectiveAccess",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryEffectiveAccess"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/groups": {
       "get": {
         "operationId": "listGroups",
@@ -2741,6 +2762,101 @@
             "type": "string"
           }
         }
+      },
+      "EffectiveAccessDecision": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "source",
+          "reason"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "EffectiveAccessPermissions": {
+        "type": "object",
+        "required": [
+          "read",
+          "write",
+          "admin"
+        ],
+        "properties": {
+          "read": {
+            "$ref": "#/components/schemas/EffectiveAccessDecision"
+          },
+          "write": {
+            "$ref": "#/components/schemas/EffectiveAccessDecision"
+          },
+          "admin": {
+            "$ref": "#/components/schemas/EffectiveAccessDecision"
+          }
+        }
+      },
+      "RepositoryEffectiveAccess": {
+        "type": "object",
+        "required": [
+          "actor",
+          "repository",
+          "anonymousRead",
+          "permissions"
+        ],
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "format",
+              "type",
+              "state"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "format": {
+                "$ref": "#/components/schemas/Format"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "hosted",
+                  "proxy"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "deleting",
+                  "deleted"
+                ]
+              }
+            }
+          },
+          "anonymousRead": {
+            "$ref": "#/components/schemas/EffectiveAccessDecision"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/EffectiveAccessPermissions"
+          }
+        }
       }
     },
     "parameters": {
@@ -3304,6 +3420,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/APIKey"
+            }
+          }
+        }
+      },
+      "RepositoryEffectiveAccess": {
+        "description": "Effective repository access decisions for the authenticated actor and anonymous read policy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryEffectiveAccess"
             }
           }
         }
