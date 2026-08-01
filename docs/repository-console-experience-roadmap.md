@@ -373,9 +373,9 @@ Group-only interactions:
 
 - [ ] Add UI help text for Repository, Hosted, Proxy, Group, Artifact, Asset,
   Cache Entry, Publication, Tombstone, Retention Policy, and Cache Policy.
-- [ ] Add operator docs for anonymous access.
-- [ ] Add protocol usage examples for authenticated and anonymous modes.
-- [ ] Add migration notes from legacy V1 Groups to V2 Proxy Repository views.
+- [x] Add operator docs for anonymous access.
+- [x] Add protocol usage examples for authenticated and anonymous modes.
+- [x] Add migration notes from legacy V1 Groups to V2 Proxy Repository views.
 
 ## Definition Of Done
 

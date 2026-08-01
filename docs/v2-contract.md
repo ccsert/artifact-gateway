@@ -19,7 +19,7 @@ A Group contains only members of its own format. All Hosted members are consider
 
 `CONTRACT: anonymous-default-deny`
 
-Every read begins denied. There is no global anonymous setting or format-wide bypass. Each Group and each member Repository persists `read_policy.anonymous`, defaulting to false. The effective anonymous policy is an AND: it is allowed only when the addressed Group and the resolved Repository both explicitly set it to true. A member policy may narrow a Group but never make it more public. Policies are evaluated after route normalization. All other reads require valid bearer, Basic, or configured OIDC credentials, then the existing repository-scoped grant check. For an authenticated request, the resolver checks the grant for each candidate member before that member's cache or upstream is accessed.
+Every read begins denied. The global anonymous-access policy and each addressed Repository or Group policy default to false. The effective anonymous policy is an AND: global policy, addressed target policy, and for a Group the resolved member Repository policy must all explicitly allow it. A member policy may narrow a Group but never make it more public. Policies are evaluated after route normalization. All other reads require valid bearer, Basic, or configured OIDC credentials, then the existing repository-scoped grant check. For an authenticated request, the resolver checks the grant for each candidate member before that member's cache or upstream is accessed.
 
 `CONTRACT: anonymous-read-methods`
 
