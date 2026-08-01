@@ -183,6 +183,12 @@ RepositoryCapacity:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RepositoryCapacity"
+GroupCapacity:
+  description: Logical capacity contribution from Group members.
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/GroupCapacity"
 RepositoryEffectiveAccess:
   description: Effective repository access decisions for the authenticated actor and anonymous read policy
   content:

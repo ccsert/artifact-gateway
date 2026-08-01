@@ -7,6 +7,7 @@ import {
   replaceGroup,
   replaceGroupMembers,
   listRepositories,
+  getGroupCapacity,
 } from '../client';
 import type { Group, Format, Member, Repository } from '../client';
 import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
@@ -111,6 +112,37 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
             </span>
           </label>
         </div>
+      </Modal>
+    </>
+  );
+}
+
+function CapacityDialog({ group }: { group: Group }) {
+  const dialog = useDisclosure();
+  const [capacity, setCapacity] = useState<Awaited<ReturnType<typeof getGroupCapacity>>['data'] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const load = async () => {
+    setError(null);
+    const result = await getGroupCapacity({ path: { groupId: group.id } });
+    if (result.error || !result.data) setError(result.error ?? new Error('加载分组容量失败'));
+    else setCapacity(result.data);
+  };
+  const formatBytes = (value: number) => value < 1024 ? `${value} B` : `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return (
+    <>
+      <button className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" onClick={() => { dialog.show(); void load(); }}>容量</button>
+      <Modal open={dialog.open} onClose={dialog.hide} title={`容量贡献 · ${group.name}`}>
+        {error !== null && <ErrorBanner error={error} />}
+        {!capacity ? <Loading /> : <DataTable columns={['位置', '成员', '类型', '已用', '对象', '配额']}>
+          {capacity.members.map((member) => <tr key={member.repositoryId}>
+            <td className="px-4 py-2 text-zinc-500">{member.position}</td>
+            <td className="px-4 py-2 font-mono text-xs">{member.repositoryId.slice(0, 8)}…</td>
+            <td className="px-4 py-2"><Badge tone={member.type === 'proxy' ? 'blue' : 'green'}>{member.type}</Badge></td>
+            <td className="px-4 py-2 text-zinc-300">{formatBytes(member.usedBytes)}</td>
+            <td className="px-4 py-2 text-zinc-300">{member.objectCount}</td>
+            <td className="px-4 py-2 text-zinc-500">{member.quotaBytes ? formatBytes(member.quotaBytes) : '无限制'}</td>
+          </tr>)}
+        </DataTable>}
       </Modal>
     </>
   );
@@ -365,6 +397,7 @@ export function GroupsPage() {
                   <div className="flex items-center justify-end gap-2">
                     <RenameGroupDialog group={g} onSaved={load} />
                     <MembersDialog group={g} repos={repos} onSaved={load} />
+                    <CapacityDialog group={g} />
                     <button
                       onClick={() => setToDelete(g)}
                       className="rounded px-2 py-1 text-xs text-zinc-600 opacity-0 hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"

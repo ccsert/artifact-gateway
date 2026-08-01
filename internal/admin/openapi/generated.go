@@ -274,6 +274,24 @@ func (e GrantScopes) Valid() bool {
 	}
 }
 
+// Defines values for GroupCapacityMemberType.
+const (
+	GroupCapacityMemberTypeHosted GroupCapacityMemberType = "hosted"
+	GroupCapacityMemberTypeProxy  GroupCapacityMemberType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the GroupCapacityMemberType enum.
+func (e GroupCapacityMemberType) Valid() bool {
+	switch e {
+	case GroupCapacityMemberTypeHosted:
+		return true
+	case GroupCapacityMemberTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LifecycleJobKind.
 const (
 	LifecycleJobKindPromotion   LifecycleJobKind = "promotion"
@@ -1054,6 +1072,27 @@ type Group struct {
 	Version       string             `json:"version"`
 }
 
+// GroupCapacity defines model for GroupCapacity.
+type GroupCapacity struct {
+	Format  Format                `json:"format"`
+	GroupId openapi_types.UUID    `json:"groupId"`
+	Members []GroupCapacityMember `json:"members"`
+}
+
+// GroupCapacityMember defines model for GroupCapacityMember.
+type GroupCapacityMember struct {
+	Format       Format                  `json:"format"`
+	ObjectCount  int64                   `json:"objectCount"`
+	Position     int                     `json:"position"`
+	QuotaBytes   *int64                  `json:"quotaBytes,omitempty"`
+	RepositoryId openapi_types.UUID      `json:"repositoryId"`
+	Type         GroupCapacityMemberType `json:"type"`
+	UsedBytes    int64                   `json:"usedBytes"`
+}
+
+// GroupCapacityMemberType defines model for GroupCapacityMember.Type.
+type GroupCapacityMemberType string
+
 // GroupPage defines model for GroupPage.
 type GroupPage struct {
 	Items         []Group `json:"items"`
@@ -1829,6 +1868,9 @@ type ServerInterface interface {
 	// (PUT /groups/{groupId})
 	ReplaceGroup(w http.ResponseWriter, r *http.Request, groupId GroupId, params ReplaceGroupParams)
 
+	// (GET /groups/{groupId}/capacity)
+	GetGroupCapacity(w http.ResponseWriter, r *http.Request, groupId GroupId)
+
 	// (GET /groups/{groupId}/members)
 	ListGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupId)
 
@@ -2467,6 +2509,32 @@ func (siw *ServerInterfaceWrapper) ReplaceGroup(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceGroup(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGroupCapacity operation middleware
+func (siw *ServerInterfaceWrapper) GetGroupCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGroupCapacity(w, r, groupId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4668,6 +4736,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/groups/{groupId}", wrapper.DeleteGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}", wrapper.GetGroup)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}", wrapper.ReplaceGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/capacity", wrapper.GetGroupCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ListGroupMembers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ReplaceGroupMembers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
@@ -4766,6 +4835,8 @@ type GrantListJSONResponse struct {
 }
 
 type GroupJSONResponse Group
+
+type GroupCapacityJSONResponse GroupCapacity
 
 type GroupListJSONResponse GroupPage
 
@@ -5342,6 +5413,44 @@ func (response ReplaceGroup412ApplicationProblemPlusJSONResponse) VisitReplaceGr
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupCapacityRequestObject struct {
+	GroupId GroupId `json:"groupId"`
+}
+
+type GetGroupCapacityResponseObject interface {
+	VisitGetGroupCapacityResponse(w http.ResponseWriter) error
+}
+
+type GetGroupCapacity200JSONResponse struct{ GroupCapacityJSONResponse }
+
+func (response GetGroupCapacity200JSONResponse) VisitGetGroupCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupCapacity404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetGroupCapacity404ApplicationProblemPlusJSONResponse) VisitGetGroupCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7572,6 +7681,9 @@ type StrictServerInterface interface {
 	// (PUT /groups/{groupId})
 	ReplaceGroup(ctx context.Context, request ReplaceGroupRequestObject) (ReplaceGroupResponseObject, error)
 
+	// (GET /groups/{groupId}/capacity)
+	GetGroupCapacity(ctx context.Context, request GetGroupCapacityRequestObject) (GetGroupCapacityResponseObject, error)
+
 	// (GET /groups/{groupId}/members)
 	ListGroupMembers(ctx context.Context, request ListGroupMembersRequestObject) (ListGroupMembersResponseObject, error)
 
@@ -8171,6 +8283,32 @@ func (sh *strictHandler) ReplaceGroup(w http.ResponseWriter, r *http.Request, gr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGroupResponseObject); ok {
 		if err := validResponse.VisitReplaceGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGroupCapacity operation middleware
+func (sh *strictHandler) GetGroupCapacity(w http.ResponseWriter, r *http.Request, groupId GroupId) {
+	var request GetGroupCapacityRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGroupCapacity(ctx, request.(GetGroupCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGroupCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGroupCapacityResponseObject); ok {
+		if err := validResponse.VisitGetGroupCapacityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

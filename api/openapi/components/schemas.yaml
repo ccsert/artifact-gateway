@@ -595,6 +595,26 @@ RepositoryCapabilities:
         - restore
         - retain
         - reclaim
+GroupCapacity:
+  type: object
+  required: [groupId, format, members]
+  properties:
+    groupId: {type: string, format: uuid}
+    format: {"$ref": "#/Format"}
+    members:
+      type: array
+      items: {"$ref": "#/GroupCapacityMember"}
+GroupCapacityMember:
+  type: object
+  required: [position, repositoryId, format, type, usedBytes, objectCount]
+  properties:
+    position: {type: integer, minimum: 0}
+    repositoryId: {type: string, format: uuid}
+    format: {"$ref": "#/Format"}
+    type: {type: string, enum: [hosted, proxy]}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 0}
 CreatePublishSession:
   oneOf:
   - "$ref": "#/CreateMavenPublishSession"

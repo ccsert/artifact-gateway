@@ -63,6 +63,8 @@ paths:
     "$ref": "./management/groups.yaml#/groups_groupId"
   "/groups/{groupId}/members":
     "$ref": "./management/groups.yaml#/groups_groupId_members"
+  "/groups/{groupId}/capacity":
+    "$ref": "./management/groups.yaml#/groups_groupId_capacity"
   "/repositories/{repositoryId}/publish-sessions":
     "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
   "/repositories/{repositoryId}/artifacts":

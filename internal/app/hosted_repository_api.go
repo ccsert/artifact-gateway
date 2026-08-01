@@ -1485,6 +1485,39 @@ func (h generatedRepositoryAPIAdapter) ListGroupMembers(w http.ResponseWriter, r
 	}
 	writeNativeMavenJSON(w, 200, group.Members)
 }
+
+func (h generatedRepositoryAPIAdapter) GetGroupCapacity(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get group failed")
+		return
+	}
+	items := make([]map[string]any, 0, len(group.Members))
+	for _, member := range group.Members {
+		repo, repoErr := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
+		if repoErr != nil {
+			continue
+		}
+		capacity, capacityErr := h.capacities.GetRepositoryCapacity(r.Context(), member.RepositoryID)
+		if capacityErr != nil {
+			continue
+		}
+		if repo.Type == repository.RepositoryTypeProxy && h.maintenance != nil {
+			if proxyCapacity, proxyErr := (proxyCacheBrowseHandler{store: h.store, maintenance: h.maintenance, authenticator: h.authenticator, authorizer: h.authorizer}).proxyCacheCapacity(r.Context(), repo, capacity); proxyErr == nil {
+				capacity = proxyCapacity
+			}
+		}
+		items = append(items, map[string]any{"position": member.Position, "repositoryId": repo.ID, "format": repo.Format, "type": repo.Type, "usedBytes": capacity.UsedBytes, "objectCount": capacity.ObjectCount, "quotaBytes": capacity.QuotaBytes})
+	}
+	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"groupId": group.ID, "format": group.Format, "members": items})
+}
 func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	if _, ok := h.authorize(w, r); !ok {
 		return

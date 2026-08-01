@@ -78,3 +78,13 @@ groups_groupId_members:
     - repositoryId_unique
     - position_contiguous_from_zero
     - repository_format_matches_group
+groups_groupId_capacity:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/GroupId"
+  get:
+    operationId: getGroupCapacity
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/GroupCapacity"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

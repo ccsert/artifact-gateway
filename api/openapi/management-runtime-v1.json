@@ -1022,6 +1022,24 @@
         ]
       }
     },
+    "/groups/{groupId}/capacity": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GroupId"
+        }
+      ],
+      "get": {
+        "operationId": "getGroupCapacity",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GroupCapacity"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/publish-sessions": {
       "parameters": [
         {
@@ -1442,7 +1460,7 @@
       ],
       "get": {
         "operationId": "listProxyCacheEntries",
-        "description": "Lists cached Maven Proxy entries grouped for operator browsing.",
+        "description": "Lists cached Proxy assets with format-aware operator browsing projections.",
         "parameters": [
           {
             "name": "q",
@@ -3590,6 +3608,75 @@
           }
         }
       },
+      "GroupCapacityMember": {
+        "type": "object",
+        "required": [
+          "position",
+          "repositoryId",
+          "format",
+          "type",
+          "usedBytes",
+          "objectCount"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "GroupCapacity": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "format",
+          "members"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupCapacityMember"
+            }
+          }
+        }
+      },
       "ProxyCacheAsset": {
         "type": "object",
         "required": [
@@ -4350,6 +4437,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RepositoryEffectiveAccess"
+            }
+          }
+        }
+      },
+      "GroupCapacity": {
+        "description": "Logical capacity contribution from Group members.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GroupCapacity"
             }
           }
         }

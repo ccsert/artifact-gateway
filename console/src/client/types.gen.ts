@@ -544,6 +544,22 @@ export type RepositoryEffectiveAccess = {
     permissions: EffectiveAccessPermissions;
 };
 
+export type GroupCapacityMember = {
+    position: number;
+    repositoryId: string;
+    format: Format;
+    type: 'hosted' | 'proxy';
+    usedBytes: number;
+    objectCount: number;
+    quotaBytes?: number;
+};
+
+export type GroupCapacity = {
+    groupId: string;
+    format: Format;
+    members: Array<GroupCapacityMember>;
+};
+
 export type ProxyCacheAsset = {
     path: string;
     name: string;
@@ -1815,6 +1831,33 @@ export type ReplaceGroupMembersResponses = {
 };
 
 export type ReplaceGroupMembersResponse = ReplaceGroupMembersResponses[keyof ReplaceGroupMembersResponses];
+
+export type GetGroupCapacityData = {
+    body?: never;
+    path: {
+        groupId: string;
+    };
+    query?: never;
+    url: '/groups/{groupId}/capacity';
+};
+
+export type GetGroupCapacityErrors = {
+    /**
+     * Problem response
+     */
+    404: Problem;
+};
+
+export type GetGroupCapacityError = GetGroupCapacityErrors[keyof GetGroupCapacityErrors];
+
+export type GetGroupCapacityResponses = {
+    /**
+     * Logical capacity contribution from Group members.
+     */
+    200: GroupCapacity;
+};
+
+export type GetGroupCapacityResponse = GetGroupCapacityResponses[keyof GetGroupCapacityResponses];
 
 export type CreatePublishSessionData = {
     body: CreatePublishSession;
