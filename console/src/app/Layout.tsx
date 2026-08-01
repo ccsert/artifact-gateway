@@ -9,7 +9,6 @@ const navItems = [
   { to: '/repositories', label: '仓库', end: false, icon: IconRepo },
   { to: '/groups', label: '分组', end: false, icon: IconGroup },
   { to: '/access', label: '访问控制', end: false, icon: IconAccess },
-  { to: '/proxy', label: '代理组', end: false, icon: IconProxy },
   { to: '/audits', label: '审计日志', end: false, icon: IconAudit },
   { to: '/audit-retention', label: '审计保留', end: false, icon: IconRetention },
   { to: '/keys', label: 'API 密钥', end: false, icon: IconKey },
@@ -81,15 +80,6 @@ function IconAccess() {
     </svg>
   );
 }
-function IconProxy() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-
 function GlobalSearchBox() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -231,7 +221,7 @@ export function AppLayout() {
           ))}
         </nav>
         <div className="border-t border-zinc-800/80 px-4 py-3 text-[10px] leading-4 text-zinc-600">
-          Native Hosted API v1
+          Native Hosted API v2
         </div>
       </aside>
       <div className="ml-56 flex min-h-screen flex-1 flex-col">

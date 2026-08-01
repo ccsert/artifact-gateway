@@ -1,4 +1,4 @@
-import type { ProxyFormat } from './v1proxy';
+export type ProxyFormat = 'oci' | 'maven' | 'raw' | 'conan';
 
 export type ProxyCacheGroupBy = 'version' | 'component' | 'asset';
 export type ProxyCacheAssetFilter = 'primary' | 'all' | 'jar' | 'pom';

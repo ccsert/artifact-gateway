@@ -23,9 +23,10 @@ export function MavenArtifactDetail({ repoId, repoName, meta }: { repoId: string
           const build = x.buildNumber ?? 0;
           // SNAPSHOT 的多个构建：label 带构建号区分（release build 0 不带）
           const label = build > 0 ? `${version} #${build}` : version;
+          const hint = [x.coordinate, build > 0 ? `build ${build}` : '', formatDate(x.createdAt)].filter(Boolean).join(' · ');
           return {
             label,
-            hint: formatDate(x.createdAt),
+            hint,
             coordinate: x.coordinate,
             publisher: x.publisher,
             createdAt: x.createdAt,

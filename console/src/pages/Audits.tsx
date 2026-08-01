@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { listAudits, listRepositories, listGroups } from '../client';
 import type { AuditRecord } from '../client';
 import { PageHeader, Card, DataTable, inputClass, btnSecondary } from '../components/Layout';
@@ -29,6 +29,8 @@ const AUDIT_CSV_COLUMNS = [
   'Trace ID',
 ];
 
+const AUDIT_PAGE_SIZE = 50;
+
 export function AuditsPage() {
   const [records, setRecords] = useState<AuditRecord[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -40,6 +42,7 @@ export function AuditsPage() {
   const [repoOptions, setRepoOptions] = useState<string[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     void listRepositories({ query: { pageSize: 200 } }).then(({ data }) => {
@@ -53,6 +56,8 @@ export function AuditsPage() {
   const load = useCallback(async () => {
     setError(null);
     setRecords(null);
+    setExpanded(null);
+    setPage(1);
     const { data, error: err } = await listAudits({
       query: {
         repository: repository || undefined,
@@ -77,8 +82,17 @@ export function AuditsPage() {
       (!outcome || a.outcome === outcome) &&
       (!format || a.format === format),
   );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * AUDIT_PAGE_SIZE;
+  const pageRecords = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
   const outcomeOptions = Array.from(new Set((records ?? []).map((a) => a.outcome).filter(Boolean)));
   const formatOptions = Array.from(new Set((records ?? []).map((a) => a.format).filter((f): f is string => !!f)));
+
+  useEffect(() => {
+    setPage(1);
+    setExpanded(null);
+  }, [repository, group, outcome, format, limit]);
 
   return (
     <div>
@@ -197,12 +211,13 @@ export function AuditsPage() {
       ) : (
         <Card>
           <DataTable columns={['时间', '操作', '结果', '仓库/分组', '格式', '状态', '流量', 'Actor', '']}>
-            {filtered.map((a, i) => (
-              <>
+            {pageRecords.map((a, i) => {
+              const rowIndex = pageStart + i;
+              return (
+              <Fragment key={a.requestId ?? rowIndex}>
                 <tr
-                  key={a.requestId ?? i}
                   className="cursor-pointer hover:bg-zinc-800/30"
-                  onClick={() => setExpanded(expanded === i ? null : i)}
+                  onClick={() => setExpanded(expanded === rowIndex ? null : rowIndex)}
                 >
                   <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
                     {formatDate(a.occurredAt)}
@@ -222,10 +237,10 @@ export function AuditsPage() {
                   <td className="max-w-32 truncate px-4 py-2.5 text-xs text-zinc-500" title={a.actor}>
                     {a.actor ?? '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-xs text-zinc-600">{expanded === i ? '▲' : '▼'}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-zinc-600">{expanded === rowIndex ? '▲' : '▼'}</td>
                 </tr>
-                {expanded === i && (
-                  <tr key={`${a.requestId ?? i}-detail`} className="bg-zinc-900/60">
+                {expanded === rowIndex && (
+                  <tr className="bg-zinc-900/60">
                     <td colSpan={9} className="px-4 py-3">
                       <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs md:grid-cols-3">
                         {(
@@ -251,9 +266,19 @@ export function AuditsPage() {
                     </td>
                   </tr>
                 )}
-              </>
-            ))}
+              </Fragment>
+              );
+            })}
           </DataTable>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
+            <span>
+              第 {currentPage} / {totalPages} 页 · 显示 {pageRecords.length} / {filtered.length} 条
+            </span>
+            <div className="flex gap-2">
+              <button className={btnSecondary} disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>上一页</button>
+              <button className={btnSecondary} disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>下一页</button>
+            </div>
+          </div>
         </Card>
       )}
     </div>
