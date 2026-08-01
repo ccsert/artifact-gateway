@@ -24,8 +24,8 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const finish = (next: string) => {
-    setToken(next);
+  const finish = (next: string, role?: string) => {
+    setToken(next, role);
     navigate(redirect, { replace: true });
   };
 
@@ -44,12 +44,12 @@ export function LoginPage() {
         setError(res.status === 401 ? '用户名或密码错误。' : `登录失败 (${res.status})。`);
         return;
       }
-      const body = (await res.json()) as { token?: string };
+      const body = (await res.json()) as { token?: string; role?: string };
       if (!body.token) {
         setError('登录响应缺少令牌。');
         return;
       }
-      finish(body.token);
+      finish(body.token, body.role);
     } catch {
       setError('网络错误，请重试。');
     } finally {

@@ -183,7 +183,8 @@ function TokenDialog() {
 }
 
 export function AppLayout() {
-  const { token, clearToken } = useAuth();
+  const { token, role, clearToken } = useAuth();
+  const visibleNavItems = navItems.filter((item) => !['/keys', '/users'].includes(item.to) || role === 'admin');
   const location = useLocation();
   if (!token) {
     const target = encodeURIComponent(location.pathname + location.search);
@@ -202,7 +203,7 @@ export function AppLayout() {
           </div>
         </div>
         <nav className="mt-2 flex-1 space-y-0.5 px-3">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -5,6 +5,7 @@ import type { AnonymousAccessPolicy, Repository, Grant } from '../client';
 import { PageHeader, Card, CardHeader, DataTable, inputClass } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, Badge } from '../components/Badge';
+import { useAuth } from '../lib/auth';
 
 interface GrantRow {
   repositoryId: string;
@@ -33,6 +34,7 @@ function scopeLabel(scopes: string[]): { label: string; tone: 'red' | 'blue' | '
 }
 
 export function AccessControlPage() {
+  const { role } = useAuth();
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState('');
@@ -137,7 +139,7 @@ export function AccessControlPage() {
             <div className="text-sm font-medium text-zinc-200">全局匿名读取</div>
             <p className="mt-1 text-xs text-zinc-500">仅为已启用匿名读取的仓库和组开放未认证协议读取。</p>
           </div>
-          {anonymousPolicy ? (
+          {anonymousPolicy && role === 'admin' ? (
             <button
               type="button"
               role="switch"
@@ -149,9 +151,9 @@ export function AccessControlPage() {
             >
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${anonymousPolicy.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
-          ) : (
+          ) : role === 'admin' ? (
             <span className="text-xs text-zinc-500">加载中…</span>
-          )}
+          ) : null}
         </div>
         {anonymousPolicyError !== null && <div className="mt-3"><ErrorBanner error={anonymousPolicyError} /></div>}
       </Card>

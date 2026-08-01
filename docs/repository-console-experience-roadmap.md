@@ -365,7 +365,7 @@ Group-only interactions:
 - [x] Add Repository anonymous effective-access explanation endpoint.
 - [x] Support anonymous protocol reads where policy allows.
 - [x] Support Repository anonymous browse/query where policy allows.
-- [ ] Hide privileged Console controls for anonymous users.
+- [x] Hide privileged Console controls for anonymous users.
 - [x] Audit all anonymous reads as `anonymous`.
 - [x] Add safe Conan revision delete/tombstone management actions.
 

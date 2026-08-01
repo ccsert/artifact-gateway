@@ -3,10 +3,12 @@ import type { ReactNode } from 'react';
 import { client } from '../client/client.gen';
 
 const TOKEN_KEY = 'ag.console.token';
+const ROLE_KEY = 'ag.console.role';
 
 interface AuthContextValue {
   token: string;
-  setToken: (token: string) => void;
+  role: string;
+  setToken: (token: string, role?: string) => void;
   clearToken: () => void;
 }
 
@@ -25,20 +27,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applyToken(stored);
     return stored;
   });
+  const [role, setRole] = useState<string>(() => localStorage.getItem(ROLE_KEY) ?? '');
 
   useEffect(() => {
     applyToken(token);
   }, [token]);
 
-  const setToken = useCallback((next: string) => {
+  const setToken = useCallback((next: string, nextRole = '') => {
     const trimmed = next.trim();
     localStorage.setItem(TOKEN_KEY, trimmed);
     setTokenState(trimmed);
+    if (nextRole) localStorage.setItem(ROLE_KEY, nextRole);
+    else localStorage.removeItem(ROLE_KEY);
+    setRole(nextRole);
   }, []);
 
   const clearToken = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ROLE_KEY);
     setTokenState('');
+    setRole('');
   }, []);
 
   useEffect(() => {
@@ -59,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, clearToken]);
 
   return (
-    <AuthContext.Provider value={{ token, setToken, clearToken }}>
+    <AuthContext.Provider value={{ token, role, setToken, clearToken }}>
       {children}
     </AuthContext.Provider>
   );
