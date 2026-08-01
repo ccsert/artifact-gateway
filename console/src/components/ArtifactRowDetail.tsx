@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { deleteArtifact, listArtifacts, listMavenCoordinates, listConanReferences } from '../client';
 import { ArtifactDetailView, VersionList } from './ArtifactDetail';
 import type { ArtifactMeta } from './ArtifactDetail';
+import { useAuth } from '../lib/auth';
 import { mavenGA, mavenVersion } from '../lib/usage';
 import { formatDate } from '../lib/format';
 
@@ -125,6 +126,43 @@ export function ConanArtifactDetail({ repoId, repoName, meta }: { repoId: string
 }
 
 // Raw 制品详情：使用方法 + 元信息
-export function RawArtifactDetail({ repoName, meta }: { repoName: string; meta: ArtifactMeta }) {
-  return <ArtifactDetailView format="raw" repoName={repoName} meta={meta} />;
+export function RawArtifactDetail({ repoName, meta, onDeleted }: { repoName: string; meta: ArtifactMeta; onDeleted?: () => void }) {
+  const { token } = useAuth();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteCurrent = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const response = await fetch(`/raw/${encodeURIComponent(repoName)}/${meta.coordinate.split('/').map(encodeURIComponent).join('/')}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok && response.status !== 204) throw new Error(`${response.status}: ${(await response.text()).slice(0, 120)}`);
+      onDeleted?.();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : '删除 Raw 文件失败');
+    } finally {
+      setDeleting(false);
+    }
+  };
+  return (
+    <div className="space-y-4">
+      <ArtifactDetailView format="raw" repoName={repoName} meta={meta} />
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
+        <div>
+          <div className="text-xs font-medium text-zinc-200">Raw 文件</div>
+          <div className="mt-0.5 font-mono text-xs text-zinc-500">{meta.coordinate}</div>
+          {deleteError && <div className="mt-1 text-xs text-rose-300">{deleteError}</div>}
+        </div>
+        <button
+          onClick={deleteCurrent}
+          disabled={deleting}
+          className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+        >
+          {deleting ? '删除中…' : '删除文件'}
+        </button>
+      </div>
+    </div>
+  );
 }

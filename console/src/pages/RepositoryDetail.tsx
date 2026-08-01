@@ -796,6 +796,7 @@ function ArtifactsTab({ repo }: { repo: Repository }) {
                         {format === 'raw' && (
                           <RawArtifactDetail
                             repoName={repo.name}
+                            onDeleted={() => void load(q)}
                             meta={{
                               coordinate: r.coordinate,
                               digest: r.digest,
