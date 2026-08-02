@@ -11,8 +11,8 @@ const (
 	FormatRaw   Format = "raw"
 	FormatOCI   Format = "oci"
 	FormatMaven Format = "maven"
-	// FormatConan is a managed authorization target for Conan Group members.
-	// Conan remains read-through only; this format has no native artifact route.
+	// FormatConan is a managed authorization target with native Hosted, Proxy,
+	// and Group protocol routes.
 	FormatConan Format = "conan"
 )
 
@@ -41,6 +41,16 @@ type HostedRepository struct {
 	State         RepositoryState `json:"state"`
 	Version       string          `json:"version"`
 	CreatedAt     time.Time       `json:"-"`
+}
+
+func normalizeHostedRepository(repo HostedRepository) HostedRepository {
+	if repo.Type == "" {
+		repo.Type = RepositoryTypeHosted
+	}
+	if repo.AllowedHosts == nil {
+		repo.AllowedHosts = []string{}
+	}
+	return repo
 }
 
 // AnonymousAccessPolicy controls whether any unauthenticated protocol read may

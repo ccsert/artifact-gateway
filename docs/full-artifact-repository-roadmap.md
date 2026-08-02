@@ -50,30 +50,11 @@ artifacts and never mutate the source.
    concurrency limits, replication observability, backup/restore coverage for
    every lifecycle state, and release evidence integrated with deployment CI.
 
-## Near-Term Objective
+## Current Status
 
-The next implementation objective is **Lifecycle foundation**. Its exit
-criteria are a written state-transition contract, an additive migration plan,
-one shared job/idempotency boundary, and a vertical slice that applies the
-model to one existing format without changing existing reads. OCI is the best
-first slice because it already has digest-addressed blobs, manifest visibility,
-tag movement, and native integration fixtures.
-
-## Non-Goals For The First Slice
-
-- Adding another package protocol before the current four have lifecycle plans.
-- Replacing protocol-native endpoints with a generic upload API.
-- Destructive physical deletion without a Tombstone and grace-period collector.
-- Cross-repository promotion or replication before the single-Repository state
-model is proven.
-
-## Lifecycle Foundation Status
-
-The OCI deletion slice is implemented. Migration `000032` introduces generic
-Artifact Tombstones and reserved lifecycle jobs. OCI manifest deletion now
-writes a tombstone in the same transaction that removes manifest/tag visibility
-and releases the delayed object intent. The existing Registry V2 response and
-post-delete `404` behavior are unchanged. OCI, Maven, and Raw reclaim now run
-through repository-scoped lifecycle jobs. Conan now has a native repository
-state model; the next slice wires it into Hosted publication, resolution,
-deletion, and reclaim before promotion or replication.
+All five delivery stages are implemented for OCI, Maven, Raw, and Conan. Each
+format has Hosted, Proxy, and Group workflows, a native lifecycle, management
+browse where applicable, promotion, checkpointed replication, and operational
+coverage in the backend completion checklist. The roadmap is retained as the
+architectural sequence; release readiness is now governed by the executable
+gates and evidence record rather than a further implementation slice.

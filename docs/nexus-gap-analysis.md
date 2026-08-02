@@ -116,10 +116,12 @@ in the Known Limitations of [release readiness](release-readiness.md); others
 reflect the backend checklist having closed Hosted lifecycle while the
 operator-facing surface is thinner:
 
-- Raw supports GET/HEAD with a single byte range; Nexus Raw Hosted provides
-  broader PUT/listing and checksum behavior.
-- Conan supports Conan 2 v2 REST; Conan 1, remote-to-remote copy, and general
-  upstream index aggregation are unsupported.
+- Raw supports authenticated PUT/DELETE, prefix listing, derived checksums, and
+  resumable uploads in addition to GET/HEAD with a single byte range; conditional
+  writes and non-HTTP tooling remain unsupported.
+- Conan supports Conan 2 v2 Hosted publication, revision lifecycle, promotion,
+  and replication; Conan 1, remote-to-remote copy, and general upstream index
+  aggregation are unsupported.
 - OCI and Conan lack garbage-collection visibility and resumable-upload
   recovery operator surfaces that Nexus exposes around Docker repositories.
 

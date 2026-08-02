@@ -55,9 +55,9 @@ storage credentials, or unredacted upstream URLs in that record.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
 - [ ] `make openapi-check`, `make console-typecheck`, `make console-build`,
-      and `make console-e2e` verify the generated `/api/v2` management
-      client, the Console production build, and the browser flow that reads and
-      triggers the administrator-only `/api/v1/operations/cache` surface.
+      and `make console-e2e` verify the generated `/api/v2` management client,
+      the Console production build, and an authenticated administrator dashboard
+      session through the Console API proxy.
 - [ ] Maven retention maintenance runs outside request handling, preserves the
       configured newest versions per module, and tombstones only expired excess
       coordinates before the Maven orphan collector reclaims bytes.
@@ -127,9 +127,12 @@ flowchart LR
   replication and promotion workers publish verified Artifacts for each of
   those formats. The backup/restore rehearsal retains their persisted jobs and
   plans, but does not require a worker to complete them after restore.
-- Raw uses HTTP GET/HEAD only, supports a single byte range, and does not
-  generate or reconcile checksum sidecars. Conan supports only Conan 2 v2 REST
-  reads; Conan 1, uploads, deletes, copies, and general search are unsupported.
+- Raw Hosted supports authenticated PUT and DELETE, single-byte-range GET/HEAD,
+  derived checksum sidecars, and resumable uploads. Conditional write/update
+  semantics and non-HTTP client tooling are unsupported. Conan supports Conan 2
+  v2 Hosted publication, revision delete/restore, Group/Proxy reads, promotion,
+  and replication. Conan 1, remote-to-remote copies, and general upstream index
+  aggregation are unsupported.
 - Static-token rotation revokes issued Gateway bearer tokens only after the
   Gateway is restarted. OIDC token revocation is governed by token expiry and
   the identity provider; JWKS refresh is cached for five minutes.

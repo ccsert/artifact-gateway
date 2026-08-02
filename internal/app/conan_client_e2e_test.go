@@ -29,6 +29,7 @@ func TestConan2ClientListsRevisionThroughGateway(t *testing.T) {
 		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
 	}
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
 	server := httptest.NewServer(h)
@@ -51,6 +52,7 @@ func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
 		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
 	}
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := newConanDownloadClient()
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
@@ -78,6 +80,7 @@ func TestConan2ClientDownloadsRevisionedPackageThroughGateway(t *testing.T) {
 		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
 	}
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := newConanPackageClient()
 	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}})
@@ -102,6 +105,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	}
 
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	hosted := repository.Member{Name: "hosted", Type: repository.MemberHosted, Anonymous: true, Position: 0}
 	proxy := repository.Member{Name: "proxy", Type: repository.MemberProxy, Anonymous: true, Position: 1, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{hosted, proxy}})
@@ -205,6 +209,7 @@ func TestConan2ClientRejectsChecksumMismatch(t *testing.T) {
 		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
 	}
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := &conanChecksumClient{}
 	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}})
@@ -233,6 +238,7 @@ func TestConan2ClientAuthenticationAndAnonymousPolicyMatrix(t *testing.T) {
 		t.Skip("set CONAN_BINARY to run the Conan 2 client fixture")
 	}
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	for _, group := range []repository.Group{
 		{Name: "authenticated", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},
 		{Name: "group-only", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}},
@@ -325,6 +331,7 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	})
 	endpoint := "https://example.com:" + port
 	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "allowed", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "denied", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"other.example"}}}})
 	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewConanCache(nil), Metrics: &Metrics{}})

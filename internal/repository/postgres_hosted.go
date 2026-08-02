@@ -9,7 +9,8 @@ import (
 )
 
 func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
-	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	repo = normalizeHostedRepository(repo)
+	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
 	}
@@ -20,6 +21,7 @@ func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedR
 }
 
 func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
+	repo = normalizeHostedRepository(repo)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return HostedRepository{}, false, err
@@ -55,7 +57,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, false, err
 	}
-	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,$6,$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, false, ErrNameExists
 	}
@@ -160,7 +162,7 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 
 func (s *PostgresStore) UpdateHostedRepository(ctx context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
 	var updated HostedRepository
-	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=$3, anonymous_read=$4, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$5 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, expectedVersion), &updated)
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=COALESCE($3::text[], '{}'::text[]), anonymous_read=$4, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$5 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, expectedVersion), &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetHostedRepository(ctx, repo.ID); errors.Is(getErr, ErrNotFound) {
 			return HostedRepository{}, ErrNotFound

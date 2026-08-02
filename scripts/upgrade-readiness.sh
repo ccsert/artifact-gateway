@@ -26,8 +26,8 @@ cleanup() {
 trap cleanup EXIT
 
 git worktree add --detach "$old_tree" "$base_ref" >/dev/null
-awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "MINIO_API_PORT" && $1 != "MINIO_CONSOLE_PORT" { print }' "$environment_file" >"$isolated_environment"
-printf 'GATEWAY_HTTP_PORT=%s\nMINIO_API_PORT=%s\nMINIO_CONSOLE_PORT=%s\n' "$gateway_port" "$minio_api_port" "$minio_console_port" >>"$isolated_environment"
+awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "MINIO_API_PORT" && $1 != "MINIO_CONSOLE_PORT" { print }' "$environment_file" >"$isolated_environment"
+printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nMINIO_API_PORT=%s\nMINIO_CONSOLE_PORT=%s\n' "$gateway_port" "$(free_port)" "$minio_api_port" "$minio_console_port" >>"$isolated_environment"
 gateway_url="http://127.0.0.1:${gateway_port}"
 
 old_compose=(docker compose --env-file "$isolated_environment" -f "$old_tree/compose.yml")

@@ -25,10 +25,17 @@ private_group="raw-private-${run_id}"
 denied_group="raw-denied-${run_id}"
 workdir=$(mktemp -d)
 fixture_pid=""
+anonymous_policy_version=""
+anonymous_policy_enabled=""
 
 cleanup() {
   local status=$?
   if [[ -n "$fixture_pid" ]]; then kill "$fixture_pid" 2>/dev/null || true; fi
+  if [[ -n "$anonymous_policy_version" && "$anonymous_policy_enabled" != "true" ]]; then
+    curl --silent --output /dev/null --write-out '' -X PUT \
+      -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "If-Match: $anonymous_policy_version" \
+      --data "{\"version\":\"$anonymous_policy_version\",\"enabled\":false}" "$gateway_url/api/v2/anonymous-access-policy" || true
+  fi
   rm -rf "$workdir"
   exit "$status"
 }
@@ -65,7 +72,19 @@ authenticated_status() {
     -H "Authorization: Bearer $GATEWAY_RESOLVER_TOKEN" "$1"
 }
 
+enable_anonymous_access() {
+  local policy response
+  policy=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/anonymous-access-policy")
+  read -r anonymous_policy_version anonymous_policy_enabled < <(python3 -c 'import json, sys; policy = json.load(sys.stdin); print(policy["version"], str(policy["enabled"]).lower())' <<<"$policy")
+  [[ "$anonymous_policy_enabled" == "true" ]] && return
+  response=$(curl --silent --show-error --fail -X PUT \
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "If-Match: $anonymous_policy_version" \
+    --data "{\"version\":\"$anonymous_policy_version\",\"enabled\":true}" "$gateway_url/api/v2/anonymous-access-policy")
+  anonymous_policy_version=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])' <<<"$response")
+}
+
 endpoint="http://host.docker.internal:${fixture_port}"
+enable_anonymous_access
 create_group "$group" true hosted "$endpoint"
 create_group "$private_group" false hosted "$endpoint"
 create_group "$denied_group" true proxy 'https://example.com' '["not-example.com"]'

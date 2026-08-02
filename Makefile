@@ -35,7 +35,7 @@ console-api-check:
 	@cd console && npm run check:api
 
 console-e2e:
-	@cd console && npm run e2e
+	@./scripts/console-e2e.sh
 
 up:
 	@docker compose --env-file .env -f compose.yml up --build --wait --remove-orphans

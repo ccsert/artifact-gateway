@@ -9,6 +9,7 @@
     "typecheck": "tsc -b --pretty false",
     "generate:api": "openapi-ts -f hey-api.config.ts",
     "check:api": "npm run generate:api",
+    "e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.72.0",
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/vite": "^4.1.0",
     "@types/node": "^26.1.1",
     "@types/react": "^19.1.0",

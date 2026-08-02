@@ -53,12 +53,12 @@ V1 is done when all of the following are true:
 
 ## Current Checkpoint
 
-The lifecycle foundation, protocol completion work, management browse/search,
-Maven retention execution, and recoverable Maven and Conan tombstones are
-complete. The active backend backlog is distribution workflows, beginning with
-immutable promotion, followed by checkpointed replication and operational
-readiness. Details are tracked in the
-[Backend Completion Checklist](backend-completion-checklist.md).
+The V1 backend work packages are complete: lifecycle, format behavior,
+management APIs, distribution, and operational controls are tracked as complete
+in the [Backend Completion Checklist](backend-completion-checklist.md). The
+remaining release decision is evidence, not feature scope: execute the full
+[release readiness](release-readiness.md) gate set from a clean checkout and
+record the results before approving a deployment.
 
 ## Constraints
 

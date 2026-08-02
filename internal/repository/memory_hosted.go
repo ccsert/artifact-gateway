@@ -8,6 +8,7 @@ import (
 )
 
 func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepository) (HostedRepository, error) {
+	repo = normalizeHostedRepository(repo)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, existing := range s.hostedRepositories {
@@ -23,6 +24,7 @@ func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepos
 }
 
 func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
+	repo = normalizeHostedRepository(repo)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	recordKey := actor + "\x00/repositories\x00" + key
