@@ -224,6 +224,11 @@ status=$(curl --silent --show-error --output "$grant_response" --write-out '%{ht
 [[ "$status" == 200 && $(<"$grant_response") == 'grant restore artifact' ]] || {
   printf 'Managed grant allow before backup returned HTTP %s: %s\n' "$status" "$(<"$grant_response")" >&2; exit 1;
 }
+anonymous_policy=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/anonymous-access-policy")
+anonymous_policy_version=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])' <<<"$anonymous_policy")
+curl --silent --show-error --fail -X PUT \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "If-Match: $anonymous_policy_version" \
+  --data "{\"version\":\"$anonymous_policy_version\",\"enabled\":true}" "$gateway_url/api/v2/anonymous-access-policy" >/dev/null
 conan_payload=$(printf '{"name":"%s","anonymous":true,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":true}]}' "$conan_group")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \

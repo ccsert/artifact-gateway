@@ -44,7 +44,7 @@ trap cleanup EXIT
 mkdir -p "$workdir/release"
 printf '%s' 'raw release artifact' >"$workdir/release/app.txt"
 printf '%064d\n' 0 >"$workdir/release/app.txt.sha256"
-python3 -m http.server "$fixture_port" --bind 127.0.0.1 --directory "$workdir" >"$workdir/fixture.log" 2>&1 &
+python3 -m http.server "$fixture_port" --bind 0.0.0.0 --directory "$workdir" >"$workdir/fixture.log" 2>&1 &
 fixture_pid=$!
 until curl --silent --show-error --fail "http://localhost:${fixture_port}/release/app.txt" >/dev/null; do
   kill -0 "$fixture_pid" 2>/dev/null || { cat "$workdir/fixture.log" >&2; exit 1; }
