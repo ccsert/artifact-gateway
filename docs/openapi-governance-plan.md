@@ -57,8 +57,10 @@ extension point for later management route migrations.
 runtime authority. `management-runtime.yaml` is the authoritative contract for
 the production-backed `/api/v2` surface. Its versioned bundle, generated
 server/client code, and assembled-handler conformance tests must change
-together. The runtime projection intentionally contains only operations with
-an equivalent handler:
+together. This intentionally keeps the API shape in one compact, reviewable
+source rather than duplicating operation metadata across Go annotations and
+OpenAPI fragments. The runtime projection intentionally contains only
+operations with an equivalent handler:
 
 | Contract area | Runtime status | Reason |
 | --- | --- | --- |
@@ -76,13 +78,14 @@ Postgres stores, authorization behavior, and a handler-level contract test.
 The generated wrapper then owns route and parameter binding; it must not be
 used to publish an unsupported route.
 
-`internal/app/openapi_runtime_contract_test.go` executes a representative
-matrix through the assembled Gateway handler and validates route reachability,
-declared response status, headers, and JSON response schema against
-`management-runtime-v1.json`. Add a matrix entry whenever a route family is
-introduced or its response shape changes. Feature tests remain responsible for
-domain scenarios and authorization branches not represented by that compact
-matrix.
+`internal/app/openapi_runtime_contract_test.go` is the management contract
+laboratory. Its operation inventory executes every published operation through
+the assembled Gateway and rejects missing or duplicate operation IDs and
+unregistered routes. Its fixture matrix validates declared response status,
+headers, and JSON schema for representative successful requests. Add a strict
+fixture whenever a route family is introduced or its response shape changes;
+feature tests remain responsible for domain scenarios and authorization
+branches outside that matrix.
 
 Protocol APIs are not handler-generated. OCI Registry V2, Raw, Maven, and
 Conan behavior is defined first by official specifications and ecosystem client

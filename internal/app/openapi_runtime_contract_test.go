@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -53,4 +55,69 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRuntimeManagementOperationInventory verifies that every published
+// management operation reaches the assembled Gateway. Scenario tests own the
+// successful state transitions; this inventory catches a route that is absent
+// from the runtime even when its generated client contract still exists.
+func TestRuntimeManagementOperationInventory(t *testing.T) {
+	loader := openapi3.NewLoader()
+	spec, err := loader.LoadFromFile(filepath.Join("..", "..", "api", "openapi", "management-runtime-v1.json"))
+	if err != nil || spec.Validate(loader.Context) != nil {
+		t.Fatalf("load runtime contract: %v", err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "inventory-conan", Format: repository.FormatConan, Type: repository.RepositoryTypeHosted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	operationCount := 0
+	operationIDs := map[string]string{}
+	for path, pathItem := range spec.Paths.Map() {
+		for method, operation := range pathItem.Operations() {
+			operationCount++
+			if operation.OperationID == "" {
+				t.Fatalf("%s %s has no operationId", strings.ToUpper(method), path)
+			}
+			if prior, exists := operationIDs[operation.OperationID]; exists {
+				t.Fatalf("operationId=%s is reused by %s and %s %s", operation.OperationID, prior, strings.ToUpper(method), path)
+			}
+			operationIDs[operation.OperationID] = strings.ToUpper(method) + " " + path
+			path := inventoryPath(path, repo.ID)
+			method := strings.ToUpper(method)
+			t.Run(fmt.Sprintf("%s %s", method, path), func(t *testing.T) {
+				req := httptest.NewRequest(method, "https://gateway.example.com/api/v2"+path, nil)
+				authorize(req, "admin-secret")
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, req)
+				if response.Code == http.StatusMethodNotAllowed {
+					t.Fatalf("operationId=%s is not registered", operation.OperationID)
+				}
+			})
+		}
+	}
+	if operationCount == 0 {
+		t.Fatal("runtime contract has no operations")
+	}
+}
+
+func inventoryPath(path, repositoryID string) string {
+	replacements := map[string]string{
+		"{apiKeyId}":          uuid.NewString(),
+		"{artifactId}":        uuid.NewString(),
+		"{groupId}":           uuid.NewString(),
+		"{objectName}":        "artifact.jar",
+		"{replicationPlanId}": uuid.NewString(),
+		"{repositoryId}":      repositoryID,
+		"{revision}":          "rrev1",
+		"{sessionId}":         uuid.NewString(),
+		"{userId}":            "inventory-user",
+	}
+	for placeholder, value := range replacements {
+		path = strings.ReplaceAll(path, placeholder, value)
+	}
+	return path
 }
