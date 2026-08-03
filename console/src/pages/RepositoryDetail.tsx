@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, Fragment } from 'react';
+import { Alert, Button, Checkbox, Input, InputNumber, Popconfirm, Progress, Select, Space, Switch, Tabs } from 'antd';
+import { DeleteOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import { Link, useParams } from 'react-router-dom';
 import {
   getRepository,
@@ -50,7 +52,7 @@ import type {
   User,
   ApiKey,
 } from '../client';
-import { PageHeader, Card, CardHeader, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, btnDanger } from '../components/Layout';
+import { PageHeader, Card, CardHeader, DataTable, Pagination, Field } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { FormatBadge, StateBadge, Badge } from '../components/Badge';
 import { Modal, useDisclosure } from '../components/Modal';
@@ -103,7 +105,9 @@ type ProxyMavenAssetFilter = 'primary' | 'all' | 'jar' | 'pom';
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
+    <Button
+      type="text"
+      size="small"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -113,10 +117,10 @@ function CopyButton({ text }: { text: string }) {
           /* ignore */
         }
       }}
-      className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+      className="shrink-0"
     >
-      {copied ? '已复制 ✓' : '复制'}
-    </button>
+      {copied ? '已复制' : '复制'}
+    </Button>
   );
 }
 
@@ -339,19 +343,15 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3">
         <div className="mb-2 text-sm font-medium text-zinc-200">预热缓存</div>
         <div className="flex flex-wrap gap-2">
-          <input
-            className={`${inputClass} min-w-80 flex-1 font-mono text-xs`}
+          <Input
+            className="min-w-80 flex-1 font-mono"
             placeholder="org.springframework.boot:spring-boot:3.4.4:pom"
             value={warmInput}
             onChange={(e) => setWarmInput(e.target.value)}
           />
-          <button onClick={warm} disabled={warming || !warmInput.trim()} className={btnSecondary}>
-            {warming ? '预热中…' : '预热'}
-          </button>
-          <button onClick={refresh} disabled={refreshing || !warmInput.trim()} className={btnSecondary}>
-            {refreshing ? '刷新中…' : '强制刷新'}
-          </button>
-          <button onClick={() => void loadHealth()} className={btnSecondary}>检查上游</button>
+          <Button onClick={warm} loading={warming} disabled={!warmInput.trim()}>预热</Button>
+          <Button onClick={refresh} loading={refreshing} disabled={!warmInput.trim()}>强制刷新</Button>
+          <Button onClick={() => void loadHealth()}>检查上游</Button>
         </div>
         {warmError && <div className="mt-2 text-xs text-rose-300">{warmError}</div>}
         {warmResult && (
@@ -369,26 +369,27 @@ function ProxyMavenUsage({ repoId, repoName, token, onWarmed }: { repoId: string
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3">
         <div className="mb-2 text-sm font-medium text-zinc-200">失效缓存</div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className={`${inputClass} w-28`} value={invalidateScope} onChange={(e) => setInvalidateScope(e.target.value as typeof invalidateScope)}>
-            <option value="path">路径</option>
-            <option value="version">版本</option>
-            <option value="component">组件</option>
-            <option value="repository">全部</option>
-          </select>
-          <input
-            className={`${inputClass} min-w-80 flex-1 font-mono text-xs`}
+          <Select
+            className="w-28"
+            value={invalidateScope}
+            options={[
+              { value: 'path', label: '路径' },
+              { value: 'version', label: '版本' },
+              { value: 'component', label: '组件' },
+              { value: 'repository', label: '全部' },
+            ]}
+            onChange={(value: typeof invalidateScope) => setInvalidateScope(value)}
+          />
+          <Input
+            className="min-w-80 flex-1 font-mono"
             placeholder={invalidateScope === 'component' ? 'org.springframework.boot:spring-boot' : invalidateScope === 'version' ? 'org.springframework.boot:spring-boot:3.4.4' : 'org/springframework/boot/spring-boot/3.4.4'}
             value={invalidateInput}
             onChange={(e) => setInvalidateInput(e.target.value)}
             disabled={invalidateScope === 'repository'}
           />
-          {invalidateScope === 'path' && <label className="flex items-center gap-1.5 text-xs text-zinc-400"><input type="checkbox" checked={invalidatePrefix} onChange={(e) => setInvalidatePrefix(e.target.checked)} />按前缀</label>}
-          <button onClick={invalidate} disabled={invalidating || (invalidateScope !== 'repository' && !invalidateInput.trim())} className={btnSecondary}>
-            {invalidating ? '处理中…' : '失效'}
-          </button>
-          <button onClick={clearNegative} disabled={clearingNegative} className={btnSecondary}>
-            {clearingNegative ? '处理中…' : '清理负缓存'}
-          </button>
+          {invalidateScope === 'path' && <Checkbox checked={invalidatePrefix} onChange={(e) => setInvalidatePrefix(e.target.checked)}>按前缀</Checkbox>}
+          <Button onClick={invalidate} loading={invalidating} disabled={invalidateScope !== 'repository' && !invalidateInput.trim()}>失效</Button>
+          <Button onClick={clearNegative} loading={clearingNegative}>清理负缓存</Button>
         </div>
         <div className="mt-1 text-[11px] text-zinc-600">版本、组件和全部会按对应 Maven 缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。</div>
         {invalidateError && <div className="mt-2 text-xs text-rose-300">{invalidateError}</div>}
@@ -650,56 +651,60 @@ function ArtifactsTab({ repo, canWrite }: { repo: Repository; canWrite: boolean 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setExpandedImage(null);
-            void load(q);
+        <Input.Search
+          allowClear
+          className="w-80"
+          placeholder={searchPlaceholder[format] ?? '搜索…'}
+          value={q}
+          onChange={(e) => {
+            const value = e.target.value;
+            setQ(value);
+            if (!value) {
+              setExpandedImage(null);
+              void load('');
+            }
           }}
-          className="flex items-center gap-2"
-        >
-          <input
-            className={`${inputClass} min-w-0 w-72`}
-            placeholder={searchPlaceholder[format] ?? '搜索…'}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <button type="submit" className={`${btnSecondary} shrink-0`}>
-            搜索
-          </button>
-        </form>
+          onSearch={(value) => {
+            setQ(value);
+            setExpandedImage(null);
+            void load(value);
+          }}
+          enterButton="搜索"
+        />
         {canUploadRaw && <RawUploadDialog repo={repo} onUploaded={() => load(q)} />}
         {proxyMaven && (
           <>
-            <select
-              className="rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-2 text-xs text-zinc-300 outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/30"
+            <Select
+              className="w-28"
               value={proxyAssetFilter}
-              onChange={(e) => {
-                setProxyAssetFilter(e.target.value as ProxyMavenAssetFilter);
+              options={[
+                { value: 'primary', label: '主资产' },
+                { value: 'all', label: '全部文件' },
+                { value: 'jar', label: '仅 JAR' },
+                { value: 'pom', label: '仅 POM' },
+              ]}
+              onChange={(value: ProxyMavenAssetFilter) => {
+                setProxyAssetFilter(value);
                 setExpandedImage(null);
               }}
-            >
-              <option value="primary">主资产</option>
-              <option value="all">全部文件</option>
-              <option value="jar">仅 JAR</option>
-              <option value="pom">仅 POM</option>
-            </select>
+            />
             <span className="text-xs text-zinc-500">
               {formatNumber(proxyTotal)} 个 Maven 版本，当前显示 {formatNumber(rows.length)} 个
             </span>
           </>
         )}
         {q && (
-          <button
+          <Button
+            type="text"
+            size="small"
             onClick={() => {
               setQ('');
               setExpandedImage(null);
               void load('');
             }}
-            className="text-xs text-zinc-500 hover:text-zinc-300"
           >
-            ← 返回完整列表
-          </button>
+            返回完整列表
+          </Button>
         )}
       </div>
       {error !== null ? (
@@ -1018,9 +1023,9 @@ function GrantsTab({ repo }: { repo: Repository }) {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button onClick={openEditor} className={btnPrimary}>
+        <Button type="primary" onClick={openEditor}>
           编辑授权
-        </button>
+        </Button>
       </div>
       {grants.length === 0 ? (
         <EmptyState title="暂无授权规则" hint="在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。" />
@@ -1050,14 +1055,14 @@ function GrantsTab({ repo }: { repo: Repository }) {
         onClose={editor.hide}
         wide
         footer={
-          <>
-            <button onClick={editor.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={editor.hide}>
               取消
-            </button>
-            <button onClick={save} disabled={saving} className={btnPrimary}>
-              {saving ? '保存中…' : '保存'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={save} loading={saving}>
+              保存
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-3">
@@ -1072,9 +1077,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
             <div className="mt-2 border-t border-cyan-500/10 pt-2 text-zinc-500">用户/API Key 的全局角色会先生效；仓库规则只能追加权限，不能撤销全局角色。</div>
           </div>
           {principalChoicesError !== null && (
-            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-              用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。
-            </div>
+            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。</div>
           )}
           <div className="min-w-[1020px]">
             <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-center gap-3 px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
@@ -1091,11 +1094,16 @@ function GrantsTab({ repo }: { repo: Repository }) {
                   <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3">
                     <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-start gap-3">
                       <div className="min-w-0">
-                        <select
-                          className={`${inputClass} h-10 min-w-0 text-xs`}
+                        <Select
+                          className="w-full"
                           value={kind}
-                          onChange={(e) => {
-                            const nextKind = e.target.value as PrincipalKind | '';
+                          options={[
+                            { value: '', label: '选择主体类型' },
+                            { value: 'user', label: '用户账号' },
+                            { value: 'api-key', label: 'API Key（CI / 自动化）' },
+                            { value: 'custom', label: 'OIDC / 自定义 actor' },
+                          ]}
+                          onChange={(nextKind: PrincipalKind | '') => {
                             const first = nextKind === 'user'
                               ? principalChoices.find((choice) => choice.value.startsWith('user:') && !choice.disabled)?.value ?? ''
                               : nextKind === 'api-key'
@@ -1103,33 +1111,31 @@ function GrantsTab({ repo }: { repo: Repository }) {
                                 : '';
                             setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: nextKind === 'custom' ? (principalEditorKind(x.principal) === 'custom' ? x.principal : CUSTOM_PRINCIPAL) : first } : x)));
                           }}
-                        >
-                          <option value="">选择主体类型</option>
-                          <option value="user">用户账号</option>
-                          <option value="api-key">API Key（CI / 自动化）</option>
-                          <option value="custom">OIDC / 自定义 actor</option>
-                        </select>
+                        />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">选择规则主体的来源</div>
                       </div>
                       <div className="min-w-0">
                         {kind === 'user' || kind === 'api-key' ? (
-                          <select
-                            className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
-                            value={g.principal}
-                            onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: e.target.value } : x)))}
-                          >
-                            <option value="">请选择</option>
-                            {principalChoices
-                              .filter((choice) => choice.value.startsWith(`${kind}:`))
-                              .map((choice) => (
-                                <option key={choice.value} value={choice.value} disabled={choice.disabled}>
-                                  {choice.label.replace(/^(用户|API Key) · /, '')} · {choice.detail}
-                                </option>
-                              ))}
-                          </select>
+                          <Select
+                            className="w-full font-mono"
+                            showSearch={{ optionFilterProp: 'label' }}
+                            value={g.principal || undefined}
+                            placeholder="请选择主体"
+                            options={[
+                              { value: '', label: '请选择主体' },
+                              ...principalChoices
+                                .filter((choice) => choice.value.startsWith(`${kind}:`))
+                                .map((choice) => ({
+                                  value: choice.value,
+                                  label: `${choice.label.replace(/^(用户|API Key) · /, '')} · ${choice.detail}`,
+                                  disabled: choice.disabled,
+                                })),
+                            ]}
+                            onChange={(value) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: value } : x)))}
+                          />
                         ) : kind === 'custom' ? (
-                          <input
-                            className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
+                          <Input
+                            className="font-mono"
                             placeholder="例如 oidc:github:acme/release 或 ci-bot"
                             value={g.principal === CUSTOM_PRINCIPAL ? '' : g.principal}
                             onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: e.target.value } : x)))}
@@ -1142,44 +1148,49 @@ function GrantsTab({ repo }: { repo: Repository }) {
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <select
-                          className={`${inputClass} h-10 min-w-0 text-xs`}
+                        <Select
+                          className="w-full"
                           value={grantLevel(g.scopes)}
-                          onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, scopes: scopesForLevel(e.target.value as GrantLevel) } : x)))}
-                        >
-                          <option value="read">读取 · 浏览 / 拉取</option>
-                          <option value="write">写入 · 发布 / 编辑</option>
-                          <option value="admin">管理员 · 授权 / 删除</option>
-                        </select>
+                          options={[
+                            { value: 'read', label: '读取 · 浏览 / 拉取' },
+                            { value: 'write', label: '写入 · 发布 / 编辑' },
+                            { value: 'admin', label: '管理员 · 授权 / 删除' },
+                          ]}
+                          onChange={(value: GrantLevel) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, scopes: scopesForLevel(value) } : x)))}
+                        />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">权限会叠加全局角色</div>
                       </div>
                       <div className="min-w-0">
-                        <input
-                          className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
+                        <Input
+                          className="font-mono"
                           placeholder="留空表示整个仓库"
                           value={g.resourcePrefix ?? ''}
                           onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, resourcePrefix: e.target.value } : x)))}
                         />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">{resourcePrefixHint(repo.format)}</div>
                       </div>
-                      <button
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
                         onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
-                        className="h-10 w-[72px] rounded-md px-2 text-xs text-zinc-500 hover:bg-rose-500/10 hover:text-rose-400"
                       >
                         移除
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          <button
+          <Button
+            block
+            type="dashed"
+            icon={<PlusOutlined />}
             onClick={() => setDraft((d) => [...d, { principal: '', scopes: ['repositories:read'] }])}
-            className="w-full rounded-lg border border-dashed border-zinc-700 py-2 text-sm text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
           >
-            + 添加授权规则
-          </button>
+            添加授权规则
+          </Button>
         </div>
       </Modal>
     </div>
@@ -1271,44 +1282,49 @@ function RetentionTab({ repo }: { repo: Repository }) {
   return (
     <div className="space-y-6">
       {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">
-          {notice}
-        </div>
-      )}
-      <div className="grid max-w-md grid-cols-2 gap-4">
-        <Field label="保留天数 (keepDays)">
-          <input
-            type="number"
-            min={0}
-            className={inputClass}
-            value={keepDays}
-            onChange={(e) => setKeepDays(Number(e.target.value))}
-          />
+      {notice && <Alert type="success" showIcon title={notice} />}
+      <div className="grid max-w-2xl grid-cols-2 gap-4">
+        <Field label="保留天数" hint="超过此天数的版本才会进入清理候选。">
+          <Space.Compact block>
+            <InputNumber
+              min={0}
+              precision={0}
+              className="w-full"
+              value={keepDays}
+              onChange={(value) => setKeepDays(value ?? 0)}
+            />
+            <Space.Addon>天</Space.Addon>
+          </Space.Compact>
         </Field>
-        <Field label="最少保留版本数 (minimumVersions)">
-          <input
-            type="number"
-            min={0}
-            className={inputClass}
-            value={minimumVersions}
-            onChange={(e) => setMinimumVersions(Number(e.target.value))}
-          />
+        <Field label="最少保留版本数" hint="即使版本较旧，也会保留最近的这些版本。">
+          <Space.Compact block>
+            <InputNumber
+              min={0}
+              precision={0}
+              className="w-full"
+              value={minimumVersions}
+              onChange={(value) => setMinimumVersions(value ?? 0)}
+            />
+            <Space.Addon>个</Space.Addon>
+          </Space.Compact>
         </Field>
       </div>
-      <div className="flex gap-2">
-        <button onClick={save} disabled={saving} className={btnPrimary}>
-          {saving ? '保存中…' : '保存策略'}
-        </button>
-        <button onClick={runDryRun} disabled={dryRunning} className={btnSecondary}>
-          {dryRunning ? '分析中…' : '试运行'}
-        </button>
+      <Space>
+        <Button type="primary" onClick={save} loading={saving}>保存策略</Button>
+        <Button onClick={runDryRun} loading={dryRunning}>试运行</Button>
         {dryRun && dryRun.candidates.length > 0 && (
-          <button onClick={execute} disabled={executing} className={btnDanger}>
-            {executing ? '提交中…' : `执行清理（${dryRun.candidates.length} 个候选）`}
-          </button>
+          <Popconfirm
+            title="确认执行保留清理？"
+            description={`将为 ${dryRun.candidates.length} 个候选制品创建清理任务。`}
+            okText="执行清理"
+            cancelText="取消"
+            okButtonProps={{ danger: true, loading: executing }}
+            onConfirm={execute}
+          >
+            <Button danger loading={executing}>执行清理（{dryRun.candidates.length} 个候选）</Button>
+          </Popconfirm>
         )}
-      </div>
+      </Space>
       {dryRun && (
         <Card>
           <CardHeader title={`试运行结果：${dryRun.candidates.length} 个候选制品（策略版本 ${dryRun.policyVersion}）`} />
@@ -1397,11 +1413,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
           : 'Hosted Repository 的容量来自已发布或可恢复的 Artifact/Asset 引用，并受发布配额约束。'}
       </div>
       {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">
-          {notice}
-        </div>
-      )}
+      {notice && <Alert type="success" showIcon title={notice} />}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-zinc-800 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-zinc-500">{proxy ? '缓存用量' : '已用空间'}</div>
@@ -1441,27 +1453,28 @@ function CapacityTab({ repo }: { repo: Repository }) {
             <span>使用率</span>
             <span>{pct.toFixed(1)}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-rose-500' : pct > 70 ? 'bg-amber-500' : 'bg-cyan-500'}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <Progress
+            percent={pct}
+            showInfo={false}
+            status={pct > 90 ? 'exception' : 'normal'}
+            strokeColor={pct > 70 && pct <= 90 ? '#f59e0b' : undefined}
+          />
         </div>
       )}
-      <div className="flex max-w-md items-end gap-2">
+      <div className="flex max-w-lg items-end gap-2">
         <Field label="配额 (GiB，0 表示无限制)">
-          <input
-            type="number"
-            min={0}
-            className={inputClass}
-            value={quotaGiB}
-            onChange={(e) => setQuotaGiB(Number(e.target.value))}
-          />
+          <Space.Compact block>
+            <InputNumber
+              min={0}
+              precision={0}
+              className="w-full"
+              value={quotaGiB}
+              onChange={(value) => setQuotaGiB(value ?? 0)}
+            />
+            <Space.Addon>GiB</Space.Addon>
+          </Space.Compact>
         </Field>
-        <button onClick={save} disabled={saving} className={btnPrimary}>
-          {saving ? '保存中…' : '更新配额'}
-        </button>
+        <Button type="primary" onClick={save} loading={saving}>更新配额</Button>
       </div>
     </div>
   );
@@ -1550,57 +1563,54 @@ function DistributeTab({ repo }: { repo: Repository }) {
   return (
     <div className="space-y-6">
       {actionError !== null && <ErrorBanner error={actionError} />}
-      {notice && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">
-          {notice}
-        </div>
-      )}
+      {notice && <Alert type="success" showIcon title={notice} />}
 
       {/* 发起表单 */}
       <div className="rounded-lg border border-zinc-800 p-4">
         <div className="mb-3 text-sm font-medium text-zinc-200">发起晋升 / 复制</div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <Field label="目标仓库">
-            <select className={inputClass} value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-              <option value="">选择同格式仓库…</option>
-              {targets.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              className="w-full"
+              showSearch={{ optionFilterProp: 'label' }}
+              value={targetId || undefined}
+              placeholder="选择同格式仓库…"
+              options={targets.map((r) => ({ value: r.id, label: r.name }))}
+              onChange={setTargetId}
+            />
           </Field>
           <Field label="坐标 coordinate">
-            <input
-              className={`${inputClass} font-mono text-xs`}
+            <Input
+              className="font-mono"
               placeholder="如 nginx:alpine 或 GAV"
               value={coordinate}
               onChange={(e) => setCoordinate(e.target.value)}
             />
           </Field>
           <Field label="摘要 digest">
-            <input
-              className={`${inputClass} font-mono text-xs`}
+            <Input
+              className="font-mono"
               placeholder="sha256:…"
               value={digest}
               onChange={(e) => setDigest(e.target.value)}
             />
           </Field>
           <div className="flex items-end gap-2">
-            <button
+            <Button
+              type="primary"
+              loading={busy === 'promote'}
               onClick={() => submit('promote')}
               disabled={busy !== null || !targetId || !coordinate.trim() || !digest.trim()}
-              className={btnPrimary}
             >
-              {busy === 'promote' ? '提交中…' : '晋升'}
-            </button>
-            <button
+              晋升
+            </Button>
+            <Button
+              loading={busy === 'replicate'}
               onClick={() => submit('replicate')}
               disabled={busy !== null || !targetId || !coordinate.trim() || !digest.trim()}
-              className={btnSecondary}
             >
-              {busy === 'replicate' ? '提交中…' : '复制'}
-            </button>
+              复制
+            </Button>
           </div>
         </div>
         <p className="mt-2 text-xs text-zinc-600">
@@ -1629,22 +1639,21 @@ function DistributeTab({ repo }: { repo: Repository }) {
                 <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(p.createdAt)}</td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(p.completedAt)}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      onClick={() => showDetail(p.id)}
-                      className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                    >
-                      进度
-                    </button>
+                  <Space size="small">
+                    <Button size="small" onClick={() => showDetail(p.id)}>进度</Button>
                     {(p.state === 'pending' || p.state === 'failed') && (
-                      <button
-                        onClick={() => void cancelPlan(p.id)}
-                        className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
+                      <Popconfirm
+                        title="确认取消复制计划？"
+                        description="取消后工作进程将不再重试，已复制的字节不会自动删除。"
+                        okText="确认取消"
+                        cancelText="返回"
+                        okButtonProps={{ danger: true }}
+                        onConfirm={() => cancelPlan(p.id)}
                       >
-                        取消
-                      </button>
+                        <Button size="small" danger>取消</Button>
+                      </Popconfirm>
                     )}
-                  </div>
+                  </Space>
                 </td>
               </tr>
             ))}
@@ -1752,6 +1761,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [restoreError, setRestoreError] = useState<unknown>(null);
+  const [restoreNotice, setRestoreNotice] = useState('');
   const [restoring, setRestoring] = useState<string | null>(null);
 
   const load = useCallback(
@@ -1782,6 +1792,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
   const restore = async (coordinate: string) => {
     setRestoring(coordinate);
     setRestoreError(null);
+    setRestoreNotice('');
     const { error: err } = await restoreRepositoryArtifact({
       path: { repositoryId: repo.id },
       body: { coordinate },
@@ -1791,39 +1802,48 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       setRestoreError(err);
       return;
     }
+    setRestoreNotice(`已恢复 ${coordinate}`);
     void load();
   };
 
   if (error !== null)
     return isNotFound(error) ? <NotEnabled feature="墓碑管理" /> : <ErrorBanner error={error} onRetry={() => load()} />;
   if (loading) return <Loading />;
-  if (items.length === 0) return <EmptyState title="暂无墓碑" hint="被删除的制品会保留墓碑记录，可在此恢复" />;
 
   return (
-    <>
+    <div className="space-y-3">
       {restoreError !== null && <div className="mb-3"><ErrorBanner error={restoreError} /></div>}
-      <DataTable columns={['坐标', '摘要', '删除时间', '']}>
-        {items.map((t, i) => (
-          <tr key={i} className="hover:bg-zinc-800/30">
-            <td className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200" title={t.coordinate}>
-              {t.coordinate}
-            </td>
-            <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{shortDigest(t.digest)}</td>
-            <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(t.tombstonedAt)}</td>
-            <td className="px-4 py-2.5 text-right">
-              <button
-                onClick={() => restore(t.coordinate)}
-                disabled={restoring === t.coordinate}
-                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                {restoring === t.coordinate ? '恢复中…' : '恢复'}
-              </button>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-      <Pagination hasMore={!!nextToken} onMore={() => load(nextToken)} />
-    </>
+      {restoreNotice && <Alert type="success" showIcon title={restoreNotice} />}
+      {items.length === 0 ? (
+        <EmptyState title="暂无墓碑" hint="被删除的制品会保留墓碑记录，可在此恢复" />
+      ) : (
+        <>
+          <DataTable columns={['坐标', '摘要', '删除时间', '']}>
+            {items.map((t) => (
+              <tr key={`${t.coordinate}:${t.digest}:${t.tombstonedAt}`} className="hover:bg-zinc-800/30">
+                <td className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200" title={t.coordinate}>
+                  {t.coordinate}
+                </td>
+                <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{shortDigest(t.digest)}</td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">{formatDate(t.tombstonedAt)}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <Popconfirm
+                    title="确认恢复此制品？"
+                    description="恢复后制品会重新出现在仓库浏览与协议读取中。"
+                    okText="恢复"
+                    cancelText="取消"
+                    onConfirm={() => restore(t.coordinate)}
+                  >
+                    <Button size="small" loading={restoring === t.coordinate}>恢复</Button>
+                  </Popconfirm>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+          <Pagination hasMore={!!nextToken} onMore={() => load(nextToken)} />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1847,7 +1867,7 @@ function RepositoryOverview({ repo, capacity, onOpenCapacity }: { repo: Reposito
     <div className="mb-4 overflow-x-auto rounded-lg border border-zinc-800/80 bg-zinc-900/35">
       <div className="grid min-w-0 grid-cols-[minmax(220px,1.45fr)_repeat(3,minmax(110px,.65fr))_minmax(250px,1.55fr)]">
         <div className="px-4 py-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${repo.state === 'active' ? 'bg-emerald-400' : repo.state === 'deleting' ? 'bg-amber-400' : 'bg-rose-400'}`} />
             <span className="text-xs font-semibold text-zinc-100">{repo.state === 'active' ? '仓库运行正常' : `仓库状态：${repo.state}`}</span>
           </div>
@@ -1866,7 +1886,7 @@ function RepositoryOverview({ repo, capacity, onOpenCapacity }: { repo: Reposito
         <div className="border-l border-zinc-800/80 px-4 py-3">
           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">配额状态</div>
           <div className={`mt-1 text-sm font-semibold ${usageTone}`}>{usage === null ? '未设置限制' : `${usage.toFixed(1)}% 已使用`}</div>
-          <button onClick={onOpenCapacity} className="mt-1 text-[10px] text-cyan-300 hover:text-cyan-200">查看详情</button>
+          <Button type="link" size="small" className="mt-0.5 h-auto p-0 text-xs" onClick={onOpenCapacity}>查看详情</Button>
         </div>
         <div className="border-l border-zinc-800/80 px-4 py-3">
           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">协议入口</div>
@@ -1917,7 +1937,9 @@ function EditRepositoryDialog({ repo, onUpdated }: { repo: Repository; onUpdated
 
   return (
     <>
-      <button
+      <Button
+        icon={<SettingOutlined />}
+        variant="outlined"
         onClick={() => {
           setEndpoint(repo.endpoint ?? '');
           setHosts((repo.allowedHosts ?? []).join(', '));
@@ -1925,61 +1947,52 @@ function EditRepositoryDialog({ repo, onUpdated }: { repo: Repository; onUpdated
           setError(null);
           dialog.show();
         }}
-        className={btnSecondary}
       >
         设置
-      </button>
+      </Button>
       <Modal
         open={dialog.open}
         title={`设置仓库：${repo.name}`}
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide}>
               取消
-            </button>
-            <button onClick={submit} disabled={saving} className={btnPrimary}>
-              {saving ? '保存中…' : '保存'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={submit} loading={saving}>
+              保存
+            </Button>
+          </Space>
         }
       >
-        <div className="space-y-4">
-          <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
-            <input type="checkbox" checked={anonymousRead} onChange={(e) => setAnonymousRead(e.target.checked)} className="mt-0.5" />
-            <span>
-              <span className="block text-sm font-medium text-zinc-200">允许匿名读取</span>
-              <span className="mt-0.5 block text-xs text-zinc-500">默认私有；开启后协议层 GET/HEAD 可在无需凭据时读取该 Repository。</span>
-            </span>
-          </label>
+        <Space orientation="vertical" size="large" className="w-full">
+          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-zinc-200">允许匿名读取</div>
+              <div className="mt-1 text-xs leading-5 text-zinc-500">开启后协议层 GET/HEAD 可在无需凭据时读取该 Repository。</div>
+            </div>
+            <Switch checked={anonymousRead} onChange={setAnonymousRead} />
+          </div>
           {repo.type === 'proxy' && (
-            <>
-              <Field
-                label="上游地址"
-                hint="https 基础地址，修改后立即生效（按请求读取）。"
-              >
-                <input
-                  className={inputClass}
+            <Space orientation="vertical" size="middle" className="w-full">
+              <Field label="上游地址" hint="https 基础地址，修改后立即生效（按请求读取）。">
+                <Input
                   placeholder="https://upstream.example"
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
                 />
               </Field>
-              <Field
-                label="允许主机"
-                hint={requiresHosts ? '逗号分隔，raw / conan 代理必填。' : '逗号分隔；oci / maven 代理可留空。'}
-              >
-                <input
-                  className={inputClass}
+              <Field label="允许主机" hint={requiresHosts ? '逗号分隔，raw / conan 代理必填。' : '逗号分隔；oci / maven 代理可留空。'}>
+                <Input
                   placeholder="upstream.example, mirror.example"
                   value={hosts}
                   onChange={(e) => setHosts(e.target.value)}
                 />
               </Field>
-            </>
+            </Space>
           )}
           {error ? <ErrorBanner error={error} /> : null}
-        </div>
+        </Space>
       </Modal>
     </>
   );
@@ -2095,21 +2108,14 @@ export function RepositoryDetailPage() {
           <div className="mt-2 border-t border-zinc-800/80 pt-2 text-[10px] text-zinc-600">判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。</div>
         </div>
       )}
-      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-zinc-800">
-        {TABS.filter((t) => (!t.formats || t.formats.includes(repo.format)) && !(t.key === 'publish' && repo.type === 'proxy')).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`whitespace-nowrap border-b-2 px-4 py-2 text-sm transition-colors ${
-              tab === t.key
-                ? 'border-cyan-400 font-medium text-cyan-300'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="mb-4"
+        activeKey={tab}
+        onChange={(key) => setTab(key as Tab)}
+        items={TABS
+          .filter((t) => (!t.formats || t.formats.includes(repo.format)) && !(t.key === 'publish' && repo.type === 'proxy'))
+          .map((t) => ({ key: t.key, label: t.label }))}
+      />
       <Card className="p-4">
         {tab === 'artifacts' && <ArtifactsTab repo={repo} canWrite={effectiveAccess?.permissions.write.allowed === true} />}
         {tab === 'publish' && repo.format === 'maven' && repo.type !== 'proxy' && (
