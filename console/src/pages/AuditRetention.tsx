@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Alert, Button, InputNumber, Popconfirm, Space, Switch } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   getAuditRetentionPolicy,
   replaceAuditRetentionPolicy,
@@ -12,10 +14,6 @@ import {
   CardHeader,
   DataTable,
   Field,
-  inputClass,
-  btnPrimary,
-  btnSecondary,
-  btnDanger,
   StatCard,
 } from "../components/Layout";
 import { Loading, ErrorBanner } from "../components/Feedback";
@@ -98,6 +96,8 @@ export function AuditRetentionPage() {
     );
   }
   if (!policy) return <Loading />;
+  const policyDirty = enabled !== policy.enabled || keepDays !== policy.keepDays;
+  const canExecute = policy.enabled && !policyDirty;
 
   return (
     <div>
@@ -110,11 +110,7 @@ export function AuditRetentionPage() {
           <ErrorBanner error={saveError} />
         </div>
       )}
-      {notice && (
-        <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">
-          {notice}
-        </div>
-      )}
+      {notice && <Alert className="mb-4" type="success" showIcon title={notice} />}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           label="自动清理"
@@ -134,48 +130,53 @@ export function AuditRetentionPage() {
       </div>
       <Card className="mb-6 p-5">
         <div className="flex max-w-lg flex-col gap-4">
-          <label className="flex cursor-pointer items-center justify-between">
+          <label className="flex items-center justify-between">
             <span className="text-sm text-zinc-300">启用自动清理</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={enabled}
+            <Switch
+              checked={enabled}
+              onChange={(checked) => {
+                setEnabled(checked);
+                if (checked && keepDays < 1) setKeepDays(90);
+              }}
               aria-label="切换自动清理"
-              onClick={() => setEnabled(!enabled)}
-              className={`relative h-6 w-11 rounded-full transition-colors ${enabled ? "bg-cyan-600" : "bg-zinc-700"}`}
-            >
-              <span
-                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`}
-              />
-            </button>
+            />
           </label>
           <Field
-            label="保留天数 (keepDays)"
+            label="保留天数"
             hint="超过该天数的审计记录将被清理"
           >
-            <input
-              type="number"
-              min={1}
-              className={inputClass}
+            <InputNumber
+              min={enabled ? 1 : 0}
+              precision={0}
+              className="w-full"
               value={keepDays}
-              onChange={(e) => setKeepDays(Number(e.target.value))}
+              onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
             />
           </Field>
-          <div className="flex gap-2">
-            <button onClick={save} disabled={saving} className={btnPrimary}>
-              {saving ? "保存中…" : "保存策略"}
-            </button>
-            <button
-              onClick={execute}
-              disabled={executing}
-              className={btnDanger}
+          <Space>
+            <Button type="primary" onClick={save} loading={saving} disabled={!policyDirty}>保存策略</Button>
+            <Popconfirm
+              disabled={!canExecute}
+              title="确认立即执行审计清理？"
+              description="将提交异步删除任务，并按当前保留天数处理符合条件的记录。"
+              okText="执行清理"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: executing }}
+              onConfirm={execute}
             >
-              {executing ? "提交中…" : "立即执行清理"}
-            </button>
-          </div>
-          <p className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-200">
-            “立即执行清理”会提交异步删除任务，并按当前保留天数处理符合条件的审计记录。保存策略不会立即删除记录。
-          </p>
+              <Button danger loading={executing} disabled={!canExecute}>立即执行清理</Button>
+            </Popconfirm>
+          </Space>
+          <Alert
+            type="warning"
+            showIcon
+            title="清理说明"
+            description={policyDirty
+              ? "请先保存当前策略；立即执行只会使用已经保存并启用的策略。"
+              : policy.enabled
+                ? "立即执行会提交异步删除任务；保存策略不会立即删除记录。"
+                : "启用自动清理并保存策略后，才能提交清理任务。"}
+          />
         </div>
       </Card>
 
@@ -183,9 +184,7 @@ export function AuditRetentionPage() {
         <CardHeader
           title={`清理任务（${jobs.length}）`}
           extra={
-            <button onClick={() => void load()} className={btnSecondary}>
-              刷新
-            </button>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
           }
         />
         {jobs.length === 0 ? (

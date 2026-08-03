@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Button, Input, Popconfirm, Select, Space, Switch } from 'antd';
+import { ClearOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { getAnonymousAccessPolicy, listRepositories, listGrants, replaceAnonymousAccessPolicy } from '../client';
 import type { AnonymousAccessPolicy, Repository, Grant } from '../client';
-import { PageHeader, Card, CardHeader, DataTable, inputClass, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, CardHeader, DataTable } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, Badge } from '../components/Badge';
 import { useAuth } from '../lib/auth';
@@ -42,6 +44,7 @@ function scopeLabel(scopes: string[]): { label: string; tone: 'red' | 'blue' | '
 
 export function AccessControlPage() {
   const { role } = useAuth();
+  const canManageAnonymousPolicy = role === '' || role === 'admin';
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState('');
@@ -109,11 +112,6 @@ export function AccessControlPage() {
 
   const updateAnonymousPolicy = async (enabled: boolean) => {
     if (!anonymousPolicy || savingAnonymousPolicy) return;
-    const warning = enabled
-      ? '启用后，满足仓库或组匿名读取策略的制品可被未认证客户端读取。是否继续？'
-      : '停用后，所有未认证协议读取将立即被拒绝，即使仓库或组允许匿名读取。是否继续？';
-    if (!window.confirm(warning)) return;
-
     setSavingAnonymousPolicy(true);
     setAnonymousPolicyError(null);
     const { data, error: err } = await replaceAnonymousAccessPolicy({
@@ -161,19 +159,20 @@ export function AccessControlPage() {
             <div className="text-sm font-medium text-zinc-200">全局匿名读取</div>
             <p className="mt-1 text-xs text-zinc-500">仅为已启用匿名读取的仓库和组开放未认证协议读取。</p>
           </div>
-          {anonymousPolicy && role === 'admin' ? (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={anonymousPolicy.enabled}
-              aria-label="切换全局匿名读取"
-              disabled={savingAnonymousPolicy}
-              onClick={() => void updateAnonymousPolicy(!anonymousPolicy.enabled)}
-              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${anonymousPolicy.enabled ? 'bg-cyan-600' : 'bg-zinc-700'}`}
+          {anonymousPolicy && canManageAnonymousPolicy ? (
+            <Popconfirm
+              title={anonymousPolicy.enabled ? '确认停用全局匿名读取？' : '确认启用全局匿名读取？'}
+              description={anonymousPolicy.enabled
+                ? '停用后，所有未认证协议读取都会被拒绝，即使仓库或组允许匿名读取。'
+                : '启用后，满足仓库或组匿名读取策略的制品可被未认证客户端读取。'}
+              okText="继续"
+              cancelText="取消"
+              okButtonProps={{ danger: anonymousPolicy.enabled, loading: savingAnonymousPolicy }}
+              onConfirm={() => updateAnonymousPolicy(!anonymousPolicy.enabled)}
             >
-              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${anonymousPolicy.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
-          ) : role === 'admin' ? (
+              <Switch checked={anonymousPolicy.enabled} loading={savingAnonymousPolicy} aria-label="切换全局匿名读取" onChange={() => undefined} />
+            </Popconfirm>
+          ) : canManageAnonymousPolicy ? (
             <span className="text-xs text-zinc-500">加载中…</span>
           ) : null}
         </div>
@@ -208,10 +207,37 @@ export function AccessControlPage() {
         <CardHeader title={`授权记录（${filtered.length}）`} />
         <div className="overflow-x-auto border-b border-zinc-800/80 px-4 py-3">
           <div className="grid min-w-[820px] grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_180px_auto] items-end gap-3">
-            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">授权主体</span><input className={inputClass} placeholder="用户名、API Key 或 actor" value={principalFilter} onChange={(e) => setPrincipalFilter(e.target.value)} /></label>
-            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">仓库</span><input className={inputClass} placeholder="仓库名称" value={repoFilter} onChange={(e) => setRepoFilter(e.target.value)} /></label>
-            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">权限级别</span><select className={inputClass} value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value as typeof scopeFilter)}><option value="all">全部权限</option><option value="read">只读</option><option value="write">写入</option><option value="admin">管理员</option></select></label>
-            <button disabled={!principalFilter && !repoFilter && scopeFilter === 'all'} className={btnSecondary} onClick={() => { setPrincipalFilter(''); setRepoFilter(''); setScopeFilter('all'); }}>清除</button>
+            <label>
+              <span className="mb-1.5 block text-[11px] font-medium text-zinc-500">授权主体</span>
+              <Input allowClear placeholder="用户名、API Key 或 actor" value={principalFilter} onChange={(e) => setPrincipalFilter(e.target.value)} />
+            </label>
+            <label>
+              <span className="mb-1.5 block text-[11px] font-medium text-zinc-500">仓库</span>
+              <Input allowClear placeholder="仓库名称" value={repoFilter} onChange={(e) => setRepoFilter(e.target.value)} />
+            </label>
+            <label>
+              <span className="mb-1.5 block text-[11px] font-medium text-zinc-500">权限级别</span>
+              <Select
+                className="w-full"
+                value={scopeFilter}
+                options={[
+                  { value: 'all', label: '全部权限' },
+                  { value: 'read', label: '只读 · 浏览 / 拉取' },
+                  { value: 'write', label: '写入 · 发布 / 编辑' },
+                  { value: 'admin', label: '管理员 · 授权 / 删除' },
+                ]}
+                onChange={(value: typeof scopeFilter) => setScopeFilter(value)}
+              />
+            </label>
+            <Space>
+              <Button
+                icon={<ClearOutlined />}
+                disabled={!principalFilter && !repoFilter && scopeFilter === 'all'}
+                onClick={() => { setPrincipalFilter(''); setRepoFilter(''); setScopeFilter('all'); }}
+              >
+                清除
+              </Button>
+            </Space>
           </div>
         </div>
         {error ? (

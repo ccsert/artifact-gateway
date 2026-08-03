@@ -1,7 +1,9 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Button, Select, Space } from 'antd';
+import { ClearOutlined, DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { listAudits, listRepositories, listGroups } from '../client';
 import type { AuditRecord } from '../client';
-import { PageHeader, Card, DataTable, inputClass, btnSecondary, StatCard } from '../components/Layout';
+import { PageHeader, Card, DataTable, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { StateBadge, FormatBadge } from '../components/Badge';
 import { formatBytes, formatDate } from '../lib/format';
@@ -55,6 +57,35 @@ function auditOperationLabel(value: string): string {
     grant: 'grant · 授权',
   };
   return labels[value] ?? value;
+}
+
+function AuditFilter({
+  label,
+  value,
+  placeholder,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">{label}</span>
+      <Select
+        className="w-full"
+        allowClear
+        showSearch={{ optionFilterProp: 'label' }}
+        value={value || undefined}
+        placeholder={placeholder}
+        options={options}
+        onChange={(next) => onChange(next ?? '')}
+      />
+    </label>
+  );
 }
 
 export function AuditsPage() {
@@ -138,62 +169,28 @@ export function AuditsPage() {
         <StatCard label="拒绝访问" value={deniedCount} sub={`${actorCount} 个操作主体`} />
       </div>
       <div className="mb-4 grid grid-cols-4 items-end gap-3">
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">仓库</span>
-          <select className={inputClass} value={repository} onChange={(e) => setRepository(e.target.value)}>
-            <option value="">全部仓库</option>
-            {repoOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">操作</span>
-          <select className={inputClass} value={operation} onChange={(e) => setOperation(e.target.value)}>
-            <option value="">全部操作</option>
-            {operationOptions.map((value) => <option key={value} value={value}>{auditOperationLabel(value)}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">主体</span>
-          <select className={inputClass} value={actor} onChange={(e) => setActor(e.target.value)}>
-            <option value="">全部主体</option>
-            {actorOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">分组</span>
-          <select className={inputClass} value={group} onChange={(e) => setGroup(e.target.value)}>
-            <option value="">全部分组</option>
-            {groupOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">结果</span>
-          <select className={inputClass} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-            <option value="">全部结果</option>
-            {outcomeOptions.map((value) => <option key={value} value={value}>{auditOutcomeLabel(value)}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">格式</span>
-          <select className={inputClass} value={format} onChange={(e) => setFormat(e.target.value)}>
-            <option value="">全部格式</option>
-            {formatOptions.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
-          </select>
-        </label>
+        <AuditFilter label="仓库" value={repository} placeholder="全部仓库" options={repoOptions.map((value) => ({ value, label: value }))} onChange={setRepository} />
+        <AuditFilter label="操作类型" value={operation} placeholder="全部操作类型" options={operationOptions.map((value) => ({ value, label: auditOperationLabel(value) }))} onChange={setOperation} />
+        <AuditFilter label="访问主体" value={actor} placeholder="全部访问主体" options={actorOptions.map((value) => ({ value, label: value }))} onChange={setActor} />
+        <AuditFilter label="所属分组" value={group} placeholder="全部分组" options={groupOptions.map((value) => ({ value, label: value }))} onChange={setGroup} />
+        <AuditFilter label="结果" value={outcome} placeholder="全部结果" options={outcomeOptions.map((value) => ({ value, label: auditOutcomeLabel(value) }))} onChange={setOutcome} />
+        <AuditFilter label="制品格式" value={format} placeholder="全部格式" options={formatOptions.map((value) => ({ value, label: value.toUpperCase() }))} onChange={setFormat} />
         <label className="block">
           <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">加载窗口</span>
-          <select className={inputClass} value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-            {[50, 100, 200, 500].map((value) => <option key={value} value={value}>{value} 条</option>)}
-          </select>
+          <Select
+            className="w-full"
+            value={String(limit)}
+            options={[50, 100, 200, 500].map((value) => ({ value: String(value), label: `最近 ${value} 条` }))}
+            onChange={(value) => setLimit(Number(value))}
+          />
         </label>
-        <div className="flex flex-wrap justify-end gap-2">
+        <Space className="flex flex-wrap justify-end" size="small">
           {(repository || group || outcome || format || operation || actor) && (
-            <button onClick={() => { setRepository(''); setGroup(''); setOutcome(''); setFormat(''); setOperation(''); setActor(''); }} className="px-2 py-2 text-xs text-zinc-500 hover:text-zinc-200">
-              清除筛选
-            </button>
+            <Button type="text" icon={<ClearOutlined />} onClick={() => { setRepository(''); setGroup(''); setOutcome(''); setFormat(''); setOperation(''); setActor(''); }}>清除筛选</Button>
           )}
-          <button onClick={() => void load()} className={btnSecondary}>刷新</button>
-          <button
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
+          <Button
+            icon={<DownloadOutlined />}
             onClick={() => {
               const rows = filtered.map((a) => [
                 a.occurredAt,
@@ -219,11 +216,10 @@ export function AuditsPage() {
               downloadCsv(`audits-${new Date().toISOString().slice(0, 19)}.csv`, toCsv(AUDIT_CSV_COLUMNS, rows));
             }}
             disabled={!filtered.length}
-            className={btnSecondary}
           >
             导出 CSV
-          </button>
-        </div>
+          </Button>
+        </Space>
       </div>
       {error !== null ? (
         isNotFound(error) ? (
@@ -305,10 +301,10 @@ export function AuditsPage() {
             <span>
               第 {currentPage} / {totalPages} 页 · 显示 {pageRecords.length} / {filtered.length} 条
             </span>
-            <div className="flex gap-2">
-              <button className={btnSecondary} disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>上一页</button>
-              <button className={btnSecondary} disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>下一页</button>
-            </div>
+            <Space size="small">
+              <Button disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>上一页</Button>
+              <Button disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>下一页</Button>
+            </Space>
           </div>
         </Card>
       )}
