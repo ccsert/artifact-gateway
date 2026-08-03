@@ -52,5 +52,27 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps chromium
         working-directory: console
+      - name: Start gateway for Console E2E
+        env:
+          GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
+        run: |
+          cat > "$GATEWAY_ENV_FILE" <<'EOF'
+          GATEWAY_HTTP_PORT=18080
+          GATEWAY_POSTGRES_PASSWORD=ci-postgres-password
+          GATEWAY_ADMIN_TOKEN=ci-admin-token
+          GATEWAY_RESOLVER_TOKEN=ci-resolver-token
+          MINIO_ROOT_USER=ci-minio-user
+          MINIO_ROOT_PASSWORD=ci-minio-password
+          MINIO_API_PORT=19000
+          MINIO_CONSOLE_PORT=19001
+          EOF
+          docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml up --build --wait --remove-orphans
       - name: Run console E2E
+        env:
+          GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
         run: make console-e2e
+      - name: Stop gateway after Console E2E
+        if: always()
+        env:
+          GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
+        run: docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml down -v --remove-orphans
