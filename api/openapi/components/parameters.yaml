@@ -92,6 +92,13 @@ ConanReferencePrefix:
   schema:
     type: string
     maxLength: 255
+ConanRevisionQuery:
+  name: q
+  in: query
+  description: Case-insensitive substring used to filter Conan recipe revision IDs and digests.
+  schema:
+    type: string
+    maxLength: 255
 IdempotencyKey:
   name: Idempotency-Key
   in: header

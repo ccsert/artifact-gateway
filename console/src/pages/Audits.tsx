@@ -31,6 +31,32 @@ const AUDIT_CSV_COLUMNS = [
 
 const AUDIT_PAGE_SIZE = 50;
 
+function auditOutcomeLabel(value: string): string {
+  const labels: Record<string, string> = {
+    resolved: 'resolved · 已处理',
+    failed: 'failed · 失败',
+    denied: 'denied · 拒绝',
+    access_denied: 'access_denied · 访问拒绝',
+    not_found: 'not_found · 未找到',
+    proxy_denied: 'proxy_denied · 代理拒绝',
+    upstream_error: 'upstream_error · 上游错误',
+    storage_error: 'storage_error · 存储错误',
+  };
+  return labels[value] ?? value;
+}
+
+function auditOperationLabel(value: string): string {
+  const labels: Record<string, string> = {
+    get: 'GET · 读取',
+    head: 'HEAD · 探测',
+    put: 'PUT · 发布',
+    post: 'POST · 创建',
+    delete: 'DELETE · 删除',
+    grant: 'grant · 授权',
+  };
+  return labels[value] ?? value;
+}
+
 export function AuditsPage() {
   const [records, setRecords] = useState<AuditRecord[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -92,6 +118,8 @@ export function AuditsPage() {
   const pageRecords = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
   const outcomeOptions = Array.from(new Set((records ?? []).map((a) => a.outcome).filter(Boolean)));
   const formatOptions = Array.from(new Set((records ?? []).map((a) => a.format).filter((f): f is string => !!f)));
+  const operationOptions = Array.from(new Set((records ?? []).map((a) => a.operation).filter((value): value is string => !!value))).sort();
+  const actorOptions = Array.from(new Set((records ?? []).map((a) => a.actor).filter((value): value is string => !!value))).sort();
   const failedCount = (records ?? []).filter((record) => record.outcome === 'failed' || (record.status ?? 0) >= 400).length;
   const deniedCount = (records ?? []).filter((record) => record.outcome === 'denied').length;
   const actorCount = new Set((records ?? []).map((record) => record.actor).filter(Boolean)).size;
@@ -109,115 +137,93 @@ export function AuditsPage() {
         <StatCard label="失败请求" value={failedCount} sub={failedCount ? '建议优先检查失败原因' : '当前窗口未发现失败'} />
         <StatCard label="拒绝访问" value={deniedCount} sub={`${actorCount} 个操作主体`} />
       </div>
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="mb-4 grid grid-cols-4 items-end gap-3">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">仓库</span>
-          <input
-            className={`${inputClass} w-52`}
-            list="audit-repos"
-            placeholder="全部仓库"
-            value={repository}
-            onChange={(e) => setRepository(e.target.value)}
-          />
-          <datalist id="audit-repos">
-            {repoOptions.map((r) => (
-              <option key={r} value={r} />
-            ))}
-          </datalist>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">操作</span>
-          <input className={`${inputClass} w-48`} placeholder="如 delete / grant" value={operation} onChange={(e) => setOperation(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">主体</span>
-          <input className={`${inputClass} w-40`} placeholder="Actor" value={actor} onChange={(e) => setActor(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">分组</span>
-          <input
-            className={`${inputClass} w-52`}
-            list="audit-groups"
-            placeholder="全部分组"
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-          />
-          <datalist id="audit-groups">
-            {groupOptions.map((g) => (
-              <option key={g} value={g} />
-            ))}
-          </datalist>
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">结果</span>
-          <select className={`${inputClass} w-32`} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-            <option value="">全部</option>
-            {outcomeOptions.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">仓库</span>
+          <select className={inputClass} value={repository} onChange={(e) => setRepository(e.target.value)}>
+            <option value="">全部仓库</option>
+            {repoOptions.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">格式</span>
-          <select className={`${inputClass} w-32`} value={format} onChange={(e) => setFormat(e.target.value)}>
-            <option value="">全部</option>
-            {formatOptions.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">操作</span>
+          <select className={inputClass} value={operation} onChange={(e) => setOperation(e.target.value)}>
+            <option value="">全部操作</option>
+            {operationOptions.map((value) => <option key={value} value={value}>{auditOperationLabel(value)}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">条数</span>
-          <select className={`${inputClass} w-28`} value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-            {[50, 100, 200, 500].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">主体</span>
+          <select className={inputClass} value={actor} onChange={(e) => setActor(e.target.value)}>
+            <option value="">全部主体</option>
+            {actorOptions.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
-        <button onClick={() => void load()} className={btnSecondary}>
-          刷新
-        </button>
-        {(repository || group || outcome || format || operation || actor) && (
-          <button onClick={() => { setRepository(''); setGroup(''); setOutcome(''); setFormat(''); setOperation(''); setActor(''); }} className="px-2 py-2 text-xs text-zinc-500 hover:text-zinc-200">
-            清除筛选
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">分组</span>
+          <select className={inputClass} value={group} onChange={(e) => setGroup(e.target.value)}>
+            <option value="">全部分组</option>
+            {groupOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">结果</span>
+          <select className={inputClass} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+            <option value="">全部结果</option>
+            {outcomeOptions.map((value) => <option key={value} value={value}>{auditOutcomeLabel(value)}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">格式</span>
+          <select className={inputClass} value={format} onChange={(e) => setFormat(e.target.value)}>
+            <option value="">全部格式</option>
+            {formatOptions.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">加载窗口</span>
+          <select className={inputClass} value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+            {[50, 100, 200, 500].map((value) => <option key={value} value={value}>{value} 条</option>)}
+          </select>
+        </label>
+        <div className="flex flex-wrap justify-end gap-2">
+          {(repository || group || outcome || format || operation || actor) && (
+            <button onClick={() => { setRepository(''); setGroup(''); setOutcome(''); setFormat(''); setOperation(''); setActor(''); }} className="px-2 py-2 text-xs text-zinc-500 hover:text-zinc-200">
+              清除筛选
+            </button>
+          )}
+          <button onClick={() => void load()} className={btnSecondary}>刷新</button>
+          <button
+            onClick={() => {
+              const rows = filtered.map((a) => [
+                a.occurredAt,
+                a.operation,
+                a.outcome,
+                a.repository,
+                a.groupName,
+                a.format,
+                a.status,
+                a.bytes,
+                a.actor,
+                a.resource,
+                a.representation,
+                a.memberName,
+                a.memberType,
+                a.upstreamHost,
+                a.cacheDisposition,
+                a.authorizationSource,
+                a.authorizationReason,
+                a.requestId,
+                a.traceId,
+              ]);
+              downloadCsv(`audits-${new Date().toISOString().slice(0, 19)}.csv`, toCsv(AUDIT_CSV_COLUMNS, rows));
+            }}
+            disabled={!filtered.length}
+            className={btnSecondary}
+          >
+            导出 CSV
           </button>
-        )}
-        <button
-          onClick={() => {
-            const rows = filtered.map((a) => [
-              a.occurredAt,
-              a.operation,
-              a.outcome,
-              a.repository,
-              a.groupName,
-              a.format,
-              a.status,
-              a.bytes,
-              a.actor,
-              a.resource,
-              a.representation,
-              a.memberName,
-              a.memberType,
-              a.upstreamHost,
-              a.cacheDisposition,
-              a.authorizationSource,
-              a.authorizationReason,
-              a.requestId,
-              a.traceId,
-            ]);
-            downloadCsv(`audits-${new Date().toISOString().slice(0, 19)}.csv`, toCsv(AUDIT_CSV_COLUMNS, rows));
-          }}
-          disabled={!filtered.length}
-          className={btnSecondary}
-        >
-          导出 CSV
-        </button>
+        </div>
       </div>
       {error !== null ? (
         isNotFound(error) ? (
@@ -239,7 +245,7 @@ export function AuditsPage() {
             {pageRecords.map((a, i) => {
               const rowIndex = pageStart + i;
               return (
-              <Fragment key={a.requestId ?? rowIndex}>
+              <Fragment key={`${a.requestId ?? 'audit'}-${rowIndex}`}>
                 <tr
                   className="cursor-pointer hover:bg-zinc-800/30"
                   onClick={() => setExpanded(expanded === rowIndex ? null : rowIndex)}

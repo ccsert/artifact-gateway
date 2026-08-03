@@ -1268,6 +1268,7 @@
       ],
       "get": {
         "operationId": "listConanRecipeRevisions",
+        "description": "Lists visible recipe revisions for one Conan reference in lexical order. Results can be filtered by revision ID or digest and paged with an opaque token.",
         "parameters": [
           {
             "name": "reference",
@@ -1278,6 +1279,15 @@
               "minLength": 1,
               "maxLength": 255
             }
+          },
+          {
+            "$ref": "#/components/parameters/ConanRevisionQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
           }
         ],
         "responses": {
@@ -2753,6 +2763,16 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "buildNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Snapshot build number; zero for release coordinates."
+          },
+          "publisher": {
+            "type": "string",
+            "description": "Publisher actor when the format records it."
           }
         }
       },
@@ -3037,6 +3057,9 @@
             "items": {
               "$ref": "#/components/schemas/ConanRecipeRevision"
             }
+          },
+          "nextPageToken": {
+            "type": "string"
           }
         }
       },
@@ -3917,6 +3940,15 @@
         "required": true,
         "schema": {
           "type": "string"
+        }
+      },
+      "ConanRevisionQuery": {
+        "name": "q",
+        "in": "query",
+        "description": "Case-insensitive substring used to filter Conan recipe revision IDs and digests.",
+        "schema": {
+          "type": "string",
+          "maxLength": 255
         }
       }
     },

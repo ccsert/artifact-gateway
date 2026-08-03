@@ -38,8 +38,8 @@ export function Modal({
     >
       <div
         ref={ref}
-        className={`max-h-[85vh] w-full overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl ${
-          wide ? 'max-w-3xl' : 'max-w-lg'
+        className={`max-h-[85vh] w-full overflow-x-auto overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl ${
+          wide ? 'max-w-6xl' : 'max-w-lg'
         }`}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
@@ -51,7 +51,7 @@ export function Modal({
           </button>
         </div>
         <div className="px-5 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-3">{footer}</div>}
+        {footer && <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-zinc-800 bg-zinc-900/95 px-5 py-3 backdrop-blur">{footer}</div>}
       </div>
     </div>
   );

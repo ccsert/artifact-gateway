@@ -808,6 +808,9 @@ export const listConanReferences = <ThrowOnError extends boolean = false>(option
     });
 };
 
+/**
+ * Lists visible recipe revisions for one Conan reference in lexical order. Results can be filtered by revision ID or digest and paged with an opaque token.
+ */
 export const listConanRecipeRevisions = <ThrowOnError extends boolean = false>(options: Options<ListConanRecipeRevisionsData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).get<ListConanRecipeRevisionsResponses, ListConanRecipeRevisionsErrors, ThrowOnError>({
         security: [

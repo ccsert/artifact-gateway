@@ -951,7 +951,8 @@ type ConanRecipeRevisionState string
 
 // ConanRecipeRevisionList defines model for ConanRecipeRevisionList.
 type ConanRecipeRevisionList struct {
-	Items []ConanRecipeRevision `json:"items"`
+	Items         []ConanRecipeRevision `json:"items"`
+	NextPageToken *string               `json:"nextPageToken,omitempty"`
 }
 
 // ConanReference defines model for ConanReference.
@@ -1519,6 +1520,9 @@ type UserList struct {
 // ConanReferencePrefix defines model for ConanReferencePrefix.
 type ConanReferencePrefix = string
 
+// ConanRevisionQuery defines model for ConanRevisionQuery.
+type ConanRevisionQuery = string
+
 // GroupId defines model for GroupId.
 type GroupId = openapi_types.UUID
 
@@ -1689,6 +1693,11 @@ type DeleteConanPackageRevisionParams struct {
 // ListConanRecipeRevisionsParams defines parameters for ListConanRecipeRevisions.
 type ListConanRecipeRevisionsParams struct {
 	Reference string `form:"reference" json:"reference"`
+
+	// Q Case-insensitive substring used to filter Conan recipe revision IDs and digests.
+	Q         *ConanRevisionQuery `form:"q,omitempty" json:"q,omitempty"`
+	PageSize  *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListConanReferencesParams defines parameters for ListConanReferences.
@@ -3611,6 +3620,45 @@ func (siw *ServerInterfaceWrapper) ListConanRecipeRevisions(w http.ResponseWrite
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reference"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reference", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
 		}
 		return
 	}

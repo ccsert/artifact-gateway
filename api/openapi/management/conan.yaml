@@ -21,11 +21,15 @@ repositories_repositoryId_conan_recipe_revisions:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   get:
     operationId: listConanRecipeRevisions
+    description: Lists visible recipe revisions for one Conan reference in lexical order. Results can be filtered by revision ID or digest and paged with an opaque token.
     parameters:
     - name: reference
       in: query
       required: true
       schema: {type: string, minLength: 1, maxLength: 255}
+    - "$ref": "../components/parameters.yaml#/ConanRevisionQuery"
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
       '200': {"$ref": "../components/responses.yaml#/ConanRecipeRevisionList"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}

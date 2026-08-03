@@ -300,6 +300,23 @@ func (s *PostgresStore) ListConanRecipeRevisions(ctx context.Context, repository
 	return out, rows.Err()
 }
 
+func (s *PostgresStore) SearchConanRecipeRevisions(ctx context.Context, repositoryID, reference, query string, limit int, after string) ([]ConanRecipeRevision, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND state='visible' AND revision>$3 AND ($4='' OR revision ILIKE '%' || $4 || '%' OR digest ILIKE '%' || $4 || '%') ORDER BY revision LIMIT $5`, repositoryID, reference, after, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ConanRecipeRevision
+	for rows.Next() {
+		var item ConanRecipeRevision
+		if err := scanConanRecipeRevision(rows, &item); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) ListConanPackageRevisions(ctx context.Context, repositoryID, reference, recipeRevision, packageID string) ([]ConanPackageRevision, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND state='visible' ORDER BY created_at DESC`, repositoryID, reference, recipeRevision, packageID)
 	if err != nil {

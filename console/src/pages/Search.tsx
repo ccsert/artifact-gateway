@@ -111,9 +111,9 @@ export function SearchPage() {
         title="全局搜索"
         description={q ? `在所有仓库中搜索 “${q}”` : '跨仓库搜索制品坐标、路径与引用'}
       />
-      <form onSubmit={(event) => { event.preventDefault(); const next = query.trim(); if (next) navigate(`/search?q=${encodeURIComponent(next)}`); }} className="mb-6 flex max-w-2xl gap-2">
-        <input className={inputClass} placeholder="输入制品坐标、路径或镜像名前缀…" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <button className={btnPrimary} disabled={!query.trim()}>搜索</button>
+      <form onSubmit={(event) => { event.preventDefault(); const next = query.trim(); if (next) navigate(`/search?q=${encodeURIComponent(next)}`); }} className="mb-6 flex max-w-2xl items-center gap-2">
+        <input className={`${inputClass} min-w-0 flex-1`} placeholder="输入制品坐标、路径或镜像名前缀…" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <button className={`${btnPrimary} shrink-0`} disabled={!query.trim()}>搜索</button>
       </form>
       {!q ? (
         <EmptyState title="输入关键词开始搜索" hint="在顶部搜索框输入坐标、路径或镜像名前缀后回车" />

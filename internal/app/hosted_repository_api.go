@@ -76,6 +76,11 @@ type conanReferencePageCursor struct {
 	ExpiresAt                                 int64
 }
 
+type conanRevisionPageCursor struct {
+	Endpoint, RepositoryID, Reference, Query, Revision string
+	ExpiresAt                                          int64
+}
+
 type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
 	ExpiresAt                                         int64
@@ -817,7 +822,7 @@ func repositoryCapabilities(format repository.Format, repoType repository.Reposi
 	switch format {
 	case repository.FormatMaven:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain, adminopenapi.RepositoryCapabilitiesOperationsRestore)
-	case repository.FormatConan:
+	case repository.FormatConan, repository.FormatOCI:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	}
 	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeHosted, Operations: operations}
@@ -1243,6 +1248,29 @@ func validRepositoryDigest(value string) bool {
 	return err == nil
 }
 
+func validOCIRestoreCoordinate(value string) bool {
+	_, _, ok := parseOCIRestoreCoordinate(value)
+	return ok
+}
+
+func parseOCIRestoreCoordinate(value string) (name, digest string, ok bool) {
+	if len(value) > 1024 || strings.ContainsAny(value, "\\\x00") {
+		return "", "", false
+	}
+	name, digest, split := strings.Cut(value, "@")
+	if !split || name == "" || digest == "" || strings.Contains(digest, "@") || !validOCIImagePrefix(name) || !validRepositoryDigest(digest) {
+		return "", "", false
+	}
+	// OCI image names cannot contain empty path components. The shared prefix
+	// validator intentionally accepts a trailing slash for search prefixes.
+	for _, component := range strings.Split(name, "/") {
+		if component == "" {
+			return "", "", false
+		}
+	}
+	return name, digest, true
+}
+
 func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.ReplicationPlan {
 	item := adminopenapi.ReplicationPlan{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanState(plan.State), CreatedAt: plan.CreatedAt}
 	if !plan.StartedAt.IsZero() {
@@ -1286,12 +1314,12 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
-		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is currently supported only for Conan and Maven tombstones")
+		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven && repo.Format != repository.FormatOCI {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is not supported for this repository format")
 			return
 		}
 		if _, err := h.tombstones.GetArtifactTombstone(r.Context(), repo.ID, repo.Format, request.Coordinate); errors.Is(err, repository.ErrNotFound) {
@@ -1309,8 +1337,11 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			} else {
 				_, err = h.sessions.store.RestoreMavenArtifact(r.Context(), repo.ID, artifact.ID)
 			}
-		} else {
+		} else if repo.Format == repository.FormatConan {
 			err = h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
+		} else {
+			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
+			_, err = h.oci.RestoreOCIManifest(r.Context(), repo.ID, name, digest)
 		}
 		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) {
 			writeHostedProblem(w, http.StatusConflict, "restore_unavailable", "artifact cannot be restored")
@@ -1803,16 +1834,47 @@ func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseW
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference must be a valid Conan recipe reference")
 			return
 		}
-		revisions, err := h.conan.ListConanRecipeRevisions(r.Context(), repo.ID, reference)
+		query := ""
+		if params.Q != nil {
+			query = strings.TrimSpace(*params.Q)
+		}
+		if len(query) > 255 || strings.ContainsRune(query, '\x00') {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be at most 255 characters")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeConanRevisionCursor(pageToken, repo.ID, reference, query)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		revisions, err := h.conan.SearchConanRecipeRevisions(r.Context(), repo.ID, reference, query, pageSize+1, after)
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Conan recipe revisions failed")
 			return
+		}
+		var next *string
+		if len(revisions) > pageSize {
+			revisions = revisions[:pageSize]
+			token := h.encodeConanRevisionCursor(repo.ID, reference, query, revisions[len(revisions)-1].Revision)
+			next = &token
 		}
 		items := make([]adminopenapi.ConanRecipeRevision, 0, len(revisions))
 		for _, revision := range revisions {
 			items = append(items, adminopenapi.ConanRecipeRevision{Reference: revision.Reference, Revision: revision.Revision, Digest: revision.Digest, State: adminopenapi.ConanRecipeRevisionState(revision.State), CreatedAt: revision.CreatedAt})
 		}
-		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanRecipeRevisionList{Items: items})
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ConanRecipeRevisionList{Items: items, NextPageToken: next})
 	})
 }
 
@@ -2341,6 +2403,34 @@ func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repository
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Reference, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeConanRevisionCursor(repositoryID, reference, query, revision string) string {
+	payload, _ := json.Marshal(conanRevisionPageCursor{Endpoint: "conan-revisions", RepositoryID: repositoryID, Reference: reference, Query: query, Revision: revision, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeConanRevisionCursor(token, repositoryID, reference, query string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor conanRevisionPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "conan-revisions" || cursor.RepositoryID != repositoryID || cursor.Reference != reference || cursor.Query != query || cursor.Revision == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Revision, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string) string {

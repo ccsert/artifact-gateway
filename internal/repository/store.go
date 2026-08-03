@@ -148,6 +148,7 @@ type NativeOCIStore interface {
 	ListOCITags(context.Context, string, string, int, string) ([]string, error)
 	DeleteOCITag(context.Context, string, string, string) error
 	DeleteOCIManifest(context.Context, string, string, string) error
+	RestoreOCIManifest(context.Context, string, string, string) (OCIManifest, error)
 }
 
 type NativeRawStore interface {
@@ -236,6 +237,7 @@ type NativeConanStore interface {
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
 	SearchConanReferences(context.Context, string, string, int, string) ([]ConanReference, error)
 	ListConanRecipeRevisions(context.Context, string, string) ([]ConanRecipeRevision, error)
+	SearchConanRecipeRevisions(context.Context, string, string, string, int, string) ([]ConanRecipeRevision, error)
 	ListConanPackageRevisions(context.Context, string, string, string, string) ([]ConanPackageRevision, error)
 	ListConanPackageIDs(context.Context, string, string, string) ([]string, error)
 	ListConanRecipeAssets(context.Context, string, string, string) ([]ConanAsset, error)

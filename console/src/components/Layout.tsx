@@ -15,7 +15,7 @@ export function PageHeader({
         <h1 className="text-xl font-semibold tracking-tight text-zinc-50">{title}</h1>
         {description && <p className="mt-1 text-sm text-zinc-500">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   );
 }
@@ -127,8 +127,8 @@ export const inputClass =
   'w-full rounded-md border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/30';
 
 export const btnPrimary =
-  'rounded-md bg-cyan-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50';
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md bg-cyan-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50';
 export const btnSecondary =
-  'rounded-md border border-zinc-700 px-3.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50';
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md border border-zinc-700 px-3.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50';
 export const btnDanger =
-  'rounded-md bg-rose-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50';
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md bg-rose-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50';

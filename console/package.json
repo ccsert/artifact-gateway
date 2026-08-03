@@ -9,16 +9,22 @@
     "typecheck": "tsc -b --pretty false",
     "generate:api": "openapi-ts -f hey-api.config.ts",
     "check:api": "npm run generate:api",
+    "antd:doctor": "antd doctor --format json",
+    "antd:lint": "antd lint src --format json",
+    "antd:usage": "antd usage src --format json",
     "e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.3.2",
     "@hey-api/client-fetch": "^0.13.1",
+    "antd": "^6.5.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0"
   },
   "devDependencies": {
+    "@ant-design/cli": "^6.5.3",
     "@hey-api/openapi-ts": "^0.72.0",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/vite": "^4.1.0",

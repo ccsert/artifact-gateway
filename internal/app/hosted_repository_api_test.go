@@ -441,6 +441,10 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 
 func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	store := repository.NewMemoryStore()
+	oci, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-oci", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
 	conan, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-conan", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -467,6 +471,13 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	handler.ServeHTTP(adminResponse, adminRequest)
 	if adminResponse.Code != http.StatusOK || !strings.Contains(adminResponse.Body.String(), `"retain"`) || !strings.Contains(adminResponse.Body.String(), `"restore"`) {
 		t.Fatalf("Maven capabilities=%d %s", adminResponse.Code, adminResponse.Body.String())
+	}
+	ociRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+oci.ID+"/capabilities", nil)
+	authorize(ociRequest, "admin-secret")
+	ociResponse := httptest.NewRecorder()
+	handler.ServeHTTP(ociResponse, ociRequest)
+	if ociResponse.Code != http.StatusOK || !strings.Contains(ociResponse.Body.String(), `"restore"`) {
+		t.Fatalf("OCI capabilities=%d %s", ociResponse.Code, ociResponse.Body.String())
 	}
 }
 
@@ -675,6 +686,71 @@ func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *tes
 	handler.ServeHTTP(deniedResponse, denied)
 	if deniedResponse.Code != http.StatusForbidden {
 		t.Fatalf("denied=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+}
+
+func TestConanRecipeRevisionSearchPaginatesAndBindsCursorToQuery(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-versions", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "conan-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	reference := "pkg/1.0/user/stable"
+	for i, revision := range []string{"build-alpha", "build-beta", "build-gamma"} {
+		digest := "sha256:" + strings.Repeat(string(rune('a'+i)), 64)
+		key := "conan/versions/" + revision
+		if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: repo.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(query, token string, pageSize int) *httptest.ResponseRecorder {
+		t.Helper()
+		values := url.Values{"reference": {reference}, "pageSize": {strconv.Itoa(pageSize)}}
+		if query != "" {
+			values.Set("q", query)
+		}
+		if token != "" {
+			values.Set("pageToken", token)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/conan/recipe-revisions?"+values.Encode(), nil)
+		authorize(req, authenticator.IssueToken("conan-reader"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	type revisionPage struct {
+		Items []struct {
+			Revision string `json:"revision"`
+		} `json:"items"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	first := request("", "", 2)
+	var firstPage revisionPage
+	if first.Code != http.StatusOK || json.Unmarshal(first.Body.Bytes(), &firstPage) != nil || len(firstPage.Items) != 2 || firstPage.Items[0].Revision != "build-alpha" || firstPage.NextPageToken == "" {
+		t.Fatalf("first page=%d body=%s", first.Code, first.Body.String())
+	}
+	second := request("", firstPage.NextPageToken, 2)
+	var secondPage revisionPage
+	if second.Code != http.StatusOK || json.Unmarshal(second.Body.Bytes(), &secondPage) != nil || len(secondPage.Items) != 1 || secondPage.Items[0].Revision != "build-gamma" || secondPage.NextPageToken != "" {
+		t.Fatalf("second page=%d body=%s", second.Code, second.Body.String())
+	}
+	filtered := request("beta", "", 2)
+	var filteredPage revisionPage
+	if filtered.Code != http.StatusOK || json.Unmarshal(filtered.Body.Bytes(), &filteredPage) != nil || len(filteredPage.Items) != 1 || filteredPage.Items[0].Revision != "build-beta" {
+		t.Fatalf("filtered=%d body=%s", filtered.Code, filtered.Body.String())
+	}
+	if invalid := request("beta", firstPage.NextPageToken, 2); invalid.Code != http.StatusBadRequest {
+		t.Fatalf("query-bound cursor=%d body=%s", invalid.Code, invalid.Body.String())
 	}
 }
 
@@ -1176,6 +1252,45 @@ func TestRepositoryRestoreRestoresMavenTombstone(t *testing.T) {
 	}
 	if _, err = store.GetMavenAsset(ctx, repo.ID, "org/example/widget/1.0.0/widget-1.0.0.jar"); err != nil {
 		t.Fatalf("restored Maven asset unavailable: %v", err)
+	}
+}
+
+func TestRepositoryRestoreRestoresOCIManifestAndTags(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "restore-oci", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	objectKey := "native/oci/manifests/restore"
+	if err = store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: objectKey, Digest: digest, Size: 42}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "team/widget", Digest: digest, ObjectKey: objectKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 42}, "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DeleteOCIManifest(ctx, repo.ID, manifest.Name, manifest.Digest); err != nil {
+		t.Fatal(err)
+	}
+	coordinate := manifest.Name + "@" + manifest.Digest
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("restore=%d body=%s", response.Code, response.Body.String())
+	}
+	if restored, getErr := store.GetOCIManifest(ctx, repo.ID, manifest.Name, manifest.Digest); getErr != nil || restored.ObjectKey != objectKey {
+		t.Fatalf("restored manifest=%#v err=%v", restored, getErr)
+	}
+	if restored, getErr := store.GetOCIManifest(ctx, repo.ID, manifest.Name, "1.0.0"); getErr != nil || restored.Digest != digest {
+		t.Fatalf("restored tag=%#v err=%v", restored, getErr)
+	}
+	if _, getErr := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatOCI, coordinate); !errors.Is(getErr, repository.ErrNotFound) {
+		t.Fatalf("restore kept tombstone: %v", getErr)
 	}
 }
 

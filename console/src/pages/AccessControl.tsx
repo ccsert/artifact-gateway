@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAnonymousAccessPolicy, listRepositories, listGrants, replaceAnonymousAccessPolicy } from '../client';
 import type { AnonymousAccessPolicy, Repository, Grant } from '../client';
-import { PageHeader, Card, CardHeader, DataTable, inputClass, StatCard } from '../components/Layout';
+import { PageHeader, Card, CardHeader, DataTable, inputClass, btnSecondary } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, Badge } from '../components/Badge';
 import { useAuth } from '../lib/auth';
@@ -22,6 +22,13 @@ const ROLE_REFERENCE: { role: string; tone: 'red' | 'blue' | 'green'; desc: stri
   { role: 'admin', tone: 'red', desc: '全部操作：浏览、发布、删除、授权、密钥管理' },
   { role: 'writer', tone: 'blue', desc: '读 + 写（发布 / 编辑 / 复制取消），不可管理密钥与 admin 授权' },
   { role: 'reader', tone: 'green', desc: '只读：浏览 / 搜索 / 拉取' },
+];
+
+const AUTHORIZATION_STEPS = [
+  { title: '1. 先看身份', text: '管理员身份直接放行；用户、API Key 或 OIDC 身份会先带着自己的全局角色进入判定。' },
+  { title: '2. 再看全局角色', text: 'admin 允许全部操作，writer 允许读取和写入，reader 只允许读取。' },
+  { title: '3. 再看仓库规则', text: '已配置仓库授权时，主体、权限级别和资源前缀都匹配才放行；未匹配会拒绝。' },
+  { title: '4. 最后兼容旧策略', text: '仓库还没有被正式管理时，才回退到旧版静态仓库策略；匿名访问另按全局和仓库开关判断。' },
 ];
 
 function scopeLabel(scopes: string[]): { label: string; tone: 'red' | 'blue' | 'green' | 'zinc' } {
@@ -139,16 +146,16 @@ export function AccessControlPage() {
     <div>
       <PageHeader
         title="访问控制"
-        description="跨仓库的授权总览与角色能力说明。逐仓库的细粒度授权在各仓库的「访问授权」Tab 编辑。"
+        description="跨仓库查看匿名策略与逐仓库授权；规则在对应仓库中编辑。"
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="授权主体" value={principalCount} sub="拥有逐仓库授权的身份" />
-        <StatCard label="写入权限" value={writeCount} sub="可发布或变更制品" />
-        <StatCard label="管理员权限" value={adminCount} sub={adminCount > 0 ? '需要定期复核' : '暂无逐仓库管理员授权'} />
+      <div className="mb-5 grid grid-cols-3 divide-x divide-zinc-800 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/35">
+        <div className="px-4 py-3"><div className="text-[10px] uppercase tracking-wider text-zinc-600">授权主体</div><div className="mt-1 text-lg font-semibold text-zinc-100">{principalCount}</div></div>
+        <div className="px-4 py-3"><div className="text-[10px] uppercase tracking-wider text-zinc-600">写入授权</div><div className="mt-1 text-lg font-semibold text-zinc-100">{writeCount}</div></div>
+        <div className="px-4 py-3"><div className="text-[10px] uppercase tracking-wider text-zinc-600">管理员授权</div><div className={adminCount > 0 ? 'mt-1 text-lg font-semibold text-rose-300' : 'mt-1 text-lg font-semibold text-zinc-100'}>{adminCount}</div></div>
       </div>
 
-      <Card className="mb-6 px-5 py-4">
+      <Card className="mb-5 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-zinc-200">全局匿名读取</div>
@@ -173,47 +180,39 @@ export function AccessControlPage() {
         {anonymousPolicyError !== null && <div className="mt-3"><ErrorBanner error={anonymousPolicyError} /></div>}
       </Card>
 
-      <Card className="mb-6 px-5 py-4">
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">角色能力</div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {ROLE_REFERENCE.map((r) => (
-            <div key={r.role} className="rounded-lg border border-zinc-800 px-3 py-2">
-              <Badge tone={r.tone}>{r.role}</Badge>
-              <p className="mt-1.5 text-xs text-zinc-400">{r.desc}</p>
+      <details className="group mb-5 border-y border-zinc-800/80 py-2.5">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-zinc-300">
+          <span>权限判定顺序与角色能力</span>
+          <span className="text-[11px] font-normal text-zinc-600 group-open:hidden">展开查看</span>
+          <span className="hidden text-[11px] font-normal text-zinc-600 group-open:inline">收起</span>
+        </summary>
+        <p className="mt-3 text-xs leading-5 text-zinc-500">仓库规则只追加权限，不能撤销全局角色。</p>
+        <div className="mt-3 grid grid-cols-4 gap-4">
+          {AUTHORIZATION_STEPS.map((step) => (
+            <div key={step.title} className="border-l border-zinc-700 pl-3">
+              <div className="text-xs font-medium text-zinc-300">{step.title}</div>
+              <p className="mt-1 text-[11px] leading-5 text-zinc-500">{step.text}</p>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[11px] text-zinc-600">
-          API 密钥与 OIDC 身份携带的全局角色在全仓库范围内生效，优先于逐仓库授权；逐仓库授权（下表）用于细粒度按主体/前缀控制。
-        </p>
-      </Card>
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-zinc-800/80 pt-3">
+          {ROLE_REFERENCE.map((r) => (
+            <div key={r.role} className="flex items-center gap-2 text-xs text-zinc-400">
+              <Badge tone={r.tone}>{r.role}</Badge><span>{r.desc}</span>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <Card>
         <CardHeader title={`授权记录（${filtered.length}）`} />
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
-          <input
-            className={`${inputClass} w-52`}
-            placeholder="按主体过滤…"
-            value={principalFilter}
-            onChange={(e) => setPrincipalFilter(e.target.value)}
-          />
-          <input
-            className={`${inputClass} w-52`}
-            placeholder="按仓库过滤…"
-            value={repoFilter}
-            onChange={(e) => setRepoFilter(e.target.value)}
-          />
-          <select className={`${inputClass} w-auto min-w-28`} value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value as typeof scopeFilter)}>
-            <option value="all">全部权限</option>
-            <option value="read">只读</option>
-            <option value="write">写入</option>
-            <option value="admin">管理员</option>
-          </select>
-          {(principalFilter || repoFilter || scopeFilter !== 'all') && (
-            <button className="px-2 text-xs text-zinc-500 hover:text-zinc-200" onClick={() => { setPrincipalFilter(''); setRepoFilter(''); setScopeFilter('all'); }}>
-              清除筛选
-            </button>
-          )}
+        <div className="overflow-x-auto border-b border-zinc-800/80 px-4 py-3">
+          <div className="grid min-w-[820px] grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_180px_auto] items-end gap-3">
+            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">授权主体</span><input className={inputClass} placeholder="用户名、API Key 或 actor" value={principalFilter} onChange={(e) => setPrincipalFilter(e.target.value)} /></label>
+            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">仓库</span><input className={inputClass} placeholder="仓库名称" value={repoFilter} onChange={(e) => setRepoFilter(e.target.value)} /></label>
+            <label><span className="mb-1.5 block text-[11px] font-medium text-zinc-500">权限级别</span><select className={inputClass} value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value as typeof scopeFilter)}><option value="all">全部权限</option><option value="read">只读</option><option value="write">写入</option><option value="admin">管理员</option></select></label>
+            <button disabled={!principalFilter && !repoFilter && scopeFilter === 'all'} className={btnSecondary} onClick={() => { setPrincipalFilter(''); setRepoFilter(''); setScopeFilter('all'); }}>清除</button>
+          </div>
         </div>
         {error ? (
           <div className="px-4 py-4">

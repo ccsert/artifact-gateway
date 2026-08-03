@@ -9,6 +9,8 @@ import {
   listConanReferences,
   listGrants,
   replaceGrants,
+  listUsers,
+  listApiKeys,
   getRetentionPolicy,
   replaceRetentionPolicy,
   dryRunRepositoryRetention,
@@ -45,6 +47,8 @@ import type {
   ReplicationPlan,
   ReplicationPlanDetail,
   ProxyCacheAsset,
+  User,
+  ApiKey,
 } from '../client';
 import { PageHeader, Card, CardHeader, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, btnDanger } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
@@ -652,15 +656,15 @@ function ArtifactsTab({ repo, canWrite }: { repo: Repository; canWrite: boolean 
             setExpandedImage(null);
             void load(q);
           }}
-          className="flex gap-2"
+          className="flex items-center gap-2"
         >
           <input
-            className={`${inputClass} w-72`}
+            className={`${inputClass} min-w-0 w-72`}
             placeholder={searchPlaceholder[format] ?? '搜索…'}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <button type="submit" className={btnSecondary}>
+          <button type="submit" className={`${btnSecondary} shrink-0`}>
             搜索
           </button>
         </form>
@@ -823,11 +827,109 @@ function ArtifactsTab({ repo, canWrite }: { repo: Repository; canWrite: boolean 
 
 /* ---------------- Grants ---------------- */
 
-const SCOPES = ['repositories:read', 'repositories:write', 'repositories:admin'] as const;
+type GrantLevel = 'read' | 'write' | 'admin';
+const CUSTOM_PRINCIPAL = '__custom__';
+
+interface PrincipalOption {
+  value: string;
+  label: string;
+  detail: string;
+  disabled?: boolean;
+}
+
+type PrincipalKind = 'user' | 'api-key' | 'custom';
+
+function principalKind(principal: string): PrincipalKind {
+  if (principal.startsWith('user:')) return 'user';
+  if (principal.startsWith('api-key:')) return 'api-key';
+  return 'custom';
+}
+
+function principalEditorKind(principal: string): PrincipalKind | '' {
+  if (principal === CUSTOM_PRINCIPAL) return 'custom';
+  return principal ? principalKind(principal) : '';
+}
+
+function resourcePrefixHint(format: Repository['format']): string {
+  switch (format) {
+    case 'maven':
+      return '例如 org/example（Maven group 前缀）';
+    case 'oci':
+      return '例如 team/backend（镜像名称前缀）';
+    case 'conan':
+      return '例如 pkg/1.0/user/stable（reference 前缀）';
+    case 'raw':
+      return '例如 releases/2026（路径前缀）';
+  }
+}
+
+function grantLevelLabel(level: GrantLevel): string {
+  if (level === 'admin') return '管理员';
+  if (level === 'write') return '写入';
+  return '读取';
+}
+
+function accessSourceLabel(source: string): string {
+  switch (source) {
+    case 'administrator': return '管理员身份';
+    case 'role': return '全局角色';
+    case 'repository_grants': return '仓库授权';
+    case 'legacy_static': return '旧版静态策略';
+    case 'anonymous_policy': return '匿名访问策略';
+    default: return source || '未说明';
+  }
+}
+
+function accessReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    administrator: '管理员直接放行',
+    role_admin: '全局 admin 角色',
+    role_writer: '全局 writer 角色',
+    role_reader: '全局 reader 角色',
+    scope_granted: '匹配主体、权限和资源范围',
+    scope_not_granted: '没有匹配的仓库授权',
+    grant_lookup_failed: '读取仓库授权失败',
+    read_pattern_granted: '匹配旧版读取规则',
+    write_pattern_granted: '匹配旧版写入规则',
+    global_anonymous_access_disabled: '全局匿名读取未启用',
+    repository_anonymous_read_disabled: '仓库未允许匿名读取',
+    repository_anonymous_read_enabled: '全局和仓库均允许匿名读取',
+  };
+  return labels[reason] ?? reason.replaceAll('_', ' ');
+}
+
+function grantLevel(scopes: Grant['scopes']): GrantLevel {
+  if (scopes.includes('repositories:admin')) return 'admin';
+  if (scopes.includes('repositories:write')) return 'write';
+  return 'read';
+}
+
+function scopesForLevel(level: GrantLevel): Grant['scopes'] {
+  return [`repositories:${level}`] as Grant['scopes'];
+}
+
+function principalOptions(users: User[], apiKeys: ApiKey[]): PrincipalOption[] {
+  return [
+    ...users.map((user) => ({
+      value: `user:${user.name}`,
+      label: `用户 · ${user.name}`,
+      detail: `全局角色 ${user.role}${user.state === 'disabled' ? ' · 已停用' : ''}`,
+      disabled: user.state === 'disabled',
+    })),
+    ...apiKeys.map((key) => ({
+      value: `api-key:${key.id}`,
+      label: `API Key · ${key.name}`,
+      detail: `全局角色 ${key.roles.join(', ')}${key.revokedAt ? ' · 已撤销' : ''}`,
+      disabled: Boolean(key.revokedAt),
+    })),
+  ];
+}
 
 function GrantsTab({ repo }: { repo: Repository }) {
   const [grants, setGrants] = useState<Grant[] | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [principalChoices, setPrincipalChoices] = useState<PrincipalOption[]>([]);
+  const [principalChoicesError, setPrincipalChoicesError] = useState<unknown>(null);
   const [version, setVersion] = useState('');
   const editor = useDisclosure();
   const [draft, setDraft] = useState<Grant[]>([]);
@@ -850,6 +952,23 @@ function GrantsTab({ repo }: { repo: Repository }) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [usersResult, apiKeysResult] = await Promise.all([listUsers(), listApiKeys()]);
+      if (cancelled) return;
+      if (usersResult.error || apiKeysResult.error) {
+        setPrincipalChoicesError(new Error('无法加载用户或 API Key 列表，可继续使用自定义身份。'));
+      }
+      setPrincipalChoices(
+        principalOptions(usersResult.data?.items ?? [], apiKeysResult.data?.items ?? []),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const openEditor = () => {
     setDraft(grants ? grants.map((g) => ({ ...g, scopes: [...g.scopes] })) : []);
     setSaveError(null);
@@ -857,11 +976,30 @@ function GrantsTab({ repo }: { repo: Repository }) {
   };
 
   const save = async () => {
+    if (draft.some((grant) => !grant.principal.trim() || grant.principal === CUSTOM_PRINCIPAL)) {
+      setSaveError(new Error('请为每条授权规则选择或填写授权主体；不需要的空行请先移除。'));
+      return;
+    }
+    const normalized = draft.map((grant) => ({
+      ...grant,
+      principal: grant.principal === CUSTOM_PRINCIPAL ? '' : grant.principal.trim(),
+      scopes: scopesForLevel(grantLevel(grant.scopes)),
+      resourcePrefix: grant.resourcePrefix?.trim() || undefined,
+    }));
+    const duplicate = new Set<string>();
+    for (const grant of normalized) {
+      const key = `${grant.principal}\x00${grant.resourcePrefix ?? ''}`;
+      if (duplicate.has(key)) {
+        setSaveError(new Error('存在重复的授权主体与资源范围，请合并或删除重复规则。'));
+        return;
+      }
+      duplicate.add(key);
+    }
     setSaving(true);
     setSaveError(null);
     const { error: err } = await replaceGrants({
       path: { repositoryId: repo.id },
-      body: draft.filter((g) => g.principal.trim()),
+      body: normalized,
       headers: { 'If-Match': version },
     });
     setSaving(false);
@@ -885,22 +1023,23 @@ function GrantsTab({ repo }: { repo: Repository }) {
         </button>
       </div>
       {grants.length === 0 ? (
-        <EmptyState title="暂无授权规则" hint="添加 principal 以开放仓库访问" />
+        <EmptyState title="暂无授权规则" hint="在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。" />
       ) : (
-        <DataTable columns={['Principal', 'Scopes', '资源前缀']}>
+        <DataTable columns={['授权主体', '权限级别', '资源范围']}>
           {grants.map((g, i) => (
             <tr key={i} className="hover:bg-zinc-800/30">
-              <td className="px-4 py-2.5 font-mono text-xs text-zinc-200">{g.principal}</td>
+              <td className="px-4 py-2.5">
+                <div className="font-mono text-xs text-zinc-200">{principalChoices.find((choice) => choice.value === g.principal)?.label ?? g.principal}</div>
+                <div className="mt-0.5 font-mono text-[10px] text-zinc-600">{g.principal}</div>
+              </td>
               <td className="px-4 py-2.5">
                 <div className="flex flex-wrap gap-1">
-                  {g.scopes.map((s) => (
-                    <Badge key={s} tone={s.endsWith('admin') ? 'red' : s.endsWith('write') ? 'amber' : 'green'}>
-                      {s.replace('repositories:', '')}
-                    </Badge>
-                  ))}
+                  <Badge tone={grantLevel(g.scopes) === 'admin' ? 'red' : grantLevel(g.scopes) === 'write' ? 'amber' : 'green'}>
+                    {grantLevelLabel(grantLevel(g.scopes))}
+                  </Badge>
                 </div>
               </td>
-              <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{g.resourcePrefix || '（整个仓库）'}</td>
+              <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{g.resourcePrefix || '整个仓库'}</td>
             </tr>
           ))}
         </DataTable>
@@ -923,67 +1062,123 @@ function GrantsTab({ repo }: { repo: Repository }) {
       >
         <div className="space-y-3">
           {saveError !== null && <ErrorBanner error={saveError} />}
-          {draft.map((g, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 p-3">
-              <input
-                className={`${inputClass} w-48 font-mono text-xs`}
-                placeholder="principal，如 user:alice"
-                value={g.principal}
-                onChange={(e) =>
-                  setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: e.target.value } : x)))
-                }
-              />
-              <input
-                className={`${inputClass} w-40 font-mono text-xs`}
-                placeholder="资源前缀（可空）"
-                value={g.resourcePrefix ?? ''}
-                onChange={(e) =>
-                  setDraft((d) => d.map((x, j) => (j === i ? { ...x, resourcePrefix: e.target.value } : x)))
-                }
-              />
-              <div className="flex gap-1.5">
-                {SCOPES.map((s) => {
-                  const active = g.scopes.includes(s);
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() =>
-                        setDraft((d) =>
-                          d.map((x, j) =>
-                            j === i
-                              ? {
-                                  ...x,
-                                  scopes: active ? x.scopes.filter((v) => v !== s) : [...x.scopes, s],
-                                }
-                              : x,
-                          ),
-                        )
-                      }
-                      className={`rounded border px-2 py-1 font-mono text-[11px] ${
-                        active
-                          ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
-                          : 'border-zinc-700 text-zinc-500 hover:bg-zinc-800'
-                      }`}
-                    >
-                      {s.replace('repositories:', '')}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
-                className="ml-auto rounded px-2 py-1 text-xs text-zinc-600 hover:bg-rose-500/10 hover:text-rose-400"
-              >
-                移除
-              </button>
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 text-xs leading-5 text-zinc-400">
+            <div className="font-medium text-cyan-200">先记住这三个概念</div>
+            <div className="mt-1 grid gap-1.5 sm:grid-cols-3">
+              <div><span className="font-medium text-zinc-300">主体</span>：谁在访问，例如用户或 CI 的 API Key。</div>
+              <div><span className="font-medium text-zinc-300">权限</span>：允许读取、写入，还是管理仓库。</div>
+              <div><span className="font-medium text-zinc-300">范围</span>：限制到仓库的一部分；留空就是整个仓库。</div>
             </div>
-          ))}
+            <div className="mt-2 border-t border-cyan-500/10 pt-2 text-zinc-500">用户/API Key 的全局角色会先生效；仓库规则只能追加权限，不能撤销全局角色。</div>
+          </div>
+          {principalChoicesError !== null && (
+            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+              用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。
+            </div>
+          )}
+          <div className="min-w-[1020px]">
+            <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-center gap-3 px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+              <span>主体类型</span>
+              <span>主体</span>
+              <span>权限级别</span>
+              <span>资源范围</span>
+              <span className="text-right">操作</span>
+            </div>
+            <div className="space-y-2">
+              {draft.map((g, i) => {
+                const kind = principalEditorKind(g.principal);
+                return (
+                  <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3">
+                    <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-start gap-3">
+                      <div className="min-w-0">
+                        <select
+                          className={`${inputClass} h-10 min-w-0 text-xs`}
+                          value={kind}
+                          onChange={(e) => {
+                            const nextKind = e.target.value as PrincipalKind | '';
+                            const first = nextKind === 'user'
+                              ? principalChoices.find((choice) => choice.value.startsWith('user:') && !choice.disabled)?.value ?? ''
+                              : nextKind === 'api-key'
+                                ? principalChoices.find((choice) => choice.value.startsWith('api-key:') && !choice.disabled)?.value ?? ''
+                                : '';
+                            setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: nextKind === 'custom' ? (principalEditorKind(x.principal) === 'custom' ? x.principal : CUSTOM_PRINCIPAL) : first } : x)));
+                          }}
+                        >
+                          <option value="">选择主体类型</option>
+                          <option value="user">用户账号</option>
+                          <option value="api-key">API Key（CI / 自动化）</option>
+                          <option value="custom">OIDC / 自定义 actor</option>
+                        </select>
+                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">选择规则主体的来源</div>
+                      </div>
+                      <div className="min-w-0">
+                        {kind === 'user' || kind === 'api-key' ? (
+                          <select
+                            className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
+                            value={g.principal}
+                            onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: e.target.value } : x)))}
+                          >
+                            <option value="">请选择</option>
+                            {principalChoices
+                              .filter((choice) => choice.value.startsWith(`${kind}:`))
+                              .map((choice) => (
+                                <option key={choice.value} value={choice.value} disabled={choice.disabled}>
+                                  {choice.label.replace(/^(用户|API Key) · /, '')} · {choice.detail}
+                                </option>
+                              ))}
+                          </select>
+                        ) : kind === 'custom' ? (
+                          <input
+                            className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
+                            placeholder="例如 oidc:github:acme/release 或 ci-bot"
+                            value={g.principal === CUSTOM_PRINCIPAL ? '' : g.principal}
+                            onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, principal: e.target.value } : x)))}
+                          />
+                        ) : (
+                          <div className="flex h-10 items-center rounded-md border border-dashed border-zinc-800 px-3 text-xs text-zinc-600">先选择主体类型</div>
+                        )}
+                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
+                          {kind === 'custom' ? '必须与认证系统传入的 actor 完全一致。' : '从已有身份中选择授权对象。'}
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <select
+                          className={`${inputClass} h-10 min-w-0 text-xs`}
+                          value={grantLevel(g.scopes)}
+                          onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, scopes: scopesForLevel(e.target.value as GrantLevel) } : x)))}
+                        >
+                          <option value="read">读取 · 浏览 / 拉取</option>
+                          <option value="write">写入 · 发布 / 编辑</option>
+                          <option value="admin">管理员 · 授权 / 删除</option>
+                        </select>
+                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">权限会叠加全局角色</div>
+                      </div>
+                      <div className="min-w-0">
+                        <input
+                          className={`${inputClass} h-10 min-w-0 font-mono text-xs`}
+                          placeholder="留空表示整个仓库"
+                          value={g.resourcePrefix ?? ''}
+                          onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, resourcePrefix: e.target.value } : x)))}
+                        />
+                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">{resourcePrefixHint(repo.format)}</div>
+                      </div>
+                      <button
+                        onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
+                        className="h-10 w-[72px] rounded-md px-2 text-xs text-zinc-500 hover:bg-rose-500/10 hover:text-rose-400"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <button
             onClick={() => setDraft((d) => [...d, { principal: '', scopes: ['repositories:read'] }])}
             className="w-full rounded-lg border border-dashed border-zinc-700 py-2 text-sm text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
           >
-            + 添加授权
+            + 添加授权规则
           </button>
         </div>
       </Modal>
@@ -1556,6 +1751,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [restoreError, setRestoreError] = useState<unknown>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
 
   const load = useCallback(
@@ -1585,12 +1781,17 @@ function TombstonesTab({ repo }: { repo: Repository }) {
 
   const restore = async (coordinate: string) => {
     setRestoring(coordinate);
+    setRestoreError(null);
     const { error: err } = await restoreRepositoryArtifact({
       path: { repositoryId: repo.id },
       body: { coordinate },
     });
     setRestoring(null);
-    if (!err) void load();
+    if (err) {
+      setRestoreError(err);
+      return;
+    }
+    void load();
   };
 
   if (error !== null)
@@ -1600,6 +1801,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
 
   return (
     <>
+      {restoreError !== null && <div className="mb-3"><ErrorBanner error={restoreError} /></div>}
       <DataTable columns={['坐标', '摘要', '删除时间', '']}>
         {items.map((t, i) => (
           <tr key={i} className="hover:bg-zinc-800/30">
@@ -1642,43 +1844,39 @@ function RepositoryOverview({ repo, capacity, onOpenCapacity }: { repo: Reposito
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
 
   return (
-    <div className="mb-5 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
-      <Card className="border-zinc-800 bg-zinc-900/70">
-        <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${repo.state === 'active' ? 'bg-emerald-400' : repo.state === 'deleting' ? 'bg-amber-400' : 'bg-rose-400'}`} />
-              <span className="text-sm font-semibold text-zinc-100">{repo.state === 'active' ? '仓库运行正常' : `仓库状态：${repo.state}`}</span>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {repo.type === 'proxy' ? '上游缓存与代理请求正在由此仓库处理。' : '已发布制品及其可恢复引用由此仓库托管。'}
-            </p>
+    <div className="mb-4 overflow-x-auto rounded-lg border border-zinc-800/80 bg-zinc-900/35">
+      <div className="grid min-w-0 grid-cols-[minmax(220px,1.45fr)_repeat(3,minmax(110px,.65fr))_minmax(250px,1.55fr)]">
+        <div className="px-4 py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className={`h-2 w-2 rounded-full ${repo.state === 'active' ? 'bg-emerald-400' : repo.state === 'deleting' ? 'bg-amber-400' : 'bg-rose-400'}`} />
+            <span className="text-xs font-semibold text-zinc-100">{repo.state === 'active' ? '仓库运行正常' : `仓库状态：${repo.state}`}</span>
           </div>
-          <button onClick={onOpenCapacity} className="text-xs text-cyan-300 hover:text-cyan-200">查看容量详情</button>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {repo.type === 'proxy' ? '上游缓存与代理请求由此仓库处理。' : '已发布制品及其可恢复引用由此仓库托管。'}
+          </p>
         </div>
-        <div className="grid border-t border-zinc-800/80 sm:grid-cols-3">
-          <div className="px-5 py-3 sm:border-r sm:border-zinc-800/80">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">已用空间</div>
-            <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatBytes(capacity.usedBytes) : '读取中…'}</div>
-          </div>
-          <div className="px-5 py-3 sm:border-r sm:border-zinc-800/80">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">对象数量</div>
-            <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatNumber(capacity.objectCount) : '—'}</div>
-          </div>
-          <div className="px-5 py-3">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">配额状态</div>
-            <div className={`mt-1 text-sm font-semibold ${usageTone}`}>{usage === null ? '未设置限制' : `${usage.toFixed(1)}% 已使用`}</div>
-          </div>
+        <div className="border-l border-zinc-800/80 px-4 py-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">已用空间</div>
+          <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatBytes(capacity.usedBytes) : '读取中…'}</div>
         </div>
-      </Card>
-      <Card className="border-zinc-800 bg-zinc-900/40 px-5 py-4">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">协议入口</div>
-        <div className="mt-2 flex items-center gap-2">
-          <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300" title={protocolPath}>{protocolPath}</code>
-          <CopyButton text={protocolPath} />
+        <div className="border-l border-zinc-800/80 px-4 py-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">对象数量</div>
+          <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatNumber(capacity.objectCount) : '—'}</div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-zinc-500">使用仓库格式对应的客户端连接；访问权限和匿名读取策略将在请求时生效。</p>
-      </Card>
+        <div className="border-l border-zinc-800/80 px-4 py-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">配额状态</div>
+          <div className={`mt-1 text-sm font-semibold ${usageTone}`}>{usage === null ? '未设置限制' : `${usage.toFixed(1)}% 已使用`}</div>
+          <button onClick={onOpenCapacity} className="mt-1 text-[10px] text-cyan-300 hover:text-cyan-200">查看详情</button>
+        </div>
+        <div className="border-l border-zinc-800/80 px-4 py-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">协议入口</div>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300" title={protocolPath}>{protocolPath}</code>
+            <CopyButton text={protocolPath} />
+          </div>
+          <p className="mt-1 text-[10px] text-zinc-600">客户端将按请求时的权限策略读取。</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1857,14 +2055,14 @@ export function RepositoryDetailPage() {
         }
       />
       {repo.anonymousRead && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm">
+        <div className="mb-3 flex items-center justify-between gap-3 border-b border-emerald-500/20 pb-2 text-xs">
           <span className="text-emerald-200">此仓库允许匿名读取；全局匿名策略启用时可公开浏览。</span>
           <Link to={`/browse?repository=${encodeURIComponent(repo.id)}`} className="text-xs font-medium text-cyan-300 hover:text-cyan-200">打开公开浏览</Link>
         </div>
       )}
       <RepositoryOverview repo={repo} capacity={capacity} onOpenCapacity={() => setTab('capacity')} />
       {caps && (
-        <div className="mb-5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
           <span className="mr-1">支持的操作:</span>
           {caps.operations.map((op) => (
             <Badge key={op} tone="zinc">
@@ -1874,25 +2072,27 @@ export function RepositoryDetailPage() {
         </div>
       )}
       {effectiveAccess && (
-        <div className="mb-5 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs sm:grid-cols-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Actor</div>
-            <div className="mt-1 font-mono text-zinc-200">{effectiveAccess.actor}</div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Anonymous</div>
-            <div className={effectiveAccess.anonymousRead.allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>
-              {effectiveAccess.anonymousRead.allowed ? '允许' : '拒绝'} · {effectiveAccess.anonymousRead.reason}
+        <div className="mb-4 overflow-x-auto border-y border-zinc-800/80 py-2.5 text-xs">
+          <div className="grid min-w-[900px] grid-cols-[minmax(220px,1fr)_repeat(4,minmax(130px,1fr))] items-center gap-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">当前身份</div>
+              <div className="mt-1 font-mono text-xs text-zinc-200">{effectiveAccess.actor}</div>
+              <div className="mt-0.5 text-[10px] text-zinc-600">有效权限摘要</div>
             </div>
-          </div>
-          {(['read', 'write'] as const).map((key) => (
-            <div key={key}>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">{key}</div>
-              <div className={effectiveAccess.permissions[key].allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>
-                {effectiveAccess.permissions[key].allowed ? '允许' : '拒绝'} · {effectiveAccess.permissions[key].reason}
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">匿名读取</div>
+              <div className={effectiveAccess.anonymousRead.allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>{effectiveAccess.anonymousRead.allowed ? '允许' : '拒绝'}</div>
+              <div className="mt-0.5 truncate text-[10px] text-zinc-600" title={`${accessSourceLabel(effectiveAccess.anonymousRead.source)} · ${accessReasonLabel(effectiveAccess.anonymousRead.reason)}`}>{accessSourceLabel(effectiveAccess.anonymousRead.source)}</div>
+            </div>
+            {(['read', 'write', 'admin'] as const).map((key) => (
+              <div key={key}>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500">{key === 'read' ? '读取' : key === 'write' ? '写入' : '管理员'}</div>
+                <div className={effectiveAccess.permissions[key].allowed ? 'mt-1 text-emerald-300' : 'mt-1 text-zinc-500'}>{effectiveAccess.permissions[key].allowed ? '允许' : '拒绝'}</div>
+                <div className="mt-0.5 truncate text-[10px] text-zinc-600" title={`${accessSourceLabel(effectiveAccess.permissions[key].source)} · ${accessReasonLabel(effectiveAccess.permissions[key].reason)}`}>{accessSourceLabel(effectiveAccess.permissions[key].source)}</div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="mt-2 border-t border-zinc-800/80 pt-2 text-[10px] text-zinc-600">判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。</div>
         </div>
       )}
       <div className="mb-5 flex gap-1 overflow-x-auto border-b border-zinc-800">

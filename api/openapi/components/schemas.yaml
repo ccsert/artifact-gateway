@@ -863,6 +863,8 @@ ConanRecipeRevisionList:
     items:
       type: array
       items: {"$ref": "#/ConanRecipeRevision"}
+    nextPageToken:
+      type: string
 ConanPackageRevision:
   type: object
   required: [reference, recipeRevision, packageId, revision, digest, state, createdAt]

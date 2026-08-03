@@ -15,20 +15,54 @@ function gatewayBase(): string {
 }
 
 // Maven GAV 坐标 → 各用法
-export function mavenUsage(repoName: string, coordinate: string): UsageSnippet[] {
+export interface MavenUsageOptions {
+  buildNumber?: number;
+  createdAt?: string;
+}
+
+function mavenSnapshotBuildVersion(version: string, options: MavenUsageOptions): string | null {
+  if (!version.endsWith('-SNAPSHOT') || !options.buildNumber || !options.createdAt) return null;
+  const date = new Date(options.createdAt);
+  if (Number.isNaN(date.getTime())) return null;
+  const timestamp = date.toISOString().slice(0, 19).replace(/[-:T]/g, '').replace(/(\d{8})(\d{6})/, '$1.$2');
+  return `${version.slice(0, -'-SNAPSHOT'.length)}-${timestamp}-${options.buildNumber}`;
+}
+
+export function mavenUsage(repoName: string, coordinate: string, options: MavenUsageOptions = {}): UsageSnippet[] {
   const parts = coordinate.split(':');
   const out: UsageSnippet[] = [];
   if (parts.length >= 3) {
     const [g, a, v] = parts;
-    out.push({
-      label: 'Maven 依赖 (pom.xml)',
-      code: `<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${v}</version>\n</dependency>`,
-    });
-    out.push({
-      label: 'Gradle 依赖',
-      code: `implementation '${g}:${a}:${v}'`,
-    });
     const path = `${g.replaceAll('.', '/')}/${a}/${v}`;
+    const dynamicPom = `<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${v}</version>\n</dependency>`;
+    const fixedVersion = mavenSnapshotBuildVersion(v, options);
+    if (fixedVersion) {
+      out.push({
+        label: 'Maven 依赖（动态 SNAPSHOT）',
+        code: dynamicPom,
+      });
+      out.push({
+        label: 'Maven 依赖（固定本次构建）',
+        code: `<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${fixedVersion}</version>\n</dependency>`,
+      });
+      out.push({
+        label: '本次构建 POM',
+        code: `${gatewayBase()}/maven/${repoName}/${path}/${a}-${fixedVersion}.pom`,
+      });
+      out.push({
+        label: 'Gradle 固定构建',
+        code: `implementation '${g}:${a}:${fixedVersion}'`,
+      });
+    } else {
+      out.push({
+        label: 'Maven 依赖 (pom.xml)',
+        code: dynamicPom,
+      });
+      out.push({
+        label: 'Gradle 依赖',
+        code: `implementation '${g}:${a}:${v}'`,
+      });
+    }
     out.push({
       label: '仓库路径',
       code: `${gatewayBase()}/maven/${repoName}/${path}`,
@@ -66,10 +100,16 @@ export function rawUsage(repoName: string, path: string): UsageSnippet[] {
   ];
 }
 
-export function usageFor(format: Format | string, repoName: string, coordinate: string, tag?: string): UsageSnippet[] {
+export function usageFor(
+  format: Format | string,
+  repoName: string,
+  coordinate: string,
+  tag?: string,
+  mavenOptions?: MavenUsageOptions,
+): UsageSnippet[] {
   switch (format) {
     case 'maven':
-      return mavenUsage(repoName, coordinate);
+      return mavenUsage(repoName, coordinate, mavenOptions);
     case 'oci':
       return ociUsage(repoName, coordinate, tag);
     case 'conan':

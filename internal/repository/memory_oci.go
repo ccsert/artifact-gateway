@@ -15,6 +15,11 @@ func ociTagKey(repositoryID, name, tag string) string {
 	return repositoryID + "\x00" + name + "\x00" + tag
 }
 
+type ociDeletedManifest struct {
+	manifest OCIManifest
+	tags     []string
+}
+
 func (s *MemoryStore) CreateOCIUpload(_ context.Context, upload OCIUpload) (OCIUpload, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -356,6 +361,13 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 		return ErrNotFound
 	}
 	manifest := s.ociManifests[key]
+	tags := make([]string, 0)
+	for tag, target := range s.ociTags {
+		if target == digest && strings.HasPrefix(tag, repositoryID+"\x00"+name+"\x00") {
+			tags = append(tags, strings.TrimPrefix(tag, repositoryID+"\x00"+name+"\x00"))
+		}
+	}
+	s.ociDeletedManifests[key] = ociDeletedManifest{manifest: manifest, tags: tags}
 	delete(s.ociManifests, key)
 	s.ociObjectIntents[manifest.ObjectKey] = OCIObjectIntent{RepositoryID: repositoryID, ObjectKey: manifest.ObjectKey, Digest: manifest.Digest, Size: manifest.Size, CreatedAt: time.Now().UTC()}
 	for tag, target := range s.ociTags {
@@ -366,6 +378,42 @@ func (s *MemoryStore) DeleteOCIManifest(_ context.Context, repositoryID, name, d
 	coordinate := name + "@" + digest
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatOCI)+"\x00"+coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatOCI, Coordinate: coordinate, Digest: digest, TombstonedAt: time.Now().UTC()}
 	return nil
+}
+
+func (s *MemoryStore) RestoreOCIManifest(ctx context.Context, repositoryID, name, digest string) (OCIManifest, error) {
+	key := ociManifestKey(repositoryID, name, digest)
+	s.mu.RLock()
+	deleted, ok := s.ociDeletedManifests[key]
+	s.mu.RUnlock()
+	if !ok {
+		return OCIManifest{}, ErrNotFound
+	}
+	release, err := s.LockOCIObject(ctx, deleted.manifest.ObjectKey)
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	defer release()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	deleted, ok = s.ociDeletedManifests[key]
+	if !ok {
+		return OCIManifest{}, ErrNotFound
+	}
+	intent, ok := s.ociObjectIntents[deleted.manifest.ObjectKey]
+	if !ok || !intent.CollectedAt.IsZero() {
+		return OCIManifest{}, ErrDisabled
+	}
+	s.ociManifests[key] = deleted.manifest
+	for _, tag := range deleted.tags {
+		tagKey := ociTagKey(repositoryID, name, tag)
+		if _, exists := s.ociTags[tagKey]; !exists {
+			s.ociTags[tagKey] = digest
+		}
+	}
+	delete(s.ociObjectIntents, deleted.manifest.ObjectKey)
+	delete(s.ociDeletedManifests, key)
+	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatOCI)+"\x00"+name+"@"+digest)
+	return deleted.manifest, nil
 }
 
 func (s *MemoryStore) GetArtifactTombstone(_ context.Context, repositoryID string, format Format, coordinate string) (ArtifactTombstone, error) {

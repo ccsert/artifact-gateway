@@ -297,6 +297,24 @@ func (s *MemoryStore) ListConanRecipeRevisions(_ context.Context, repositoryID, 
 	return out, nil
 }
 
+func (s *MemoryStore) SearchConanRecipeRevisions(_ context.Context, repositoryID, reference, query string, limit int, after string) ([]ConanRecipeRevision, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	query = strings.ToLower(query)
+	var out []ConanRecipeRevision
+	for _, item := range s.conanRecipes {
+		searchText := strings.ToLower(item.Revision + " " + item.Digest)
+		if item.RepositoryID == repositoryID && item.Reference == reference && item.State == "visible" && item.Revision > after && (query == "" || strings.Contains(searchText, query)) {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Revision < out[j].Revision })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func (s *MemoryStore) ListConanPackageRevisions(_ context.Context, repositoryID, reference, recipeRevision, packageID string) ([]ConanPackageRevision, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

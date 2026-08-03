@@ -279,7 +279,13 @@ export type ArtifactSummary = {
   size?: number;
   contentType?: string;
   createdAt?: string;
+  /**
+   * Snapshot build number; zero for release coordinates.
+   */
   buildNumber?: number;
+  /**
+   * Publisher actor when the format records it.
+   */
   publisher?: string;
 };
 
@@ -379,6 +385,7 @@ export type ConanRecipeRevision = {
 
 export type ConanRecipeRevisionList = {
   items: Array<ConanRecipeRevision>;
+  nextPageToken?: string;
 };
 
 export type ConanPackageRevision = {
@@ -647,6 +654,11 @@ export type ConanReferencePrefix = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+/**
+ * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
+ */
+export type ConanRevisionQuery = string;
 
 export type GetAnonymousAccessPolicyData = {
   body?: never;
@@ -2187,6 +2199,12 @@ export type ListConanRecipeRevisionsData = {
   };
   query: {
     reference: string;
+    /**
+     * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
+     */
+    q?: string;
+    pageSize?: number;
+    pageToken?: string;
   };
   url: "/repositories/{repositoryId}/conan/recipe-revisions";
 };

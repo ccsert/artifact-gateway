@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -427,6 +428,14 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifest_tombstones (repository_id,name,digest,object_key,media_type,size,subject_digest,artifact_type,tags,deleted_at)
+		SELECT m.repository_id,m.name,m.digest,m.object_key,m.media_type,m.size,m.subject_digest,m.artifact_type,COALESCE(array_agg(t.tag ORDER BY t.tag) FILTER (WHERE t.tag IS NOT NULL),'{}'::text[]),now()
+		FROM native_oci_manifests m LEFT JOIN native_oci_tags t ON t.repository_id=m.repository_id AND t.name=m.name AND t.digest=m.digest
+		WHERE m.repository_id::text=$1 AND m.name=$2 AND m.digest=$3
+		GROUP BY m.repository_id,m.name,m.digest,m.object_key,m.media_type,m.size,m.subject_digest,m.artifact_type
+		ON CONFLICT (repository_id,name,digest) DO UPDATE SET object_key=EXCLUDED.object_key,media_type=EXCLUDED.media_type,size=EXCLUDED.size,subject_digest=EXCLUDED.subject_digest,artifact_type=EXCLUDED.artifact_type,tags=EXCLUDED.tags,deleted_at=EXCLUDED.deleted_at`, repositoryID, name, digest); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM native_oci_tags WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest); err != nil {
 		return err
 	}
@@ -444,6 +453,90 @@ func (s *PostgresStore) DeleteOCIManifest(ctx context.Context, repositoryID, nam
 		return ErrNotFound
 	}
 	return tx.Commit()
+}
+
+func (s *PostgresStore) RestoreOCIManifest(ctx context.Context, repositoryID, name, digest string) (OCIManifest, error) {
+	coordinate := name + "@" + digest
+	var manifest OCIManifest
+	var tagsJSON []byte
+	err := s.db.QueryRowContext(ctx, `SELECT repository_id::text,name,digest,object_key,media_type,size,COALESCE(subject_digest,''),artifact_type,array_to_json(tags)
+		FROM native_oci_manifest_tombstones WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest).Scan(
+		&manifest.RepositoryID, &manifest.Name, &manifest.Digest, &manifest.ObjectKey, &manifest.MediaType, &manifest.Size, &manifest.SubjectDigest, &manifest.ArtifactType, &tagsJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Tombstones created before native_oci_manifest_tombstones existed can
+		// still be restored while their object intent has not been collected.
+		rows, queryErr := s.db.QueryContext(ctx, `SELECT object_key,size FROM native_oci_object_intents WHERE repository_id::text=$1 AND digest=$2 AND collected_at IS NULL ORDER BY created_at LIMIT 2`, repositoryID, digest)
+		if queryErr != nil {
+			return OCIManifest{}, queryErr
+		}
+		defer rows.Close()
+		var candidates []OCIObjectIntent
+		for rows.Next() {
+			var candidate OCIObjectIntent
+			candidate.RepositoryID = repositoryID
+			candidate.Digest = digest
+			if scanErr := rows.Scan(&candidate.ObjectKey, &candidate.Size); scanErr != nil {
+				return OCIManifest{}, scanErr
+			}
+			candidates = append(candidates, candidate)
+		}
+		if err = rows.Err(); err != nil {
+			return OCIManifest{}, err
+		}
+		if len(candidates) != 1 {
+			return OCIManifest{}, ErrDisabled
+		}
+		manifest = OCIManifest{RepositoryID: repositoryID, Name: name, Digest: digest, ObjectKey: candidates[0].ObjectKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: candidates[0].Size}
+		tagsJSON = []byte("[]")
+	} else if err != nil {
+		return OCIManifest{}, err
+	}
+	var tags []string
+	if err = json.Unmarshal(tagsJSON, &tags); err != nil {
+		return OCIManifest{}, err
+	}
+	release, err := s.LockOCIObject(ctx, manifest.ObjectKey)
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	defer release()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var collected bool
+	err = tx.QueryRowContext(ctx, `SELECT collected_at IS NOT NULL FROM native_oci_object_intents WHERE repository_id::text=$1 AND object_key=$2 AND digest=$3 FOR UPDATE`, repositoryID, manifest.ObjectKey, digest).Scan(&collected)
+	if errors.Is(err, sql.ErrNoRows) {
+		return OCIManifest{}, ErrNotFound
+	}
+	if err != nil {
+		return OCIManifest{}, err
+	}
+	if collected {
+		return OCIManifest{}, ErrDisabled
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_manifests (repository_id,name,digest,object_key,media_type,size,subject_digest,artifact_type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (repository_id,name,digest) DO NOTHING`, repositoryID, manifest.Name, manifest.Digest, manifest.ObjectKey, manifest.MediaType, manifest.Size, nullableString(manifest.SubjectDigest), manifest.ArtifactType); err != nil {
+		return OCIManifest{}, err
+	}
+	for _, tag := range tags {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_oci_tags (repository_id,name,tag,digest) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, repositoryID, manifest.Name, tag, manifest.Digest); err != nil {
+			return OCIManifest{}, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_oci_object_intents SET claimed_at=now() WHERE repository_id::text=$1 AND object_key=$2 AND digest=$3 AND collected_at IS NULL`, repositoryID, manifest.ObjectKey, digest); err != nil {
+		return OCIManifest{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_oci_manifest_tombstones WHERE repository_id::text=$1 AND name=$2 AND digest=$3`, repositoryID, name, digest); err != nil {
+		return OCIManifest{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='oci' AND coordinate=$2`, repositoryID, coordinate); err != nil {
+		return OCIManifest{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return OCIManifest{}, err
+	}
+	return manifest, nil
 }
 
 func (s *PostgresStore) GetArtifactTombstone(ctx context.Context, repositoryID string, format Format, coordinate string) (ArtifactTombstone, error) {
