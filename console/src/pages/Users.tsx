@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Input, Popconfirm, Select, Space, Switch } from 'antd';
 import { listUsers, createUser, updateUser, deleteUser } from '../client';
 import type { User } from '../client';
-import { PageHeader, Card, DataTable, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
+import { PageHeader, Card, DataTable, Field, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { StateBadge, Badge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
@@ -41,44 +43,54 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
 
   return (
     <>
-      <button onClick={dialog.show} className={btnPrimary}>
-        + 新建用户
-      </button>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setError(null);
+          dialog.show();
+        }}
+      >
+        新建用户
+      </Button>
       <Modal
         open={dialog.open}
         title="新建用户"
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button onClick={submit} disabled={busy || !name.trim() || password.length < 8} className={btnPrimary}>
-              {busy ? '创建中…' : '创建'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={submit} loading={busy} disabled={!name.trim() || password.length < 8}>
+              创建
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-4">
           {error ? <ErrorBanner error={error} /> : null}
           <Field label="用户名">
-            <input className={inputClass} placeholder="alice" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input placeholder="alice" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="密码" hint="至少 8 个字符；创建后无法查看，请妥善保存。">
-            <input
-              type="password"
-              className={inputClass}
+            <Input.Password
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
           <Field label="角色" hint="reader 只读；writer 读写；admin 全部（含用户与密钥管理）。">
-            <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="reader">reader · 只读</option>
-              <option value="writer">writer · 读写</option>
-              <option value="admin">admin · 管理员</option>
-            </select>
+            <Select<Role>
+              className="w-full"
+              value={role}
+              onChange={setRole}
+              options={[
+                { value: 'reader', label: 'reader · 只读' },
+                { value: 'writer', label: 'writer · 读写' },
+                { value: 'admin', label: 'admin · 管理员' },
+              ]}
+            />
           </Field>
         </div>
       </Modal>
@@ -184,12 +196,20 @@ export function UsersPage() {
             <StatCard label="已禁用" value={users.length - activeUsers} sub="无法登录或调用 API" />
           </div>
           <Card>
-          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
-            <input className={`${inputClass} w-56`} placeholder="搜索用户名…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className={`${inputClass} w-auto min-w-28`} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | 'all')}>
-              <option value="all">全部角色</option><option value="reader">reader</option><option value="writer">writer</option><option value="admin">admin</option>
-            </select>
-          </div>
+          <Space wrap className="!flex w-full border-b border-zinc-800/80 px-4 py-3">
+            <Input allowClear prefix={<SearchOutlined />} className="w-72" placeholder="搜索用户名…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Select<Role | 'all'>
+              className="w-36"
+              value={roleFilter}
+              onChange={setRoleFilter}
+              options={[
+                { value: 'all', label: '全部角色' },
+                { value: 'reader', label: 'reader' },
+                { value: 'writer', label: 'writer' },
+                { value: 'admin', label: 'admin' },
+              ]}
+            />
+          </Space>
           {visibleUsers.length === 0 ? <EmptyState title="没有匹配的用户" hint="调整筛选条件后重试" /> : <DataTable columns={['用户名', '角色', '状态', '创建时间', '']}>
             {visibleUsers.map((u) => (
               <tr key={u.id} className="hover:bg-zinc-800/30">
@@ -197,38 +217,52 @@ export function UsersPage() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Badge tone={ROLE_TONE[u.role]}>{u.role}</Badge>
-                    <select
+                    <Select<Role>
+                      size="small"
+                      className="w-28"
                       value={u.role}
+                      loading={busyId === u.id}
                       disabled={busyId === u.id}
-                      onChange={(e) => void changeRole(u, e.target.value as Role)}
-                      className="rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-xs text-zinc-300 disabled:opacity-50"
-                    >
-                      <option value="reader">reader</option>
-                      <option value="writer">writer</option>
-                      <option value="admin">admin</option>
-                    </select>
+                      onChange={(role) => void changeRole(u, role)}
+                      options={[
+                        { value: 'reader', label: 'reader' },
+                        { value: 'writer', label: 'writer' },
+                        { value: 'admin', label: 'admin' },
+                      ]}
+                    />
                   </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <StateBadge state={u.state} />
-                    <button
-                      onClick={() => void toggleState(u)}
-                      disabled={busyId === u.id}
-                      className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+                    <Popconfirm
+                      title={u.state === 'active' ? '确认禁用该用户？' : '确认启用该用户？'}
+                      description={u.state === 'active' ? '禁用后，该用户将无法登录或调用 API。' : '启用后，该用户可以按当前角色重新访问系统。'}
+                      okText={u.state === 'active' ? '禁用' : '启用'}
+                      cancelText="取消"
+                      okButtonProps={{ danger: u.state === 'active', loading: busyId === u.id }}
+                      onConfirm={() => toggleState(u)}
                     >
-                      {u.state === 'active' ? '禁用' : '启用'}
-                    </button>
+                      <Switch
+                        size="small"
+                        checked={u.state === 'active'}
+                        loading={busyId === u.id}
+                        aria-label={u.state === 'active' ? `禁用用户 ${u.name}` : `启用用户 ${u.name}`}
+                        onChange={() => undefined}
+                      />
+                    </Popconfirm>
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(u.createdAt)}</td>
                 <td className="px-4 py-3 text-right">
-                  <button
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
                     onClick={() => setToDelete(u)}
-                    className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
                   >
                     删除
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

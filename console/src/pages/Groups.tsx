@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  DatabaseOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
+import { Button, Input, Segmented, Select, Space, Switch } from 'antd';
+import {
   listGroups,
   createGroup,
   deleteGroup,
@@ -10,7 +19,7 @@ import {
   getGroupCapacity,
 } from '../client';
 import type { Group, Format, Member, Repository } from '../client';
-import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
+import { PageHeader, Card, DataTable, Pagination, Field, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { Badge, FormatBadge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
@@ -51,51 +60,49 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
 
   return (
     <>
-      <button onClick={dialog.show} className={btnPrimary}>
-        + 新建分组
-      </button>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setError(null);
+          dialog.show();
+        }}
+      >
+        新建分组
+      </Button>
       <Modal
         open={dialog.open}
         title="新建分组"
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button onClick={submit} disabled={busy || !name.trim()} className={btnPrimary}>
-              {busy ? '创建中…' : '创建'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={submit} loading={busy} disabled={!name.trim()}>
+              创建
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
           <Field label="分组名称">
-            <input className={`${inputClass} font-mono`} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input className="font-mono" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="格式">
-            <div className="grid grid-cols-4 gap-2">
-              {FORMATS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => {
-                    setFormat(f);
-                    setMemberIds([]);
-                  }}
-                  className={`rounded-md border px-3 py-2 font-mono text-sm ${
-                    format === f
-                      ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+          <Field label="格式" group>
+            <Segmented<Format>
+              block
+              className="font-mono"
+              value={format}
+              options={FORMATS}
+              onChange={(nextFormat) => {
+                setFormat(nextFormat);
+                setMemberIds([]);
+              }}
+            />
           </Field>
-          <Field label="成员仓库" hint="分组按成员顺序（自上而下）解析制品">
+          <Field label="成员仓库" hint="分组按成员顺序（自上而下）解析制品" group>
             {candidates.length === 0 ? (
               <div className="rounded-lg border border-zinc-800 px-2 py-3 text-center text-xs text-zinc-600">
                 该格式下暂无活跃仓库
@@ -104,13 +111,13 @@ function CreateGroupDialog({ repos, onCreated }: { repos: Repository[]; onCreate
               <MemberOrderPicker candidates={candidates} memberIds={memberIds} onChange={setMemberIds} />
             )}
           </Field>
-          <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
-            <input type="checkbox" checked={anonymousRead} onChange={(e) => setAnonymousRead(e.target.checked)} className="mt-0.5" />
-            <span>
-              <span className="block text-sm font-medium text-zinc-200">允许匿名读取</span>
-              <span className="mt-0.5 block text-xs text-zinc-500">Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。</span>
-            </span>
-          </label>
+          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+            <div>
+              <div className="text-sm font-medium text-zinc-200">允许匿名读取</div>
+              <div className="mt-0.5 text-xs text-zinc-500">Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。</div>
+            </div>
+            <Switch checked={anonymousRead} onChange={setAnonymousRead} aria-label="允许分组匿名读取" />
+          </div>
         </div>
       </Modal>
     </>
@@ -123,6 +130,7 @@ function CapacityDialog({ group }: { group: Group }) {
   const [error, setError] = useState<unknown>(null);
   const load = async () => {
     setError(null);
+    setCapacity(null);
     const result = await getGroupCapacity({ path: { groupId: group.id } });
     if (result.error || !result.data) setError(result.error ?? new Error('加载分组容量失败'));
     else setCapacity(result.data);
@@ -130,12 +138,12 @@ function CapacityDialog({ group }: { group: Group }) {
   const formatBytes = (value: number) => value < 1024 ? `${value} B` : `${(value / 1024 / 1024).toFixed(1)} MB`;
   return (
     <>
-      <button className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" onClick={() => { dialog.show(); void load(); }}>容量</button>
+      <Button size="small" type="text" icon={<DatabaseOutlined />} onClick={() => { dialog.show(); void load(); }}>容量</Button>
       <Modal open={dialog.open} onClose={dialog.hide} title={`容量贡献 · ${group.name}`}>
         {error !== null && <ErrorBanner error={error} />}
         {!capacity ? <Loading /> : <DataTable columns={['位置', '成员', '类型', '已用', '对象', '配额']}>
           {capacity.members.map((member) => <tr key={member.repositoryId}>
-            <td className="px-4 py-2 text-zinc-500">{member.position}</td>
+            <td className="px-4 py-2 text-zinc-500">{member.position + 1}</td>
             <td className="px-4 py-2 font-mono text-xs">{member.repositoryId.slice(0, 8)}…</td>
             <td className="px-4 py-2"><Badge tone={member.type === 'proxy' ? 'blue' : 'green'}>{member.type}</Badge></td>
             <td className="px-4 py-2 text-zinc-300">{formatBytes(member.usedBytes)}</td>
@@ -174,43 +182,45 @@ function RenameGroupDialog({ group, onSaved }: { group: Group; onSaved: () => vo
 
   return (
     <>
-      <button
+      <Button
+        size="small"
+        icon={<SettingOutlined />}
         onClick={() => {
           setName(group.name);
           setAnonymousRead(group.anonymousRead);
+          setError(null);
           dialog.show();
         }}
-        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
       >
         设置
-      </button>
+      </Button>
       <Modal
         open={dialog.open}
         title={`设置分组：${group.name}`}
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button onClick={save} disabled={busy || !name.trim()} className={btnPrimary}>
-              {busy ? '保存中…' : '保存'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={save} loading={busy} disabled={!name.trim()}>
+              保存
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
           <Field label="分组名称">
-            <input className={`${inputClass} font-mono`} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input className="font-mono" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
-            <input type="checkbox" checked={anonymousRead} onChange={(e) => setAnonymousRead(e.target.checked)} className="mt-0.5" />
-            <span>
-              <span className="block text-sm font-medium text-zinc-200">允许匿名读取</span>
-              <span className="mt-0.5 block text-xs text-zinc-500">仍需成员 Repository 自身允许匿名读取。</span>
-            </span>
-          </label>
+          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+            <div>
+              <div className="text-sm font-medium text-zinc-200">允许匿名读取</div>
+              <div className="mt-0.5 text-xs text-zinc-500">仍需成员 Repository 自身允许匿名读取。</div>
+            </div>
+            <Switch checked={anonymousRead} onChange={setAnonymousRead} aria-label="允许分组匿名读取" />
+          </div>
         </div>
       </Modal>
     </>
@@ -258,25 +268,26 @@ function MembersDialog({ group, repos, onSaved }: { group: Group; repos: Reposit
 
   return (
     <>
-      <button
+      <Button
+        size="small"
+        icon={<EditOutlined />}
         onClick={open}
-        className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
       >
         编辑成员
-      </button>
+      </Button>
       <Modal
         open={dialog.open}
         title={`编辑成员：${group.name}`}
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button onClick={save} disabled={busy} className={btnPrimary}>
-              {busy ? '保存中…' : '保存'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={save} loading={busy}>
+              保存
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-3">
@@ -294,6 +305,7 @@ export function GroupsPage() {
   const [repos, setRepos] = useState<Repository[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [toDelete, setToDelete] = useState<Group | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -326,7 +338,13 @@ export function GroupsPage() {
 
   const loadMore = async () => {
     if (!nextToken) return;
-    const { data } = await listGroups({ query: { pageSize: 100, pageToken: nextToken } });
+    setLoadingMore(true);
+    const { data, error: err } = await listGroups({ query: { pageSize: 100, pageToken: nextToken } });
+    setLoadingMore(false);
+    if (err) {
+      setError(err);
+      return;
+    }
     setGroups((prev) => [...prev, ...(data?.items ?? [])]);
     setNextToken(data?.nextPageToken);
   };
@@ -339,6 +357,8 @@ export function GroupsPage() {
     if (!err) {
       setToDelete(null);
       void load();
+    } else {
+      setError(err);
     }
   };
 
@@ -378,14 +398,23 @@ export function GroupsPage() {
           <StatCard label="覆盖格式" value={new Set(groups.map((group) => group.format)).size} sub="按同格式仓库解析" />
         </div>
         <Card>
-          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
-            <input className={`${inputClass} w-56`} placeholder="搜索分组名称…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className={`${inputClass} w-auto min-w-28`} value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as Format | 'all')}>
-              <option value="all">全部格式</option>{FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
-            </select>
-          </div>
+          <Space wrap className="!flex w-full border-b border-zinc-800/80 px-4 py-3">
+            <Input allowClear prefix={<SearchOutlined />} className="w-72" placeholder="搜索分组名称…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Select<Format | 'all'>
+              className="w-36"
+              value={formatFilter}
+              onChange={setFormatFilter}
+              options={[
+                { value: 'all', label: '全部格式' },
+                ...FORMATS.map((format) => ({ value: format, label: format })),
+              ]}
+            />
+          </Space>
           {visibleGroups.length === 0 ? <EmptyState title="没有匹配的分组" hint="调整筛选条件后重试" /> :
-          <DataTable columns={['名称', '格式', '访问', '成员（按优先级）', '版本', '']}>
+          <DataTable
+            columns={['名称', '格式', '访问', '成员（按优先级）', '版本', '']}
+            columnClassNames={['', '', '', '', 'whitespace-nowrap', 'whitespace-nowrap']}
+          >
             {visibleGroups.map((g) => (
               <tr key={g.id} className="group hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{g.name}</td>
@@ -407,7 +436,7 @@ export function GroupsPage() {
                             className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300"
                             title={m.repositoryId}
                           >
-                            {m.position}. {repoName(m.repositoryId)} · {repo?.type ?? 'hosted'} · {repo?.anonymousRead ? 'anon' : 'private'}
+                            {m.position + 1}. {repoName(m.repositoryId)} · {repo?.type ?? 'hosted'} · {repo?.anonymousRead ? 'anon' : 'private'}
                           </span>
                         );
                       })}
@@ -420,19 +449,22 @@ export function GroupsPage() {
                     <RenameGroupDialog group={g} onSaved={load} />
                     <MembersDialog group={g} repos={repos} onSaved={load} />
                     <CapacityDialog group={g} />
-                    <button
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
                       onClick={() => setToDelete(g)}
-                      className="rounded px-2 py-1 text-xs text-zinc-600 opacity-0 hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
                     >
                       删除
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>
             ))}
           </DataTable>
           }
-          <Pagination hasMore={!!nextToken} onMore={loadMore} />
+          <Pagination hasMore={!!nextToken} loading={loadingMore} onMore={loadMore} />
         </Card>
         </>
       )}

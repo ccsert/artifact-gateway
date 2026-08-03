@@ -1,3 +1,5 @@
+import { ArrowDownOutlined, ArrowUpOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Tooltip } from 'antd';
 import type { Repository } from '../client';
 
 // 成员排序选择器：左侧候选仓库（点击添加），右侧已选成员（上下移动调序、移除）。
@@ -47,18 +49,20 @@ export function MemberOrderPicker({
             <div className="px-2 py-4 text-center text-xs text-zinc-600">全部已加入</div>
           )}
           {available.map((r) => (
-            <button
+            <Button
               key={r.id}
-              type="button"
+              type="text"
               onClick={() => add(r.id)}
-              className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              block
+              icon={<PlusOutlined />}
+              iconPlacement="end"
+              className="!flex !h-auto !justify-between !px-2.5 !py-1.5 !text-left !text-xs"
             >
               <span className="flex items-center gap-1.5 font-mono">
                 <TypeDot type={r.type} />
                 {r.name}
               </span>
-              <span className="text-zinc-600">+</span>
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -81,32 +85,36 @@ export function MemberOrderPicker({
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-200" title={repoName(id)}>
                 {repoName(id)}
               </span>
-              <button
-                type="button"
-                onClick={() => move(i, -1)}
-                disabled={i === 0}
-                title="上移"
-                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 disabled:opacity-30"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m18 15-6-6-6 6"/></svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => move(i, 1)}
-                disabled={i === memberIds.length - 1}
-                title="下移"
-                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 disabled:opacity-30"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(id)}
-                title="移除"
-                className="rounded p-0.5 text-zinc-500 hover:bg-rose-500/20 hover:text-rose-300"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
+              <Tooltip title="上移">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="上移"
+                  icon={<ArrowUpOutlined />}
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                />
+              </Tooltip>
+              <Tooltip title="下移">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="下移"
+                  icon={<ArrowDownOutlined />}
+                  onClick={() => move(i, 1)}
+                  disabled={i === memberIds.length - 1}
+                />
+              </Tooltip>
+              <Tooltip title="移除">
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="移除"
+                  icon={<CloseOutlined />}
+                  onClick={() => remove(id)}
+                />
+              </Tooltip>
             </div>
           ))}
         </div>

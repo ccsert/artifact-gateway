@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ClearOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Input, Segmented, Select, Space } from 'antd';
 import { Link } from 'react-router-dom';
 import { listRepositories, createRepository, deleteRepository, getRepositoryCapacity } from '../client';
 import type { Repository, Format } from '../client';
-import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
+import { PageHeader, Card, DataTable, Pagination, Field, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, StateBadge, Badge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
@@ -59,82 +61,74 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
 
   return (
     <>
-      <button onClick={dialog.show} className={btnPrimary}>
-        + 新建仓库
-      </button>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setError(null);
+          dialog.show();
+        }}
+      >
+        新建仓库
+      </Button>
       <Modal
         open={dialog.open}
         title="新建仓库"
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button
+            </Button>
+            <Button
+              type="primary"
               onClick={submit}
+              loading={busy}
               disabled={busy || !name.trim() || (type === 'proxy' && (!endpoint.trim() || (needsHosts && !allowedHosts.trim())))}
-              className={btnPrimary}
             >
-              {busy ? '创建中…' : '创建'}
-            </button>
-          </>
+              创建
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label="类型">
-            <div className="grid grid-cols-2 gap-2">
-              {(['hosted', 'proxy'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setType(t)}
-                  className={`rounded-md border px-3 py-2 text-sm transition-colors ${
-                    type === t
-                      ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  {t === 'hosted' ? '托管 (hosted)' : '代理 (proxy)'}
-                </button>
-              ))}
-            </div>
+          <Field label="类型" group>
+            <Segmented<'hosted' | 'proxy'>
+              block
+              value={type}
+              onChange={setType}
+              options={[
+                { value: 'hosted', label: '托管 (hosted)' },
+                { value: 'proxy', label: '代理 (proxy)' },
+              ]}
+            />
             <span className="mt-1 block text-xs text-zinc-600">
               {type === 'hosted' ? '自己托管制品，可推送' : '从上游仓库拉取并缓存'}
             </span>
           </Field>
           <Field label="仓库名称" hint="小写字母、数字与连字符，例如 team-images">
-            <input
-              className={`${inputClass} font-mono`}
+            <Input
+              className="font-mono"
               placeholder="my-repository"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label="格式">
-            <div className="grid grid-cols-4 gap-2">
-              {FORMATS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFormat(f)}
-                  className={`rounded-md border px-3 py-2 font-mono text-sm transition-colors ${
-                    format === f
-                      ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
-                      : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+          <Field label="格式" group>
+            <Segmented<Format>
+              block
+              className="font-mono"
+              value={format}
+              onChange={setFormat}
+              options={FORMATS}
+            />
           </Field>
           {type === 'proxy' && (
             <>
               <Field label="上游地址 endpoint" hint="代理拉取的外部仓库地址">
-                <input
-                  className={`${inputClass} font-mono text-xs`}
+                <Input
+                  className="font-mono text-xs"
                   placeholder={endpointPlaceholder[format]}
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
@@ -144,8 +138,8 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
                 label={`允许主机 allowedHosts${needsHosts ? '（必填）' : '（可选）'}`}
                 hint="逗号分隔的主机名；raw/conan 代理必填"
               >
-                <input
-                  className={`${inputClass} font-mono text-xs`}
+                <Input
+                  className="font-mono text-xs"
                   placeholder="repo1.maven.org"
                   value={allowedHosts}
                   onChange={(e) => setAllowedHosts(e.target.value)}
@@ -201,10 +195,27 @@ export function RepositoriesPage() {
   const loadMore = async () => {
     if (!nextToken) return;
     setLoadingMore(true);
-    const { data } = await listRepositories({ query: { pageSize: 100, pageToken: nextToken } });
-    setLoadingMore(false);
-    setItems((prev) => [...prev, ...(data?.items ?? [])]);
+    const { data, error: err } = await listRepositories({ query: { pageSize: 100, pageToken: nextToken } });
+    if (err) {
+      setLoadingMore(false);
+      setError(err);
+      return;
+    }
+    const nextItems = data?.items ?? [];
+    setItems((prev) => [...prev, ...nextItems]);
     setNextToken(data?.nextPageToken);
+    const activeItems = nextItems.filter((repository) => repository.state === 'active');
+    const capacityResults = await Promise.all(
+      activeItems.map(async (repository) => {
+        const result = await getRepositoryCapacity({ path: { repositoryId: repository.id } });
+        return result.data ? [repository.id, result.data] as const : null;
+      }),
+    );
+    setCapacities((previous) => ({
+      ...previous,
+      ...Object.fromEntries(capacityResults.filter((entry): entry is NonNullable<typeof entry> => entry !== null)),
+    }));
+    setLoadingMore(false);
   };
 
   const confirmDelete = async () => {
@@ -215,6 +226,8 @@ export function RepositoriesPage() {
     if (!err) {
       setToDelete(null);
       void load();
+    } else {
+      setError(err);
     }
   };
 
@@ -244,40 +257,54 @@ export function RepositoriesPage() {
         <StatCard label="代理仓库" value={proxyCount} sub="上游缓存与镜像" />
         <StatCard label="当前占用" value={totalUsedBytes ? formatBytes(totalUsedBytes) : '—'} sub={Object.keys(capacities).length ? `${formatNumber(Object.values(capacities).reduce((sum, value) => sum + value.objectCount, 0))} 个对象` : '容量未启用'} />
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          className={`${inputClass} min-w-56 max-w-xs`}
+      <Space wrap className="mb-4">
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          className="w-72"
           placeholder="搜索名称或类型…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
-        <select className={`${inputClass} w-auto min-w-28`} value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as Format | 'all')}>
-          <option value="all">全部格式</option>
-          {FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
-        </select>
-        <select className={`${inputClass} w-auto min-w-28`} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as Repository['state'] | 'all')}>
-          <option value="all">全部状态</option>
-          <option value="active">active</option>
-          <option value="deleting">deleting</option>
-          <option value="deleted">deleted</option>
-        </select>
+        <Select<Format | 'all'>
+          className="w-36"
+          value={formatFilter}
+          onChange={setFormatFilter}
+          options={[
+            { value: 'all', label: '全部格式' },
+            ...FORMATS.map((format) => ({ value: format, label: format })),
+          ]}
+        />
+        <Select<Repository['state'] | 'all'>
+          className="w-36"
+          value={stateFilter}
+          onChange={setStateFilter}
+          options={[
+            { value: 'all', label: '全部状态' },
+            { value: 'active', label: 'active' },
+            { value: 'deleting', label: 'deleting' },
+            { value: 'deleted', label: 'deleted' },
+          ]}
+        />
         {(filter || formatFilter !== 'all' || stateFilter !== 'all') && (
-          <button className="px-2 text-xs text-zinc-500 hover:text-zinc-200" onClick={() => { setFilter(''); setFormatFilter('all'); setStateFilter('all'); }}>
+          <Button type="text" icon={<ClearOutlined />} onClick={() => { setFilter(''); setFormatFilter('all'); setStateFilter('all'); }}>
             清除筛选
-          </button>
+          </Button>
         )}
-      </div>
+      </Space>
       {error !== null ? (
         <ErrorBanner error={error} onRetry={load} />
       ) : loading ? (
         <Loading />
-      ) : visible.length === 0 ? (
+      ) : items.length === 0 ? (
         <Card>
           <EmptyState title="暂无仓库" hint="点击右上角「新建仓库」创建第一个仓库" />
         </Card>
       ) : (
         <Card>
-          <DataTable columns={['名称', '类型', '格式', '状态', '容量', '配置', 'ID', '']}>
+          {visible.length === 0 ? (
+            <EmptyState title="没有匹配的仓库" hint="调整筛选条件，或继续加载更多仓库" />
+          ) : <DataTable columns={['名称', '类型', '格式', '状态', '容量', '配置', 'ID', '']}>
             {visible.map((r) => {
               const isProxy = r.type === 'proxy';
               return (
@@ -311,18 +338,21 @@ export function RepositoriesPage() {
                     {r.id.slice(0, 8)}…
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
                       onClick={() => setToDelete(r)}
-                      className="rounded px-2 py-1 text-xs text-zinc-600 opacity-0 transition-opacity hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
                     >
                       删除
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               );
             })}
-          </DataTable>
-          <Pagination hasMore={!!nextToken && !filter} loading={loadingMore} onMore={loadMore} />
+          </DataTable>}
+          <Pagination hasMore={!!nextToken} loading={loadingMore} onMore={loadMore} />
         </Card>
       )}
       <ConfirmDialog

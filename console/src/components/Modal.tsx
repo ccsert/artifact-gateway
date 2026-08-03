@@ -1,4 +1,4 @@
-import { Modal as AntdModal } from 'antd';
+import { Button, Modal as AntdModal, Space } from 'antd';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -22,7 +22,7 @@ export function Modal({
       open={open}
       title={title}
       onCancel={onClose}
-      footer={footer}
+      footer={footer ?? null}
       centered
       destroyOnHidden
       width={wide ? 1152 : 520}
@@ -63,23 +63,19 @@ export function ConfirmDialog({
       title={title}
       onClose={onClose}
       footer={
-        <>
-          <button
-            onClick={onClose}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-          >
+        <Space>
+          <Button onClick={onClose} disabled={busy}>
             取消
-          </button>
-          <button
+          </Button>
+          <Button
+            type="primary"
             onClick={onConfirm}
-            disabled={busy}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
-              danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'
-            }`}
+            danger={danger}
+            loading={busy}
           >
-            {busy ? '处理中…' : confirmLabel}
-          </button>
-        </>
+            {confirmLabel}
+          </Button>
+        </Space>
       }
     >
       <div className="text-sm text-zinc-300">{message}</div>

@@ -1,3 +1,5 @@
+import { DownOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
 import type { ReactNode } from 'react';
 
 export function PageHeader({
@@ -102,24 +104,45 @@ export function Pagination({
   if (!hasMore) return null;
   return (
     <div className="flex justify-center border-t border-zinc-800/60 px-4 py-3">
-      <button
+      <Button
+        icon={<DownOutlined />}
         onClick={onMore}
-        disabled={loading}
-        className="rounded-md border border-zinc-700 px-4 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+        loading={loading}
       >
-        {loading ? '加载中…' : '加载更多'}
-      </button>
+        加载更多
+      </Button>
     </div>
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({
+  label,
+  children,
+  hint,
+  group,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+  group?: boolean;
+}) {
+  if (group) {
+    return (
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend className="mb-1.5 block text-xs font-medium text-zinc-400">{label}</legend>
+        {children}
+        {hint && <span className="mt-1 block text-xs text-zinc-600">{hint}</span>}
+      </fieldset>
+    );
+  }
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-zinc-400">{label}</span>
-      {children}
+    <div className="block">
+      <label className="block">
+        <span className="mb-1.5 block text-xs font-medium text-zinc-400">{label}</span>
+        {children}
+      </label>
       {hint && <span className="mt-1 block text-xs text-zinc-600">{hint}</span>}
-    </label>
+    </div>
   );
 }
 
