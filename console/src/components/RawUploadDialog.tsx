@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { UploadOutlined } from '@ant-design/icons';
+import { Button, Input, Space, Upload } from 'antd';
 import { useAuth } from '../lib/auth';
 import { Modal, useDisclosure } from './Modal';
-import { Field, inputClass, btnPrimary, btnSecondary } from './Layout';
+import { Field } from './Layout';
 import { ErrorBanner } from './Feedback';
 import type { Repository } from '../client';
 
@@ -56,36 +58,52 @@ export function RawUploadDialog({ repo, onUploaded }: { repo: Repository; onUplo
 
   return (
     <>
-      <button onClick={dialog.show} className={btnSecondary}>
+      <Button
+        icon={<UploadOutlined />}
+        onClick={() => {
+          setError(null);
+          dialog.show();
+        }}
+      >
         上传
-      </button>
+      </Button>
       <Modal
         open={dialog.open}
         title={`上传到 ${repo.name}`}
         onClose={dialog.hide}
         footer={
-          <>
-            <button onClick={dialog.hide} className={btnSecondary}>
+          <Space>
+            <Button onClick={dialog.hide} disabled={busy}>
               取消
-            </button>
-            <button onClick={submit} disabled={busy || !file} className={btnPrimary}>
-              {busy ? '上传中…' : '上传'}
-            </button>
-          </>
+            </Button>
+            <Button type="primary" onClick={submit} loading={busy} disabled={!file}>
+              上传
+            </Button>
+          </Space>
         }
       >
         <div className="space-y-4">
           {error ? <ErrorBanner error={error} /> : null}
-          <Field label="文件">
-            <input
-              type="file"
-              className={inputClass}
-              onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-            />
+          <Field label="文件" group>
+            <Space>
+              <Upload
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={(selectedFile) => {
+                  pickFile(selectedFile);
+                  return Upload.LIST_IGNORE;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>选择文件</Button>
+              </Upload>
+              <span className="max-w-72 truncate text-xs text-zinc-400" title={file?.name}>
+                {file?.name ?? '尚未选择文件'}
+              </span>
+            </Space>
           </Field>
           <Field label="目标路径" hint="相对于仓库根；留空则用文件名。不要以 / 开头。">
-            <input
-              className={`${inputClass} font-mono`}
+            <Input
+              className="font-mono"
               placeholder="releases/widget.tar"
               value={path}
               onChange={(e) => setPath(e.target.value)}

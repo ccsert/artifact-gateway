@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { DeleteOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons';
+import { Button, Input, Popconfirm, Result, Select, Steps, Upload } from 'antd';
+import type { UploadProps } from 'antd';
 import { createPublishSession, getPublishSession, commitPublishSession } from '../client';
 import type { PublishSession, DeclaredObject } from '../client';
 import { useAuth } from '../lib/auth';
-import { Card, DataTable, Field, inputClass, btnPrimary, btnSecondary } from './Layout';
+import { Card, DataTable, Field } from './Layout';
 import { ErrorBanner } from './Feedback';
 import { StateBadge, Badge } from './Badge';
 import { formatBytes, formatDate, shortDigest } from '../lib/format';
@@ -37,10 +40,9 @@ export function MavenPublishWizard({ repositoryId, onPublished }: { repositoryId
   const [uploading, setUploading] = useState(false);
 
   // 选择文件后计算 digest
-  const addFiles = async (files: FileList | null) => {
-    if (!files) return;
+  const addFiles = async (files: readonly File[]) => {
     const next: StagedFile[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       const digest = `sha256:${await sha256Hex(file)}`;
       next.push({ name: file.name, digest, size: file.size, file, uploaded: false });
     }
@@ -128,54 +130,64 @@ export function MavenPublishWizard({ repositoryId, onPublished }: { repositoryId
   };
 
   const allUploaded = staged.length > 0 && staged.every((f) => f.uploaded);
+  const removeFile = (name: string) => {
+    setStaged((previous) => previous.filter((file) => file.name !== name));
+    if (pomObject === name) setPomObject('');
+  };
+  const beforeUpload: UploadProps['beforeUpload'] = (file, fileList) => {
+    if (file.uid === fileList[0]?.uid) void addFiles(fileList);
+    return Upload.LIST_IGNORE;
+  };
+  const currentStep = step === 'declare' ? 0 : step === 'upload' ? 1 : 2;
 
   return (
     <div className="space-y-5">
       {error !== null && <ErrorBanner error={error} />}
 
-      {/* 步骤指示 */}
-      <div className="flex items-center gap-2 text-xs">
-        {(['declare', 'upload', 'done'] as const).map((s, i) => {
-          const labels = { declare: '1 声明坐标与对象', upload: '2 上传文件', done: '3 完成' };
-          const active = step === s;
-          const passed = (['declare', 'upload', 'done'] as const).indexOf(step) > i;
-          return (
-            <span key={s} className={`flex items-center gap-2 ${i > 0 ? 'before:content-["→"] before:mr-2 before:text-zinc-700' : ''}`}>
-              <span className={active ? 'font-medium text-cyan-300' : passed ? 'text-emerald-400' : 'text-zinc-600'}>
-                {labels[s]}
-              </span>
-            </span>
-          );
-        })}
-      </div>
+      <Steps
+        current={currentStep}
+        responsive={false}
+        size="small"
+        variant="outlined"
+        items={[
+          { title: '声明坐标与对象' },
+          { title: '上传文件' },
+          { title: '完成' },
+        ]}
+      />
 
       {step === 'declare' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Maven 坐标" hint="group:artifact:version，如 com.acme:widget:1.0.0">
-              <input
-                className={`${inputClass} font-mono text-xs`}
+              <Input
+                className="font-mono text-xs"
                 placeholder="com.example:my-lib:1.0.0"
                 value={coordinate}
                 onChange={(e) => setCoordinate(e.target.value)}
               />
             </Field>
             <Field label="POM 对象名" hint="staged 文件中作为 POM 的那个">
-              <input
-                className={`${inputClass} font-mono text-xs`}
-                placeholder="my-lib-1.0.0.pom"
+              <Select
+                showSearch
+                className="w-full font-mono text-xs"
+                placeholder="请先选择 POM 文件"
                 value={pomObject}
-                onChange={(e) => setPomObject(e.target.value)}
+                onChange={setPomObject}
+                options={staged
+                  .filter((file) => file.name.endsWith('.pom'))
+                  .map((file) => ({ value: file.name, label: file.name }))}
               />
             </Field>
           </div>
-          <Field label="发布文件" hint="选择 POM、JAR、源码包等；浏览器会自动计算 sha256">
-            <input
-              type="file"
+          <Field label="发布文件" hint="选择 POM、JAR、源码包等；浏览器会自动计算 sha256" group>
+            <Upload
               multiple
-              onChange={(e) => addFiles(e.target.files)}
-              className="block w-full text-sm text-zinc-400 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
-            />
+              showUploadList={false}
+              beforeUpload={beforeUpload}
+            >
+              <Button icon={<UploadOutlined />}>选择发布文件</Button>
+            </Upload>
           </Field>
           {staged.length > 0 && (
             <Card>
@@ -188,25 +200,29 @@ export function MavenPublishWizard({ repositoryId, onPublished }: { repositoryId
                     </td>
                     <td className="px-4 py-2 text-xs text-zinc-400">{formatBytes(f.size)}</td>
                     <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => setStaged((prev) => prev.filter((x) => x.name !== f.name))}
-                        className="text-xs text-zinc-600 hover:text-rose-400"
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => removeFile(f.name)}
                       >
                         移除
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </DataTable>
             </Card>
           )}
-          <button
+          <Button
+            type="primary"
             onClick={createSession}
-            disabled={busy || !coordinate.trim() || !pomObject || staged.length === 0}
-            className={btnPrimary}
+            loading={busy}
+            disabled={!coordinate.trim() || !pomObject || staged.length === 0}
           >
-            {busy ? '创建会话…' : '创建发布会话'}
-          </button>
+            创建发布会话
+          </Button>
         </div>
       )}
 
@@ -233,27 +249,33 @@ export function MavenPublishWizard({ repositoryId, onPublished }: { repositoryId
             </DataTable>
           </Card>
           <div className="flex gap-2">
-            <button onClick={uploadAll} disabled={uploading || allUploaded} className={btnSecondary}>
-              {uploading ? '上传中…' : allUploaded ? '全部已上传' : '上传全部文件'}
-            </button>
-            <button onClick={commit} disabled={busy || !allUploaded} className={btnPrimary}>
-              {busy ? '提交中…' : '提交发布'}
-            </button>
-            <button onClick={reset} className="ml-auto text-xs text-zinc-600 hover:text-zinc-400">
-              放弃并重新开始
-            </button>
+            <Button icon={<UploadOutlined />} onClick={uploadAll} loading={uploading} disabled={allUploaded}>
+              {allUploaded ? '全部已上传' : '上传全部文件'}
+            </Button>
+            <Button type="primary" icon={<SendOutlined />} onClick={commit} loading={busy} disabled={!allUploaded}>
+              提交发布
+            </Button>
+            <Popconfirm
+              title="确认放弃当前发布？"
+              description="本地选择和会话信息将被清空，已上传的临时对象由服务端过期回收。"
+              okText="放弃发布"
+              cancelText="继续编辑"
+              okButtonProps={{ danger: true }}
+              onConfirm={reset}
+            >
+              <Button type="text" danger className="ml-auto">放弃并重新开始</Button>
+            </Popconfirm>
           </div>
         </div>
       )}
 
       {step === 'done' && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-emerald-300">发布成功</p>
-          <p className="mt-1 font-mono text-xs text-emerald-400/70">{coordinate}</p>
-          <button onClick={reset} className={`${btnPrimary} mt-4`}>
-            再发布一个
-          </button>
-        </div>
+        <Result
+          status="success"
+          title="发布成功"
+          subTitle={<span className="font-mono text-xs">{coordinate}</span>}
+          extra={<Button type="primary" onClick={reset}>再发布一个</Button>}
+        />
       )}
     </div>
   );

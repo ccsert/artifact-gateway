@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react';
+import { LoginOutlined } from '@ant-design/icons';
+import { Alert, Button, Input, Segmented } from 'antd';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { client } from '../client/client.gen';
 import { listRepositories } from '../client';
-import { Field, inputClass, btnPrimary } from '../components/Layout';
+import { Field } from '../components/Layout';
 
 type Mode = 'password' | 'token';
 
@@ -77,7 +79,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-lg font-bold text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-cyan-600 text-lg font-bold text-white">
             AG
           </div>
           <div className="text-center">
@@ -86,30 +88,24 @@ export function LoginPage() {
           </div>
         </div>
 
-        <div className="mb-4 flex rounded-lg border border-zinc-800 p-0.5 text-xs">
-          {(['password', 'token'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={mode === m}
-              onClick={() => {
-                setMode(m);
-                setError('');
-              }}
-              className={`flex-1 rounded-md py-1.5 transition-colors ${
-                mode === m ? 'bg-cyan-500/10 font-medium text-cyan-300' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {m === 'password' ? '账号密码' : '访问令牌'}
-            </button>
-          ))}
-        </div>
+        <Segmented<Mode>
+          block
+          className="mb-4"
+          value={mode}
+          options={[
+            { value: 'password', label: '账号密码' },
+            { value: 'token', label: '访问令牌' },
+          ]}
+          onChange={(nextMode) => {
+            setMode(nextMode);
+            setError('');
+          }}
+        />
 
         {mode === 'password' ? (
-          <form onSubmit={submitPassword} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <form onSubmit={submitPassword} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6">
             <Field label="用户名">
-              <input
-                className={inputClass}
+              <Input
                 placeholder="alice"
                 autoComplete="username"
                 autoFocus
@@ -118,9 +114,7 @@ export function LoginPage() {
               />
             </Field>
             <Field label="密码">
-              <input
-                type="password"
-                className={inputClass}
+              <Input.Password
                 placeholder="••••••••"
                 autoComplete="current-password"
                 value={password}
@@ -128,33 +122,44 @@ export function LoginPage() {
               />
             </Field>
             {error && (
-              <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                {error}
-              </div>
+              <Alert type="error" showIcon title={error} />
             )}
-            <button type="submit" disabled={busy || !username.trim() || !password} className={`${btnPrimary} w-full`}>
-              {busy ? '登录中…' : '登录'}
-            </button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              icon={<LoginOutlined />}
+              loading={busy}
+              disabled={!username.trim() || !password}
+            >
+              登录
+            </Button>
           </form>
         ) : (
-          <form onSubmit={submitToken} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <form onSubmit={submitToken} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6">
             <Field label="访问令牌" hint="静态令牌、OIDC 或 API 密钥的 Bearer；仅保存在本浏览器 localStorage。">
-            <textarea
-              className={`${inputClass} h-28 resize-none font-mono text-xs`}
-              placeholder="粘贴 Bearer Token…"
-              autoFocus
+              <Input.TextArea
+                className="font-mono text-xs"
+                autoSize={{ minRows: 4, maxRows: 8 }}
+                placeholder="粘贴 Bearer Token…"
+                autoFocus
                 value={token}
                 onChange={(e) => setTokenDraft(e.target.value)}
               />
             </Field>
             {error && (
-              <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                {error}
-              </div>
+              <Alert type="error" showIcon title={error} />
             )}
-            <button type="submit" disabled={busy || !token.trim()} className={`${btnPrimary} w-full`}>
-              {busy ? '验证中…' : '登录'}
-            </button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              icon={<LoginOutlined />}
+              loading={busy}
+              disabled={!token.trim()}
+            >
+              验证并登录
+            </Button>
           </form>
         )}
         <div className="mt-5 text-center text-xs text-zinc-600">

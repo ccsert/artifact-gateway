@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { DatabaseOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
+import { Link, useNavigate } from 'react-router-dom';
 import { listRepositories, listGroups, listAudits, getRepositoryCapacity } from '../client';
 import type { Repository, Group, AuditRecord } from '../client';
-import { PageHeader, StatCard, Card, CardHeader, DataTable, btnPrimary } from '../components/Layout';
+import { PageHeader, StatCard, Card, CardHeader, DataTable } from '../components/Layout';
 import { Loading, ErrorBanner, isNotFound } from '../components/Feedback';
 import { FormatBadge, StateBadge } from '../components/Badge';
 import { Donut } from '../components/Donut';
@@ -19,6 +21,7 @@ const FORMAT_COLORS: Record<string, string> = {
 const FORMAT_ORDER = ['oci', 'maven', 'conan', 'raw'] as const;
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const [repos, setRepos] = useState<Repository[] | null>(null);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
@@ -94,9 +97,9 @@ export function DashboardPage() {
         title="总览"
         description="Artifact Gateway 运行状态一览"
         actions={
-          <Link to="/repositories" className={btnPrimary}>
+          <Button type="primary" icon={<DatabaseOutlined />} onClick={() => navigate('/repositories')}>
             管理仓库
-          </Link>
+          </Button>
         }
       />
       <Card className="mb-6 border-zinc-800 bg-zinc-900/70">
@@ -250,7 +253,7 @@ export function DashboardPage() {
           />
           <DataTable columns={['时间', '操作', '结果', 'Actor']}>
             {audits.map((a, i) => (
-              <tr key={a.requestId ?? i} className="hover:bg-zinc-800/30">
+              <tr key={`${a.requestId ?? 'audit'}-${i}`} className="hover:bg-zinc-800/30">
                 <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
                   {formatDate(a.occurredAt)}
                 </td>
