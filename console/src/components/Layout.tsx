@@ -145,13 +145,3 @@ export function Field({
     </div>
   );
 }
-
-export const inputClass =
-  'w-full rounded-md border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/30';
-
-export const btnPrimary =
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md bg-cyan-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50';
-export const btnSecondary =
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md border border-zinc-700 px-3.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50';
-export const btnDanger =
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md bg-rose-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50';

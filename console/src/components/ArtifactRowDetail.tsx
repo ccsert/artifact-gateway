@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { DeleteOutlined } from '@ant-design/icons';
+import { Alert, Button, Popconfirm } from 'antd';
 import { deleteArtifact, deleteConanPackageRevision, listArtifacts, listConanPackageIds, listConanPackageRevisions, listConanRecipeRevisions, listMavenCoordinates } from '../client';
 import { ArtifactDetailView, VersionList } from './ArtifactDetail';
 import type { ArtifactMeta } from './ArtifactDetail';
@@ -85,13 +87,23 @@ export function MavenArtifactDetail({ repoId, repoName, meta, onDeleted }: { rep
               <div className="mt-0.5 truncate font-mono text-xs text-zinc-500" title={effectiveMeta.coordinate}>{effectiveMeta.coordinate}</div>
               {deleteError && <div className="mt-1 text-xs text-rose-300">{deleteError}</div>}
             </div>
-            <button
-              onClick={deleteCurrent}
-              disabled={deleting}
-              className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+            <Popconfirm
+              title="删除当前 Maven 版本？"
+              description="删除后该版本及其可恢复引用将不可见。"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => void deleteCurrent()}
             >
-              {deleting ? '删除中…' : '删除当前版本'}
-            </button>
+              <Button
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                loading={deleting}
+              >
+                删除当前版本
+              </Button>
+            </Popconfirm>
           </div>
           <VersionList title={`发布版本（${ga ?? ''}）`} items={releases} current={currentVersion} onSelect={setSelected} />
           <VersionList title="快照构建" items={snapshots} current={currentVersion} onSelect={setSelected} />
@@ -181,12 +193,36 @@ export function ConanArtifactDetail({ repoId, repoName, meta, managed, canDelete
       meta={meta}
       versions={managed ? (
         <div className="space-y-4">
-          {error && <div className="text-xs text-rose-300">{error}</div>}
+          {error && <Alert type="error" showIcon title={error} />}
           <VersionList title="Recipe revisions" items={recipeRevisions.map((item) => ({ label: item.revision, hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt)}` }))} current={selectedRecipe} onSelect={setSelectedRecipe} />
           {packageRevisions.length > 0 && (
             <div className="overflow-hidden rounded-lg border border-zinc-800">
               <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200">Package revisions</div>
-              {packageRevisions.map((item) => <div key={`${item.recipeRevision}:${item.packageId}:${item.revision}`} className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0"><div className="min-w-0"><div className="font-mono text-xs text-zinc-200">{item.packageId}#{item.revision}</div><div className="mt-0.5 text-[11px] text-zinc-500">{item.digest.slice(0, 18)} · {formatDate(item.createdAt)}</div></div>{canDelete && <button onClick={() => void deletePackage(item)} disabled={deleting === `package:${item.recipeRevision}:${item.packageId}:${item.revision}`} className="shrink-0 rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">删除</button>}</div>)}
+              {packageRevisions.map((item) => {
+                const deletingItem = deleting === `package:${item.recipeRevision}:${item.packageId}:${item.revision}`;
+                return (
+                  <div key={`${item.recipeRevision}:${item.packageId}:${item.revision}`} className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0">
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-zinc-200">{item.packageId}#{item.revision}</div>
+                      <div className="mt-0.5 text-[11px] text-zinc-500">{item.digest.slice(0, 18)} · {formatDate(item.createdAt)}</div>
+                    </div>
+                    {canDelete && (
+                      <Popconfirm
+                        title="删除 package revision？"
+                        description="删除后该二进制包 revision 将不可见。"
+                        okText="删除"
+                        cancelText="取消"
+                        okButtonProps={{ danger: true }}
+                        onConfirm={() => void deletePackage(item)}
+                      >
+                        <Button danger size="small" icon={<DeleteOutlined />} loading={deletingItem}>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -225,13 +261,18 @@ export function RawArtifactDetail({ repoName, meta, onDeleted }: { repoName: str
           <div className="mt-0.5 font-mono text-xs text-zinc-500">{meta.coordinate}</div>
           {deleteError && <div className="mt-1 text-xs text-rose-300">{deleteError}</div>}
         </div>
-        <button
-          onClick={deleteCurrent}
-          disabled={deleting}
-          className="rounded border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+        <Popconfirm
+          title="删除 Raw 文件？"
+          description="删除后该路径将不可见。"
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          onConfirm={() => void deleteCurrent()}
         >
-          {deleting ? '删除中…' : '删除文件'}
-        </button>
+          <Button danger size="small" icon={<DeleteOutlined />} loading={deleting}>
+            删除文件
+          </Button>
+        </Popconfirm>
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DeleteOutlined } from '@ant-design/icons';
+import { Button, Popconfirm, Select } from 'antd';
 import { useAuth } from '../lib/auth';
 import { Loading, ErrorBanner } from './Feedback';
 import { Badge } from './Badge';
@@ -126,6 +128,7 @@ export function OciImageDetail({
   const loadManifest = useCallback(
     async (tag: string) => {
       setManifestLoading(true);
+      setError(null);
       setManifest(null);
       setConfig(null);
       try {
@@ -154,8 +157,8 @@ export function OciImageDetail({
   }, [selectedTag, loadManifest]);
 
   if (loading) return <Loading label="加载镜像详情…" />;
-  if (error !== null) return <ErrorBanner error={error} />;
-  if (!tags || tags.length === 0)
+  if (!tags) return <ErrorBanner error={error ?? new Error('读取镜像标签失败')} />;
+  if (tags.length === 0)
     return <p className="py-6 text-center text-sm text-zinc-500">该镜像暂无标签</p>;
 
   const totalSize = (manifest?.layers ?? []).reduce((n, l) => n + l.size, 0) + (manifest?.config?.size ?? 0);
@@ -185,30 +188,40 @@ export function OciImageDetail({
 
   return (
     <div className="space-y-4">
+      {error !== null && (
+        <ErrorBanner
+          error={error}
+          onRetry={() => {
+            if (selectedTag) void loadManifest(selectedTag);
+          }}
+        />
+      )}
       {/* 标签选择 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs text-zinc-500">标签:</span>
-        {tags.map((t) => (
-          <button
-            key={t}
-            onClick={() => setSelectedTag(t)}
-            className={`rounded-full border px-2.5 py-0.5 font-mono text-[11px] ${
-              selectedTag === t
-                ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-300'
-                : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="flex items-center gap-3">
+        <label className="shrink-0 text-xs text-zinc-500" htmlFor="oci-tag-select">标签</label>
+        <Select
+          id="oci-tag-select"
+          className="min-w-0 flex-1 font-mono text-xs"
+          showSearch={{ optionFilterProp: 'label' }}
+          value={selectedTag ?? undefined}
+          options={tags.map((tag) => ({ value: tag, label: tag }))}
+          onChange={setSelectedTag}
+          placeholder="搜索并选择标签"
+          listHeight={280}
+        />
         {selectedTag && (
-          <button
-            onClick={deleteTag}
-            disabled={deleting}
-            className="ml-auto rounded border border-rose-500/40 px-2.5 py-0.5 text-[11px] text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+          <Popconfirm
+            title="删除当前镜像标签？"
+            description={`将删除 ${selectedTag} 的 manifest 引用。`}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => void deleteTag()}
           >
-            {deleting ? '删除中…' : `删除标签 ${selectedTag}`}
-          </button>
+            <Button danger size="small" icon={<DeleteOutlined />} loading={deleting}>
+              删除标签
+            </Button>
+          </Popconfirm>
         )}
       </div>
 

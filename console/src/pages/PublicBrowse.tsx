@@ -1,10 +1,19 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Select } from "antd";
+import {
+  ArrowLeftOutlined,
+  CheckOutlined,
+  CopyOutlined,
+  DownOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+  UpOutlined,
+} from "@ant-design/icons";
+import { Button, Input, Select, Tooltip } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { listConanRecipeRevisions, searchRepositoryArtifacts } from "../client";
 import type { ArtifactSummary } from "../client";
-import { Card, DataTable, inputClass, btnPrimary } from "../components/Layout";
+import { Card, DataTable } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
@@ -303,8 +312,10 @@ function ConanGroupTable({
                 {selectedRevisionItem?.revision ?? (expanded ? "读取中…" : "展开后加载")}
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-right">
-                <button
-                  type="button"
+                <Button
+                  type="text"
+                  size="small"
+                  icon={expanded ? <UpOutlined /> : <DownOutlined />}
                   onClick={() => {
                     if (expanded) {
                       onCollapse();
@@ -316,22 +327,21 @@ function ConanGroupTable({
                     if (!revisionPages[selectedReference]) onLoadRevisions(selectedReference);
                     onOpenArtifact(selectedReference, selectedRevisionValue || undefined);
                   }}
-                  className="rounded px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
                 >
                   {expanded ? "收起" : "选择版本"}
-                </button>
-                <a href={versionHref} className="ml-1 rounded px-2 py-1 text-[11px] text-cyan-300 hover:bg-zinc-800">
+                </Button>
+                <Button type="link" size="small" icon={<LinkOutlined />} href={versionHref}>
                   {selectedRevisionValue ? "打开版本" : "打开"}
-                </a>
-                <button
-                  type="button"
-                  title="复制 Conan 包标识"
-                  aria-label={`复制 ${group.key}`}
-                  onClick={() => onCopyCoordinate(group.key)}
-                  className="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
-                >
-                  {copiedCoordinate === group.key ? "✓" : "⧉"}
-                </button>
+                </Button>
+                <Tooltip title={copiedCoordinate === group.key ? "已复制" : "复制 Conan 包标识"}>
+                  <Button
+                    type="text"
+                    size="small"
+                    aria-label={`复制 ${group.key}`}
+                    icon={copiedCoordinate === group.key ? <CheckOutlined /> : <CopyOutlined />}
+                    onClick={() => onCopyCoordinate(group.key)}
+                  />
+                </Tooltip>
               </td>
             </tr>
             {expanded && (
@@ -368,26 +378,19 @@ function ConanGroupTable({
                         <span className="text-[11px] text-zinc-600">{visibleRevisions.length}/{revisions.length}</span>
                       </div>
                       <div className="mt-1.5 flex gap-2">
-                        <input
-                          className={`${inputClass} min-w-0 flex-1 font-mono text-xs`}
+                        <Input
+                          className="min-w-0 flex-1 font-mono text-xs"
                           placeholder="输入 revision 或 digest"
                           value={versionFilter}
                           onChange={(event) => onFilterChange(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              onLoadRevisions(selectedReference, versionFilter);
-                            }
-                          }}
+                          onPressEnter={() => onLoadRevisions(selectedReference, versionFilter)}
                         />
-                        <button
-                          type="button"
-                          disabled={page?.loading === true}
+                        <Button
+                          loading={page?.loading === true}
                           onClick={() => onLoadRevisions(selectedReference, versionFilter)}
-                          className="shrink-0 rounded-md border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
                         >
                           搜索
-                        </button>
+                        </Button>
                       </div>
                       {page?.error && <div className="mt-2 text-[11px] text-rose-300">{page.error}</div>}
                       <SearchableVersionSelect
@@ -410,24 +413,25 @@ function ConanGroupTable({
                         }}
                       />
                       {page?.nextPageToken && (
-                        <button
-                          type="button"
-                          disabled={page.loading}
+                        <Button
+                          block
+                          size="small"
+                          loading={page.loading}
                           onClick={() => onLoadRevisions(selectedReference, page.query, page.nextPageToken)}
-                          className="mt-2 w-full rounded-md border border-zinc-800 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-50"
+                          className="mt-2"
                         >
                           {page.loading ? "加载中…" : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
-                        </button>
+                        </Button>
                       )}
                       {selectedRevisionItem ? (
                         <>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-xs text-zinc-100">{selectedReference}</span>
                             <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">{selectedRevisionItem.revision}</span>
-                            <a href={versionHref} className="text-[11px] text-cyan-300 hover:text-cyan-200">打开版本页</a>
-                            <button type="button" onClick={() => onCopyPageLink(versionHref)} className="text-[11px] text-zinc-500 hover:text-cyan-300">
+                            <Button type="link" size="small" icon={<LinkOutlined />} href={versionHref}>打开版本页</Button>
+                            <Button type="link" size="small" onClick={() => onCopyPageLink(versionHref)}>
                               {copiedCoordinate === versionHref ? "链接已复制" : "复制链接"}
-                            </button>
+                            </Button>
                           </div>
                           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
                             <MetadataItem label="Conan reference" value={selectedReference} mono />
@@ -800,23 +804,20 @@ export function PublicBrowsePage() {
                 {selectedRepository.name}
               </span>
               <FormatBadge format={selectedRepository.format} />
-              <button
-                onClick={() => setParams({})}
-                className="ml-auto text-xs text-zinc-500 hover:text-cyan-300"
-              >
+              <Button type="link" size="small" icon={<ArrowLeftOutlined />} className="ml-auto" onClick={() => setParams({})}>
                 返回公开仓库
-              </button>
+              </Button>
             </div>
           )}
           {repositoryId && (
             <form onSubmit={submit} className="mt-5 flex items-center gap-2">
-              <input
-                className={`${inputClass} min-w-0 flex-1 font-mono text-xs`}
+              <Input
+                className="min-w-0 flex-1 font-mono text-xs"
                 placeholder="坐标、路径或名称前缀（可选）"
                 value={queryDraft}
                 onChange={(event) => setQueryDraft(event.target.value)}
               />
-              <button className={`${btnPrimary} shrink-0 whitespace-nowrap`}>搜索</button>
+              <Button type="primary" htmlType="submit" className="shrink-0 whitespace-nowrap">搜索</Button>
             </form>
           )}
         </Card>
@@ -850,9 +851,9 @@ export function PublicBrowsePage() {
                 title="公开仓库不存在或不可见"
                 hint="返回公开仓库目录，选择一个已启用匿名读取的仓库。"
                 action={
-                  <button className={btnPrimary} onClick={() => setParams({})}>
+                  <Button type="primary" onClick={() => setParams({})}>
                     返回目录
-                  </button>
+                  </Button>
                 }
               />
             ) : !repositoryId ? (
@@ -864,10 +865,10 @@ export function PublicBrowsePage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {repositories.map((repository) => (
-                    <button
+                    <Link
                       key={repository.id}
-                      onClick={() => setParams({ repository: repository.id })}
-                      className="text-left"
+                      to={`/browse?repository=${encodeURIComponent(repository.id)}`}
+                      className="block text-left"
                     >
                       <Card className="h-full border-zinc-800 px-4 py-4 transition-colors hover:border-cyan-500/50 hover:bg-zinc-900">
                         <div className="flex items-center justify-between gap-3">
@@ -889,7 +890,7 @@ export function PublicBrowsePage() {
                           浏览制品
                         </div>
                       </Card>
-                    </button>
+                    </Link>
                   ))}
                 </div>
               )
@@ -994,8 +995,10 @@ export function PublicBrowsePage() {
                             </td>
                             <td />
                             <td className="px-3 py-2 text-right">
-                              <button
-                                type="button"
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={expanded ? <UpOutlined /> : <DownOutlined />}
                                 onClick={() => {
                                   if (expanded) {
                                     setExpandedMavenGroup(null);
@@ -1005,10 +1008,9 @@ export function PublicBrowsePage() {
                                   setExpandedMavenGroup(group.key);
                                   setSelectedMavenVersion(mavenVersionKey(latest, 0));
                                 }}
-                                className="rounded px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
                               >
                                 {expanded ? "收起" : "选择版本"}
-                              </button>
+                              </Button>
                             </td>
                           </tr>
                           {expanded && (
@@ -1068,17 +1070,20 @@ export function PublicBrowsePage() {
                                           {selectedVersion.buildNumber}
                                         </span>
                                       ) : null}
-                                      <a
+                                      <Button
+                                        type="link"
+                                        size="small"
+                                        icon={<LinkOutlined />}
                                         href={artifactHref(
                                           selectedVersion.coordinate,
                                           selectedVersion.buildNumber,
                                         )}
-                                        className="text-[11px] text-cyan-300 hover:text-cyan-200"
                                       >
                                         打开版本页
-                                      </a>
-                                      <button
-                                        type="button"
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        size="small"
                                         onClick={() =>
                                           void copyPageLink(
                                             artifactHref(
@@ -1087,7 +1092,6 @@ export function PublicBrowsePage() {
                                             ),
                                           )
                                         }
-                                        className="text-[11px] text-zinc-500 hover:text-cyan-300"
                                       >
                                         {copiedCoordinate ===
                                         artifactHref(
@@ -1096,7 +1100,7 @@ export function PublicBrowsePage() {
                                         )
                                           ? "链接已复制"
                                           : "复制链接"}
-                                      </button>
+                                      </Button>
                                     </div>
                                     <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-600">
                                       <span>
@@ -1381,8 +1385,10 @@ export function PublicBrowsePage() {
                               </td>
                             )}
                             <td className="whitespace-nowrap px-3 py-2 text-right">
-                              <button
-                                type="button"
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={expanded ? <UpOutlined /> : <DownOutlined />}
                                 title={
                                   isVersioned ? "选择版本" : "查看使用方式"
                                 }
@@ -1408,39 +1414,39 @@ export function PublicBrowsePage() {
                                     }
                                   })()
                                 }
-                                className="mr-1 rounded px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
                               >
                                 {expanded
                                   ? "收起"
                                   : isVersioned
                                     ? "选择版本"
                                     : "使用方式"}
-                              </button>
-                              <a
+                              </Button>
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<LinkOutlined />}
                                 href={
                                   isVersioned
                                     ? selectedProtocolHref
                                     : artifactHref(item.coordinate)
                                 }
-                                className={`mr-1 rounded px-2 py-1 text-[11px] text-cyan-300 hover:bg-zinc-800 ${isVersioned ? "hidden sm:inline" : ""}`}
+                                className={isVersioned ? "hidden sm:inline-flex" : ""}
                               >
                                 {isVersioned && selectedProtocolVersionItem
                                   ? "打开版本"
                                   : "打开"}
-                              </a>
-                              <button
-                                type="button"
-                                title="复制制品坐标"
+                              </Button>
+                              <Tooltip title={copiedCoordinate === item.coordinate ? "已复制" : "复制制品坐标"}>
+                                <Button
+                                type="text"
+                                size="small"
                                 aria-label={`复制 ${item.coordinate}`}
                                 onClick={() =>
                                   void copyCoordinate(item.coordinate)
                                 }
-                                className="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
-                              >
-                                {copiedCoordinate === item.coordinate
-                                  ? "✓"
-                                  : "⧉"}
-                              </button>
+                                icon={copiedCoordinate === item.coordinate ? <CheckOutlined /> : <CopyOutlined />}
+                              />
+                              </Tooltip>
                             </td>
                           </tr>
                           {expanded && isVersioned && (
@@ -1461,38 +1467,32 @@ export function PublicBrowsePage() {
                                     </div>
                                     {isConan && (
                                       <div className="mt-1.5 flex gap-2">
-                                        <input
-                                          className={`${inputClass} min-w-0 flex-1 font-mono text-xs`}
+                                        <Input
+                                          className="min-w-0 flex-1 font-mono text-xs"
                                           placeholder="输入 revision 或 digest"
                                           value={protocolVersionFilter}
                                           onChange={(event) => setProtocolVersionFilter(event.target.value)}
-                                          onKeyDown={(event) => {
-                                            if (event.key === "Enter") {
-                                              event.preventDefault();
-                                              void loadConanRevisions(item.coordinate, protocolVersionFilter);
-                                            }
-                                          }}
+                                          onPressEnter={() => void loadConanRevisions(item.coordinate, protocolVersionFilter)}
                                         />
-                                        <button
-                                          type="button"
-                                          disabled={protocolVersionsLoading}
+                                        <Button
+                                          loading={protocolVersionsLoading}
                                           onClick={() => void loadConanRevisions(item.coordinate, protocolVersionFilter)}
-                                          className="rounded-md border border-zinc-700 px-2.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
                                         >
                                           搜索
-                                        </button>
+                                        </Button>
                                       </div>
                                     )}
                                     {protocolVersionsError && (
                                       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-rose-300">
                                         <span>{protocolVersionsError}</span>
-                                        <button
-                                          type="button"
+                                        <Button
+                                          type="link"
+                                          size="small"
+                                          icon={<ReloadOutlined />}
                                           onClick={() => isOci ? void loadOciTags(item.coordinate) : void loadConanRevisions(item.coordinate, protocolVersionFilter)}
-                                          className="text-zinc-400 hover:text-zinc-200"
                                         >
                                           重试
-                                        </button>
+                                        </Button>
                                       </div>
                                     )}
                                     <label className={`${isConan ? "mt-3 " : "mt-1.5 "}mb-1.5 block text-[11px] font-medium text-zinc-500`}>
@@ -1538,16 +1538,17 @@ export function PublicBrowsePage() {
                                       }}
                                     />
                                     {nextProtocolPage && (
-                                      <button
-                                        type="button"
-                                        disabled={protocolVersionsLoading}
+                                      <Button
+                                        block
+                                        size="small"
+                                        loading={protocolVersionsLoading}
                                         onClick={() => isOci
                                           ? void loadOciTags(item.coordinate, nextProtocolPage)
                                           : void loadConanRevisions(item.coordinate, conanPage?.query ?? protocolVersionFilter, nextProtocolPage)}
-                                        className="mt-2 w-full rounded-md border border-zinc-800 py-1.5 text-[11px] text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-50"
+                                        className="mt-2"
                                       >
                                         {protocolVersionsLoading ? "加载中…" : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
-                                      </button>
+                                      </Button>
                                     )}
                                     <p className="mt-2 text-[11px] leading-5 text-zinc-600">
                                       每次最多读取 {VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。
@@ -1565,26 +1566,28 @@ export function PublicBrowsePage() {
                                           >
                                             {selectedProtocolVersionItem.label}
                                           </span>
-                                          <a
+                                          <Button
+                                            type="link"
+                                            size="small"
+                                            icon={<LinkOutlined />}
                                             href={selectedProtocolHref}
-                                            className="text-[11px] text-cyan-300 hover:text-cyan-200"
                                           >
                                             打开版本页
-                                          </a>
-                                          <button
-                                            type="button"
+                                          </Button>
+                                          <Button
+                                            type="link"
+                                            size="small"
                                             onClick={() =>
                                               void copyPageLink(
                                                 selectedProtocolHref,
                                               )
                                             }
-                                            className="text-[11px] text-zinc-500 hover:text-cyan-300"
                                           >
                                             {copiedCoordinate ===
                                             selectedProtocolHref
                                               ? "链接已复制"
                                               : "复制链接"}
-                                          </button>
+                                          </Button>
                                         </div>
                                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
                                           <MetadataItem
@@ -1767,15 +1770,15 @@ function UsageSnippetBlock({
         <span className="text-[11px] font-medium text-zinc-400">
           {snippet.label}
         </span>
-        <button
-          type="button"
-          title="复制使用方式"
-          aria-label={`复制${snippet.label}`}
-          onClick={onCopy}
-          className="shrink-0 rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-cyan-300"
-        >
-          {copied ? "✓" : "⧉"}
-        </button>
+        <Tooltip title={copied ? "已复制" : "复制使用方式"}>
+          <Button
+            type="text"
+            size="small"
+            aria-label={`复制${snippet.label}`}
+            onClick={onCopy}
+            icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+          />
+        </Tooltip>
       </div>
       <pre
         className={`max-w-full overflow-x-auto whitespace-pre font-mono text-[11px] leading-5 text-cyan-100 ${compact ? "max-h-24" : ""}`}

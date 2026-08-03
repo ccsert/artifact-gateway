@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
+import { Button, Collapse, Select, Tooltip } from 'antd';
 import { usageFor } from '../lib/usage';
 import type { UsageSnippet } from '../lib/usage';
 import { Badge } from './Badge';
@@ -7,20 +9,23 @@ import { formatBytes, formatDate, shortDigest } from '../lib/format';
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* ignore */
-        }
-      }}
-      className="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-    >
-      {copied ? '已复制 ✓' : '复制'}
-    </button>
+    <Tooltip title={copied ? '已复制' : '复制'}>
+      <Button
+        type="text"
+        size="small"
+        aria-label={copied ? '已复制' : '复制'}
+        icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            /* ignore */
+          }
+        }}
+      />
+    </Tooltip>
   );
 }
 
@@ -109,16 +114,23 @@ export function ArtifactDetailView({
 
       {/* 使用方法 */}
       {snippets.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-sm font-medium text-zinc-200 hover:text-cyan-300">
-            使用方法 <span className="text-xs text-zinc-600 group-open:hidden">（展开）</span>
-          </summary>
-          <div className="mt-2 space-y-2">
-            {snippets.map((s) => (
-              <Snippet key={s.label} snippet={s} />
-            ))}
-          </div>
-        </details>
+        <Collapse
+          ghost
+          size="small"
+          items={[
+            {
+              key: 'usage',
+              label: '使用方法',
+              children: (
+                <div className="space-y-2">
+                  {snippets.map((s) => (
+                    <Snippet key={s.label} snippet={s} />
+                  ))}
+                </div>
+              ),
+            },
+          ]}
+        />
       )}
 
       {/* 版本列表（由父组件提供） */}
@@ -154,9 +166,6 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-const COLLAPSE_THRESHOLD = 8;
-const COLLAPSED_COUNT = 5;
-
 export function VersionList({
   title,
   items,
@@ -168,76 +177,39 @@ export function VersionList({
   current?: string;
   onSelect?: (label: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [filter, setFilter] = useState('');
-
   const sorted = [...items].sort((x, y) => compareVersions(x.label, y.label));
-  const filtered = filter ? sorted.filter((v) => v.label.toLowerCase().includes(filter.toLowerCase())) : sorted;
-  const collapsible = !filter && filtered.length > COLLAPSE_THRESHOLD;
-  const shown = collapsible && !expanded ? filtered.slice(0, COLLAPSED_COUNT) : filtered;
 
   if (items.length === 0) return null;
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-zinc-200">
-          {title} <Badge tone="zinc">{items.length}</Badge>
-        </div>
-        {items.length > COLLAPSE_THRESHOLD && (
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="过滤版本…"
-            className="w-36 rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-cyan-500/60"
-          />
-        )}
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+        {title} <Badge tone="zinc">{items.length}</Badge>
       </div>
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
-        <table className="w-full text-left">
-          <tbody className="divide-y divide-zinc-800/60">
-            {shown.map((v, idx) => {
-              const active = v.active || v.label === current;
-              const isLatest = !filter && idx === 0;
-              return (
-                <tr
-                  key={v.label}
-                  onClick={() => onSelect?.(v.label)}
-                  className={`cursor-pointer transition-colors ${
-                    active ? 'bg-cyan-500/10' : 'hover:bg-zinc-800/40'
-                  }`}
-                >
-                  <td className="px-3 py-2">
-                    <span className={`font-mono text-xs ${active ? 'font-medium text-cyan-300' : 'text-zinc-200'}`}>
-                      {v.label}
-                    </span>
-                    {isLatest && (
-                      <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-400">
-                        最新
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right text-xs text-zinc-500">{v.hint ?? ''}</td>
-                </tr>
-              );
-            })}
-            {shown.length === 0 && (
-              <tr>
-                <td className="px-3 py-4 text-center text-xs text-zinc-600" colSpan={2}>
-                  无匹配版本
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {collapsible && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-1.5 text-xs text-zinc-500 hover:text-cyan-300"
-        >
-          {expanded ? '收起 ▲' : `显示全部 ${filtered.length} 个版本 ▼`}
-        </button>
-      )}
+      <Select
+        className="w-full"
+        showSearch={{
+          optionFilterProp: 'label',
+          filterOption: (input, option) => {
+            const item = sorted.find((entry) => entry.label === option?.value);
+            return `${item?.label ?? ''} ${item?.hint ?? ''}`.toLowerCase().includes(input.toLowerCase());
+          },
+        }}
+        value={current && sorted.some((item) => item.label === current) ? current : undefined}
+        placeholder="搜索并选择版本"
+        options={sorted.map((item) => ({ value: item.label, label: item.label }))}
+        optionRender={(option) => {
+          const item = sorted.find((entry) => entry.label === option.value);
+          return (
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-mono text-xs">{item?.label ?? option.label}</span>
+              {item?.hint && <span className="truncate text-[11px] text-zinc-500">{item.hint}</span>}
+            </div>
+          );
+        }}
+        onChange={(value) => onSelect?.(value)}
+        notFoundContent="没有匹配版本"
+        listHeight={280}
+      />
     </div>
   );
 }
