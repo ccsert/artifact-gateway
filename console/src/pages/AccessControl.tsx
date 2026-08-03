@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAnonymousAccessPolicy, listRepositories, listGrants, replaceAnonymousAccessPolicy } from '../client';
 import type { AnonymousAccessPolicy, Repository, Grant } from '../client';
-import { PageHeader, Card, CardHeader, DataTable, inputClass } from '../components/Layout';
+import { PageHeader, Card, CardHeader, DataTable, inputClass, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, Badge } from '../components/Badge';
 import { useAuth } from '../lib/auth';
@@ -39,6 +39,7 @@ export function AccessControlPage() {
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState('');
   const [repoFilter, setRepoFilter] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'read' | 'write' | 'admin'>('all');
   const [anonymousPolicy, setAnonymousPolicy] = useState<AnonymousAccessPolicy | null>(null);
   const [anonymousPolicyError, setAnonymousPolicyError] = useState<unknown>(null);
   const [savingAnonymousPolicy, setSavingAnonymousPolicy] = useState(false);
@@ -124,7 +125,15 @@ export function AccessControlPage() {
     (r) =>
       (!principalFilter || r.principal.toLowerCase().includes(principalFilter.toLowerCase())) &&
       (!repoFilter || r.repositoryName.toLowerCase().includes(repoFilter.toLowerCase())),
-  );
+  ).filter((r) => {
+    const scope = scopeLabel(r.scopes).label;
+    return scopeFilter === 'all' || scope === scopeFilter || (scopeFilter === 'write' && scope.includes('write'));
+  });
+
+  const grants = rows ?? [];
+  const principalCount = new Set(grants.map((grant) => grant.principal)).size;
+  const adminCount = grants.filter((grant) => grant.scopes.includes('repositories:admin')).length;
+  const writeCount = grants.filter((grant) => grant.scopes.includes('repositories:write') && !grant.scopes.includes('repositories:admin')).length;
 
   return (
     <div>
@@ -132,6 +141,12 @@ export function AccessControlPage() {
         title="访问控制"
         description="跨仓库的授权总览与角色能力说明。逐仓库的细粒度授权在各仓库的「访问授权」Tab 编辑。"
       />
+
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="授权主体" value={principalCount} sub="拥有逐仓库授权的身份" />
+        <StatCard label="写入权限" value={writeCount} sub="可发布或变更制品" />
+        <StatCard label="管理员权限" value={adminCount} sub={adminCount > 0 ? '需要定期复核' : '暂无逐仓库管理员授权'} />
+      </div>
 
       <Card className="mb-6 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -149,7 +164,7 @@ export function AccessControlPage() {
               onClick={() => void updateAnonymousPolicy(!anonymousPolicy.enabled)}
               className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${anonymousPolicy.enabled ? 'bg-cyan-600' : 'bg-zinc-700'}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${anonymousPolicy.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${anonymousPolicy.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           ) : role === 'admin' ? (
             <span className="text-xs text-zinc-500">加载中…</span>
@@ -188,6 +203,17 @@ export function AccessControlPage() {
             value={repoFilter}
             onChange={(e) => setRepoFilter(e.target.value)}
           />
+          <select className={`${inputClass} w-auto min-w-28`} value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value as typeof scopeFilter)}>
+            <option value="all">全部权限</option>
+            <option value="read">只读</option>
+            <option value="write">写入</option>
+            <option value="admin">管理员</option>
+          </select>
+          {(principalFilter || repoFilter || scopeFilter !== 'all') && (
+            <button className="px-2 text-xs text-zinc-500 hover:text-zinc-200" onClick={() => { setPrincipalFilter(''); setRepoFilter(''); setScopeFilter('all'); }}>
+              清除筛选
+            </button>
+          )}
         </div>
         {error ? (
           <div className="px-4 py-4">
@@ -220,6 +246,7 @@ export function AccessControlPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={scope.tone}>{scope.label}</Badge>
+                    {scope.label === 'admin' && <span className="ml-2 text-[10px] text-rose-300">高权限</span>}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{r.resourcePrefix || '—'}</td>
                   <td className="px-4 py-2.5 text-right">

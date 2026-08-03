@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { listUsers, createUser, updateUser, deleteUser } from '../client';
 import type { User } from '../client';
-import { PageHeader, Card, DataTable, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, DataTable, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { StateBadge, Badge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
@@ -92,6 +92,8 @@ export function UsersPage() {
   const [toDelete, setToDelete] = useState<User | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
 
   const load = useCallback(async () => {
     setError(null);
@@ -152,6 +154,13 @@ export function UsersPage() {
     }
   };
 
+  const visibleUsers = (users ?? []).filter((user) =>
+    (!filter || user.name.toLowerCase().includes(filter.toLowerCase())) &&
+    (roleFilter === 'all' || user.role === roleFilter),
+  );
+  const activeUsers = (users ?? []).filter((user) => user.state === 'active').length;
+  const adminUsers = (users ?? []).filter((user) => user.role === 'admin').length;
+
   return (
     <div>
       <PageHeader
@@ -168,9 +177,21 @@ export function UsersPage() {
           <EmptyState title="暂无用户" hint="创建用户后即可用用户名密码登录控制台" />
         </Card>
       ) : (
-        <Card>
-          <DataTable columns={['用户名', '角色', '状态', '创建时间', '']}>
-            {users.map((u) => (
+        <>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="用户总数" value={users.length} sub={`${activeUsers} 个有效账户`} />
+            <StatCard label="管理员" value={adminUsers} sub={adminUsers ? '具备全局治理权限' : '暂无管理员账户'} />
+            <StatCard label="已禁用" value={users.length - activeUsers} sub="无法登录或调用 API" />
+          </div>
+          <Card>
+          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
+            <input className={`${inputClass} w-56`} placeholder="搜索用户名…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <select className={`${inputClass} w-auto min-w-28`} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | 'all')}>
+              <option value="all">全部角色</option><option value="reader">reader</option><option value="writer">writer</option><option value="admin">admin</option>
+            </select>
+          </div>
+          {visibleUsers.length === 0 ? <EmptyState title="没有匹配的用户" hint="调整筛选条件后重试" /> : <DataTable columns={['用户名', '角色', '状态', '创建时间', '']}>
+            {visibleUsers.map((u) => (
               <tr key={u.id} className="hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{u.name}</td>
                 <td className="px-4 py-3">
@@ -211,8 +232,9 @@ export function UsersPage() {
                 </td>
               </tr>
             ))}
-          </DataTable>
+          </DataTable>}
         </Card>
+        </>
       )}
       <ConfirmDialog
         open={!!toDelete}

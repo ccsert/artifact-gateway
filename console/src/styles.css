@@ -10,7 +10,7 @@
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-200 antialiased;
+  @apply bg-[#090a0c] text-zinc-200 antialiased;
 }
 
 ::selection {
@@ -31,4 +31,12 @@ body {
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  transition-duration: 160ms;
 }

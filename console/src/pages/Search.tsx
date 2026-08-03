@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { listRepositories, searchRepositoryArtifacts } from '../client';
 import type { Repository } from '../client';
-import { PageHeader, DataTable } from '../components/Layout';
+import { PageHeader, DataTable, inputClass, btnPrimary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge } from '../components/Badge';
 import { formatBytes, formatDate, shortDigest } from '../lib/format';
@@ -54,7 +54,9 @@ async function searchRepository(repo: Repository, q: string): Promise<GlobalHit[
 
 export function SearchPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const q = (params.get('q') ?? '').trim();
+  const [query, setQuery] = useState(q);
 
   const [hits, setHits] = useState<GlobalHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,12 +103,18 @@ export function SearchPage() {
     };
   }, [q]);
 
+  useEffect(() => setQuery(q), [q]);
+
   return (
     <div>
       <PageHeader
         title="全局搜索"
         description={q ? `在所有仓库中搜索 “${q}”` : '跨仓库搜索制品坐标、路径与引用'}
       />
+      <form onSubmit={(event) => { event.preventDefault(); const next = query.trim(); if (next) navigate(`/search?q=${encodeURIComponent(next)}`); }} className="mb-6 flex max-w-2xl gap-2">
+        <input className={inputClass} placeholder="输入制品坐标、路径或镜像名前缀…" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <button className={btnPrimary} disabled={!query.trim()}>搜索</button>
+      </form>
       {!q ? (
         <EmptyState title="输入关键词开始搜索" hint="在顶部搜索框输入坐标、路径或镜像名前缀后回车" />
       ) : error ? (
@@ -120,14 +128,11 @@ export function SearchPage() {
         />
       ) : (
         <>
-          <p className="mb-3 text-xs text-zinc-500">
-            在 {searchedRepos} 个仓库中找到 <span className="text-zinc-300">{hits.length}</span> 条结果
-            {maybeTruncated > 0 && (
-              <span className="text-zinc-600">
-                （{maybeTruncated} 个仓库命中较多，仅展示前 {PER_REPO_LIMIT} 条，进入仓库详情可查看全部）
-              </span>
-            )}
-          </p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="命中制品" value={hits.length} sub="按更新时间排序" />
+            <StatCard label="已检索仓库" value={searchedRepos} sub="跨仓库并行搜索" />
+            <StatCard label="可能截断" value={maybeTruncated} sub={maybeTruncated ? `每个仓库最多显示 ${PER_REPO_LIMIT} 条` : '当前结果完整'} />
+          </div>
           <DataTable columns={['坐标', '仓库', '格式', '大小', '创建时间']}>
             {hits.map((h, i) => (
               <tr key={`${h.repositoryId}-${h.coordinate}-${i}`} className="hover:bg-zinc-800/30">

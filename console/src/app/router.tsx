@@ -11,9 +11,11 @@ import { SearchPage } from '../pages/Search';
 import { LoginPage } from '../pages/Login';
 import { AccessControlPage } from '../pages/AccessControl';
 import { UsersPage } from '../pages/Users';
+import { PublicBrowsePage } from '../pages/PublicBrowse';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/browse', element: <PublicBrowsePage /> },
   {
     element: <AppLayout />,
     children: [

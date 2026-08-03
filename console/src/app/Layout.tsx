@@ -5,14 +5,15 @@ import { Modal, useDisclosure } from '../components/Modal';
 import { Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
 
 const navItems = [
-  { to: '/', label: '总览', end: true, icon: IconDashboard },
-  { to: '/repositories', label: '仓库', end: false, icon: IconRepo },
-  { to: '/groups', label: '分组', end: false, icon: IconGroup },
-  { to: '/access', label: '访问控制', end: false, icon: IconAccess },
-  { to: '/audits', label: '审计日志', end: false, icon: IconAudit },
-  { to: '/audit-retention', label: '审计保留', end: false, icon: IconRetention },
-  { to: '/keys', label: 'API 密钥', end: false, icon: IconKey },
-  { to: '/users', label: '用户', end: false, icon: IconUser },
+  { to: '/', label: '总览', end: true, icon: IconDashboard, group: '运行' },
+  { to: '/repositories', label: '仓库', end: false, icon: IconRepo, group: '运行' },
+  { to: '/search', label: '制品搜索', end: false, icon: IconSearch, group: '运行' },
+  { to: '/groups', label: '分组', end: false, icon: IconGroup, group: '治理' },
+  { to: '/access', label: '访问控制', end: false, icon: IconAccess, group: '治理' },
+  { to: '/audits', label: '审计日志', end: false, icon: IconAudit, group: '治理' },
+  { to: '/audit-retention', label: '审计保留', end: false, icon: IconRetention, group: '治理' },
+  { to: '/keys', label: 'API 密钥', end: false, icon: IconKey, group: '管理' },
+  { to: '/users', label: '用户', end: false, icon: IconUser, group: '管理' },
 ];
 
 function IconDashboard() {
@@ -70,6 +71,21 @@ function IconUser() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+function IconSearch() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconMenu() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
     </svg>
   );
 }
@@ -184,15 +200,20 @@ function TokenDialog() {
 
 export function AppLayout() {
   const { token, role, clearToken } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
   const visibleNavItems = navItems.filter((item) => !['/keys', '/users'].includes(item.to) || role === 'admin');
   const location = useLocation();
   if (!token) {
+    if (location.pathname === '/' || location.pathname === '/search') {
+      return <Navigate to={`/browse${location.search}`} replace />;
+    }
     const target = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${target}`} replace />;
   }
   return (
     <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-zinc-800/80 bg-zinc-925 bg-zinc-900/40">
+      {menuOpen && <button aria-label="关闭导航" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenuOpen(false)} />}
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-zinc-800/80 bg-zinc-925 bg-zinc-900/95 transition-transform lg:translate-x-0 lg:bg-zinc-900/40 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center gap-2.5 px-5 py-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 text-sm font-bold text-white">
             AG
@@ -202,31 +223,44 @@ export function AppLayout() {
             <div className="text-[10px] uppercase tracking-widest text-zinc-600">Console</div>
           </div>
         </div>
-        <nav className="mt-2 flex-1 space-y-0.5 px-3">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-cyan-500/10 font-medium text-cyan-300'
-                    : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-                }`
-              }
-            >
-              <item.icon />
-              {item.label}
-            </NavLink>
-          ))}
+        <nav className="mt-2 flex-1 space-y-5 px-3">
+          {(['运行', '治理', '管理'] as const).map((group) => {
+            const items = visibleNavItems.filter((item) => item.group === group);
+            if (items.length === 0) return null;
+            return (
+              <div key={group}>
+                <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">{group}</div>
+                <div className="space-y-0.5">
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-cyan-400/10 font-medium text-cyan-200'
+                            : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                        }`
+                      }
+                    >
+                      <span className="text-zinc-500 transition-colors group-hover:text-zinc-300"><item.icon /></span>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
         <div className="border-t border-zinc-800/80 px-4 py-3 text-[10px] leading-4 text-zinc-600">
           Native Hosted API v2
         </div>
       </aside>
-      <div className="ml-56 flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/80 px-6 py-3 backdrop-blur">
+      <div className="flex min-h-screen flex-1 flex-col lg:ml-56">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/80 px-4 py-3 backdrop-blur lg:px-6">
+          <button aria-label="打开导航" onClick={() => setMenuOpen(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 lg:hidden"><IconMenu /></button>
           <GlobalSearchBox />
           <div className="ml-auto flex items-center gap-2">
             <TokenDialog />
@@ -239,7 +273,7 @@ export function AppLayout() {
             </button>
           </div>
         </header>
-        <main className="flex-1 px-6 py-6">
+        <main className="flex-1 px-4 py-5 lg:px-6 lg:py-6">
           <Outlet />
         </main>
       </div>

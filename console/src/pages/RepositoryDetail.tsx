@@ -1636,6 +1636,53 @@ function NotEnabled({ feature }: { feature: string }) {
   );
 }
 
+function RepositoryOverview({ repo, capacity, onOpenCapacity }: { repo: Repository; capacity: RepositoryCapacity | null; onOpenCapacity: () => void }) {
+  const usage = capacity?.quotaBytes ? Math.min(100, (capacity.usedBytes / capacity.quotaBytes) * 100) : null;
+  const usageTone = usage !== null && usage > 90 ? 'text-rose-300' : usage !== null && usage > 70 ? 'text-amber-300' : 'text-emerald-300';
+  const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
+
+  return (
+    <div className="mb-5 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+      <Card className="border-zinc-800 bg-zinc-900/70">
+        <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${repo.state === 'active' ? 'bg-emerald-400' : repo.state === 'deleting' ? 'bg-amber-400' : 'bg-rose-400'}`} />
+              <span className="text-sm font-semibold text-zinc-100">{repo.state === 'active' ? '仓库运行正常' : `仓库状态：${repo.state}`}</span>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              {repo.type === 'proxy' ? '上游缓存与代理请求正在由此仓库处理。' : '已发布制品及其可恢复引用由此仓库托管。'}
+            </p>
+          </div>
+          <button onClick={onOpenCapacity} className="text-xs text-cyan-300 hover:text-cyan-200">查看容量详情</button>
+        </div>
+        <div className="grid border-t border-zinc-800/80 sm:grid-cols-3">
+          <div className="px-5 py-3 sm:border-r sm:border-zinc-800/80">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">已用空间</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatBytes(capacity.usedBytes) : '读取中…'}</div>
+          </div>
+          <div className="px-5 py-3 sm:border-r sm:border-zinc-800/80">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">对象数量</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-100">{capacity ? formatNumber(capacity.objectCount) : '—'}</div>
+          </div>
+          <div className="px-5 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">配额状态</div>
+            <div className={`mt-1 text-sm font-semibold ${usageTone}`}>{usage === null ? '未设置限制' : `${usage.toFixed(1)}% 已使用`}</div>
+          </div>
+        </div>
+      </Card>
+      <Card className="border-zinc-800 bg-zinc-900/40 px-5 py-4">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">协议入口</div>
+        <div className="mt-2 flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300" title={protocolPath}>{protocolPath}</code>
+          <CopyButton text={protocolPath} />
+        </div>
+        <p className="mt-3 text-xs leading-5 text-zinc-500">使用仓库格式对应的客户端连接；访问权限和匿名读取策略将在请求时生效。</p>
+      </Card>
+    </div>
+  );
+}
+
 function EditRepositoryDialog({ repo, onUpdated }: { repo: Repository; onUpdated: () => void }) {
   const dialog = useDisclosure();
   const [endpoint, setEndpoint] = useState(repo.endpoint ?? '');
@@ -1744,6 +1791,7 @@ export function RepositoryDetailPage() {
   const { repositoryId = '' } = useParams();
   const [repo, setRepo] = useState<Repository | null>(null);
   const [caps, setCaps] = useState<RepositoryCapabilities | null>(null);
+  const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
   const [effectiveAccess, setEffectiveAccess] = useState<RepositoryEffectiveAccess | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>('artifacts');
@@ -1756,12 +1804,14 @@ export function RepositoryDetailPage() {
       return;
     }
     setRepo(data ?? null);
-    const [capsRes, accessRes] = await Promise.all([
+    const [capsRes, accessRes, capacityRes] = await Promise.all([
       getRepositoryCapabilities({ path: { repositoryId } }),
       getRepositoryEffectiveAccess({ path: { repositoryId } }),
+      getRepositoryCapacity({ path: { repositoryId } }),
     ]);
     if (!capsRes.error) setCaps(capsRes.data ?? null);
     if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
+    if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
   }, [repositoryId]);
 
   useEffect(() => {
@@ -1806,6 +1856,13 @@ export function RepositoryDetailPage() {
           </div>
         }
       />
+      {repo.anonymousRead && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm">
+          <span className="text-emerald-200">此仓库允许匿名读取；全局匿名策略启用时可公开浏览。</span>
+          <Link to={`/browse?repository=${encodeURIComponent(repo.id)}`} className="text-xs font-medium text-cyan-300 hover:text-cyan-200">打开公开浏览</Link>
+        </div>
+      )}
+      <RepositoryOverview repo={repo} capacity={capacity} onOpenCapacity={() => setTab('capacity')} />
       {caps && (
         <div className="mb-5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
           <span className="mr-1">支持的操作:</span>

@@ -10,7 +10,7 @@ import {
   getGroupCapacity,
 } from '../client';
 import type { Group, Format, Member, Repository } from '../client';
-import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { Badge, FormatBadge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
@@ -297,6 +297,8 @@ export function GroupsPage() {
   const [error, setError] = useState<unknown>(null);
   const [toDelete, setToDelete] = useState<Group | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [formatFilter, setFormatFilter] = useState<Format | 'all'>('all');
 
   const repoName = (id: string) => repos.find((r) => r.id === id)?.name ?? id.slice(0, 8) + '…';
   const repoById = (id: string) => repos.find((r) => r.id === id);
@@ -340,6 +342,13 @@ export function GroupsPage() {
     }
   };
 
+  const visibleGroups = groups.filter((group) =>
+    (!filter || group.name.toLowerCase().includes(filter.toLowerCase())) &&
+    (formatFilter === 'all' || group.format === formatFilter),
+  );
+  const memberCount = groups.reduce((total, group) => total + (group.members?.length ?? 0), 0);
+  const publicGroups = groups.filter((group) => group.anonymousRead).length;
+
   return (
     <div>
       <PageHeader
@@ -362,9 +371,22 @@ export function GroupsPage() {
           <EmptyState title="暂无分组" hint="创建分组以聚合多个仓库" />
         </Card>
       ) : (
+        <>
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard label="分组总数" value={groups.length} sub={`${memberCount} 个成员引用`} />
+          <StatCard label="匿名可读" value={publicGroups} sub={publicGroups ? '仍需成员仓库允许匿名读取' : '全部为私有入口'} />
+          <StatCard label="覆盖格式" value={new Set(groups.map((group) => group.format)).size} sub="按同格式仓库解析" />
+        </div>
         <Card>
+          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
+            <input className={`${inputClass} w-56`} placeholder="搜索分组名称…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <select className={`${inputClass} w-auto min-w-28`} value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as Format | 'all')}>
+              <option value="all">全部格式</option>{FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
+            </select>
+          </div>
+          {visibleGroups.length === 0 ? <EmptyState title="没有匹配的分组" hint="调整筛选条件后重试" /> :
           <DataTable columns={['名称', '格式', '访问', '成员（按优先级）', '版本', '']}>
-            {groups.map((g) => (
+            {visibleGroups.map((g) => (
               <tr key={g.id} className="group hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{g.name}</td>
                 <td className="px-4 py-3">
@@ -409,8 +431,10 @@ export function GroupsPage() {
               </tr>
             ))}
           </DataTable>
+          }
           <Pagination hasMore={!!nextToken} onMore={loadMore} />
         </Card>
+        </>
       )}
       <ConfirmDialog
         open={!!toDelete}

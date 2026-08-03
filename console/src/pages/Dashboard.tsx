@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listRepositories, listGroups, listAudits, getRepositoryCapacity } from '../client';
 import type { Repository, Group, AuditRecord } from '../client';
-import { PageHeader, StatCard, Card, CardHeader, DataTable } from '../components/Layout';
+import { PageHeader, StatCard, Card, CardHeader, DataTable, btnPrimary } from '../components/Layout';
 import { Loading, ErrorBanner, isNotFound } from '../components/Feedback';
 import { FormatBadge, StateBadge } from '../components/Badge';
 import { Donut } from '../components/Donut';
@@ -85,10 +85,39 @@ export function DashboardPage() {
 
   const formatCount = (f: string) => repos.filter((r) => r.format === f).length;
   const active = repos.filter((r) => r.state === 'active').length;
+  const inactive = repos.length - active;
+  const healthTone = inactive > 0 ? 'text-amber-300' : 'text-emerald-300';
 
   return (
     <div>
-      <PageHeader title="总览" description="Artifact Gateway 运行状态一览" />
+      <PageHeader
+        title="总览"
+        description="Artifact Gateway 运行状态一览"
+        actions={
+          <Link to="/repositories" className={btnPrimary}>
+            管理仓库
+          </Link>
+        }
+      />
+      <Card className="mb-6 border-zinc-800 bg-zinc-900/70">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 ${healthTone}`}>
+              <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_4px_rgba(52,211,153,0.12)]" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-zinc-100">平台运行正常</div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                {active} 个活跃仓库{inactive > 0 ? `，${inactive} 个需要关注` : '，暂无待处理异常'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-5 text-xs text-zinc-500">
+            <span><span className="mr-1.5 text-zinc-300">API</span> v2</span>
+            <span><span className="mr-1.5 text-zinc-300">采样</span> {formatDate(new Date().toISOString())}</span>
+          </div>
+        </div>
+      </Card>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="仓库总数" value={repos.length} sub={`${active} 个活跃`} />
         <StatCard label="分组" value={groups.length} sub={`共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`} />

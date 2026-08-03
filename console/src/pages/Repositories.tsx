@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listRepositories, createRepository, deleteRepository } from '../client';
+import { listRepositories, createRepository, deleteRepository, getRepositoryCapacity } from '../client';
 import type { Repository, Format } from '../client';
-import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, DataTable, Pagination, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
 import { FormatBadge, StateBadge, Badge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
+import { formatBytes, formatNumber } from '../lib/format';
 
 const FORMATS: Format[] = ['oci', 'maven', 'conan', 'raw'];
 
@@ -165,6 +166,9 @@ export function RepositoriesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [filter, setFilter] = useState('');
+  const [formatFilter, setFormatFilter] = useState<Format | 'all'>('all');
+  const [stateFilter, setStateFilter] = useState<Repository['state'] | 'all'>('all');
+  const [capacities, setCapacities] = useState<Record<string, { usedBytes: number; objectCount: number; quotaBytes: number }>>({});
   const [toDelete, setToDelete] = useState<Repository | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -177,8 +181,17 @@ export function RepositoriesPage() {
       setError(err);
       return;
     }
-    setItems(data?.items ?? []);
+    const nextItems = data?.items ?? [];
+    setItems(nextItems);
     setNextToken(data?.nextPageToken);
+    const activeItems = nextItems.filter((repository) => repository.state === 'active');
+    const capacityResults = await Promise.all(
+      activeItems.map(async (repository) => {
+        const result = await getRepositoryCapacity({ path: { repositoryId: repository.id } });
+        return result.data ? [repository.id, result.data] as const : null;
+      }),
+    );
+    setCapacities(Object.fromEntries(capacityResults.filter((entry): entry is NonNullable<typeof entry> => entry !== null)));
   }, []);
 
   useEffect(() => {
@@ -212,7 +225,12 @@ export function RepositoriesPage() {
       r.name.toLowerCase().includes(q) ||
       r.format.includes(q) ||
       (r.type ?? 'hosted').includes(q),
-  );
+  ).filter((r) => formatFilter === 'all' || r.format === formatFilter)
+    .filter((r) => stateFilter === 'all' || r.state === stateFilter);
+
+  const activeCount = items.filter((r) => r.state === 'active').length;
+  const proxyCount = items.filter((r) => r.type === 'proxy').length;
+  const totalUsedBytes = Object.values(capacities).reduce((sum, value) => sum + value.usedBytes, 0);
 
   return (
     <div>
@@ -221,13 +239,33 @@ export function RepositoriesPage() {
         description="Hosted 与 Proxy Repository 的统一视图"
         actions={<CreateRepositoryDialog onCreated={load} />}
       />
-      <div className="mb-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="仓库总数" value={items.length} sub={`${activeCount} 个活跃`} />
+        <StatCard label="代理仓库" value={proxyCount} sub="上游缓存与镜像" />
+        <StatCard label="当前占用" value={totalUsedBytes ? formatBytes(totalUsedBytes) : '—'} sub={Object.keys(capacities).length ? `${formatNumber(Object.values(capacities).reduce((sum, value) => sum + value.objectCount, 0))} 个对象` : '容量未启用'} />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
-          className={`${inputClass} max-w-xs`}
-          placeholder="按名称、格式或类型过滤…"
+          className={`${inputClass} min-w-56 max-w-xs`}
+          placeholder="搜索名称或类型…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        <select className={`${inputClass} w-auto min-w-28`} value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as Format | 'all')}>
+          <option value="all">全部格式</option>
+          {FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
+        </select>
+        <select className={`${inputClass} w-auto min-w-28`} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as Repository['state'] | 'all')}>
+          <option value="all">全部状态</option>
+          <option value="active">active</option>
+          <option value="deleting">deleting</option>
+          <option value="deleted">deleted</option>
+        </select>
+        {(filter || formatFilter !== 'all' || stateFilter !== 'all') && (
+          <button className="px-2 text-xs text-zinc-500 hover:text-zinc-200" onClick={() => { setFilter(''); setFormatFilter('all'); setStateFilter('all'); }}>
+            清除筛选
+          </button>
+        )}
       </div>
       {error !== null ? (
         <ErrorBanner error={error} onRetry={load} />
@@ -239,7 +277,7 @@ export function RepositoriesPage() {
         </Card>
       ) : (
         <Card>
-          <DataTable columns={['名称', '类型', '格式', '状态', '配置', 'ID', '']}>
+          <DataTable columns={['名称', '类型', '格式', '状态', '容量', '配置', 'ID', '']}>
             {visible.map((r) => {
               const isProxy = r.type === 'proxy';
               return (
@@ -257,6 +295,14 @@ export function RepositoriesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <StateBadge state={r.state} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {capacities[r.id] ? (
+                      <div>
+                        <div className="font-mono text-xs text-zinc-300">{formatBytes(capacities[r.id].usedBytes)}</div>
+                        {capacities[r.id].quotaBytes > 0 && <div className="mt-1 text-[10px] text-zinc-600">/ {formatBytes(capacities[r.id].quotaBytes)}</div>}
+                      </div>
+                    ) : <span className="text-xs text-zinc-600">—</span>}
                   </td>
                   <td className="max-w-48 truncate px-4 py-3 font-mono text-xs text-zinc-500" title={isProxy ? r.endpoint : `v${r.version}`}>
                     {isProxy ? r.endpoint : `v${r.version}`}

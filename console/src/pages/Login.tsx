@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { client } from '../client/client.gen';
 import { listRepositories } from '../client';
@@ -75,7 +75,7 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-lg font-bold text-white">
             AG
@@ -90,6 +90,8 @@ export function LoginPage() {
           {(['password', 'token'] as const).map((m) => (
             <button
               key={m}
+              type="button"
+              aria-pressed={mode === m}
               onClick={() => {
                 setMode(m);
                 setError('');
@@ -109,6 +111,8 @@ export function LoginPage() {
               <input
                 className={inputClass}
                 placeholder="alice"
+                autoComplete="username"
+                autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -118,6 +122,7 @@ export function LoginPage() {
                 type="password"
                 className={inputClass}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -134,9 +139,10 @@ export function LoginPage() {
         ) : (
           <form onSubmit={submitToken} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
             <Field label="访问令牌" hint="静态令牌、OIDC 或 API 密钥的 Bearer；仅保存在本浏览器 localStorage。">
-              <textarea
-                className={`${inputClass} h-28 resize-none font-mono text-xs`}
-                placeholder="粘贴 Bearer Token…"
+            <textarea
+              className={`${inputClass} h-28 resize-none font-mono text-xs`}
+              placeholder="粘贴 Bearer Token…"
+              autoFocus
                 value={token}
                 onChange={(e) => setTokenDraft(e.target.value)}
               />
@@ -151,6 +157,9 @@ export function LoginPage() {
             </button>
           </form>
         )}
+        <div className="mt-5 text-center text-xs text-zinc-600">
+          <Link to="/browse" className="text-zinc-400 hover:text-cyan-300">浏览公开制品</Link>
+        </div>
       </div>
     </div>
   );

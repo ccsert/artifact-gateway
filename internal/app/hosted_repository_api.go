@@ -163,6 +163,9 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search") {
 		return parts[0], true
 	}
+	if len(parts) == 3 && parts[1] == "artifacts" {
+		return parts[0], true
+	}
 	if len(parts) == 3 && ((parts[1] == "oci" && parts[2] == "images") || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && (parts[2] == "references" || parts[2] == "recipe-revisions" || parts[2] == "package-revisions" || parts[2] == "package-ids")) || (parts[1] == "cache" && parts[2] == "entries")) {
 		return parts[0], true
 	}
@@ -761,7 +764,8 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			for _, a := range artifacts {
 				d := a.Digest
 				created := a.CreatedAt
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created})
+				buildNumber := int32(a.BuildNumber)
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created, BuildNumber: &buildNumber, Publisher: optionalPublisher(a.Publisher)})
 				lastCoordinate = a.Coordinate
 			}
 		case repository.FormatConan:
@@ -775,7 +779,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				references = references[:pageSize]
 			}
 			for _, reference := range references {
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference})
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 				lastCoordinate = reference.Reference
 			}
 		case repository.FormatRaw:
@@ -1891,7 +1895,7 @@ func (h generatedRepositoryAPIAdapter) GetProxyHealth(w http.ResponseWriter, r *
 }
 
 func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
 	})
 }

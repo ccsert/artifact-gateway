@@ -118,6 +118,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		metrics = &Metrics{}
 	}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
+	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, anonymous: store})
 	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	authenticator.Users = store
 	ociClient := OCIClient(UpstreamClient{})

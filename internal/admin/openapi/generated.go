@@ -828,11 +828,16 @@ type ArtifactPage struct {
 
 // ArtifactSummary defines model for ArtifactSummary.
 type ArtifactSummary struct {
+	// BuildNumber Snapshot build number; zero for release coordinates.
+	BuildNumber *int32     `json:"buildNumber,omitempty"`
 	ContentType *string    `json:"contentType,omitempty"`
 	Coordinate  string     `json:"coordinate"`
 	CreatedAt   *time.Time `json:"createdAt,omitempty"`
 	Digest      *string    `json:"digest,omitempty"`
-	Size        *int64     `json:"size,omitempty"`
+
+	// Publisher Publisher actor when the format records it.
+	Publisher *string `json:"publisher,omitempty"`
+	Size      *int64  `json:"size,omitempty"`
 }
 
 // ArtifactSummaryPage defines model for ArtifactSummaryPage.

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { listApiKeys, createApiKey, revokeApiKey } from '../client';
 import type { ApiKey, CreatedApiKey } from '../client';
-import { PageHeader, Card, DataTable, Field, inputClass, btnPrimary, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, DataTable, Field, inputClass, btnPrimary, btnSecondary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState } from '../components/Feedback';
-import { StateBadge } from '../components/Badge';
+import { StateBadge, Badge } from '../components/Badge';
 import { Modal, ConfirmDialog, useDisclosure } from '../components/Modal';
 import { formatDate } from '../lib/format';
 
@@ -116,6 +116,8 @@ export function ApiKeysPage() {
   const [reveal, setReveal] = useState<CreatedApiKey | null>(null);
   const [toRevoke, setToRevoke] = useState<ApiKey | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'revoked'>('all');
 
   const load = useCallback(async () => {
     setError(null);
@@ -142,6 +144,13 @@ export function ApiKeysPage() {
     }
   };
 
+  const visibleKeys = (keys ?? []).filter((key) =>
+    (!filter || key.name.toLowerCase().includes(filter.toLowerCase()) || key.roles.some((role) => role.includes(filter.toLowerCase()))) &&
+    (stateFilter === 'all' || (stateFilter === 'active' ? !key.revokedAt : !!key.revokedAt)),
+  );
+  const activeKeys = (keys ?? []).filter((key) => !key.revokedAt);
+  const adminKeys = activeKeys.filter((key) => key.roles.includes('admin'));
+
   return (
     <div>
       <PageHeader
@@ -158,12 +167,27 @@ export function ApiKeysPage() {
           <EmptyState title="暂无 API 密钥" hint="创建密钥以通过脚本/CI 调用管理 API" />
         </Card>
       ) : (
-        <Card>
-          <DataTable columns={['名称', '角色', '状态', '创建时间', '吊销时间', 'ID', '']}>
-            {keys.map((k) => (
+        <>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="有效密钥" value={activeKeys.length} sub="可调用管理 API" />
+            <StatCard label="管理员密钥" value={adminKeys.length} sub={adminKeys.length ? '建议定期轮换与审阅' : '暂无高权限密钥'} />
+            <StatCard label="已吊销" value={keys.length - activeKeys.length} sub="保留历史审计记录" />
+          </div>
+          <Card>
+            <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
+              <input className={`${inputClass} w-56`} placeholder="搜索名称或角色…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <select className={`${inputClass} w-auto min-w-28`} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as typeof stateFilter)}>
+                <option value="all">全部状态</option>
+                <option value="active">有效</option>
+                <option value="revoked">已吊销</option>
+              </select>
+            </div>
+            {visibleKeys.length === 0 ? <EmptyState title="没有匹配的密钥" hint="调整筛选条件后重试" /> : (
+              <DataTable columns={['名称', '角色', '状态', '创建时间', '吊销时间', 'ID', '']}>
+                {visibleKeys.map((k) => (
               <tr key={k.id} className="group hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{k.name}</td>
-                <td className="px-4 py-3 font-mono text-xs text-zinc-400">{k.roles.join(', ')}</td>
+                <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{k.roles.map((role) => <Badge key={role} tone={role === 'admin' ? 'red' : role === 'writer' ? 'blue' : 'green'}>{role}</Badge>)}</div></td>
                 <td className="px-4 py-3">
                   <StateBadge state={k.revokedAt ? 'revoked' : 'active'} />
                 </td>
@@ -183,9 +207,11 @@ export function ApiKeysPage() {
                   )}
                 </td>
               </tr>
-            ))}
-          </DataTable>
-        </Card>
+                ))}
+              </DataTable>
+            )}
+          </Card>
+        </>
       )}
       {reveal && (
         <TokenReveal

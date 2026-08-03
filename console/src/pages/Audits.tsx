@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { listAudits, listRepositories, listGroups } from '../client';
 import type { AuditRecord } from '../client';
-import { PageHeader, Card, DataTable, inputClass, btnSecondary } from '../components/Layout';
+import { PageHeader, Card, DataTable, inputClass, btnSecondary, StatCard } from '../components/Layout';
 import { Loading, ErrorBanner, EmptyState, isNotFound } from '../components/Feedback';
 import { StateBadge, FormatBadge } from '../components/Badge';
 import { formatBytes, formatDate } from '../lib/format';
@@ -38,6 +38,8 @@ export function AuditsPage() {
   const [group, setGroup] = useState('');
   const [outcome, setOutcome] = useState('');
   const [format, setFormat] = useState('');
+  const [operation, setOperation] = useState('');
+  const [actor, setActor] = useState('');
   const [limit, setLimit] = useState(100);
   const [repoOptions, setRepoOptions] = useState<string[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
@@ -80,7 +82,9 @@ export function AuditsPage() {
   const filtered = (records ?? []).filter(
     (a) =>
       (!outcome || a.outcome === outcome) &&
-      (!format || a.format === format),
+      (!format || a.format === format) &&
+      (!operation || (a.operation ?? '').toLowerCase().includes(operation.toLowerCase())) &&
+      (!actor || (a.actor ?? '').toLowerCase().includes(actor.toLowerCase())),
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -88,15 +92,23 @@ export function AuditsPage() {
   const pageRecords = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
   const outcomeOptions = Array.from(new Set((records ?? []).map((a) => a.outcome).filter(Boolean)));
   const formatOptions = Array.from(new Set((records ?? []).map((a) => a.format).filter((f): f is string => !!f)));
+  const failedCount = (records ?? []).filter((record) => record.outcome === 'failed' || (record.status ?? 0) >= 400).length;
+  const deniedCount = (records ?? []).filter((record) => record.outcome === 'denied').length;
+  const actorCount = new Set((records ?? []).map((record) => record.actor).filter(Boolean)).size;
 
   useEffect(() => {
     setPage(1);
     setExpanded(null);
-  }, [repository, group, outcome, format, limit]);
+  }, [repository, group, outcome, format, operation, actor, limit]);
 
   return (
     <div>
       <PageHeader title="审计日志" description="网关访问与授权决策记录（最新在前）" />
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="当前记录" value={records?.length ?? '—'} sub={`当前检索窗口 ${limit} 条`} />
+        <StatCard label="失败请求" value={failedCount} sub={failedCount ? '建议优先检查失败原因' : '当前窗口未发现失败'} />
+        <StatCard label="拒绝访问" value={deniedCount} sub={`${actorCount} 个操作主体`} />
+      </div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-zinc-400">仓库</span>
@@ -112,6 +124,14 @@ export function AuditsPage() {
               <option key={r} value={r} />
             ))}
           </datalist>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-zinc-400">操作</span>
+          <input className={`${inputClass} w-48`} placeholder="如 delete / grant" value={operation} onChange={(e) => setOperation(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-zinc-400">主体</span>
+          <input className={`${inputClass} w-40`} placeholder="Actor" value={actor} onChange={(e) => setActor(e.target.value)} />
         </label>
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-zinc-400">分组</span>
@@ -163,6 +183,11 @@ export function AuditsPage() {
         <button onClick={() => void load()} className={btnSecondary}>
           刷新
         </button>
+        {(repository || group || outcome || format || operation || actor) && (
+          <button onClick={() => { setRepository(''); setGroup(''); setOutcome(''); setFormat(''); setOperation(''); setActor(''); }} className="px-2 py-2 text-xs text-zinc-500 hover:text-zinc-200">
+            清除筛选
+          </button>
+        )}
         <button
           onClick={() => {
             const rows = filtered.map((a) => [

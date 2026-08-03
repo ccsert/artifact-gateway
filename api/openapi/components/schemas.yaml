@@ -750,6 +750,14 @@ ArtifactSummary:
     createdAt:
       type: string
       format: date-time
+    buildNumber:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Snapshot build number; zero for release coordinates.
+    publisher:
+      type: string
+      description: Publisher actor when the format records it.
 ArtifactSummaryPage:
   type: object
   required:

@@ -14,5 +14,8 @@ console/playwright-report/
 console/.playwright-cli/
 console/*.tsbuildinfo
 console/openapi-ts-error-*.log
+/.playwright-cli/
+/output/playwright/
+/console/.product-design-audit/
 .vscode/
 console/*.png
