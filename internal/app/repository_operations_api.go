@@ -116,7 +116,13 @@ func (a auditAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 	audits, err := a.store.ListAudits(r.Context(), repository.AuditQuery{
-		GroupName: r.URL.Query().Get("group"), Repository: r.URL.Query().Get("repository"), Limit: limit,
+		GroupName:  r.URL.Query().Get("group"),
+		Repository: r.URL.Query().Get("repository"),
+		Outcome:    r.URL.Query().Get("outcome"),
+		Format:     r.URL.Query().Get("format"),
+		Operation:  r.URL.Query().Get("operation"),
+		Actor:      r.URL.Query().Get("actor"),
+		Limit:      limit,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "unable to query audits")

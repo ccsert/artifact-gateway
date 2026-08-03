@@ -8,6 +8,7 @@ import {
   LoginOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
+  SyncOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/', label: '总览', exact: true, icon: <DashboardOutlined />, group: '运行' },
   { to: '/repositories', label: '仓库', icon: <InboxOutlined />, group: '运行' },
   { to: '/search', label: '制品搜索', icon: <SearchOutlined />, group: '运行' },
+  { to: '/operations', label: '任务中心', icon: <SyncOutlined />, group: '运行', admin: true },
   { to: '/groups', label: '分组', icon: <TeamOutlined />, group: '治理' },
   { to: '/access', label: '访问控制', icon: <SafetyCertificateOutlined />, group: '治理' },
   { to: '/audits', label: '审计日志', icon: <FileSearchOutlined />, group: '治理' },

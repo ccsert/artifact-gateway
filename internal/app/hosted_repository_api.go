@@ -443,6 +443,18 @@ func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http
 	if params.Repository != nil {
 		query.Repository = *params.Repository
 	}
+	if params.Outcome != nil {
+		query.Outcome = *params.Outcome
+	}
+	if params.Format != nil {
+		query.Format = *params.Format
+	}
+	if params.Operation != nil {
+		query.Operation = *params.Operation
+	}
+	if params.Actor != nil {
+		query.Actor = *params.Actor
+	}
 	audits, err := h.audit.ListAudits(r.Context(), query)
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list audits failed")

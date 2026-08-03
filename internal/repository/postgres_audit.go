@@ -23,8 +23,10 @@ func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]Aud
 		COALESCE(http_status, 0), COALESCE(cache_disposition, ''), COALESCE(bytes, 0), COALESCE(authorization_source, ''), COALESCE(authorization_reason, ''), COALESCE(request_id, ''), COALESCE(trace_id, '')
 		FROM resolver_audit_log
 		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
+		  AND ($3 = '' OR outcome = $3) AND ($4 = '' OR format = $4)
+		  AND ($5 = '' OR operation = $5) AND ($6 = '' OR actor = $6)
 		ORDER BY occurred_at DESC, id DESC
-		LIMIT $3`, query.GroupName, query.Repository, limit)
+		LIMIT $7`, query.GroupName, query.Repository, query.Outcome, query.Format, query.Operation, query.Actor, limit)
 	if err != nil {
 		return nil, err
 	}

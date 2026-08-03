@@ -36,6 +36,38 @@
             }
           },
           {
+            "name": "outcome",
+            "in": "query",
+            "description": "Exact audit outcome filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Exact artifact format filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "in": "query",
+            "description": "Exact HTTP or management operation filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "description": "Exact actor or principal filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -3229,6 +3261,16 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "buildNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Snapshot build number; zero for release coordinates."
+          },
+          "publisher": {
+            "type": "string",
+            "description": "Publisher actor when the format records it."
           }
         }
       },

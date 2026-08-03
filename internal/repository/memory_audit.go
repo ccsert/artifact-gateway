@@ -25,6 +25,18 @@ func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRe
 		if query.Repository != "" && record.Repository != query.Repository {
 			continue
 		}
+		if query.Outcome != "" && string(record.Outcome) != query.Outcome {
+			continue
+		}
+		if query.Format != "" && record.Format != query.Format {
+			continue
+		}
+		if query.Operation != "" && record.Operation != query.Operation {
+			continue
+		}
+		if query.Actor != "" && record.Actor != query.Actor {
+			continue
+		}
 		records = append(records, record)
 	}
 	return records, nil

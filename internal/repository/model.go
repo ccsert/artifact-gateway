@@ -391,6 +391,10 @@ type AuditRecord struct {
 type AuditQuery struct {
 	GroupName  string
 	Repository string
+	Outcome    string
+	Format     string
+	Operation  string
+	Actor      string
 	Limit      int
 }
 

@@ -973,6 +973,22 @@ export type ListAuditsData = {
   query?: {
     group?: string;
     repository?: string;
+    /**
+     * Exact audit outcome filter.
+     */
+    outcome?: string;
+    /**
+     * Exact artifact format filter.
+     */
+    format?: string;
+    /**
+     * Exact HTTP or management operation filter.
+     */
+    operation?: string;
+    /**
+     * Exact actor or principal filter.
+     */
+    actor?: string;
     limit?: number;
   };
   url: "/audits";

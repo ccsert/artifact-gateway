@@ -121,6 +121,10 @@ export function AuditsPage() {
       query: {
         repository: repository || undefined,
         group: group || undefined,
+        outcome: outcome || undefined,
+        format: format || undefined,
+        operation: operation || undefined,
+        actor: actor || undefined,
         limit,
       },
     });
@@ -129,20 +133,15 @@ export function AuditsPage() {
       return;
     }
     setRecords(data ?? []);
-  }, [repository, group, limit]);
+  }, [repository, group, outcome, format, operation, actor, limit]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // 客户端二次筛选（后端仅支持 repository/group/limit）
-  const filtered = (records ?? []).filter(
-    (a) =>
-      (!outcome || a.outcome === outcome) &&
-      (!format || a.format === format) &&
-      (!operation || (a.operation ?? '').toLowerCase().includes(operation.toLowerCase())) &&
-      (!actor || (a.actor ?? '').toLowerCase().includes(actor.toLowerCase())),
-  );
+  // Filters are evaluated by the API, so results remain correct beyond the
+  // current page/window. Keep this alias for counters, table pagination, and export.
+  const filtered = records ?? [];
   const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * AUDIT_PAGE_SIZE;
