@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { Select } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { listConanRecipeRevisions, searchRepositoryArtifacts } from "../client";
 import type { ArtifactSummary } from "../client";
@@ -45,6 +46,44 @@ interface ConanRevisionPage {
 }
 
 const VERSION_PAGE_SIZE = 50;
+
+type VersionSelectOption = { value: string; label: string };
+
+function SearchableVersionSelect({
+  value,
+  options,
+  onChange,
+  loading = false,
+  placeholder = "搜索并选择版本",
+  notFoundContent = "没有匹配版本",
+  className = "",
+}: {
+  value: string;
+  options: VersionSelectOption[];
+  onChange: (value: string) => void;
+  loading?: boolean;
+  placeholder?: string;
+  notFoundContent?: string;
+  className?: string;
+}) {
+  return (
+    <Select
+      showSearch={{
+        optionFilterProp: "label",
+        filterOption: (input, option) =>
+          String(option?.label ?? "").toLowerCase().includes(input.toLowerCase()),
+      }}
+      value={value || undefined}
+      options={options}
+      onChange={onChange}
+      loading={loading}
+      placeholder={placeholder}
+      notFoundContent={notFoundContent}
+      listHeight={280}
+      className={`w-full ${className}`}
+    />
+  );
+}
 
 function nextOciTagCursor(response: Response, tags: string[]): string | undefined {
   const link = response.headers.get("Link");
@@ -306,24 +345,21 @@ function ConanGroupTable({
                         </label>
                         <span className="text-[11px] text-zinc-600">{referenceVersion}</span>
                       </div>
-                      <select
-                        className={`${inputClass} mt-1.5 h-36 w-full font-mono text-xs`}
-                        size={Math.min(Math.max(group.versions.length, 2), 6)}
+                      <SearchableVersionSelect
+                        className="mt-1.5"
                         value={selectedReference}
-                        onChange={(event) => {
-                          const reference = event.target.value;
+                        options={group.versions.map((version) => ({
+                          value: version.coordinate,
+                          label: version.coordinate,
+                        }))}
+                        onChange={(reference) => {
                           onSelectReference(group.key, reference);
                           onFilterChange("");
                           onLoadRevisions(reference);
                           onOpenArtifact(reference);
                         }}
-                      >
-                        {group.versions.map((version) => (
-                          <option key={version.coordinate} value={version.coordinate}>
-                            {version.coordinate}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="搜索并选择 Conan 包版本"
+                      />
                       <p className="mt-2 text-[11px] leading-5 text-zinc-600">同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。</p>
                     </div>
                     <div className="min-w-0">
@@ -354,28 +390,25 @@ function ConanGroupTable({
                         </button>
                       </div>
                       {page?.error && <div className="mt-2 text-[11px] text-rose-300">{page.error}</div>}
-                      <select
-                        className={`${inputClass} mt-3 h-36 w-full font-mono text-xs`}
-                        size={Math.min(Math.max(visibleRevisions.length, 2), 6)}
+                      <SearchableVersionSelect
+                        className="mt-3"
                         value={selectedRevisionValue}
-                        onChange={(event) => {
-                          const revision = event.target.value;
+                        options={visibleRevisions.map((revision) => ({
+                          value: revision.revision,
+                          label: `${revision.revision} · ${shortDigest(revision.digest)}`,
+                        }))}
+                        loading={page?.loading === true}
+                        notFoundContent={
+                          page?.loading && visibleRevisions.length === 0
+                            ? "正在读取 revision…"
+                            : "没有匹配 revision"
+                        }
+                        placeholder="搜索并选择 recipe revision"
+                        onChange={(revision) => {
                           onSelectRevision(selectedReference, revision);
                           onOpenArtifact(selectedReference, revision);
                         }}
-                      >
-                        {page?.loading && visibleRevisions.length === 0 ? (
-                          <option disabled>正在读取 revision…</option>
-                        ) : visibleRevisions.length === 0 ? (
-                          <option disabled>没有匹配 revision</option>
-                        ) : (
-                          visibleRevisions.map((revision) => (
-                            <option key={revision.revision} value={revision.revision}>
-                              {revision.revision} · {shortDigest(revision.digest)}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                      />
                       {page?.nextPageToken && (
                         <button
                           type="button"
@@ -460,7 +493,6 @@ export function PublicBrowsePage() {
   const [selectedMavenVersion, setSelectedMavenVersion] = useState<
     string | null
   >(null);
-  const [mavenVersionFilter, setMavenVersionFilter] = useState("");
   const [protocolVersionFilter, setProtocolVersionFilter] = useState("");
   const [selectedProtocolVersions, setSelectedProtocolVersions] = useState<
     Record<string, string>
@@ -902,16 +934,7 @@ export function PublicBrowsePage() {
                       );
                       const expanded =
                         expandedMavenGroup === group.key || Boolean(urlVersion);
-                      const normalizedFilter = mavenVersionFilter
-                        .trim()
-                        .toLowerCase();
-                      const visibleVersions = normalizedFilter
-                        ? group.versions.filter((version) =>
-                            `${version.coordinate} ${version.buildNumber ?? ""} ${version.digest ?? ""}`
-                              .toLowerCase()
-                              .includes(normalizedFilter),
-                          )
-                        : group.versions;
+                      const visibleVersions = group.versions;
                       const preferredKey =
                         selectedMavenVersion &&
                         group.versions.some(
@@ -981,7 +1004,6 @@ export function PublicBrowsePage() {
                                   }
                                   setExpandedMavenGroup(group.key);
                                   setSelectedMavenVersion(mavenVersionKey(latest, 0));
-                                  setMavenVersionFilter("");
                                 }}
                                 className="rounded px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-800 hover:text-cyan-300"
                               >
@@ -998,40 +1020,30 @@ export function PublicBrowsePage() {
                                 <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
                                   <div>
                                     <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
-                                      筛选版本
-                                    </label>
-                                    <input
-                                      className={`${inputClass} w-full font-mono text-xs`}
-                                      placeholder="版本号、构建号或 digest"
-                                      value={mavenVersionFilter}
-                                      onChange={(event) =>
-                                        setMavenVersionFilter(
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <label className="mb-1.5 mt-3 block text-[11px] font-medium text-zinc-500">
                                       选择版本{" "}
                                       <span className="font-normal text-zinc-600">
-                                        ({visibleVersions.length}/
-                                        {group.versions.length})
+                                        ({group.versions.length})
                                       </span>
                                     </label>
-                                    <select
-                                      className={`${inputClass} h-36 w-full font-mono text-xs`}
-                                      size={Math.min(
-                                        Math.max(visibleVersions.length, 2),
-                                        6,
-                                      )}
+                                    <SearchableVersionSelect
                                       value={selectedKey}
-                                      onChange={(event) => {
-                                        setSelectedMavenVersion(
-                                          event.target.value,
-                                        );
+                                      options={visibleVersions.map((version) => {
+                                        const index = group.versions.indexOf(version);
+                                        return {
+                                          value: mavenVersionKey(version, index),
+                                          label: `${version.coordinate.split(":").slice(2).join(":")}${
+                                            version.buildNumber
+                                              ? ` · SNAPSHOT #${version.buildNumber}`
+                                              : ""
+                                          }`,
+                                        };
+                                      })}
+                                      onChange={(value) => {
+                                        setSelectedMavenVersion(value);
                                         const version = group.versions.find(
                                           (item, index) =>
                                             mavenVersionKey(item, index) ===
-                                            event.target.value,
+                                            value,
                                         );
                                         if (version)
                                           openArtifact(
@@ -1039,39 +1051,10 @@ export function PublicBrowsePage() {
                                             version.buildNumber,
                                           );
                                       }}
-                                    >
-                                      {visibleVersions.length === 0 ? (
-                                        <option disabled>没有匹配版本</option>
-                                      ) : (
-                                        visibleVersions.map((version) => {
-                                          const index =
-                                            group.versions.indexOf(version);
-                                          return (
-                                            <option
-                                              key={mavenVersionKey(
-                                                version,
-                                                index,
-                                              )}
-                                              value={mavenVersionKey(
-                                                version,
-                                                index,
-                                              )}
-                                            >
-                                              {version.coordinate
-                                                .split(":")
-                                                .slice(2)
-                                                .join(":")}
-                                              {version.buildNumber
-                                                ? ` · SNAPSHOT #${version.buildNumber}`
-                                                : ""}
-                                            </option>
-                                          );
-                                        })
-                                      )}
-                                    </select>
+                                      placeholder="搜索并选择 Maven 版本"
+                                    />
                                     <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                                      版本不会全部铺开；输入版本号、SNAPSHOT
-                                      构建号或 digest 即可定位。
+                                      在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。
                                     </p>
                                   </div>
                                   <div className="min-w-0">
@@ -1283,15 +1266,7 @@ export function PublicBrowsePage() {
                         : isConan
                           ? revisionParam
                           : "";
-                      const normalizedProtocolFilter =
-                        protocolVersionFilter.trim().toLowerCase();
-                      const visibleProtocolVersions = normalizedProtocolFilter && isOci
-                        ? protocolVersions.filter((version) =>
-                            version.searchText
-                              .toLowerCase()
-                              .includes(normalizedProtocolFilter),
-                          )
-                        : protocolVersions;
+                      const visibleProtocolVersions = protocolVersions;
                       const preferredProtocolVersion =
                         (selectedProtocolVersions[item.coordinate] &&
                           protocolVersions.some(
@@ -1478,31 +1453,26 @@ export function PublicBrowsePage() {
                                   <div>
                                     <div className="flex items-center justify-between gap-3">
                                       <label className="block text-[11px] font-medium text-zinc-500">
-                                        筛选{isOci ? "标签" : "recipe revision"}
+                                        {isOci ? "选择镜像标签" : "搜索 recipe revision"}
                                       </label>
                                       <span className="text-[11px] text-zinc-600">
-                                        {visibleProtocolVersions.length}/
-                                        {protocolVersions.length}
+                                        已加载 {protocolVersions.length}
                                       </span>
                                     </div>
-                                    <div className="mt-1.5 flex gap-2">
-                                      <input
-                                        className={`${inputClass} min-w-0 flex-1 font-mono text-xs`}
-                                        placeholder={
-                                          isOci
-                                            ? "在已加载 tag 中筛选"
-                                            : "输入 revision 或 digest"
-                                        }
-                                        value={protocolVersionFilter}
-                                        onChange={(event) => setProtocolVersionFilter(event.target.value)}
-                                        onKeyDown={(event) => {
-                                          if (isConan && event.key === "Enter") {
-                                            event.preventDefault();
-                                            void loadConanRevisions(item.coordinate, protocolVersionFilter);
-                                          }
-                                        }}
-                                      />
-                                      {isConan && (
+                                    {isConan && (
+                                      <div className="mt-1.5 flex gap-2">
+                                        <input
+                                          className={`${inputClass} min-w-0 flex-1 font-mono text-xs`}
+                                          placeholder="输入 revision 或 digest"
+                                          value={protocolVersionFilter}
+                                          onChange={(event) => setProtocolVersionFilter(event.target.value)}
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                              event.preventDefault();
+                                              void loadConanRevisions(item.coordinate, protocolVersionFilter);
+                                            }
+                                          }}
+                                        />
                                         <button
                                           type="button"
                                           disabled={protocolVersionsLoading}
@@ -1511,8 +1481,8 @@ export function PublicBrowsePage() {
                                         >
                                           搜索
                                         </button>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                     {protocolVersionsError && (
                                       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-rose-300">
                                         <span>{protocolVersionsError}</span>
@@ -1525,21 +1495,27 @@ export function PublicBrowsePage() {
                                         </button>
                                       </div>
                                     )}
-                                    <label className="mb-1.5 mt-3 block text-[11px] font-medium text-zinc-500">
+                                    <label className={`${isConan ? "mt-3 " : "mt-1.5 "}mb-1.5 block text-[11px] font-medium text-zinc-500`}>
                                       选择版本
                                     </label>
-                                    <select
-                                      className={`${inputClass} h-36 w-full font-mono text-xs`}
-                                      size={Math.min(
-                                        Math.max(
-                                          visibleProtocolVersions.length,
-                                          2,
-                                        ),
-                                        6,
-                                      )}
+                                    <SearchableVersionSelect
                                       value={selectedProtocolVersionValue}
-                                      onChange={(event) => {
-                                        const value = event.target.value;
+                                      options={visibleProtocolVersions.map((version) => ({
+                                        value: version.value,
+                                        label: `${version.label}${
+                                          isConan && version.digest
+                                            ? ` · ${shortDigest(version.digest)}`
+                                            : ""
+                                        }`,
+                                      }))}
+                                      loading={protocolVersionsLoading}
+                                      notFoundContent={
+                                        protocolVersionsLoading && visibleProtocolVersions.length === 0
+                                          ? "正在读取版本…"
+                                          : "没有匹配版本"
+                                      }
+                                      placeholder={`搜索并选择${isOci ? "镜像标签" : " recipe revision"}`}
+                                      onChange={(value) => {
                                         setSelectedProtocolVersions(
                                           (current) => ({
                                             ...current,
@@ -1560,27 +1536,7 @@ export function PublicBrowsePage() {
                                           );
                                         }
                                       }}
-                                    >
-                                      {protocolVersionsLoading && visibleProtocolVersions.length === 0 ? (
-                                        <option disabled>正在读取版本…</option>
-                                      ) : visibleProtocolVersions.length === 0 ? (
-                                        <option disabled>
-                                          没有匹配版本
-                                        </option>
-                                      ) : (
-                                        visibleProtocolVersions.map((version) => (
-                                          <option
-                                            key={version.value}
-                                            value={version.value}
-                                          >
-                                            {version.label}
-                                            {isConan && version.digest
-                                              ? ` · ${shortDigest(version.digest)}`
-                                              : ""}
-                                          </option>
-                                        ))
-                                      )}
-                                    </select>
+                                    />
                                     {nextProtocolPage && (
                                       <button
                                         type="button"

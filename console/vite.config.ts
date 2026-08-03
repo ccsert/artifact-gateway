@@ -13,6 +13,31 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (
+              id.includes('/antd/') ||
+              id.includes('/@ant-design/') ||
+              id.includes('/@rc-component/') ||
+              /\/rc-[^/]+\//.test(id)
+            ) {
+              return 'antd';
+            }
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router')
+            ) {
+              return 'react';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       port: 4173,
       proxy: {

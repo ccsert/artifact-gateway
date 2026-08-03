@@ -1,35 +1,69 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom';
-import { AppLayout } from './Layout';
-import { DashboardPage } from '../pages/Dashboard';
-import { RepositoriesPage } from '../pages/Repositories';
-import { RepositoryDetailPage } from '../pages/RepositoryDetail';
-import { GroupsPage } from '../pages/Groups';
-import { AuditsPage } from '../pages/Audits';
-import { ApiKeysPage } from '../pages/ApiKeys';
-import { AuditRetentionPage } from '../pages/AuditRetention';
-import { SearchPage } from '../pages/Search';
-import { LoginPage } from '../pages/Login';
-import { AccessControlPage } from '../pages/AccessControl';
-import { UsersPage } from '../pages/Users';
-import { PublicBrowsePage } from '../pages/PublicBrowse';
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#090a0c] text-sm text-zinc-500">
+      正在加载…
+    </div>
+  );
+}
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  { path: '/browse', element: <PublicBrowsePage /> },
   {
-    element: <AppLayout />,
+    path: '/login',
+    hydrateFallbackElement: <RouteFallback />,
+    lazy: async () => ({ Component: (await import('../pages/Login')).LoginPage }),
+  },
+  {
+    path: '/browse',
+    hydrateFallbackElement: <RouteFallback />,
+    lazy: async () => ({ Component: (await import('../pages/PublicBrowse')).PublicBrowsePage }),
+  },
+  {
+    hydrateFallbackElement: <RouteFallback />,
+    lazy: async () => ({ Component: (await import('./Layout')).AppLayout }),
     children: [
-      { path: '/', element: <DashboardPage /> },
-      { path: '/search', element: <SearchPage /> },
-      { path: '/repositories', element: <RepositoriesPage /> },
-      { path: '/repositories/:repositoryId', element: <RepositoryDetailPage /> },
-      { path: '/groups', element: <GroupsPage /> },
+      {
+        path: '/',
+        lazy: async () => ({ Component: (await import('../pages/Dashboard')).DashboardPage }),
+      },
+      {
+        path: '/search',
+        lazy: async () => ({ Component: (await import('../pages/Search')).SearchPage }),
+      },
+      {
+        path: '/repositories',
+        lazy: async () => ({ Component: (await import('../pages/Repositories')).RepositoriesPage }),
+      },
+      {
+        path: '/repositories/:repositoryId',
+        lazy: async () => ({ Component: (await import('../pages/RepositoryDetail')).RepositoryDetailPage }),
+      },
+      {
+        path: '/groups',
+        lazy: async () => ({ Component: (await import('../pages/Groups')).GroupsPage }),
+      },
       { path: '/proxy', element: <Navigate to="/repositories" replace /> },
-      { path: '/access', element: <AccessControlPage /> },
-      { path: '/audits', element: <AuditsPage /> },
-      { path: '/keys', element: <ApiKeysPage /> },
-      { path: '/users', element: <UsersPage /> },
-      { path: '/audit-retention', element: <AuditRetentionPage /> },
+      {
+        path: '/access',
+        lazy: async () => ({ Component: (await import('../pages/AccessControl')).AccessControlPage }),
+      },
+      {
+        path: '/audits',
+        lazy: async () => ({ Component: (await import('../pages/Audits')).AuditsPage }),
+      },
+      {
+        path: '/keys',
+        lazy: async () => ({ Component: (await import('../pages/ApiKeys')).ApiKeysPage }),
+      },
+      {
+        path: '/users',
+        lazy: async () => ({ Component: (await import('../pages/Users')).UsersPage }),
+      },
+      {
+        path: '/audit-retention',
+        lazy: async () => ({ Component: (await import('../pages/AuditRetention')).AuditRetentionPage }),
+      },
     ],
   },
 ]);

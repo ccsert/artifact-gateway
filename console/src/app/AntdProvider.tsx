@@ -26,7 +26,7 @@ export function AntdProvider({ children }: { children: ReactNode }) {
       }}
       variant="outlined"
     >
-      <AntdApp component={false}>{children}</AntdApp>
+      <AntdApp className="min-h-screen">{children}</AntdApp>
     </ConfigProvider>
   );
 }
