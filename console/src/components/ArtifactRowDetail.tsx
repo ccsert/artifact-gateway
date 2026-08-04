@@ -36,6 +36,7 @@ export function MavenArtifactDetail({
       coordinate: string;
       publisher?: string;
       createdAt?: string;
+      buildNumber?: number;
     }[]
   >([]);
   // coordinate 是 GA（2 段）时直接用它，否则取 GA 部分
@@ -49,12 +50,26 @@ export function MavenArtifactDetail({
 
   useEffect(() => {
     if (!ga) return;
-    // 用 group:artifact 前缀搜同族所有版本
-    listMavenCoordinates({
-      path: { repositoryId: repoId },
-      query: { q: ga, pageSize: 100 },
-    }).then(({ data }) => {
-      const vs = (data?.items ?? [])
+    let cancelled = false;
+    void (async () => {
+      const coordinates: {
+        coordinate: string;
+        buildNumber?: number;
+        publisher?: string;
+        createdAt?: string;
+      }[] = [];
+      let pageToken: string | undefined;
+      do {
+        const { data, error } = await listMavenCoordinates({
+          path: { repositoryId: repoId },
+          query: { q: ga, pageSize: 200, pageToken },
+        });
+        if (cancelled || error || !data) return;
+        coordinates.push(...data.items);
+        pageToken = data.nextPageToken;
+      } while (pageToken);
+
+      const vs = coordinates
         .map((x) => {
           const version = mavenVersion(x.coordinate) ?? x.coordinate;
           const build = x.buildNumber ?? 0;
@@ -73,11 +88,11 @@ export function MavenArtifactDetail({
             coordinate: x.coordinate,
             publisher: x.publisher,
             createdAt: x.createdAt,
+            buildNumber: x.buildNumber,
           };
         })
         .filter((v) => v.label);
       const uniq = Array.from(new Map(vs.map((v) => [v.label, v])).values());
-      setVersions(uniq);
       const requestedVersion = mavenVersion(meta.coordinate);
       const requestedLabel = requestedVersion
         ? `${requestedVersion}${meta.buildNumber && meta.buildNumber > 0 ? ` #${meta.buildNumber}` : ""}`
@@ -88,8 +103,13 @@ export function MavenArtifactDetail({
       const requested = uniq.find(
         (version) => version.label === requestedLabel,
       );
+      if (cancelled) return;
+      setVersions(uniq);
       setSelected((prev) => requested?.label ?? prev ?? latest?.label ?? null);
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [repoId, ga, meta.buildNumber, meta.coordinate]);
 
   // 当前选中的版本（用 label 标识，SNAPSHOT 多构建 label 唯一）；coordinate 用于使用方法
@@ -100,6 +120,7 @@ export function MavenArtifactDetail({
         coordinate: selectedMeta.coordinate,
         publisher: selectedMeta.publisher ?? meta.publisher,
         createdAt: selectedMeta.createdAt ?? meta.createdAt,
+        buildNumber: selectedMeta.buildNumber,
       }
     : meta;
   const currentVersion =

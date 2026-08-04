@@ -85,11 +85,11 @@ func (w Worker) Start(ctx context.Context, interval time.Duration) {
 
 func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) error {
 	if w.Store == nil || w.Source == nil || w.Destination == nil {
-		return w.failPlan(ctx, plan.ID, "replication worker is not configured")
+		return w.failPlan(ctx, plan.ID, "replication worker is not configured", plan.LeaseToken)
 	}
 	checks, err := w.Store.ListReplicationCheckpoints(ctx, plan.ID)
 	if err != nil {
-		return w.failPlan(ctx, plan.ID, "load replication checkpoints failed")
+		return w.failPlan(ctx, plan.ID, "load replication checkpoints failed", plan.LeaseToken)
 	}
 	if w.Metrics != nil {
 		for _, checkpoint := range checks {
@@ -103,7 +103,7 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 		if checkpoint.State == "verified" {
 			continue
 		}
-		if err := w.copyCheckpoint(ctx, checkpoint); err != nil {
+		if err := w.copyCheckpoint(ctx, checkpoint, plan.LeaseToken); err != nil {
 			// copyCheckpoint persists each successful chunk before attempting the
 			// next one. Reload that durable offset so failure bookkeeping cannot
 			// roll a completed chunk back to its stale in-memory value.
@@ -118,21 +118,38 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 			checkpoint.State = "failed"
 			checkpoint.Attempts++
 			checkpoint.LastError = err.Error()
-			if updateErr := w.Store.UpdateReplicationCheckpoint(ctx, checkpoint); updateErr != nil {
+			if updateErr := w.Store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, plan.LeaseToken); updateErr != nil {
 				return updateErr
 			}
-			return w.failPlan(ctx, plan.ID, "replication checkpoint failed: "+checkpoint.ObjectKey)
+			return w.failPlan(ctx, plan.ID, "replication checkpoint failed: "+checkpoint.ObjectKey, plan.LeaseToken)
 		}
 	}
 	if w.Publish != nil {
+		// Renew the lease from durable verified state immediately before
+		// publication. Recovery changes the token, fencing stale workers here.
+		checks, err = w.Store.ListReplicationCheckpoints(ctx, plan.ID)
+		if err != nil {
+			return w.failPlan(ctx, plan.ID, "reload verified replication checkpoints failed", plan.LeaseToken)
+		}
+		if len(checks) == 0 {
+			return w.failPlan(ctx, plan.ID, "replication plan has no checkpoints", plan.LeaseToken)
+		}
+		for _, checkpoint := range checks {
+			if checkpoint.State != "verified" {
+				return w.failPlan(ctx, plan.ID, "replication checkpoint is not verified: "+checkpoint.ObjectKey, plan.LeaseToken)
+			}
+		}
+		if err := w.Store.UpdateReplicationCheckpointWithLease(ctx, checks[len(checks)-1], plan.LeaseToken); err != nil {
+			return err
+		}
 		if err := w.Publish(ctx, plan, checks); err != nil {
-			return w.failPlan(ctx, plan.ID, "publish replicated artifacts failed")
+			return w.failPlan(ctx, plan.ID, "publish replicated artifacts failed", plan.LeaseToken)
 		}
 	}
-	return w.Store.CompleteReplicationPlan(ctx, plan.ID)
+	return w.Store.CompleteReplicationPlanWithLease(ctx, plan.ID, plan.LeaseToken)
 }
 
-func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.ReplicationCheckpoint) error {
+func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.ReplicationCheckpoint, leaseToken string) error {
 	if checkpoint.Size < 0 || checkpoint.ByteOffset < 0 || checkpoint.ByteOffset > checkpoint.Size || !validSHA256(checkpoint.Digest) {
 		return fmt.Errorf("invalid checkpoint")
 	}
@@ -153,7 +170,7 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 			}
 			checkpoint.State = "verified"
 			checkpoint.VerifiedAt = time.Now().UTC()
-			return w.Store.UpdateReplicationCheckpoint(ctx, checkpoint)
+			return w.Store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, leaseToken)
 		}
 		if err != nil && err != objectstore.ErrNotFound {
 			return fmt.Errorf("read destination object: %w", err)
@@ -196,7 +213,7 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 		checkpoint.ByteOffset += length
 		checkpoint.State = "copying"
 		checkpoint.LastError = ""
-		if err := w.Store.UpdateReplicationCheckpoint(ctx, checkpoint); err != nil {
+		if err := w.Store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, leaseToken); err != nil {
 			return err
 		}
 	}
@@ -210,11 +227,11 @@ func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.Replic
 	checkpoint.State = "verified"
 	checkpoint.LastError = ""
 	checkpoint.VerifiedAt = time.Now().UTC()
-	return w.Store.UpdateReplicationCheckpoint(ctx, checkpoint)
+	return w.Store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, leaseToken)
 }
 
-func (w Worker) failPlan(ctx context.Context, id, message string) error {
-	if err := w.Store.FailReplicationPlan(ctx, id, message); err != nil {
+func (w Worker) failPlan(ctx context.Context, id, message, leaseToken string) error {
+	if err := w.Store.FailReplicationPlanWithLease(ctx, id, message, leaseToken); err != nil {
 		return err
 	}
 	return nil

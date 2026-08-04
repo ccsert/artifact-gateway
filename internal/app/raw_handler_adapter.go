@@ -31,7 +31,7 @@ type rawRuntime struct{ handler RawHandler }
 
 func (r rawRuntime) Authenticate(header string) (rawprotocol.Principal, bool) {
 	p, ok := r.handler.Authenticator.Authenticate(header)
-	return rawprotocol.Principal{Actor: p.Actor, Admin: p.Admin}, ok
+	return rawprotocol.Principal{Actor: p.Actor, Admin: p.Admin, Role: string(p.Role)}, ok
 }
 
 func (r rawRuntime) AnonymousAllowed(ctx context.Context, groupName string) bool {
@@ -53,11 +53,12 @@ func (r rawRuntime) AnonymousAllowed(ctx context.Context, groupName string) bool
 func (r rawRuntime) CanRead(principal rawprotocol.Principal, name string) bool {
 	p := r.handler.Authenticator.PrincipalForActor(principal.Actor)
 	p.Admin = principal.Admin
+	p.Role = Role(principal.Role)
 	return r.handler.Authenticator.CanReadRepository(p, name)
 }
 
 func (r rawRuntime) ManagedDecision(ctx context.Context, principal rawprotocol.Principal, member repository.Member, resource string) (rawprotocol.Decision, bool) {
-	decision, managed := ManagedGroupMemberDecision(ctx, r.handler.Repositories, r.handler.Authorizer, Principal{Actor: principal.Actor, Admin: principal.Admin}, member, repository.FormatRaw, resource)
+	decision, managed := ManagedGroupMemberDecision(ctx, r.handler.Repositories, r.handler.Authorizer, Principal{Actor: principal.Actor, Admin: principal.Admin, Role: Role(principal.Role)}, member, repository.FormatRaw, resource)
 	return rawprotocol.Decision{Allowed: decision.Allowed, Source: decision.Source, Reason: decision.Reason}, managed
 }
 

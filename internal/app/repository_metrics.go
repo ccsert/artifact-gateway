@@ -184,12 +184,13 @@ func (m *Metrics) AddBackgroundOperationInFlight(kind string, format repository.
 	}
 }
 func (m *Metrics) RecordAuditRetentionCleanup(outcome string, deleted int) {
-	if outcome == "completed" {
+	switch outcome {
+	case "completed":
 		m.auditCleanupCompleted.Add(1)
 		if deleted > 0 {
 			m.auditCleanupDeleted.Add(uint64(deleted))
 		}
-	} else if outcome == "failed" {
+	case "failed":
 		m.auditCleanupFailed.Add(1)
 	}
 }

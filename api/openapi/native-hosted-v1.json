@@ -16,6 +16,55 @@
     }
   ],
   "paths": {
+    "/artifact-search": {
+      "get": {
+        "operationId": "searchArtifacts",
+        "summary": "Search visible artifacts across every readable repository",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Format"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cross-repository artifact search page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalArtifactSearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/audits": {
       "get": {
         "operationId": "listAudits",
@@ -3271,6 +3320,93 @@
           "$ref": "#/components/schemas/AuditRecord"
         }
       },
+      "ArtifactSummary": {
+        "type": "object",
+        "required": [
+          "coordinate"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "buildNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Snapshot build number; zero for release coordinates."
+          },
+          "publisher": {
+            "type": "string",
+            "description": "Publisher actor when the format records it."
+          }
+        }
+      },
+      "GlobalArtifactSearchHit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ArtifactSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "repositoryId",
+              "repositoryName",
+              "format"
+            ],
+            "properties": {
+              "repositoryId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "repositoryName": {
+                "type": "string"
+              },
+              "format": {
+                "$ref": "#/components/schemas/Format"
+              }
+            }
+          }
+        ]
+      },
+      "GlobalArtifactSearchPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "searchedRepositories"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlobalArtifactSearchHit"
+            }
+          },
+          "searchedRepositories": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of readable active repositories considered by this query."
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateRepository": {
         "type": "object",
         "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
@@ -3580,43 +3716,6 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/EffectiveAccessPermissions"
-          }
-        }
-      },
-      "ArtifactSummary": {
-        "type": "object",
-        "required": [
-          "coordinate"
-        ],
-        "properties": {
-          "coordinate": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string",
-            "pattern": "^sha256:[a-f0-9]{64}$"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "buildNumber": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "description": "Snapshot build number; zero for release coordinates."
-          },
-          "publisher": {
-            "type": "string",
-            "description": "Publisher actor when the format records it."
           }
         }
       },

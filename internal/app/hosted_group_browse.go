@@ -3,12 +3,16 @@ package app
 import (
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+type artifactIdentity struct {
+	Coordinate  string
+	BuildNumber int32
+}
 
 // searchHostedGroupArtifacts exposes the same format-aware projection as a
 // repository search, but merges only members that are explicitly anonymous.
@@ -46,7 +50,7 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 		return
 	}
 	members = anonymousHostedGroupMembers(group, members)
-	byIdentity := make(map[string]adminopenapi.ArtifactSummary)
+	byIdentity := make(map[artifactIdentity]adminopenapi.ArtifactSummary)
 	for _, member := range members {
 		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
@@ -58,9 +62,9 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 			return
 		}
 		for _, item := range items {
-			identity := item.Coordinate
+			identity := artifactIdentity{Coordinate: item.Coordinate}
 			if item.BuildNumber != nil {
-				identity += "\x00" + strconv.Itoa(int(*item.BuildNumber))
+				identity.BuildNumber = *item.BuildNumber
 			}
 			if _, exists := byIdentity[identity]; !exists {
 				byIdentity[identity] = item
@@ -88,17 +92,22 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 	var next *string
 	if len(items) > pageSize {
 		items = items[:pageSize]
-		token := h.encodeArtifactSearchCursor(group.ID, group.Format, query, items[len(items)-1].Coordinate)
+		last := items[len(items)-1]
+		buildNumber := 0
+		if last.BuildNumber != nil {
+			buildNumber = int(*last.BuildNumber)
+		}
+		token := h.encodeArtifactSearchCursor(group.ID, group.Format, query, last.Coordinate, buildNumber)
 		next = &token
 	}
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
 }
 
-func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Request, repo repository.HostedRepository, query string, limit int, after string) ([]adminopenapi.ArtifactSummary, error) {
+func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Request, repo repository.HostedRepository, query string, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
 	switch repo.Format {
 	case repository.FormatOCI:
-		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, limit, after)
+		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +115,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
 		}
 	case repository.FormatMaven:
-		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, limit, after)
+		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +125,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: artifact.Coordinate, Digest: &digest, CreatedAt: &createdAt, BuildNumber: &buildNumber, Publisher: optionalPublisher(artifact.Publisher)})
 		}
 	case repository.FormatConan:
-		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, limit, after)
+		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +133,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
 	case repository.FormatRaw:
-		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, limit, after)
+		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}

@@ -36,6 +36,9 @@ services:
       GATEWAY_OIDC_AUDIENCE: ${GATEWAY_OIDC_AUDIENCE:-}
       GATEWAY_OIDC_JWKS_URL: ${GATEWAY_OIDC_JWKS_URL:-}
       GATEWAY_OIDC_ADMIN_SUBJECTS: ${GATEWAY_OIDC_ADMIN_SUBJECTS:-}
+      GATEWAY_OIDC_READER_ROLES: ${GATEWAY_OIDC_READER_ROLES:-}
+      GATEWAY_OIDC_WRITER_ROLES: ${GATEWAY_OIDC_WRITER_ROLES:-}
+      GATEWAY_OIDC_ADMIN_ROLES: ${GATEWAY_OIDC_ADMIN_ROLES:-}
       GATEWAY_OTLP_HTTP_ENDPOINT: ${GATEWAY_OTLP_HTTP_ENDPOINT:-}
       GATEWAY_OTEL_SAMPLING_RATIO: ${GATEWAY_OTEL_SAMPLING_RATIO:-1}
       # 出网代理：让 proxy 仓库的上游请求走宿主机代理（容器经 host-gateway 访问）
@@ -75,10 +78,10 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: ${GATEWAY_POSTGRES_PASSWORD:?set GATEWAY_POSTGRES_PASSWORD in .env}
-    entrypoint: ["/bin/sh", "-ec"]
-    command: ["for migration in /migrations/*.sql; do sed '/-- +goose Down/,$$d' \"$$migration\" | psql -h postgres -U gateway -d gateway -v ON_ERROR_STOP=1; done"]
+    entrypoint: ["/usr/local/bin/run-migrations"]
     volumes:
       - ./migrations:/migrations:ro
+      - ./scripts/run-migrations.sh:/usr/local/bin/run-migrations:ro
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z

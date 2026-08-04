@@ -174,7 +174,7 @@ func TestRawProxyValidatesDirectRequestsWhenEgressIsBypassed(t *testing.T) {
 func TestRawProxyEgressClientClearsCustomDialers(t *testing.T) {
 	client := rawProxyEgressClient(&http.Client{Transport: &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) { return nil, nil }, Dial: func(string, string) (net.Conn, error) { return nil, nil }}})
 	transport, ok := client.Transport.(*http.Transport)
-	if !ok || transport.DialContext != nil || transport.Dial != nil || transport.Proxy == nil {
+	if !ok || transport.DialContext != nil || transport.Dial != nil || transport.Proxy == nil { //nolint:staticcheck // The regression explicitly covers the legacy Dial hook.
 		t.Fatalf("egress transport did not use standard proxy dialing")
 	}
 }

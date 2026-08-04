@@ -49,7 +49,7 @@ func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
 	}
 	s3Checker, ok := dependencies.checkers[1].(httpChecker)
 	if !ok {
-		t.Fatalf("S3 checker type = %T, want httpChecker", dependencies.checkers[2])
+		t.Fatalf("S3 checker type = %T, want httpChecker", dependencies.checkers[1])
 	}
 	if s3Checker.url != "https://objects.example.test/prefix/" {
 		t.Fatalf("S3 checker URL = %q", s3Checker.url)

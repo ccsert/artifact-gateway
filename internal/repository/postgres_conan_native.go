@@ -12,7 +12,7 @@ func (s *PostgresStore) ListReclaimableConanObjects(ctx context.Context, before 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []ConanObjectIntent{}
 	for rows.Next() {
 		var item ConanObjectIntent
@@ -216,7 +216,7 @@ func (s *PostgresStore) PromoteConanRecipeRevision(ctx context.Context, p ConanP
 	if err != nil {
 		return ConanRecipeRevision{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var out ConanRecipeRevision
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 AND digest=$4 AND state='visible' FOR SHARE`, p.SourceRepositoryID, p.Reference, p.Revision, p.Digest), &out)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -271,7 +271,7 @@ func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	refs := []ConanReference{}
 	for rows.Next() {
 		var ref ConanReference
@@ -288,7 +288,7 @@ func (s *PostgresStore) ListConanRecipeRevisions(ctx context.Context, repository
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []ConanRecipeRevision
 	for rows.Next() {
 		var item ConanRecipeRevision
@@ -305,7 +305,7 @@ func (s *PostgresStore) SearchConanRecipeRevisions(ctx context.Context, reposito
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []ConanRecipeRevision
 	for rows.Next() {
 		var item ConanRecipeRevision
@@ -322,7 +322,7 @@ func (s *PostgresStore) ListConanPackageRevisions(ctx context.Context, repositor
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []ConanPackageRevision
 	for rows.Next() {
 		var item ConanPackageRevision
@@ -338,7 +338,7 @@ func (s *PostgresStore) ListConanPackageIDs(ctx context.Context, repositoryID, r
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []string
 	for rows.Next() {
 		var id string
@@ -363,7 +363,7 @@ func (s *PostgresStore) listConanAssets(ctx context.Context, repositoryID, refer
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []ConanAsset
 	for rows.Next() {
 		var asset ConanAsset

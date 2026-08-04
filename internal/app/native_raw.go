@@ -207,7 +207,7 @@ func (h nativeRawHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, id string) {
 	release, err := h.store.LockRawUpload(r.Context(), id)
 	if err != nil {
-		http.Error(w, "raw upload coordination is unavailable", 503)
+		http.Error(w, "raw upload coordination is unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	defer release()
@@ -263,7 +263,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		key := "native/raw/sha256/" + strings.TrimPrefix(digest, "sha256:")
 		releaseObject, err := h.store.LockRawObject(r.Context(), digest)
 		if err != nil {
-			http.Error(w, "raw object coordination is unavailable", 503)
+			http.Error(w, "raw object coordination is unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		defer releaseObject()
@@ -277,7 +277,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		}
 		asset, err := h.store.CompleteRawUpload(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: int64(len(data)), ContentType: contentType})
 		if err != nil {
-			http.Error(w, "raw upload cannot be completed", 409)
+			http.Error(w, "raw upload cannot be completed", http.StatusConflict)
 			return
 		}
 		_ = h.objects.Delete(r.Context(), upload.ObjectKey)

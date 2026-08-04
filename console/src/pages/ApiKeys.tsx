@@ -13,6 +13,7 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
   const dialog = useDisclosure();
   const [name, setName] = useState('');
   const [role, setRole] = useState<'reader' | 'writer' | 'admin'>('reader');
+  const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -20,7 +21,7 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
     setBusy(true);
     setError(null);
     const { data, error: err } = await createApiKey({
-      body: { name: name.trim(), roles: [role] },
+      body: { name: name.trim(), roles: [role], expiresAt: new Date(Date.now() + validDays * 86_400_000).toISOString() },
     });
     setBusy(false);
     if (err) {
@@ -31,6 +32,7 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
       dialog.hide();
       setName('');
       setRole('reader');
+      setValidDays(90);
       onCreated(data);
     }
   };
@@ -84,6 +86,19 @@ function CreateKeyDialog({ onCreated }: { onCreated: (key: CreatedApiKey) => voi
               ]}
             />
           </Field>
+          <Field label="有效期" hint="到期后密钥会自动拒绝认证，无需手动吊销。">
+            <Select<typeof validDays>
+              className="w-full"
+              value={validDays}
+              onChange={setValidDays}
+              options={[
+                { value: 30, label: '30 天' },
+                { value: 90, label: '90 天（推荐）' },
+                { value: 180, label: '180 天' },
+                { value: 365, label: '365 天' },
+              ]}
+            />
+          </Field>
           <p className="text-xs text-zinc-500">创建后只会显示一次明文 Token，请立即保存。</p>
         </div>
       </Modal>
@@ -121,7 +136,7 @@ export function ApiKeysPage() {
   const [toRevoke, setToRevoke] = useState<ApiKey | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [filter, setFilter] = useState('');
-  const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'revoked'>('all');
+  const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'expired' | 'revoked'>('all');
 
   const load = useCallback(async () => {
     setError(null);
@@ -150,11 +165,13 @@ export function ApiKeysPage() {
     }
   };
 
+  const isExpired = (key: ApiKey) => !!key.expiresAt && new Date(key.expiresAt).getTime() <= Date.now();
+  const keyState = (key: ApiKey) => key.revokedAt ? 'revoked' : isExpired(key) ? 'expired' : 'active';
   const visibleKeys = (keys ?? []).filter((key) =>
     (!filter || key.name.toLowerCase().includes(filter.toLowerCase()) || key.roles.some((role) => role.includes(filter.toLowerCase()))) &&
-    (stateFilter === 'all' || (stateFilter === 'active' ? !key.revokedAt : !!key.revokedAt)),
+    (stateFilter === 'all' || keyState(key) === stateFilter),
   );
-  const activeKeys = (keys ?? []).filter((key) => !key.revokedAt);
+  const activeKeys = (keys ?? []).filter((key) => keyState(key) === 'active');
   const adminKeys = activeKeys.filter((key) => key.roles.includes('admin'));
 
   return (
@@ -189,26 +206,28 @@ export function ApiKeysPage() {
                 options={[
                   { value: 'all', label: '全部状态' },
                   { value: 'active', label: '有效' },
+                  { value: 'expired', label: '已过期' },
                   { value: 'revoked', label: '已吊销' },
                 ]}
               />
             </Space>
             {visibleKeys.length === 0 ? <EmptyState title="没有匹配的密钥" hint="调整筛选条件后重试" /> : (
-              <DataTable columns={['名称', '角色', '状态', '创建时间', '吊销时间', 'ID', '']}>
+              <DataTable columns={['名称', '角色', '状态', '创建时间', '到期时间', '最后使用', 'ID', '']}>
                 {visibleKeys.map((k) => (
               <tr key={k.id} className="group hover:bg-zinc-800/30">
                 <td className="px-4 py-3 font-medium text-zinc-100">{k.name}</td>
                 <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{k.roles.map((role) => <Badge key={role} tone={role === 'admin' ? 'red' : role === 'writer' ? 'blue' : 'green'}>{role}</Badge>)}</div></td>
                 <td className="px-4 py-3">
-                  <StateBadge state={k.revokedAt ? 'revoked' : 'active'} />
+                  <StateBadge state={keyState(k)} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(k.createdAt)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(k.revokedAt)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(k.expiresAt)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(k.lastUsedAt)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-zinc-500" title={k.id}>
                   {k.id.slice(0, 8)}…
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {!k.revokedAt && (
+                  {!k.revokedAt && !isExpired(k) && (
                     <Button
                       type="text"
                       size="small"

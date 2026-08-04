@@ -52,7 +52,7 @@ func (s *PostgresStore) ListConanPublishUploads(ctx context.Context, sessionID s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	uploads := map[string]string{}
 	for rows.Next() {
 		var name, key string

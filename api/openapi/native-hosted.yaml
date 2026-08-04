@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/artifact-search":
+    "$ref": "./management/search.yaml#/artifact_search"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
   "/repositories":

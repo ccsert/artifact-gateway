@@ -4,6 +4,13 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	replicationLeaseDuration = 10 * time.Minute
+	replicationMaxAttempts   = 3
 )
 
 func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan, checks []ReplicationCheckpoint) (ReplicationPlan, bool, error) {
@@ -19,6 +26,11 @@ func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan
 	}
 	p.State = "pending"
 	p.CreatedAt = time.Now().UTC()
+	if p.MaxAttempts <= 0 {
+		p.MaxAttempts = replicationMaxAttempts
+	} else if p.MaxAttempts > 10 {
+		p.MaxAttempts = 10
+	}
 	s.replicationPlans[p.ID] = p
 	s.replicationKeys[key] = p.ID
 	s.replicationChecks[p.ID] = map[string]ReplicationCheckpoint{}
@@ -48,20 +60,65 @@ func (s *MemoryStore) ClaimReplicationPlansByFormat(_ context.Context, format Fo
 func (s *MemoryStore) claimReplicationPlans(limit int, format Format) ([]ReplicationPlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	s.recoverExpiredReplicationPlansLocked(now)
 	out := []ReplicationPlan{}
-	for id, p := range s.replicationPlans {
+	ids := make([]string, 0, len(s.replicationPlans))
+	for id := range s.replicationPlans {
+		ids = append(ids, id)
+	}
+	s.sortReplicationPlanIDs(ids)
+	for _, id := range ids {
+		p := s.replicationPlans[id]
 		if len(out) == limit {
 			break
 		}
-		if (format == "" || p.Format == format) && (p.State == "pending" || p.State == "failed") {
+		if (format == "" || p.Format == format) && (p.State == "pending" || p.State == "failed") && p.Attempts < p.MaxAttempts && (p.NextAttemptAt.IsZero() || !now.Before(p.NextAttemptAt)) {
 			p.State = "running"
-			p.StartedAt = time.Now().UTC()
+			p.StartedAt = now
 			p.CompletedAt = time.Time{}
+			p.NextAttemptAt = time.Time{}
+			p.Attempts++
+			p.LeaseToken = uuid.NewString()
+			p.LeaseExpiresAt = now.Add(replicationLeaseDuration)
 			s.replicationPlans[id] = p
 			out = append(out, p)
 		}
 	}
 	return out, nil
+}
+
+func (s *MemoryStore) sortReplicationPlanIDs(ids []string) {
+	sort.Slice(ids, func(i, j int) bool {
+		return s.replicationPlans[ids[i]].CreatedAt.Before(s.replicationPlans[ids[j]].CreatedAt)
+	})
+}
+
+func (s *MemoryStore) RecoverExpiredReplicationPlans(_ context.Context, before time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.recoverExpiredReplicationPlansLocked(before), nil
+}
+
+func (s *MemoryStore) recoverExpiredReplicationPlansLocked(before time.Time) int {
+	count := 0
+	for id, p := range s.replicationPlans {
+		if p.State != "running" || p.LeaseExpiresAt.IsZero() || p.LeaseExpiresAt.After(before) {
+			continue
+		}
+		p.State = "failed"
+		p.LeaseToken = ""
+		p.LeaseExpiresAt = time.Time{}
+		p.LastError = "replication worker lease expired"
+		if p.Attempts >= p.MaxAttempts {
+			p.NextAttemptAt = time.Time{}
+		} else {
+			p.NextAttemptAt = before
+		}
+		s.replicationPlans[id] = p
+		count++
+	}
+	return count
 }
 func (s *MemoryStore) ListReplicationPlans(_ context.Context, repositoryID string, limit int) ([]ReplicationPlan, error) {
 	s.mu.RLock()
@@ -104,9 +161,13 @@ func (s *MemoryStore) ListReplicationCheckpoints(_ context.Context, id string) (
 	sort.Slice(out, func(i, j int) bool { return out[i].ObjectKey < out[j].ObjectKey })
 	return out, nil
 }
-func (s *MemoryStore) UpdateReplicationCheckpoint(_ context.Context, c ReplicationCheckpoint) error {
+func (s *MemoryStore) UpdateReplicationCheckpointWithLease(_ context.Context, c ReplicationCheckpoint, leaseToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	p, ok := s.replicationPlans[c.PlanID]
+	if !ok || p.State != "running" || p.LeaseToken == "" || p.LeaseToken != leaseToken || (!p.LeaseExpiresAt.IsZero() && !time.Now().UTC().Before(p.LeaseExpiresAt)) {
+		return ErrNotFound
+	}
 	m := s.replicationChecks[c.PlanID]
 	if m == nil {
 		return ErrNotFound
@@ -116,22 +177,42 @@ func (s *MemoryStore) UpdateReplicationCheckpoint(_ context.Context, c Replicati
 	}
 	c.UpdatedAt = time.Now().UTC()
 	m[c.ObjectKey] = c
+	p.LeaseExpiresAt = c.UpdatedAt.Add(replicationLeaseDuration)
+	s.replicationPlans[c.PlanID] = p
 	return nil
 }
-func (s *MemoryStore) CompleteReplicationPlan(_ context.Context, id string) error {
-	return s.finishReplication(id, "completed", "")
+func (s *MemoryStore) CompleteReplicationPlanWithLease(_ context.Context, id, leaseToken string) error {
+	return s.finishReplication(id, "completed", "", leaseToken)
 }
-func (s *MemoryStore) FailReplicationPlan(_ context.Context, id, msg string) error {
-	return s.finishReplication(id, "failed", msg)
-}
-func (s *MemoryStore) finishReplication(id, state, msg string) error {
+func (s *MemoryStore) FailReplicationPlanWithLease(_ context.Context, id, msg, leaseToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.replicationPlans[id]
-	if !ok || p.State != "running" {
+	if !ok || p.State != "running" || p.LeaseToken == "" || p.LeaseToken != leaseToken || (!p.LeaseExpiresAt.IsZero() && !time.Now().UTC().Before(p.LeaseExpiresAt)) {
+		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	p.State, p.LastError, p.CompletedAt = "failed", msg, now
+	p.LeaseToken = ""
+	p.LeaseExpiresAt = time.Time{}
+	if p.Attempts >= p.MaxAttempts {
+		p.NextAttemptAt = time.Time{}
+	} else {
+		p.NextAttemptAt = now
+	}
+	s.replicationPlans[id] = p
+	return nil
+}
+func (s *MemoryStore) finishReplication(id, state, msg, leaseToken string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.replicationPlans[id]
+	if !ok || p.State != "running" || p.LeaseToken == "" || p.LeaseToken != leaseToken || (!p.LeaseExpiresAt.IsZero() && !time.Now().UTC().Before(p.LeaseExpiresAt)) {
 		return ErrNotFound
 	}
 	p.State, p.LastError, p.CompletedAt = state, msg, time.Now().UTC()
+	p.LeaseToken = ""
+	p.LeaseExpiresAt = time.Time{}
 	s.replicationPlans[id] = p
 	return nil
 }

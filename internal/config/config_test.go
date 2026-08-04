@@ -88,12 +88,15 @@ func TestLoadConfiguresOIDCWithHTTPSIssuerAndDiscoveryDefault(t *testing.T) {
 	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway")
 	t.Setenv("GATEWAY_OIDC_JWKS_URL", "")
 	t.Setenv("GATEWAY_OIDC_ADMIN_SUBJECTS", "ops-admin, release-admin ")
+	t.Setenv("GATEWAY_OIDC_READER_ROLES", "artifact-reader")
+	t.Setenv("GATEWAY_OIDC_WRITER_ROLES", "artifact-writer")
+	t.Setenv("GATEWAY_OIDC_ADMIN_ROLES", "artifact-admin")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OIDCIssuer != "https://login.example.test" || cfg.OIDCJWKSURL != "" || strings.Join(cfg.OIDCAdminSubjects, ",") != "ops-admin,release-admin" {
+	if cfg.OIDCIssuer != "https://login.example.test" || cfg.OIDCJWKSURL != "" || strings.Join(cfg.OIDCAdminSubjects, ",") != "ops-admin,release-admin" || strings.Join(cfg.OIDCRoles.Reader, ",") != "artifact-reader" || strings.Join(cfg.OIDCRoles.Writer, ",") != "artifact-writer" || strings.Join(cfg.OIDCRoles.Admin, ",") != "artifact-admin" {
 		t.Fatalf("OIDC config = %#v", cfg)
 	}
 }

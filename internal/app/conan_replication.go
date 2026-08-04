@@ -157,7 +157,7 @@ func conanReplicationMatchingAssets(ctx context.Context, store repository.Native
 
 func conanReplicationAssets(ctx context.Context, store repository.NativeConanStore, sourceID, reference, revision string) ([]repository.ConanAsset, error) {
 	if reference == "" || revision == "" {
-		return nil, errors.New("Conan source revision is required")
+		return nil, errors.New("Conan source revision is required") //nolint:staticcheck // Protocol name is a proper noun in operator-facing errors.
 	}
 	recipe, err := store.GetConanRecipeRevision(ctx, sourceID, reference, revision)
 	if err != nil || recipe.State != "visible" {

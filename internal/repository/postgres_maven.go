@@ -416,7 +416,7 @@ func (s *PostgresStore) ListMavenAssets(ctx context.Context, repoID, coordinate 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	assets := []MavenAsset{}
 	for rows.Next() {
 		var asset MavenAsset
@@ -451,10 +451,18 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 }
 
 // SearchMavenArtifacts pages visible artifacts in (coordinate, build_number)
-// order so every SNAPSHOT build appears as its own row. The after cursor is
-// the previous page's last coordinate; paging stays per-coordinate, which
-// keeps releases (build_number 0) fully compatible.
-func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after string) ([]MavenArtifact, error) {
+// order so every SNAPSHOT build appears as its own row.
+func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after MavenArtifactCursor) ([]MavenArtifact, error) {
+	if limit <= 0 {
+		limit = 100
+	} else if limit > 2_147_483_647 {
+		// PostgreSQL's LIMIT parameter is an int4; callers may use a large
+		// logical limit to request an unbounded in-memory-style page.
+		limit = 2_147_483_647
+	}
+	if after.BuildNumber > 2_147_483_647 {
+		after.BuildNumber = 2_147_483_647
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id::text,a.repository_id::text,a.coordinate,a.digest,a.state,a.created_at,a.build_number,COALESCE(p.publisher,'')
 		FROM native_maven_artifacts a
 		LEFT JOIN LATERAL (
@@ -462,8 +470,9 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 			WHERE s.repository_id=a.repository_id AND s.coordinate=a.coordinate AND s.state='committed'
 			ORDER BY s.expires_at DESC LIMIT 1
 		) p ON true
-		WHERE a.repository_id=$1::uuid AND a.state='visible' AND substring(a.coordinate FROM 1 FOR char_length($2))=$2 AND a.coordinate>$3
-		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $4`, repoID, prefix, after, limit)
+		WHERE a.repository_id=$1::uuid AND a.state='visible' AND substring(a.coordinate FROM 1 FOR char_length($2))=$2
+			AND (a.coordinate>$3 OR (a.coordinate=$3 AND a.build_number>$4))
+		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $5`, repoID, prefix, after.Coordinate, after.BuildNumber, limit)
 	if err != nil {
 		return nil, err
 	}

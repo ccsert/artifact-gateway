@@ -1,11 +1,9 @@
 # Artifact Gateway
 
-Artifact Gateway serves native OCI, Raw, and Maven Hosted repositories using
-PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
-verified bytes. Conan 2 is a read-through Group protocol: a managed `conan`
-Repository is an authorization target for a bound remote, not native artifact
-storage. Legacy Groups remain available only for allowlisted external Proxy
-reads.
+Artifact Gateway serves native OCI, Raw, Maven, and Conan 2 Hosted repositories
+using PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
+verified bytes. Legacy Groups remain available for allowlisted external Proxy
+reads, while V2 Groups resolve managed Hosted and Proxy members.
 
 ## Local development
 
@@ -21,7 +19,10 @@ preserves local volumes.
 
 Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean
 checkout. `make integration-test` creates isolated PostgreSQL and MinIO
-containers, applies every migration, and runs the persistent-store tests.
+containers, applies every migration, verifies a second migration run is a
+no-op, and runs the persistent-store tests. Applied migration filenames and
+SHA-256 checksums are recorded in `artifact_gateway_schema_migrations`; edit
+history only through a new forward migration.
 
 Native protocol fixtures exercise the externally visible behavior without an
 external package service:
@@ -73,11 +74,10 @@ docker compose ps gateway
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an
-idempotency key and a `format` of `oci`, `raw`, `maven`, or `conan`. OCI repositories
-are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
-`/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`.
-Conan repositories do not create a native endpoint: bind one to an allowlisted
-Conan Group member to apply repository grants to that remote read-through path.
+idempotency key and a `format` of `oci`, `raw`, `maven`, or `conan`. OCI
+repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
+`/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
+Conan 2 uses `/conan/v2/<repository>/...`.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
@@ -98,7 +98,9 @@ and negative-cache lifetimes default to 15 and 10 minutes and can be overridden
 with `GATEWAY_MAVEN_CACHE_TTL`, `GATEWAY_MAVEN_METADATA_CACHE_TTL`, and
 `GATEWAY_MAVEN_NEGATIVE_CACHE_TTL`.
 For OIDC, configure `GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`; the JWKS
-URL defaults to the issuer's standard path.
+URL defaults to the issuer's standard path. Reader, writer, and administrator
+role mappings are configured with `GATEWAY_OIDC_READER_ROLES`,
+`GATEWAY_OIDC_WRITER_ROLES`, and `GATEWAY_OIDC_ADMIN_ROLES`.
 
 Administrators can inspect audits at `GET /api/v1/audits`, metrics at
 `GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.

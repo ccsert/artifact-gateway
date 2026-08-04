@@ -16,6 +16,55 @@
     }
   ],
   "paths": {
+    "/artifact-search": {
+      "get": {
+        "operationId": "searchArtifacts",
+        "summary": "Search visible artifacts across every readable repository",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Format"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cross-repository artifact search page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalArtifactSearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/anonymous-access-policy": {
       "get": {
         "operationId": "getAnonymousAccessPolicy",
@@ -2719,6 +2768,16 @@
             "type": "string",
             "format": "date-time"
           },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time after which the key can no longer authenticate."
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent successful authentication time."
+          },
           "revokedAt": {
             "type": "string",
             "format": "date-time"
@@ -2763,6 +2822,11 @@
                 "reader"
               ]
             }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optional expiry. Defaults to 90 days and cannot exceed 365 days."
           }
         }
       },
@@ -3808,6 +3872,56 @@
           "lastError": {
             "type": "string",
             "maxLength": 1024
+          }
+        }
+      },
+      "GlobalArtifactSearchHit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ArtifactSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "repositoryId",
+              "repositoryName",
+              "format"
+            ],
+            "properties": {
+              "repositoryId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "repositoryName": {
+                "type": "string"
+              },
+              "format": {
+                "$ref": "#/components/schemas/Format"
+              }
+            }
+          }
+        ]
+      },
+      "GlobalArtifactSearchPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "searchedRepositories"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlobalArtifactSearchHit"
+            }
+          },
+          "searchedRepositories": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of readable active repositories considered by this query."
+          },
+          "nextPageToken": {
+            "type": "string"
           }
         }
       },

@@ -110,6 +110,9 @@ func (a RepositoryAuthorizer) ManagedResourceDecision(ctx context.Context, princ
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}, true
 	}
+	if RoleAllows(principal.Role, operation) {
+		return AuthorizationDecision{Allowed: true, Source: "role", Reason: "role_" + string(principal.Role)}, true
+	}
 	if a.Grants == nil {
 		return AuthorizationDecision{}, false
 	}

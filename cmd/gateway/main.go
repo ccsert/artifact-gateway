@@ -118,11 +118,13 @@ func main() {
 				Audience:      cfg.OIDCAudience,
 				JWKSURL:       cfg.OIDCJWKSURL,
 				AdminSubjects: cfg.OIDCAdminSubjects,
-				AdminRoles:    cfg.OIDCAdminRoles,
+				Roles:         cfg.OIDCRoles,
 			}),
 			APIKeys: store,
 		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{}),
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	errs := make(chan error, 1)

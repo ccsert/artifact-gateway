@@ -355,7 +355,7 @@ func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []OCIManifest
 	for rows.Next() {
 		var v OCIManifest
@@ -410,7 +410,7 @@ func (s *PostgresStore) searchOCIManifestNames(ctx context.Context, repositoryID
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var names []string
 	for rows.Next() {
 		var name string
@@ -499,7 +499,7 @@ func (s *PostgresStore) RestoreOCIManifest(ctx context.Context, repositoryID, na
 		if queryErr != nil {
 			return OCIManifest{}, queryErr
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		var candidates []OCIObjectIntent
 		for rows.Next() {
 			var candidate OCIObjectIntent
@@ -583,7 +583,7 @@ func (s *PostgresStore) ListArtifactTombstones(ctx context.Context, repositoryID
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []ArtifactTombstone{}
 	for rows.Next() {
 		var item ArtifactTombstone

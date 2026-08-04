@@ -834,11 +834,17 @@ func (e ListProxyCacheEntriesParamsAssetFilter) Valid() bool {
 
 // APIKey defines model for APIKey.
 type APIKey struct {
-	CreatedAt time.Time          `json:"createdAt"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ExpiresAt Time after which the key can no longer authenticate.
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
-	Name      string             `json:"name"`
-	RevokedAt *time.Time         `json:"revokedAt,omitempty"`
-	Roles     []APIKeyRoles      `json:"roles"`
+
+	// LastUsedAt Most recent successful authentication time.
+	LastUsedAt *time.Time    `json:"lastUsedAt,omitempty"`
+	Name       string        `json:"name"`
+	RevokedAt  *time.Time    `json:"revokedAt,omitempty"`
+	Roles      []APIKeyRoles `json:"roles"`
 }
 
 // APIKeyRoles defines model for APIKey.Roles.
@@ -1018,8 +1024,10 @@ type ConanReferencePage struct {
 
 // CreateAPIKey defines model for CreateAPIKey.
 type CreateAPIKey struct {
-	Name  string              `json:"name"`
-	Roles []CreateAPIKeyRoles `json:"roles"`
+	// ExpiresAt Optional expiry. Defaults to 90 days and cannot exceed 365 days.
+	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
+	Name      string              `json:"name"`
+	Roles     []CreateAPIKeyRoles `json:"roles"`
 }
 
 // CreateAPIKeyRoles defines model for CreateAPIKey.Roles.
@@ -1080,12 +1088,18 @@ type CreateUserRole string
 
 // CreatedAPIKey defines model for CreatedAPIKey.
 type CreatedAPIKey struct {
-	CreatedAt time.Time            `json:"createdAt"`
-	Id        openapi_types.UUID   `json:"id"`
-	Name      string               `json:"name"`
-	RevokedAt *time.Time           `json:"revokedAt,omitempty"`
-	Roles     []CreatedAPIKeyRoles `json:"roles"`
-	Token     string               `json:"token"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ExpiresAt Time after which the key can no longer authenticate.
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// LastUsedAt Most recent successful authentication time.
+	LastUsedAt *time.Time           `json:"lastUsedAt,omitempty"`
+	Name       string               `json:"name"`
+	RevokedAt  *time.Time           `json:"revokedAt,omitempty"`
+	Roles      []CreatedAPIKeyRoles `json:"roles"`
+	Token      string               `json:"token"`
 }
 
 // CreatedAPIKeyRoles defines model for CreatedAPIKey.Roles.
@@ -1123,6 +1137,32 @@ type EffectiveAccessPermissions struct {
 
 // Format defines model for Format.
 type Format string
+
+// GlobalArtifactSearchHit defines model for GlobalArtifactSearchHit.
+type GlobalArtifactSearchHit struct {
+	// BuildNumber Snapshot build number; zero for release coordinates.
+	BuildNumber *int32     `json:"buildNumber,omitempty"`
+	ContentType *string    `json:"contentType,omitempty"`
+	Coordinate  string     `json:"coordinate"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	Digest      *string    `json:"digest,omitempty"`
+	Format      Format     `json:"format"`
+
+	// Publisher Publisher actor when the format records it.
+	Publisher      *string            `json:"publisher,omitempty"`
+	RepositoryId   openapi_types.UUID `json:"repositoryId"`
+	RepositoryName string             `json:"repositoryName"`
+	Size           *int64             `json:"size,omitempty"`
+}
+
+// GlobalArtifactSearchPage defines model for GlobalArtifactSearchPage.
+type GlobalArtifactSearchPage struct {
+	Items         []GlobalArtifactSearchHit `json:"items"`
+	NextPageToken *string                   `json:"nextPageToken,omitempty"`
+
+	// SearchedRepositories Number of readable active repositories considered by this query.
+	SearchedRepositories int `json:"searchedRepositories"`
+}
 
 // Grant defines model for Grant.
 type Grant struct {
@@ -1720,6 +1760,14 @@ type ReplaceAnonymousAccessPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// SearchArtifactsParams defines parameters for SearchArtifacts.
+type SearchArtifactsParams struct {
+	Q         string     `form:"q" json:"q"`
+	Format    *Format    `form:"format,omitempty" json:"format,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ReplaceAuditRetentionPolicyParams defines parameters for ReplaceAuditRetentionPolicy.
 type ReplaceAuditRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -2039,6 +2087,9 @@ type ServerInterface interface {
 
 	// (DELETE /api-keys/{apiKeyId})
 	RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyId openapi_types.UUID)
+	// SearchArtifacts Search visible artifacts across every readable repository
+	// (GET /artifact-search)
+	SearchArtifacts(w http.ResponseWriter, r *http.Request, params SearchArtifactsParams)
 
 	// (GET /audit-retention-policy)
 	GetAuditRetentionPolicy(w http.ResponseWriter, r *http.Request)
@@ -2349,6 +2400,78 @@ func (siw *ServerInterfaceWrapper) RevokeApiKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeApiKey(w, r, apiKeyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) SearchArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchArtifactsParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchArtifacts(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5265,6 +5388,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api-keys", wrapper.CreateApiKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api-keys/{apiKeyId}", wrapper.RevokeApiKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/artifact-search", wrapper.SearchArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit-retention-policy", wrapper.GetAuditRetentionPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/audit-retention-policy", wrapper.ReplaceAuditRetentionPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit-retention/jobs", wrapper.ListAuditRetentionJobs)
@@ -5663,6 +5787,58 @@ func (response RevokeApiKey404ApplicationProblemPlusJSONResponse) VisitRevokeApi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchArtifactsRequestObject struct {
+	Params SearchArtifactsParams
+}
+
+type SearchArtifactsResponseObject interface {
+	VisitSearchArtifactsResponse(w http.ResponseWriter) error
+}
+
+type SearchArtifacts200JSONResponse GlobalArtifactSearchPage
+
+func (response SearchArtifacts200JSONResponse) VisitSearchArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SearchArtifacts400ApplicationProblemPlusJSONResponse) VisitSearchArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchArtifacts401ApplicationProblemPlusJSONResponse) VisitSearchArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8578,6 +8754,9 @@ type StrictServerInterface interface {
 
 	// (DELETE /api-keys/{apiKeyId})
 	RevokeApiKey(ctx context.Context, request RevokeApiKeyRequestObject) (RevokeApiKeyResponseObject, error)
+	// SearchArtifacts Search visible artifacts across every readable repository
+	// (GET /artifact-search)
+	SearchArtifacts(ctx context.Context, request SearchArtifactsRequestObject) (SearchArtifactsResponseObject, error)
 
 	// (GET /audit-retention-policy)
 	GetAuditRetentionPolicy(ctx context.Context, request GetAuditRetentionPolicyRequestObject) (GetAuditRetentionPolicyResponseObject, error)
@@ -8945,6 +9124,32 @@ func (sh *strictHandler) RevokeApiKey(w http.ResponseWriter, r *http.Request, ap
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeApiKeyResponseObject); ok {
 		if err := validResponse.VisitRevokeApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchArtifacts operation middleware
+func (sh *strictHandler) SearchArtifacts(w http.ResponseWriter, r *http.Request, params SearchArtifactsParams) {
+	var request SearchArtifactsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchArtifacts(ctx, request.(SearchArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchArtifactsResponseObject); ok {
+		if err := validResponse.VisitSearchArtifactsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

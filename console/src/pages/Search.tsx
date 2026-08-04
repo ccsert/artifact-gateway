@@ -2,8 +2,8 @@ import { Fragment, useEffect, useState } from "react";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Input, Space, Tooltip } from "antd";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { listRepositories, searchRepositoryArtifacts } from "../client";
-import type { Repository } from "../client";
+import { searchArtifacts } from "../client";
+import type { GlobalArtifactSearchHit } from "../client";
 import { PageHeader, DataTable, StatCard } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge } from "../components/Badge";
@@ -15,59 +15,9 @@ import {
 } from "../components/ArtifactRowDetail";
 import { OciImageDetail } from "../components/OciImageDetail";
 
-interface GlobalHit {
-  repositoryId: string;
-  repositoryName: string;
-  format: Repository["format"];
-  coordinate: string;
-  digest?: string;
-  size?: number;
-  contentType?: string;
-  createdAt?: string;
-  buildNumber?: number;
-  publisher?: string;
-}
+const SEARCH_PAGE_SIZE = 100;
 
-const PER_REPO_LIMIT = 25;
-
-async function loadAllRepositories(): Promise<Repository[]> {
-  const out: Repository[] = [];
-  let pageToken: string | undefined;
-  do {
-    const r = await listRepositories({ query: { pageSize: 100, pageToken } });
-    if (r.error || !r.data) throw r.error ?? new Error("加载仓库列表失败");
-    out.push(...r.data.items);
-    pageToken = r.data.nextPageToken;
-  } while (pageToken);
-  return out;
-}
-
-// A repository that errors (search unsupported, not enabled, or denied) simply
-// contributes no hits rather than failing the whole search.
-async function searchRepository(
-  repo: Repository,
-  q: string,
-): Promise<GlobalHit[]> {
-  const r = await searchRepositoryArtifacts({
-    path: { repositoryId: repo.id },
-    query: { q, pageSize: PER_REPO_LIMIT },
-  });
-  if (r.error || !r.data) return [];
-  return (r.data.items ?? []).map((x) => ({
-    repositoryId: repo.id,
-    repositoryName: repo.name,
-    format: repo.format,
-    coordinate: x.coordinate,
-    digest: x.digest,
-    size: x.size,
-    contentType: x.contentType,
-    createdAt: x.createdAt,
-    buildNumber: x.buildNumber,
-    publisher: x.publisher,
-  }));
-}
-
-function artifactTarget(hit: GlobalHit): string {
+function artifactTarget(hit: GlobalArtifactSearchHit): string {
   const params = new URLSearchParams({ artifact: hit.coordinate });
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
@@ -80,11 +30,12 @@ export function SearchPage() {
   const q = (params.get("q") ?? "").trim();
   const [query, setQuery] = useState(q);
 
-  const [hits, setHits] = useState<GlobalHit[]>([]);
+  const [hits, setHits] = useState<GlobalArtifactSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [searchedRepos, setSearchedRepos] = useState(0);
-  const [maybeTruncated, setMaybeTruncated] = useState(0);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>();
   const [expandedHit, setExpandedHit] = useState<string | null>(null);
 
   useEffect(() => {
@@ -93,7 +44,7 @@ export function SearchPage() {
       setLoading(false);
       setError(null);
       setSearchedRepos(0);
-      setMaybeTruncated(0);
+      setNextPageToken(undefined);
       return;
     }
     let cancelled = false;
@@ -101,30 +52,21 @@ export function SearchPage() {
     setError(null);
     setHits([]);
     setSearchedRepos(0);
-    setMaybeTruncated(0);
+    setNextPageToken(undefined);
 
     (async () => {
-      try {
-        const repos = await loadAllRepositories();
-        if (cancelled) return;
-        setSearchedRepos(repos.length);
-        const perRepo = await Promise.all(
-          repos.map((repo) => searchRepository(repo, q)),
-        );
-        if (cancelled) return;
-        const flat = perRepo.flat();
-        setMaybeTruncated(
-          perRepo.filter((rows) => rows.length >= PER_REPO_LIMIT).length,
-        );
-        flat.sort((a, b) =>
-          (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
-        );
-        setHits(flat);
-      } catch (e) {
-        if (!cancelled) setError(e);
-      } finally {
-        if (!cancelled) setLoading(false);
+      const response = await searchArtifacts({
+        query: { q, pageSize: SEARCH_PAGE_SIZE },
+      });
+      if (cancelled) return;
+      if (response.error || !response.data) {
+        setError(response.error ?? new Error("搜索制品失败"));
+      } else {
+        setHits(response.data.items);
+        setSearchedRepos(response.data.searchedRepositories);
+        setNextPageToken(response.data.nextPageToken);
       }
+      setLoading(false);
     })();
 
     return () => {
@@ -133,6 +75,23 @@ export function SearchPage() {
   }, [q]);
 
   useEffect(() => setQuery(q), [q]);
+
+  const loadMore = async () => {
+    if (!nextPageToken || loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+    const response = await searchArtifacts({
+      query: { q, pageSize: SEARCH_PAGE_SIZE, pageToken: nextPageToken },
+    });
+    setLoadingMore(false);
+    if (response.error || !response.data) {
+      setError(response.error ?? new Error("加载更多搜索结果失败"));
+      return;
+    }
+    setHits((current) => [...current, ...response.data.items]);
+    setSearchedRepos(response.data.searchedRepositories);
+    setNextPageToken(response.data.nextPageToken);
+  };
 
   return (
     <div>
@@ -164,7 +123,7 @@ export function SearchPage() {
           title="输入关键词开始搜索"
           hint="在上方搜索框输入坐标、路径或镜像名前缀后回车"
         />
-      ) : error ? (
+      ) : error && hits.length === 0 ? (
         <ErrorBanner error={error} />
       ) : loading ? (
         <Loading
@@ -181,25 +140,30 @@ export function SearchPage() {
         <>
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatCard
-              label="命中制品"
+              label="已加载制品"
               value={hits.length}
-              sub="按更新时间排序"
+              sub="可继续展开或精确定位"
             />
             <StatCard
               label="已检索仓库"
               value={searchedRepos}
-              sub="跨仓库并行搜索"
+              sub="仅包含当前身份可读仓库"
             />
             <StatCard
-              label="可能截断"
-              value={maybeTruncated}
+              label="分页状态"
+              value={nextPageToken ? "有更多" : "已完成"}
               sub={
-                maybeTruncated
-                  ? `每个仓库最多显示 ${PER_REPO_LIMIT} 条`
-                  : "当前结果完整"
+                nextPageToken
+                  ? "继续加载不会丢失仓库结果"
+                  : "已到达搜索结果末尾"
               }
             />
           </div>
+          {error ? (
+            <div className="mb-4">
+              <ErrorBanner error={error} />
+            </div>
+          ) : null}
           <DataTable columns={["坐标", "仓库", "格式", "大小", "创建时间", ""]}>
             {hits.map((hit, index) => {
               const rowKey = `${hit.repositoryId}-${hit.coordinate}-${hit.buildNumber ?? 0}-${index}`;
@@ -360,6 +324,13 @@ export function SearchPage() {
               );
             })}
           </DataTable>
+          {nextPageToken ? (
+            <div className="mt-4 flex justify-center">
+              <Button loading={loadingMore} onClick={() => void loadMore()}>
+                加载更多
+              </Button>
+            </div>
+          ) : null}
         </>
       )}
     </div>

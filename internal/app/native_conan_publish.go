@@ -206,10 +206,6 @@ func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Re
 	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(Principal, repository.HostedRepository) { next(session) })
 }
 
-func (h nativeConanPublishHandler) withRepository(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, next func(Principal, repository.HostedRepository)) {
-	h.withRepositoryResource(w, r, id, operation, "", next)
-}
-
 func (h nativeConanPublishHandler) withRepositoryResource(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, resource string, next func(Principal, repository.HostedRepository)) {
 	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !ok {

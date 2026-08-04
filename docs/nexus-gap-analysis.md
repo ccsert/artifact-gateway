@@ -31,19 +31,19 @@ the Console described in `console/src/app/router.tsx`.
 
 | Area | Nexus | Artifact Gateway | Severity |
 | --- | --- | --- | --- |
-| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Static tokens or single OIDC issuer/audience; env-var reader grants; free-text principals | High |
-| Login and SSO entry | Login page, SAML/OIDC buttons, sessions | No login page; manual bearer-token paste in a header dialog | High |
-| Global artifact search | Cross-repo component, checksum, class-name, tag search | Per-repository browse only; no cross-repo search | High |
-| Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard only; OCI, Raw, Conan have no upload UI | Medium |
-| Repository editing | Rename, change endpoint, convert type | Create and delete only; no edit | Medium |
-| User and role admin pages | Full Security section | Absent entirely | High |
+| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Local users, reader/writer/admin roles, repository grants, OIDC role mapping; LDAP/SAML/content selectors remain out of scope | Medium |
+| Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Login page supports local credentials and bearer tokens; OIDC JWT validation and role mapping are available; auth-code SSO is not | Medium |
+| Global artifact search | Cross-repo component, checksum, class-name, tag search | Server-side cross-repository coordinate/path search with permission filtering and deep links; checksum/class-name/saved queries remain future work | Medium |
+| Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
+| Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
+| User and role admin pages | Full Security section | Users, API Keys, Access Control and repository Grants pages; LDAP/SAML/privilege designer remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Lifecycle-driven jobs only; no general scheduler or UI | Medium |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | None | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Instantaneous stat cards only; no charts | Low |
-| Distribution job controls | Pause, retry, cancel, delete | Replication create and view only; promotion fire-and-forget | Medium |
+| Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls and lifecycle Jobs view; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
-| API key governance | Scoped roles, expiry, last-used | Hard-coded `admin` role; no expiry; no last-used | Medium |
+| API key governance | Scoped roles, expiry, last-used | Reader/writer/admin roles, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
 
 ## Functional Gaps
 
@@ -134,11 +134,12 @@ sidebar of seven links plus a tabbed repository detail page
 
 ### Authentication Entry
 
-There is no login route. Authentication is a bearer token entered through a
-Set Token modal in the sticky header (`console/src/app/Layout.tsx:76`,
-`TokenDialog`). There is no SSO button, no session management, no logout, and
-no expiry indication. The token is persisted in `localStorage` under
-`ag.console.token` (`console/src/lib/auth.tsx:5`).
+The Console has a standalone `/login` route for local credentials and bearer
+tokens, an auth guard, logout, and token switching. OIDC JWT validation and
+role mapping are available on the backend; an interactive auth-code redirect
+is still a deployment-specific follow-up. Browser bearer-token persistence
+remains localStorage-based and should be fronted by an HTTPS reverse proxy in
+production.
 
 ### Navigation And Information Architecture
 
@@ -158,37 +159,32 @@ stack.
 
 ### Search And Browse
 
-Artifact browsing exists only inside a single repository detail Artifacts tab
-(`console/src/pages/RepositoryDetail.tsx:79`). There is no global or
-cross-repository search, no checksum or digest search box, no class-name
-search, no tag search, no saved queries or filter presets, and no
-download-popularity sorting. Groups can be created and reordered but there is
-no view of the artifacts a Group would resolve; only legacy Proxy Groups offer
-a try-fetch (`console/src/components/ProxyGroupDetail.tsx`).
+The `/search` route performs permission-filtered cross-repository coordinate and
+path search, supports server-side pagination, and links directly to the exact
+repository artifact (including Maven SNAPSHOT build numbers). Repository
+Artifacts tabs provide format-specific version selection and metadata. Checksum
+search, saved queries, popularity sorting, and a richer Group resolution view
+remain future work.
 
 ### Upload And Publish UI
 
-Only Maven has a publish UI: a three-step wizard
-(`console/src/components/MavenPublishWizard.tsx:28`) that declares a
-coordinate, uploads objects, and commits. OCI push, Raw upload, and Conan
-upload have no Console surface; users must use native CLI clients. There is no
-general drag-and-drop upload component.
+Maven has a three-step publish wizard and Raw has an authenticated upload
+surface. OCI and Conan publication intentionally use their native clients so
+large/resumable protocol uploads are not duplicated in the Console.
 
 ### Repository Management Operations
 
-Repositories can be created and deleted
-(`console/src/pages/Repositories.tsx:197`). The generated management client
-exposes only `listRepositories`, `createRepository`, `deleteRepository`, and
-`getRepository` (`console/src/client/sdk.gen.ts:149`); there is no edit, rename,
-endpoint change, allowlist edit, or hosted-to-proxy conversion.
+Repositories can be created, inspected, edited where mutable (proxy endpoint
+and egress allowlist), and deleted. Updates use `If-Match` optimistic
+concurrency; format, type, and name remain immutable by design.
 
 ### User, Role, And Security Pages
 
-Nexus ships a full Security section: Users, Roles, Privileges, Anonymous, LDAP,
-and Capabilities. Artifact Gateway has none of these pages. The only
-identity-adjacent surface is API Keys, where every key is created with the
-hard-coded role `admin` (`console/src/pages/ApiKeys.tsx:20`), with no scoping,
-no expiry, and no last-used timestamp.
+Nexus ships a broader Security section including LDAP, SAML and content
+selectors. Artifact Gateway provides Users, API Keys, Access Control, grants,
+anonymous policy, local roles and OIDC role mapping. API Keys expose bounded
+roles, expiry, revocation and last-used timestamps; full privilege/content
+selector design remains a deliberate gap.
 
 ### System Settings And Operations Pages
 
@@ -209,10 +205,10 @@ hard-purged through the UI despite a `reclaim` capability.
 
 ### Distribution Job Controls
 
-Replication plans can be created and their checkpoint progress viewed
-(`console/src/pages/RepositoryDetail.tsx` Distribute tab), but there is no
-pause, cancel, retry, abort, or delete control. Promotion is fire-and-forget:
-there is no promotion list and no status tracking.
+Replication plans can be created, inspected, cancelled while pending, retried,
+and run immediately through lifecycle controls. Checkpoint progress is fenced
+by leases. Promotion and retention are represented as lifecycle jobs; a general
+Nexus-style scheduler is not implemented.
 
 ### Notifications And Feedback
 
@@ -263,9 +259,9 @@ Work shipped against this analysis. Items are partial unless noted; see the
 referenced commits.
 
 - **Global cross-repository artifact search (P1).** A header search bar and a
-  `/search` results page fan the existing per-repository `artifact-search`
-  endpoint across every readable repository and aggregate hits. Server-side
-  cross-repo search remains a future enhancement. (`6dc6dace`)
+  `/search` results page use the server-side `/api/v2/artifact-search` cursor
+  endpoint, enforce per-repository read permissions, and preserve exact deep
+  links including Maven SNAPSHOT build numbers.
 - **Audit CSV export (P3).** The audits page exports the currently filtered
   records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
 - **Dashboard storage-by-format donut (P2).** The overview page renders a
@@ -291,17 +287,17 @@ referenced commits.
   button that PUTs a chosen file to `/raw/<repository>/<path>` with the bearer
   token; the server computes the sha256 digest. This is the first publish UI
   for a non-Maven format. (`7317e072`)
-- **Login page (P0).** A standalone `/login` route verifies the pasted bearer
-  against the management API before persisting it, an auth guard redirects
-  unauthenticated visits with a return path, and the header gains a logout
-  button. The token-paste dialog remains for switching credentials. The OIDC
-  single-sign-on (auth-code) flow remains a backend follow-up. (`66eb4684`)
+- **Login page (P0).** A standalone `/login` route supports local credentials
+  and bearer verification, an auth guard redirects unauthenticated visits with
+  a return path, and the header provides logout and credential switching. OIDC
+  JWT validation and reader/writer/admin role mapping are configured by
+  environment; interactive auth-code SSO remains a deployment-specific gap.
 - **Access-control overview (P0/P3).** A central `/access` page aggregates every
   repository's managed grant set into one filterable view (principal, repository,
   scope, resource prefix), pairs it with a reader/writer/admin role-capability
-  reference, and deep-links each row to the repository's grants tab. This is the
-  RBAC management surface built over the existing grant and role model; a full
-  user/privilege CRUD and OIDC role mapping remain future work. (`e228311b`)
+  reference, and deep-links each row to the repository's Grants tab. OIDC role
+  mapping is now implemented; a full privilege/content-selector designer
+  remains future work.
 - **Local user management (P0).** A `users` table with bcrypt password hashing,
   a UserStore (Postgres + Memory), admin-only `/api/v2/users` CRUD (the hash is
   never returned), `POST /auth/login` that mints a stateless 12-hour session
@@ -326,35 +322,34 @@ backend API additions listed below.
   lifecycle contract requires a tombstone, a grace period, and a reference
   recheck before any bytes are reclaimed, so an operator "purge now" button
   would violate that safety model.
-- **API key scoping beyond `admin`** is partly delivered: `reader`/`writer`/
-  `admin` roles now exist and are enforced, and local user accounts with the
-  same roles are managed via `/api/v2/users` (see `535c51e3` and `bf22725a`).
-  OIDC role mapping and a full privilege/content-selector model remain future
-  work.
+- **API key governance** is delivered for the current RBAC model: `reader`/
+  `writer`/`admin` roles are enforced, keys expire by default after 90 days
+  (maximum 365), revocation and last-used timestamps are recorded, and local
+  user accounts with the same roles are managed via `/api/v2/users`. Full
+  privilege/content-selector design remains future work.
+- **Hosted lifecycle coverage** is delivered for Maven, OCI, Raw and Conan:
+  retention policies expose dry-run, protection patterns, version caps, CSV
+  export and queued jobs; replication uses fenced, resumable checkpoints.
 
 ## Prioritized Backlog
 
 A suggested sequence for closing the gaps, scoped so each item is
 independently deliverable.
 
-1. **P0 Login page and OIDC/SSO entry.** Replace the token-paste dialog with a
-   real login route and IdP redirect. The current flow is not usable in
-   production.
-2. **P0 User, role, and privilege management.** Introduce a user/role model
-   and the corresponding Security pages. Lack of RBAC is the main enterprise
-   adoption blocker.
-3. **P1 Global artifact search and cross-repository browse.** Surface the
-   existing `searchRepositoryArtifacts` and coordinate-list endpoints behind a
-   global search bar and a browse view.
-4. **P1 Repository editing and artifact-level operations.** Add an
-   `updateRepository` operation and per-row delete and download UI.
+1. **P0 Interactive OIDC SSO.** Add an auth-code redirect/session adapter for
+   deployments that require browser-managed IdP sessions; JWT validation and
+   environment-driven role mapping are already available.
+2. **P1 Privilege/content-selector management.** Add path-aware privilege
+   composition beyond the current repository grant prefixes.
+3. **P1 Rich global search.** Add checksum/class-name/tag indexes, saved queries,
+   and a deeper Group resolution view.
+4. **P1 Artifact operations.** Add download/metadata actions for every format
+   and promotion status history.
 5. **P2 Dashboard charts and trends.** Add time-series metrics, throughput,
    and storage-growth visualization.
 6. **P2 Task scheduler, blob store management, and system settings pages.**
-7. **P2 OCI, Raw, and Conan upload UI and a shared upload component.**
-8. **P3 Distribution controls** (pause, retry, cancel, delete), tombstone
-   purge, API key scoping and expiry, webhooks and email, i18n, and mobile
-   responsiveness.
+7. **P3 Notifications and ecosystem breadth.** Add webhooks/email and additional
+   package formats; tombstone hard-purge remains intentionally out of scope.
 
 This backlog is advisory. The authoritative delivery objective and completion
 criteria remain [the full repository goal](full-artifact-repository-goal.md);

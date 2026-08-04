@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 )
 
 type Config struct {
@@ -38,7 +40,7 @@ type Config struct {
 	OIDCAudience             string
 	OIDCJWKSURL              string
 	OIDCAdminSubjects        []string
-	OIDCAdminRoles           []string
+	OIDCRoles                authorization.OIDCRoleMapping
 	OTLPHTTPEndpoint         string
 	OTELSamplingRatio        float64
 }
@@ -72,9 +74,13 @@ func Load() (Config, error) {
 		OIDCAudience:             strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
 		OIDCJWKSURL:              strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
 		OIDCAdminSubjects:        splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
-		OIDCAdminRoles:           splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_ROLES")),
-		OTLPHTTPEndpoint:         strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
-		OTELSamplingRatio:        1,
+		OIDCRoles: authorization.OIDCRoleMapping{
+			Reader: splitCSV(os.Getenv("GATEWAY_OIDC_READER_ROLES")),
+			Writer: splitCSV(os.Getenv("GATEWAY_OIDC_WRITER_ROLES")),
+			Admin:  splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_ROLES")),
+		},
+		OTLPHTTPEndpoint:  strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
+		OTELSamplingRatio: 1,
 	}
 
 	if cfg.DatabaseURL == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {

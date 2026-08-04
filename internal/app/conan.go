@@ -91,7 +91,7 @@ func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.Metrics.recordConanRequest(r.Method)
 	}
 	restorePath := r.Method == http.MethodPost && strings.HasSuffix(r.URL.EscapedPath(), ":restore")
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && !(r.Method == http.MethodPost && restorePath) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && (r.Method != http.MethodPost || !restorePath) {
 		if group, path, ok := conanReadGroupAndPath(r.URL.EscapedPath()); ok {
 			h.audit(withConanAuditStatus(r.Context(), http.StatusNotFound), group, path, "", "anonymous", repository.AuditNotFound)
 			http.NotFound(w, r)
@@ -501,7 +501,7 @@ func (h ConanHandler) nativeConanFile(ctx context.Context, asset repository.Cona
 	if err != nil {
 		return conanCacheEntry{}, false, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	body, err := io.ReadAll(io.LimitReader(reader, size+1))
 	if err != nil || int64(len(body)) != size {
 		return conanCacheEntry{}, false, errors.New("native Conan object size mismatch")

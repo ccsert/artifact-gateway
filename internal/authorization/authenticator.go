@@ -76,6 +76,7 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		if identity, ok := a.OIDC.Validate(context.Background(), token); ok {
 			principal := a.PrincipalForActor(identity.Subject)
 			principal.Admin = identity.Admin
+			principal.Role = identity.Role
 			return principal, true
 		}
 	}

@@ -20,6 +20,8 @@ type openAPIServeMux struct {
 	authorize func(http.ResponseWriter, *http.Request) (Principal, bool)
 }
 
+const managementJSONBodyLimit = 1 << 20
+
 func (m openAPIServeMux) guarded(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if m.authorize != nil {
@@ -27,8 +29,24 @@ func (m openAPIServeMux) guarded(handler func(http.ResponseWriter, *http.Request
 				return
 			}
 		}
+		if r.Body != nil && !isManagementObjectUpload(r) {
+			r.Body = http.MaxBytesReader(w, r.Body, managementJSONBodyLimit)
+		}
 		handler(w, r)
 	}
+}
+
+func isManagementObjectUpload(r *http.Request) bool {
+	if r.Method != http.MethodPut {
+		return false
+	}
+	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	for index := 0; index+3 < len(segments); index++ {
+		if segments[index] == "publish-sessions" && segments[index+1] != "" && segments[index+2] == "objects" && segments[index+3] != "" {
+			return index+4 == len(segments)
+		}
+	}
+	return false
 }
 
 func (m openAPIServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {

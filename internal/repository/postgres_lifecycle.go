@@ -42,7 +42,7 @@ func (s *PostgresStore) ListLifecycleJobs(ctx context.Context, repositoryID stri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	jobs := make([]LifecycleJob, 0, limit)
 	for rows.Next() {
 		var job LifecycleJob
@@ -101,7 +101,7 @@ func (s *PostgresStore) claimLifecycleJobs(ctx context.Context, kind LifecycleJo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var jobs []LifecycleJob
 	for rows.Next() {
 		var job LifecycleJob

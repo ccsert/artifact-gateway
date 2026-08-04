@@ -56,7 +56,7 @@ func (s *PostgresStore) ListAuditCleanupJobs(ctx context.Context, limit int) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	jobs := []AuditCleanupJob{}
 	for rows.Next() {
 		var j AuditCleanupJob
@@ -81,7 +81,7 @@ func (s *PostgresStore) ClaimAuditCleanupJobs(ctx context.Context, limit int) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	jobs := []AuditCleanupJob{}
 	for rows.Next() {
 		var j AuditCleanupJob

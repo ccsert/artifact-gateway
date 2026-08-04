@@ -61,7 +61,7 @@ func TestUpstreamMavenClientSendsMavenUserAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchMaven returned error: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", response.StatusCode)
 	}

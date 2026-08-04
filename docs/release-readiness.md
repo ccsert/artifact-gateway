@@ -40,7 +40,9 @@ storage credentials, or unredacted upstream URLs in that record.
 - [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
       promotion and checkpointed replication of OCI, Maven, Raw, and Conan
       Artifacts. It verifies verified-object publication, retry/resume, and
-      SHA-256 verification; it does not run the backup/restore rehearsal.
+      SHA-256 verification. It also runs migrations twice to prove the tracked
+      second pass is a no-op and rejects checksum drift in previously applied
+      files; it does not run the backup/restore rehearsal.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and

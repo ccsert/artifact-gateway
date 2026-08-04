@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -34,6 +35,44 @@ func TestAuthenticatorAcceptsActiveAdministrativeAPIKeyAndRejectsRevokedKey(t *t
 		t.Fatal("revoked API key authenticated")
 	}
 }
+
+func TestAuthenticatorRejectsExpiredAPIKeyAndRecordsSuccessfulUse(t *testing.T) {
+	store := repository.NewMemoryStore()
+	now := time.Now().UTC()
+	expiredToken := "agk_expired-token"
+	_, err := store.CreateAPIKey(context.Background(), repository.APIKey{
+		ID: uuid.NewString(), Name: "expired", SecretHash: HashAPIKey(expiredToken), Roles: []string{"reader"}, ExpiresAt: timePointer(now.Add(-time.Minute)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeToken := "agk_active-token"
+	active, err := store.CreateAPIKey(context.Background(), repository.APIKey{
+		ID: uuid.NewString(), Name: "active", SecretHash: HashAPIKey(activeToken), Roles: []string{"reader"}, ExpiresAt: timePointer(now.Add(time.Hour)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	authenticator := Authenticator{APIKeys: store}
+	if _, ok := authenticator.Authenticate("Bearer " + expiredToken); ok {
+		t.Fatal("expired API key authenticated")
+	}
+	if _, ok := authenticator.Authenticate("Bearer " + activeToken); !ok {
+		t.Fatal("active API key did not authenticate")
+	}
+	keys, err := store.ListAPIKeys(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range keys {
+		if key.ID == active.ID && key.LastUsedAt == nil {
+			t.Fatal("successful authentication did not record last-used time")
+		}
+	}
+}
+
+func timePointer(value time.Time) *time.Time { return &value }
 
 func TestHashAPIKeyDoesNotReturnPlaintext(t *testing.T) {
 	token := "agk_test-token"
@@ -98,6 +137,31 @@ func TestRoleAllowsGrantsBoundedOperations(t *testing.T) {
 		if got := RoleAllows(tc.role, tc.op); got != tc.want {
 			t.Errorf("RoleAllows(%q,%q)=%v want=%v", tc.role, tc.op, got, tc.want)
 		}
+	}
+}
+
+func TestManagedResourceDecisionHonorsGlobalRole(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "managed-role-target", Name: "managed-role-target", Format: repository.FormatRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+
+	authorizer := RepositoryAuthorizer{Grants: store}
+	decision, managed := authorizer.ManagedResourceDecision(
+		context.Background(),
+		Principal{Actor: "reader", Role: RoleReader},
+		repo,
+		RepositoryRead,
+		"release/app.txt",
+	)
+	if !managed || !decision.Allowed || decision.Source != "role" || decision.Reason != "role_reader" {
+		t.Fatalf("managed=%v decision=%#v", managed, decision)
 	}
 }
 

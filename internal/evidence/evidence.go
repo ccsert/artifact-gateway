@@ -125,7 +125,7 @@ func fetch(ctx context.Context, client *http.Client, base *url.URL, path, token 
 	if err != nil {
 		return 0, nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	return response.StatusCode, body, err
 }
@@ -211,10 +211,13 @@ func writeJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(value)
+	if err := encoder.Encode(value); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func hash(value string) string {

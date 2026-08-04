@@ -86,12 +86,13 @@ type ReplicationStore interface {
 	CreateReplicationPlan(context.Context, ReplicationPlan, []ReplicationCheckpoint) (ReplicationPlan, bool, error)
 	ClaimReplicationPlans(context.Context, int) ([]ReplicationPlan, error)
 	ClaimReplicationPlansByFormat(context.Context, Format, int) ([]ReplicationPlan, error)
+	RecoverExpiredReplicationPlans(context.Context, time.Time) (int, error)
 	ListReplicationPlans(context.Context, string, int) ([]ReplicationPlan, error)
 	GetReplicationPlan(context.Context, string, string) (ReplicationPlan, error)
 	ListReplicationCheckpoints(context.Context, string) ([]ReplicationCheckpoint, error)
-	UpdateReplicationCheckpoint(context.Context, ReplicationCheckpoint) error
-	CompleteReplicationPlan(context.Context, string) error
-	FailReplicationPlan(context.Context, string, string) error
+	UpdateReplicationCheckpointWithLease(context.Context, ReplicationCheckpoint, string) error
+	CompleteReplicationPlanWithLease(context.Context, string, string) error
+	FailReplicationPlanWithLease(context.Context, string, string, string) error
 	CancelReplicationPlan(context.Context, string, string) error
 }
 
@@ -110,7 +111,7 @@ type NativeMavenStore interface {
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenAssets(context.Context, string, string) ([]MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
-	SearchMavenArtifacts(context.Context, string, string, int, string) ([]MavenArtifact, error)
+	SearchMavenArtifacts(context.Context, string, string, int, MavenArtifactCursor) ([]MavenArtifact, error)
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	GetMavenArtifactByCoordinate(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,46 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+func TestOpenAPIServeMuxBoundsManagementBodies(t *testing.T) {
+	mux := http.NewServeMux()
+	handler := openAPIServeMux{mux: mux}
+	handler.HandleFunc("POST /payload", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(r.Body); err == nil {
+			t.Error("management body read error = nil, want size limit")
+		}
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/payload",
+		strings.NewReader(strings.Repeat("x", managementJSONBodyLimit+1)),
+	)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestOpenAPIServeMuxDoesNotTruncateArtifactUploads(t *testing.T) {
+	mux := http.NewServeMux()
+	handler := openAPIServeMux{mux: mux}
+	body := strings.Repeat("x", managementJSONBodyLimit+1)
+	handler.HandleFunc("PUT /api/v2/publish-sessions/{sessionId}/objects/{objectName}", func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(r.Body)
+		if err != nil || len(data) != len(body) {
+			t.Fatalf("upload body length=%d err=%v", len(data), err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodPut, "/api/v2/publish-sessions/session/objects/artifact.jar", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+}
 
 type selectiveAdapter struct{ available map[string]bool }
 

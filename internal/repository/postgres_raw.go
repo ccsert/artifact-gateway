@@ -131,7 +131,7 @@ func (s *PostgresStore) ListRawAssets(ctx context.Context, repositoryID, prefix 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	assets := make([]RawAsset, 0)
 	for rows.Next() {
 		var asset RawAsset

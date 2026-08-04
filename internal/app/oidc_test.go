@@ -76,6 +76,42 @@ func TestOIDCAuthenticatorRejectsInvalidClaimsAndSignatures(t *testing.T) {
 	}
 }
 
+func TestOIDCAuthenticatorMapsRealmRolesByHighestPrivilege(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyID := "role-mapping-key"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(oidcJWKS(t, keyID, &privateKey.PublicKey))
+	}))
+	defer server.Close()
+	authenticator := Authenticator{OIDC: NewOIDCValidator(OIDCConfig{
+		Issuer: "https://issuer.example.test", Audience: "artifact-gateway", JWKSURL: server.URL,
+		Roles: OIDCRoleMapping{Reader: []string{" gateway-reader "}, Writer: []string{"gateway-writer"}, Admin: []string{"gateway-admin"}},
+	})}
+
+	for _, tc := range []struct {
+		name  string
+		roles []string
+		want  Role
+		admin bool
+	}{
+		{name: "reader", roles: []string{"gateway-reader"}, want: RoleReader},
+		{name: "writer wins reader", roles: []string{"gateway-reader", "gateway-writer"}, want: RoleWriter},
+		{name: "admin wins writer", roles: []string{"gateway-writer", "gateway-admin"}, want: RoleAdmin, admin: true},
+		{name: "unmapped", roles: []string{"other"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := signedOIDCTokenWithRoles(t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "ci-user", time.Now().Add(time.Minute), tc.roles)
+			principal, ok := authenticator.Authenticate("Bearer " + token)
+			if !ok || principal.Role != tc.want || principal.Admin != tc.admin {
+				t.Fatalf("principal=%#v authenticated=%t", principal, ok)
+			}
+		})
+	}
+}
+
 func TestOIDCAuthenticatorDiscoversJWKS(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -149,16 +185,24 @@ func oidcJWKS(t *testing.T, keyID string, key *rsa.PublicKey) []byte {
 }
 
 func signedOIDCToken(t *testing.T, key *rsa.PrivateKey, keyID, issuer, audience, subject string, expires time.Time) string {
+	return signedOIDCTokenWithRoles(t, key, keyID, issuer, audience, subject, expires, nil)
+}
+
+func signedOIDCTokenWithRoles(t *testing.T, key *rsa.PrivateKey, keyID, issuer, audience, subject string, expires time.Time, roles []string) string {
 	t.Helper()
 	header, err := json.Marshal(map[string]string{"alg": "RS256", "kid": keyID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims, err := json.Marshal(map[string]any{"iss": issuer, "aud": audience, "sub": subject, "exp": expires.Unix()})
+	claims := map[string]any{"iss": issuer, "aud": audience, "sub": subject, "exp": expires.Unix()}
+	if roles != nil {
+		claims["realm_access"] = map[string]any{"roles": roles}
+	}
+	claimBytes, err := json.Marshal(claims)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
+	payload := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claimBytes)
 	digest := sha256.Sum256([]byte(payload))
 	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
 	if err != nil {

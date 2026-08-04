@@ -16,6 +16,7 @@ import (
 type Principal struct {
 	Actor string
 	Admin bool
+	Role  string
 }
 
 type Decision struct {

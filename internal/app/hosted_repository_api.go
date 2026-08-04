@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -91,7 +90,13 @@ type conanRevisionPageCursor struct {
 
 type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
+	BuildNumber                                       int
 	ExpiresAt                                         int64
+}
+
+type artifactSearchPosition struct {
+	Coordinate  string
+	BuildNumber int
 }
 
 type retentionDryRunPageCursor struct {
@@ -247,8 +252,19 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 		return
 	}
 	var request adminopenapi.CreateAPIKey
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" || len(request.Roles) == 0 {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" || len(request.Roles) == 0 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name and at least one role are required")
+		return
+	}
+	now := time.Now().UTC()
+	expiresAt := now.Add(90 * 24 * time.Hour)
+	if request.ExpiresAt != nil {
+		expiresAt = request.ExpiresAt.UTC()
+	}
+	if !expiresAt.After(now) || expiresAt.After(now.Add(365*24*time.Hour)) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "API key expiry must be in the future and no more than 365 days away")
 		return
 	}
 	roles := make([]string, 0, len(request.Roles))
@@ -267,12 +283,12 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 		return
 	}
 	token := "agk_" + base64.RawURLEncoding.EncodeToString(raw)
-	key, err := h.apiKeys.CreateAPIKey(r.Context(), repository.APIKey{ID: uuid.NewString(), Name: strings.TrimSpace(request.Name), SecretHash: authorization.HashAPIKey(token), Roles: roles})
+	key, err := h.apiKeys.CreateAPIKey(r.Context(), repository.APIKey{ID: uuid.NewString(), Name: strings.TrimSpace(request.Name), SecretHash: authorization.HashAPIKey(token), Roles: roles, ExpiresAt: &expiresAt})
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create API key failed")
 		return
 	}
-	response := adminopenapi.CreatedAPIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, Token: token, Roles: make([]adminopenapi.CreatedAPIKeyRoles, 0, len(key.Roles))}
+	response := adminopenapi.CreatedAPIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, ExpiresAt: key.ExpiresAt, LastUsedAt: key.LastUsedAt, Token: token, Roles: make([]adminopenapi.CreatedAPIKeyRoles, 0, len(key.Roles))}
 	for _, role := range key.Roles {
 		response.Roles = append(response.Roles, adminopenapi.CreatedAPIKeyRoles(role))
 	}
@@ -296,7 +312,7 @@ func (h generatedRepositoryAPIAdapter) RevokeApiKey(w http.ResponseWriter, r *ht
 }
 
 func apiKeyResponse(key repository.APIKey) adminopenapi.APIKey {
-	response := adminopenapi.APIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, RevokedAt: key.RevokedAt, Roles: make([]adminopenapi.APIKeyRoles, 0, len(key.Roles))}
+	response := adminopenapi.APIKey{Id: uuid.MustParse(key.ID), Name: key.Name, CreatedAt: key.CreatedAt, RevokedAt: key.RevokedAt, ExpiresAt: key.ExpiresAt, LastUsedAt: key.LastUsedAt, Roles: make([]adminopenapi.APIKeyRoles, 0, len(key.Roles))}
 	for _, role := range key.Roles {
 		response.Roles = append(response.Roles, adminopenapi.APIKeyRoles(role))
 	}
@@ -786,7 +802,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 		hasMore := false
 		switch repo.Format {
 		case repository.FormatOCI:
-			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after)
+			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search OCI artifacts failed")
 				return
@@ -800,7 +816,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = name
 			}
 		case repository.FormatMaven:
-			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, after)
+			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
 				return
@@ -817,7 +833,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = a.Coordinate
 			}
 		case repository.FormatConan:
-			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after)
+			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Conan artifacts failed")
 				return
@@ -831,7 +847,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = reference.Reference
 			}
 		case repository.FormatRaw:
-			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after)
+			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Raw artifacts failed")
 				return
@@ -850,7 +866,11 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 		}
 		var next *string
 		if hasMore {
-			token := h.encodeArtifactSearchCursor(repo.ID, repo.Format, query, lastCoordinate)
+			buildNumber := 0
+			if last := items[len(items)-1].BuildNumber; last != nil {
+				buildNumber = int(*last)
+			}
+			token := h.encodeArtifactSearchCursor(repo.ID, repo.Format, query, lastCoordinate, buildNumber)
 			next = &token
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
@@ -1287,14 +1307,15 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 				return
 			}
 			var job repository.LifecycleJob
-			if source.Format == repository.FormatMaven {
+			switch source.Format {
+			case repository.FormatMaven:
 				promotionID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("maven-promotion:"+target.ID+":"+string(params.IdempotencyKey))).String()
 				job, _, err = (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: promotionID})
-			} else if source.Format == repository.FormatOCI {
+			case repository.FormatOCI:
 				job, _, err = (ociprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: request.Coordinate, Digest: request.Digest})
-			} else if source.Format == repository.FormatRaw {
+			case repository.FormatRaw:
 				job, _, err = (rawprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), rawprotocol.PromotionPayload{SourceRepositoryID: source.ID, Path: request.Coordinate, Digest: request.Digest})
-			} else {
+			default:
 				reference, revision, _ := strings.Cut(request.Coordinate, "#")
 				job, _, err = (conanprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), conanprotocol.PromotionPayload{SourceRepositoryID: source.ID, Reference: reference, Revision: revision, Digest: request.Digest})
 			}
@@ -1567,19 +1588,20 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			return
 		}
 		var err error
-		if repo.Format == repository.FormatMaven {
+		switch repo.Format {
+		case repository.FormatMaven:
 			artifact, getErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), repo.ID, request.Coordinate)
 			if getErr != nil {
 				err = getErr
 			} else {
 				_, err = h.sessions.store.RestoreMavenArtifact(r.Context(), repo.ID, artifact.ID)
 			}
-		} else if repo.Format == repository.FormatConan {
+		case repository.FormatConan:
 			err = h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
-		} else if repo.Format == repository.FormatOCI {
+		case repository.FormatOCI:
 			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
 			_, err = h.oci.RestoreOCIManifest(r.Context(), repo.ID, name, digest)
-		} else {
+		default:
 			_, err = h.sessions.store.RestoreRawAsset(r.Context(), repo.ID, request.Coordinate)
 		}
 		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) || errors.Is(err, repository.ErrNameExists) {
@@ -2536,28 +2558,15 @@ func (h hostedRepositoryAPIHandler) listBound(w http.ResponseWriter, r *http.Req
 }
 
 func (h hostedRepositoryAPIHandler) encodeCursor(id string) string {
-	payload, _ := json.Marshal(repositoryPageCursor{Endpoint: "repositories", ID: id, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, repositoryPageCursor{Endpoint: "repositories", ID: id, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeCursor(token string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
-	}
 	var cursor repositoryPageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "repositories" || cursor.ID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repositories" || cursor.ID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.ID, nil
@@ -2586,7 +2595,7 @@ func validMavenCoordinatePrefix(value string) bool {
 		return false
 	}
 	for _, r := range value {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' || r == ':') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' && r != ':' {
 			return false
 		}
 	}
@@ -2679,220 +2688,119 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 }
 
 func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
-	payload, _ := json.Marshal(ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
-	}
 	var cursor ociImagePageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "oci-images" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Name == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "oci-images" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Name == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Name, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeOCIManifestCursor(repositoryID, name, digest string) string {
-	payload, _ := json.Marshal(ociManifestPageCursor{Endpoint: "oci-manifests", RepositoryID: repositoryID, Name: name, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, ociManifestPageCursor{Endpoint: "oci-manifests", RepositoryID: repositoryID, Name: name, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeOCIManifestCursor(token, repositoryID, name string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
-	}
 	var cursor ociManifestPageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "oci-manifests" || cursor.RepositoryID != repositoryID || cursor.Name != name || cursor.Digest == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "oci-manifests" || cursor.RepositoryID != repositoryID || cursor.Name != name || cursor.Digest == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Digest, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string, buildNumber int) string {
-	payload, _ := json.Marshal(mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositoryID, prefix string) (string, error) {
+func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositoryID, prefix string) (repository.MavenArtifactCursor, error) {
 	if token == "" {
-		return "", nil
-	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
+		return repository.MavenArtifactCursor{}, nil
 	}
 	var cursor mavenCoordinatePageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "maven-coordinates" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
-		return "", errors.New("invalid cursor")
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "maven-coordinates" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return repository.MavenArtifactCursor{}, errors.New("invalid cursor")
 	}
-	return cursor.Coordinate, nil
+	return repository.MavenArtifactCursor{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeConanReferenceCursor(repositoryID, prefix, reference string) string {
-	payload, _ := json.Marshal(conanReferencePageCursor{Endpoint: "conan-references", RepositoryID: repositoryID, Prefix: prefix, Reference: reference, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, conanReferencePageCursor{Endpoint: "conan-references", RepositoryID: repositoryID, Prefix: prefix, Reference: reference, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repositoryID, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
-	}
 	var cursor conanReferencePageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "conan-references" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Reference == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "conan-references" || cursor.RepositoryID != repositoryID || cursor.Prefix != prefix || cursor.Reference == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Reference, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeConanRevisionCursor(repositoryID, reference, query, revision string) string {
-	payload, _ := json.Marshal(conanRevisionPageCursor{Endpoint: "conan-revisions", RepositoryID: repositoryID, Reference: reference, Query: query, Revision: revision, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, conanRevisionPageCursor{Endpoint: "conan-revisions", RepositoryID: repositoryID, Reference: reference, Query: query, Revision: revision, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeConanRevisionCursor(token, repositoryID, reference, query string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
-	}
 	var cursor conanRevisionPageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "conan-revisions" || cursor.RepositoryID != repositoryID || cursor.Reference != reference || cursor.Query != query || cursor.Revision == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "conan-revisions" || cursor.RepositoryID != repositoryID || cursor.Reference != reference || cursor.Query != query || cursor.Revision == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Revision, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string) string {
-	payload, _ := json.Marshal(artifactSearchPageCursor{Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string, buildNumber int) string {
+	return encodeSignedCursor(h.authenticator.AdminToken, artifactSearchPageCursor{Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string) (string, error) {
+func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string) (artifactSearchPosition, error) {
 	if token == "" {
-		return "", nil
-	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", errors.New("invalid cursor")
+		return artifactSearchPosition{}, nil
 	}
 	var cursor artifactSearchPageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
-		return "", errors.New("invalid cursor")
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return artifactSearchPosition{}, errors.New("invalid cursor")
 	}
-	return cursor.Coordinate, nil
+	return artifactSearchPosition{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeRetentionDryRunCursor(repositoryID, policyVersion, coordinate, artifactID string) string {
-	payload, _ := json.Marshal(retentionDryRunPageCursor{Endpoint: "retention-dry-run", RepositoryID: repositoryID, PolicyVersion: policyVersion, Coordinate: coordinate, ArtifactID: artifactID, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, retentionDryRunPageCursor{Endpoint: "retention-dry-run", RepositoryID: repositoryID, PolicyVersion: policyVersion, Coordinate: coordinate, ArtifactID: artifactID, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) decodeRetentionDryRunCursor(token, repositoryID, policyVersion string) (string, string, error) {
 	if token == "" {
 		return "", "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", "", errors.New("invalid cursor")
-	}
 	var cursor retentionDryRunPageCursor
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "retention-dry-run" || cursor.RepositoryID != repositoryID || cursor.PolicyVersion != policyVersion || cursor.Coordinate == "" || cursor.ArtifactID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "retention-dry-run" || cursor.RepositoryID != repositoryID || cursor.PolicyVersion != policyVersion || cursor.Coordinate == "" || cursor.ArtifactID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", "", errors.New("invalid cursor")
 	}
 	return cursor.Coordinate, cursor.ArtifactID, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeTombstoneCursor(repositoryID string, format repository.Format, prefix, coordinate string) string {
-	payload, _ := json.Marshal(tombstonePageCursor{Endpoint: "tombstones", RepositoryID: repositoryID, Format: string(format), Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
-	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+	return encodeSignedCursor(h.authenticator.AdminToken, tombstonePageCursor{Endpoint: "tombstones", RepositoryID: repositoryID, Format: string(format), Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 func (h hostedRepositoryAPIHandler) decodeTombstoneCursor(token, repositoryID string, format repository.Format, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
-	encoded, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(encoded) <= sha256.Size {
-		return "", errors.New("invalid cursor")
-	}
-	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
-	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
-	_, _ = mac.Write(payload)
 	var cursor tombstonePageCursor
-	if !hmac.Equal(signature, mac.Sum(nil)) || json.Unmarshal(payload, &cursor) != nil || cursor.Endpoint != "tombstones" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "tombstones" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Prefix != prefix || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Coordinate, nil

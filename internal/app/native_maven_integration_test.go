@@ -188,7 +188,7 @@ func TestPostgresMavenCollectorClaimSkipsCommitLockedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SELECT 1 FROM native_maven_publish_sessions WHERE id=$1 FOR UPDATE`, session.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -235,14 +235,14 @@ func TestPostgresMavenCoordinateSearchProjection(t *testing.T) {
 	commit("org.example:widget:2.0.0")
 	commit("org.example:widget:1.0.0")
 	commit("org.example:other:1.0.0")
-	items, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, "")
+	items, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, repository.MavenArtifactCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(items) != 2 || items[0].Coordinate != "org.example:widget:1.0.0" || items[1].Coordinate != "org.example:widget:2.0.0" {
 		t.Fatalf("search=%#v", items)
 	}
-	next, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, items[0].Coordinate)
+	next, err := store.SearchMavenArtifacts(ctx, repo.ID, "org.example:widget:", 2, repository.MavenArtifactAfterCoordinate(items[0].Coordinate))
 	if err != nil {
 		t.Fatal(err)
 	}

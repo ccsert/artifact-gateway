@@ -6,10 +6,10 @@ OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 openapi-bundle:
 	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
@@ -57,6 +57,7 @@ api-change-check:
 integration-test: integration-down
 	@docker compose -f compose.integration.yml up -d --wait postgres minio-ready
 	@docker compose -f compose.integration.yml run --rm --no-deps migrate
+	@./scripts/migration-runner-check.sh
 	@docker compose -f compose.integration.yml run --rm --no-deps test
 	@docker compose -f compose.integration.yml down -v
 
@@ -65,6 +66,19 @@ integration-down:
 
 lint:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run
+
+vet:
+	@go vet ./...
+
+race:
+	@go test -race ./internal/...
+
+coverage:
+	@./scripts/coverage-check.sh
+
+dependency-audit:
+	@go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+	@node ./scripts/npm-audit-check.mjs console tools/openapi
 
 fmt:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) gofmt -w cmd internal

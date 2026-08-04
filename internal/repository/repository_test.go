@@ -29,10 +29,10 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
 	checkpoint := ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: checks[0].ObjectKey, Digest: digest, Size: 12, ByteOffset: 12, State: "verified", Attempts: 1, VerifiedAt: time.Now()}
-	if err = store.UpdateReplicationCheckpoint(ctx, checkpoint); err != nil {
+	if err = store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, claimed[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
+	if err = store.CompleteReplicationPlanWithLease(ctx, plan.ID, claimed[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 	plans, err := store.ListReplicationPlans(ctx, "target", 10)
@@ -47,6 +47,66 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	}
 	if _, err = store.ClaimReplicationPlans(ctx, 1); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMemoryReplicationLeaseRecoveryFencesStaleWorker(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("b", 64)
+	plan := ReplicationPlan{ID: "lease-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "lease"}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "object", Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(first) != 1 || first[0].LeaseToken == "" {
+		t.Fatalf("first claim=%#v err=%v", first, err)
+	}
+	oldToken := first[0].LeaseToken
+	expired := store.replicationPlans[plan.ID]
+	expired.LeaseExpiresAt = time.Now().UTC().Add(-time.Second)
+	store.replicationPlans[plan.ID] = expired
+	if err := store.CompleteReplicationPlanWithLease(ctx, plan.ID, oldToken); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale worker complete err=%v", err)
+	}
+	if err := store.FailReplicationPlanWithLease(ctx, plan.ID, "stale failure", oldToken); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale worker fail err=%v", err)
+	}
+	if recovered, err := store.RecoverExpiredReplicationPlans(ctx, time.Now().UTC()); err != nil || recovered != 1 {
+		t.Fatalf("recovered=%d err=%v", recovered, err)
+	}
+	second, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(second) != 1 || second[0].LeaseToken == oldToken || second[0].Attempts != 2 {
+		t.Fatalf("second claim=%#v err=%v", second, err)
+	}
+	checkpoint := ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: "object", Digest: digest, Size: 1, ByteOffset: 1, State: "verified"}
+	if err := store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, oldToken); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale worker update err=%v", err)
+	}
+	if err := store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, second[0].LeaseToken); err != nil {
+		t.Fatalf("current worker update err=%v", err)
+	}
+}
+
+func TestMemoryReplicationPlanStopsAfterMaximumAttempts(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	plan := ReplicationPlan{ID: "bounded-retry-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "bounded-retry", MaxAttempts: 2}
+	checkpoint := ReplicationCheckpoint{ObjectKey: "object", Digest: "sha256:" + strings.Repeat("c", 64), Size: 1}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{checkpoint}); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 1; attempt <= plan.MaxAttempts; attempt++ {
+		claimed, err := store.ClaimReplicationPlans(ctx, 1)
+		if err != nil || len(claimed) != 1 || claimed[0].Attempts != attempt {
+			t.Fatalf("attempt %d claim=%#v err=%v", attempt, claimed, err)
+		}
+		if err = store.FailReplicationPlanWithLease(ctx, plan.ID, "temporary failure", claimed[0].LeaseToken); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if claimed, err := store.ClaimReplicationPlans(ctx, 1); err != nil || len(claimed) != 0 {
+		t.Fatalf("exhausted claim=%#v err=%v", claimed, err)
 	}
 }
 
@@ -294,5 +354,23 @@ func TestMemoryHostedRepositoryDefaultsToHostedType(t *testing.T) {
 	}
 	if created.Type != RepositoryTypeHosted || created.Endpoint != "" || len(created.AllowedHosts) != 0 {
 		t.Fatalf("created=%#v", created)
+	}
+}
+
+func TestMemoryMavenArtifactSearchCursorPreservesSnapshotBuilds(t *testing.T) {
+	store := NewMemoryStore()
+	coordinate := "org.example:demo:1.0-SNAPSHOT"
+	for build := 1; build <= 3; build++ {
+		artifact := MavenArtifact{ID: string(rune('a' + build)), RepositoryID: "repo", Coordinate: coordinate, BuildNumber: build, State: "visible"}
+		store.mavenArtifacts[artifact.ID] = artifact
+	}
+
+	first, err := store.SearchMavenArtifacts(context.Background(), "repo", coordinate, 2, MavenArtifactCursor{})
+	if err != nil || len(first) != 2 || first[0].BuildNumber != 1 || first[1].BuildNumber != 2 {
+		t.Fatalf("first=%#v err=%v", first, err)
+	}
+	second, err := store.SearchMavenArtifacts(context.Background(), "repo", coordinate, 2, MavenArtifactCursor{Coordinate: first[1].Coordinate, BuildNumber: first[1].BuildNumber})
+	if err != nil || len(second) != 1 || second[0].BuildNumber != 3 {
+		t.Fatalf("second=%#v err=%v", second, err)
 	}
 }

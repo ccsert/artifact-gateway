@@ -123,7 +123,7 @@ func rawProxyEgressClient(client *http.Client) *http.Client {
 	// An injected dial hook can bypass the selected egress proxy. Keep TLS
 	// trust configuration but let the standard transport establish the proxy hop.
 	transport.DialContext = nil
-	transport.Dial = nil
+	transport.Dial = nil //nolint:staticcheck // Clear the legacy hook too; otherwise it bypasses the egress proxy when DialContext is nil.
 	copy := *client
 	copy.Transport = transport
 	return &copy

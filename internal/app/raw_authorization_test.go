@@ -131,6 +131,37 @@ func TestRawUsesManagedGrantsForBoundMembers(t *testing.T) {
 	}
 }
 
+func TestRawPreservesAuthenticatedGlobalRoleAcrossProtocolBoundary(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "raw-role-target", Name: "raw-role-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateRawGroup(ctx, repository.Group{Name: "role-downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example", RepositoryID: repo.ID}}}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{}}
+	handler := RawHandler{
+		Store: store, Repositories: store,
+		Authorizer:    RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		Authenticator: authenticator,
+		Client:        &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")},
+	}
+	for _, role := range []Role{RoleReader, RoleWriter} {
+		request := httptest.NewRequest(http.MethodGet, "/raw/role-downloads/release/app.txt", nil)
+		request.Header.Set("Authorization", "Bearer "+authenticator.IssuePrincipalToken(Principal{Actor: string(role), Role: role}))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || response.Body.String() != "artifact" {
+			t.Fatalf("role %s: status=%d body=%q", role, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestRawBoundGrantDenialDoesNotServeCachedSource(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-cached", Name: "raw-cached", Format: repository.FormatRaw})

@@ -156,6 +156,35 @@ interface ArtifactRow {
   files?: ProxyMavenFile[];
 }
 
+async function fetchMavenArtifactPage(
+  repositoryId: string,
+  query: string,
+  pageToken?: string,
+): Promise<{
+  items: ArtifactRow[];
+  nextPageToken?: string;
+  error: unknown;
+}> {
+  const response = await searchRepositoryArtifacts({
+    path: { repositoryId },
+    query: { q: query, pageSize: 50, pageToken },
+  });
+  return {
+    items: (response.data?.items ?? []).map((item) => ({
+      key: `${item.coordinate}-${item.buildNumber ?? 0}`,
+      coordinate: item.coordinate,
+      digest: item.digest,
+      createdAt: item.createdAt,
+      size: item.size,
+      contentType: item.contentType,
+      publisher: item.publisher,
+      buildNumber: item.buildNumber,
+    })),
+    nextPageToken: response.data?.nextPageToken,
+    error: response.error,
+  };
+}
+
 type ProxyMavenFile = ProxyCacheAsset;
 
 const PROXY_MAVEN_PAGE_SIZE = 50;
@@ -849,22 +878,34 @@ function ArtifactsTab({
             err = e;
           }
         } else if (query) {
-          const r = await searchRepositoryArtifacts({
-            path: { repositoryId: repo.id },
-            query: { q: query, ...page },
-          });
-          err = r.error;
-          items = (r.data?.items ?? []).map((x, i) => ({
-            key: `${x.coordinate}-${x.buildNumber ?? 0}-${i}`,
-            coordinate: x.coordinate,
-            digest: x.digest,
-            createdAt: x.createdAt,
-            size: x.size,
-            contentType: x.contentType,
-            publisher: x.publisher,
-            buildNumber: x.buildNumber,
-          }));
-          next = r.data?.nextPageToken;
+          let result = await fetchMavenArtifactPage(repo.id, query, pageToken);
+          err = result.error;
+          items = result.items;
+          next = result.nextPageToken;
+          if (!pageToken && artifactTarget && buildTarget && !err) {
+            let target = items.find(
+              (item) =>
+                item.coordinate === artifactTarget &&
+                item.buildNumber === buildTarget,
+            );
+            while (!target && next) {
+              result = await fetchMavenArtifactPage(repo.id, query, next);
+              if (result.error) {
+                err = result.error;
+                break;
+              }
+              target = result.items.find(
+                (item) =>
+                  item.coordinate === artifactTarget &&
+                  item.buildNumber === buildTarget,
+              );
+              next = result.nextPageToken;
+            }
+            if (target) {
+              items = [target];
+              next = undefined;
+            }
+          }
         } else {
           const r = await listMavenCoordinates({
             path: { repositoryId: repo.id },
@@ -1367,7 +1408,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
       return;
     }
     setGrants(data ?? []);
-    const etag = response.headers.get("ETag");
+    const etag = response?.headers.get("ETag");
     setVersion(etag ? etag.replaceAll('"', "") : repo.version);
   }, [repo.id, repo.version]);
 
@@ -2198,13 +2239,20 @@ function RetentionTab({ repo }: { repo: Repository }) {
           />
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-zinc-800/80 px-4 py-3 text-xs text-zinc-400">
             <span>
-              按期限 <strong className="font-medium text-zinc-200">{dryRun.summary.reasonCounts.age}</strong>
+              按期限{" "}
+              <strong className="font-medium text-zinc-200">
+                {dryRun.summary.reasonCounts.age}
+              </strong>
             </span>
             <span>
-              超过版本上限 <strong className="font-medium text-zinc-200">{dryRun.summary.reasonCounts.maximumVersions}</strong>
+              超过版本上限{" "}
+              <strong className="font-medium text-zinc-200">
+                {dryRun.summary.reasonCounts.maximumVersions}
+              </strong>
             </span>
             <span>
-              类型：{[
+              类型：
+              {[
                 ["发布", dryRun.summary.versionTypeCounts.release],
                 ["快照", dryRun.summary.versionTypeCounts.snapshot],
                 ["版本", dryRun.summary.versionTypeCounts.version],

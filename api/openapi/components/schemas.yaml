@@ -30,6 +30,14 @@ APIKey:
     createdAt:
       type: string
       format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+      description: Time after which the key can no longer authenticate.
+    lastUsedAt:
+      type: string
+      format: date-time
+      description: Most recent successful authentication time.
     revokedAt:
       type: string
       format: date-time
@@ -62,6 +70,10 @@ CreateAPIKey:
         - admin
         - writer
         - reader
+    expiresAt:
+      type: string
+      format: date-time
+      description: Optional expiry. Defaults to 90 days and cannot exceed 365 days.
 CreatedAPIKey:
   allOf:
   - "$ref": "#/APIKey"
@@ -854,6 +866,38 @@ ArtifactSummaryPage:
       type: array
       items:
         "$ref": "#/ArtifactSummary"
+    nextPageToken:
+      type: string
+GlobalArtifactSearchHit:
+  allOf:
+  - "$ref": "#/ArtifactSummary"
+  - type: object
+    required:
+    - repositoryId
+    - repositoryName
+    - format
+    properties:
+      repositoryId:
+        type: string
+        format: uuid
+      repositoryName:
+        type: string
+      format:
+        "$ref": "#/Format"
+GlobalArtifactSearchPage:
+  type: object
+  required:
+  - items
+  - searchedRepositories
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/GlobalArtifactSearchHit"
+    searchedRepositories:
+      type: integer
+      minimum: 0
+      description: Number of readable active repositories considered by this query.
     nextPageToken:
       type: string
 OCIImage:

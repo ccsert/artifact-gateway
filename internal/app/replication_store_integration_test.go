@@ -58,10 +58,10 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	if err != nil || len(claimed) != 1 || claimed[0].ID != plan.ID || claimed[0].State != "running" {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
-	if err = store.UpdateReplicationCheckpoint(ctx, repository.ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: checks[0].ObjectKey, Digest: checks[0].Digest, Size: checks[0].Size, ByteOffset: checks[0].Size, State: "verified", Attempts: 1, VerifiedAt: time.Now().UTC()}); err != nil {
+	if err = store.UpdateReplicationCheckpointWithLease(ctx, repository.ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: checks[0].ObjectKey, Digest: checks[0].Digest, Size: checks[0].Size, ByteOffset: checks[0].Size, State: "verified", Attempts: 1, VerifiedAt: time.Now().UTC()}, claimed[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.FailReplicationPlan(ctx, plan.ID, "temporary object-store failure"); err != nil {
+	if err = store.FailReplicationPlanWithLease(ctx, plan.ID, "temporary object-store failure", claimed[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 	retried, err := store.ClaimReplicationPlans(ctx, 1)
@@ -72,7 +72,7 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	if err != nil || len(persisted) != 2 || persisted[0].State != "verified" || persisted[0].ByteOffset != checks[0].Size || persisted[0].VerifiedAt.IsZero() {
 		t.Fatalf("checkpoints=%#v err=%v", persisted, err)
 	}
-	if err = store.CompleteReplicationPlan(ctx, plan.ID); err != nil {
+	if err = store.CompleteReplicationPlanWithLease(ctx, plan.ID, retried[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
@@ -88,6 +88,21 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	}
 	if _, err := store.GetReplicationPlan(ctx, other.ID, plan.ID); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("unrelated scoped plan err=%v", err)
+	}
+
+	exhausted := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "exhausted-" + uuid.NewString(), MaxAttempts: 1}
+	if _, _, err = store.CreateReplicationPlan(ctx, exhausted, checks[:1]); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != exhausted.ID {
+		t.Fatalf("exhausted initial claim=%#v err=%v", claimed, err)
+	}
+	if err = store.FailReplicationPlanWithLease(ctx, exhausted.ID, "final failure", claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	if claimed, err = store.ClaimReplicationPlans(ctx, 1); err != nil || len(claimed) != 0 {
+		t.Fatalf("exhausted retry claim=%#v err=%v", claimed, err)
 	}
 }
 

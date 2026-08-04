@@ -14,6 +14,8 @@ type APIKey struct {
 	Roles      []string
 	CreatedAt  time.Time
 	RevokedAt  *time.Time
+	ExpiresAt  *time.Time
+	LastUsedAt *time.Time
 }
 
 type APIKeyStore interface {

@@ -494,7 +494,7 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *t
 	publish := func(repositoryName, image, tag string, body []byte) string {
 		t.Helper()
 		response := request(http.MethodPut, serverA.URL+"/v2/"+repositoryName+"/"+image+"/manifests/"+tag, body)
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode != http.StatusCreated {
 			t.Fatalf("publish %s/%s=%d", repositoryName, image, response.StatusCode)
 		}

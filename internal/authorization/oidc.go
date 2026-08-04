@@ -16,6 +16,13 @@ import (
 
 const oidcJWKSCacheTTL = 5 * time.Minute
 
+// OIDCRoleMapping maps external realm roles onto the Gateway's coarse roles.
+type OIDCRoleMapping struct {
+	Reader []string
+	Writer []string
+	Admin  []string
+}
+
 // OIDCConfig supplies the immutable issuer trust boundary. Only RS256 is
 // accepted so the configured JWKS cannot negotiate an unexpected algorithm.
 type OIDCConfig struct {
@@ -23,13 +30,15 @@ type OIDCConfig struct {
 	Audience      string
 	JWKSURL       string
 	AdminSubjects []string
-	// AdminRoles are opt-in Keycloak realm roles that grant administrator access.
-	AdminRoles []string
+	// Realm-role mappings are opt-in. When a token contains several mapped
+	// roles, the validator grants the most privileged one.
+	Roles OIDCRoleMapping
 }
 
 type OIDCIdentity struct {
 	Subject string
 	Admin   bool
+	Role    Role
 }
 
 type OIDCValidator struct {
@@ -52,13 +61,9 @@ func NewOIDCValidator(config OIDCConfig) *OIDCValidator {
 			admins = append(admins, subject)
 		}
 	}
-	roles := make([]string, 0, len(config.AdminRoles))
-	for _, role := range config.AdminRoles {
-		if role = strings.TrimSpace(role); role != "" {
-			roles = append(roles, role)
-		}
-	}
-	config.AdminRoles = roles
+	config.Roles.Reader = normalizedOIDCRoles(config.Roles.Reader)
+	config.Roles.Writer = normalizedOIDCRoles(config.Roles.Writer)
+	config.Roles.Admin = normalizedOIDCRoles(config.Roles.Admin)
 	config.AdminSubjects = admins
 	return &OIDCValidator{config: config, client: &http.Client{Timeout: 5 * time.Second}}
 }
@@ -100,13 +105,29 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 	for _, subject := range v.config.AdminSubjects {
 		if subject == identity.Subject {
 			identity.Admin = true
+			identity.Role = RoleAdmin
 			break
 		}
 	}
-	if containsAny(claims.RealmAccess.Roles, v.config.AdminRoles) {
+	if containsAny(claims.RealmAccess.Roles, v.config.Roles.Admin) {
 		identity.Admin = true
+		identity.Role = RoleAdmin
+	} else if containsAny(claims.RealmAccess.Roles, v.config.Roles.Writer) {
+		identity.Role = RoleWriter
+	} else if containsAny(claims.RealmAccess.Roles, v.config.Roles.Reader) {
+		identity.Role = RoleReader
 	}
 	return identity, true
+}
+
+func normalizedOIDCRoles(values []string) []string {
+	roles := make([]string, 0, len(values))
+	for _, role := range values {
+		if role = strings.TrimSpace(role); role != "" {
+			roles = append(roles, role)
+		}
+	}
+	return roles
 }
 
 func (v *OIDCValidator) key(ctx context.Context, keyID string) (*rsa.PublicKey, bool) {

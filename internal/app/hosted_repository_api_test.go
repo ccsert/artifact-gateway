@@ -89,7 +89,7 @@ func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *
 	read.SetBasicAuth("maven", "resolver-secret")
 	resolved := httptest.NewRecorder()
 	handler.ServeHTTP(resolved, read)
-	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+	if resolved.Code != http.StatusOK || resolved.Body.String() != string(body) {
 		t.Fatalf("promoted HTTP read=%d %q", resolved.Code, resolved.Body.String())
 	}
 	foundPromotionAudit := false
@@ -214,7 +214,11 @@ func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
 	checkpoint.LastError = "transient object-store error"
 	checkpoint.VerifiedAt = time.Now().UTC()
 	checkpoint.SourceObjectKey = "internal/source/object-key"
-	if err = store.UpdateReplicationCheckpoint(ctx, checkpoint); err != nil {
+	claimed, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != plan.ID {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	if err = store.UpdateReplicationCheckpointWithLease(ctx, checkpoint, claimed[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 	detail := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+target.ID+"/replications/"+plan.ID, nil)
@@ -343,7 +347,7 @@ func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
 	read.Header.Set("Authorization", "Bearer "+authenticator.IssueToken("promoter"))
 	resolved := httptest.NewRecorder()
 	handler.ServeHTTP(resolved, read)
-	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+	if resolved.Code != http.StatusOK || resolved.Body.String() != string(body) {
 		t.Fatalf("promoted Raw read=%d %q", resolved.Code, resolved.Body.String())
 	}
 	if targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path); err != nil || targetAsset.Digest != digest || targetAsset.ObjectKey != asset.ObjectKey {
@@ -401,7 +405,7 @@ func TestRepositoryConanPromotionHTTPPublishesTargetRevision(t *testing.T) {
 	read.Header.Set("Authorization", "Bearer "+authenticator.IssueToken("promoter"))
 	resolved := httptest.NewRecorder()
 	handler.ServeHTTP(resolved, read)
-	if resolved.Code != http.StatusOK || string(resolved.Body.Bytes()) != string(body) {
+	if resolved.Code != http.StatusOK || resolved.Body.String() != string(body) {
 		t.Fatalf("promoted Conan read=%d %q", resolved.Code, resolved.Body.String())
 	}
 	if targetRevision, err := store.GetConanRecipeRevision(ctx, target.ID, reference, revision); err != nil || targetRevision.Digest != digest || targetRevision.State != "visible" {
@@ -699,6 +703,87 @@ func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *tes
 	if deniedResponse.Code != http.StatusForbidden {
 		t.Fatalf("denied=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
 	}
+}
+
+func TestMavenSnapshotSearchPaginationPreservesBuildPositionAcrossSurfaces(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "snapshot-search", Format: repository.FormatMaven, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "snapshot-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{
+		ID: uuid.NewString(), Name: "snapshot-search-group", Format: repository.FormatMaven, AnonymousRead: true,
+		Members: []repository.GroupMember{{RepositoryID: repo.ID, Position: 0}},
+	}, "test", "snapshot-search-group", "snapshot-search-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enableAnonymousAccess(t, store)
+
+	coordinate := "org.example:demo:1.0-SNAPSHOT"
+	for build := 1; build <= 3; build++ {
+		sessionID := uuid.NewString()
+		objectName := fmt.Sprintf("demo-build-%d.pom", build)
+		objectKey := "maven/snapshot-search/" + sessionID
+		digest := "sha256:" + fmt.Sprintf("%064x", build)
+		session := repository.MavenPublishSession{ID: sessionID, RepositoryID: repo.ID, Coordinate: coordinate, Publisher: "snapshot-publisher", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: objectName, Digest: digest, Size: 1}}}
+		if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+		if err = store.MarkMavenPublishObject(ctx, sessionID, objectName, objectKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.CommitMavenPublishSession(ctx, sessionID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: objectName, ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	assertPages := func(name, path string, authenticated bool) {
+		t.Helper()
+		token := ""
+		for wantBuild := 1; wantBuild <= 3; wantBuild++ {
+			values := url.Values{"q": {"org.example:demo:"}, "pageSize": {"1"}}
+			if strings.Contains(path, "/artifact-search") && !strings.Contains(path, "/repositories/") {
+				values.Set("format", "maven")
+			}
+			if token != "" {
+				values.Set("pageToken", token)
+			}
+			request := httptest.NewRequest(http.MethodGet, path+"?"+values.Encode(), nil)
+			if authenticated {
+				authorize(request, authenticator.IssueToken("snapshot-reader"))
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			var page struct {
+				Items []struct {
+					Coordinate  string `json:"coordinate"`
+					BuildNumber int    `json:"buildNumber"`
+				} `json:"items"`
+				NextPageToken string `json:"nextPageToken"`
+			}
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Coordinate != coordinate || page.Items[0].BuildNumber != wantBuild {
+				t.Fatalf("%s build %d: status=%d body=%s", name, wantBuild, response.Code, response.Body.String())
+			}
+			token = page.NextPageToken
+			if wantBuild < 3 && token == "" {
+				t.Fatalf("%s build %d: missing next page token", name, wantBuild)
+			}
+		}
+		if token != "" {
+			t.Fatalf("%s final page has next token", name)
+		}
+	}
+
+	assertPages("repository", "/api/v2/repositories/"+repo.ID+"/artifact-search", true)
+	assertPages("anonymous group", "/api/v2/repositories/"+group.ID+"/artifact-search", false)
+	assertPages("global", "/api/v2/artifact-search", true)
 }
 
 func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {

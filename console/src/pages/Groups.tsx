@@ -244,7 +244,7 @@ function MembersDialog({ group, repos, onSaved }: { group: Group; repos: Reposit
       const sorted = [...data].sort((a, b) => a.position - b.position);
       setMemberIds(sorted.map((m) => m.repositoryId));
     }
-    const etag = response.headers.get('ETag');
+	const etag = response?.headers.get('ETag');
     if (etag) setVersion(etag.replaceAll('"', ''));
   };
 

@@ -79,6 +79,7 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 		t.Fatalf("openapi=%s", spec.OpenAPI)
 	}
 	for _, path := range []string{
+		"/artifact-search",
 		"/audits",
 		"/repositories",
 		"/groups",
@@ -170,6 +171,7 @@ func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 		filepath.Join("..", "api", "openapi", "components", "parameters.yaml"),
 		filepath.Join("..", "api", "openapi", "components", "responses.yaml"),
 		filepath.Join("..", "api", "openapi", "management", "repositories.yaml"),
+		filepath.Join("..", "api", "openapi", "management", "search.yaml"),
 		filepath.Join("..", "api", "openapi", "management", "audits.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "oci.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "raw.yaml"),
@@ -180,6 +182,22 @@ func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("required generated-contract input %s: %v", path, err)
 		}
+	}
+}
+
+func TestGlobalArtifactSearchContract(t *testing.T) {
+	spec := loadNativeHostedSpec(t)
+	search := operation(t, spec, "/artifact-search", "GET")
+	if search.OperationID != "searchArtifacts" {
+		t.Fatalf("operationId=%q", search.OperationID)
+	}
+	for _, parameter := range []string{"q", "format", "pageSize", "pageToken"} {
+		if !hasParameter(search.Parameters, parameter, "query") {
+			t.Errorf("global artifact search missing query parameter %s", parameter)
+		}
+	}
+	for _, status := range []string{"200", "400", "401"} {
+		requireResponse(t, search, status)
 	}
 }
 

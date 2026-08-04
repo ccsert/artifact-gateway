@@ -32,10 +32,13 @@ func (s *MemoryStore) ListAPIKeys(_ context.Context) ([]APIKey, error) {
 }
 
 func (s *MemoryStore) FindActiveAPIKeyByHash(_ context.Context, hash string) (APIKey, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, key := range s.apiKeys {
-		if key.SecretHash == hash && key.RevokedAt == nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for id, key := range s.apiKeys {
+		if key.SecretHash == hash && key.RevokedAt == nil && (key.ExpiresAt == nil || now.Before(*key.ExpiresAt)) {
+			key.LastUsedAt = &now
+			s.apiKeys[id] = key
 			return key, nil
 		}
 	}

@@ -211,6 +211,9 @@ type ReplicationPlan struct {
 	Format                                     Format
 	IdempotencyKey, State, LastError           string
 	CreatedAt, StartedAt, CompletedAt          time.Time
+	NextAttemptAt, LeaseExpiresAt              time.Time
+	LeaseToken                                 string
+	Attempts, MaxAttempts                      int
 }
 
 type ReplicationCheckpoint struct {
@@ -271,6 +274,18 @@ type MavenArtifact struct {
 func IsMavenSnapshotCoordinate(coordinate string) bool {
 	parts := strings.Split(coordinate, ":")
 	return len(parts) >= 3 && strings.HasSuffix(parts[2], "-SNAPSHOT")
+}
+
+// MavenArtifactCursor preserves a SNAPSHOT build's position without encoding
+// domain fields into an opaque string inside the storage boundary.
+type MavenArtifactCursor struct {
+	Coordinate  string
+	BuildNumber int
+}
+
+// MavenArtifactAfterCoordinate resumes after every build of one coordinate.
+func MavenArtifactAfterCoordinate(coordinate string) MavenArtifactCursor {
+	return MavenArtifactCursor{Coordinate: coordinate, BuildNumber: int(^uint(0) >> 1)}
 }
 
 // MavenReplication is the immutable source snapshot and target-owned assets
