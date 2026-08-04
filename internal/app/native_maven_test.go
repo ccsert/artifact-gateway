@@ -717,11 +717,18 @@ func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T
 	if err := maintenance.Collect(context.Background()); err == nil {
 		t.Fatal("collector must report failed object deletion")
 	}
+	jobs, err := store.ListLifecycleJobs(context.Background(), "repo", 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobRetrying {
+		t.Fatalf("retrying jobs=%#v err=%v", jobs, err)
+	}
+	if _, err = store.RunLifecycleJobNow(context.Background(), "repo", jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
 	objects.fail = false
 	if err := maintenance.Collect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := objects.Get(context.Background(), key); err == nil {
+	if _, err = objects.Get(context.Background(), key); err == nil {
 		t.Fatal("collector did not retry the retained intent")
 	}
 	if metrics.backgroundOperations[backgroundOperationLifecycle][backgroundOperationMaven][backgroundOperationStarted].Load() != 3 ||

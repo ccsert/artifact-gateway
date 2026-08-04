@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReloadOutlined, SyncOutlined } from '@ant-design/icons';
-import { Button, Select, Space } from 'antd';
-import { listAuditRetentionJobs, listRepositories, listRepositoryLifecycleJobs } from '../client';
+import { CloseOutlined, PlayCircleOutlined, RedoOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
+import { Button, Popconfirm, Progress, Select, Space, Tooltip } from 'antd';
+import {
+  cancelRepositoryLifecycleJob,
+  listAuditRetentionJobs,
+  listRepositories,
+  listRepositoryLifecycleJobs,
+  retryRepositoryLifecycleJob,
+  runRepositoryLifecycleJobNow,
+} from '../client';
 import type { LifecycleJob, Repository } from '../client';
 import { PageHeader, Card, DataTable, StatCard } from '../components/Layout';
 import { EmptyState, ErrorBanner, Loading } from '../components/Feedback';
@@ -17,6 +24,12 @@ type OperationRow = {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  nextAttemptAt?: string;
+  attempts?: number;
+  maxAttempts?: number;
+  progressCurrent?: number;
+  progressTotal?: number;
+  progressMessage?: string;
   lastError?: string;
 };
 
@@ -40,50 +53,93 @@ export function OperationsPage() {
   const [stateFilter, setStateFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
   const [repositoryFilter, setRepositoryFilter] = useState('all');
+  const [actingJob, setActingJob] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const repositoryResult = await listRepositories({ query: { pageSize: 200 } });
-    if (repositoryResult.error) {
-      setError(repositoryResult.error);
-      setLoading(false);
-      return;
-    }
-    const nextRepositories = repositoryResult.data?.items ?? [];
-    setRepositories(nextRepositories);
+    try {
+      const repositoryResult = await listRepositories({ query: { pageSize: 200 } });
+      if (repositoryResult.error) throw repositoryResult.error;
+      const nextRepositories = repositoryResult.data?.items ?? [];
+      setRepositories(nextRepositories);
 
-    const lifecycle = await Promise.all(nextRepositories.map(async (repo) => {
-      const result = await listRepositoryLifecycleJobs({ path: { repositoryId: repo.id } });
-      return result.data?.map((job: LifecycleJob) => ({
+      const lifecycle = await Promise.all(nextRepositories.map(async (repo) => {
+        const result = await listRepositoryLifecycleJobs({ path: { repositoryId: repo.id } });
+        if (result.error) throw result.error;
+        return result.data?.map((job: LifecycleJob) => {
+          const isHistoricalJob = job.state === 'completed' && job.attempts === 0 && !job.progressTotal;
+          return {
+            id: job.id,
+            kind: job.kind,
+            state: job.state,
+            repository: repo.name,
+            repositoryId: repo.id,
+            createdAt: job.createdAt,
+            startedAt: job.startedAt,
+            completedAt: job.completedAt,
+            nextAttemptAt: job.nextAttemptAt,
+            attempts: isHistoricalJob ? undefined : job.attempts,
+            maxAttempts: isHistoricalJob ? undefined : job.maxAttempts,
+            progressCurrent: job.progressCurrent,
+            progressTotal: job.progressTotal,
+            progressMessage: isHistoricalJob ? '历史任务' : job.progressMessage,
+            lastError: job.lastError,
+          };
+        }) ?? [];
+      }));
+      const auditRetention = await listAuditRetentionJobs();
+      if (auditRetention.error) throw auditRetention.error;
+      const auditRows: OperationRow[] = (auditRetention.data ?? []).map((job) => ({
         id: job.id,
-        kind: job.kind,
+        kind: 'audit-retention',
         state: job.state,
-        repository: repo.name,
-        repositoryId: repo.id,
         createdAt: job.createdAt,
         startedAt: job.startedAt,
         completedAt: job.completedAt,
         lastError: job.lastError,
-      })) ?? [];
-    }));
-    const auditRetention = await listAuditRetentionJobs();
-    const auditRows: OperationRow[] = (auditRetention.data ?? []).map((job) => ({
-      id: job.id,
-      kind: 'audit-retention',
-      state: job.state,
-      createdAt: job.createdAt,
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
-      lastError: job.lastError,
-    }));
-    setRows([...lifecycle.flat(), ...auditRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-    setLoading(false);
+      }));
+      setRows([...lifecycle.flat(), ...auditRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (rows?.some((row) => ['pending', 'running', 'retrying'].includes(row.state))) void load();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [load, rows]);
+
+  const controlJob = async (row: OperationRow, action: 'run' | 'retry' | 'cancel') => {
+    if (!row.repositoryId) return;
+    setActingJob(row.id);
+    setError(null);
+    try {
+      const options = { path: { repositoryId: row.repositoryId, lifecycleJobId: row.id } };
+      const result = action === 'run'
+        ? await runRepositoryLifecycleJobNow(options)
+        : action === 'retry'
+          ? await retryRepositoryLifecycleJob(options)
+          : await cancelRepositoryLifecycleJob(options);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setActingJob(null);
+    }
+  };
 
   const visibleRows = useMemo(() => (rows ?? []).filter((row) =>
     (stateFilter === 'all' || row.state === stateFilter) &&
@@ -92,7 +148,7 @@ export function OperationsPage() {
   ), [kindFilter, repositoryFilter, rows, stateFilter]);
   const running = (rows ?? []).filter((row) => row.state === 'running').length;
   const failed = (rows ?? []).filter((row) => row.state === 'failed').length;
-  const pending = (rows ?? []).filter((row) => row.state === 'pending').length;
+  const pending = (rows ?? []).filter((row) => row.state === 'pending' || row.state === 'retrying').length;
   const kindOptions = Array.from(new Set((rows ?? []).map((row) => row.kind))).sort();
 
   return (
@@ -117,8 +173,10 @@ export function OperationsPage() {
             { value: 'all', label: '全部状态' },
             { value: 'pending', label: 'pending' },
             { value: 'running', label: 'running' },
+            { value: 'retrying', label: 'retrying' },
             { value: 'completed', label: 'completed' },
             { value: 'failed', label: 'failed' },
+            { value: 'cancelled', label: 'cancelled' },
           ]}
         />
         <Select
@@ -142,7 +200,7 @@ export function OperationsPage() {
         <Card><EmptyState title="没有匹配的任务" hint="调整筛选条件，或等待任务产生后再刷新。" /></Card>
       ) : (
         <Card>
-          <DataTable columns={['类型', '仓库', '状态', '创建时间', '开始时间', '完成时间', '任务 ID / 失败原因']}>
+          <DataTable className="min-w-[1440px]" columns={['类型', '仓库', '状态', '进度', '尝试', '创建时间', '下次执行 / 完成时间', '任务 ID / 失败原因', '操作']}>
             {visibleRows.map((row) => (
               <tr key={`${row.kind}-${row.id}`} className="hover:bg-zinc-800/30">
                 <td className="px-4 py-3 text-sm text-zinc-200">
@@ -150,12 +208,55 @@ export function OperationsPage() {
                 </td>
                 <td className="px-4 py-3 text-xs text-zinc-400">{row.repository ?? '全局'}</td>
                 <td className="px-4 py-3"><StateBadge state={row.state} /></td>
+                <td className="w-44 px-4 py-3">
+                  {row.progressTotal !== undefined && row.progressTotal > 0 ? (
+                    <div>
+                      <Progress
+                        percent={Math.round(((row.progressCurrent ?? 0) / row.progressTotal) * 100)}
+                        size="small"
+                        status={row.state === 'failed' ? 'exception' : row.state === 'completed' ? 'success' : 'normal'}
+                        format={() => `${row.progressCurrent ?? 0}/${row.progressTotal}`}
+                      />
+                      {row.progressMessage && <div className="mt-1 max-w-40 truncate text-[11px] text-zinc-500" title={row.progressMessage}>{row.progressMessage}</div>}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-zinc-600">{row.progressMessage ?? '未报告'}</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
+                  {row.attempts === undefined ? '—' : `${row.attempts} / ${row.maxAttempts}`}
+                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(row.createdAt)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(row.startedAt)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">{formatDate(row.completedAt)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
+                  <div>{row.nextAttemptAt ? formatDate(row.nextAttemptAt) : formatDate(row.completedAt)}</div>
+                  {row.startedAt && <div className="mt-1 text-[11px] text-zinc-600">开始 {formatDate(row.startedAt)}</div>}
+                </td>
                 <td className="max-w-96 px-4 py-3 font-mono text-[11px] text-zinc-500">
                   <div className="truncate" title={row.id}>{row.id}</div>
                   {row.lastError && <div className="mt-1 truncate text-rose-300" title={row.lastError}>{row.lastError}</div>}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  {row.repositoryId ? (
+                    <Space size="small">
+                      {(row.state === 'pending' || row.state === 'retrying') && (
+                        <Tooltip title="立即加入执行队列">
+                          <Button aria-label="立即加入执行队列" size="small" icon={<PlayCircleOutlined />} loading={actingJob === row.id} onClick={() => void controlJob(row, 'run')} />
+                        </Tooltip>
+                      )}
+                      {(row.state === 'failed' || row.state === 'cancelled') && (
+                        <Tooltip title="重新执行任务">
+                          <Button aria-label="重新执行任务" size="small" icon={<RedoOutlined />} loading={actingJob === row.id} onClick={() => void controlJob(row, 'retry')} />
+                        </Tooltip>
+                      )}
+                      {(row.state === 'pending' || row.state === 'retrying') && (
+                        <Popconfirm title="取消此任务？" description="取消后仍可从任务中心重新执行。" okText="取消任务" cancelText="返回" onConfirm={() => controlJob(row, 'cancel')}>
+                          <Tooltip title="取消任务">
+                            <Button aria-label="取消任务" danger size="small" icon={<CloseOutlined />} loading={actingJob === row.id} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
+                    </Space>
+                  ) : <span className="text-xs text-zinc-600">—</span>}
                 </td>
               </tr>
             ))}

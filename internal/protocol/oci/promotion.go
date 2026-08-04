@@ -46,15 +46,19 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.begin()
 		if err := m.run(ctx, job); err != nil {
 			m.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.end("completed")
 	}
-	return nil
+	return firstErr
 }
 func (m NativePromotion) begin() {
 	if m.Metrics != nil {
@@ -90,36 +94,36 @@ func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
 func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) error {
 	var p PromotionPayload
 	if err := json.Unmarshal(job.Payload, &p); err != nil || p.Format != repository.FormatOCI || p.SourceRepositoryID == "" || p.Name == "" || !strings.HasPrefix(p.Digest, "sha256:") {
-		return m.fail(ctx, job.ID, "invalid OCI promotion payload")
+		return m.fail(ctx, job, "invalid OCI promotion payload")
 	}
 	source, err := m.Store.GetOCIManifest(ctx, p.SourceRepositoryID, p.Name, p.Digest)
 	if err != nil {
-		return m.fail(ctx, job.ID, "source OCI manifest is unavailable")
+		return m.fail(ctx, job, "source OCI manifest is unavailable")
 	}
 	body, err := m.Objects.Get(ctx, source.ObjectKey)
 	if err != nil {
-		return m.fail(ctx, job.ID, "source OCI manifest object is unavailable")
+		return m.fail(ctx, job, "source OCI manifest object is unavailable")
 	}
 	for _, digest := range manifestBlobDigests(body) {
 		if _, err = m.Store.MountOCIBlobFrom(ctx, job.RepositoryID, p.SourceRepositoryID, digest); err != nil {
-			return m.fail(ctx, job.ID, "source OCI blob is unavailable")
+			return m.fail(ctx, job, "source OCI blob is unavailable")
 		}
 	}
 	key := "native/oci/manifests/" + job.RepositoryID + "/" + p.Name + "/" + strings.TrimPrefix(p.Digest, "sha256:")
 	if err = m.Store.StageOCIObjectIntent(ctx, repository.OCIObjectIntent{RepositoryID: job.RepositoryID, ObjectKey: key, Digest: p.Digest, Size: int64(len(body))}); err != nil {
-		return m.fail(ctx, job.ID, "stage target OCI manifest failed")
+		return m.fail(ctx, job, "stage target OCI manifest failed")
 	}
 	if err = m.Objects.PutVerifiedReader(ctx, key, bytes.NewReader(body), int64(len(body)), p.Digest); err != nil {
-		return m.fail(ctx, job.ID, "persist target OCI manifest failed")
+		return m.fail(ctx, job, "persist target OCI manifest failed")
 	}
 	if _, err = m.Store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: job.RepositoryID, Name: p.Name, Digest: p.Digest, ObjectKey: key, MediaType: source.MediaType, SubjectDigest: source.SubjectDigest, ArtifactType: source.ArtifactType, Size: int64(len(body))}, p.Digest); err != nil {
-		return m.fail(ctx, job.ID, "publish target OCI manifest failed")
+		return m.fail(ctx, job, "publish target OCI manifest failed")
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (m NativePromotion) fail(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativePromotion) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

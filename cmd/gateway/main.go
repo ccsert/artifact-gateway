@@ -89,6 +89,7 @@ func main() {
 	maintenance := app.NewCacheMaintenanceWithRaw(cacheStore, ociCache, rawCache).WithConan(conanCache)
 	metrics := &app.Metrics{}
 	runtimeContext := signalContext()
+	app.LifecycleJobRecovery{Store: store}.Start(runtimeContext, time.Minute)
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
 	app.NativeRepositoryRetention{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)

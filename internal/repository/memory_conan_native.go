@@ -429,6 +429,17 @@ func (s *MemoryStore) RestoreConanRecipeRevision(_ context.Context, repositoryID
 	item.State = "visible"
 	s.conanRecipes[key] = item
 	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatConan)+"\x00"+reference+"#"+revision)
+	for packageKey, pkg := range s.conanPackages {
+		if pkg.RepositoryID != repositoryID || pkg.Reference != reference || pkg.RecipeRevision != revision || pkg.State != "deleted" {
+			continue
+		}
+		coordinate := reference + "#" + revision + "/" + pkg.PackageID + "#" + pkg.Revision
+		if _, explicitlyDeleted := s.artifactTombstones[repositoryID+"\x00"+string(FormatConan)+"\x00"+coordinate]; explicitlyDeleted || s.conanAssetsCollectedLocked(repositoryID, reference, revision, pkg.PackageID, pkg.Revision) {
+			continue
+		}
+		pkg.State = "visible"
+		s.conanPackages[packageKey] = pkg
+	}
 	return item, nil
 }
 func (s *MemoryStore) RestoreConanPackageRevision(_ context.Context, repositoryID, reference, recipeRevision, packageID, revision string) (ConanPackageRevision, error) {

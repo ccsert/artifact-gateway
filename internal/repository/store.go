@@ -69,11 +69,17 @@ type ArtifactTombstoneStore interface {
 type LifecycleJobStore interface {
 	EnqueueLifecycleJob(context.Context, LifecycleJob) (LifecycleJob, bool, error)
 	ListLifecycleJobs(context.Context, string, int) ([]LifecycleJob, error)
+	GetLifecycleJob(context.Context, string, string) (LifecycleJob, error)
 	ClaimLifecycleJobs(context.Context, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKind(context.Context, LifecycleJobKind, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKindAndFormat(context.Context, LifecycleJobKind, Format, int) ([]LifecycleJob, error)
-	CompleteLifecycleJob(context.Context, string) error
-	FailLifecycleJob(context.Context, string, string) error
+	RecoverExpiredLifecycleJobs(context.Context, time.Time) (int, error)
+	RunLifecycleJobNow(context.Context, string, string) (LifecycleJob, error)
+	RetryLifecycleJob(context.Context, string, string) (LifecycleJob, error)
+	CancelLifecycleJob(context.Context, string, string) (LifecycleJob, error)
+	UpdateLifecycleJobProgress(context.Context, string, string, int, int, string) error
+	CompleteLifecycleJob(context.Context, string, string) error
+	FailLifecycleJob(context.Context, string, string, string) error
 }
 
 type ReplicationStore interface {

@@ -27,6 +27,13 @@ ReplicationPlanId:
   schema:
     type: string
     format: uuid
+LifecycleJobId:
+  name: lifecycleJobId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
 RepositoryName:
   name: repository
   in: path

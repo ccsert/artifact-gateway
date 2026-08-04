@@ -90,15 +90,19 @@ func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error 
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.begin()
 		if err := m.runReclaimJob(ctx, job); err != nil {
 			m.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.end("completed")
 	}
-	return nil
+	return firstErr
 }
 
 func (m NativeMaintenance) begin() {
@@ -118,31 +122,31 @@ func (m NativeMaintenance) end(outcome string) {
 func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload reclaimPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" {
-		return m.failReclaimJob(ctx, job.ID, "invalid OCI reclaim payload")
+		return m.failReclaimJob(ctx, job, "invalid OCI reclaim payload")
 	}
 	release, err := m.Store.LockOCIObject(ctx, payload.ObjectKey)
 	if err != nil {
-		return m.failReclaimJob(ctx, job.ID, "OCI object coordination failed")
+		return m.failReclaimJob(ctx, job, "OCI object coordination failed")
 	}
 	defer release()
 	unclaimed, err := m.Store.OCIObjectIntentIsUnclaimed(ctx, payload.ObjectKey)
 	if err != nil {
-		return m.failReclaimJob(ctx, job.ID, "OCI object intent lookup failed")
+		return m.failReclaimJob(ctx, job, "OCI object intent lookup failed")
 	}
 	if !unclaimed {
-		return m.Store.CompleteLifecycleJob(ctx, job.ID)
+		return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 	}
 	if err := m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
-		return m.failReclaimJob(ctx, job.ID, fmt.Sprintf("delete OCI object: %v", err))
+		return m.failReclaimJob(ctx, job, fmt.Sprintf("delete OCI object: %v", err))
 	}
 	if err := m.Store.MarkOCIObjectIntentCollected(ctx, payload.ObjectKey); err != nil {
-		return m.failReclaimJob(ctx, job.ID, "mark OCI object intent collected failed")
+		return m.failReclaimJob(ctx, job, "mark OCI object intent collected failed")
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (m NativeMaintenance) failReclaimJob(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

@@ -139,6 +139,7 @@ export type RepositoryCapacityQuota = {
 export type RetentionDryRun = {
   policyVersion: string;
   totalCandidates: number;
+  summary: RetentionDryRunSummary;
   candidates: Array<{
     format: Format;
     coordinate: string;
@@ -158,10 +159,18 @@ export type RestoreArtifact = {
 export type LifecycleJob = {
   id: string;
   kind: "retention" | "promotion" | "replication" | "reclaim";
-  state: "pending" | "running" | "completed" | "failed";
+  state:
+    "pending" | "running" | "retrying" | "completed" | "failed" | "cancelled";
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  nextAttemptAt?: string;
+  leaseExpiresAt?: string;
+  attempts: number;
+  maxAttempts: number;
+  progressCurrent: number;
+  progressTotal: number;
+  progressMessage?: string;
   lastError?: string;
 };
 
@@ -570,6 +579,24 @@ export type UpdateRepository = {
   anonymousRead?: boolean;
 };
 
+export type RetentionReasonCounts = {
+  age: number;
+  maximumVersions: number;
+};
+
+export type RetentionVersionTypeCounts = {
+  release: number;
+  snapshot: number;
+  version: number;
+  asset: number;
+};
+
+export type RetentionDryRunSummary = {
+  reasonCounts: RetentionReasonCounts;
+  versionTypeCounts: RetentionVersionTypeCounts;
+  oldestCandidateAt?: string;
+};
+
 export type PromotionRequest = {
   targetRepositoryId: string;
   coordinate: string;
@@ -702,6 +729,8 @@ export type IdempotencyKey = string;
 export type IfMatch = string;
 
 export type OptionalIfMatch = string;
+
+export type LifecycleJobId = string;
 
 /**
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
@@ -1485,6 +1514,7 @@ export type DryRunRepositoryRetentionData = {
   query?: {
     pageSize?: number;
     pageToken?: string;
+    output?: "json" | "csv";
   };
   url: "/repositories/{repositoryId}/retention:dry-run";
 };
@@ -1772,6 +1802,120 @@ export type ListRepositoryLifecycleJobsResponses = {
 
 export type ListRepositoryLifecycleJobsResponse =
   ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
+
+export type RunRepositoryLifecycleJobNowData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    lifecycleJobId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run";
+};
+
+export type RunRepositoryLifecycleJobNowErrors = {
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type RunRepositoryLifecycleJobNowError =
+  RunRepositoryLifecycleJobNowErrors[keyof RunRepositoryLifecycleJobNowErrors];
+
+export type RunRepositoryLifecycleJobNowResponses = {
+  /**
+   * Updated lifecycle job
+   */
+  200: LifecycleJob;
+};
+
+export type RunRepositoryLifecycleJobNowResponse =
+  RunRepositoryLifecycleJobNowResponses[keyof RunRepositoryLifecycleJobNowResponses];
+
+export type RetryRepositoryLifecycleJobData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    lifecycleJobId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry";
+};
+
+export type RetryRepositoryLifecycleJobErrors = {
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type RetryRepositoryLifecycleJobError =
+  RetryRepositoryLifecycleJobErrors[keyof RetryRepositoryLifecycleJobErrors];
+
+export type RetryRepositoryLifecycleJobResponses = {
+  /**
+   * Updated lifecycle job
+   */
+  200: LifecycleJob;
+};
+
+export type RetryRepositoryLifecycleJobResponse =
+  RetryRepositoryLifecycleJobResponses[keyof RetryRepositoryLifecycleJobResponses];
+
+export type CancelRepositoryLifecycleJobData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    lifecycleJobId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel";
+};
+
+export type CancelRepositoryLifecycleJobErrors = {
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CancelRepositoryLifecycleJobError =
+  CancelRepositoryLifecycleJobErrors[keyof CancelRepositoryLifecycleJobErrors];
+
+export type CancelRepositoryLifecycleJobResponses = {
+  /**
+   * Updated lifecycle job
+   */
+  200: LifecycleJob;
+};
+
+export type CancelRepositoryLifecycleJobResponse =
+  CancelRepositoryLifecycleJobResponses[keyof CancelRepositoryLifecycleJobResponses];
 
 export type ListRepositoryTombstonesData = {
   body?: never;

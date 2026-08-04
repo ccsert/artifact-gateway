@@ -51,6 +51,12 @@ paths:
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
+  "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_lifecycleJobId_run"
+  "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_lifecycleJobId_retry"
+  "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_lifecycleJobId_cancel"
   "/repositories/{repositoryId}/tombstones":
     "$ref": "./management/tombstones.yaml#/repositories_repositoryId_tombstones"
   "/repositories/{repositoryId}/capabilities":

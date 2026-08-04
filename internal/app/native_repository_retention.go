@@ -104,6 +104,7 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 	if limit <= 0 {
 		limit = 100
 	}
+	var firstErr error
 	remaining := limit
 	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatRaw} {
 		if remaining <= 0 {
@@ -117,45 +118,58 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 			m.begin(format)
 			if err := m.runJob(ctx, job); err != nil {
 				m.end(format, "failed")
-				return err
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 			m.end(format, "completed")
 		}
 		remaining -= len(jobs)
 	}
-	return nil
+	return firstErr
 }
 
 func (m NativeRepositoryRetention) runJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload repositoryRetentionPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || !supportsRepositoryRetention(payload.Format) || payload.PolicyVersion == "" {
-		return m.fail(ctx, job.ID, "invalid repository retention payload")
+		return m.fail(ctx, job, "invalid repository retention payload")
 	}
 	repo, err := m.Store.GetHostedRepository(ctx, job.RepositoryID)
 	if err != nil || repo.Type != repository.RepositoryTypeHosted || repo.Format != payload.Format {
-		return m.fail(ctx, job.ID, "repository retention payload does not match repository")
+		return m.fail(ctx, job, "repository retention payload does not match repository")
 	}
 	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, job.RepositoryID)
 	if err != nil {
-		return m.fail(ctx, job.ID, "get repository retention policy failed")
+		return m.fail(ctx, job, "get repository retention policy failed")
 	}
 	if policy.Version != payload.PolicyVersion {
-		return m.fail(ctx, job.ID, "repository retention policy changed before execution")
+		if err = m.Store.UpdateLifecycleJobProgress(ctx, job.ID, job.LeaseToken, 0, 0, "superseded by retention policy "+policy.Version); err != nil {
+			return m.fail(ctx, job, "update superseded retention job failed")
+		}
+		return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 	}
 	candidates, err := m.PlanRepositoryDetailed(ctx, job.RepositoryID, payload.Format)
 	if err != nil {
-		return m.fail(ctx, job.ID, "plan repository retention failed")
+		return m.fail(ctx, job, "plan repository retention failed")
 	}
-	for _, candidate := range candidates {
+	if err = m.Store.UpdateLifecycleJobProgress(ctx, job.ID, job.LeaseToken, 0, len(candidates), "retention plan ready"); err != nil {
+		return m.fail(ctx, job, "update repository retention progress failed")
+	}
+	for index, candidate := range candidates {
 		err = m.tombstone(ctx, job.RepositoryID, candidate)
-		if errors.Is(err, repository.ErrNotFound) {
-			continue
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return m.fail(ctx, job, "tombstone repository retention candidate failed")
 		}
-		if err != nil {
-			return m.fail(ctx, job.ID, "tombstone repository retention candidate failed")
+		message := candidate.Coordinate
+		if len(message) > 255 {
+			message = message[:255]
+		}
+		if err = m.Store.UpdateLifecycleJobProgress(ctx, job.ID, job.LeaseToken, index+1, len(candidates), message); err != nil {
+			return m.fail(ctx, job, "update repository retention progress failed")
 		}
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
 func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID string, candidate RepositoryRetentionCandidate) error {
@@ -390,8 +404,8 @@ func (m NativeRepositoryRetention) ageDays(createdAt time.Time) int {
 	return age
 }
 
-func (m NativeRepositoryRetention) fail(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativeRepositoryRetention) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

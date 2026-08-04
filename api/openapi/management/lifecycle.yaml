@@ -9,3 +9,48 @@ repositories_repositoryId_lifecycle_jobs:
         "$ref": "../components/responses.yaml#/LifecycleJobList"
       '403':
         "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_lifecycle_jobs_lifecycleJobId_run:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/LifecycleJobId"
+  post:
+    operationId: runRepositoryLifecycleJobNow
+    responses:
+      '200': {"$ref": "#/components/responses/LifecycleJob"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+repositories_repositoryId_lifecycle_jobs_lifecycleJobId_retry:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/LifecycleJobId"
+  post:
+    operationId: retryRepositoryLifecycleJob
+    responses:
+      '200': {"$ref": "#/components/responses/LifecycleJob"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+repositories_repositoryId_lifecycle_jobs_lifecycleJobId_cancel:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/LifecycleJobId"
+  post:
+    operationId: cancelRepositoryLifecycleJob
+    responses:
+      '200': {"$ref": "#/components/responses/LifecycleJob"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+components:
+  responses:
+    LifecycleJob:
+      description: Updated lifecycle job
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/LifecycleJob"

@@ -41,15 +41,19 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.begin()
 		if err := m.run(ctx, job); err != nil {
 			m.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.end("completed")
 	}
-	return nil
+	return firstErr
 }
 func (m NativePromotion) begin() {
 	if m.Metrics != nil {
@@ -83,32 +87,32 @@ func (m NativePromotion) Start(ctx context.Context, interval time.Duration) {
 func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) error {
 	var p PromotionPayload
 	if err := json.Unmarshal(job.Payload, &p); err != nil || p.Format != repository.FormatRaw || p.SourceRepositoryID == "" || p.Path == "" || p.Digest == "" {
-		return m.fail(ctx, job.ID, "invalid Raw promotion payload")
+		return m.fail(ctx, job, "invalid Raw promotion payload")
 	}
 	// Serialize the destination name, not the source digest: separate sources
 	// must never race into an immutable target path.
 	release, err := m.Store.LockRawObject(ctx, "promotion:"+job.RepositoryID+":"+strings.TrimPrefix(p.Path, "/"))
 	if err != nil {
-		return m.fail(ctx, job.ID, "target Raw path coordination failed")
+		return m.fail(ctx, job, "target Raw path coordination failed")
 	}
 	defer release()
 	if _, err := m.Store.GetRawAsset(ctx, job.RepositoryID, p.Path); err == nil {
-		return m.fail(ctx, job.ID, "target Raw path already exists")
+		return m.fail(ctx, job, "target Raw path already exists")
 	} else if err != repository.ErrNotFound {
-		return m.fail(ctx, job.ID, "target Raw path lookup failed")
+		return m.fail(ctx, job, "target Raw path lookup failed")
 	}
 	source, err := m.Store.GetRawAsset(ctx, p.SourceRepositoryID, p.Path)
 	if err != nil || source.Digest != p.Digest {
-		return m.fail(ctx, job.ID, "source Raw asset is unavailable")
+		return m.fail(ctx, job, "source Raw asset is unavailable")
 	}
 	source.RepositoryID = job.RepositoryID
 	if _, err = m.Store.PutRawAsset(ctx, source); err != nil {
-		return m.fail(ctx, job.ID, "publish target Raw asset failed")
+		return m.fail(ctx, job, "publish target Raw asset failed")
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
-func (m NativePromotion) fail(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativePromotion) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

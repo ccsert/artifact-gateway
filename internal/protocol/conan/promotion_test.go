@@ -41,8 +41,11 @@ func TestNativePromotionRetriesFailedConanPublication(t *testing.T) {
 		t.Fatalf("worker must persist a retryable failure: %v", err)
 	}
 	jobs, err := base.ListLifecycleJobs(ctx, "target", 10)
-	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobFailed {
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobRetrying {
 		t.Fatalf("jobs=%#v err=%v", jobs, err)
+	}
+	if _, err = base.RunLifecycleJobNow(ctx, "target", job.ID); err != nil {
+		t.Fatal(err)
 	}
 	if err = worker.RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)

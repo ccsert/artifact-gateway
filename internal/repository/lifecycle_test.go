@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestMemoryLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
@@ -26,14 +27,15 @@ func TestMemoryLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	if err != nil || len(claimed) != 1 || claimed[0].State != LifecycleJobRunning {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
+	leaseToken := claimed[0].LeaseToken
 	claimed, err = store.ClaimLifecycleJobs(context.Background(), 10)
 	if err != nil || len(claimed) != 0 {
 		t.Fatalf("second claim=%#v err=%v", claimed, err)
 	}
-	if err := store.CompleteLifecycleJob(context.Background(), job.ID); err != nil {
+	if err := store.CompleteLifecycleJob(context.Background(), job.ID, leaseToken); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.CompleteLifecycleJob(context.Background(), job.ID); !errors.Is(err, ErrNotFound) {
+	if err := store.CompleteLifecycleJob(context.Background(), job.ID, leaseToken); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("repeat completion error=%v", err)
 	}
 }
@@ -50,6 +52,9 @@ func TestMemoryLifecycleJobsCanBeClaimedByKind(t *testing.T) {
 	claimed, err := store.ClaimLifecycleJobsByKind(ctx, LifecycleJobReclaim, 10)
 	if err != nil || len(claimed) != 1 || claimed[0].ID != "reclaim" {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, claimed[0].ID, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
 	}
 	remaining, err := store.ClaimLifecycleJobsByKind(ctx, LifecycleJobRetention, 10)
 	if err != nil || len(remaining) != 1 || remaining[0].ID != "retention" {
@@ -68,6 +73,9 @@ func TestMemoryLifecycleJobsCanBeClaimedByFormat(t *testing.T) {
 	claimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, LifecycleJobReclaim, FormatOCI, 10)
 	if err != nil || len(claimed) != 1 || claimed[0].ID != "oci" {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, claimed[0].ID, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
 	}
 	remaining, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, LifecycleJobReclaim, FormatMaven, 10)
 	if err != nil || len(remaining) != 1 || remaining[0].ID != "maven" {
@@ -93,7 +101,7 @@ func TestMemoryLifecycleClaimLimitsEachRepositoryToOneRunningJob(t *testing.T) {
 	}
 	for _, job := range claimed {
 		if job.RepositoryID == "repo" {
-			if err = store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			if err = store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -101,5 +109,126 @@ func TestMemoryLifecycleClaimLimitsEachRepositoryToOneRunningJob(t *testing.T) {
 	next, err := store.ClaimLifecycleJobs(ctx, 10)
 	if err != nil || len(next) != 1 || next[0].RepositoryID != "repo" {
 		t.Fatalf("next=%#v err=%v", next, err)
+	}
+}
+
+func TestMemoryLifecycleJobRetriesWithBackoffBeforeFinalFailure(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	created, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "retry-job", RepositoryID: "repo", Kind: LifecycleJobRetention, IdempotencyKey: "retry-job", Payload: []byte(`{"format":"raw"}`), MaxAttempts: 3})
+	if err != nil || created.MaxAttempts != 3 || created.Attempts != 0 {
+		t.Fatalf("created=%#v err=%v", created, err)
+	}
+	for attempt := 1; attempt <= 3; attempt++ {
+		claimed, claimErr := store.ClaimLifecycleJobs(ctx, 1)
+		if claimErr != nil || len(claimed) != 1 || claimed[0].Attempts != attempt || claimed[0].LeaseExpiresAt.IsZero() {
+			t.Fatalf("attempt %d claimed=%#v err=%v", attempt, claimed, claimErr)
+		}
+		if err = store.FailLifecycleJob(ctx, "retry-job", claimed[0].LeaseToken, "temporary outage"); err != nil {
+			t.Fatal(err)
+		}
+		jobs, listErr := store.ListLifecycleJobs(ctx, "repo", 10)
+		if listErr != nil || len(jobs) != 1 {
+			t.Fatalf("attempt %d jobs=%#v err=%v", attempt, jobs, listErr)
+		}
+		if attempt < 3 {
+			if jobs[0].State != LifecycleJobRetrying || !jobs[0].NextAttemptAt.After(time.Now().UTC()) || !jobs[0].CompletedAt.IsZero() {
+				t.Fatalf("attempt %d retry state=%#v", attempt, jobs[0])
+			}
+			if claimed, claimErr = store.ClaimLifecycleJobs(ctx, 1); claimErr != nil || len(claimed) != 0 {
+				t.Fatalf("attempt %d ignored backoff claimed=%#v err=%v", attempt, claimed, claimErr)
+			}
+			if _, err = store.RunLifecycleJobNow(ctx, "repo", "retry-job"); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if jobs[0].State != LifecycleJobFailed || jobs[0].CompletedAt.IsZero() || jobs[0].LastError != "temporary outage" {
+			t.Fatalf("final state=%#v", jobs[0])
+		}
+	}
+}
+
+func TestMemoryLifecycleJobRecoversExpiredLeaseAndSupportsControls(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	if _, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "controlled", RepositoryID: "repo", Kind: LifecycleJobReclaim, IdempotencyKey: "controlled", Payload: []byte(`{"format":"raw"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	recovered, err := store.RecoverExpiredLifecycleJobs(ctx, claimed[0].LeaseExpiresAt.Add(time.Second))
+	if err != nil || recovered != 1 {
+		t.Fatalf("recovered=%d err=%v", recovered, err)
+	}
+	recoveredJob, err := store.GetLifecycleJob(ctx, "repo", "controlled")
+	if err != nil || recoveredJob.State != LifecycleJobRetrying || !recoveredJob.NextAttemptAt.After(claimed[0].LeaseExpiresAt) {
+		t.Fatalf("recovered job=%#v err=%v", recoveredJob, err)
+	}
+	job, err := store.RunLifecycleJobNow(ctx, "repo", "controlled")
+	if err != nil || job.State != LifecycleJobPending {
+		t.Fatalf("run now=%#v err=%v", job, err)
+	}
+	job, err = store.CancelLifecycleJob(ctx, "repo", "controlled")
+	if err != nil || job.State != LifecycleJobCancelled || job.CompletedAt.IsZero() {
+		t.Fatalf("cancelled=%#v err=%v", job, err)
+	}
+	if _, err = store.RunLifecycleJobNow(ctx, "repo", "controlled"); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("run cancelled error=%v", err)
+	}
+
+	if _, _, err = store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "failed", RepositoryID: "repo", Kind: LifecycleJobReclaim, IdempotencyKey: "failed", Payload: []byte(`{"format":"raw"}`), MaxAttempts: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if claimed, err = store.ClaimLifecycleJobs(ctx, 1); err != nil || len(claimed) != 1 || claimed[0].ID != "failed" {
+		t.Fatalf("failed claim=%#v err=%v", claimed, err)
+	}
+	if err = store.FailLifecycleJob(ctx, "failed", claimed[0].LeaseToken, "permanent"); err != nil {
+		t.Fatal(err)
+	}
+	job, err = store.RetryLifecycleJob(ctx, "repo", "failed")
+	if err != nil || job.State != LifecycleJobPending || job.Attempts != 0 || job.LastError != "" {
+		t.Fatalf("retried=%#v err=%v", job, err)
+	}
+}
+
+func TestMemoryLifecycleJobLeaseTokenFencesExpiredWorkerAndProgressRenewsLease(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	if _, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "fenced", RepositoryID: "repo", Kind: LifecycleJobRetention, IdempotencyKey: "fenced", Payload: []byte(`{"format":"raw"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(first) != 1 || first[0].LeaseToken == "" {
+		t.Fatalf("first claim=%#v err=%v", first, err)
+	}
+	firstLeaseExpiry := first[0].LeaseExpiresAt
+	if err = store.UpdateLifecycleJobProgress(ctx, first[0].ID, first[0].LeaseToken, 1, 2, "halfway"); err != nil {
+		t.Fatal(err)
+	}
+	progressed, err := store.GetLifecycleJob(ctx, "repo", "fenced")
+	if err != nil || !progressed.LeaseExpiresAt.After(firstLeaseExpiry) {
+		t.Fatalf("progressed=%#v err=%v", progressed, err)
+	}
+	if _, err = store.RecoverExpiredLifecycleJobs(ctx, progressed.LeaseExpiresAt.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RunLifecycleJobNow(ctx, "repo", "fenced"); err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(second) != 1 || second[0].LeaseToken == first[0].LeaseToken {
+		t.Fatalf("second claim=%#v err=%v", second, err)
+	}
+	if err = store.UpdateLifecycleJobProgress(ctx, first[0].ID, first[0].LeaseToken, 2, 2, "stale"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale progress error=%v", err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, first[0].ID, first[0].LeaseToken); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale completion error=%v", err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, second[0].ID, second[0].LeaseToken); err != nil {
+		t.Fatal(err)
 	}
 }

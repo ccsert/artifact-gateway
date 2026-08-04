@@ -282,17 +282,17 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jobClaimed := false
+	var claimedJob repository.LifecycleJob
 	for _, candidate := range claimed {
 		if candidate.ID == job.ID && candidate.State == repository.LifecycleJobRunning {
-			jobClaimed = true
+			claimedJob = candidate
 			break
 		}
 	}
-	if !jobClaimed {
+	if claimedJob.ID == "" {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
-	if err := store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+	if err := store.CompleteLifecycleJob(ctx, job.ID, claimedJob.LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 	ociJob := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "oci-" + uuid.NewString(), Payload: []byte(`{"format":"oci","objectKey":"oci-object"}`)}
@@ -307,34 +307,34 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ociJobClaimed := false
+	var claimedOCIJob repository.LifecycleJob
 	for _, candidate := range ociClaimed {
 		if candidate.ID == ociJob.ID {
-			ociJobClaimed = true
+			claimedOCIJob = candidate
 			break
 		}
 	}
-	if !ociJobClaimed {
+	if claimedOCIJob.ID == "" {
 		t.Fatalf("OCI claimed=%#v err=%v", ociClaimed, err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, ociJob.ID, claimedOCIJob.LeaseToken); err != nil {
+		t.Fatal(err)
 	}
 	mavenClaimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mavenJobClaimed := false
+	var claimedMavenJob repository.LifecycleJob
 	for _, candidate := range mavenClaimed {
 		if candidate.ID == mavenJob.ID {
-			mavenJobClaimed = true
+			claimedMavenJob = candidate
 			break
 		}
 	}
-	if !mavenJobClaimed {
+	if claimedMavenJob.ID == "" {
 		t.Fatalf("Maven claimed=%#v err=%v", mavenClaimed, err)
 	}
-	if err = store.CompleteLifecycleJob(ctx, ociJob.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err = store.CompleteLifecycleJob(ctx, mavenJob.ID); err != nil {
+	if err = store.CompleteLifecycleJob(ctx, mavenJob.ID, claimedMavenJob.LeaseToken); err != nil {
 		t.Fatal(err)
 	}
 }

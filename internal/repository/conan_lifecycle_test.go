@@ -96,3 +96,47 @@ func TestMemoryConanPackageRequiresVisibleRecipe(t *testing.T) {
 		t.Fatalf("package without recipe err=%v", err)
 	}
 }
+
+func TestMemoryConanRecipeRestoreOnlyCascadesPackagesDeletedWithRecipe(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "repo", Name: "conan-restore", Format: FormatConan}); err != nil {
+		t.Fatal(err)
+	}
+	reference, recipeRevision := "pkg/1.0/user/stable", "rrev"
+	recipeDigest := "sha256:" + strings.Repeat("a", 64)
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "recipe", Digest: recipeDigest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: reference, Revision: recipeRevision, Digest: recipeDigest}, []ConanAsset{{RepositoryID: "repo", Reference: reference, RecipeRevision: recipeRevision, Path: "conanfile.py", ObjectKey: "recipe", Digest: recipeDigest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	putPackage := func(packageID, revision, objectKey, digest string) {
+		t.Helper()
+		if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: objectKey, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, Revision: revision, Digest: digest}, []ConanAsset{{RepositoryID: "repo", Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, PackageRevision: revision, Path: "package.tgz", ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	putPackage("explicit", "prev-explicit", "package-explicit", "sha256:"+strings.Repeat("b", 64))
+	putPackage("cascade", "prev-cascade", "package-cascade", "sha256:"+strings.Repeat("c", 64))
+	if _, err := store.TombstoneConanPackageRevision(ctx, "repo", reference, recipeRevision, "explicit", "prev-explicit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TombstoneConanRecipeRevision(ctx, "repo", reference, recipeRevision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RestoreConanRecipeRevision(ctx, "repo", reference, recipeRevision); err != nil {
+		t.Fatal(err)
+	}
+	explicit, err := store.GetConanPackageRevision(ctx, "repo", reference, recipeRevision, "explicit", "prev-explicit")
+	if err != nil || explicit.State != "deleted" {
+		t.Fatalf("explicit package=%#v err=%v", explicit, err)
+	}
+	cascade, err := store.GetConanPackageRevision(ctx, "repo", reference, recipeRevision, "cascade", "prev-cascade")
+	if err != nil || cascade.State != "visible" {
+		t.Fatalf("cascaded package=%#v err=%v", cascade, err)
+	}
+}

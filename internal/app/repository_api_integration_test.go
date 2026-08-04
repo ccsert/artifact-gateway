@@ -694,7 +694,7 @@ func TestPostgresMavenRetentionDryRunReturnsCandidatesWithoutTombstoning(t *test
 	if err = json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if result.PolicyVersion != policy.Version || len(result.Candidates) != 2 || result.Candidates[0].Coordinate != coordinates[1] || result.Candidates[1].Coordinate != coordinates[0] {
+	if result.PolicyVersion != policy.Version || len(result.Candidates) != 2 || result.Candidates[0].Coordinate != coordinates[0] || result.Candidates[1].Coordinate != coordinates[1] {
 		t.Fatalf("dry run result=%#v", result)
 	}
 	visible, err := store.ListMavenArtifacts(ctx, repo.ID)

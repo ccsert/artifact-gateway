@@ -333,6 +333,18 @@
         },
         {
           "$ref": "#/components/parameters/PageToken"
+        },
+        {
+          "name": "output",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv"
+            ],
+            "default": "json"
+          }
         }
       ],
       "post": {
@@ -587,6 +599,87 @@
             "$ref": "#/components/responses/LifecycleJobList"
           },
           "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/LifecycleJobId"
+        }
+      ],
+      "post": {
+        "operationId": "runRepositoryLifecycleJobNow",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LifecycleJob"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/LifecycleJobId"
+        }
+      ],
+      "post": {
+        "operationId": "retryRepositoryLifecycleJob",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LifecycleJob"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/LifecycleJobId"
+        }
+      ],
+      "post": {
+        "operationId": "cancelRepositoryLifecycleJob",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LifecycleJob"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -2547,6 +2640,7 @@
         "required": [
           "policyVersion",
           "totalCandidates",
+          "summary",
           "candidates"
         ],
         "properties": {
@@ -2556,6 +2650,9 @@
           "totalCandidates": {
             "type": "integer",
             "minimum": 0
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RetentionDryRunSummary"
           },
           "candidates": {
             "type": "array",
@@ -2636,7 +2733,11 @@
           "id",
           "kind",
           "state",
-          "createdAt"
+          "createdAt",
+          "attempts",
+          "maxAttempts",
+          "progressCurrent",
+          "progressTotal"
         ],
         "properties": {
           "id": {
@@ -2656,8 +2757,10 @@
             "enum": [
               "pending",
               "running",
+              "retrying",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "createdAt": {
@@ -2671,6 +2774,35 @@
           "completedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "leaseExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "progressCurrent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "progressTotal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "progressMessage": {
+            "type": "string",
+            "maxLength": 255
           },
           "lastError": {
             "type": "string",
@@ -3158,6 +3290,72 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          }
+        }
+      },
+      "RetentionReasonCounts": {
+        "type": "object",
+        "required": [
+          "age",
+          "maximumVersions"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "age": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maximumVersions": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RetentionVersionTypeCounts": {
+        "type": "object",
+        "required": [
+          "release",
+          "snapshot",
+          "version",
+          "asset"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "release": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "snapshot": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "asset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RetentionDryRunSummary": {
+        "type": "object",
+        "required": [
+          "reasonCounts",
+          "versionTypeCounts"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "reasonCounts": {
+            "$ref": "#/components/schemas/RetentionReasonCounts"
+          },
+          "versionTypeCounts": {
+            "$ref": "#/components/schemas/RetentionVersionTypeCounts"
+          },
+          "oldestCandidateAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -3719,6 +3917,15 @@
           "format": "uuid"
         }
       },
+      "LifecycleJobId": {
+        "name": "lifecycleJobId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "OCIImagePrefix": {
         "name": "q",
         "in": "query",
@@ -3982,6 +4189,11 @@
             "schema": {
               "$ref": "#/components/schemas/RetentionDryRun"
             }
+          },
+          "text/csv": {
+            "schema": {
+              "type": "string"
+            }
           }
         }
       },
@@ -4054,6 +4266,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuditList"
+            }
+          }
+        }
+      },
+      "LifecycleJob": {
+        "description": "Updated lifecycle job",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LifecycleJob"
             }
           }
         }

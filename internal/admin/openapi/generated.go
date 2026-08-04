@@ -318,20 +318,26 @@ func (e LifecycleJobKind) Valid() bool {
 
 // Defines values for LifecycleJobState.
 const (
+	LifecycleJobStateCancelled LifecycleJobState = "cancelled"
 	LifecycleJobStateCompleted LifecycleJobState = "completed"
 	LifecycleJobStateFailed    LifecycleJobState = "failed"
 	LifecycleJobStatePending   LifecycleJobState = "pending"
+	LifecycleJobStateRetrying  LifecycleJobState = "retrying"
 	LifecycleJobStateRunning   LifecycleJobState = "running"
 )
 
 // Valid indicates whether the value is a known member of the LifecycleJobState enum.
 func (e LifecycleJobState) Valid() bool {
 	switch e {
+	case LifecycleJobStateCancelled:
+		return true
 	case LifecycleJobStateCompleted:
 		return true
 	case LifecycleJobStateFailed:
 		return true
 	case LifecycleJobStatePending:
+		return true
+	case LifecycleJobStateRetrying:
 		return true
 	case LifecycleJobStateRunning:
 		return true
@@ -1173,13 +1179,20 @@ type GroupPage struct {
 
 // LifecycleJob defines model for LifecycleJob.
 type LifecycleJob struct {
-	CompletedAt *time.Time        `json:"completedAt,omitempty"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	Id          string            `json:"id"`
-	Kind        LifecycleJobKind  `json:"kind"`
-	LastError   *string           `json:"lastError,omitempty"`
-	StartedAt   *time.Time        `json:"startedAt,omitempty"`
-	State       LifecycleJobState `json:"state"`
+	Attempts        int               `json:"attempts"`
+	CompletedAt     *time.Time        `json:"completedAt,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt"`
+	Id              string            `json:"id"`
+	Kind            LifecycleJobKind  `json:"kind"`
+	LastError       *string           `json:"lastError,omitempty"`
+	LeaseExpiresAt  *time.Time        `json:"leaseExpiresAt,omitempty"`
+	MaxAttempts     int               `json:"maxAttempts"`
+	NextAttemptAt   *time.Time        `json:"nextAttemptAt,omitempty"`
+	ProgressCurrent int               `json:"progressCurrent"`
+	ProgressMessage *string           `json:"progressMessage,omitempty"`
+	ProgressTotal   int               `json:"progressTotal"`
+	StartedAt       *time.Time        `json:"startedAt,omitempty"`
+	State           LifecycleJobState `json:"state"`
 }
 
 // LifecycleJobKind defines model for LifecycleJob.Kind.
@@ -1523,9 +1536,10 @@ type RetentionDryRun struct {
 		Reasons     []RetentionDryRunCandidatesReasons   `json:"reasons"`
 		VersionType RetentionDryRunCandidatesVersionType `json:"versionType"`
 	} `json:"candidates"`
-	NextPageToken   *string `json:"nextPageToken,omitempty"`
-	PolicyVersion   string  `json:"policyVersion"`
-	TotalCandidates int     `json:"totalCandidates"`
+	NextPageToken   *string                `json:"nextPageToken,omitempty"`
+	PolicyVersion   string                 `json:"policyVersion"`
+	Summary         RetentionDryRunSummary `json:"summary"`
+	TotalCandidates int                    `json:"totalCandidates"`
 }
 
 // RetentionDryRunCandidatesReasons defines model for RetentionDryRun.Candidates.Reasons.
@@ -1533,6 +1547,13 @@ type RetentionDryRunCandidatesReasons string
 
 // RetentionDryRunCandidatesVersionType defines model for RetentionDryRun.Candidates.VersionType.
 type RetentionDryRunCandidatesVersionType string
+
+// RetentionDryRunSummary defines model for RetentionDryRunSummary.
+type RetentionDryRunSummary struct {
+	OldestCandidateAt *time.Time                 `json:"oldestCandidateAt,omitempty"`
+	ReasonCounts      RetentionReasonCounts      `json:"reasonCounts"`
+	VersionTypeCounts RetentionVersionTypeCounts `json:"versionTypeCounts"`
+}
 
 // RetentionPolicy defines model for RetentionPolicy.
 type RetentionPolicy struct {
@@ -1557,6 +1578,20 @@ type RetentionPolicy struct {
 	// SnapshotKeepDays Days to retain Maven SNAPSHOT versions. Defaults to keepDays when omitted.
 	SnapshotKeepDays *int   `json:"snapshotKeepDays,omitempty"`
 	Version          string `json:"version"`
+}
+
+// RetentionReasonCounts defines model for RetentionReasonCounts.
+type RetentionReasonCounts struct {
+	Age             int `json:"age"`
+	MaximumVersions int `json:"maximumVersions"`
+}
+
+// RetentionVersionTypeCounts defines model for RetentionVersionTypeCounts.
+type RetentionVersionTypeCounts struct {
+	Asset    int `json:"asset"`
+	Release  int `json:"release"`
+	Snapshot int `json:"snapshot"`
+	Version  int `json:"version"`
 }
 
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
@@ -1619,6 +1654,9 @@ type IdempotencyKey = string
 
 // IfMatch defines model for IfMatch.
 type IfMatch = string
+
+// LifecycleJobId defines model for LifecycleJobId.
+type LifecycleJobId = openapi_types.UUID
 
 // MavenCoordinatePrefix defines model for MavenCoordinatePrefix.
 type MavenCoordinatePrefix = string
@@ -1867,6 +1905,7 @@ type ReplaceRetentionPolicyParams struct {
 type DryRunRepositoryRetentionParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Output    *string    `form:"output,omitempty" json:"output,omitempty"`
 }
 
 // ExecuteRepositoryRetentionParams defines parameters for ExecuteRepositoryRetention.
@@ -2123,6 +2162,15 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/lifecycle-jobs)
 	ListRepositoryLifecycleJobs(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel)
+	CancelRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry)
+	RetryRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run)
+	RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListMavenCoordinatesParams)
@@ -4050,6 +4098,111 @@ func (siw *ServerInterfaceWrapper) ListRepositoryLifecycleJobs(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// CancelRepositoryLifecycleJob operation middleware
+func (siw *ServerInterfaceWrapper) CancelRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "lifecycleJobId" -------------
+	var lifecycleJobId LifecycleJobId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "lifecycleJobId", r.PathValue("lifecycleJobId"), &lifecycleJobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleJobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRepositoryLifecycleJob(w, r, repositoryId, lifecycleJobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryRepositoryLifecycleJob operation middleware
+func (siw *ServerInterfaceWrapper) RetryRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "lifecycleJobId" -------------
+	var lifecycleJobId LifecycleJobId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "lifecycleJobId", r.PathValue("lifecycleJobId"), &lifecycleJobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleJobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryRepositoryLifecycleJob(w, r, repositoryId, lifecycleJobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunRepositoryLifecycleJobNow operation middleware
+func (siw *ServerInterfaceWrapper) RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "lifecycleJobId" -------------
+	var lifecycleJobId LifecycleJobId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "lifecycleJobId", r.PathValue("lifecycleJobId"), &lifecycleJobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycleJobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunRepositoryLifecycleJobNow(w, r, repositoryId, lifecycleJobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMavenCoordinates operation middleware
 func (siw *ServerInterfaceWrapper) ListMavenCoordinates(w http.ResponseWriter, r *http.Request) {
 
@@ -4688,6 +4841,19 @@ func (siw *ServerInterfaceWrapper) DryRunRepositoryRetention(w http.ResponseWrit
 		return
 	}
 
+	// ------------- Optional query parameter "output" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "output", r.URL.Query(), &params.Output, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "output"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "output", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DryRunRepositoryRetention(w, r, repositoryId, params)
 	}))
@@ -5140,6 +5306,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel", wrapper.CancelRepositoryLifecycleJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry", wrapper.RetryRepositoryLifecycleJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run", wrapper.RunRepositoryLifecycleJobNow)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/manifests", wrapper.ListOCIManifests)
@@ -5214,6 +5383,8 @@ type GroupCapacityJSONResponse GroupCapacity
 
 type GroupListJSONResponse GroupPage
 
+type LifecycleJobJSONResponse LifecycleJob
+
 type LifecycleJobListJSONResponse []LifecycleJob
 
 type MavenCacheRefreshResultJSONResponse MavenCacheRefreshResult
@@ -5249,6 +5420,11 @@ type RepositoryEffectiveAccessJSONResponse RepositoryEffectiveAccess
 type RepositoryListJSONResponse RepositoryPage
 
 type RetentionDryRunJSONResponse RetentionDryRun
+type RetentionDryRunTextcsvResponse struct {
+	Body io.Reader
+
+	ContentLength int64
+}
 
 type RetentionPolicyJSONResponse RetentionPolicy
 
@@ -7147,6 +7323,207 @@ func (response ListRepositoryLifecycleJobs403ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type CancelRepositoryLifecycleJobRequestObject struct {
+	RepositoryId   RepositoryId   `json:"repositoryId"`
+	LifecycleJobId LifecycleJobId `json:"lifecycleJobId"`
+}
+
+type CancelRepositoryLifecycleJobResponseObject interface {
+	VisitCancelRepositoryLifecycleJobResponse(w http.ResponseWriter) error
+}
+
+type CancelRepositoryLifecycleJob200JSONResponse struct{ LifecycleJobJSONResponse }
+
+func (response CancelRepositoryLifecycleJob200JSONResponse) VisitCancelRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRepositoryLifecycleJob403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CancelRepositoryLifecycleJob403ApplicationProblemPlusJSONResponse) VisitCancelRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRepositoryLifecycleJob404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRepositoryLifecycleJob404ApplicationProblemPlusJSONResponse) VisitCancelRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRepositoryLifecycleJob409ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRepositoryLifecycleJob409ApplicationProblemPlusJSONResponse) VisitCancelRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryRepositoryLifecycleJobRequestObject struct {
+	RepositoryId   RepositoryId   `json:"repositoryId"`
+	LifecycleJobId LifecycleJobId `json:"lifecycleJobId"`
+}
+
+type RetryRepositoryLifecycleJobResponseObject interface {
+	VisitRetryRepositoryLifecycleJobResponse(w http.ResponseWriter) error
+}
+
+type RetryRepositoryLifecycleJob200JSONResponse struct{ LifecycleJobJSONResponse }
+
+func (response RetryRepositoryLifecycleJob200JSONResponse) VisitRetryRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryRepositoryLifecycleJob403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RetryRepositoryLifecycleJob403ApplicationProblemPlusJSONResponse) VisitRetryRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryRepositoryLifecycleJob404ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryRepositoryLifecycleJob404ApplicationProblemPlusJSONResponse) VisitRetryRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryRepositoryLifecycleJob409ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryRepositoryLifecycleJob409ApplicationProblemPlusJSONResponse) VisitRetryRepositoryLifecycleJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunRepositoryLifecycleJobNowRequestObject struct {
+	RepositoryId   RepositoryId   `json:"repositoryId"`
+	LifecycleJobId LifecycleJobId `json:"lifecycleJobId"`
+}
+
+type RunRepositoryLifecycleJobNowResponseObject interface {
+	VisitRunRepositoryLifecycleJobNowResponse(w http.ResponseWriter) error
+}
+
+type RunRepositoryLifecycleJobNow200JSONResponse struct{ LifecycleJobJSONResponse }
+
+func (response RunRepositoryLifecycleJobNow200JSONResponse) VisitRunRepositoryLifecycleJobNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunRepositoryLifecycleJobNow403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RunRepositoryLifecycleJobNow403ApplicationProblemPlusJSONResponse) VisitRunRepositoryLifecycleJobNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunRepositoryLifecycleJobNow404ApplicationProblemPlusJSONResponse Problem
+
+func (response RunRepositoryLifecycleJobNow404ApplicationProblemPlusJSONResponse) VisitRunRepositoryLifecycleJobNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunRepositoryLifecycleJobNow409ApplicationProblemPlusJSONResponse Problem
+
+func (response RunRepositoryLifecycleJobNow409ApplicationProblemPlusJSONResponse) VisitRunRepositoryLifecycleJobNowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMavenCoordinatesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListMavenCoordinatesParams
@@ -7748,6 +8125,23 @@ func (response DryRunRepositoryRetention200JSONResponse) VisitDryRunRepositoryRe
 	return err
 }
 
+type DryRunRepositoryRetention200TextcsvResponse struct{ RetentionDryRunTextcsvResponse }
+
+func (response DryRunRepositoryRetention200TextcsvResponse) VisitDryRunRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type DryRunRepositoryRetention400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
@@ -8307,6 +8701,15 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/lifecycle-jobs)
 	ListRepositoryLifecycleJobs(ctx context.Context, request ListRepositoryLifecycleJobsRequestObject) (ListRepositoryLifecycleJobsResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel)
+	CancelRepositoryLifecycleJob(ctx context.Context, request CancelRepositoryLifecycleJobRequestObject) (CancelRepositoryLifecycleJobResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry)
+	RetryRepositoryLifecycleJob(ctx context.Context, request RetryRepositoryLifecycleJobRequestObject) (RetryRepositoryLifecycleJobResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run)
+	RunRepositoryLifecycleJobNow(ctx context.Context, request RunRepositoryLifecycleJobNowRequestObject) (RunRepositoryLifecycleJobNowResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(ctx context.Context, request ListMavenCoordinatesRequestObject) (ListMavenCoordinatesResponseObject, error)
@@ -9702,6 +10105,87 @@ func (sh *strictHandler) ListRepositoryLifecycleJobs(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryLifecycleJobsResponseObject); ok {
 		if err := validResponse.VisitListRepositoryLifecycleJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelRepositoryLifecycleJob operation middleware
+func (sh *strictHandler) CancelRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId) {
+	var request CancelRepositoryLifecycleJobRequestObject
+
+	request.RepositoryId = repositoryId
+	request.LifecycleJobId = lifecycleJobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRepositoryLifecycleJob(ctx, request.(CancelRepositoryLifecycleJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRepositoryLifecycleJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRepositoryLifecycleJobResponseObject); ok {
+		if err := validResponse.VisitCancelRepositoryLifecycleJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryRepositoryLifecycleJob operation middleware
+func (sh *strictHandler) RetryRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId) {
+	var request RetryRepositoryLifecycleJobRequestObject
+
+	request.RepositoryId = repositoryId
+	request.LifecycleJobId = lifecycleJobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryRepositoryLifecycleJob(ctx, request.(RetryRepositoryLifecycleJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryRepositoryLifecycleJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryRepositoryLifecycleJobResponseObject); ok {
+		if err := validResponse.VisitRetryRepositoryLifecycleJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RunRepositoryLifecycleJobNow operation middleware
+func (sh *strictHandler) RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId) {
+	var request RunRepositoryLifecycleJobNowRequestObject
+
+	request.RepositoryId = repositoryId
+	request.LifecycleJobId = lifecycleJobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RunRepositoryLifecycleJobNow(ctx, request.(RunRepositoryLifecycleJobNowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RunRepositoryLifecycleJobNow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RunRepositoryLifecycleJobNowResponseObject); ok {
+		if err := validResponse.VisitRunRepositoryLifecycleJobNowResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

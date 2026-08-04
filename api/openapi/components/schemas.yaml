@@ -440,10 +440,11 @@ RepositoryEffectiveAccess:
     permissions: {"$ref": "#/EffectiveAccessPermissions"}
 RetentionDryRun:
   type: object
-  required: [policyVersion, totalCandidates, candidates]
+  required: [policyVersion, totalCandidates, summary, candidates]
   properties:
     policyVersion: {type: string}
     totalCandidates: {type: integer, minimum: 0}
+    summary: {"$ref": "#/RetentionDryRunSummary"}
     candidates:
       type: array
       items:
@@ -461,6 +462,30 @@ RetentionDryRun:
           ageDays: {type: integer, minimum: 0}
           versionType: {type: string, enum: [release, snapshot, version, asset]}
     nextPageToken: {type: string}
+RetentionDryRunSummary:
+  type: object
+  required: [reasonCounts, versionTypeCounts]
+  additionalProperties: false
+  properties:
+    reasonCounts: {"$ref": "#/RetentionReasonCounts"}
+    versionTypeCounts: {"$ref": "#/RetentionVersionTypeCounts"}
+    oldestCandidateAt: {type: string, format: date-time}
+RetentionReasonCounts:
+  type: object
+  required: [age, maximumVersions]
+  additionalProperties: false
+  properties:
+    age: {type: integer, minimum: 0}
+    maximumVersions: {type: integer, minimum: 0}
+RetentionVersionTypeCounts:
+  type: object
+  required: [release, snapshot, version, asset]
+  additionalProperties: false
+  properties:
+    release: {type: integer, minimum: 0}
+    snapshot: {type: integer, minimum: 0}
+    version: {type: integer, minimum: 0}
+    asset: {type: integer, minimum: 0}
 RestoreArtifact:
   type: object
   required: [coordinate]
@@ -477,6 +502,10 @@ LifecycleJob:
   - kind
   - state
   - createdAt
+  - attempts
+  - maxAttempts
+  - progressCurrent
+  - progressTotal
   properties:
     id:
       type: string
@@ -492,8 +521,10 @@ LifecycleJob:
       enum:
       - pending
       - running
+      - retrying
       - completed
       - failed
+      - cancelled
     createdAt:
       type: string
       format: date-time
@@ -503,6 +534,28 @@ LifecycleJob:
     completedAt:
       type: string
       format: date-time
+    nextAttemptAt:
+      type: string
+      format: date-time
+    leaseExpiresAt:
+      type: string
+      format: date-time
+    attempts:
+      type: integer
+      minimum: 0
+    maxAttempts:
+      type: integer
+      minimum: 1
+      maximum: 20
+    progressCurrent:
+      type: integer
+      minimum: 0
+    progressTotal:
+      type: integer
+      minimum: 0
+    progressMessage:
+      type: string
+      maxLength: 255
     lastError:
       type: string
       maxLength: 1024

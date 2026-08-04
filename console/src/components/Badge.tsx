@@ -26,6 +26,7 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   deleted: 'red',
   visible: 'green',
   pending: 'amber',
+  retrying: 'amber',
   running: 'blue',
   completed: 'green',
   failed: 'red',

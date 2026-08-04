@@ -73,15 +73,19 @@ func (c Collector) RunReclaimJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		c.begin()
 		if err := c.runReclaimJob(ctx, job); err != nil {
 			c.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		c.end("completed")
 	}
-	return nil
+	return firstErr
 }
 
 func (c Collector) begin() {
@@ -101,31 +105,31 @@ func (c Collector) end(outcome string) {
 func (c Collector) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload reclaimPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.Digest == "" || payload.ObjectKey == "" {
-		return c.failReclaimJob(ctx, job.ID, "invalid Raw reclaim payload")
+		return c.failReclaimJob(ctx, job, "invalid Raw reclaim payload")
 	}
 	release, err := c.Store.LockRawObject(ctx, payload.Digest)
 	if err != nil {
-		return c.failReclaimJob(ctx, job.ID, "Raw object coordination failed")
+		return c.failReclaimJob(ctx, job, "Raw object coordination failed")
 	}
 	defer release()
 	unreferenced, err := c.Store.RawObjectIsUnreferenced(ctx, payload.Digest)
 	if err != nil {
-		return c.failReclaimJob(ctx, job.ID, "Raw object reference lookup failed")
+		return c.failReclaimJob(ctx, job, "Raw object reference lookup failed")
 	}
 	if !unreferenced {
-		return c.Store.CompleteLifecycleJob(ctx, job.ID)
+		return c.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 	}
 	if err = c.Objects.Delete(ctx, payload.ObjectKey); err != nil {
-		return c.failReclaimJob(ctx, job.ID, fmt.Sprintf("delete Raw object: %v", err))
+		return c.failReclaimJob(ctx, job, fmt.Sprintf("delete Raw object: %v", err))
 	}
 	if err = c.Store.MarkRawObjectCollected(ctx, payload.Digest); err != nil && err != repository.ErrNotFound {
-		return c.failReclaimJob(ctx, job.ID, "mark Raw object collected failed")
+		return c.failReclaimJob(ctx, job, "mark Raw object collected failed")
 	}
-	return c.Store.CompleteLifecycleJob(ctx, job.ID)
+	return c.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (c Collector) failReclaimJob(ctx context.Context, id, message string) error {
-	if err := c.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (c Collector) failReclaimJob(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := c.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

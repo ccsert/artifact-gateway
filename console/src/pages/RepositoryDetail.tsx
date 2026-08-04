@@ -11,9 +11,11 @@ import {
   Space,
   Switch,
   Tabs,
+  Tooltip,
 } from "antd";
 import {
   DeleteOutlined,
+  DownloadOutlined,
   PlusOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
@@ -93,6 +95,7 @@ import {
 } from "../components/ArtifactRowDetail";
 import { RawUploadDialog } from "../components/RawUploadDialog";
 import { useAuth } from "../lib/auth";
+import { downloadCsv } from "../lib/csv";
 import { mavenGA, mavenUsage, mavenVersion } from "../lib/usage";
 import {
   formatBytes,
@@ -1838,6 +1841,7 @@ function retentionCandidateTypeLabel(
 }
 
 function RetentionTab({ repo }: { repo: Repository }) {
+  const { token } = useAuth();
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [enabled, setEnabled] = useState(false);
@@ -1853,6 +1857,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
   const [dryRunning, setDryRunning] = useState(false);
   const [dryRunLoadingMore, setDryRunLoadingMore] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
   const isMaven = repo.format === "maven";
   const isRaw = repo.format === "raw";
@@ -1993,6 +1998,31 @@ function RetentionTab({ repo }: { repo: Repository }) {
     }
     setNotice("保留执行任务已提交，请在「生命周期任务」标签页查看进度");
     setDryRun(null);
+  };
+
+  const exportDryRun = async () => {
+    setExporting(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(
+        `/api/v2/repositories/${repo.id}/retention:dry-run?output=csv`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!response.ok) {
+        const problem = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(problem?.message ?? "导出试运行结果失败");
+      }
+      downloadCsv(`${repo.name}-retention.csv`, await response.text());
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (error !== null)
@@ -2151,7 +2181,41 @@ function RetentionTab({ repo }: { repo: Repository }) {
         <Card>
           <CardHeader
             title={`试运行结果：已加载 ${dryRun.candidates.length} / 共 ${dryRun.totalCandidates} 个候选${copy.candidateName}（策略版本 ${dryRun.policyVersion}）`}
+            extra={
+              dryRun.totalCandidates > 0 ? (
+                <Tooltip title="导出完整候选集，不受当前分页影响">
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    loading={exporting}
+                    onClick={() => void exportDryRun()}
+                  >
+                    导出 CSV
+                  </Button>
+                </Tooltip>
+              ) : undefined
+            }
           />
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-zinc-800/80 px-4 py-3 text-xs text-zinc-400">
+            <span>
+              按期限 <strong className="font-medium text-zinc-200">{dryRun.summary.reasonCounts.age}</strong>
+            </span>
+            <span>
+              超过版本上限 <strong className="font-medium text-zinc-200">{dryRun.summary.reasonCounts.maximumVersions}</strong>
+            </span>
+            <span>
+              类型：{[
+                ["发布", dryRun.summary.versionTypeCounts.release],
+                ["快照", dryRun.summary.versionTypeCounts.snapshot],
+                ["版本", dryRun.summary.versionTypeCounts.version],
+                ["资产", dryRun.summary.versionTypeCounts.asset],
+              ]
+                .filter(([, count]) => Number(count) > 0)
+                .map(([label, count]) => `${label} ${count}`)
+                .join("、") || "无"}
+            </span>
+            <span>最早候选 {formatDate(dryRun.summary.oldestCandidateAt)}</span>
+          </div>
           {dryRun.candidates.length === 0 ? (
             <EmptyState title={`没有需要清理的${copy.candidateName}`} />
           ) : (

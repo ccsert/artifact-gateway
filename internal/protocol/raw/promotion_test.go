@@ -37,11 +37,14 @@ func TestNativePromotionRetriesFailedRawPublication(t *testing.T) {
 		t.Fatal("first run must fail")
 	}
 	jobs, err := base.ListLifecycleJobs(ctx, "target", 10)
-	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobFailed {
+	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].State != repository.LifecycleJobRetrying {
 		t.Fatalf("jobs=%#v err=%v", jobs, err)
 	}
 	if _, err = base.GetRawAsset(ctx, "source", "releases/widget.txt"); err != nil {
 		t.Fatalf("source disappeared after failed promotion: %v", err)
+	}
+	if _, err = base.RunLifecycleJobNow(ctx, "target", job.ID); err != nil {
+		t.Fatal(err)
 	}
 	if err = worker.RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)

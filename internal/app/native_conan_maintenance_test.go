@@ -50,6 +50,13 @@ func TestNativeConanMaintenanceRetriesFailedReclaimJob(t *testing.T) {
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}
+	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobRetrying {
+		t.Fatalf("retrying jobs=%#v err=%v", jobs, err)
+	}
+	if _, err = store.RunLifecycleJobNow(ctx, repo.ID, jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
 	objects.fail = false
 	if err = maintenance.Collect(ctx); err != nil {
 		t.Fatal(err)

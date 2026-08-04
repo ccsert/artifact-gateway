@@ -451,6 +451,20 @@ func (s *PostgresStore) RestoreConanRecipeRevision(ctx context.Context, reposito
 	if err != nil {
 		return item, err
 	}
+	if _, err = tx.ExecContext(ctx, `UPDATE native_conan_package_revisions p SET state='visible'
+		WHERE p.repository_id::text=$1 AND p.reference=$2 AND p.recipe_revision=$3 AND p.state='deleted'
+		AND NOT EXISTS (
+			SELECT 1 FROM artifact_tombstones t
+			WHERE t.repository_id=p.repository_id AND t.format='conan'
+			AND t.coordinate=p.reference||'#'||p.recipe_revision||'/'||p.package_id||'#'||p.revision
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key
+			WHERE a.repository_id=p.repository_id AND a.reference=p.reference AND a.recipe_revision=p.recipe_revision
+			AND a.package_id=p.package_id AND a.package_revision=p.revision AND i.collected_at IS NOT NULL
+		)`, repositoryID, reference, revision); err != nil {
+		return item, err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='conan' AND coordinate=$2`, repositoryID, reference+"#"+revision); err != nil {
 		return item, err
 	}

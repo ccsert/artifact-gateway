@@ -201,6 +201,9 @@ RetentionDryRun:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RetentionDryRun"
+    text/csv:
+      schema:
+        type: string
 LifecycleJobList:
   description: Lifecycle jobs for one repository, newest first
   content:

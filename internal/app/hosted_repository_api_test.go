@@ -1299,6 +1299,9 @@ func TestRepositoryRetentionDryRunPaginatesAndBindsPolicyVersion(t *testing.T) {
 	if first.Code != http.StatusOK {
 		t.Fatalf("first page=%d body=%s", first.Code, first.Body.String())
 	}
+	if !strings.Contains(first.Body.String(), `"summary":{"oldestCandidateAt":`) || !strings.Contains(first.Body.String(), `"maximumVersions":2`) || !strings.Contains(first.Body.String(), `"release":2`) {
+		t.Fatalf("first page summary=%s", first.Body.String())
+	}
 	var firstPage adminopenapi.RetentionDryRun
 	if err = json.NewDecoder(first.Body).Decode(&firstPage); err != nil {
 		t.Fatal(err)
@@ -1316,6 +1319,14 @@ func TestRepositoryRetentionDryRunPaginatesAndBindsPolicyVersion(t *testing.T) {
 	}
 	if len(secondPage.Candidates) != 1 || secondPage.Candidates[0].Coordinate == firstPage.Candidates[0].Coordinate || secondPage.NextPageToken != nil {
 		t.Fatalf("second page=%#v", secondPage)
+	}
+	exported := request("/api/v2/repositories/" + repo.ID + "/retention:dry-run?output=csv&pageSize=1")
+	if exported.Code != http.StatusOK || exported.Header().Get("Content-Type") != "text/csv; charset=utf-8" {
+		t.Fatalf("export=%d content-type=%q body=%s", exported.Code, exported.Header().Get("Content-Type"), exported.Body.String())
+	}
+	lines := strings.Split(strings.TrimSpace(exported.Body.String()), "\n")
+	if len(lines) != 3 || lines[0] != "format,coordinate,digest,createdAt,ageDays,versionType,reasons" || !strings.Contains(lines[1]+lines[2], "maximum_versions") {
+		t.Fatalf("export lines=%#v", lines)
 	}
 	foreign := request("/api/v2/repositories/" + otherRepo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(*firstPage.NextPageToken))
 	if foreign.Code != http.StatusBadRequest || !strings.Contains(foreign.Body.String(), "invalid_page_token") {
@@ -1601,7 +1612,7 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	if err != nil || len(claimed) != 1 || claimed[0].ID != failedID {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
-	if err = store.FailLifecycleJob(ctx, failedID, "object store unavailable"); err != nil {
+	if err = store.FailLifecycleJob(ctx, failedID, claimed[0].LeaseToken, "object store unavailable"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err = store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobRetention, IdempotencyKey: "retention-run", Payload: []byte(`{"format":"conan"}`)}); err != nil {
@@ -1616,7 +1627,7 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"failed"`) || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"lastError":"object store unavailable"`) || strings.Contains(response.Body.String(), "secret-object-key") || strings.Contains(response.Body.String(), "idempotencyKey") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"retrying"`) || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"lastError":"object store unavailable"`) || strings.Contains(response.Body.String(), "secret-object-key") || strings.Contains(response.Body.String(), "idempotencyKey") {
 		t.Fatalf("jobs=%d body=%s", response.Code, response.Body.String())
 	}
 	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
@@ -1625,6 +1636,95 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	handler.ServeHTTP(deniedResponse, denied)
 	if deniedResponse.Code != http.StatusForbidden {
 		t.Fatalf("reader status=%d body=%s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+}
+
+func TestRepositoryLifecycleJobControlsAreAdminOnlyAndAudited(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "job-controls", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	enqueue := func(id string, maxAttempts int) {
+		t.Helper()
+		if _, _, enqueueErr := store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: id, RepositoryID: repo.ID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: id, Payload: []byte(`{"format":"raw"}`), MaxAttempts: maxAttempts}); enqueueErr != nil {
+			t.Fatal(enqueueErr)
+		}
+	}
+	cancelID, runID, failedID, pendingID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	enqueue(cancelID, 3)
+	enqueue(runID, 3)
+	claimed, err := store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != cancelID {
+		t.Fatalf("first claim=%#v err=%v", claimed, err)
+	}
+	if err = store.FailLifecycleJob(ctx, cancelID, claimed[0].LeaseToken, "temporary"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RunLifecycleJobNow(ctx, repo.ID, cancelID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != cancelID {
+		t.Fatalf("second claim=%#v err=%v", claimed, err)
+	}
+	if err = store.CompleteLifecycleJob(ctx, cancelID, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != runID {
+		t.Fatalf("run claim=%#v err=%v", claimed, err)
+	}
+	if err = store.FailLifecycleJob(ctx, runID, claimed[0].LeaseToken, "temporary"); err != nil {
+		t.Fatal(err)
+	}
+	enqueue(failedID, 1)
+	claimed, err = store.ClaimLifecycleJobs(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != failedID {
+		t.Fatalf("failed claim=%#v err=%v", claimed, err)
+	}
+	if err = store.FailLifecycleJob(ctx, failedID, claimed[0].LeaseToken, "permanent"); err != nil {
+		t.Fatal(err)
+	}
+	enqueue(pendingID, 3)
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(id, action, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs/"+id+"/"+action, nil)
+		authorize(req, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if response := request(pendingID, "cancel", "admin-secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"cancelled"`) {
+		t.Fatalf("cancel=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(runID, "cancel", authenticator.IssueToken("reader")); response.Code != http.StatusForbidden {
+		t.Fatalf("reader cancel=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(runID, "run", "admin-secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"pending"`) {
+		t.Fatalf("run now=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(failedID, "retry", "admin-secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"attempts":0`) {
+		t.Fatalf("retry=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(cancelID, "retry", "admin-secret"); response.Code != http.StatusConflict {
+		t.Fatalf("completed retry=%d body=%s", response.Code, response.Body.String())
+	}
+	operations := map[string]bool{}
+	for _, audit := range store.Audits {
+		operations[audit.Operation] = true
+	}
+	for _, operation := range []string{"lifecycle.cancel", "lifecycle.run_now", "lifecycle.retry"} {
+		if !operations[operation] {
+			t.Fatalf("missing audit %q in %#v", operation, store.Audits)
+		}
 	}
 }
 

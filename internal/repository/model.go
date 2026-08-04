@@ -177,21 +177,33 @@ type LifecycleJobState string
 const (
 	LifecycleJobPending   LifecycleJobState = "pending"
 	LifecycleJobRunning   LifecycleJobState = "running"
+	LifecycleJobRetrying  LifecycleJobState = "retrying"
 	LifecycleJobCompleted LifecycleJobState = "completed"
 	LifecycleJobFailed    LifecycleJobState = "failed"
+	LifecycleJobCancelled LifecycleJobState = "cancelled"
 )
 
+const DefaultLifecycleJobMaxAttempts = 3
+
 type LifecycleJob struct {
-	ID             string
-	RepositoryID   string
-	Kind           LifecycleJobKind
-	IdempotencyKey string
-	Payload        []byte
-	State          LifecycleJobState
-	CreatedAt      time.Time
-	StartedAt      time.Time
-	CompletedAt    time.Time
-	LastError      string
+	ID              string
+	RepositoryID    string
+	Kind            LifecycleJobKind
+	IdempotencyKey  string
+	Payload         []byte
+	State           LifecycleJobState
+	CreatedAt       time.Time
+	StartedAt       time.Time
+	CompletedAt     time.Time
+	NextAttemptAt   time.Time
+	LeaseExpiresAt  time.Time
+	LeaseToken      string
+	Attempts        int
+	MaxAttempts     int
+	ProgressCurrent int
+	ProgressTotal   int
+	ProgressMessage string
+	LastError       string
 }
 
 type ReplicationPlan struct {

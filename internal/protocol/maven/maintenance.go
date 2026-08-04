@@ -67,25 +67,29 @@ func (m NativeMaintenance) RunReclaimJobs(ctx context.Context, limit int) error 
 	if limit <= 0 {
 		limit = 100
 	}
+	var firstErr error
 	for remaining := limit; remaining > 0; {
 		jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatMaven, remaining)
 		if err != nil {
 			return err
 		}
 		if len(jobs) == 0 {
-			return nil
+			return firstErr
 		}
 		for _, job := range jobs {
 			m.beginLifecycle()
 			if err := m.runReclaimJob(ctx, job); err != nil {
 				m.endLifecycle("failed")
-				return err
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 			m.endLifecycle("completed")
 		}
 		remaining -= len(jobs)
 	}
-	return nil
+	return firstErr
 }
 
 func (m NativeMaintenance) beginLifecycle() {
@@ -105,42 +109,42 @@ func (m NativeMaintenance) endLifecycle(outcome string) {
 func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload reclaimPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" || payload.ClaimToken == "" {
-		return m.failReclaimJob(ctx, job.ID, "invalid Maven reclaim payload")
+		return m.failReclaimJob(ctx, job, "invalid Maven reclaim payload")
 	}
 	active, err := m.Store.MavenObjectIntentClaimIsActive(ctx, payload.ObjectKey, payload.ClaimToken)
 	if err != nil {
-		return m.failReclaimJob(ctx, job.ID, "Maven object claim lookup failed")
+		return m.failReclaimJob(ctx, job, "Maven object claim lookup failed")
 	}
 	if !active {
-		return m.Store.CompleteLifecycleJob(ctx, job.ID)
+		return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 	}
 	referenced, err := m.Store.MavenObjectIntentHasReference(ctx, payload.ObjectKey)
 	if err != nil {
-		return m.releaseAndFail(ctx, job.ID, payload, "Maven object reference lookup failed")
+		return m.releaseAndFail(ctx, job, payload, "Maven object reference lookup failed")
 	}
 	if referenced {
 		_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken)
-		return m.Store.CompleteLifecycleJob(ctx, job.ID)
+		return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 	}
 	if err := m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
-		return m.releaseAndFail(ctx, job.ID, payload, fmt.Sprintf("delete Maven object: %v", err))
+		return m.releaseAndFail(ctx, job, payload, fmt.Sprintf("delete Maven object: %v", err))
 	}
 	if err := m.Store.DeleteClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken); err != nil {
-		return m.releaseAndFail(ctx, job.ID, payload, "mark Maven object intent collected failed")
+		return m.releaseAndFail(ctx, job, payload, "mark Maven object intent collected failed")
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (m NativeMaintenance) releaseAndFail(ctx context.Context, id string, payload reclaimPayload, message string) error {
+func (m NativeMaintenance) releaseAndFail(ctx context.Context, job repository.LifecycleJob, payload reclaimPayload, message string) error {
 	_ = m.Store.ReleaseClaimedMavenObjectIntent(ctx, payload.ObjectKey, payload.ClaimToken)
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)
 }
 
-func (m NativeMaintenance) failReclaimJob(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)
@@ -207,26 +211,30 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.beginPromotion()
 		var p PromotionPayload
 		if err := json.Unmarshal(job.Payload, &p); err != nil || p.SourceRepositoryID == "" || p.Coordinate == "" || p.Digest == "" || p.PromotionID == "" {
-			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Maven promotion payload")
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "invalid Maven promotion payload")
 			m.endPromotion("failed")
 			continue
 		}
 		if _, err := m.Store.PromoteMavenArtifact(ctx, repository.MavenPromotion{ID: p.PromotionID, SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Coordinate: p.Coordinate, Digest: p.Digest}); err != nil {
-			_ = m.Store.FailLifecycleJob(ctx, job.ID, fmt.Sprintf("promote Maven artifact failed: %v", err))
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, fmt.Sprintf("promote Maven artifact failed: %v", err))
 			m.endPromotion("failed")
 			continue
 		}
-		if err := m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+		if err := m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 			m.endPromotion("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.endPromotion("completed")
 	}
-	return nil
+	return firstErr
 }
 func (m NativePromotion) beginPromotion() {
 	if m.Metrics != nil {
@@ -325,15 +333,19 @@ func (m NativeRetention) RunJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.beginLifecycle()
 		if err := m.runJob(ctx, job); err != nil {
 			m.endLifecycle("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.endLifecycle("completed")
 	}
-	return nil
+	return firstErr
 }
 
 func (m NativeRetention) beginLifecycle() {
@@ -353,29 +365,29 @@ func (m NativeRetention) endLifecycle(outcome string) {
 func (m NativeRetention) runJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload retentionPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.Format != repository.FormatMaven || payload.PolicyVersion == "" {
-		return m.failRetentionJob(ctx, job.ID, "invalid Maven retention payload")
+		return m.failRetentionJob(ctx, job, "invalid Maven retention payload")
 	}
 	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, job.RepositoryID)
 	if err != nil {
-		return m.failRetentionJob(ctx, job.ID, "get Maven retention policy failed")
+		return m.failRetentionJob(ctx, job, "get Maven retention policy failed")
 	}
 	if policy.Version != payload.PolicyVersion {
-		return m.failRetentionJob(ctx, job.ID, "Maven retention policy changed before execution")
+		return m.failRetentionJob(ctx, job, "Maven retention policy changed before execution")
 	}
 	candidates, err := m.PlanRepository(ctx, job.RepositoryID)
 	if err != nil {
-		return m.failRetentionJob(ctx, job.ID, "plan Maven retention failed")
+		return m.failRetentionJob(ctx, job, "plan Maven retention failed")
 	}
 	for _, artifact := range candidates {
 		if _, err = m.Store.TombstoneMavenArtifact(ctx, job.RepositoryID, artifact.ID); err != nil {
-			return m.failRetentionJob(ctx, job.ID, "tombstone Maven retention candidate failed")
+			return m.failRetentionJob(ctx, job, "tombstone Maven retention candidate failed")
 		}
 	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID)
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (m NativeRetention) failRetentionJob(ctx context.Context, id, message string) error {
-	if err := m.Store.FailLifecycleJob(ctx, id, message); err != nil {
+func (m NativeRetention) failRetentionJob(ctx context.Context, job repository.LifecycleJob, message string) error {
+	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
 	}
 	return fmt.Errorf("%s", message)

@@ -52,42 +52,58 @@ func (m NativeConanMaintenance) RunReclaimJobs(ctx context.Context, limit int) e
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.begin()
 		var payload conanReclaimPayload
 		if json.Unmarshal(job.Payload, &payload) != nil || payload.ObjectKey == "" {
-			_ = m.Store.FailLifecycleJob(ctx, job.ID, "invalid Conan reclaim payload")
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "invalid Conan reclaim payload")
 			m.end("failed")
 			continue
 		}
 		referenced, err := m.Store.ConanObjectHasVisibleReference(ctx, payload.ObjectKey)
 		if err != nil {
 			m.end("failed")
-			return m.fail(ctx, job.ID, "Conan object reference lookup failed")
+			if jobErr := m.fail(ctx, job, "Conan object reference lookup failed"); firstErr == nil {
+				firstErr = jobErr
+			}
+			continue
 		}
 		if referenced {
-			if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+			if err = m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 				m.end("failed")
-				return err
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 			m.end("completed")
 			continue
 		}
 		if err = m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
 			m.end("failed")
-			return m.fail(ctx, job.ID, fmt.Sprintf("delete Conan object: %v", err))
+			if jobErr := m.fail(ctx, job, fmt.Sprintf("delete Conan object: %v", err)); firstErr == nil {
+				firstErr = jobErr
+			}
+			continue
 		}
 		if err = m.Store.MarkConanObjectCollected(ctx, payload.ObjectKey); err != nil && err != repository.ErrNotFound {
 			m.end("failed")
-			return m.fail(ctx, job.ID, "mark Conan object collected failed")
+			if jobErr := m.fail(ctx, job, "mark Conan object collected failed"); firstErr == nil {
+				firstErr = jobErr
+			}
+			continue
 		}
-		if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+		if err = m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 			m.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.end("completed")
 	}
-	return nil
+	return firstErr
 }
 
 func (m NativeConanMaintenance) begin() {
@@ -103,8 +119,8 @@ func (m NativeConanMaintenance) end(outcome string) {
 		m.Metrics.AddBackgroundOperationInFlight("lifecycle", repository.FormatConan, -1)
 	}
 }
-func (m NativeConanMaintenance) fail(ctx context.Context, id, message string) error {
-	_ = m.Store.FailLifecycleJob(ctx, id, message)
+func (m NativeConanMaintenance) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
+	_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message)
 	return fmt.Errorf("%s", message)
 }
 func (m NativeConanMaintenance) Start(ctx context.Context, interval time.Duration) {

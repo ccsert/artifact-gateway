@@ -4,6 +4,12 @@ repositories_repositoryId_retention_dry_run:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   - "$ref": "../components/parameters.yaml#/PageSize"
   - "$ref": "../components/parameters.yaml#/PageToken"
+  - name: output
+    in: query
+    schema:
+      type: string
+      enum: [json, csv]
+      default: json
   post:
     operationId: dryRunRepositoryRetention
     responses:

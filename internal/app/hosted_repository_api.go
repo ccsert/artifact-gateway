@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1091,6 +1092,14 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention dry-run is supported for Maven, OCI, Conan, and Raw hosted repositories")
 			return
 		}
+		output := "json"
+		if params.Output != nil {
+			output = *params.Output
+		}
+		if output != "json" && output != "csv" {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "output must be json or csv")
+			return
+		}
 		pageSize := 100
 		if params.PageSize != nil {
 			pageSize = int(*params.PageSize)
@@ -1104,6 +1113,19 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
 			return
 		}
+		candidates, err := (NativeRepositoryRetention{Store: h.sessions.store}).PlanRepositoryDetailed(r.Context(), repo.ID, repo.Format)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "plan retention failed")
+			return
+		}
+		if output == "csv" {
+			if params.PageToken != nil && string(*params.PageToken) != "" {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageToken cannot be used with CSV export")
+				return
+			}
+			writeRetentionDryRunCSV(w, repo.Name, candidates)
+			return
+		}
 		pageToken := ""
 		if params.PageToken != nil {
 			pageToken = string(*params.PageToken)
@@ -1111,11 +1133,6 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 		afterCoordinate, afterArtifactID, err := h.decodeRetentionDryRunCursor(pageToken, repo.ID, policy.Version)
 		if err != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid, expired, or belongs to another retention policy version")
-			return
-		}
-		candidates, err := (NativeRepositoryRetention{Store: h.sessions.store}).PlanRepositoryDetailed(r.Context(), repo.ID, repo.Format)
-		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "plan retention failed")
 			return
 		}
 		start := 0
@@ -1133,7 +1150,7 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 			end = len(candidates)
 		}
 		page := candidates[start:end]
-		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, TotalCandidates: len(candidates), Candidates: make([]struct {
+		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, TotalCandidates: len(candidates), Summary: retentionDryRunSummary(candidates), Candidates: make([]struct {
 			AgeDays     int                                               `json:"ageDays"`
 			Coordinate  string                                            `json:"coordinate"`
 			CreatedAt   time.Time                                         `json:"createdAt"`
@@ -1160,6 +1177,56 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 		}
 		writeNativeMavenJSON(w, http.StatusOK, response)
 	})
+}
+
+func retentionDryRunSummary(candidates []RepositoryRetentionCandidate) adminopenapi.RetentionDryRunSummary {
+	summary := adminopenapi.RetentionDryRunSummary{}
+	for _, candidate := range candidates {
+		for _, reason := range candidate.Reasons {
+			switch reason {
+			case "age":
+				summary.ReasonCounts.Age++
+			case "maximum_versions":
+				summary.ReasonCounts.MaximumVersions++
+			}
+		}
+		switch candidate.VersionType {
+		case "release":
+			summary.VersionTypeCounts.Release++
+		case "snapshot":
+			summary.VersionTypeCounts.Snapshot++
+		case "version":
+			summary.VersionTypeCounts.Version++
+		case "asset":
+			summary.VersionTypeCounts.Asset++
+		}
+		if summary.OldestCandidateAt == nil || candidate.CreatedAt.Before(*summary.OldestCandidateAt) {
+			createdAt := candidate.CreatedAt
+			summary.OldestCandidateAt = &createdAt
+		}
+	}
+	return summary
+}
+
+func writeRetentionDryRunCSV(w http.ResponseWriter, repositoryName string, candidates []RepositoryRetentionCandidate) {
+	var output strings.Builder
+	writer := csv.NewWriter(&output)
+	_ = writer.Write([]string{"format", "coordinate", "digest", "createdAt", "ageDays", "versionType", "reasons"})
+	for _, candidate := range candidates {
+		_ = writer.Write([]string{string(candidate.Format), csvSpreadsheetSafe(candidate.Coordinate), candidate.Digest, candidate.CreatedAt.UTC().Format(time.RFC3339Nano), strconv.Itoa(candidate.AgeDays), candidate.VersionType, strings.Join(candidate.Reasons, "|")})
+	}
+	writer.Flush()
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+repositoryName+`-retention.csv"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(output.String()))
+}
+
+func csvSpreadsheetSafe(value string) string {
+	if value != "" && strings.ContainsRune("=+-@", rune(value[0])) {
+		return "'" + value
+	}
+	return value
 }
 
 func mapRetentionReasons(reasons []string) []adminopenapi.RetentionDryRunCandidatesReasons {
@@ -1198,7 +1265,7 @@ func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.Respons
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "enqueue retention job failed")
 			return
 		}
-		writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
+		writeNativeMavenJSON(w, http.StatusAccepted, lifecycleJobResponse(job))
 	})
 }
 
@@ -1240,7 +1307,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 				return
 			}
 			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: source.Name, GroupName: source.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: request.Coordinate, Operation: "promote", Status: http.StatusAccepted})
-			writeNativeMavenJSON(w, http.StatusAccepted, adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: job.CreatedAt})
+			writeNativeMavenJSON(w, http.StatusAccepted, lifecycleJobResponse(job))
 		})
 	})
 }
@@ -1549,23 +1616,75 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.Respon
 		}
 		items := make([]adminopenapi.LifecycleJob, 0, len(jobs))
 		for _, job := range jobs {
-			createdAt := job.CreatedAt
-			item := adminopenapi.LifecycleJob{Id: job.ID, Kind: adminopenapi.LifecycleJobKind(job.Kind), State: adminopenapi.LifecycleJobState(job.State), CreatedAt: createdAt}
-			if !job.StartedAt.IsZero() {
-				startedAt := job.StartedAt
-				item.StartedAt = &startedAt
-			}
-			if !job.CompletedAt.IsZero() {
-				completedAt := job.CompletedAt
-				item.CompletedAt = &completedAt
-			}
-			if job.LastError != "" {
-				lastError := job.LastError
-				item.LastError = &lastError
-			}
-			items = append(items, item)
+			items = append(items, lifecycleJobResponse(job))
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.LifecycleJobList(items))
+	})
+}
+
+func lifecycleJobResponse(job repository.LifecycleJob) adminopenapi.LifecycleJob {
+	item := adminopenapi.LifecycleJob{
+		Id:              job.ID,
+		Kind:            adminopenapi.LifecycleJobKind(job.Kind),
+		State:           adminopenapi.LifecycleJobState(job.State),
+		CreatedAt:       job.CreatedAt,
+		Attempts:        job.Attempts,
+		MaxAttempts:     job.MaxAttempts,
+		ProgressCurrent: job.ProgressCurrent,
+		ProgressTotal:   job.ProgressTotal,
+	}
+	if !job.StartedAt.IsZero() {
+		item.StartedAt = &job.StartedAt
+	}
+	if !job.CompletedAt.IsZero() {
+		item.CompletedAt = &job.CompletedAt
+	}
+	if !job.NextAttemptAt.IsZero() {
+		item.NextAttemptAt = &job.NextAttemptAt
+	}
+	if !job.LeaseExpiresAt.IsZero() {
+		item.LeaseExpiresAt = &job.LeaseExpiresAt
+	}
+	if job.ProgressMessage != "" {
+		item.ProgressMessage = &job.ProgressMessage
+	}
+	if job.LastError != "" {
+		item.LastError = &job.LastError
+	}
+	return item
+}
+
+func (h generatedRepositoryAPIAdapter) RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, lifecycleJobID adminopenapi.LifecycleJobId) {
+	h.controlRepositoryLifecycleJob(w, r, repositoryID.String(), lifecycleJobID.String(), "lifecycle.run_now", h.lifecycleJobs.RunLifecycleJobNow)
+}
+
+func (h generatedRepositoryAPIAdapter) RetryRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, lifecycleJobID adminopenapi.LifecycleJobId) {
+	h.controlRepositoryLifecycleJob(w, r, repositoryID.String(), lifecycleJobID.String(), "lifecycle.retry", h.lifecycleJobs.RetryLifecycleJob)
+}
+
+func (h generatedRepositoryAPIAdapter) CancelRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, lifecycleJobID adminopenapi.LifecycleJobId) {
+	h.controlRepositoryLifecycleJob(w, r, repositoryID.String(), lifecycleJobID.String(), "lifecycle.cancel", h.lifecycleJobs.CancelLifecycleJob)
+}
+
+func (h generatedRepositoryAPIAdapter) controlRepositoryLifecycleJob(w http.ResponseWriter, r *http.Request, repositoryID, lifecycleJobID, operation string, control func(context.Context, string, string) (repository.LifecycleJob, error)) {
+	h.withRepositoryScope(w, r, repositoryID, RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		job, err := control(r.Context(), repositoryID, lifecycleJobID)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "lifecycle job not found")
+			return
+		}
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusConflict, "invalid_job_state", "lifecycle job cannot perform this action in its current state")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "control lifecycle job failed")
+			return
+		}
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: "lifecycle-jobs/" + job.ID, Operation: operation, Status: http.StatusOK, CacheDisposition: "bypass"})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, lifecycleJobResponse(job))
 	})
 }
 

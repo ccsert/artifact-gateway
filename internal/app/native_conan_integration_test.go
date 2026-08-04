@@ -217,6 +217,14 @@ func TestPostgresNativeConanLifecycleStateTransitions(t *testing.T) {
 	if _, err = store.PutConanPackageRevision(ctx, pkg, []repository.ConanAsset{pkgAsset}); err != nil {
 		t.Fatalf("package publish replay: %v", err)
 	}
+	cascadeObject := repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: "native/conan/objects/" + uuid.NewString(), Digest: "sha256:" + strings.Repeat("f", 64), Size: 11}
+	if err = store.StageConanObject(ctx, cascadeObject); err != nil {
+		t.Fatal(err)
+	}
+	cascadePackage := repository.ConanPackageRevision{RepositoryID: repo.ID, Reference: recipe.Reference, RecipeRevision: recipe.Revision, PackageID: "cascade-package", Revision: "prev-cascade", Digest: cascadeObject.Digest}
+	if _, err = store.PutConanPackageRevision(ctx, cascadePackage, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: recipe.Reference, RecipeRevision: recipe.Revision, PackageID: cascadePackage.PackageID, PackageRevision: cascadePackage.Revision, Path: "package.tgz", ObjectKey: cascadeObject.ObjectKey, Digest: cascadeObject.Digest, Size: cascadeObject.Size}}); err != nil {
+		t.Fatal(err)
+	}
 	tombstonedPackage, err := store.TombstoneConanPackageRevision(ctx, repo.ID, recipe.Reference, recipe.Revision, pkg.PackageID, pkg.Revision)
 	if err != nil || tombstonedPackage.State != "deleted" {
 		t.Fatalf("package tombstone=%#v err=%v", tombstonedPackage, err)
@@ -224,6 +232,17 @@ func TestPostgresNativeConanLifecycleStateTransitions(t *testing.T) {
 	tombstonedRecipe, err := store.TombstoneConanRecipeRevision(ctx, repo.ID, recipe.Reference, recipe.Revision)
 	if err != nil || tombstonedRecipe.State != "deleted" {
 		t.Fatalf("recipe tombstone=%#v err=%v", tombstonedRecipe, err)
+	}
+	if _, err = store.RestoreConanRecipeRevision(ctx, repo.ID, recipe.Reference, recipe.Revision); err != nil {
+		t.Fatal(err)
+	}
+	explicitPackage, err := store.GetConanPackageRevision(ctx, repo.ID, recipe.Reference, recipe.Revision, pkg.PackageID, pkg.Revision)
+	if err != nil || explicitPackage.State != "deleted" {
+		t.Fatalf("explicit package=%#v err=%v", explicitPackage, err)
+	}
+	restoredPackage, err := store.GetConanPackageRevision(ctx, repo.ID, recipe.Reference, recipe.Revision, cascadePackage.PackageID, cascadePackage.Revision)
+	if err != nil || restoredPackage.State != "visible" {
+		t.Fatalf("cascaded package=%#v err=%v", restoredPackage, err)
 	}
 }
 
@@ -327,8 +346,11 @@ func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 		t.Fatal("first reclaim must fail")
 	}
 	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
-	if err != nil || len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobReclaim || jobs[0].State != repository.LifecycleJobFailed {
+	if err != nil || len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobReclaim || jobs[0].State != repository.LifecycleJobRetrying {
 		t.Fatalf("failed reclaim jobs=%#v err=%v", jobs, err)
+	}
+	if _, err = store.RunLifecycleJobNow(ctx, repo.ID, jobs[0].ID); err != nil {
+		t.Fatal(err)
 	}
 	if err = maintenance.Collect(ctx); err != nil {
 		t.Fatalf("retry reclaim: %v", err)

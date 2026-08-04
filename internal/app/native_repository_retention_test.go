@@ -69,6 +69,10 @@ func TestNativeRepositoryRetentionPlansOCIByImageAndRestoresTombstones(t *testin
 	if err = retention.RunJobs(ctx, 10); err != nil {
 		t.Fatal(err)
 	}
+	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].ProgressCurrent != 1 || jobs[0].ProgressTotal != 1 {
+		t.Fatalf("retention progress=%#v err=%v", jobs, err)
+	}
 	if _, err = store.GetOCIManifest(ctx, repo.ID, "team/app", "v1"); err == nil {
 		t.Fatal("expected old OCI manifest to be hidden")
 	}
@@ -204,5 +208,33 @@ func TestNativeRepositoryRetentionPlansRawAssetsWithoutVersionCounts(t *testing.
 	}
 	if _, err = store.GetRawAsset(ctx, repo.ID, "releases/old.txt"); err != nil {
 		t.Fatalf("restored Raw asset unavailable: %v", err)
+	}
+}
+
+func TestNativeRepositoryRetentionCompletesSupersededPolicyJobWithoutRetry(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-superseded", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retentionPolicyForTest(t, store, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 30})
+	retention := NativeRepositoryRetention{Store: store}
+	if _, _, err = retention.EnqueueRepository(ctx, repo.ID, "superseded"); err != nil {
+		t.Fatal(err)
+	}
+	policy, err := store.GetRepositoryRetentionPolicy(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 60, SnapshotKeepDays: 60, MinimumVersions: 1}, policy.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err = retention.RunJobs(ctx, 1); err != nil {
+		t.Fatalf("superseded job returned error: %v", err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobCompleted || !strings.Contains(jobs[0].ProgressMessage, "superseded") {
+		t.Fatalf("superseded job=%#v err=%v", jobs, err)
 	}
 }

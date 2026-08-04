@@ -37,32 +37,42 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, job := range jobs {
 		m.begin()
 		var p PromotionPayload
 		if err = json.Unmarshal(job.Payload, &p); err != nil || p.Format != repository.FormatConan || p.SourceRepositoryID == "" || p.Reference == "" || p.Revision == "" || p.Digest == "" {
-			if e := m.Store.FailLifecycleJob(ctx, job.ID, "invalid Conan promotion payload"); e != nil {
+			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "invalid Conan promotion payload"); e != nil {
 				m.end("failed")
-				return e
+				if firstErr == nil {
+					firstErr = e
+				}
+				continue
 			}
 			m.end("failed")
 			continue
 		}
 		if _, err = m.Store.PromoteConanRecipeRevision(ctx, repository.ConanPromotion{SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Reference: p.Reference, Revision: p.Revision, Digest: p.Digest}); err != nil {
-			if e := m.Store.FailLifecycleJob(ctx, job.ID, "promote Conan recipe failed"); e != nil {
+			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "promote Conan recipe failed"); e != nil {
 				m.end("failed")
-				return e
+				if firstErr == nil {
+					firstErr = e
+				}
+				continue
 			}
 			m.end("failed")
 			continue
 		}
-		if err = m.Store.CompleteLifecycleJob(ctx, job.ID); err != nil {
+		if err = m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 			m.end("failed")
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		m.end("completed")
 	}
-	return nil
+	return firstErr
 }
 func (m NativePromotion) begin() {
 	if m.Metrics != nil {
