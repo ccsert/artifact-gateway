@@ -91,7 +91,7 @@ func main() {
 	runtimeContext := signalContext()
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.NativeMavenRetention{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)
+	app.NativeRepositoryRetention{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)
 	app.AuditRetentionWorker{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)
 	app.NativeMavenPromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
 	app.NativeOCIMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)

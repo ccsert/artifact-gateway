@@ -143,6 +143,7 @@ type NativeOCIStore interface {
 	PublishReplicatedOCIManifest(context.Context, OCIReplicationPublication) (OCIManifest, error)
 	GetOCIManifest(context.Context, string, string, string) (OCIManifest, error)
 	ListOCIReferrers(context.Context, string, string, string, int, string) ([]OCIManifest, error)
+	ListOCIManifests(context.Context, string, string, int, string) ([]OCIManifest, error)
 	ListOCIManifestNames(context.Context, string, int, string) ([]string, error)
 	SearchOCIManifestNames(context.Context, string, string, int, string) ([]string, error)
 	ListOCITags(context.Context, string, string, int, string) ([]string, error)
@@ -164,6 +165,7 @@ type NativeRawStore interface {
 	GetRawAsset(context.Context, string, string) (RawAsset, error)
 	ListRawAssets(context.Context, string, string, int, string) ([]RawAsset, error)
 	DeleteRawAsset(context.Context, string, string) error
+	RestoreRawAsset(context.Context, string, string) (RawAsset, error)
 	ListUnreferencedRawObjects(context.Context, time.Time, int) ([]RawObject, error)
 	RawObjectIsUnreferenced(context.Context, string) (bool, error)
 	MarkRawObjectCollected(context.Context, string) error

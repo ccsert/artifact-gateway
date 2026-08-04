@@ -366,6 +366,36 @@ func (s *PostgresStore) ListOCIReferrers(ctx context.Context, repositoryID, name
 	}
 	return out, rows.Err()
 }
+
+func (s *PostgresStore) ListOCIManifests(ctx context.Context, repositoryID, name string, limit int, after string) ([]OCIManifest, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT m.repository_id::text,m.name,m.digest,m.object_key,m.media_type,m.size,m.created_at,COALESCE(m.subject_digest,''),m.artifact_type,COALESCE(array_to_json(array_agg(t.tag ORDER BY t.tag) FILTER (WHERE t.tag IS NOT NULL)),'[]'::json)
+		FROM native_oci_manifests m
+		LEFT JOIN native_oci_tags t ON t.repository_id=m.repository_id AND t.name=m.name AND t.digest=m.digest
+		WHERE m.repository_id::text=$1 AND m.name=$2 AND m.digest>$3
+		GROUP BY m.repository_id,m.name,m.digest,m.object_key,m.media_type,m.size,m.created_at,m.subject_digest,m.artifact_type
+		ORDER BY m.digest LIMIT $4`, repositoryID, name, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []OCIManifest
+	for rows.Next() {
+		var item OCIManifest
+		var tagsJSON []byte
+		if err := rows.Scan(&item.RepositoryID, &item.Name, &item.Digest, &item.ObjectKey, &item.MediaType, &item.Size, &item.CreatedAt, &item.SubjectDigest, &item.ArtifactType, &tagsJSON); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(tagsJSON, &item.Tags); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) ListOCIManifestNames(ctx context.Context, repositoryID string, limit int, after string) ([]string, error) {
 	return s.searchOCIManifestNames(ctx, repositoryID, "", limit, after)
 }

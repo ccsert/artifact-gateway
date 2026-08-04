@@ -925,7 +925,7 @@ func TestPostgresMavenRetentionTombstonesExpiredExcessVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 1, MinimumVersions: 1}, "1"); err != nil {
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 1, MinimumVersions: 1}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	db, err := sql.Open("pgx", databaseURL)

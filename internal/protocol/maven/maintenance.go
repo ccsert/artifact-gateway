@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -265,6 +266,13 @@ type retentionPayload struct {
 	PolicyVersion string            `json:"policyVersion"`
 }
 
+type RetentionCandidate struct {
+	Artifact    repository.MavenArtifact
+	Reasons     []string
+	AgeDays     int
+	VersionType string
+}
+
 func (m NativeRetention) Collect(ctx context.Context) error {
 	now := time.Now
 	if m.Now != nil {
@@ -278,6 +286,13 @@ func (m NativeRetention) Collect(ctx context.Context) error {
 		}
 		for _, repo := range repositories {
 			if repo.Format != repository.FormatMaven || repo.State != repository.RepositoryActive {
+				continue
+			}
+			policy, policyErr := m.Store.GetRepositoryRetentionPolicy(ctx, repo.ID)
+			if policyErr != nil {
+				return policyErr
+			}
+			if !policy.Enabled {
 				continue
 			}
 			if _, _, err = m.EnqueueRepository(ctx, repo.ID, "scheduled:"+now().UTC().Format("2006-01-02")); err != nil {
@@ -369,9 +384,35 @@ func (m NativeRetention) failRetentionJob(ctx context.Context, id, message strin
 // PlanRepository returns the artifacts a retention run would tombstone without
 // changing state. It is shared by execution and management dry-run callers.
 func (m NativeRetention) PlanRepository(ctx context.Context, repositoryID string) ([]repository.MavenArtifact, error) {
+	detailed, err := m.PlanRepositoryDetailed(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]repository.MavenArtifact, 0, len(detailed))
+	for _, candidate := range detailed {
+		candidates = append(candidates, candidate.Artifact)
+	}
+	return candidates, nil
+}
+
+// PlanRepositoryDetailed explains why each artifact is eligible. Matching
+// rules are evaluated before age and count rules; protected coordinates always
+// win, including when a module exceeds its configured maximum.
+func (m NativeRetention) PlanRepositoryDetailed(ctx context.Context, repositoryID string) ([]RetentionCandidate, error) {
 	policy, err := m.Store.GetRepositoryRetentionPolicy(ctx, repositoryID)
 	if err != nil {
 		return nil, err
+	}
+	if !policy.Enabled {
+		return []RetentionCandidate{}, nil
+	}
+	coordinatePatterns, err := compileRetentionPatterns(policy.CoordinatePatterns)
+	if err != nil {
+		return nil, fmt.Errorf("compile retention coordinate patterns: %w", err)
+	}
+	protectedPatterns, err := compileRetentionPatterns(policy.ProtectedPatterns)
+	if err != nil {
+		return nil, fmt.Errorf("compile retention protected patterns: %w", err)
 	}
 	artifacts, err := m.Store.ListMavenArtifacts(ctx, repositoryID)
 	if err != nil {
@@ -381,22 +422,82 @@ func (m NativeRetention) PlanRepository(ctx context.Context, repositoryID string
 	if m.Now != nil {
 		now = m.Now
 	}
-	cutoff := now().UTC().AddDate(0, 0, -policy.KeepDays)
+	nowUTC := now().UTC()
 	byModule := map[string][]repository.MavenArtifact{}
 	for _, artifact := range artifacts {
 		key := retentionModule(artifact.Coordinate)
 		byModule[key] = append(byModule[key], artifact)
 	}
-	candidates := []repository.MavenArtifact{}
+	candidates := []RetentionCandidate{}
 	for _, versions := range byModule {
-		sort.SliceStable(versions, func(i, j int) bool { return versions[i].CreatedAt.After(versions[j].CreatedAt) })
+		sort.SliceStable(versions, func(i, j int) bool {
+			if versions[i].CreatedAt.Equal(versions[j].CreatedAt) {
+				return versions[i].ID > versions[j].ID
+			}
+			return versions[i].CreatedAt.After(versions[j].CreatedAt)
+		})
 		for index, artifact := range versions {
-			if index >= policy.MinimumVersions && artifact.CreatedAt.Before(cutoff) {
-				candidates = append(candidates, artifact)
+			if index < policy.MinimumVersions || !matchesAnyRetentionPattern(coordinatePatterns, artifact.Coordinate, true) || matchesAnyRetentionPattern(protectedPatterns, artifact.Coordinate, false) {
+				continue
+			}
+			versionType := "release"
+			keepDays := policy.KeepDays
+			if isMavenSnapshotCoordinate(artifact.Coordinate) {
+				versionType = "snapshot"
+				keepDays = policy.SnapshotKeepDays
+			}
+			reasons := []string{}
+			if artifact.CreatedAt.Before(nowUTC.AddDate(0, 0, -keepDays)) {
+				reasons = append(reasons, "age")
+			}
+			if policy.MaximumVersions > 0 && index >= policy.MaximumVersions {
+				reasons = append(reasons, "maximum_versions")
+			}
+			if len(reasons) > 0 {
+				ageDays := int(nowUTC.Sub(artifact.CreatedAt.UTC()).Hours() / 24)
+				if ageDays < 0 {
+					ageDays = 0
+				}
+				candidates = append(candidates, RetentionCandidate{Artifact: artifact, Reasons: reasons, AgeDays: ageDays, VersionType: versionType})
 			}
 		}
 	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Artifact.Coordinate == candidates[j].Artifact.Coordinate {
+			return candidates[i].Artifact.ID < candidates[j].Artifact.ID
+		}
+		return candidates[i].Artifact.Coordinate < candidates[j].Artifact.Coordinate
+	})
 	return candidates, nil
+}
+
+func compileRetentionPatterns(patterns []string) ([]*regexp.Regexp, error) {
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		expression, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		compiled = append(compiled, expression)
+	}
+	return compiled, nil
+}
+
+func matchesAnyRetentionPattern(patterns []*regexp.Regexp, coordinate string, emptyMatches bool) bool {
+	if len(patterns) == 0 {
+		return emptyMatches
+	}
+	for _, pattern := range patterns {
+		if pattern.MatchString(coordinate) {
+			return true
+		}
+	}
+	return false
+}
+
+func isMavenSnapshotCoordinate(coordinate string) bool {
+	parts := strings.Split(coordinate, ":")
+	return len(parts) >= 3 && strings.HasSuffix(strings.ToUpper(parts[2]), "-SNAPSHOT")
 }
 
 func (m NativeRetention) Start(ctx context.Context, interval time.Duration) {

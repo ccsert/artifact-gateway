@@ -454,14 +454,33 @@ func (s *PostgresStore) GetRepositoryRetentionPolicy(ctx context.Context, reposi
 		return RepositoryRetentionPolicy{}, ErrNotFound
 	}
 	policy := defaultRepositoryRetentionPolicy()
-	err := s.db.QueryRowContext(ctx, `SELECT version::text,keep_days,minimum_versions FROM repository_retention_policies WHERE repository_id::text=$1`, repositoryID).Scan(&policy.Version, &policy.KeepDays, &policy.MinimumVersions)
+	var coordinatePatterns, protectedPatterns []byte
+	err := s.db.QueryRowContext(ctx, `SELECT version::text,enabled,keep_days,snapshot_keep_days,minimum_versions,maximum_versions,array_to_json(coordinate_patterns),array_to_json(protected_patterns) FROM repository_retention_policies WHERE repository_id::text=$1`, repositoryID).Scan(&policy.Version, &policy.Enabled, &policy.KeepDays, &policy.SnapshotKeepDays, &policy.MinimumVersions, &policy.MaximumVersions, &coordinatePatterns, &protectedPatterns)
 	if errors.Is(err, sql.ErrNoRows) {
 		return policy, nil
 	}
-	return policy, err
+	if err != nil {
+		return policy, err
+	}
+	if err = json.Unmarshal(coordinatePatterns, &policy.CoordinatePatterns); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	if err = json.Unmarshal(protectedPatterns, &policy.ProtectedPatterns); err != nil {
+		return RepositoryRetentionPolicy{}, err
+	}
+	return policy, nil
 }
 
 func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, repositoryID string, policy RepositoryRetentionPolicy, expectedVersion string) (RepositoryRetentionPolicy, error) {
+	if policy.SnapshotKeepDays == 0 {
+		policy.SnapshotKeepDays = policy.KeepDays
+	}
+	if policy.CoordinatePatterns == nil {
+		policy.CoordinatePatterns = []string{}
+	}
+	if policy.ProtectedPatterns == nil {
+		policy.ProtectedPatterns = []string{}
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return RepositoryRetentionPolicy{}, err
@@ -474,10 +493,10 @@ func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, re
 	if !exists {
 		return RepositoryRetentionPolicy{}, ErrNotFound
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_retention_policies (repository_id,version,keep_days,minimum_versions) VALUES ($1,1,30,1) ON CONFLICT DO NOTHING`, repositoryID); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_retention_policies (repository_id,version,enabled,keep_days,snapshot_keep_days,minimum_versions,maximum_versions,coordinate_patterns,protected_patterns) VALUES ($1,1,false,30,30,1,0,'{}','{}') ON CONFLICT DO NOTHING`, repositoryID); err != nil {
 		return RepositoryRetentionPolicy{}, err
 	}
-	err = tx.QueryRowContext(ctx, `UPDATE repository_retention_policies SET version=version+1, keep_days=$3, minimum_versions=$4 WHERE repository_id::text=$1 AND version::text=$2 RETURNING version::text`, repositoryID, expectedVersion, policy.KeepDays, policy.MinimumVersions).Scan(&policy.Version)
+	err = tx.QueryRowContext(ctx, `UPDATE repository_retention_policies SET version=version+1,enabled=$3,keep_days=$4,snapshot_keep_days=$5,minimum_versions=$6,maximum_versions=$7,coordinate_patterns=COALESCE($8::text[],'{}'),protected_patterns=COALESCE($9::text[],'{}') WHERE repository_id::text=$1 AND version::text=$2 RETURNING version::text`, repositoryID, expectedVersion, policy.Enabled, policy.KeepDays, policy.SnapshotKeepDays, policy.MinimumVersions, policy.MaximumVersions, policy.CoordinatePatterns, policy.ProtectedPatterns).Scan(&policy.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RepositoryRetentionPolicy{}, ErrVersionConflict
 	}

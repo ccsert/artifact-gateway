@@ -327,6 +327,12 @@
       "parameters": [
         {
           "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/PageSize"
+        },
+        {
+          "$ref": "#/components/parameters/PageToken"
         }
       ],
       "post": {
@@ -334,6 +340,15 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/RetentionDryRun"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -349,11 +364,14 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/OptionalIfMatch"
           }
         ],
         "responses": {
           "202": {
-            "description": "Maven retention job accepted",
+            "description": "Repository retention job accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -361,6 +379,18 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -996,6 +1026,47 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/OCIImageList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/oci/manifests": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listOCIManifests",
+        "description": "Lists visible manifests for one OCI image, including manifests without tags.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "Exact OCI image name.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OCIManifestSummaryList"
           },
           "400": {
             "$ref": "#/components/responses/Problem"
@@ -2374,13 +2445,51 @@
           "version": {
             "type": "string"
           },
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether scheduled and manual retention execution is enabled."
+          },
           "keepDays": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Days to retain artifacts or versions before cleanup eligibility."
+          },
+          "snapshotKeepDays": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Days to retain Maven SNAPSHOT versions. Defaults to keepDays when omitted."
           },
           "minimumVersions": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules."
+          },
+          "maximumVersions": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it."
+          },
+          "coordinatePatterns": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "Optional RE2 regular expressions selecting coordinates eligible for cleanup.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "protectedPatterns": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "RE2 regular expressions protecting matching coordinates from cleanup.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
           }
         }
       },
@@ -2437,22 +2546,34 @@
         "type": "object",
         "required": [
           "policyVersion",
+          "totalCandidates",
           "candidates"
         ],
         "properties": {
           "policyVersion": {
             "type": "string"
           },
+          "totalCandidates": {
+            "type": "integer",
+            "minimum": 0
+          },
           "candidates": {
             "type": "array",
             "items": {
               "type": "object",
               "required": [
+                "format",
                 "coordinate",
                 "digest",
-                "createdAt"
+                "createdAt",
+                "reasons",
+                "ageDays",
+                "versionType"
               ],
               "properties": {
+                "format": {
+                  "$ref": "#/components/schemas/Format"
+                },
                 "coordinate": {
                   "type": "string"
                 },
@@ -2462,9 +2583,36 @@
                 "createdAt": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "reasons": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "age",
+                      "maximum_versions"
+                    ]
+                  }
+                },
+                "ageDays": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "versionType": {
+                  "type": "string",
+                  "enum": [
+                    "release",
+                    "snapshot",
+                    "version",
+                    "asset"
+                  ]
                 }
               }
             }
+          },
+          "nextPageToken": {
+            "type": "string"
           }
         }
       },
@@ -3320,6 +3468,59 @@
           }
         }
       },
+      "OCIManifestSummary": {
+        "type": "object",
+        "required": [
+          "digest",
+          "mediaType",
+          "size",
+          "tags"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subjectDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "artifactType": {
+            "type": "string"
+          }
+        }
+      },
+      "OCIManifestSummaryPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OCIManifestSummary"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "MavenCoordinate": {
         "type": "object",
         "required": [
@@ -3497,6 +3698,14 @@
         "name": "If-Match",
         "in": "header",
         "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "OptionalIfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
         "schema": {
           "type": "string"
         }
@@ -3767,7 +3976,7 @@
         }
       },
       "RetentionDryRun": {
-        "description": "Maven retention candidates without state changes",
+        "description": "Repository retention candidates without state changes",
         "content": {
           "application/json": {
             "schema": {
@@ -3885,6 +4094,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/OCIImagePage"
+            }
+          }
+        }
+      },
+      "OCIManifestSummaryList": {
+        "description": "Visible OCI manifests for one image, including untagged digests",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OCIManifestSummaryPage"
             }
           }
         }

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
@@ -453,6 +454,10 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	raw, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticator := testAuthenticator()
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), conan.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
@@ -478,6 +483,13 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	handler.ServeHTTP(ociResponse, ociRequest)
 	if ociResponse.Code != http.StatusOK || !strings.Contains(ociResponse.Body.String(), `"restore"`) {
 		t.Fatalf("OCI capabilities=%d %s", ociResponse.Code, ociResponse.Body.String())
+	}
+	rawRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+raw.ID+"/capabilities", nil)
+	authorize(rawRequest, "admin-secret")
+	rawResponse := httptest.NewRecorder()
+	handler.ServeHTTP(rawResponse, rawRequest)
+	if rawResponse.Code != http.StatusOK || !strings.Contains(rawResponse.Body.String(), `"restore"`) || strings.Contains(rawResponse.Body.String(), `"retain"`) {
+		t.Fatalf("Raw capabilities=%d %s", rawResponse.Code, rawResponse.Body.String())
 	}
 }
 
@@ -689,6 +701,65 @@ func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *tes
 	}
 }
 
+func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-untagged", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("d", 64)
+	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "nginx", Digest: digest, ObjectKey: "oci/untagged", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1989}, digest); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/oci/manifests?name=nginx&pageSize=50", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"digest":"`+digest+`"`) || !strings.Contains(response.Body.String(), `"tags":[]`) {
+		t.Fatalf("untagged OCI manifest browse=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAnonymousHostedGroupArtifactSearchAggregatesOnlyAnonymousMembers(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	public, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "public-group-member", Format: repository.FormatOCI, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "private-group-member", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if _, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: public.ID, Name: "team/public", Digest: digest, ObjectKey: "public", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1}, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: private.ID, Name: "team/private", Digest: digest, ObjectKey: "private", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1}, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{
+		ID: uuid.NewString(), Name: "public-search-group", Format: repository.FormatOCI, AnonymousRead: true,
+		Members: []repository.GroupMember{{RepositoryID: public.ID, Position: 0}, {RepositoryID: private.ID, Position: 1}},
+	}, "test", "public-search-group", "public-search-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enableAnonymousAccess(t, store)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+group.ID+"/artifact-search?q=team%2F&pageSize=50", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"coordinate":"team/public"`) {
+		t.Fatalf("anonymous group search=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "team/private") {
+		t.Fatalf("private member leaked into group search: %s", response.Body.String())
+	}
+}
+
 func TestConanRecipeRevisionSearchPaginatesAndBindsCursorToQuery(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
@@ -751,6 +822,67 @@ func TestConanRecipeRevisionSearchPaginatesAndBindsCursorToQuery(t *testing.T) {
 	}
 	if invalid := request("beta", firstPage.NextPageToken, 2); invalid.Code != http.StatusBadRequest {
 		t.Fatalf("query-bound cursor=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestAnonymousHostedGroupConanRecipeRevisionsAggregateMembers(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	public, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-public", Format: repository.FormatConan, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-private", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := "demo/1.0/user/stable"
+	publish := func(repoID, revision string) {
+		digestChar := "a"
+		if revision == "private-revision" {
+			digestChar = "b"
+		}
+		digest := "sha256:" + strings.Repeat(digestChar, 64)
+		key := "conan/group/" + repoID + "/" + revision
+		if err := store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repoID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: repoID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: repoID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish(public.ID, "public-revision")
+	publish(private.ID, "private-revision")
+	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: uuid.NewString(), Name: "conan-public-group", Format: repository.FormatConan, AnonymousRead: true, Members: []repository.GroupMember{{RepositoryID: public.ID, Position: 0}, {RepositoryID: private.ID, Position: 1}}}, "test", "conan-public-group", "conan-public-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enableAnonymousAccess(t, store)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+group.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference), nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "public-revision") || strings.Contains(response.Body.String(), "private-revision") {
+		t.Fatalf("anonymous group revisions=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestCreateHostedGroupAcceptsConanFormat(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "conan-group-member", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(fmt.Sprintf(`{"name":"conan-group","format":"conan","members":[{"repositoryId":"%s","position":0}]}`, repo.ID)))
+	authorize(request, "admin-secret")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "create-conan-group")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"format":"conan"`) {
+		t.Fatalf("create Conan group=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
@@ -982,7 +1114,7 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	authorize(get, "admin-secret")
 	defaultPolicy := httptest.NewRecorder()
 	handler.ServeHTTP(defaultPolicy, get)
-	if defaultPolicy.Code != http.StatusOK || !strings.Contains(defaultPolicy.Body.String(), `"version":"1"`) || !strings.Contains(defaultPolicy.Body.String(), `"keepDays":30`) {
+	if defaultPolicy.Code != http.StatusOK || !strings.Contains(defaultPolicy.Body.String(), `"version":"1"`) || !strings.Contains(defaultPolicy.Body.String(), `"enabled":false`) || !strings.Contains(defaultPolicy.Body.String(), `"snapshotKeepDays":30`) {
 		t.Fatalf("default policy=%d body=%s", defaultPolicy.Code, defaultPolicy.Body.String())
 	}
 	replace := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"1","keepDays":14,"minimumVersions":3}`))
@@ -1008,6 +1140,22 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	handler.ServeHTTP(invalidResult, invalid)
 	if invalidResult.Code != http.StatusBadRequest {
 		t.Fatalf("invalid=%d body=%s", invalidResult.Code, invalidResult.Body.String())
+	}
+	invalidMaximum := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"2","keepDays":14,"minimumVersions":3,"maximumVersions":2}`))
+	authorize(invalidMaximum, "admin-secret")
+	invalidMaximum.Header.Set("If-Match", "2")
+	invalidMaximumResult := httptest.NewRecorder()
+	handler.ServeHTTP(invalidMaximumResult, invalidMaximum)
+	if invalidMaximumResult.Code != http.StatusBadRequest || !strings.Contains(invalidMaximumResult.Body.String(), "maximumVersions") {
+		t.Fatalf("invalid maximum=%d body=%s", invalidMaximumResult.Code, invalidMaximumResult.Body.String())
+	}
+	invalidPattern := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/retention-policy", strings.NewReader(`{"version":"2","keepDays":14,"minimumVersions":1,"coordinatePatterns":["["]}`))
+	authorize(invalidPattern, "admin-secret")
+	invalidPattern.Header.Set("If-Match", "2")
+	invalidPatternResult := httptest.NewRecorder()
+	handler.ServeHTTP(invalidPatternResult, invalidPattern)
+	if invalidPatternResult.Code != http.StatusBadRequest || !strings.Contains(invalidPatternResult.Body.String(), "coordinatePatterns") {
+		t.Fatalf("invalid pattern=%d body=%s", invalidPatternResult.Code, invalidPatternResult.Body.String())
 	}
 }
 
@@ -1057,7 +1205,7 @@ func TestRepositoryCapacityManagementUsesScopedGrantsAndAuditsConfiguration(t *t
 	}
 }
 
-func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *testing.T) {
+func TestRepositoryRetentionDryRunIsAdminOnlyAcrossFormatsAndDoesNotMutateArtifacts(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	maven, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-dry-run", Format: repository.FormatMaven})
@@ -1099,7 +1247,7 @@ func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *t
 	if err != nil || visible.State != "visible" {
 		t.Fatalf("dry run mutated artifact=%#v err=%v", visible, err)
 	}
-	if response := request(raw.ID, "admin-secret"); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "unsupported_operation") {
+	if response := request(raw.ID, "admin-secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"candidates":[]`) {
 		t.Fatalf("raw dry run=%d body=%s", response.Code, response.Body.String())
 	}
 	if response := request(maven.ID, authenticator.IssueToken("retention-reader")); response.Code != http.StatusForbidden {
@@ -1107,7 +1255,94 @@ func TestRepositoryRetentionDryRunIsAdminOnlyMavenAndDoesNotMutateArtifacts(t *t
 	}
 }
 
-func TestRepositoryRetentionExecutionEnqueuesIdempotentMavenJob(t *testing.T) {
+func TestRepositoryRetentionDryRunPaginatesAndBindsPolicyVersion(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-page", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-page-other", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 36500, SnapshotKeepDays: 36500, MinimumVersions: 1, MaximumVersions: 1}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	for index, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+		sessionID := uuid.NewString()
+		coordinate := "org.example:pageable:" + version
+		digest := "sha256:" + fmt.Sprintf("%064x", index+1)
+		name := "pageable-" + version + ".jar"
+		objectKey := "native/maven/pageable/" + sessionID
+		session := repository.MavenPublishSession{ID: sessionID, RepositoryID: repo.ID, Coordinate: coordinate, Publisher: "test", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: name, Digest: digest, Size: 1}}}
+		if _, err = store.CreateMavenPublishSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+		if err = store.MarkMavenPublishObject(ctx, sessionID, name, objectKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.CommitMavenPublishSession(ctx, sessionID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/pageable/" + version + "/" + name, ObjectKey: objectKey, Digest: digest, Size: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(target string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, target, nil)
+		authorize(req, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	first := request("/api/v2/repositories/" + repo.ID + "/retention:dry-run?pageSize=1")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first page=%d body=%s", first.Code, first.Body.String())
+	}
+	var firstPage adminopenapi.RetentionDryRun
+	if err = json.NewDecoder(first.Body).Decode(&firstPage); err != nil {
+		t.Fatal(err)
+	}
+	if firstPage.TotalCandidates != 2 || len(firstPage.Candidates) != 1 || firstPage.NextPageToken == nil {
+		t.Fatalf("first page=%#v", firstPage)
+	}
+	second := request("/api/v2/repositories/" + repo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(*firstPage.NextPageToken))
+	if second.Code != http.StatusOK {
+		t.Fatalf("second page=%d body=%s", second.Code, second.Body.String())
+	}
+	var secondPage adminopenapi.RetentionDryRun
+	if err = json.NewDecoder(second.Body).Decode(&secondPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(secondPage.Candidates) != 1 || secondPage.Candidates[0].Coordinate == firstPage.Candidates[0].Coordinate || secondPage.NextPageToken != nil {
+		t.Fatalf("second page=%#v", secondPage)
+	}
+	foreign := request("/api/v2/repositories/" + otherRepo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(*firstPage.NextPageToken))
+	if foreign.Code != http.StatusBadRequest || !strings.Contains(foreign.Body.String(), "invalid_page_token") {
+		t.Fatalf("foreign repository page=%d body=%s", foreign.Code, foreign.Body.String())
+	}
+	expiredPayload, err := json.Marshal(retentionDryRunPageCursor{Endpoint: "retention-dry-run", RepositoryID: repo.ID, PolicyVersion: firstPage.PolicyVersion, Coordinate: firstPage.Candidates[0].Coordinate, ArtifactID: "expired-artifact", ExpiresAt: time.Now().UTC().Add(-time.Minute).Unix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredMAC := hmac.New(sha256.New, []byte(authenticator.AdminToken))
+	_, _ = expiredMAC.Write(expiredPayload)
+	expiredToken := base64.RawURLEncoding.EncodeToString(append(expiredPayload, expiredMAC.Sum(nil)...))
+	expired := request("/api/v2/repositories/" + repo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(expiredToken))
+	if expired.Code != http.StatusBadRequest || !strings.Contains(expired.Body.String(), "invalid_page_token") {
+		t.Fatalf("expired page=%d body=%s", expired.Code, expired.Body.String())
+	}
+	updated, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 36500, SnapshotKeepDays: 36500, MinimumVersions: 1, MaximumVersions: 1}, secondPage.PolicyVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := request("/api/v2/repositories/" + repo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(*firstPage.NextPageToken))
+	if stale.Code != http.StatusBadRequest || !strings.Contains(stale.Body.String(), "invalid_page_token") {
+		t.Fatalf("stale page=%d body=%s policy=%#v", stale.Code, stale.Body.String(), updated)
+	}
+}
+
+func TestRepositoryRetentionExecutionEnqueuesIdempotentCrossFormatJobs(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	maven, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-execute", Format: repository.FormatMaven})
@@ -1116,6 +1351,12 @@ func TestRepositoryRetentionExecutionEnqueuesIdempotentMavenJob(t *testing.T) {
 	}
 	raw, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-execute-raw", Format: repository.FormatRaw})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, maven.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 30, MinimumVersions: 1}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, raw.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 30, MinimumVersions: 1}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
@@ -1135,15 +1376,66 @@ func TestRepositoryRetentionExecutionEnqueuesIdempotentMavenJob(t *testing.T) {
 	if second.Code != http.StatusAccepted || second.Body.String() != first.Body.String() {
 		t.Fatalf("replay=%d body=%s", second.Code, second.Body.String())
 	}
-	if err = (NativeMavenRetention{Store: store}).RunJobs(ctx, 10); err != nil {
+	rawResponse := request(raw.ID)
+	if rawResponse.Code != http.StatusAccepted || !strings.Contains(rawResponse.Body.String(), `"kind":"retention"`) {
+		t.Fatalf("raw execute=%d body=%s", rawResponse.Code, rawResponse.Body.String())
+	}
+	if err = (NativeRepositoryRetention{Store: store}).RunJobs(ctx, 10); err != nil {
 		t.Fatal(err)
 	}
 	jobs, err := store.ListLifecycleJobs(ctx, maven.ID, 10)
 	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobCompleted {
 		t.Fatalf("jobs=%#v err=%v", jobs, err)
 	}
-	if response := request(raw.ID); response.Code != http.StatusConflict {
-		t.Fatalf("raw execute=%d body=%s", response.Code, response.Body.String())
+	rawJobs, err := store.ListLifecycleJobs(ctx, raw.ID, 10)
+	if err != nil || len(rawJobs) != 1 || rawJobs[0].State != repository.LifecycleJobCompleted {
+		t.Fatalf("raw jobs=%#v err=%v", rawJobs, err)
+	}
+}
+
+func TestRepositoryRetentionExecutionChecksDryRunPolicyVersion(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-if-match", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 30, MinimumVersions: 1}, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := func(key, version string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/retention:execute", nil)
+		authorize(req, "admin-secret")
+		req.Header.Set("Idempotency-Key", key)
+		req.Header.Set("If-Match", version)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if stale := request("retention-stale", "1"); stale.Code != http.StatusPreconditionFailed || !strings.Contains(stale.Body.String(), "version_conflict") {
+		t.Fatalf("stale execute=%d body=%s", stale.Code, stale.Body.String())
+	}
+	if current := request("retention-current", policy.Version); current.Code != http.StatusAccepted {
+		t.Fatalf("current execute=%d body=%s", current.Code, current.Body.String())
+	}
+	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: false, KeepDays: 30, MinimumVersions: 1}, policy.Version); err != nil {
+		t.Fatal(err)
+	}
+	if disabled := request("retention-disabled", policy.Version); disabled.Code != http.StatusPreconditionFailed {
+		// The version was incremented by the disable update, so the stale If-Match
+		// is expected to fail before the disabled-policy guard.
+		t.Fatalf("disabled execute=%d body=%s", disabled.Code, disabled.Body.String())
+	}
+	currentPolicy, err := store.GetRepositoryRetentionPolicy(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := request("retention-disabled-current", currentPolicy.Version)
+	if disabled.Code != http.StatusConflict || !strings.Contains(disabled.Body.String(), "retention_disabled") {
+		t.Fatalf("disabled current execute=%d body=%s", disabled.Code, disabled.Body.String())
 	}
 }
 
@@ -1208,8 +1500,8 @@ func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *te
 	if response := request(conan.ID, "admin-secret", second.Reference+"#"+second.Revision); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore_unavailable") {
 		t.Fatalf("restore collected=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := request(raw.ID, "admin-secret", coordinate); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "unsupported_operation") {
-		t.Fatalf("restore raw=%d body=%s", response.Code, response.Body.String())
+	if response := request(raw.ID, "admin-secret", coordinate); response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "tombstone not found") {
+		t.Fatalf("restore missing raw tombstone=%d body=%s", response.Code, response.Body.String())
 	}
 	if response := request(conan.ID, authenticator.IssueToken("restore-reader"), coordinate); response.Code != http.StatusForbidden {
 		t.Fatalf("restore reader=%d body=%s", response.Code, response.Body.String())

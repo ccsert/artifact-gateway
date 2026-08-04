@@ -662,7 +662,7 @@ func TestPostgresMavenRetentionDryRunReturnsCandidatesWithoutTombstoning(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 1, MinimumVersions: 1}, "1")
+	policy, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 1, SnapshotKeepDays: 1, MinimumVersions: 1}, "1")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +50,9 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	if tokenMatches(token, a.ResolverToken) {
 		return a.PrincipalForActor(a.ResolverActor), true
+	}
+	if principal, ok := a.principalToken(token); ok {
+		return principal, true
 	}
 	if actor, ok := a.tokenActor(token); ok {
 		principal, active := a.principalForTokenActor(actor)
@@ -161,6 +165,22 @@ func (a Authenticator) IssueToken(actor string) string {
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+// IssuePrincipalToken mints a short-lived protocol token that preserves the
+// authenticated principal's role. Legacy actor-only tokens remain supported
+// through IssueToken for existing clients and tests.
+func (a Authenticator) IssuePrincipalToken(principal Principal) string {
+	expiresAt := time.Now().UTC().Add(5 * time.Minute).Unix()
+	claims, _ := json.Marshal(struct {
+		Actor string `json:"a"`
+		Role  Role   `json:"r,omitempty"`
+		Admin bool   `json:"d,omitempty"`
+	}{Actor: principal.Actor, Role: principal.Role, Admin: principal.Admin})
+	payload := "v2." + base64.RawURLEncoding.EncodeToString(claims) + "." + strconv.FormatInt(expiresAt, 10)
+	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
 // IssueUserSession mints a stateless session token for a local user. The token
 // carries only the user id and an expiry; the user's current role and active
 // state are rechecked on every authenticated request, so role changes and
@@ -221,6 +241,50 @@ func (a Authenticator) tokenActor(token string) (string, bool) {
 		return "", false
 	}
 	return string(actor), true
+}
+
+func (a Authenticator) principalToken(token string) (Principal, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 || parts[0] != "v2" || a.ResolverToken == "" {
+		return Principal{}, false
+	}
+	expiresAt, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().UTC().Unix() >= expiresAt {
+		return Principal{}, false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[3])
+	if err != nil {
+		return Principal{}, false
+	}
+	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
+	_, _ = mac.Write([]byte(strings.Join(parts[:3], ".")))
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return Principal{}, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return Principal{}, false
+	}
+	var claims struct {
+		Actor string `json:"a"`
+		Role  Role   `json:"r"`
+		Admin bool   `json:"d"`
+	}
+	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" {
+		return Principal{}, false
+	}
+	if strings.HasPrefix(claims.Actor, "user:") {
+		return a.principalForTokenActor(claims.Actor)
+	}
+	if claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin {
+		return Principal{}, false
+	}
+	return Principal{
+		Actor:              claims.Actor,
+		Admin:              claims.Admin,
+		Role:               claims.Role,
+		RepositoryPatterns: a.RepositoryReaders[claims.Actor],
+	}, true
 }
 
 func tokenMatches(value, expected string) bool {

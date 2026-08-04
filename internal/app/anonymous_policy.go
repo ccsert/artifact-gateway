@@ -39,6 +39,19 @@ func anonymousHostedRepositoryReadAllowed(ctx context.Context, source any, repo 
 	return anonymousReadMethod(method) && repo.AnonymousRead && anonymousAccessAllowed(ctx, source)
 }
 
+func anonymousHostedGroupReadAllowed(ctx context.Context, policySource any, repositories repository.HostedRepositoryStore, group repository.HostedGroup, method string) bool {
+	if !anonymousReadMethod(method) || !group.AnonymousRead || !anonymousAccessAllowed(ctx, policySource) {
+		return false
+	}
+	for _, member := range group.Members {
+		repo, err := repositories.GetHostedRepository(ctx, member.RepositoryID)
+		if err == nil && repo.State == repository.RepositoryActive && repo.Format == group.Format && repo.AnonymousRead {
+			return true
+		}
+	}
+	return false
+}
+
 func anonymousHostedGroupMembers(group repository.HostedGroup, members []repository.Member) []repository.Member {
 	if !group.AnonymousRead {
 		return nil

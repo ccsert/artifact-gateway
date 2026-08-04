@@ -36,6 +36,16 @@
 1. 修复 Console lockfile，使 GitHub Actions 的 `npm ci` 可复现，并显式锁定生成客户端的 Prettier 步骤，避免 OpenAPI 生成漂移。
 2. 将审计结果、格式、操作、主体筛选下沉到 OpenAPI、Memory/Postgres 存储和管理 API；Console 不再只在最近 100 条记录上做客户端过滤。
 3. 新增 Console 全局“任务中心”，汇总跨仓库生命周期任务和审计保留任务，展示失败原因并支持状态/类型/仓库筛选。
+4. 将保留策略从 Maven 扩展到 OCI、Conan 和 Raw：分别按制品坐标、镜像名称、Conan reference 和文件路径执行格式感知的候选计算，并支持签名游标 dry-run、`If-Match` 并发保护和统一 worker 执行。
+5. Raw 删除改为可恢复墓碑；Proxy/Group 明确禁止配置 Hosted 保留策略；Console 使用 Ant Design 6 按仓库格式呈现适用规则，避免向用户暴露无效配置。
+
+## 生命周期后续记录
+
+1. 优先补齐任务重试、指数退避、最终失败状态，以及服务重启后对卡在 `running` 状态任务的恢复。
+2. 在任务中心增加立即执行、取消、重试、进度和失败原因，并记录任务级审计事件。
+3. 处理策略版本变化时已排队任务的兼容行为，避免旧任务永久失败或无意义重试。
+4. 明确 Conan recipe revision 恢复时是否级联恢复由保留策略删除的 package revisions，并以集成测试固化语义。
+5. 为 retention dry-run 增加候选原因统计、摘要和导出，便于管理员在真正执行前核对影响范围。
 
 ## 建议下一阶段
 

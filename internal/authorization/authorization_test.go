@@ -205,3 +205,20 @@ func TestAuthenticatorRestoresUserRoleForIssuedProtocolToken(t *testing.T) {
 		t.Fatalf("protocol principal = %#v, ok=%v", protocolPrincipal, ok)
 	}
 }
+
+func TestAuthenticatorRestoresStaticAdminForIssuedProtocolToken(t *testing.T) {
+	authenticator := Authenticator{
+		AdminToken:    "admin-secret",
+		ResolverToken: "resolver-secret",
+		AdminActor:    "gateway-admin",
+	}
+	managementPrincipal, ok := authenticator.Authenticate("Bearer admin-secret")
+	if !ok {
+		t.Fatal("static administrator did not authenticate")
+	}
+	protocolToken := authenticator.IssuePrincipalToken(managementPrincipal)
+	principal, ok := authenticator.Authenticate("Bearer " + protocolToken)
+	if !ok || principal.Actor != "gateway-admin" || !principal.Admin {
+		t.Fatalf("protocol principal = %#v, ok=%v", principal, ok)
+	}
+}

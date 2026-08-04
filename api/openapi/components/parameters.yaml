@@ -113,3 +113,10 @@ IfMatch:
   required: true
   schema:
     type: string
+
+OptionalIfMatch:
+  name: If-Match
+  in: header
+  required: false
+  schema:
+    type: string

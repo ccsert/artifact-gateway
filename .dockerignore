@@ -4,3 +4,14 @@
 .agent_context
 .gitea-fixture
 .go-build-cache
+**/node_modules
+console/dist
+console/test-results
+console/playwright-report
+console/.playwright-cli
+console/.product-design-audit
+output
+*.log
+*.png
+*.tsbuildinfo
+.DS_Store

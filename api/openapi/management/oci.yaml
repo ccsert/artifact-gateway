@@ -15,3 +15,28 @@ repositories_repositoryId_oci_images:
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_oci_manifests:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listOCIManifests
+    description: Lists visible manifests for one OCI image, including manifests without tags.
+    parameters:
+    - name: name
+      in: query
+      required: true
+      description: Exact OCI image name.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OCIManifestSummaryList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

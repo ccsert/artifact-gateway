@@ -196,7 +196,7 @@ RepositoryEffectiveAccess:
       schema:
         "$ref": "../components/schemas.yaml#/RepositoryEffectiveAccess"
 RetentionDryRun:
-  description: Maven retention candidates without state changes
+  description: Repository retention candidates without state changes
   content:
     application/json:
       schema:
@@ -251,6 +251,12 @@ OCIImageList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/OCIImagePage"
+OCIManifestSummaryList:
+  description: Visible OCI manifests for one image, including untagged digests
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/OCIManifestSummaryPage"
 MavenCoordinateList:
   description: Maven committed-coordinate projection page
   content:

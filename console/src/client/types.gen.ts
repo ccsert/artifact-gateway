@@ -91,8 +91,34 @@ export type GrantList = Array<Grant>;
 
 export type RetentionPolicy = {
   version: string;
+  /**
+   * Whether scheduled and manual retention execution is enabled.
+   */
+  enabled?: boolean;
+  /**
+   * Days to retain artifacts or versions before cleanup eligibility.
+   */
   keepDays: number;
+  /**
+   * Days to retain Maven SNAPSHOT versions. Defaults to keepDays when omitted.
+   */
+  snapshotKeepDays?: number;
+  /**
+   * Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules.
+   */
   minimumVersions: number;
+  /**
+   * Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it.
+   */
+  maximumVersions?: number;
+  /**
+   * Optional RE2 regular expressions selecting coordinates eligible for cleanup.
+   */
+  coordinatePatterns?: Array<string>;
+  /**
+   * RE2 regular expressions protecting matching coordinates from cleanup.
+   */
+  protectedPatterns?: Array<string>;
 };
 
 export type RepositoryCapacity = {
@@ -112,11 +138,17 @@ export type RepositoryCapacityQuota = {
 
 export type RetentionDryRun = {
   policyVersion: string;
+  totalCandidates: number;
   candidates: Array<{
+    format: Format;
     coordinate: string;
     digest: string;
     createdAt: string;
+    reasons: Array<"age" | "maximum_versions">;
+    ageDays: number;
+    versionType: "release" | "snapshot" | "version" | "asset";
   }>;
+  nextPageToken?: string;
 };
 
 export type RestoreArtifact = {
@@ -585,6 +617,20 @@ export type GroupCapacity = {
   members: Array<GroupCapacityMember>;
 };
 
+export type OciManifestSummary = {
+  digest: string;
+  mediaType: string;
+  size: number;
+  tags: Array<string>;
+  subjectDigest?: string;
+  artifactType?: string;
+};
+
+export type OciManifestSummaryPage = {
+  items: Array<OciManifestSummary>;
+  nextPageToken?: string;
+};
+
 export type ProxyCacheAsset = {
   path: string;
   name: string;
@@ -654,6 +700,8 @@ export type ConanReferencePrefix = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type OptionalIfMatch = string;
 
 /**
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
@@ -1434,13 +1482,34 @@ export type DryRunRepositoryRetentionData = {
   path: {
     repositoryId: string;
   };
-  query?: never;
+  query?: {
+    pageSize?: number;
+    pageToken?: string;
+  };
   url: "/repositories/{repositoryId}/retention:dry-run";
 };
 
+export type DryRunRepositoryRetentionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type DryRunRepositoryRetentionError =
+  DryRunRepositoryRetentionErrors[keyof DryRunRepositoryRetentionErrors];
+
 export type DryRunRepositoryRetentionResponses = {
   /**
-   * Maven retention candidates without state changes
+   * Repository retention candidates without state changes
    */
   200: RetentionDryRun;
 };
@@ -1452,6 +1521,7 @@ export type ExecuteRepositoryRetentionData = {
   body?: never;
   headers: {
     "Idempotency-Key": string;
+    "If-Match"?: string;
   };
   path: {
     repositoryId: string;
@@ -1460,9 +1530,31 @@ export type ExecuteRepositoryRetentionData = {
   url: "/repositories/{repositoryId}/retention:execute";
 };
 
+export type ExecuteRepositoryRetentionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ExecuteRepositoryRetentionError =
+  ExecuteRepositoryRetentionErrors[keyof ExecuteRepositoryRetentionErrors];
+
 export type ExecuteRepositoryRetentionResponses = {
   /**
-   * Maven retention job accepted
+   * Repository retention job accepted
    */
   202: LifecycleJob;
 };
@@ -2127,6 +2219,46 @@ export type ListOciImagesResponses = {
 
 export type ListOciImagesResponse =
   ListOciImagesResponses[keyof ListOciImagesResponses];
+
+export type ListOciManifestsData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    /**
+     * Exact OCI image name.
+     */
+    name: string;
+    pageSize?: number;
+    pageToken?: string;
+  };
+  url: "/repositories/{repositoryId}/oci/manifests";
+};
+
+export type ListOciManifestsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListOciManifestsError =
+  ListOciManifestsErrors[keyof ListOciManifestsErrors];
+
+export type ListOciManifestsResponses = {
+  /**
+   * Visible OCI manifests for one image, including untagged digests
+   */
+  200: OciManifestSummaryPage;
+};
+
+export type ListOciManifestsResponse =
+  ListOciManifestsResponses[keyof ListOciManifestsResponses];
 
 export type ListMavenCoordinatesData = {
   body?: never;

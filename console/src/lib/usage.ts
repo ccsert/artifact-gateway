@@ -73,7 +73,7 @@ export function mavenUsage(repoName: string, coordinate: string, options: MavenU
 
 // OCI 镜像 → docker 命令
 export function ociUsage(repoName: string, image: string, tag?: string): UsageSnippet[] {
-  const ref = tag ? `${image}:${tag}` : image;
+  const ref = tag ? `${image}${tag.startsWith('sha256:') ? '@' : ':'}${tag}` : image;
   const host = gatewayHost();
   return [
     { label: 'Docker 拉取', code: `docker pull ${host}/${repoName}/${ref}` },

@@ -2,8 +2,13 @@
 repositories_repositoryId_retention_dry_run:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/PageSize"
+  - "$ref": "../components/parameters.yaml#/PageToken"
   post:
     operationId: dryRunRepositoryRetention
     responses:
       '200':
         "$ref": "../components/responses.yaml#/RetentionDryRun"
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}

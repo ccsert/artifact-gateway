@@ -118,7 +118,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		metrics = &Metrics{}
 	}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
-	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, anonymous: store})
+	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, groups: store, anonymous: store})
 	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	authenticator.Users = store
 	ociClient := OCIClient(UpstreamClient{})
@@ -165,7 +165,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
-	hostedRepositories := hostedRepositoryAPIHandler{store: store, authenticator: authenticator}
+	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},

@@ -661,6 +661,48 @@ func (e RepositoryEffectiveAccessRepositoryType) Valid() bool {
 	}
 }
 
+// Defines values for RetentionDryRunCandidatesReasons.
+const (
+	Age             RetentionDryRunCandidatesReasons = "age"
+	MaximumVersions RetentionDryRunCandidatesReasons = "maximum_versions"
+)
+
+// Valid indicates whether the value is a known member of the RetentionDryRunCandidatesReasons enum.
+func (e RetentionDryRunCandidatesReasons) Valid() bool {
+	switch e {
+	case Age:
+		return true
+	case MaximumVersions:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RetentionDryRunCandidatesVersionType.
+const (
+	RetentionDryRunCandidatesVersionTypeAsset    RetentionDryRunCandidatesVersionType = "asset"
+	RetentionDryRunCandidatesVersionTypeRelease  RetentionDryRunCandidatesVersionType = "release"
+	RetentionDryRunCandidatesVersionTypeSnapshot RetentionDryRunCandidatesVersionType = "snapshot"
+	RetentionDryRunCandidatesVersionTypeVersion  RetentionDryRunCandidatesVersionType = "version"
+)
+
+// Valid indicates whether the value is a known member of the RetentionDryRunCandidatesVersionType enum.
+func (e RetentionDryRunCandidatesVersionType) Valid() bool {
+	switch e {
+	case RetentionDryRunCandidatesVersionTypeAsset:
+		return true
+	case RetentionDryRunCandidatesVersionTypeRelease:
+		return true
+	case RetentionDryRunCandidatesVersionTypeSnapshot:
+		return true
+	case RetentionDryRunCandidatesVersionTypeVersion:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
@@ -1218,6 +1260,22 @@ type OCIImagePage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// OCIManifestSummary defines model for OCIManifestSummary.
+type OCIManifestSummary struct {
+	ArtifactType  *string  `json:"artifactType,omitempty"`
+	Digest        string   `json:"digest"`
+	MediaType     string   `json:"mediaType"`
+	Size          int64    `json:"size"`
+	SubjectDigest *string  `json:"subjectDigest,omitempty"`
+	Tags          []string `json:"tags"`
+}
+
+// OCIManifestSummaryPage defines model for OCIManifestSummaryPage.
+type OCIManifestSummaryPage struct {
+	Items         []OCIManifestSummary `json:"items"`
+	NextPageToken *string              `json:"nextPageToken,omitempty"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code      ProblemCode `json:"code"`
@@ -1457,18 +1515,48 @@ type RestoreArtifact struct {
 // RetentionDryRun defines model for RetentionDryRun.
 type RetentionDryRun struct {
 	Candidates []struct {
-		Coordinate string    `json:"coordinate"`
-		CreatedAt  time.Time `json:"createdAt"`
-		Digest     string    `json:"digest"`
+		AgeDays     int                                  `json:"ageDays"`
+		Coordinate  string                               `json:"coordinate"`
+		CreatedAt   time.Time                            `json:"createdAt"`
+		Digest      string                               `json:"digest"`
+		Format      Format                               `json:"format"`
+		Reasons     []RetentionDryRunCandidatesReasons   `json:"reasons"`
+		VersionType RetentionDryRunCandidatesVersionType `json:"versionType"`
 	} `json:"candidates"`
-	PolicyVersion string `json:"policyVersion"`
+	NextPageToken   *string `json:"nextPageToken,omitempty"`
+	PolicyVersion   string  `json:"policyVersion"`
+	TotalCandidates int     `json:"totalCandidates"`
 }
+
+// RetentionDryRunCandidatesReasons defines model for RetentionDryRun.Candidates.Reasons.
+type RetentionDryRunCandidatesReasons string
+
+// RetentionDryRunCandidatesVersionType defines model for RetentionDryRun.Candidates.VersionType.
+type RetentionDryRunCandidatesVersionType string
 
 // RetentionPolicy defines model for RetentionPolicy.
 type RetentionPolicy struct {
-	KeepDays        int    `json:"keepDays"`
-	MinimumVersions int    `json:"minimumVersions"`
-	Version         string `json:"version"`
+	// CoordinatePatterns Optional RE2 regular expressions selecting coordinates eligible for cleanup.
+	CoordinatePatterns *[]string `json:"coordinatePatterns,omitempty"`
+
+	// Enabled Whether scheduled and manual retention execution is enabled.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// KeepDays Days to retain artifacts or versions before cleanup eligibility.
+	KeepDays int `json:"keepDays"`
+
+	// MaximumVersions Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it.
+	MaximumVersions *int `json:"maximumVersions,omitempty"`
+
+	// MinimumVersions Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules.
+	MinimumVersions int `json:"minimumVersions"`
+
+	// ProtectedPatterns RE2 regular expressions protecting matching coordinates from cleanup.
+	ProtectedPatterns *[]string `json:"protectedPatterns,omitempty"`
+
+	// SnapshotKeepDays Days to retain Maven SNAPSHOT versions. Defaults to keepDays when omitted.
+	SnapshotKeepDays *int   `json:"snapshotKeepDays,omitempty"`
+	Version          string `json:"version"`
 }
 
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
@@ -1538,6 +1626,9 @@ type MavenCoordinatePrefix = string
 // OCIImagePrefix defines model for OCIImagePrefix.
 type OCIImagePrefix = string
 
+// OptionalIfMatch defines model for OptionalIfMatch.
+type OptionalIfMatch = string
+
 // PageSize defines model for PageSize.
 type PageSize = int
 
@@ -1579,6 +1670,9 @@ type MavenCoordinateList = MavenCoordinatePage
 
 // OCIImageList defines model for OCIImageList.
 type OCIImageList = OCIImagePage
+
+// OCIManifestSummaryList defines model for OCIManifestSummaryList.
+type OCIManifestSummaryList = OCIManifestSummaryPage
 
 // RepositoryList defines model for RepositoryList.
 type RepositoryList = RepositoryPage
@@ -1741,6 +1835,14 @@ type ListOCIImagesParams struct {
 	PageToken *PageToken      `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListOCIManifestsParams defines parameters for ListOCIManifests.
+type ListOCIManifestsParams struct {
+	// Name Exact OCI image name.
+	Name      string     `form:"name" json:"name"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // CreateRepositoryPromotionParams defines parameters for CreateRepositoryPromotion.
 type CreateRepositoryPromotionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -1761,9 +1863,16 @@ type ReplaceRetentionPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// DryRunRepositoryRetentionParams defines parameters for DryRunRepositoryRetention.
+type DryRunRepositoryRetentionParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ExecuteRepositoryRetentionParams defines parameters for ExecuteRepositoryRetention.
 type ExecuteRepositoryRetentionParams struct {
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
+	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
 }
 
 // ListRepositoryTombstonesParams defines parameters for ListRepositoryTombstones.
@@ -2021,6 +2130,9 @@ type ServerInterface interface {
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIImagesParams)
 
+	// (GET /repositories/{repositoryId}/oci/manifests)
+	ListOCIManifests(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIManifestsParams)
+
 	// (POST /repositories/{repositoryId}/promotions)
 	CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryPromotionParams)
 
@@ -2052,7 +2164,7 @@ type ServerInterface interface {
 	ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceRetentionPolicyParams)
 
 	// (POST /repositories/{repositoryId}/retention:dry-run)
-	DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+	DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params DryRunRepositoryRetentionParams)
 
 	// (POST /repositories/{repositoryId}/retention:execute)
 	ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ExecuteRepositoryRetentionParams)
@@ -4074,6 +4186,74 @@ func (siw *ServerInterfaceWrapper) ListOCIImages(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListOCIManifests operation middleware
+func (siw *ServerInterfaceWrapper) ListOCIManifests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOCIManifestsParams
+
+	// ------------- Required query parameter "name" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "name", r.URL.Query(), &params.Name, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "name"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOCIManifests(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateRepositoryPromotion operation middleware
 func (siw *ServerInterfaceWrapper) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request) {
 
@@ -4479,8 +4659,37 @@ func (siw *ServerInterfaceWrapper) DryRunRepositoryRetention(w http.ResponseWrit
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DryRunRepositoryRetentionParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DryRunRepositoryRetention(w, r, repositoryId)
+		siw.Handler.DryRunRepositoryRetention(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4531,6 +4740,25 @@ func (siw *ServerInterfaceWrapper) ExecuteRepositoryRetention(w http.ResponseWri
 		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch OptionalIfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4914,6 +5142,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/manifests", wrapper.ListOCIManifests)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/proxy/health", wrapper.GetProxyHealth)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
@@ -4996,6 +5225,8 @@ type MavenProxyHealthJSONResponse MavenProxyHealth
 type MemberListJSONResponse MemberList
 
 type OCIImageListJSONResponse OCIImagePage
+
+type OCIManifestSummaryListJSONResponse OCIManifestSummaryPage
 
 type ProblemApplicationProblemPlusJSONResponse Problem
 
@@ -7024,6 +7255,61 @@ func (response ListOCIImages404ApplicationProblemPlusJSONResponse) VisitListOCII
 	return err
 }
 
+type ListOCIManifestsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListOCIManifestsParams
+}
+
+type ListOCIManifestsResponseObject interface {
+	VisitListOCIManifestsResponse(w http.ResponseWriter) error
+}
+
+type ListOCIManifests200JSONResponse struct {
+	OCIManifestSummaryListJSONResponse
+}
+
+func (response ListOCIManifests200JSONResponse) VisitListOCIManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIManifests400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOCIManifests400ApplicationProblemPlusJSONResponse) VisitListOCIManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIManifests404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOCIManifests404ApplicationProblemPlusJSONResponse) VisitListOCIManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRepositoryPromotionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreateRepositoryPromotionParams
@@ -7441,6 +7727,7 @@ func (response ReplaceRetentionPolicy412ApplicationProblemPlusJSONResponse) Visi
 
 type DryRunRepositoryRetentionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       DryRunRepositoryRetentionParams
 }
 
 type DryRunRepositoryRetentionResponseObject interface {
@@ -7457,6 +7744,50 @@ func (response DryRunRepositoryRetention200JSONResponse) VisitDryRunRepositoryRe
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DryRunRepositoryRetention400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DryRunRepositoryRetention400ApplicationProblemPlusJSONResponse) VisitDryRunRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DryRunRepositoryRetention403ApplicationProblemPlusJSONResponse Problem
+
+func (response DryRunRepositoryRetention403ApplicationProblemPlusJSONResponse) VisitDryRunRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DryRunRepositoryRetention409ApplicationProblemPlusJSONResponse Problem
+
+func (response DryRunRepositoryRetention409ApplicationProblemPlusJSONResponse) VisitDryRunRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7480,6 +7811,64 @@ func (response ExecuteRepositoryRetention202JSONResponse) VisitExecuteRepository
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteRepositoryRetention400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ExecuteRepositoryRetention400ApplicationProblemPlusJSONResponse) VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteRepositoryRetention403ApplicationProblemPlusJSONResponse Problem
+
+func (response ExecuteRepositoryRetention403ApplicationProblemPlusJSONResponse) VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteRepositoryRetention409ApplicationProblemPlusJSONResponse Problem
+
+func (response ExecuteRepositoryRetention409ApplicationProblemPlusJSONResponse) VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExecuteRepositoryRetention412ApplicationProblemPlusJSONResponse Problem
+
+func (response ExecuteRepositoryRetention412ApplicationProblemPlusJSONResponse) VisitExecuteRepositoryRetentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7924,6 +8313,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/oci/images)
 	ListOCIImages(ctx context.Context, request ListOCIImagesRequestObject) (ListOCIImagesResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/oci/manifests)
+	ListOCIManifests(ctx context.Context, request ListOCIManifestsRequestObject) (ListOCIManifestsResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/promotions)
 	CreateRepositoryPromotion(ctx context.Context, request CreateRepositoryPromotionRequestObject) (CreateRepositoryPromotionResponseObject, error)
@@ -9371,6 +9763,33 @@ func (sh *strictHandler) ListOCIImages(w http.ResponseWriter, r *http.Request, r
 	}
 }
 
+// ListOCIManifests operation middleware
+func (sh *strictHandler) ListOCIManifests(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListOCIManifestsParams) {
+	var request ListOCIManifestsRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOCIManifests(ctx, request.(ListOCIManifestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOCIManifests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOCIManifestsResponseObject); ok {
+		if err := validResponse.VisitListOCIManifestsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateRepositoryPromotion operation middleware
 func (sh *strictHandler) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryPromotionParams) {
 	var request CreateRepositoryPromotionRequestObject
@@ -9673,10 +10092,11 @@ func (sh *strictHandler) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.R
 }
 
 // DryRunRepositoryRetention operation middleware
-func (sh *strictHandler) DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+func (sh *strictHandler) DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params DryRunRepositoryRetentionParams) {
 	var request DryRunRepositoryRetentionRequestObject
 
 	request.RepositoryId = repositoryId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.DryRunRepositoryRetention(ctx, request.(DryRunRepositoryRetentionRequestObject))

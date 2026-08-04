@@ -702,7 +702,7 @@ func writeOCIError(w http.ResponseWriter, status int, code, message string) {
 func (h OCIHandler) Token(w http.ResponseWriter, request *http.Request) {
 	username, password, ok := request.BasicAuth()
 	if ok && username != "" && h.Authenticator.ResolverPasswordMatches(password) {
-		token := h.Authenticator.IssueToken(username)
+		token := h.Authenticator.IssuePrincipalToken(h.Authenticator.PrincipalForActor(username))
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"token": token, "access_token": token, "expires_in": 300, "issued_at": time.Now().UTC().Format(time.RFC3339)})
 		return
@@ -712,7 +712,7 @@ func (h OCIHandler) Token(w http.ResponseWriter, request *http.Request) {
 		writeOCIChallenge(w, request)
 		return
 	}
-	token := h.Authenticator.IssueToken(principal.Actor)
+	token := h.Authenticator.IssuePrincipalToken(principal)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"token": token, "access_token": token, "expires_in": 300, "issued_at": time.Now().UTC().Format(time.RFC3339)})
 }

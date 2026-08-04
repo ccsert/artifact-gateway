@@ -6,6 +6,7 @@
 *.log
 .release-validation.env
 scripts/__pycache__/
+**/target/
 console/node_modules/
 tools/openapi/node_modules/
 console/dist/

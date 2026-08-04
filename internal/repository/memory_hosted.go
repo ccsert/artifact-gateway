@@ -303,7 +303,22 @@ func (s *MemoryStore) ReplaceRepositoryGrants(_ context.Context, repositoryID st
 }
 
 func defaultRepositoryRetentionPolicy() RepositoryRetentionPolicy {
-	return RepositoryRetentionPolicy{Version: "1", KeepDays: 30, MinimumVersions: 1}
+	return RepositoryRetentionPolicy{
+		Version:            "1",
+		Enabled:            false,
+		KeepDays:           30,
+		SnapshotKeepDays:   30,
+		MinimumVersions:    1,
+		MaximumVersions:    0,
+		CoordinatePatterns: []string{},
+		ProtectedPatterns:  []string{},
+	}
+}
+
+func cloneRepositoryRetentionPolicy(policy RepositoryRetentionPolicy) RepositoryRetentionPolicy {
+	policy.CoordinatePatterns = append([]string{}, policy.CoordinatePatterns...)
+	policy.ProtectedPatterns = append([]string{}, policy.ProtectedPatterns...)
+	return policy
 }
 
 func (s *MemoryStore) GetRepositoryRetentionPolicy(_ context.Context, repositoryID string) (RepositoryRetentionPolicy, error) {
@@ -316,7 +331,7 @@ func (s *MemoryStore) GetRepositoryRetentionPolicy(_ context.Context, repository
 	if !ok {
 		return defaultRepositoryRetentionPolicy(), nil
 	}
-	return policy, nil
+	return cloneRepositoryRetentionPolicy(policy), nil
 }
 
 func (s *MemoryStore) ReplaceRepositoryRetentionPolicy(_ context.Context, repositoryID string, policy RepositoryRetentionPolicy, expectedVersion string) (RepositoryRetentionPolicy, error) {
@@ -332,7 +347,17 @@ func (s *MemoryStore) ReplaceRepositoryRetentionPolicy(_ context.Context, reposi
 	if current.Version != expectedVersion {
 		return RepositoryRetentionPolicy{}, ErrVersionConflict
 	}
+	if policy.SnapshotKeepDays == 0 {
+		policy.SnapshotKeepDays = policy.KeepDays
+	}
+	if policy.CoordinatePatterns == nil {
+		policy.CoordinatePatterns = []string{}
+	}
+	if policy.ProtectedPatterns == nil {
+		policy.ProtectedPatterns = []string{}
+	}
 	policy.Version = nextHostedGroupVersion(current.Version)
+	policy = cloneRepositoryRetentionPolicy(policy)
 	s.retentionPolicies[repositoryID] = policy
-	return policy, nil
+	return cloneRepositoryRetentionPolicy(policy), nil
 }

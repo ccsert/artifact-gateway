@@ -1,8 +1,12 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
@@ -29,7 +33,7 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		return
 	}
 	name, resource, reference, _, ok := parseNativeOCIPath(r.URL.Path)
-	if !ok || (resource != "manifest" && resource != "blob") {
+	if !ok || (resource != "manifest" && resource != "blob" && resource != "tags") {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
@@ -71,6 +75,10 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		writeOCIChallenge(w, r)
 		return
 	}
+	if resource == "tags" {
+		h.tags(w, r, resolver, group, imageName, principal, members)
+		return
+	}
 	upstreamResource := map[string]string{"manifest": ociManifest, "blob": ociBlob}[resource]
 	for _, member := range members {
 		if member.Type == repository.MemberHosted {
@@ -90,6 +98,50 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	}
 	resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 	writeOCIError(w, http.StatusNotFound, map[string]string{"manifest": "MANIFEST_UNKNOWN", "blob": "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
+}
+
+func (h v2GroupOCIHandler) tags(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, imageName string, principal Principal, members []repository.Member) {
+	limit := 100
+	if raw := r.URL.Query().Get("n"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 1000 {
+			writeOCIError(w, http.StatusBadRequest, "NAME_INVALID", "tag page size must be between 1 and 1000")
+			return
+		}
+		limit = parsed
+	}
+	seen := make(map[string]struct{})
+	for _, member := range members {
+		if member.Type != repository.MemberHosted {
+			continue
+		}
+		tags, err := h.native.store.ListOCITags(r.Context(), member.RepositoryID, imageName, limit+1, r.URL.Query().Get("last"))
+		if err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list group tags")
+			return
+		}
+		for _, tag := range tags {
+			seen[tag] = struct{}{}
+		}
+	}
+	tags := make([]string, 0, len(seen))
+	for tag := range seen {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	if len(tags) > limit {
+		tags = tags[:limit]
+		next := "/v2/" + group.Name + "/" + imageName + "/tags/list?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(tags[len(tags)-1])
+		w.Header().Set("Link", "<"+next+">; rel=\"next\"")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+	w.WriteHeader(http.StatusOK)
+	resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditResolved, http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"name": group.Name + "/" + imageName, "tags": tags})
 }
 
 // serveHostedRead attempts a read against a native hosted repository without

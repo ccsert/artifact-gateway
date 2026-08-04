@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -32,6 +33,7 @@ var hostedRepositoryName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-
 // native-hosted-v1.json. It intentionally does not reuse the V2 Group routes.
 type hostedRepositoryAPIHandler struct {
 	store         repository.HostedRepositoryStore
+	groups        repository.HostedGroupStore
 	authenticator Authenticator
 }
 
@@ -65,6 +67,11 @@ type ociImagePageCursor struct {
 	ExpiresAt                            int64
 }
 
+type ociManifestPageCursor struct {
+	Endpoint, RepositoryID, Name, Digest string
+	ExpiresAt                            int64
+}
+
 type mavenCoordinatePageCursor struct {
 	Endpoint, RepositoryID, Prefix, Coordinate string
 	BuildNumber                                int
@@ -85,6 +92,12 @@ type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
 	ExpiresAt                                         int64
 }
+
+type retentionDryRunPageCursor struct {
+	Endpoint, RepositoryID, PolicyVersion, Coordinate, ArtifactID string
+	ExpiresAt                                                     int64
+}
+
 type tombstonePageCursor struct {
 	Endpoint, RepositoryID, Format, Prefix, Coordinate string
 	ExpiresAt                                          int64
@@ -155,6 +168,12 @@ func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.Respons
 	if err == nil && anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 		return anonymousPrincipal(), true
 	}
+	if errors.Is(err, repository.ErrNotFound) && h.groups != nil {
+		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID)
+		if groupErr == nil && anonymousHostedGroupReadAllowed(r.Context(), h.store, h.store, group, r.Method) {
+			return anonymousPrincipal(), true
+		}
+	}
 	return h.authenticate(w, r)
 }
 
@@ -171,7 +190,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 	if len(parts) == 3 && parts[1] == "artifacts" {
 		return parts[0], true
 	}
-	if len(parts) == 3 && ((parts[1] == "oci" && parts[2] == "images") || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && (parts[2] == "references" || parts[2] == "recipe-revisions" || parts[2] == "package-revisions" || parts[2] == "package-ids")) || (parts[1] == "cache" && parts[2] == "entries")) {
+	if len(parts) == 3 && ((parts[1] == "oci" && (parts[2] == "images" || parts[2] == "manifests")) || (parts[1] == "maven" && parts[2] == "coordinates") || (parts[1] == "conan" && (parts[2] == "references" || parts[2] == "recipe-revisions" || parts[2] == "package-revisions" || parts[2] == "package-ids")) || (parts[1] == "cache" && parts[2] == "entries")) {
 		return parts[0], true
 	}
 	return "", false
@@ -724,6 +743,17 @@ func anonymousRepositoryReason(ctx context.Context, source any, repo repository.
 }
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
+	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
+		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
+		if groupErr == nil {
+			if !anonymousHostedGroupReadAllowed(r.Context(), h.store, h.store, group, r.Method) {
+				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
+				return
+			}
+			h.searchHostedGroupArtifacts(w, r, group, params)
+			return
+		}
+	}
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		query := ""
 		if params.Q != nil {
@@ -812,7 +842,8 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			for _, a := range assets {
 				d, ct := a.Digest, a.ContentType
 				size := a.Size
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Path, Digest: &d, ContentType: &ct, Size: &size})
+				updatedAt := a.UpdatedAt
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Path, Digest: &d, ContentType: &ct, Size: &size, CreatedAt: &updatedAt})
 				lastCoordinate = a.Path
 			}
 		}
@@ -834,7 +865,7 @@ func repositoryCapabilities(format repository.Format, repoType repository.Reposi
 	switch format {
 	case repository.FormatMaven:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain, adminopenapi.RepositoryCapabilitiesOperationsRestore)
-	case repository.FormatConan, repository.FormatOCI:
+	case repository.FormatConan, repository.FormatOCI, repository.FormatRaw:
 		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
 	}
 	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeHosted, Operations: operations}
@@ -902,8 +933,61 @@ func validRepositoryGrants(grants []repository.RepositoryGrant, format repositor
 	return true
 }
 
+func normalizeAndValidateRetentionPolicy(policy *repository.RepositoryRetentionPolicy) error {
+	if policy.KeepDays < 1 || policy.KeepDays > 36500 {
+		return errors.New("keepDays must be between 1 and 36500")
+	}
+	if policy.SnapshotKeepDays == 0 {
+		policy.SnapshotKeepDays = policy.KeepDays
+	}
+	if policy.SnapshotKeepDays < 1 || policy.SnapshotKeepDays > 36500 {
+		return errors.New("snapshotKeepDays must be between 1 and 36500")
+	}
+	if policy.MinimumVersions < 1 || policy.MinimumVersions > 100000 {
+		return errors.New("minimumVersions must be between 1 and 100000")
+	}
+	if policy.MaximumVersions < 0 || policy.MaximumVersions > 100000 {
+		return errors.New("maximumVersions must be between 0 and 100000")
+	}
+	if policy.MaximumVersions > 0 && policy.MaximumVersions < policy.MinimumVersions {
+		return errors.New("maximumVersions must be zero or greater than or equal to minimumVersions")
+	}
+	var err error
+	policy.CoordinatePatterns, err = normalizeRetentionPatterns(policy.CoordinatePatterns)
+	if err != nil {
+		return fmt.Errorf("coordinatePatterns %w", err)
+	}
+	policy.ProtectedPatterns, err = normalizeRetentionPatterns(policy.ProtectedPatterns)
+	if err != nil {
+		return fmt.Errorf("protectedPatterns %w", err)
+	}
+	return nil
+}
+
+func normalizeRetentionPatterns(patterns []string) ([]string, error) {
+	if len(patterns) > 20 {
+		return nil, errors.New("must contain at most 20 regular expressions")
+	}
+	result := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" || len(pattern) > 256 {
+			return nil, errors.New("must contain non-empty expressions of at most 256 characters")
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return nil, fmt.Errorf("contains invalid regular expression %q", pattern)
+		}
+		result = append(result, pattern)
+	}
+	return result, nil
+}
+
 func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention policies are supported for Maven, OCI, Conan, and Raw hosted repositories")
+			return
+		}
 		policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repositoryID.String())
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
@@ -914,12 +998,20 @@ func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter,
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceRetentionPolicyParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention policies are supported for Maven, OCI, Conan, and Raw hosted repositories")
+			return
+		}
 		var policy repository.RepositoryRetentionPolicy
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&policy); err != nil || policy.Version == "" || policy.KeepDays < 1 || policy.MinimumVersions < 1 {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version, keepDays, and minimumVersions must be valid")
+		if err := decoder.Decode(&policy); err != nil || policy.Version == "" {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "version must be valid")
+			return
+		}
+		if err := normalizeAndValidateRetentionPolicy(&policy); err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 			return
 		}
 		updated, err := h.retentionPolicies.ReplaceRepositoryRetentionPolicy(r.Context(), repositoryID.String(), policy, string(params.IfMatch))
@@ -991,12 +1083,97 @@ func (h generatedRepositoryAPIAdapter) ReplaceRepositoryCapacity(w http.Response
 	})
 }
 
-// DryRunRepositoryRetention exposes the Maven retention planner without
+// DryRunRepositoryRetention exposes the repository retention planner without
 // tombstoning candidates or enqueuing a lifecycle job.
-func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.DryRunRepositoryRetentionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
-		if repo.Format != repository.FormatMaven {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention dry-run is currently supported only for Maven repositories")
+		if repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention dry-run is supported for Maven, OCI, Conan, and Raw hosted repositories")
+			return
+		}
+		pageSize := 100
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repo.ID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
+			return
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		afterCoordinate, afterArtifactID, err := h.decodeRetentionDryRunCursor(pageToken, repo.ID, policy.Version)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid, expired, or belongs to another retention policy version")
+			return
+		}
+		candidates, err := (NativeRepositoryRetention{Store: h.sessions.store}).PlanRepositoryDetailed(r.Context(), repo.ID, repo.Format)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "plan retention failed")
+			return
+		}
+		start := 0
+		if afterCoordinate != "" {
+			start = len(candidates)
+			for index, candidate := range candidates {
+				if candidate.Coordinate > afterCoordinate || (candidate.Coordinate == afterCoordinate && candidate.CursorID > afterArtifactID) {
+					start = index
+					break
+				}
+			}
+		}
+		end := start + pageSize
+		if end > len(candidates) {
+			end = len(candidates)
+		}
+		page := candidates[start:end]
+		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, TotalCandidates: len(candidates), Candidates: make([]struct {
+			AgeDays     int                                               `json:"ageDays"`
+			Coordinate  string                                            `json:"coordinate"`
+			CreatedAt   time.Time                                         `json:"createdAt"`
+			Digest      string                                            `json:"digest"`
+			Format      adminopenapi.Format                               `json:"format"`
+			Reasons     []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
+			VersionType adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
+		}, 0, len(page))}
+		for _, candidate := range page {
+			response.Candidates = append(response.Candidates, struct {
+				AgeDays     int                                               `json:"ageDays"`
+				Coordinate  string                                            `json:"coordinate"`
+				CreatedAt   time.Time                                         `json:"createdAt"`
+				Digest      string                                            `json:"digest"`
+				Format      adminopenapi.Format                               `json:"format"`
+				Reasons     []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
+				VersionType adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
+			}{Format: adminopenapi.Format(candidate.Format), AgeDays: candidate.AgeDays, Coordinate: candidate.Coordinate, CreatedAt: candidate.CreatedAt, Digest: candidate.Digest, Reasons: mapRetentionReasons(candidate.Reasons), VersionType: adminopenapi.RetentionDryRunCandidatesVersionType(candidate.VersionType)})
+		}
+		if end < len(candidates) {
+			last := page[len(page)-1]
+			nextPageToken := h.encodeRetentionDryRunCursor(repo.ID, policy.Version, last.Coordinate, last.CursorID)
+			response.NextPageToken = &nextPageToken
+		}
+		writeNativeMavenJSON(w, http.StatusOK, response)
+	})
+}
+
+func mapRetentionReasons(reasons []string) []adminopenapi.RetentionDryRunCandidatesReasons {
+	mapped := make([]adminopenapi.RetentionDryRunCandidatesReasons, 0, len(reasons))
+	for _, reason := range reasons {
+		mapped = append(mapped, adminopenapi.RetentionDryRunCandidatesReasons(reason))
+	}
+	return mapped
+}
+
+func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ExecuteRepositoryRetentionParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention policies are supported for Maven, OCI, Conan, and Raw hosted repositories")
 			return
 		}
 		policy, err := h.retentionPolicies.GetRepositoryRetentionPolicy(r.Context(), repo.ID)
@@ -1004,34 +1181,15 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get retention policy failed")
 			return
 		}
-		candidates, err := (NativeMavenRetention{Store: h.sessions.store}).PlanRepository(r.Context(), repo.ID)
-		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "plan retention failed")
+		if params.IfMatch != nil && string(*params.IfMatch) != policy.Version {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "retention policy changed after dry-run; run the preview again")
 			return
 		}
-		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, Candidates: make([]struct {
-			Coordinate string    `json:"coordinate"`
-			CreatedAt  time.Time `json:"createdAt"`
-			Digest     string    `json:"digest"`
-		}, 0, len(candidates))}
-		for _, candidate := range candidates {
-			response.Candidates = append(response.Candidates, struct {
-				Coordinate string    `json:"coordinate"`
-				CreatedAt  time.Time `json:"createdAt"`
-				Digest     string    `json:"digest"`
-			}{Coordinate: candidate.Coordinate, CreatedAt: candidate.CreatedAt, Digest: candidate.Digest})
-		}
-		writeNativeMavenJSON(w, http.StatusOK, response)
-	})
-}
-
-func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ExecuteRepositoryRetentionParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
-		if repo.Format != repository.FormatMaven {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "retention execution is currently supported only for Maven repositories")
+		if !policy.Enabled {
+			writeHostedProblem(w, http.StatusConflict, "retention_disabled", "retention policy is disabled")
 			return
 		}
-		job, _, err := (NativeMavenRetention{Store: h.sessions.store}).EnqueueRepository(r.Context(), repo.ID, string(params.IdempotencyKey))
+		job, _, err := (NativeRepositoryRetention{Store: h.sessions.store}).EnqueueRepository(r.Context(), repo.ID, string(params.IdempotencyKey))
 		if errors.Is(err, repository.ErrIdempotencyConflict) {
 			writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing retention job")
 			return
@@ -1326,11 +1484,11 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
-		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven && repo.Format != repository.FormatOCI {
+		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven && repo.Format != repository.FormatOCI && repo.Format != repository.FormatRaw {
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is not supported for this repository format")
 			return
 		}
@@ -1351,11 +1509,13 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			}
 		} else if repo.Format == repository.FormatConan {
 			err = h.restoreConanCoordinate(r, repo.ID, request.Coordinate)
-		} else {
+		} else if repo.Format == repository.FormatOCI {
 			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
 			_, err = h.oci.RestoreOCIManifest(r.Context(), repo.ID, name, digest)
+		} else {
+			_, err = h.sessions.store.RestoreRawAsset(r.Context(), repo.ID, request.Coordinate)
 		}
-		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) {
+		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrDisabled) || errors.Is(err, repository.ErrNameExists) {
 			writeHostedProblem(w, http.StatusConflict, "restore_unavailable", "artifact cannot be restored")
 			return
 		}
@@ -1647,7 +1807,7 @@ func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter,
 	writeNativeMavenJSON(w, 200, group)
 }
 func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
-	if !hostedRepositoryName.MatchString(group.Name) || (group.Format != repository.FormatOCI && group.Format != repository.FormatMaven && group.Format != repository.FormatRaw) || len(group.Members) == 0 {
+	if !hostedRepositoryName.MatchString(group.Name) || (group.Format != repository.FormatOCI && group.Format != repository.FormatMaven && group.Format != repository.FormatRaw && group.Format != repository.FormatConan) || len(group.Members) == 0 {
 		return false
 	}
 	seen := map[string]bool{}
@@ -1735,6 +1895,57 @@ func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *h
 			items = append(items, adminopenapi.OCIImage{Name: name})
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.OCIImagePage{Items: items, NextPageToken: next})
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListOCIManifests(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIManifestsParams) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		name := strings.TrimSpace(params.Name)
+		if repo.Format != repository.FormatOCI || name == "" || !validOCIImagePrefix(name) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name must identify an OCI image")
+			return
+		}
+		pageSize := 50
+		if params.PageSize != nil {
+			pageSize = int(*params.PageSize)
+			if pageSize < 1 || pageSize > 200 {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+				return
+			}
+		}
+		pageToken := ""
+		if params.PageToken != nil {
+			pageToken = string(*params.PageToken)
+		}
+		after, err := h.decodeOCIManifestCursor(pageToken, repo.ID, name)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		manifests, err := h.oci.ListOCIManifests(r.Context(), repo.ID, name, pageSize+1, after)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list OCI manifests failed")
+			return
+		}
+		var next *string
+		if len(manifests) > pageSize {
+			manifests = manifests[:pageSize]
+			token := h.encodeOCIManifestCursor(repo.ID, name, manifests[len(manifests)-1].Digest)
+			next = &token
+		}
+		items := make([]adminopenapi.OCIManifestSummary, 0, len(manifests))
+		for _, manifest := range manifests {
+			tags := append([]string{}, manifest.Tags...)
+			item := adminopenapi.OCIManifestSummary{Digest: manifest.Digest, MediaType: manifest.MediaType, Size: manifest.Size, Tags: tags}
+			if manifest.SubjectDigest != "" {
+				item.SubjectDigest = &manifest.SubjectDigest
+			}
+			if manifest.ArtifactType != "" {
+				item.ArtifactType = &manifest.ArtifactType
+			}
+			items = append(items, item)
+		}
+		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.OCIManifestSummaryPage{Items: items, NextPageToken: next})
 	})
 }
 
@@ -1840,6 +2051,21 @@ func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanRecipeRevisionsParams) {
+	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
+		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
+		if groupErr == nil {
+			if group.Format != repository.FormatConan {
+				writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
+				return
+			}
+			if !anonymousHostedGroupReadAllowed(r.Context(), h.store, h.store, group, r.Method) {
+				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
+				return
+			}
+			h.listHostedGroupConanRecipeRevisions(w, r, group, params)
+			return
+		}
+	}
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		reference := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/")
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 {
@@ -2361,6 +2587,34 @@ func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, pr
 	return cursor.Name, nil
 }
 
+func (h hostedRepositoryAPIHandler) encodeOCIManifestCursor(repositoryID, name, digest string) string {
+	payload, _ := json.Marshal(ociManifestPageCursor{Endpoint: "oci-manifests", RepositoryID: repositoryID, Name: name, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeOCIManifestCursor(token, repositoryID, name string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", errors.New("invalid cursor")
+	}
+	var cursor ociManifestPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "oci-manifests" || cursor.RepositoryID != repositoryID || cursor.Name != name || cursor.Digest == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", errors.New("invalid cursor")
+	}
+	return cursor.Digest, nil
+}
+
 func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string, buildNumber int) string {
 	payload, _ := json.Marshal(mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
@@ -2471,6 +2725,34 @@ func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repository
 		return "", errors.New("invalid cursor")
 	}
 	return cursor.Coordinate, nil
+}
+
+func (h hostedRepositoryAPIHandler) encodeRetentionDryRunCursor(repositoryID, policyVersion, coordinate, artifactID string) string {
+	payload, _ := json.Marshal(retentionDryRunPageCursor{Endpoint: "retention-dry-run", RepositoryID: repositoryID, PolicyVersion: policyVersion, Coordinate: coordinate, ArtifactID: artifactID, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(append(payload, mac.Sum(nil)...))
+}
+
+func (h hostedRepositoryAPIHandler) decodeRetentionDryRunCursor(token, repositoryID, policyVersion string) (string, string, error) {
+	if token == "" {
+		return "", "", nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(encoded) <= sha256.Size {
+		return "", "", errors.New("invalid cursor")
+	}
+	payload, signature := encoded[:len(encoded)-sha256.Size], encoded[len(encoded)-sha256.Size:]
+	mac := hmac.New(sha256.New, []byte(h.authenticator.AdminToken))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return "", "", errors.New("invalid cursor")
+	}
+	var cursor retentionDryRunPageCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.Endpoint != "retention-dry-run" || cursor.RepositoryID != repositoryID || cursor.PolicyVersion != policyVersion || cursor.Coordinate == "" || cursor.ArtifactID == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+		return "", "", errors.New("invalid cursor")
+	}
+	return cursor.Coordinate, cursor.ArtifactID, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeTombstoneCursor(repositoryID string, format repository.Format, prefix, coordinate string) string {

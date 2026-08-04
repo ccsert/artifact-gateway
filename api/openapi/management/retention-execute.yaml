@@ -6,10 +6,15 @@ repositories_repositoryId_retention_execute:
     operationId: executeRepositoryRetention
     parameters:
     - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    - "$ref": "../components/parameters.yaml#/OptionalIfMatch"
     responses:
       '202':
-        description: Maven retention job accepted
+        description: Repository retention job accepted
         content:
           application/json:
             schema:
               "$ref": "../components/schemas.yaml#/LifecycleJob"
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}

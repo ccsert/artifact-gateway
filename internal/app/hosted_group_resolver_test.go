@@ -135,6 +135,57 @@ func TestV2GroupOCIManifestFallsBackToProxy(t *testing.T) {
 	}
 }
 
+func TestV2GroupOCIAnonymousTagListAggregatesAnonymousMembers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	public, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-public", Name: "oci-public", Format: repository.FormatOCI, AnonymousRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-private", Name: "oci-private", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range []struct {
+		repositoryID string
+		tag          string
+	}{
+		{public.ID, "1.0.0"},
+		{public.ID, "latest"},
+		{private.ID, "private"},
+	} {
+		body := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
+		sum := sha256.Sum256(append(body, fixture.tag...))
+		digest := "sha256:" + hex.EncodeToString(sum[:])
+		key := "native/oci/manifests/" + fixture.repositoryID + "/app/" + hex.EncodeToString(sum[:])
+		if err := objects.Put(context.Background(), key, body); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.PutOCIManifest(context.Background(), repository.OCIManifest{RepositoryID: fixture.repositoryID, Name: "app", Digest: digest, ObjectKey: key, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(body))}, fixture.tag); err != nil {
+			t.Fatal(err)
+		}
+	}
+	group, _, err := store.CreateHostedGroupIdempotently(context.Background(), repository.HostedGroup{
+		ID: "group-public", Name: "public-group", Format: repository.FormatOCI, AnonymousRead: true,
+		Members: []repository.GroupMember{{RepositoryID: public.ID, Position: 0}, {RepositoryID: private.ID, Position: 1}},
+	}, "test", "public-group", "public-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enableAnonymousAccess(t, store)
+	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+
+	request := httptest.NewRequest(http.MethodGet, "/v2/"+group.Name+"/app/tags/list?n=50", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"1.0.0"`) || !strings.Contains(response.Body.String(), `"latest"`) {
+		t.Fatalf("anonymous group tags=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), `"private"`) {
+		t.Fatalf("private member tag leaked into anonymous group response: %s", response.Body.String())
+	}
+}
+
 func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()

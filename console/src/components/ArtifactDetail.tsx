@@ -1,19 +1,19 @@
-import { useState } from 'react';
-import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
-import { Button, Collapse, Select, Tooltip } from 'antd';
-import { usageFor } from '../lib/usage';
-import type { UsageSnippet } from '../lib/usage';
-import { Badge } from './Badge';
-import { formatBytes, formatDate, shortDigest } from '../lib/format';
+import { useState } from "react";
+import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
+import { Button, Collapse, Select, Tooltip } from "antd";
+import { usageFor } from "../lib/usage";
+import type { UsageSnippet } from "../lib/usage";
+import { Badge } from "./Badge";
+import { formatBytes, formatDate, shortDigest } from "../lib/format";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <Tooltip title={copied ? '已复制' : '复制'}>
+    <Tooltip title={copied ? "已复制" : "复制"}>
       <Button
         type="text"
         size="small"
-        aria-label={copied ? '已复制' : '复制'}
+        aria-label={copied ? "已复制" : "复制"}
         icon={copied ? <CheckOutlined /> : <CopyOutlined />}
         onClick={async () => {
           try {
@@ -33,7 +33,9 @@ function Snippet({ snippet }: { snippet: UsageSnippet }) {
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">{snippet.label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+          {snippet.label}
+        </span>
         <CopyButton text={snippet.code} />
       </div>
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">
@@ -50,6 +52,7 @@ export interface ArtifactMeta {
   contentType?: string;
   createdAt?: string;
   publisher?: string;
+  buildNumber?: number;
   state?: string;
 }
 
@@ -75,36 +78,58 @@ export function ArtifactDetailView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">发布者</div>
-            <div className="mt-0.5 truncate font-mono text-xs text-zinc-100" title={meta.publisher}>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              发布者
+            </div>
+            <div
+              className="mt-0.5 truncate font-mono text-xs text-zinc-100"
+              title={meta.publisher}
+            >
               {meta.publisher}
             </div>
           </div>
         )}
         {meta.size !== undefined && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">大小</div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">{formatBytes(meta.size)}</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              大小
+            </div>
+            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+              {formatBytes(meta.size)}
+            </div>
           </div>
         )}
         {meta.createdAt && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">发布时间</div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">{formatDate(meta.createdAt)}</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              发布时间
+            </div>
+            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+              {formatDate(meta.createdAt)}
+            </div>
           </div>
         )}
         {meta.state && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">状态</div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">{meta.state}</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              状态
+            </div>
+            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+              {meta.state}
+            </div>
           </div>
         )}
       </div>
       {meta.digest && (
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">摘要 (digest)</div>
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            摘要 (digest)
+          </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            <code className="break-all font-mono text-xs text-zinc-300" title={meta.digest}>
+            <code
+              className="break-all font-mono text-xs text-zinc-300"
+              title={meta.digest}
+            >
               {shortDigest(meta.digest)}
             </code>
             <CopyButton text={meta.digest} />
@@ -119,8 +144,8 @@ export function ArtifactDetailView({
           size="small"
           items={[
             {
-              key: 'usage',
-              label: '使用方法',
+              key: "usage",
+              label: "使用方法",
               children: (
                 <div className="space-y-2">
                   {snippets.map((s) => (
@@ -146,12 +171,12 @@ function compareVersions(a: string, b: string): number {
   const pa = a.split(/[.\-+_]/);
   const pb = b.split(/[.\-+_]/);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const xa = pa[i] ?? '';
-    const xb = pb[i] ?? '';
+    const xa = pa[i] ?? "";
+    const xb = pb[i] ?? "";
     const na = Number(xa);
     const nb = Number(xb);
-    const aNum = xa !== '' && !Number.isNaN(na);
-    const bNum = xb !== '' && !Number.isNaN(nb);
+    const aNum = xa !== "" && !Number.isNaN(na);
+    const bNum = xb !== "" && !Number.isNaN(nb);
     if (aNum && bNum) {
       if (na !== nb) return nb - na;
     } else if (aNum) {
@@ -188,21 +213,36 @@ export function VersionList({
       <Select
         className="w-full"
         showSearch={{
-          optionFilterProp: 'label',
+          optionFilterProp: "label",
           filterOption: (input, option) => {
             const item = sorted.find((entry) => entry.label === option?.value);
-            return `${item?.label ?? ''} ${item?.hint ?? ''}`.toLowerCase().includes(input.toLowerCase());
+            return `${item?.label ?? ""} ${item?.hint ?? ""}`
+              .toLowerCase()
+              .includes(input.toLowerCase());
           },
         }}
-        value={current && sorted.some((item) => item.label === current) ? current : undefined}
+        value={
+          current && sorted.some((item) => item.label === current)
+            ? current
+            : undefined
+        }
         placeholder="搜索并选择版本"
-        options={sorted.map((item) => ({ value: item.label, label: item.label }))}
+        options={sorted.map((item) => ({
+          value: item.label,
+          label: item.label,
+        }))}
         optionRender={(option) => {
           const item = sorted.find((entry) => entry.label === option.value);
           return (
             <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-xs">{item?.label ?? option.label}</span>
-              {item?.hint && <span className="truncate text-[11px] text-zinc-500">{item.hint}</span>}
+              <span className="font-mono text-xs">
+                {item?.label ?? option.label}
+              </span>
+              {item?.hint && (
+                <span className="truncate text-[11px] text-zinc-500">
+                  {item.hint}
+                </span>
+              )}
             </div>
           );
         }}

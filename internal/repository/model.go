@@ -102,14 +102,20 @@ type RepositoryGrantSet struct {
 }
 
 type RepositoryRetentionPolicy struct {
-	Version         string `json:"version"`
-	KeepDays        int    `json:"keepDays"`
-	MinimumVersions int    `json:"minimumVersions"`
+	Version            string   `json:"version"`
+	Enabled            bool     `json:"enabled"`
+	KeepDays           int      `json:"keepDays"`
+	SnapshotKeepDays   int      `json:"snapshotKeepDays"`
+	MinimumVersions    int      `json:"minimumVersions"`
+	MaximumVersions    int      `json:"maximumVersions"`
+	CoordinatePatterns []string `json:"coordinatePatterns"`
+	ProtectedPatterns  []string `json:"protectedPatterns"`
 }
 
 type RawAsset struct {
 	RepositoryID, Path, Digest, ObjectKey, ContentType string
 	Size                                               int64
+	UpdatedAt                                          time.Time
 }
 type RawObject struct {
 	RepositoryID, Digest, ObjectKey string
@@ -143,6 +149,8 @@ type OCIManifest struct {
 	RepositoryID, Name, Digest, ObjectKey, MediaType string
 	SubjectDigest, ArtifactType                      string
 	Size                                             int64
+	CreatedAt                                        time.Time
+	Tags                                             []string
 }
 
 // ArtifactTombstone keeps a deleted artifact's identity until its byte objects

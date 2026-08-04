@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DeleteOutlined } from '@ant-design/icons';
 import { Button, Popconfirm, Select } from 'antd';
+import { listOciManifests } from '../client';
+import type { OciManifestSummary } from '../client';
 import { useAuth } from '../lib/auth';
 import { Loading, ErrorBanner } from './Feedback';
 import { Badge } from './Badge';
@@ -32,6 +34,14 @@ interface OciConfig {
   };
 }
 
+interface OciVersionOption {
+  value: string;
+  label: string;
+  searchText: string;
+  digest: string;
+  kind: 'tag' | 'digest';
+}
+
 const MANIFEST_ACCEPT =
   'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json';
 
@@ -61,6 +71,45 @@ async function ociFetch(token: string, path: string, accept?: string): Promise<R
   return res;
 }
 
+async function fetchOciManifests(repositoryId: string, image: string): Promise<OciManifestSummary[]> {
+  const items: OciManifestSummary[] = [];
+  const seenTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const response = await listOciManifests({
+      path: { repositoryId },
+      query: { name: image, pageSize: 200, pageToken },
+    });
+    if (response.error || !response.data) throw new Error('读取 OCI Manifest 列表失败');
+    items.push(...response.data.items);
+    pageToken = response.data.nextPageToken;
+    if (pageToken && seenTokens.has(pageToken)) throw new Error('OCI Manifest 分页游标重复');
+    if (pageToken) seenTokens.add(pageToken);
+  } while (pageToken);
+  return items;
+}
+
+function ociVersionOptions(manifests: OciManifestSummary[]): OciVersionOption[] {
+  return manifests.flatMap<OciVersionOption>((manifest) => {
+    if (manifest.tags.length === 0) {
+      return [{
+        value: manifest.digest,
+        label: `无标签 · ${shortDigest(manifest.digest)}`,
+        searchText: `无标签 ${manifest.digest}`,
+        digest: manifest.digest,
+        kind: 'digest' as const,
+      }];
+    }
+    return manifest.tags.map((tag) => ({
+      value: tag,
+      label: `${tag} · ${shortDigest(manifest.digest)}`,
+      searchText: `${tag} ${manifest.digest}`,
+      digest: manifest.digest,
+      kind: 'tag' as const,
+    }));
+  });
+}
+
 function LayerRow({ index, layer }: { index: number; layer: OciDescriptor }) {
   const kind = layer.mediaType.includes('gzip')
     ? 'tar+gzip'
@@ -80,17 +129,19 @@ function LayerRow({ index, layer }: { index: number; layer: OciDescriptor }) {
 }
 
 export function OciImageDetail({
+  repositoryId,
   repository,
   image,
   onDeleted,
 }: {
+  repositoryId: string;
   repository: string;
   image: string;
   onDeleted?: () => void;
 }) {
   const { token } = useAuth();
-  const [tags, setTags] = useState<string[] | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [manifests, setManifests] = useState<OciManifestSummary[] | null>(null);
+  const [selectedReference, setSelectedReference] = useState<string | null>(null);
   const [manifest, setManifest] = useState<OciManifest | null>(null);
   const [config, setConfig] = useState<OciConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,40 +150,43 @@ export function OciImageDetail({
   const [deleting, setDeleting] = useState(false);
 
   const name = `${repository}/${image}`;
+  const versions = ociVersionOptions(manifests ?? []);
+  const selectedVersion = versions.find((version) => version.value === selectedReference);
 
-  // 加载标签列表
-  useEffect(() => {
-    let cancelled = false;
+  const loadVersions = useCallback(async (): Promise<OciManifestSummary[] | null> => {
     setLoading(true);
     setError(null);
-    ociFetch(token, `${name}/tags/list`)
-      .then((r) => r.json())
-      .then((d: { tags?: string[] }) => {
-        if (cancelled) return;
-        const t = d.tags ?? [];
-        setTags(t);
-        setSelectedTag(t[0] ?? null);
-        setLoading(false);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, name]);
+    try {
+      const nextManifests = await fetchOciManifests(repositoryId, image);
+      const nextVersions = ociVersionOptions(nextManifests);
+      setManifests(nextManifests);
+      setSelectedReference((current) =>
+        current && nextVersions.some((version) => version.value === current)
+          ? current
+          : (nextVersions[0]?.value ?? null),
+      );
+      return nextManifests;
+    } catch (requestError) {
+      setError(requestError);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [image, repositoryId]);
+
+  useEffect(() => {
+    void loadVersions();
+  }, [loadVersions]);
 
   // 加载选中标签的 manifest + config
   const loadManifest = useCallback(
-    async (tag: string) => {
+    async (reference: string) => {
       setManifestLoading(true);
       setError(null);
       setManifest(null);
       setConfig(null);
       try {
-        const res = await ociFetch(token, `${name}/manifests/${tag}`, MANIFEST_ACCEPT);
+        const res = await ociFetch(token, `${name}/manifests/${reference}`, MANIFEST_ACCEPT);
         const m = (await res.json()) as OciManifest;
         setManifest(m);
         if (m.config?.digest) {
@@ -153,32 +207,30 @@ export function OciImageDetail({
   );
 
   useEffect(() => {
-    if (selectedTag) void loadManifest(selectedTag);
-  }, [selectedTag, loadManifest]);
+    if (selectedReference) void loadManifest(selectedReference);
+  }, [selectedReference, loadManifest]);
 
   if (loading) return <Loading label="加载镜像详情…" />;
-  if (!tags) return <ErrorBanner error={error ?? new Error('读取镜像标签失败')} />;
-  if (tags.length === 0)
-    return <p className="py-6 text-center text-sm text-zinc-500">该镜像暂无标签</p>;
+  if (!manifests) return <ErrorBanner error={error ?? new Error('读取 OCI Manifest 列表失败')} />;
+  if (manifests.length === 0)
+    return <p className="py-6 text-center text-sm text-zinc-500">该镜像没有可见 Manifest</p>;
 
   const totalSize = (manifest?.layers ?? []).reduce((n, l) => n + l.size, 0) + (manifest?.config?.size ?? 0);
 
-  const deleteTag = async () => {
-    if (!selectedTag) return;
+  const deleteReference = async () => {
+    if (!selectedVersion) return;
     setDeleting(true);
     try {
       const registryToken = await ociRegistryToken(token);
-      const res = await fetch(`/v2/${name}/manifests/${encodeURIComponent(selectedTag)}`, {
+      const res = await fetch(`/v2/${name}/manifests/${encodeURIComponent(selectedVersion.value)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${registryToken}` },
       });
       if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 120)}`);
-      const remaining = (tags ?? []).filter((t) => t !== selectedTag);
-      setTags(remaining);
-      setSelectedTag(remaining[0] ?? null);
       setManifest(null);
       setConfig(null);
-      if (remaining.length === 0) onDeleted?.();
+      const remaining = await loadVersions();
+      if (remaining?.length === 0) onDeleted?.();
     } catch (e) {
       setError(e);
     } finally {
@@ -192,38 +244,57 @@ export function OciImageDetail({
         <ErrorBanner
           error={error}
           onRetry={() => {
-            if (selectedTag) void loadManifest(selectedTag);
+            if (selectedReference) void loadManifest(selectedReference);
+            else void loadVersions();
           }}
         />
       )}
-      {/* 标签选择 */}
+      {/* 版本选择 */}
       <div className="flex items-center gap-3">
-        <label className="shrink-0 text-xs text-zinc-500" htmlFor="oci-tag-select">标签</label>
+        <label className="shrink-0 text-xs text-zinc-500" htmlFor="oci-version-select">版本</label>
         <Select
-          id="oci-tag-select"
+          id="oci-version-select"
           className="min-w-0 flex-1 font-mono text-xs"
-          showSearch={{ optionFilterProp: 'label' }}
-          value={selectedTag ?? undefined}
-          options={tags.map((tag) => ({ value: tag, label: tag }))}
-          onChange={setSelectedTag}
-          placeholder="搜索并选择标签"
+          showSearch={{
+            optionFilterProp: 'label',
+            filterOption: (input, option) =>
+              String(option?.searchText ?? option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+          value={selectedReference ?? undefined}
+          options={versions}
+          onChange={setSelectedReference}
+          placeholder="搜索标签或 Digest"
           listHeight={280}
         />
-        {selectedTag && (
+        {selectedVersion && (
           <Popconfirm
-            title="删除当前镜像标签？"
-            description={`将删除 ${selectedTag} 的 manifest 引用。`}
+            title={selectedVersion.kind === 'tag' ? '解绑当前镜像标签？' : '删除无标签 Manifest？'}
+            description={
+              selectedVersion.kind === 'tag'
+                ? '只移除该标签；没有其他标签时，Manifest 会保留为可按 Digest 管理的版本。'
+                : 'Manifest 将进入墓碑，可在墓碑页恢复。'
+            }
             okText="删除"
             cancelText="取消"
             okButtonProps={{ danger: true }}
-            onConfirm={() => void deleteTag()}
+            onConfirm={() => void deleteReference()}
           >
             <Button danger size="small" icon={<DeleteOutlined />} loading={deleting}>
-              删除标签
+              {selectedVersion.kind === 'tag' ? '解绑标签' : '删除 Manifest'}
             </Button>
           </Popconfirm>
         )}
       </div>
+
+      {selectedVersion && (
+        <div className="flex min-w-0 items-center gap-2 rounded border border-zinc-800 px-3 py-2 text-xs">
+          <span className="shrink-0 text-zinc-500">Digest</span>
+          <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-zinc-300" title={selectedVersion.digest}>
+            {selectedVersion.digest}
+          </code>
+          {selectedVersion.kind === 'digest' && <Badge tone="amber">无标签</Badge>}
+        </div>
+      )}
 
       {manifestLoading ? (
         <Loading label="加载清单…" />

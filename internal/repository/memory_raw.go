@@ -65,7 +65,9 @@ func (s *MemoryStore) CompleteRawUpload(_ context.Context, id string, asset RawA
 	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) || v.RepositoryID != asset.RepositoryID || v.Path != asset.Path {
 		return RawAsset{}, ErrNotFound
 	}
-	s.rawObjects[asset.Digest] = RawObject{RepositoryID: asset.RepositoryID, Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: time.Now().UTC()}
+	now := time.Now().UTC()
+	asset.UpdatedAt = now
+	s.rawObjects[asset.Digest] = RawObject{RepositoryID: asset.RepositoryID, Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, CreatedAt: now}
 	s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)] = asset
 	v.State = "completed"
 	s.rawUploads[id] = v
@@ -100,6 +102,7 @@ func (s *MemoryStore) StageRawObject(_ context.Context, object RawObject) error 
 func (s *MemoryStore) PutRawAsset(_ context.Context, asset RawAsset) (RawAsset, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	asset.UpdatedAt = time.Now().UTC()
 	if object, ok := s.rawObjects[asset.Digest]; ok {
 		object.RepositoryID = asset.RepositoryID
 		object.CollectedAt = time.Time{}
@@ -140,11 +143,41 @@ func (s *MemoryStore) DeleteRawAsset(_ context.Context, repositoryID, path strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := rawAssetKey(repositoryID, path)
-	if _, ok := s.rawAssets[key]; !ok {
+	asset, ok := s.rawAssets[key]
+	if !ok {
 		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	s.rawAssetTombstones[key] = asset
+	s.artifactTombstones[repositoryID+"\x00"+string(FormatRaw)+"\x00"+path] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatRaw, Coordinate: path, Digest: asset.Digest, TombstonedAt: now}
+	if object, exists := s.rawObjects[asset.Digest]; exists {
+		object.CreatedAt, object.CollectedAt = now, time.Time{}
+		s.rawObjects[asset.Digest] = object
 	}
 	delete(s.rawAssets, key)
 	return nil
+}
+
+func (s *MemoryStore) RestoreRawAsset(_ context.Context, repositoryID, path string) (RawAsset, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := rawAssetKey(repositoryID, path)
+	asset, ok := s.rawAssetTombstones[key]
+	if !ok {
+		return RawAsset{}, ErrNotFound
+	}
+	if _, exists := s.rawAssets[key]; exists {
+		return RawAsset{}, ErrNameExists
+	}
+	object, ok := s.rawObjects[asset.Digest]
+	if !ok || !object.CollectedAt.IsZero() {
+		return RawAsset{}, ErrDisabled
+	}
+	asset.ObjectKey, asset.Size, asset.UpdatedAt = object.ObjectKey, object.Size, time.Now().UTC()
+	s.rawAssets[key] = asset
+	delete(s.rawAssetTombstones, key)
+	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatRaw)+"\x00"+path)
+	return asset, nil
 }
 func (s *MemoryStore) ListUnreferencedRawObjects(_ context.Context, before time.Time, limit int) ([]RawObject, error) {
 	s.mu.RLock()

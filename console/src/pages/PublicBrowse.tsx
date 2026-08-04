@@ -11,7 +11,11 @@ import {
 } from "@ant-design/icons";
 import { Button, Input, Select, Tooltip } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
-import { listConanRecipeRevisions, searchRepositoryArtifacts } from "../client";
+import {
+  listConanRecipeRevisions,
+  listOciManifests,
+  searchRepositoryArtifacts,
+} from "../client";
 import type { ArtifactSummary } from "../client";
 import { Card, DataTable } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
@@ -42,6 +46,15 @@ interface OciTagPage {
   nextCursor?: string;
   loaded: boolean;
   loading: boolean;
+  error?: string;
+}
+
+interface OciManifestDetail {
+  loading: boolean;
+  digest?: string;
+  size?: number;
+  createdAt?: string;
+  publisher?: string;
   error?: string;
 }
 
@@ -80,7 +93,9 @@ function SearchableVersionSelect({
       showSearch={{
         optionFilterProp: "label",
         filterOption: (input, option) =>
-          String(option?.label ?? "").toLowerCase().includes(input.toLowerCase()),
+          String(option?.label ?? "")
+            .toLowerCase()
+            .includes(input.toLowerCase()),
       }}
       value={value || undefined}
       options={options}
@@ -94,17 +109,100 @@ function SearchableVersionSelect({
   );
 }
 
-function nextOciTagCursor(response: Response, tags: string[]): string | undefined {
+function nextOciTagCursor(
+  response: Response,
+  tags: string[],
+): string | undefined {
   const link = response.headers.get("Link");
   const target = link?.match(/<([^>]+)>;\s*rel="next"/i)?.[1];
   if (target) {
     try {
-      return new URL(target, window.location.origin).searchParams.get("last") ?? undefined;
+      return (
+        new URL(target, window.location.origin).searchParams.get("last") ??
+        undefined
+      );
     } catch {
       // Fall through to the page-size heuristic for non-standard registries.
     }
   }
   return tags.length === VERSION_PAGE_SIZE ? tags.at(-1) : undefined;
+}
+
+const OCI_MANIFEST_ACCEPT = [
+  "application/vnd.oci.image.manifest.v1+json",
+  "application/vnd.docker.distribution.manifest.v2+json",
+  "application/vnd.oci.image.index.v1+json",
+  "application/vnd.docker.distribution.manifest.list.v2+json",
+].join(", ");
+
+type OciManifestEnvelope = {
+  config?: { digest?: string; size?: number };
+  layers?: Array<{ size?: number }>;
+  manifests?: Array<{ digest?: string }>;
+};
+
+type OciConfigEnvelope = {
+  created?: string;
+  author?: string;
+  config?: { Labels?: Record<string, string> };
+};
+
+async function readOciManifestDetail(
+  repositoryName: string,
+  imageName: string,
+  reference: string,
+  depth = 0,
+): Promise<Omit<OciManifestDetail, "loading">> {
+  const imagePath = imageName.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `/v2/${encodeURIComponent(repositoryName)}/${imagePath}/manifests/${encodeURIComponent(reference)}`,
+    { headers: { Accept: OCI_MANIFEST_ACCEPT } },
+  );
+  if (!response.ok)
+    throw new Error(`读取 OCI manifest 失败 (${response.status})`);
+  const envelope = (await response.json()) as OciManifestEnvelope;
+  const digest = response.headers.get("Docker-Content-Digest") ?? undefined;
+  const layerSize = (envelope.layers ?? []).reduce(
+    (total, layer) => total + (layer.size ?? 0),
+    envelope.config?.size ?? 0,
+  );
+
+  // Multi-platform indexes point to a child manifest. Read its config for the
+  // same useful metadata while retaining the digest of the selected tag.
+  if (!envelope.config && depth < 2) {
+    const child = envelope.manifests?.find((entry) => entry.digest);
+    if (child?.digest) {
+      const nested = await readOciManifestDetail(
+        repositoryName,
+        imageName,
+        child.digest,
+        depth + 1,
+      );
+      return {
+        ...nested,
+        digest: digest ?? nested.digest,
+        size: nested.size ?? layerSize,
+      };
+    }
+  }
+
+  let createdAt: string | undefined;
+  let publisher: string | undefined;
+  if (envelope.config?.digest) {
+    const configResponse = await fetch(
+      `/v2/${encodeURIComponent(repositoryName)}/${imagePath}/blobs/${encodeURIComponent(envelope.config.digest)}`,
+    );
+    if (configResponse.ok) {
+      const config = (await configResponse.json()) as OciConfigEnvelope;
+      const labels = config.config?.Labels ?? {};
+      createdAt = config.created ?? labels["org.opencontainers.image.created"];
+      publisher =
+        config.author ||
+        labels["org.opencontainers.image.authors"] ||
+        labels["org.opencontainers.image.vendor"];
+    }
+  }
+  return { digest, size: layerSize || undefined, createdAt, publisher };
 }
 
 type ProtocolVersion = {
@@ -146,7 +244,10 @@ function mavenVersionKey(version: ArtifactSummary, index: number): string {
   return `${version.coordinate}-${version.buildNumber ?? index}`;
 }
 
-function conanReferenceParts(reference: string): { key: string; version: string } {
+function conanReferenceParts(reference: string): {
+  key: string;
+  version: string;
+} {
   const canonical = reference.split("/");
   if (canonical.length >= 4 && !reference.includes("@")) {
     return {
@@ -167,7 +268,8 @@ function conanArtifactGroups(items: ArtifactSummary[]): ConanArtifactGroup[] {
   for (const item of items) {
     const { key } = conanReferenceParts(item.coordinate);
     const current = groups.get(key) ?? [];
-    if (!current.some((entry) => entry.coordinate === item.coordinate)) current.push(item);
+    if (!current.some((entry) => entry.coordinate === item.coordinate))
+      current.push(item);
     groups.set(key, current);
   }
   return [...groups.entries()]
@@ -176,7 +278,10 @@ function conanArtifactGroups(items: ArtifactSummary[]): ConanArtifactGroup[] {
       versions: versions.sort((a, b) => {
         const left = conanReferenceParts(a.coordinate).version;
         const right = conanReferenceParts(b.coordinate).version;
-        return right.localeCompare(left, undefined, { numeric: true, sensitivity: "base" });
+        return right.localeCompare(left, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
       }),
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
@@ -235,7 +340,11 @@ interface ConanGroupTableProps {
   onSelectReference: (key: string, reference: string) => void;
   onSelectRevision: (reference: string, revision: string) => void;
   onFilterChange: (value: string) => void;
-  onLoadRevisions: (reference: string, query?: string, pageToken?: string) => void;
+  onLoadRevisions: (
+    reference: string,
+    query?: string,
+    pageToken?: string,
+  ) => void;
   onOpenArtifact: (reference: string, revision?: string) => void;
   onClearArtifactParams: () => void;
   artifactHref: (reference: string, revision?: string) => string;
@@ -275,41 +384,75 @@ function ConanGroupTable({
     >
       {groups.map((group) => {
         const latest = group.versions[0];
-        const urlReference = group.versions.some((version) => version.coordinate === artifactParam)
+        const urlReference = group.versions.some(
+          (version) => version.coordinate === artifactParam,
+        )
           ? artifactParam
           : "";
-        const selectedReference = urlReference || selectedReferences[group.key] || latest.coordinate;
+        const selectedReference =
+          urlReference || selectedReferences[group.key] || latest.coordinate;
         const expanded = expandedGroup === group.key || Boolean(urlReference);
         const page = revisionPages[selectedReference];
         const revisions = page?.items ?? [];
         const normalizedFilter = versionFilter.trim().toLowerCase();
         const visibleRevisions = normalizedFilter
-          ? revisions.filter((revision) => `${revision.revision} ${revision.digest ?? ""} ${revision.createdAt ?? ""}`.toLowerCase().includes(normalizedFilter))
+          ? revisions.filter((revision) =>
+              `${revision.revision} ${revision.digest ?? ""} ${revision.createdAt ?? ""}`
+                .toLowerCase()
+                .includes(normalizedFilter),
+            )
           : revisions;
         const selectedRevision = selectedRevisions[selectedReference];
-        const requestedRevision = artifactParam === selectedReference ? revisionParam : "";
+        const requestedRevision =
+          artifactParam === selectedReference ? revisionParam : "";
         const preferredRevision =
-          (selectedRevision && revisions.some((revision) => revision.revision === selectedRevision) && selectedRevision) ||
-          (requestedRevision && revisions.some((revision) => revision.revision === requestedRevision) && requestedRevision) ||
+          (selectedRevision &&
+            revisions.some(
+              (revision) => revision.revision === selectedRevision,
+            ) &&
+            selectedRevision) ||
+          (requestedRevision &&
+            revisions.some(
+              (revision) => revision.revision === requestedRevision,
+            ) &&
+            requestedRevision) ||
           revisions[0]?.revision ||
           "";
-        const selectedRevisionValue = visibleRevisions.some((revision) => revision.revision === preferredRevision)
+        const selectedRevisionValue = visibleRevisions.some(
+          (revision) => revision.revision === preferredRevision,
+        )
           ? preferredRevision
           : visibleRevisions[0]?.revision || preferredRevision;
-        const selectedRevisionItem = revisions.find((revision) => revision.revision === selectedRevisionValue);
+        const selectedRevisionItem = revisions.find(
+          (revision) => revision.revision === selectedRevisionValue,
+        );
         const referenceVersion = conanReferenceParts(selectedReference).version;
         const versionHref = selectedRevisionValue
           ? artifactHref(selectedReference, selectedRevisionValue)
           : artifactHref(selectedReference);
-        const snippets = usageFor(repository.format, repository.name, selectedReference);
+        const snippets = usageFor(
+          repository.format,
+          repository.name,
+          selectedReference,
+        );
         return (
           <Fragment key={group.key}>
             <tr className="hover:bg-zinc-800/30">
-              <td className="px-4 py-3 font-mono text-xs text-zinc-100">{group.key}</td>
-              <td className="px-4 py-3 font-mono text-xs text-zinc-400">{conanReferenceParts(latest.coordinate).version}</td>
-              <td className="px-4 py-3 text-xs text-zinc-500">{group.versions.length}</td>
-              <td className="max-w-[240px] truncate px-4 py-3 font-mono text-xs text-zinc-500" title={selectedRevisionItem?.revision}>
-                {selectedRevisionItem?.revision ?? (expanded ? "读取中…" : "展开后加载")}
+              <td className="px-4 py-3 font-mono text-xs text-zinc-100">
+                {group.key}
+              </td>
+              <td className="px-4 py-3 font-mono text-xs text-zinc-400">
+                {conanReferenceParts(latest.coordinate).version}
+              </td>
+              <td className="px-4 py-3 text-xs text-zinc-500">
+                {group.versions.length}
+              </td>
+              <td
+                className="max-w-[240px] truncate px-4 py-3 font-mono text-xs text-zinc-500"
+                title={selectedRevisionItem?.revision}
+              >
+                {selectedRevisionItem?.revision ??
+                  (expanded ? "读取中…" : "展开后加载")}
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-right">
                 <Button
@@ -324,21 +467,42 @@ function ConanGroupTable({
                     }
                     onExpand(group.key, selectedReference);
                     onFilterChange("");
-                    if (!revisionPages[selectedReference]) onLoadRevisions(selectedReference);
-                    onOpenArtifact(selectedReference, selectedRevisionValue || undefined);
+                    if (!revisionPages[selectedReference])
+                      onLoadRevisions(selectedReference);
+                    onOpenArtifact(
+                      selectedReference,
+                      selectedRevisionValue || undefined,
+                    );
                   }}
                 >
                   {expanded ? "收起" : "选择版本"}
                 </Button>
-                <Button type="link" size="small" icon={<LinkOutlined />} href={versionHref}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<LinkOutlined />}
+                  href={versionHref}
+                >
                   {selectedRevisionValue ? "打开版本" : "打开"}
                 </Button>
-                <Tooltip title={copiedCoordinate === group.key ? "已复制" : "复制 Conan 包标识"}>
+                <Tooltip
+                  title={
+                    copiedCoordinate === group.key
+                      ? "已复制"
+                      : "复制 Conan 包标识"
+                  }
+                >
                   <Button
                     type="text"
                     size="small"
                     aria-label={`复制 ${group.key}`}
-                    icon={copiedCoordinate === group.key ? <CheckOutlined /> : <CopyOutlined />}
+                    icon={
+                      copiedCoordinate === group.key ? (
+                        <CheckOutlined />
+                      ) : (
+                        <CopyOutlined />
+                      )
+                    }
                     onClick={() => onCopyCoordinate(group.key)}
                   />
                 </Tooltip>
@@ -351,9 +515,14 @@ function ConanGroupTable({
                     <div>
                       <div className="flex items-center justify-between gap-3">
                         <label className="text-[11px] font-medium text-zinc-500">
-                          选择包版本 <span className="font-normal text-zinc-600">({group.versions.length})</span>
+                          选择包版本{" "}
+                          <span className="font-normal text-zinc-600">
+                            ({group.versions.length})
+                          </span>
                         </label>
-                        <span className="text-[11px] text-zinc-600">{referenceVersion}</span>
+                        <span className="text-[11px] text-zinc-600">
+                          {referenceVersion}
+                        </span>
                       </div>
                       <SearchableVersionSelect
                         className="mt-1.5"
@@ -370,29 +539,46 @@ function ConanGroupTable({
                         }}
                         placeholder="搜索并选择 Conan 包版本"
                       />
-                      <p className="mt-2 text-[11px] leading-5 text-zinc-600">同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。</p>
+                      <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                        同一 name@user/channel 下收拢不同版本；选定版本后再查看
+                        recipe revision。
+                      </p>
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center justify-between gap-3">
-                        <label className="text-[11px] font-medium text-zinc-500">Recipe revision</label>
-                        <span className="text-[11px] text-zinc-600">{visibleRevisions.length}/{revisions.length}</span>
+                        <label className="text-[11px] font-medium text-zinc-500">
+                          Recipe revision
+                        </label>
+                        <span className="text-[11px] text-zinc-600">
+                          {visibleRevisions.length}/{revisions.length}
+                        </span>
                       </div>
                       <div className="mt-1.5 flex gap-2">
                         <Input
                           className="min-w-0 flex-1 font-mono text-xs"
                           placeholder="输入 revision 或 digest"
                           value={versionFilter}
-                          onChange={(event) => onFilterChange(event.target.value)}
-                          onPressEnter={() => onLoadRevisions(selectedReference, versionFilter)}
+                          onChange={(event) =>
+                            onFilterChange(event.target.value)
+                          }
+                          onPressEnter={() =>
+                            onLoadRevisions(selectedReference, versionFilter)
+                          }
                         />
                         <Button
                           loading={page?.loading === true}
-                          onClick={() => onLoadRevisions(selectedReference, versionFilter)}
+                          onClick={() =>
+                            onLoadRevisions(selectedReference, versionFilter)
+                          }
                         >
                           搜索
                         </Button>
                       </div>
-                      {page?.error && <div className="mt-2 text-[11px] text-rose-300">{page.error}</div>}
+                      {page?.error && (
+                        <div className="mt-2 text-[11px] text-rose-300">
+                          {page.error}
+                        </div>
+                      )}
                       <SearchableVersionSelect
                         className="mt-3"
                         value={selectedRevisionValue}
@@ -417,28 +603,72 @@ function ConanGroupTable({
                           block
                           size="small"
                           loading={page.loading}
-                          onClick={() => onLoadRevisions(selectedReference, page.query, page.nextPageToken)}
+                          onClick={() =>
+                            onLoadRevisions(
+                              selectedReference,
+                              page.query,
+                              page.nextPageToken,
+                            )
+                          }
                           className="mt-2"
                         >
-                          {page.loading ? "加载中…" : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
+                          {page.loading
+                            ? "加载中…"
+                            : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
                         </Button>
                       )}
                       {selectedRevisionItem ? (
                         <>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs text-zinc-100">{selectedReference}</span>
-                            <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">{selectedRevisionItem.revision}</span>
-                            <Button type="link" size="small" icon={<LinkOutlined />} href={versionHref}>打开版本页</Button>
-                            <Button type="link" size="small" onClick={() => onCopyPageLink(versionHref)}>
-                              {copiedCoordinate === versionHref ? "链接已复制" : "复制链接"}
+                            <span className="font-mono text-xs text-zinc-100">
+                              {selectedReference}
+                            </span>
+                            <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">
+                              {selectedRevisionItem.revision}
+                            </span>
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<LinkOutlined />}
+                              href={versionHref}
+                            >
+                              打开版本页
+                            </Button>
+                            <Button
+                              type="link"
+                              size="small"
+                              onClick={() => onCopyPageLink(versionHref)}
+                            >
+                              {copiedCoordinate === versionHref
+                                ? "链接已复制"
+                                : "复制链接"}
                             </Button>
                           </div>
                           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
-                            <MetadataItem label="Conan reference" value={selectedReference} mono />
-                            <MetadataItem label="Recipe revision" value={selectedRevisionItem.revision} mono />
-                            <MetadataItem label="发布时间" value={formatDate(selectedRevisionItem.createdAt)} />
-                            <MetadataItem label="发布者" value={latest.publisher ?? "未记录"} mono />
-                            <MetadataItem label="校验摘要" value={selectedRevisionItem.digest ?? "未记录"} mono />
+                            <MetadataItem
+                              label="Conan reference"
+                              value={selectedReference}
+                              mono
+                            />
+                            <MetadataItem
+                              label="Recipe revision"
+                              value={selectedRevisionItem.revision}
+                              mono
+                            />
+                            <MetadataItem
+                              label="发布时间"
+                              value={formatDate(selectedRevisionItem.createdAt)}
+                            />
+                            <MetadataItem
+                              label="发布者"
+                              value={latest.publisher ?? "未记录"}
+                              mono
+                            />
+                            <MetadataItem
+                              label="校验摘要"
+                              value={selectedRevisionItem.digest ?? "未记录"}
+                              mono
+                            />
                           </div>
                           <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {snippets.map((snippet) => (
@@ -452,7 +682,9 @@ function ConanGroupTable({
                           </div>
                         </>
                       ) : (
-                        <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">选择一个 recipe revision 查看详情与使用方式。</div>
+                        <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
+                          选择一个 recipe revision 查看详情与使用方式。
+                        </div>
                       )}
                     </div>
                   </div>
@@ -504,7 +736,12 @@ export function PublicBrowsePage() {
   const [selectedConanReferences, setSelectedConanReferences] = useState<
     Record<string, string>
   >({});
-  const [ociTagPages, setOciTagPages] = useState<Record<string, OciTagPage>>({});
+  const [ociTagPages, setOciTagPages] = useState<Record<string, OciTagPage>>(
+    {},
+  );
+  const [ociManifestDetails, setOciManifestDetails] = useState<
+    Record<string, OciManifestDetail>
+  >({});
   const [conanRevisionPages, setConanRevisionPages] = useState<
     Record<string, ConanRevisionPage>
   >({});
@@ -550,109 +787,214 @@ export function PublicBrowsePage() {
 
   useEffect(() => {
     setOciTagPages({});
+    setOciManifestDetails({});
     setConanRevisionPages({});
     setExpandedConanGroup(null);
     setSelectedConanReferences({});
   }, [repositoryId]);
 
-  const loadOciTags = useCallback(async (coordinate: string, after = "") => {
-    if (selectedRepository?.format !== "oci") return;
-    setOciTagPages((current) => ({
-      ...current,
-      [coordinate]: {
-        items: after ? current[coordinate]?.items ?? [] : [],
-        loaded: current[coordinate]?.loaded ?? false,
-        loading: true,
-      },
-    }));
-    const imagePath = coordinate.split("/").map(encodeURIComponent).join("/");
-    try {
-      const query = new URLSearchParams({ n: String(VERSION_PAGE_SIZE) });
-      if (after) query.set("last", after);
-      const response = await fetch(`/v2/${encodeURIComponent(selectedRepository.name)}/${imagePath}/tags/list?${query}`);
-      if (!response.ok) throw new Error(`读取 OCI 标签失败 (${response.status})`);
-      const data = (await response.json()) as { tags?: string[] };
-      const page = data.tags ?? [];
-      setOciTagPages((current) => ({
+  const loadOciManifest = useCallback(
+    async (coordinate: string, tag: string) => {
+      if (selectedRepository?.format !== "oci" || !tag) return;
+      const key = `${coordinate}\x00${tag}`;
+      setOciManifestDetails((current) => ({
         ...current,
-        [coordinate]: {
-          items: after ? [...new Set([...(current[coordinate]?.items ?? []), ...page])] : page,
-          nextCursor: nextOciTagCursor(response, page),
-          loaded: true,
-          loading: false,
-        },
+        [key]: { ...(current[key] ?? {}), loading: true, error: undefined },
       }));
-    } catch (requestError) {
-      setOciTagPages((current) => ({
-        ...current,
-        [coordinate]: {
-          items: current[coordinate]?.items ?? [],
-          loaded: true,
-          loading: false,
-          error: requestError instanceof Error ? requestError.message : "读取 OCI 标签失败",
-        },
-      }));
-    }
-  }, [selectedRepository]);
+      try {
+        const detail = await readOciManifestDetail(
+          selectedRepository.name,
+          coordinate,
+          tag,
+        );
+        setOciManifestDetails((current) => ({
+          ...current,
+          [key]: { ...detail, loading: false },
+        }));
+      } catch (requestError) {
+        setOciManifestDetails((current) => ({
+          ...current,
+          [key]: {
+            ...(current[key] ?? {}),
+            loading: false,
+            error:
+              requestError instanceof Error
+                ? requestError.message
+                : "读取 OCI manifest 失败",
+          },
+        }));
+      }
+    },
+    [selectedRepository],
+  );
 
-  const loadConanRevisions = useCallback(async (coordinate: string, query = "", pageToken = "") => {
-    if (selectedRepository?.format !== "conan") return;
-    const normalizedQuery = query.trim();
-    setConanRevisionPages((current) => ({
-      ...current,
-      [coordinate]: {
-        items: pageToken && current[coordinate]?.query === normalizedQuery ? current[coordinate]?.items ?? [] : [],
-        query: normalizedQuery,
-        loaded: current[coordinate]?.loaded ?? false,
-        loading: true,
-      },
-    }));
-    const { data, error: requestError } = await listConanRecipeRevisions({
-      path: { repositoryId: selectedRepository.id },
-      query: {
-        reference: coordinate,
-        q: normalizedQuery || undefined,
-        pageSize: VERSION_PAGE_SIZE,
-        pageToken: pageToken || undefined,
-      },
-    });
-    if (requestError || !data) {
+  const loadOciTags = useCallback(
+    async (coordinate: string, after = "") => {
+      if (selectedRepository?.format !== "oci") return;
+      setOciTagPages((current) => ({
+        ...current,
+        [coordinate]: {
+          items: after ? (current[coordinate]?.items ?? []) : [],
+          loaded: current[coordinate]?.loaded ?? false,
+          loading: true,
+        },
+      }));
+      const imagePath = coordinate.split("/").map(encodeURIComponent).join("/");
+      try {
+        if (selectedRepository.type !== "group") {
+          const { data, error: requestError } = await listOciManifests({
+            path: { repositoryId: selectedRepository.id },
+            query: {
+              name: coordinate,
+              pageSize: VERSION_PAGE_SIZE,
+              pageToken: after || undefined,
+            },
+          });
+          if (requestError || !data)
+            throw new Error("读取 OCI 版本失败");
+          const page = data.items.flatMap((manifest) =>
+            manifest.tags.length > 0 ? manifest.tags : [manifest.digest],
+          );
+          setOciTagPages((current) => ({
+            ...current,
+            [coordinate]: {
+              items: after
+                ? [...new Set([...(current[coordinate]?.items ?? []), ...page])]
+                : page,
+              nextCursor: data.nextPageToken,
+              loaded: true,
+              loading: false,
+            },
+          }));
+          const selectedVersion =
+            tagParam && artifactParam === coordinate ? tagParam : page[0];
+          if (!after && selectedVersion)
+            void loadOciManifest(coordinate, selectedVersion);
+          return;
+        }
+        const query = new URLSearchParams({ n: String(VERSION_PAGE_SIZE) });
+        if (after) query.set("last", after);
+        const response = await fetch(
+          `/v2/${encodeURIComponent(selectedRepository.name)}/${imagePath}/tags/list?${query}`,
+        );
+        if (!response.ok)
+          throw new Error(`读取 OCI 标签失败 (${response.status})`);
+        const data = (await response.json()) as { tags?: string[] };
+        const page = data.tags ?? [];
+        setOciTagPages((current) => ({
+          ...current,
+          [coordinate]: {
+            items: after
+              ? [...new Set([...(current[coordinate]?.items ?? []), ...page])]
+              : page,
+            nextCursor: nextOciTagCursor(response, page),
+            loaded: true,
+            loading: false,
+          },
+        }));
+        const selectedTag =
+          tagParam && artifactParam === coordinate ? tagParam : page[0];
+        if (!after && selectedTag)
+          void loadOciManifest(coordinate, selectedTag);
+      } catch (requestError) {
+        setOciTagPages((current) => ({
+          ...current,
+          [coordinate]: {
+            items: current[coordinate]?.items ?? [],
+            loaded: true,
+            loading: false,
+            error:
+              requestError instanceof Error
+                ? requestError.message
+                : "读取 OCI 标签失败",
+          },
+        }));
+      }
+    },
+    [artifactParam, loadOciManifest, selectedRepository, tagParam],
+  );
+
+  const loadConanRevisions = useCallback(
+    async (coordinate: string, query = "", pageToken = "") => {
+      if (selectedRepository?.format !== "conan") return;
+      const normalizedQuery = query.trim();
       setConanRevisionPages((current) => ({
         ...current,
         [coordinate]: {
-          items: current[coordinate]?.items ?? [],
+          items:
+            pageToken && current[coordinate]?.query === normalizedQuery
+              ? (current[coordinate]?.items ?? [])
+              : [],
+          query: normalizedQuery,
+          loaded: current[coordinate]?.loaded ?? false,
+          loading: true,
+        },
+      }));
+      const { data, error: requestError } = await listConanRecipeRevisions({
+        path: { repositoryId: selectedRepository.id },
+        query: {
+          reference: coordinate,
+          q: normalizedQuery || undefined,
+          pageSize: VERSION_PAGE_SIZE,
+          pageToken: pageToken || undefined,
+        },
+      });
+      if (requestError || !data) {
+        setConanRevisionPages((current) => ({
+          ...current,
+          [coordinate]: {
+            items: current[coordinate]?.items ?? [],
+            query: normalizedQuery,
+            loaded: true,
+            loading: false,
+            error: "读取 Conan revisions 失败",
+          },
+        }));
+        return;
+      }
+      setConanRevisionPages((current) => ({
+        ...current,
+        [coordinate]: {
+          items:
+            pageToken && current[coordinate]?.query === normalizedQuery
+              ? [...current[coordinate].items, ...data.items]
+              : data.items,
+          nextPageToken: data.nextPageToken,
           query: normalizedQuery,
           loaded: true,
           loading: false,
-          error: "读取 Conan revisions 失败",
         },
       }));
-      return;
-    }
-    setConanRevisionPages((current) => ({
-      ...current,
-      [coordinate]: {
-        items: pageToken && current[coordinate]?.query === normalizedQuery
-          ? [...current[coordinate].items, ...data.items]
-          : data.items,
-        nextPageToken: data.nextPageToken,
-        query: normalizedQuery,
-        loaded: true,
-        loading: false,
-      },
-    }));
-  }, [selectedRepository]);
+    },
+    [selectedRepository],
+  );
 
   useEffect(() => {
-    if (!artifactParam || !items?.some((item) => item.coordinate === artifactParam)) return;
+    if (
+      !artifactParam ||
+      !items?.some((item) => item.coordinate === artifactParam)
+    )
+      return;
     if (selectedRepository?.format === "oci" && !ociTagPages[artifactParam]) {
       void loadOciTags(artifactParam);
     }
-    if (selectedRepository?.format === "conan" && !conanRevisionPages[artifactParam]) {
+    if (
+      selectedRepository?.format === "conan" &&
+      !conanRevisionPages[artifactParam]
+    ) {
       if (revisionParam) setProtocolVersionFilter(revisionParam);
       void loadConanRevisions(artifactParam, revisionParam);
     }
-  }, [artifactParam, conanRevisionPages, items, loadConanRevisions, loadOciTags, ociTagPages, revisionParam, selectedRepository?.format]);
+  }, [
+    artifactParam,
+    conanRevisionPages,
+    items,
+    loadConanRevisions,
+    loadOciTags,
+    ociTagPages,
+    revisionParam,
+    selectedRepository?.format,
+  ]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -804,7 +1146,13 @@ export function PublicBrowsePage() {
                 {selectedRepository.name}
               </span>
               <FormatBadge format={selectedRepository.format} />
-              <Button type="link" size="small" icon={<ArrowLeftOutlined />} className="ml-auto" onClick={() => setParams({})}>
+              <Button
+                type="link"
+                size="small"
+                icon={<ArrowLeftOutlined />}
+                className="ml-auto"
+                onClick={() => setParams({})}
+              >
                 返回公开仓库
               </Button>
             </div>
@@ -817,7 +1165,13 @@ export function PublicBrowsePage() {
                 value={queryDraft}
                 onChange={(event) => setQueryDraft(event.target.value)}
               />
-              <Button type="primary" htmlType="submit" className="shrink-0 whitespace-nowrap">搜索</Button>
+              <Button
+                type="primary"
+                htmlType="submit"
+                className="shrink-0 whitespace-nowrap"
+              >
+                搜索
+              </Button>
             </form>
           )}
         </Card>
@@ -909,7 +1263,9 @@ export function PublicBrowsePage() {
                   <div className="text-xs text-zinc-500">
                     找到{" "}
                     <span className="font-medium text-zinc-300">
-                      {groupedItems?.length ?? groupedConanItems?.length ?? items.length}
+                      {groupedItems?.length ??
+                        groupedConanItems?.length ??
+                        items.length}
                     </span>{" "}
                     个制品
                     {(groupedItems || groupedConanItems) && (
@@ -998,7 +1354,9 @@ export function PublicBrowsePage() {
                               <Button
                                 type="text"
                                 size="small"
-                                icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                                icon={
+                                  expanded ? <UpOutlined /> : <DownOutlined />
+                                }
                                 onClick={() => {
                                   if (expanded) {
                                     setExpandedMavenGroup(null);
@@ -1006,7 +1364,9 @@ export function PublicBrowsePage() {
                                     return;
                                   }
                                   setExpandedMavenGroup(group.key);
-                                  setSelectedMavenVersion(mavenVersionKey(latest, 0));
+                                  setSelectedMavenVersion(
+                                    mavenVersionKey(latest, 0),
+                                  );
                                 }}
                               >
                                 {expanded ? "收起" : "选择版本"}
@@ -1029,17 +1389,23 @@ export function PublicBrowsePage() {
                                     </label>
                                     <SearchableVersionSelect
                                       value={selectedKey}
-                                      options={visibleVersions.map((version) => {
-                                        const index = group.versions.indexOf(version);
-                                        return {
-                                          value: mavenVersionKey(version, index),
-                                          label: `${version.coordinate.split(":").slice(2).join(":")}${
-                                            version.buildNumber
-                                              ? ` · SNAPSHOT #${version.buildNumber}`
-                                              : ""
-                                          }`,
-                                        };
-                                      })}
+                                      options={visibleVersions.map(
+                                        (version) => {
+                                          const index =
+                                            group.versions.indexOf(version);
+                                          return {
+                                            value: mavenVersionKey(
+                                              version,
+                                              index,
+                                            ),
+                                            label: `${version.coordinate.split(":").slice(2).join(":")}${
+                                              version.buildNumber
+                                                ? ` · SNAPSHOT #${version.buildNumber}`
+                                                : ""
+                                            }`,
+                                          };
+                                        },
+                                      )}
                                       onChange={(value) => {
                                         setSelectedMavenVersion(value);
                                         const version = group.versions.find(
@@ -1056,7 +1422,8 @@ export function PublicBrowsePage() {
                                       placeholder="搜索并选择 Maven 版本"
                                     />
                                     <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                                      在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。
+                                      在选择器中输入版本号或 SNAPSHOT
+                                      构建号即可定位，不会铺开全部版本。
                                     </p>
                                   </div>
                                   <div className="min-w-0">
@@ -1181,16 +1548,35 @@ export function PublicBrowsePage() {
                     copiedCoordinate={copiedCoordinate}
                     onExpand={(key, reference) => {
                       setExpandedConanGroup(key);
-                      setSelectedConanReferences((current) => ({ ...current, [key]: reference }));
+                      setSelectedConanReferences((current) => ({
+                        ...current,
+                        [key]: reference,
+                      }));
                     }}
                     onCollapse={() => setExpandedConanGroup(null)}
-                    onSelectReference={(key, reference) => setSelectedConanReferences((current) => ({ ...current, [key]: reference }))}
-                    onSelectRevision={(reference, revision) => setSelectedProtocolVersions((current) => ({ ...current, [reference]: revision }))}
+                    onSelectReference={(key, reference) =>
+                      setSelectedConanReferences((current) => ({
+                        ...current,
+                        [key]: reference,
+                      }))
+                    }
+                    onSelectRevision={(reference, revision) =>
+                      setSelectedProtocolVersions((current) => ({
+                        ...current,
+                        [reference]: revision,
+                      }))
+                    }
                     onFilterChange={setProtocolVersionFilter}
-                    onLoadRevisions={(reference, filter, pageToken) => void loadConanRevisions(reference, filter, pageToken)}
-                    onOpenArtifact={(reference, revision) => openArtifact(reference, undefined, undefined, revision)}
+                    onLoadRevisions={(reference, filter, pageToken) =>
+                      void loadConanRevisions(reference, filter, pageToken)
+                    }
+                    onOpenArtifact={(reference, revision) =>
+                      openArtifact(reference, undefined, undefined, revision)
+                    }
                     onClearArtifactParams={clearArtifactParams}
-                    artifactHref={(reference, revision) => artifactHref(reference, undefined, undefined, revision)}
+                    artifactHref={(reference, revision) =>
+                      artifactHref(reference, undefined, undefined, revision)
+                    }
                     onCopyCoordinate={(value) => void copyCoordinate(value)}
                     onCopyPageLink={(value) => void copyPageLink(value)}
                     onCopyUsage={(snippet) => void copyUsage(snippet)}
@@ -1217,7 +1603,7 @@ export function PublicBrowsePage() {
                     }
                     columns={
                       selectedRepository?.format === "oci"
-                        ? ["镜像", "已加载标签", "当前标签", "镜像摘要", ""]
+                        ? ["镜像", "已加载版本", "当前版本", "镜像摘要", ""]
                         : selectedRepository?.format === "conan"
                           ? [
                               "Conan reference",
@@ -1236,8 +1622,12 @@ export function PublicBrowsePage() {
                       const expanded =
                         expandedCoordinate === item.coordinate ||
                         artifactParam === item.coordinate;
-                      const ociPage = isOci ? ociTagPages[item.coordinate] : undefined;
-                      const conanPage = isConan ? conanRevisionPages[item.coordinate] : undefined;
+                      const ociPage = isOci
+                        ? ociTagPages[item.coordinate]
+                        : undefined;
+                      const conanPage = isConan
+                        ? conanRevisionPages[item.coordinate]
+                        : undefined;
                       const tags = isOci ? (ociPage?.items ?? []) : [];
                       const revisions = isConan ? (conanPage?.items ?? []) : [];
                       const protocolVersionsLoaded = isOci
@@ -1245,18 +1635,35 @@ export function PublicBrowsePage() {
                         : isConan
                           ? conanPage?.loaded === true
                           : true;
-                      const protocolVersionsLoading = isOci ? ociPage?.loading === true : isConan ? conanPage?.loading === true : false;
-                      const protocolVersionsError = isOci ? ociPage?.error : conanPage?.error;
-                      const nextProtocolPage = isOci ? ociPage?.nextCursor : conanPage?.nextPageToken;
+                      const protocolVersionsLoading = isOci
+                        ? ociPage?.loading === true
+                        : isConan
+                          ? conanPage?.loading === true
+                          : false;
+                      const protocolVersionsError = isOci
+                        ? ociPage?.error
+                        : conanPage?.error;
+                      const nextProtocolPage = isOci
+                        ? ociPage?.nextCursor
+                        : conanPage?.nextPageToken;
                       const protocolVersions: ProtocolVersion[] = isOci
-                        ? [...new Set(
-                            tagParam && artifactParam === item.coordinate && !tags.includes(tagParam)
-                              ? [...tags, tagParam]
-                              : tags,
-                          )].map((tag) => ({
+                        ? [
+                            ...new Set(
+                              tagParam &&
+                                artifactParam === item.coordinate &&
+                                !tags.includes(tagParam)
+                                ? [...tags, tagParam]
+                                : tags,
+                            ),
+                          ].map((tag) => ({
                             value: tag,
-                            label: tag,
+                            label: tag.startsWith("sha256:")
+                              ? `无标签 · ${shortDigest(tag)}`
+                              : tag,
                             searchText: tag,
+                            digest: tag.startsWith("sha256:")
+                              ? tag
+                              : undefined,
                           }))
                         : revisions.map((revision) => ({
                             value: revision.revision,
@@ -1295,14 +1702,19 @@ export function PublicBrowsePage() {
                           ? preferredProtocolVersion
                           : visibleProtocolVersions[0]?.value ||
                             preferredProtocolVersion;
-                      const selectedProtocolVersionItem =
-                        protocolVersions.find(
-                          (version) =>
-                            version.value === selectedProtocolVersionValue,
-                        );
+                      const selectedProtocolVersionItem = protocolVersions.find(
+                        (version) =>
+                          version.value === selectedProtocolVersionValue,
+                      );
                       const selectedTag = isOci
                         ? selectedProtocolVersionItem?.value
                         : undefined;
+                      const ociDetail =
+                        isOci && selectedTag
+                          ? ociManifestDetails[
+                              `${item.coordinate}\x00${selectedTag}`
+                            ]
+                          : undefined;
                       const selectedRevision = isConan
                         ? selectedProtocolVersionItem?.value
                         : undefined;
@@ -1335,13 +1747,14 @@ export function PublicBrowsePage() {
                             {isVersioned ? (
                               <>
                                 <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
-                                  {protocolVersionsLoading && !protocolVersionsLoaded
+                                  {protocolVersionsLoading &&
+                                  !protocolVersionsLoaded
                                     ? "读取中…"
                                     : !protocolVersionsLoaded
-                                    ? "展开后加载"
-                                    : protocolVersions.length > 0
-                                    ? `${protocolVersions.length}${nextProtocolPage ? "+" : ""} 个`
-                                    : "—"}
+                                      ? "展开后加载"
+                                      : protocolVersions.length > 0
+                                        ? `${protocolVersions.length}${nextProtocolPage ? "+" : ""} 个`
+                                        : "—"}
                                 </td>
                                 <td
                                   className="hidden max-w-[220px] px-4 py-3 font-mono text-xs text-zinc-500 sm:table-cell"
@@ -1352,20 +1765,23 @@ export function PublicBrowsePage() {
                                   }
                                 >
                                   <div className="truncate">
-                                    {protocolVersionsLoading && !protocolVersionsLoaded
+                                    {protocolVersionsLoading &&
+                                    !protocolVersionsLoaded
                                       ? "读取中…"
                                       : !protocolVersionsLoaded
-                                      ? "—"
-                                      : protocolVersions.length > 0
-                                        ? isOci
-                                        ? selectedProtocolVersionItem?.label
-                                        : protocolVersions[0]?.value
-                                      : "—"}
+                                        ? "—"
+                                        : protocolVersions.length > 0
+                                          ? isOci
+                                            ? selectedProtocolVersionItem?.label
+                                            : protocolVersions[0]?.value
+                                          : "—"}
                                   </div>
                                 </td>
                                 <td className="hidden px-4 py-3 font-mono text-xs text-zinc-500 sm:table-cell">
                                   {shortDigest(
-                                    protocolVersions[0]?.digest ?? item.digest,
+                                    ociDetail?.digest ??
+                                      protocolVersions[0]?.digest ??
+                                      item.digest,
                                   )}
                                 </td>
                               </>
@@ -1388,7 +1804,9 @@ export function PublicBrowsePage() {
                               <Button
                                 type="text"
                                 size="small"
-                                icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                                icon={
+                                  expanded ? <UpOutlined /> : <DownOutlined />
+                                }
                                 title={
                                   isVersioned ? "选择版本" : "查看使用方式"
                                 }
@@ -1401,8 +1819,10 @@ export function PublicBrowsePage() {
                                     }
                                     setExpandedCoordinate(item.coordinate);
                                     setProtocolVersionFilter("");
-                                    if (isOci && !ociPage) void loadOciTags(item.coordinate);
-                                    if (isConan && !conanPage) void loadConanRevisions(item.coordinate);
+                                    if (isOci && !ociPage)
+                                      void loadOciTags(item.coordinate);
+                                    if (isConan && !conanPage)
+                                      void loadConanRevisions(item.coordinate);
                                     if (selectedProtocolVersionValue) {
                                       setSelectedProtocolVersions(
                                         (current) => ({
@@ -1430,22 +1850,36 @@ export function PublicBrowsePage() {
                                     ? selectedProtocolHref
                                     : artifactHref(item.coordinate)
                                 }
-                                className={isVersioned ? "hidden sm:inline-flex" : ""}
+                                className={
+                                  isVersioned ? "hidden sm:inline-flex" : ""
+                                }
                               >
                                 {isVersioned && selectedProtocolVersionItem
                                   ? "打开版本"
                                   : "打开"}
                               </Button>
-                              <Tooltip title={copiedCoordinate === item.coordinate ? "已复制" : "复制制品坐标"}>
-                                <Button
-                                type="text"
-                                size="small"
-                                aria-label={`复制 ${item.coordinate}`}
-                                onClick={() =>
-                                  void copyCoordinate(item.coordinate)
+                              <Tooltip
+                                title={
+                                  copiedCoordinate === item.coordinate
+                                    ? "已复制"
+                                    : "复制制品坐标"
                                 }
-                                icon={copiedCoordinate === item.coordinate ? <CheckOutlined /> : <CopyOutlined />}
-                              />
+                              >
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  aria-label={`复制 ${item.coordinate}`}
+                                  onClick={() =>
+                                    void copyCoordinate(item.coordinate)
+                                  }
+                                  icon={
+                                    copiedCoordinate === item.coordinate ? (
+                                      <CheckOutlined />
+                                    ) : (
+                                      <CopyOutlined />
+                                    )
+                                  }
+                                />
                               </Tooltip>
                             </td>
                           </tr>
@@ -1459,7 +1893,9 @@ export function PublicBrowsePage() {
                                   <div>
                                     <div className="flex items-center justify-between gap-3">
                                       <label className="block text-[11px] font-medium text-zinc-500">
-                                        {isOci ? "选择镜像标签" : "搜索 recipe revision"}
+                                        {isOci
+                                          ? "选择镜像版本"
+                                          : "搜索 recipe revision"}
                                       </label>
                                       <span className="text-[11px] text-zinc-600">
                                         已加载 {protocolVersions.length}
@@ -1471,12 +1907,26 @@ export function PublicBrowsePage() {
                                           className="min-w-0 flex-1 font-mono text-xs"
                                           placeholder="输入 revision 或 digest"
                                           value={protocolVersionFilter}
-                                          onChange={(event) => setProtocolVersionFilter(event.target.value)}
-                                          onPressEnter={() => void loadConanRevisions(item.coordinate, protocolVersionFilter)}
+                                          onChange={(event) =>
+                                            setProtocolVersionFilter(
+                                              event.target.value,
+                                            )
+                                          }
+                                          onPressEnter={() =>
+                                            void loadConanRevisions(
+                                              item.coordinate,
+                                              protocolVersionFilter,
+                                            )
+                                          }
                                         />
                                         <Button
                                           loading={protocolVersionsLoading}
-                                          onClick={() => void loadConanRevisions(item.coordinate, protocolVersionFilter)}
+                                          onClick={() =>
+                                            void loadConanRevisions(
+                                              item.coordinate,
+                                              protocolVersionFilter,
+                                            )
+                                          }
                                         >
                                           搜索
                                         </Button>
@@ -1489,32 +1939,46 @@ export function PublicBrowsePage() {
                                           type="link"
                                           size="small"
                                           icon={<ReloadOutlined />}
-                                          onClick={() => isOci ? void loadOciTags(item.coordinate) : void loadConanRevisions(item.coordinate, protocolVersionFilter)}
+                                          onClick={() =>
+                                            isOci
+                                              ? void loadOciTags(
+                                                  item.coordinate,
+                                                )
+                                              : void loadConanRevisions(
+                                                  item.coordinate,
+                                                  protocolVersionFilter,
+                                                )
+                                          }
                                         >
                                           重试
                                         </Button>
                                       </div>
                                     )}
-                                    <label className={`${isConan ? "mt-3 " : "mt-1.5 "}mb-1.5 block text-[11px] font-medium text-zinc-500`}>
+                                    <label
+                                      className={`${isConan ? "mt-3 " : "mt-1.5 "}mb-1.5 block text-[11px] font-medium text-zinc-500`}
+                                    >
                                       选择版本
                                     </label>
                                     <SearchableVersionSelect
                                       value={selectedProtocolVersionValue}
-                                      options={visibleProtocolVersions.map((version) => ({
-                                        value: version.value,
-                                        label: `${version.label}${
-                                          isConan && version.digest
-                                            ? ` · ${shortDigest(version.digest)}`
-                                            : ""
-                                        }`,
-                                      }))}
+                                      options={visibleProtocolVersions.map(
+                                        (version) => ({
+                                          value: version.value,
+                                          label: `${version.label}${
+                                            isConan && version.digest
+                                              ? ` · ${shortDigest(version.digest)}`
+                                              : ""
+                                          }`,
+                                        }),
+                                      )}
                                       loading={protocolVersionsLoading}
                                       notFoundContent={
-                                        protocolVersionsLoading && visibleProtocolVersions.length === 0
+                                        protocolVersionsLoading &&
+                                        visibleProtocolVersions.length === 0
                                           ? "正在读取版本…"
                                           : "没有匹配版本"
                                       }
-                                      placeholder={`搜索并选择${isOci ? "镜像标签" : " recipe revision"}`}
+                                      placeholder={`搜索并选择${isOci ? "镜像版本" : " recipe revision"}`}
                                       onChange={(value) => {
                                         setSelectedProtocolVersions(
                                           (current) => ({
@@ -1522,6 +1986,14 @@ export function PublicBrowsePage() {
                                             [item.coordinate]: value,
                                           }),
                                         );
+                                        if (
+                                          selectedRepository?.format === "oci"
+                                        ) {
+                                          void loadOciManifest(
+                                            item.coordinate,
+                                            value,
+                                          );
+                                        }
                                         const version = protocolVersions.find(
                                           (entry) => entry.value === value,
                                         );
@@ -1530,9 +2002,7 @@ export function PublicBrowsePage() {
                                             item.coordinate,
                                             undefined,
                                             isOci ? version.value : undefined,
-                                            isConan
-                                              ? version.value
-                                              : undefined,
+                                            isConan ? version.value : undefined,
                                           );
                                         }
                                       }}
@@ -1542,16 +2012,29 @@ export function PublicBrowsePage() {
                                         block
                                         size="small"
                                         loading={protocolVersionsLoading}
-                                        onClick={() => isOci
-                                          ? void loadOciTags(item.coordinate, nextProtocolPage)
-                                          : void loadConanRevisions(item.coordinate, conanPage?.query ?? protocolVersionFilter, nextProtocolPage)}
+                                        onClick={() =>
+                                          isOci
+                                            ? void loadOciTags(
+                                                item.coordinate,
+                                                nextProtocolPage,
+                                              )
+                                            : void loadConanRevisions(
+                                                item.coordinate,
+                                                conanPage?.query ??
+                                                  protocolVersionFilter,
+                                                nextProtocolPage,
+                                              )
+                                        }
                                         className="mt-2"
                                       >
-                                        {protocolVersionsLoading ? "加载中…" : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
+                                        {protocolVersionsLoading
+                                          ? "加载中…"
+                                          : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
                                       </Button>
                                     )}
                                     <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                                      每次最多读取 {VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。
+                                      每次最多读取 {VERSION_PAGE_SIZE}{" "}
+                                      个版本；选择后可查看详情与使用方式。
                                     </p>
                                   </div>
                                   <div className="min-w-0">
@@ -1591,13 +2074,19 @@ export function PublicBrowsePage() {
                                         </div>
                                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
                                           <MetadataItem
-                                            label={isOci ? "镜像" : "Conan reference"}
+                                            label={
+                                              isOci ? "镜像" : "Conan reference"
+                                            }
                                             value={item.coordinate}
                                             mono
                                           />
                                           <MetadataItem
-                                            label={isOci ? "标签" : "Recipe revision"}
-                                            value={selectedProtocolVersionItem.value}
+                                            label={
+                                              isOci ? "版本" : "Recipe revision"
+                                            }
+                                            value={
+                                              selectedProtocolVersionItem.value
+                                            }
                                             mono
                                           />
                                           <MetadataItem
@@ -1607,30 +2096,70 @@ export function PublicBrowsePage() {
                                                 ? formatDate(
                                                     selectedProtocolVersionItem.createdAt,
                                                   )
-                                                : formatDate(item.createdAt)
+                                                : ociDetail?.loading
+                                                  ? "读取中…"
+                                                  : formatDate(
+                                                      ociDetail?.createdAt ??
+                                                        item.createdAt,
+                                                    )
                                             }
                                           />
                                           <MetadataItem
                                             label="发布者"
-                                            value={item.publisher ?? "未记录"}
+                                            value={
+                                              isOci
+                                                ? (ociDetail?.publisher ??
+                                                  item.publisher ??
+                                                  "未记录")
+                                                : (item.publisher ?? "未记录")
+                                            }
                                             mono
                                           />
                                           <MetadataItem
                                             label="校验摘要"
                                             value={
-                                              selectedProtocolVersionItem.digest ??
-                                              item.digest ??
-                                              "未记录"
+                                              ociDetail?.loading
+                                                ? "读取中…"
+                                                : (ociDetail?.digest ??
+                                                  selectedProtocolVersionItem.digest ??
+                                                  item.digest ??
+                                                  "未记录")
                                             }
                                             mono
                                           />
                                           {isOci && (
                                             <MetadataItem
                                               label="镜像大小"
-                                              value={formatBytes(item.size)}
+                                              value={
+                                                ociDetail?.loading
+                                                  ? "读取中…"
+                                                  : formatBytes(
+                                                      ociDetail?.size ??
+                                                        item.size,
+                                                    )
+                                              }
                                             />
                                           )}
                                         </div>
+                                        {isOci && ociDetail?.error && (
+                                          <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-300">
+                                            <span>{ociDetail.error}</span>
+                                            <Button
+                                              type="link"
+                                              size="small"
+                                              icon={<ReloadOutlined />}
+                                              onClick={() =>
+                                                selectedTag &&
+                                                void loadOciManifest(
+                                                  item.coordinate,
+                                                  selectedTag,
+                                                )
+                                              }
+                                            >
+                                              重试
+                                            </Button>
+                                          </div>
+                                        )}
                                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                           {snippets.map((snippet) => (
                                             <UsageSnippetBlock
@@ -1650,7 +2179,7 @@ export function PublicBrowsePage() {
                                     ) : (
                                       <div className="rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
                                         {isOci
-                                          ? "标签加载完成后，可在左侧搜索并选择一个版本。"
+                                          ? "版本加载完成后，可在左侧搜索并选择一个版本。"
                                           : "Recipe revisions 加载完成后，可在左侧搜索并选择一个版本。"}
                                       </div>
                                     )}

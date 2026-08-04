@@ -75,6 +75,8 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/repositories/{repositoryId}/oci/images":
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
+  "/repositories/{repositoryId}/oci/manifests":
+    "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_manifests"
   "/repositories/{repositoryId}/maven/coordinates":
     "$ref": "./management/maven.yaml#/repositories_repositoryId_maven_coordinates"
   "/repositories/{repositoryId}/conan/references":
