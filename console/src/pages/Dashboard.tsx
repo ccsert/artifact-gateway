@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DatabaseOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { Button, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
 import {
   listRepositories,
@@ -9,7 +10,7 @@ import {
   getRepositoryCapacity,
 } from "../client";
 import type { Repository, Group, AuditRecord } from "../client";
-import { PageHeader, Card, CardHeader, DataTable } from "../components/Layout";
+import { PageHeader, Card, CardHeader } from "../components/Layout";
 import { Loading, ErrorBanner, isNotFound } from "../components/Feedback";
 import { FormatBadge, StateBadge } from "../components/Badge";
 import { Donut } from "../components/Donut";
@@ -117,6 +118,88 @@ export function DashboardPage() {
   const active = repos.filter((r) => r.state === "active").length;
   const inactive = repos.length - active;
   const healthTone = inactive > 0 ? "text-amber-300" : "text-emerald-300";
+  const repositoryColumns: ColumnsType<Repository> = [
+    {
+      title: "名称",
+      dataIndex: "name",
+      key: "name",
+      render: (value: string, repository) => (
+        <Link
+          to={`/repositories/${repository.id}`}
+          className="font-medium text-zinc-100 hover:text-cyan-300"
+        >
+          {value}
+        </Link>
+      ),
+    },
+    {
+      title: "格式",
+      dataIndex: "format",
+      key: "format",
+      width: 100,
+      render: (value: Repository["format"]) => <FormatBadge format={value} />,
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 120,
+      render: (value: string) => <StateBadge state={value} />,
+    },
+    {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 130,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500" title={value}>
+          {value.slice(0, 8)}…
+        </span>
+      ),
+    },
+  ];
+  const auditColumns: ColumnsType<AuditRecord> = [
+    {
+      title: "时间",
+      dataIndex: "occurredAt",
+      key: "occurredAt",
+      width: 180,
+      render: (value: string) => (
+        <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "操作",
+      dataIndex: "operation",
+      key: "operation",
+      width: 140,
+      render: (value: string | undefined) => (
+        <span className="text-xs text-zinc-300">{value ?? "—"}</span>
+      ),
+    },
+    {
+      title: "结果",
+      dataIndex: "outcome",
+      key: "outcome",
+      width: 120,
+      render: (value: string) => <StateBadge state={value} />,
+    },
+    {
+      title: "Actor",
+      dataIndex: "actor",
+      key: "actor",
+      render: (value: string | undefined) => (
+        <span
+          className="block max-w-32 truncate text-xs text-zinc-500"
+          title={value}
+        >
+          {value ?? "—"}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -278,39 +361,16 @@ export function DashboardPage() {
               </Link>
             }
           />
-          <DataTable columns={["名称", "格式", "状态", "ID"]}>
-            {repos.slice(0, 6).map((r) => (
-              <tr key={r.id} className="hover:bg-zinc-800/30">
-                <td className="px-4 py-2.5">
-                  <Link
-                    to={`/repositories/${r.id}`}
-                    className="font-medium text-zinc-100 hover:text-cyan-300"
-                  >
-                    {r.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2.5">
-                  <FormatBadge format={r.format} />
-                </td>
-                <td className="px-4 py-2.5">
-                  <StateBadge state={r.state} />
-                </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                  {r.id.slice(0, 8)}…
-                </td>
-              </tr>
-            ))}
-            {repos.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-4 py-8 text-center text-sm text-zinc-500"
-                >
-                  暂无仓库
-                </td>
-              </tr>
-            )}
-          </DataTable>
+          <Table<Repository>
+            className="ag-console-table"
+            rowKey="id"
+            size="middle"
+            dataSource={repos.slice(0, 6)}
+            columns={repositoryColumns}
+            pagination={false}
+            locale={{ emptyText: "暂无仓库" }}
+            scroll={{ x: 520 }}
+          />
         </Card>
 
         <Card>
@@ -325,43 +385,18 @@ export function DashboardPage() {
               </Link>
             }
           />
-          <DataTable columns={["时间", "操作", "结果", "Actor"]}>
-            {audits.map((a, i) => (
-              <tr
-                key={`${a.requestId ?? "audit"}-${i}`}
-                className="hover:bg-zinc-800/30"
-              >
-                <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
-                  {formatDate(a.occurredAt)}
-                </td>
-                <td
-                  className="max-w-48 truncate px-4 py-2.5 text-zinc-300"
-                  title={a.operation}
-                >
-                  {a.operation ?? "—"}
-                </td>
-                <td className="px-4 py-2.5">
-                  <StateBadge state={a.outcome} />
-                </td>
-                <td
-                  className="max-w-32 truncate px-4 py-2.5 text-xs text-zinc-500"
-                  title={a.actor}
-                >
-                  {a.actor ?? "—"}
-                </td>
-              </tr>
-            ))}
-            {audits.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-4 py-8 text-center text-sm text-zinc-500"
-                >
-                  暂无审计记录
-                </td>
-              </tr>
-            )}
-          </DataTable>
+          <Table<AuditRecord>
+            className="ag-console-table"
+            rowKey={(record, index) =>
+              `${record.requestId ?? "audit"}-${index}`
+            }
+            size="middle"
+            dataSource={audits}
+            columns={auditColumns}
+            pagination={false}
+            locale={{ emptyText: "暂无审计记录" }}
+            scroll={{ x: 520 }}
+          />
         </Card>
       </div>
     </div>
