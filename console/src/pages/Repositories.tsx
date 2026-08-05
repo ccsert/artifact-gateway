@@ -5,7 +5,8 @@ import {
   PlusOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Segmented, Select, Space } from "antd";
+import { Button, Input, Segmented, Select, Space, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import {
   listRepositories,
@@ -14,13 +15,7 @@ import {
   getRepositoryCapacity,
 } from "../client";
 import type { Repository, Format } from "../client";
-import {
-  PageHeader,
-  Card,
-  DataTable,
-  Pagination,
-  Field,
-} from "../components/Layout";
+import { PageHeader, Card, Pagination, Field } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
@@ -318,6 +313,120 @@ export function RepositoriesPage() {
     (sum, value) => sum + value.usedBytes,
     0,
   );
+  const columns: ColumnsType<Repository> = [
+    {
+      title: "名称",
+      dataIndex: "name",
+      key: "name",
+      fixed: "left",
+      width: 190,
+      render: (name: string, repository) => (
+        <Link
+          to={`/repositories/${repository.id}`}
+          className="font-medium text-zinc-100 hover:text-cyan-300"
+        >
+          {name}
+        </Link>
+      ),
+    },
+    {
+      title: "类型",
+      dataIndex: "type",
+      key: "type",
+      width: 105,
+      render: (type: Repository["type"]) => (
+        <Badge tone={type === "proxy" ? "amber" : "cyan"}>
+          {type === "proxy" ? "proxy" : "hosted"}
+        </Badge>
+      ),
+    },
+    {
+      title: "格式",
+      dataIndex: "format",
+      key: "format",
+      width: 105,
+      render: (format: Repository["format"]) => <FormatBadge format={format} />,
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 120,
+      render: (state: Repository["state"]) => <StateBadge state={state} />,
+    },
+    {
+      title: "容量",
+      key: "capacity",
+      width: 140,
+      render: (_value, repository) => {
+        const capacity = capacities[repository.id];
+        return capacity ? (
+          <div>
+            <div className="font-mono text-xs text-zinc-300">
+              {formatBytes(capacity.usedBytes)}
+            </div>
+            {capacity.quotaBytes > 0 && (
+              <div className="mt-1 text-[10px] text-zinc-600">
+                / {formatBytes(capacity.quotaBytes)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-zinc-600">—</span>
+        );
+      },
+    },
+    {
+      title: "配置",
+      key: "configuration",
+      width: 230,
+      ellipsis: true,
+      render: (_value, repository) => (
+        <span
+          className="font-mono text-xs text-zinc-500"
+          title={
+            repository.type === "proxy"
+              ? repository.endpoint
+              : `v${repository.version}`
+          }
+        >
+          {repository.type === "proxy"
+            ? repository.endpoint
+            : `v${repository.version}`}
+        </span>
+      ),
+    },
+    {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 145,
+      render: (id: string) => (
+        <CopyableValue
+          value={id}
+          label={`${id.slice(0, 8)}…`}
+          className="text-xs text-zinc-500"
+        />
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 82,
+      align: "right",
+      render: (_value, repository) => (
+        <Button
+          type="text"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          aria-label={`删除 ${repository.name}`}
+          onClick={() => setToDelete(repository)}
+        />
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -414,85 +523,15 @@ export function RepositoriesPage() {
               hint="调整筛选条件，或继续加载更多仓库"
             />
           ) : (
-            <DataTable
-              columns={[
-                "名称",
-                "类型",
-                "格式",
-                "状态",
-                "容量",
-                "配置",
-                "ID",
-                "",
-              ]}
-            >
-              {visible.map((r) => {
-                const isProxy = r.type === "proxy";
-                return (
-                  <tr key={r.id} className="group hover:bg-zinc-800/30">
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/repositories/${r.id}`}
-                        className="font-medium text-zinc-100 hover:text-cyan-300"
-                      >
-                        {r.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={isProxy ? "amber" : "cyan"}>
-                        {isProxy ? "proxy" : "hosted"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <FormatBadge format={r.format} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StateBadge state={r.state} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {capacities[r.id] ? (
-                        <div>
-                          <div className="font-mono text-xs text-zinc-300">
-                            {formatBytes(capacities[r.id].usedBytes)}
-                          </div>
-                          {capacities[r.id].quotaBytes > 0 && (
-                            <div className="mt-1 text-[10px] text-zinc-600">
-                              / {formatBytes(capacities[r.id].quotaBytes)}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td
-                      className="max-w-48 truncate px-4 py-3 font-mono text-xs text-zinc-500"
-                      title={isProxy ? r.endpoint : `v${r.version}`}
-                    >
-                      {isProxy ? r.endpoint : `v${r.version}`}
-                    </td>
-                    <td className="px-4 py-3" title={r.id}>
-                      <CopyableValue
-                        value={r.id}
-                        label={`${r.id.slice(0, 8)}…`}
-                        className="text-xs text-zinc-500"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => setToDelete(r)}
-                      >
-                        删除
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </DataTable>
+            <Table<Repository>
+              className="ag-console-table"
+              rowKey="id"
+              size="middle"
+              dataSource={visible}
+              columns={columns}
+              pagination={false}
+              scroll={{ x: 1100 }}
+            />
           )}
           <Pagination
             hasMore={!!nextToken}

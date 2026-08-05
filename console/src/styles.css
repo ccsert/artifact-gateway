@@ -57,6 +57,30 @@ body {
   background: rgb(24 24 27 / 0.42);
 }
 
+.ag-console-table .ant-table,
+.ag-console-table .ant-table-container,
+.ag-console-table .ant-table-content {
+  background: transparent;
+}
+
+.ag-console-table .ant-table-thead > tr > th {
+  background: transparent;
+  color: rgb(113 113 122);
+  border-bottom-color: rgb(39 39 42 / 0.8);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.ag-console-table .ant-table-tbody > tr > td {
+  background: transparent;
+  border-bottom-color: rgb(39 39 42 / 0.6);
+}
+
+.ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: rgb(39 39 42 / 0.3);
+}
+
 @media (max-width: 900px) {
   .ag-metric-strip {
     grid-template-columns: 1fr;
