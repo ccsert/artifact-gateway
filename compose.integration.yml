@@ -27,7 +27,7 @@ services:
       - ./scripts/run-migrations.sh:/usr/local/bin/run-migrations:ro
 
   test:
-    image: golang:1.26-alpine
+    image: golang:1.26.5-alpine
     depends_on:
       migrate:
         condition: service_completed_successfully

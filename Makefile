@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-GO_IMAGE := golang:1.26-alpine
+GO_IMAGE := golang:1.26.5-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
