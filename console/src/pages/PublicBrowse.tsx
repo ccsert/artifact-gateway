@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   ArrowLeftOutlined,
@@ -18,7 +18,7 @@ import {
   searchRepositoryArtifacts,
 } from "../client";
 import type { ArtifactSummary } from "../client";
-import { Card, DataTable } from "../components/Layout";
+import { Card } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
@@ -178,6 +178,25 @@ type ProtocolVersion = {
   createdAt?: string;
   digest?: string;
 };
+
+interface PublicArtifactTableRow {
+  key: string;
+  item: ArtifactSummary;
+  isOci: boolean;
+  expanded: boolean;
+  page?: OciTagPage;
+  protocolVersions: ProtocolVersion[];
+  protocolVersionsLoaded: boolean;
+  protocolVersionsLoading: boolean;
+  protocolVersionsError?: string;
+  nextProtocolPage?: string;
+  selectedProtocolVersionValue: string;
+  selectedProtocolVersionItem?: ProtocolVersion;
+  selectedTag?: string;
+  ociDetail?: OciManifestDetail;
+  selectedProtocolHref: string;
+  snippets: UsageSnippet[];
+}
 
 interface MavenArtifactGroup {
   key: string;
@@ -1404,6 +1423,470 @@ export function PublicBrowsePage() {
           ? "注册 Conan remote"
           : "注册 Raw 源地址";
 
+  const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
+    (item, index) => {
+      const isOci = selectedRepository?.format === "oci";
+      const expanded =
+        expandedCoordinate === item.coordinate ||
+        artifactParam === item.coordinate;
+      const page = isOci ? ociTagPages[item.coordinate] : undefined;
+      const tags = isOci ? (page?.items ?? []) : [];
+      const protocolVersions: ProtocolVersion[] = isOci
+        ? [
+            ...new Set(
+              tagParam &&
+                artifactParam === item.coordinate &&
+                !tags.includes(tagParam)
+                ? [...tags, tagParam]
+                : tags,
+            ),
+          ].map((tag) => ({
+            value: tag,
+            label: tag.startsWith("sha256:")
+              ? `无标签 · ${shortDigest(tag)}`
+              : tag,
+            searchText: tag,
+            digest: tag.startsWith("sha256:") ? tag : undefined,
+          }))
+        : [];
+      const protocolVersionsLoaded = isOci ? page?.loaded === true : true;
+      const protocolVersionsLoading = isOci ? page?.loading === true : false;
+      const protocolVersionsError = isOci ? page?.error : undefined;
+      const nextProtocolPage = isOci ? page?.nextCursor : undefined;
+      const preferredProtocolVersion =
+        (selectedProtocolVersions[item.coordinate] &&
+          protocolVersions.some(
+            (version) =>
+              version.value === selectedProtocolVersions[item.coordinate],
+          ) &&
+          selectedProtocolVersions[item.coordinate]) ||
+        (tagParam &&
+          artifactParam === item.coordinate &&
+          protocolVersions.some((version) => version.value === tagParam) &&
+          tagParam) ||
+        protocolVersions[0]?.value ||
+        "";
+      const selectedProtocolVersionValue = protocolVersions.some(
+        (version) => version.value === preferredProtocolVersion,
+      )
+        ? preferredProtocolVersion
+        : protocolVersions[0]?.value || preferredProtocolVersion;
+      const selectedProtocolVersionItem = protocolVersions.find(
+        (version) => version.value === selectedProtocolVersionValue,
+      );
+      const selectedTag = isOci
+        ? selectedProtocolVersionItem?.value
+        : undefined;
+      const ociDetail =
+        isOci && selectedTag
+          ? ociManifestDetails[`${item.coordinate}\x00${selectedTag}`]
+          : undefined;
+      return {
+        key: `${item.coordinate}-${index}`,
+        item,
+        isOci,
+        expanded,
+        page,
+        protocolVersions,
+        protocolVersionsLoaded,
+        protocolVersionsLoading,
+        protocolVersionsError,
+        nextProtocolPage,
+        selectedProtocolVersionValue,
+        selectedProtocolVersionItem,
+        selectedTag,
+        ociDetail,
+        selectedProtocolHref: artifactHref(
+          item.coordinate,
+          undefined,
+          selectedTag,
+        ),
+        snippets: selectedRepository
+          ? usageFor(
+              selectedRepository.format,
+              selectedRepository.name,
+              item.coordinate,
+              selectedTag,
+            )
+          : [],
+      };
+    },
+  );
+
+  const toggleArtifactRow = (row: PublicArtifactTableRow) => {
+    if (row.expanded) {
+      setExpandedCoordinate(null);
+      clearArtifactParams();
+      return;
+    }
+    setExpandedCoordinate(row.item.coordinate);
+    setProtocolVersionFilter("");
+    if (row.isOci && !row.page) void loadOciTags(row.item.coordinate);
+    if (row.selectedProtocolVersionValue) {
+      setSelectedProtocolVersions((current) => ({
+        ...current,
+        [row.item.coordinate]: row.selectedProtocolVersionValue,
+      }));
+    }
+  };
+
+  const artifactColumns: ColumnsType<PublicArtifactTableRow> = [
+    {
+      title: selectedRepository?.format === "oci" ? "镜像" : "制品坐标",
+      key: "coordinate",
+      width: 320,
+      render: (_, row) => (
+        <span
+          className="block max-w-md truncate font-mono text-xs text-zinc-100"
+          title={row.item.coordinate}
+        >
+          {row.item.coordinate}
+        </span>
+      ),
+    },
+    ...(selectedRepository?.format === "oci"
+      ? [
+          {
+            title: "已加载版本",
+            key: "loadedVersions",
+            width: 130,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="whitespace-nowrap text-xs text-zinc-500">
+                {row.protocolVersionsLoading && !row.protocolVersionsLoaded
+                  ? "读取中…"
+                  : !row.protocolVersionsLoaded
+                    ? "展开后加载"
+                    : row.protocolVersions.length > 0
+                      ? `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""} 个`
+                      : "—"}
+              </span>
+            ),
+          },
+          {
+            title: "当前版本",
+            key: "selectedVersion",
+            width: 190,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="block max-w-[180px] truncate font-mono text-xs text-zinc-500">
+                {row.protocolVersionsLoading && !row.protocolVersionsLoaded
+                  ? "读取中…"
+                  : !row.protocolVersionsLoaded
+                    ? "—"
+                    : (row.selectedProtocolVersionItem?.label ?? "—")}
+              </span>
+            ),
+          },
+          {
+            title: "镜像摘要",
+            key: "digest",
+            width: 160,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="font-mono text-xs text-zinc-500">
+                {shortDigest(
+                  row.ociDetail?.digest ??
+                    row.selectedProtocolVersionItem?.digest ??
+                    row.item.digest,
+                )}
+              </span>
+            ),
+          },
+        ]
+      : [
+          {
+            title: "摘要",
+            key: "digest",
+            width: 180,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="font-mono text-xs text-zinc-500">
+                {shortDigest(row.item.digest)}
+              </span>
+            ),
+          },
+          {
+            title: "大小",
+            key: "size",
+            width: 120,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="text-xs text-zinc-400">
+                {formatBytes(row.item.size)}
+              </span>
+            ),
+          },
+          {
+            title: "创建时间",
+            key: "createdAt",
+            width: 180,
+            render: (_: unknown, row: PublicArtifactTableRow) => (
+              <span className="whitespace-nowrap text-xs text-zinc-500">
+                {formatDate(row.item.createdAt)}
+              </span>
+            ),
+          },
+        ]),
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 230,
+      render: (_, row) => (
+        <div className="whitespace-nowrap text-right">
+          <Button
+            type="text"
+            size="small"
+            icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
+            onClick={() => toggleArtifactRow(row)}
+          >
+            {row.expanded ? "收起" : row.isOci ? "选择版本" : "使用方式"}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<LinkOutlined />}
+            href={
+              row.isOci
+                ? row.selectedProtocolHref
+                : artifactHref(row.item.coordinate)
+            }
+          >
+            {row.isOci && row.selectedProtocolVersionItem ? "打开版本" : "打开"}
+          </Button>
+          <Tooltip
+            title={
+              copiedCoordinate === row.item.coordinate
+                ? "已复制"
+                : "复制制品坐标"
+            }
+          >
+            <Button
+              type="text"
+              size="small"
+              aria-label={`复制 ${row.item.coordinate}`}
+              onClick={() => void copyCoordinate(row.item.coordinate)}
+              icon={
+                copiedCoordinate === row.item.coordinate ? (
+                  <CheckOutlined />
+                ) : (
+                  <CopyOutlined />
+                )
+              }
+            />
+          </Tooltip>
+        </div>
+      ),
+    },
+  ];
+
+  const expandedArtifactRowRender = (row: PublicArtifactTableRow) => {
+    if (!row.isOci) {
+      return (
+        <div className="px-2 py-1">
+          <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-zinc-800/80 pb-4 text-xs sm:grid-cols-4">
+            <MetadataItem
+              label="仓库"
+              value={selectedRepository?.name ?? "—"}
+              mono
+            />
+            <MetadataItem label="制品坐标" value={row.item.coordinate} mono />
+            <MetadataItem
+              label="发布时间"
+              value={formatDate(row.item.createdAt)}
+            />
+            <MetadataItem
+              label="发布者"
+              value={row.item.publisher ?? "未记录"}
+              mono
+            />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {row.snippets.map((snippet) => (
+              <UsageSnippetBlock
+                key={snippet.label}
+                snippet={snippet}
+                copied={copiedCoordinate === snippet.code}
+                onCopy={() => void copyUsage(snippet)}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="block text-[11px] font-medium text-zinc-500">
+              选择镜像版本
+            </label>
+            <span className="text-[11px] text-zinc-600">
+              已加载 {row.protocolVersions.length}
+            </span>
+          </div>
+          {row.protocolVersionsError && (
+            <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-rose-300">
+              <span>{row.protocolVersionsError}</span>
+              <Button
+                type="link"
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() => void loadOciTags(row.item.coordinate)}
+              >
+                重试
+              </Button>
+            </div>
+          )}
+          <SearchableVersionSelect
+            className="mt-1.5"
+            value={row.selectedProtocolVersionValue}
+            options={row.protocolVersions.map((version) => ({
+              value: version.value,
+              label: version.label,
+            }))}
+            loading={row.protocolVersionsLoading}
+            notFoundContent={
+              row.protocolVersionsLoading && row.protocolVersions.length === 0
+                ? "正在读取版本…"
+                : "没有匹配版本"
+            }
+            placeholder="搜索并选择镜像版本"
+            onChange={(value) => {
+              setSelectedProtocolVersions((current) => ({
+                ...current,
+                [row.item.coordinate]: value,
+              }));
+              void loadOciManifest(row.item.coordinate, value);
+              openArtifact(row.item.coordinate, undefined, value);
+            }}
+          />
+          {row.nextProtocolPage && (
+            <Button
+              block
+              size="small"
+              loading={row.protocolVersionsLoading}
+              onClick={() =>
+                void loadOciTags(row.item.coordinate, row.nextProtocolPage)
+              }
+              className="mt-2"
+            >
+              {row.protocolVersionsLoading
+                ? "加载中…"
+                : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
+            </Button>
+          )}
+          <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+            每次最多读取 {VERSION_PAGE_SIZE}{" "}
+            个版本；选择后可查看详情与使用方式。
+          </p>
+        </div>
+        <div className="min-w-0">
+          {row.selectedProtocolVersionItem ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-zinc-100">
+                  {row.item.coordinate}
+                </span>
+                <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300">
+                  {row.selectedProtocolVersionItem.label}
+                </span>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<LinkOutlined />}
+                  href={row.selectedProtocolHref}
+                >
+                  打开版本页
+                </Button>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => void copyPageLink(row.selectedProtocolHref)}
+                >
+                  {copiedCoordinate === row.selectedProtocolHref
+                    ? "链接已复制"
+                    : "复制链接"}
+                </Button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+                <MetadataItem label="镜像" value={row.item.coordinate} mono />
+                <MetadataItem
+                  label="版本"
+                  value={row.selectedProtocolVersionItem.value}
+                  mono
+                />
+                <MetadataItem
+                  label="发布时间"
+                  value={
+                    row.ociDetail?.loading
+                      ? "读取中…"
+                      : formatDate(
+                          row.ociDetail?.createdAt ?? row.item.createdAt,
+                        )
+                  }
+                />
+                <MetadataItem
+                  label="发布者"
+                  value={
+                    row.ociDetail?.publisher ?? row.item.publisher ?? "未记录"
+                  }
+                  mono
+                />
+                <MetadataItem
+                  label="校验摘要"
+                  value={
+                    row.ociDetail?.loading
+                      ? "读取中…"
+                      : (row.ociDetail?.digest ??
+                        row.selectedProtocolVersionItem.digest ??
+                        row.item.digest ??
+                        "未记录")
+                  }
+                  mono
+                />
+                <MetadataItem
+                  label="镜像大小"
+                  value={
+                    row.ociDetail?.loading
+                      ? "读取中…"
+                      : formatBytes(row.ociDetail?.size ?? row.item.size)
+                  }
+                />
+              </div>
+              {row.ociDetail?.error && (
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-300">
+                  <span>{row.ociDetail.error}</span>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={() =>
+                      row.selectedTag &&
+                      void loadOciManifest(row.item.coordinate, row.selectedTag)
+                    }
+                  >
+                    重试
+                  </Button>
+                </div>
+              )}
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {row.snippets.map((snippet) => (
+                  <UsageSnippetBlock
+                    key={snippet.label}
+                    snippet={snippet}
+                    copied={copiedCoordinate === snippet.code}
+                    onCopy={() => void copyUsage(snippet)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
+              版本加载完成后，可在左侧搜索并选择一个版本。
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <main className="min-h-screen bg-[#090a0c] px-4 py-8 text-zinc-200 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-7xl">
@@ -1641,663 +2124,24 @@ export function PublicBrowsePage() {
                     onCopyUsage={(snippet) => void copyUsage(snippet)}
                   />
                 ) : (
-                  <DataTable
-                    className={
-                      selectedRepository?.format === "oci" ||
-                      selectedRepository?.format === "conan"
-                        ? ""
-                        : "min-w-[720px]"
-                    }
-                    columnClassNames={
-                      selectedRepository?.format === "oci" ||
-                      selectedRepository?.format === "conan"
-                        ? [
-                            "",
-                            "whitespace-nowrap",
-                            "hidden sm:table-cell",
-                            "hidden sm:table-cell",
-                            "whitespace-nowrap",
-                          ]
-                        : undefined
-                    }
-                    columns={
-                      selectedRepository?.format === "oci"
-                        ? ["镜像", "已加载版本", "当前版本", "镜像摘要", ""]
-                        : selectedRepository?.format === "conan"
-                          ? [
-                              "Conan reference",
-                              "已加载版本",
-                              "当前 revision",
-                              "当前摘要",
-                              "",
-                            ]
-                          : ["制品坐标", "摘要", "大小", "创建时间", ""]
-                    }
-                  >
-                    {items.map((item, index) => {
-                      const isOci = selectedRepository?.format === "oci";
-                      const isConan = selectedRepository?.format === "conan";
-                      const isVersioned = isOci || isConan;
-                      const expanded =
-                        expandedCoordinate === item.coordinate ||
-                        artifactParam === item.coordinate;
-                      const ociPage = isOci
-                        ? ociTagPages[item.coordinate]
-                        : undefined;
-                      const conanPage = isConan
-                        ? conanRevisionPages[item.coordinate]
-                        : undefined;
-                      const tags = isOci ? (ociPage?.items ?? []) : [];
-                      const revisions = isConan ? (conanPage?.items ?? []) : [];
-                      const protocolVersionsLoaded = isOci
-                        ? ociPage?.loaded === true
-                        : isConan
-                          ? conanPage?.loaded === true
-                          : true;
-                      const protocolVersionsLoading = isOci
-                        ? ociPage?.loading === true
-                        : isConan
-                          ? conanPage?.loading === true
-                          : false;
-                      const protocolVersionsError = isOci
-                        ? ociPage?.error
-                        : conanPage?.error;
-                      const nextProtocolPage = isOci
-                        ? ociPage?.nextCursor
-                        : conanPage?.nextPageToken;
-                      const protocolVersions: ProtocolVersion[] = isOci
-                        ? [
-                            ...new Set(
-                              tagParam &&
-                                artifactParam === item.coordinate &&
-                                !tags.includes(tagParam)
-                                ? [...tags, tagParam]
-                                : tags,
-                            ),
-                          ].map((tag) => ({
-                            value: tag,
-                            label: tag.startsWith("sha256:")
-                              ? `无标签 · ${shortDigest(tag)}`
-                              : tag,
-                            searchText: tag,
-                            digest: tag.startsWith("sha256:") ? tag : undefined,
-                          }))
-                        : revisions.map((revision) => ({
-                            value: revision.revision,
-                            label: revision.revision,
-                            searchText: `${revision.revision} ${revision.digest ?? ""} ${revision.createdAt ?? ""}`,
-                            createdAt: revision.createdAt,
-                            digest: revision.digest,
-                          }));
-                      const requestedProtocolVersion = isOci
-                        ? tagParam
-                        : isConan
-                          ? revisionParam
-                          : "";
-                      const visibleProtocolVersions = protocolVersions;
-                      const preferredProtocolVersion =
-                        (selectedProtocolVersions[item.coordinate] &&
-                          protocolVersions.some(
-                            (version) =>
-                              version.value ===
-                              selectedProtocolVersions[item.coordinate],
-                          ) &&
-                          selectedProtocolVersions[item.coordinate]) ||
-                        (requestedProtocolVersion &&
-                          protocolVersions.some(
-                            (version) =>
-                              version.value === requestedProtocolVersion,
-                          ) &&
-                          requestedProtocolVersion) ||
-                        protocolVersions[0]?.value ||
-                        "";
-                      const selectedProtocolVersionValue =
-                        visibleProtocolVersions.some(
-                          (version) =>
-                            version.value === preferredProtocolVersion,
-                        )
-                          ? preferredProtocolVersion
-                          : visibleProtocolVersions[0]?.value ||
-                            preferredProtocolVersion;
-                      const selectedProtocolVersionItem = protocolVersions.find(
-                        (version) =>
-                          version.value === selectedProtocolVersionValue,
-                      );
-                      const selectedTag = isOci
-                        ? selectedProtocolVersionItem?.value
-                        : undefined;
-                      const ociDetail =
-                        isOci && selectedTag
-                          ? ociManifestDetails[
-                              `${item.coordinate}\x00${selectedTag}`
-                            ]
-                          : undefined;
-                      const selectedRevision = isConan
-                        ? selectedProtocolVersionItem?.value
-                        : undefined;
-                      const selectedProtocolHref = artifactHref(
-                        item.coordinate,
-                        undefined,
-                        selectedTag,
-                        selectedRevision,
-                      );
-                      const snippets = selectedRepository
-                        ? usageFor(
-                            selectedRepository.format,
-                            selectedRepository.name,
-                            item.coordinate,
-                            selectedTag,
-                          )
-                        : [];
-                      return (
-                        <Fragment key={`${item.coordinate}-${index}`}>
-                          <tr
-                            key={`${item.coordinate}-${index}`}
-                            className="hover:bg-zinc-800/30"
-                          >
-                            <td
-                              className="max-w-md px-4 py-3 font-mono text-xs text-zinc-100"
-                              title={item.coordinate}
-                            >
-                              <div className="truncate">{item.coordinate}</div>
-                            </td>
-                            {isVersioned ? (
-                              <>
-                                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
-                                  {protocolVersionsLoading &&
-                                  !protocolVersionsLoaded
-                                    ? "读取中…"
-                                    : !protocolVersionsLoaded
-                                      ? "展开后加载"
-                                      : protocolVersions.length > 0
-                                        ? `${protocolVersions.length}${nextProtocolPage ? "+" : ""} 个`
-                                        : "—"}
-                                </td>
-                                <td
-                                  className="hidden max-w-[220px] px-4 py-3 font-mono text-xs text-zinc-500 sm:table-cell"
-                                  title={
-                                    isOci
-                                      ? selectedProtocolVersionItem?.label
-                                      : protocolVersions[0]?.value
-                                  }
-                                >
-                                  <div className="truncate">
-                                    {protocolVersionsLoading &&
-                                    !protocolVersionsLoaded
-                                      ? "读取中…"
-                                      : !protocolVersionsLoaded
-                                        ? "—"
-                                        : protocolVersions.length > 0
-                                          ? isOci
-                                            ? selectedProtocolVersionItem?.label
-                                            : protocolVersions[0]?.value
-                                          : "—"}
-                                  </div>
-                                </td>
-                                <td className="hidden px-4 py-3 font-mono text-xs text-zinc-500 sm:table-cell">
-                                  {shortDigest(
-                                    ociDetail?.digest ??
-                                      protocolVersions[0]?.digest ??
-                                      item.digest,
-                                  )}
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="px-4 py-3 font-mono text-xs text-zinc-500">
-                                  {shortDigest(item.digest)}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-zinc-400">
-                                  {formatBytes(item.size)}
-                                </td>
-                              </>
-                            )}
-                            {!isVersioned && (
-                              <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
-                                {formatDate(item.createdAt)}
-                              </td>
-                            )}
-                            <td className="whitespace-nowrap px-3 py-2 text-right">
-                              <Button
-                                type="text"
-                                size="small"
-                                icon={
-                                  expanded ? <UpOutlined /> : <DownOutlined />
-                                }
-                                title={
-                                  isVersioned ? "选择版本" : "查看使用方式"
-                                }
-                                onClick={() =>
-                                  (() => {
-                                    if (expanded) {
-                                      setExpandedCoordinate(null);
-                                      clearArtifactParams();
-                                      return;
-                                    }
-                                    setExpandedCoordinate(item.coordinate);
-                                    setProtocolVersionFilter("");
-                                    if (isOci && !ociPage)
-                                      void loadOciTags(item.coordinate);
-                                    if (isConan && !conanPage)
-                                      void loadConanRevisions(item.coordinate);
-                                    if (selectedProtocolVersionValue) {
-                                      setSelectedProtocolVersions(
-                                        (current) => ({
-                                          ...current,
-                                          [item.coordinate]:
-                                            selectedProtocolVersionValue,
-                                        }),
-                                      );
-                                    }
-                                  })()
-                                }
-                              >
-                                {expanded
-                                  ? "收起"
-                                  : isVersioned
-                                    ? "选择版本"
-                                    : "使用方式"}
-                              </Button>
-                              <Button
-                                type="link"
-                                size="small"
-                                icon={<LinkOutlined />}
-                                href={
-                                  isVersioned
-                                    ? selectedProtocolHref
-                                    : artifactHref(item.coordinate)
-                                }
-                                className={
-                                  isVersioned ? "hidden sm:inline-flex" : ""
-                                }
-                              >
-                                {isVersioned && selectedProtocolVersionItem
-                                  ? "打开版本"
-                                  : "打开"}
-                              </Button>
-                              <Tooltip
-                                title={
-                                  copiedCoordinate === item.coordinate
-                                    ? "已复制"
-                                    : "复制制品坐标"
-                                }
-                              >
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  aria-label={`复制 ${item.coordinate}`}
-                                  onClick={() =>
-                                    void copyCoordinate(item.coordinate)
-                                  }
-                                  icon={
-                                    copiedCoordinate === item.coordinate ? (
-                                      <CheckOutlined />
-                                    ) : (
-                                      <CopyOutlined />
-                                    )
-                                  }
-                                />
-                              </Tooltip>
-                            </td>
-                          </tr>
-                          {expanded && isVersioned && (
-                            <tr key={`${item.coordinate}-${index}-versions`}>
-                              <td
-                                colSpan={5}
-                                className="bg-zinc-950/50 px-4 py-4"
-                              >
-                                <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                                  <div>
-                                    <div className="flex items-center justify-between gap-3">
-                                      <label className="block text-[11px] font-medium text-zinc-500">
-                                        {isOci
-                                          ? "选择镜像版本"
-                                          : "搜索 recipe revision"}
-                                      </label>
-                                      <span className="text-[11px] text-zinc-600">
-                                        已加载 {protocolVersions.length}
-                                      </span>
-                                    </div>
-                                    {isConan && (
-                                      <div className="mt-1.5 flex gap-2">
-                                        <Input
-                                          className="min-w-0 flex-1 font-mono text-xs"
-                                          placeholder="输入 revision 或 digest"
-                                          value={protocolVersionFilter}
-                                          onChange={(event) =>
-                                            setProtocolVersionFilter(
-                                              event.target.value,
-                                            )
-                                          }
-                                          onPressEnter={() =>
-                                            void loadConanRevisions(
-                                              item.coordinate,
-                                              protocolVersionFilter,
-                                            )
-                                          }
-                                        />
-                                        <Button
-                                          loading={protocolVersionsLoading}
-                                          onClick={() =>
-                                            void loadConanRevisions(
-                                              item.coordinate,
-                                              protocolVersionFilter,
-                                            )
-                                          }
-                                        >
-                                          搜索
-                                        </Button>
-                                      </div>
-                                    )}
-                                    {protocolVersionsError && (
-                                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-rose-300">
-                                        <span>{protocolVersionsError}</span>
-                                        <Button
-                                          type="link"
-                                          size="small"
-                                          icon={<ReloadOutlined />}
-                                          onClick={() =>
-                                            isOci
-                                              ? void loadOciTags(
-                                                  item.coordinate,
-                                                )
-                                              : void loadConanRevisions(
-                                                  item.coordinate,
-                                                  protocolVersionFilter,
-                                                )
-                                          }
-                                        >
-                                          重试
-                                        </Button>
-                                      </div>
-                                    )}
-                                    <label
-                                      className={`${isConan ? "mt-3 " : "mt-1.5 "}mb-1.5 block text-[11px] font-medium text-zinc-500`}
-                                    >
-                                      选择版本
-                                    </label>
-                                    <SearchableVersionSelect
-                                      value={selectedProtocolVersionValue}
-                                      options={visibleProtocolVersions.map(
-                                        (version) => ({
-                                          value: version.value,
-                                          label: `${version.label}${
-                                            isConan && version.digest
-                                              ? ` · ${shortDigest(version.digest)}`
-                                              : ""
-                                          }`,
-                                        }),
-                                      )}
-                                      loading={protocolVersionsLoading}
-                                      notFoundContent={
-                                        protocolVersionsLoading &&
-                                        visibleProtocolVersions.length === 0
-                                          ? "正在读取版本…"
-                                          : "没有匹配版本"
-                                      }
-                                      placeholder={`搜索并选择${isOci ? "镜像版本" : " recipe revision"}`}
-                                      onChange={(value) => {
-                                        setSelectedProtocolVersions(
-                                          (current) => ({
-                                            ...current,
-                                            [item.coordinate]: value,
-                                          }),
-                                        );
-                                        if (
-                                          selectedRepository?.format === "oci"
-                                        ) {
-                                          void loadOciManifest(
-                                            item.coordinate,
-                                            value,
-                                          );
-                                        }
-                                        const version = protocolVersions.find(
-                                          (entry) => entry.value === value,
-                                        );
-                                        if (version) {
-                                          openArtifact(
-                                            item.coordinate,
-                                            undefined,
-                                            isOci ? version.value : undefined,
-                                            isConan ? version.value : undefined,
-                                          );
-                                        }
-                                      }}
-                                    />
-                                    {nextProtocolPage && (
-                                      <Button
-                                        block
-                                        size="small"
-                                        loading={protocolVersionsLoading}
-                                        onClick={() =>
-                                          isOci
-                                            ? void loadOciTags(
-                                                item.coordinate,
-                                                nextProtocolPage,
-                                              )
-                                            : void loadConanRevisions(
-                                                item.coordinate,
-                                                conanPage?.query ??
-                                                  protocolVersionFilter,
-                                                nextProtocolPage,
-                                              )
-                                        }
-                                        className="mt-2"
-                                      >
-                                        {protocolVersionsLoading
-                                          ? "加载中…"
-                                          : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
-                                      </Button>
-                                    )}
-                                    <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                                      每次最多读取 {VERSION_PAGE_SIZE}{" "}
-                                      个版本；选择后可查看详情与使用方式。
-                                    </p>
-                                  </div>
-                                  <div className="min-w-0">
-                                    {selectedProtocolVersionItem ? (
-                                      <>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="font-mono text-xs text-zinc-100">
-                                            {item.coordinate}
-                                          </span>
-                                          <span
-                                            className={`rounded px-1.5 py-0.5 text-[10px] ${isOci ? "bg-cyan-500/10 text-cyan-300" : "bg-violet-500/10 text-violet-300"}`}
-                                          >
-                                            {selectedProtocolVersionItem.label}
-                                          </span>
-                                          <Button
-                                            type="link"
-                                            size="small"
-                                            icon={<LinkOutlined />}
-                                            href={selectedProtocolHref}
-                                          >
-                                            打开版本页
-                                          </Button>
-                                          <Button
-                                            type="link"
-                                            size="small"
-                                            onClick={() =>
-                                              void copyPageLink(
-                                                selectedProtocolHref,
-                                              )
-                                            }
-                                          >
-                                            {copiedCoordinate ===
-                                            selectedProtocolHref
-                                              ? "链接已复制"
-                                              : "复制链接"}
-                                          </Button>
-                                        </div>
-                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
-                                          <MetadataItem
-                                            label={
-                                              isOci ? "镜像" : "Conan reference"
-                                            }
-                                            value={item.coordinate}
-                                            mono
-                                          />
-                                          <MetadataItem
-                                            label={
-                                              isOci ? "版本" : "Recipe revision"
-                                            }
-                                            value={
-                                              selectedProtocolVersionItem.value
-                                            }
-                                            mono
-                                          />
-                                          <MetadataItem
-                                            label="发布时间"
-                                            value={
-                                              isConan
-                                                ? formatDate(
-                                                    selectedProtocolVersionItem.createdAt,
-                                                  )
-                                                : ociDetail?.loading
-                                                  ? "读取中…"
-                                                  : formatDate(
-                                                      ociDetail?.createdAt ??
-                                                        item.createdAt,
-                                                    )
-                                            }
-                                          />
-                                          <MetadataItem
-                                            label="发布者"
-                                            value={
-                                              isOci
-                                                ? (ociDetail?.publisher ??
-                                                  item.publisher ??
-                                                  "未记录")
-                                                : (item.publisher ?? "未记录")
-                                            }
-                                            mono
-                                          />
-                                          <MetadataItem
-                                            label="校验摘要"
-                                            value={
-                                              ociDetail?.loading
-                                                ? "读取中…"
-                                                : (ociDetail?.digest ??
-                                                  selectedProtocolVersionItem.digest ??
-                                                  item.digest ??
-                                                  "未记录")
-                                            }
-                                            mono
-                                          />
-                                          {isOci && (
-                                            <MetadataItem
-                                              label="镜像大小"
-                                              value={
-                                                ociDetail?.loading
-                                                  ? "读取中…"
-                                                  : formatBytes(
-                                                      ociDetail?.size ??
-                                                        item.size,
-                                                    )
-                                              }
-                                            />
-                                          )}
-                                        </div>
-                                        {isOci && ociDetail?.error && (
-                                          <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-300">
-                                            <span>{ociDetail.error}</span>
-                                            <Button
-                                              type="link"
-                                              size="small"
-                                              icon={<ReloadOutlined />}
-                                              onClick={() =>
-                                                selectedTag &&
-                                                void loadOciManifest(
-                                                  item.coordinate,
-                                                  selectedTag,
-                                                )
-                                              }
-                                            >
-                                              重试
-                                            </Button>
-                                          </div>
-                                        )}
-                                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                          {snippets.map((snippet) => (
-                                            <UsageSnippetBlock
-                                              key={snippet.label}
-                                              snippet={snippet}
-                                              copied={
-                                                copiedCoordinate ===
-                                                snippet.code
-                                              }
-                                              onCopy={() =>
-                                                void copyUsage(snippet)
-                                              }
-                                            />
-                                          ))}
-                                        </div>
-                                      </>
-                                    ) : (
-                                      <div className="rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
-                                        {isOci
-                                          ? "版本加载完成后，可在左侧搜索并选择一个版本。"
-                                          : "Recipe revisions 加载完成后，可在左侧搜索并选择一个版本。"}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          {expanded && !isVersioned && snippets.length > 0 && (
-                            <tr key={`${item.coordinate}-${index}-usage`}>
-                              <td
-                                colSpan={5}
-                                className="bg-zinc-950/50 px-4 py-4"
-                              >
-                                <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-zinc-800/80 pb-4 text-xs sm:grid-cols-4">
-                                  <MetadataItem
-                                    label="仓库"
-                                    value={selectedRepository?.name ?? "—"}
-                                    mono
-                                  />
-                                  <MetadataItem
-                                    label="制品坐标"
-                                    value={item.coordinate}
-                                    mono
-                                  />
-                                  <MetadataItem
-                                    label={
-                                      selectedRepository?.format === "oci"
-                                        ? "镜像标签"
-                                        : "发布时间"
-                                    }
-                                    value={
-                                      selectedRepository?.format === "oci"
-                                        ? tagParam || "选择标签后显示"
-                                        : formatDate(item.createdAt)
-                                    }
-                                    mono={selectedRepository?.format === "oci"}
-                                  />
-                                  <MetadataItem
-                                    label="发布者"
-                                    value={item.publisher ?? "未记录"}
-                                    mono
-                                  />
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  {snippets.map((snippet) => (
-                                    <UsageSnippetBlock
-                                      key={snippet.label}
-                                      snippet={snippet}
-                                      copied={copiedCoordinate === snippet.code}
-                                      onCopy={() => void copyUsage(snippet)}
-                                    />
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </DataTable>
+                  <Table<PublicArtifactTableRow>
+                    className="ag-console-table"
+                    rowKey="key"
+                    size="middle"
+                    dataSource={artifactTableRows}
+                    columns={artifactColumns}
+                    pagination={false}
+                    scroll={{
+                      x: selectedRepository?.format === "oci" ? 1100 : 900,
+                    }}
+                    expandable={{
+                      expandedRowKeys: artifactTableRows
+                        .filter((row) => row.expanded)
+                        .map((row) => row.key),
+                      expandedRowRender: expandedArtifactRowRender,
+                      showExpandColumn: false,
+                    }}
+                  />
                 )}
               </Card>
             )}
