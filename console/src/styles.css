@@ -57,6 +57,13 @@ body {
   background: rgb(24 24 27 / 0.42);
 }
 
+/* Keep page-level surfaces visually distinct without affecting nested cards. */
+.ag-metric-strip + .ag-card,
+.ag-filter-bar + .ag-card,
+.ag-card + .ag-card {
+  margin-top: 16px;
+}
+
 .ag-console-table .ant-table,
 .ag-console-table .ant-table-container,
 .ag-console-table .ant-table-content {
@@ -78,6 +85,19 @@ body {
 }
 
 .ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: rgb(39 39 42 / 0.3);
+}
+
+/* Fixed columns are rendered outside the scrolling table surface. */
+.ag-console-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.ag-console-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
+.ag-console-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.ag-console-table .ant-table-tbody > tr > td.ant-table-cell-fix-end {
+  background: rgb(24 24 27);
+}
+
+.ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-start,
+.ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-end {
   background: rgb(39 39 42 / 0.3);
 }
 

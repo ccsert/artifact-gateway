@@ -35,6 +35,7 @@ func (r ConanReplication) Start(ctx context.Context, interval time.Duration) {
 	}
 	go func() {
 		_ = r.RunJobs(ctx, 100)
+		wake := notificationWake(ctx, r.Store, "artifact_gateway_replication_plans")
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -42,6 +43,8 @@ func (r ConanReplication) Start(ctx context.Context, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				_ = r.RunJobs(ctx, 100)
+			case <-wake:
 				_ = r.RunJobs(ctx, 100)
 			}
 		}

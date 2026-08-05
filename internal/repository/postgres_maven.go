@@ -470,9 +470,9 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 			WHERE s.repository_id=a.repository_id AND s.coordinate=a.coordinate AND s.state='committed'
 			ORDER BY s.expires_at DESC LIMIT 1
 		) p ON true
-		WHERE a.repository_id=$1::uuid AND a.state='visible' AND substring(a.coordinate FROM 1 FOR char_length($2))=$2
+		WHERE a.repository_id=$1::uuid AND a.state='visible' AND a.coordinate LIKE $2 || '%' ESCAPE '\'
 			AND (a.coordinate>$3 OR (a.coordinate=$3 AND a.build_number>$4))
-		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $5`, repoID, prefix, after.Coordinate, after.BuildNumber, limit)
+		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $5`, repoID, escapeLikePrefix(prefix), after.Coordinate, after.BuildNumber, limit)
 	if err != nil {
 		return nil, err
 	}

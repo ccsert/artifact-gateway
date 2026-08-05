@@ -261,13 +261,13 @@ func (s *PostgresStore) GetConanPackageRevision(ctx context.Context, repositoryI
 
 func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]ConanReference, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.reference, COALESCE(p.publisher,'')
-		FROM (SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' AND reference > $3 ORDER BY reference LIMIT $4) r
+		FROM (SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' ESCAPE '\' AND reference > $3 ORDER BY reference LIMIT $4) r
 		LEFT JOIN LATERAL (
 			SELECT s.publisher FROM native_conan_publish_sessions s
 			WHERE s.repository_id::text=$1 AND s.reference=r.reference AND s.state='committed'
 			ORDER BY s.expires_at DESC LIMIT 1
 		) p ON true
-		ORDER BY r.reference`, repositoryID, prefix, after, limit)
+		ORDER BY r.reference`, repositoryID, escapeLikePrefix(prefix), after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (s *PostgresStore) ListConanRecipeRevisions(ctx context.Context, repository
 }
 
 func (s *PostgresStore) SearchConanRecipeRevisions(ctx context.Context, repositoryID, reference, query string, limit int, after string) ([]ConanRecipeRevision, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND state='visible' AND revision>$3 AND ($4='' OR revision ILIKE '%' || $4 || '%' OR digest ILIKE '%' || $4 || '%') ORDER BY revision LIMIT $5`, repositoryID, reference, after, query, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND state='visible' AND revision>$3 AND ($4='' OR revision ILIKE '%' || $4 || '%' ESCAPE '\' OR digest ILIKE '%' || $4 || '%' ESCAPE '\') ORDER BY revision LIMIT $5`, repositoryID, reference, after, escapeLikePrefix(query), limit)
 	if err != nil {
 		return nil, err
 	}

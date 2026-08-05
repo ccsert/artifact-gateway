@@ -57,6 +57,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
     environment:
       POSTGRES_DB: gateway
       POSTGRES_USER: gateway

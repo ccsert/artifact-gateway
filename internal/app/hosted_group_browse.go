@@ -105,6 +105,33 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 
 func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Request, repo repository.HostedRepository, query string, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
+	if h.searchProjection != nil {
+		projected, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, query, limit, repository.ArtifactSearchPosition{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range projected {
+			var digest *string
+			if item.Digest != "" {
+				value := item.Digest
+				digest = &value
+			}
+			createdAt := item.CreatedAt
+			size := item.Size
+			var contentType *string
+			if item.ContentType != "" {
+				value := item.ContentType
+				contentType = &value
+			}
+			var buildNumber *int32
+			if item.BuildNumber > 0 {
+				value := int32(item.BuildNumber)
+				buildNumber = &value
+			}
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher)})
+		}
+		return items, nil
+	}
 	switch repo.Format {
 	case repository.FormatOCI:
 		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, limit, after.Coordinate)

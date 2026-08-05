@@ -9,14 +9,17 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-type PostgresStore struct{ db *sql.DB }
+type PostgresStore struct {
+	db          *sql.DB
+	databaseURL string
+}
 
 func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	return &PostgresStore{db: db}, nil
+	return &PostgresStore{db: db, databaseURL: databaseURL}, nil
 }
 
 func (s *PostgresStore) Close() error { return s.db.Close() }

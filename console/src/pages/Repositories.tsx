@@ -194,9 +194,9 @@ export function RepositoriesPage() {
   const [error, setError] = useState<unknown>(null);
   const [filter, setFilter] = useState("");
   const [formatFilter, setFormatFilter] = useState<Format | "all">("all");
-  const [stateFilter, setStateFilter] = useState<Repository["state"] | "all">(
-    "all",
-  );
+  type RepositoryStateFilter = Repository["state"] | "all" | "operational";
+  const [stateFilter, setStateFilter] =
+    useState<RepositoryStateFilter>("operational");
   const [capacities, setCapacities] = useState<
     Record<
       string,
@@ -282,6 +282,10 @@ export function RepositoriesPage() {
 
   const confirmDelete = async () => {
     if (!toDelete) return;
+    if (toDelete.state !== "active") {
+      setToDelete(null);
+      return;
+    }
     setDeleting(true);
     const { error: err } = await deleteRepository({
       path: { repositoryId: toDelete.id },
@@ -305,10 +309,18 @@ export function RepositoriesPage() {
         (r.type ?? "hosted").includes(q),
     )
     .filter((r) => formatFilter === "all" || r.format === formatFilter)
-    .filter((r) => stateFilter === "all" || r.state === stateFilter);
+    .filter((r) =>
+      stateFilter === "operational"
+        ? r.state !== "deleted"
+        : stateFilter === "all" || r.state === stateFilter,
+    );
 
   const activeCount = items.filter((r) => r.state === "active").length;
-  const proxyCount = items.filter((r) => r.type === "proxy").length;
+  const operationalCount = items.filter((r) => r.state !== "deleted").length;
+  const proxyCount = items.filter(
+    (r) => r.type === "proxy" && r.state !== "deleted",
+  ).length;
+  const deletedCount = items.filter((r) => r.state === "deleted").length;
   const totalUsedBytes = Object.values(capacities).reduce(
     (sum, value) => sum + value.usedBytes,
     0,
@@ -415,16 +427,21 @@ export function RepositoriesPage() {
       fixed: "right",
       width: 82,
       align: "right",
-      render: (_value, repository) => (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          aria-label={`删除 ${repository.name}`}
-          onClick={() => setToDelete(repository)}
-        />
-      ),
+      render: (_value, repository) =>
+        repository.state === "active" ? (
+          <Button
+            type="text"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            aria-label={`删除 ${repository.name}`}
+            onClick={() => setToDelete(repository)}
+          />
+        ) : repository.state === "deleting" ? (
+          <Badge tone="amber">删除中</Badge>
+        ) : (
+          <span className="text-xs text-zinc-600">—</span>
+        ),
     },
   ];
 
@@ -439,8 +456,11 @@ export function RepositoriesPage() {
         items={[
           {
             label: "仓库总数",
-            value: items.length,
-            hint: `${activeCount} 个活跃`,
+            value: operationalCount,
+            hint:
+              deletedCount > 0
+                ? `${deletedCount} 个已归档`
+                : `${activeCount} 个活跃`,
           },
           { label: "代理仓库", value: proxyCount, hint: "上游缓存与镜像" },
           {
@@ -455,14 +475,14 @@ export function RepositoriesPage() {
       <FilterBar
         className="mt-4 mb-4"
         actions={
-          filter || formatFilter !== "all" || stateFilter !== "all" ? (
+          filter || formatFilter !== "all" || stateFilter !== "operational" ? (
             <Button
               type="text"
               icon={<ClearOutlined />}
               onClick={() => {
                 setFilter("");
                 setFormatFilter("all");
-                setStateFilter("all");
+                setStateFilter("operational");
               }}
             >
               清除筛选
@@ -491,11 +511,12 @@ export function RepositoriesPage() {
           />
         </FilterField>
         <FilterField label="状态" className="min-w-[150px]">
-          <Select<Repository["state"] | "all">
+          <Select<RepositoryStateFilter>
             className="w-full"
             value={stateFilter}
             onChange={setStateFilter}
             options={[
+              { value: "operational", label: "运行中与删除中" },
               { value: "all", label: "全部状态" },
               { value: "active", label: "运行中" },
               { value: "deleting", label: "删除中" },
@@ -508,11 +529,17 @@ export function RepositoriesPage() {
         <ErrorBanner error={error} onRetry={load} />
       ) : loading ? (
         <Loading />
-      ) : items.length === 0 ? (
+      ) : visible.length === 0 ? (
         <Card>
           <EmptyState
-            title="暂无仓库"
-            hint="点击右上角「新建仓库」创建第一个仓库"
+            title={items.length === 0 ? "暂无仓库" : "暂无符合条件的仓库"}
+            hint={
+              items.length === 0
+                ? "点击右上角「新建仓库」创建第一个仓库"
+                : deletedCount > 0 && stateFilter === "operational"
+                  ? "已删除仓库已归档，可在状态筛选中查看"
+                  : "调整筛选条件后重试"
+            }
           />
         </Card>
       ) : (
@@ -547,7 +574,8 @@ export function RepositoriesPage() {
           <>
             确定要删除仓库{" "}
             <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
-            吗？ 仓库将进入 deleting 状态，此操作不可撤销。
+            吗？仓库会立即停止读写并进入 deleting
+            状态，后台通常在一分钟内完成处理并标记为已删除。此操作不可撤销，审计元数据会保留。
           </>
         }
         confirmLabel="删除"

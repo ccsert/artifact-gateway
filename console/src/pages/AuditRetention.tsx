@@ -213,56 +213,64 @@ export function AuditRetentionPage() {
         ]}
       />
       <Card className="mt-4 mb-6">
-        <div className="max-w-xl p-5">
-          <Form layout="vertical">
-            <Form.Item
-              label="启用自动清理"
-              extra="关闭后不会自动删除记录，但已保存的保留周期仍会保留。"
-            >
-              <Switch
-                checked={enabled}
-                onChange={(checked) => {
-                  setEnabled(checked);
-                  if (checked && keepDays < 1) setKeepDays(90);
-                }}
-                aria-label="切换自动清理"
-              />
-            </Form.Item>
-            <Form.Item label="保留天数" extra="超过该天数的审计记录将被清理。">
-              <InputNumber
-                min={enabled ? 1 : 0}
-                precision={0}
-                className="w-full"
-                value={keepDays}
-                onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
-              />
-            </Form.Item>
-            <Space>
-              <Button
-                type="primary"
-                onClick={save}
-                loading={saving}
-                disabled={!policyDirty}
+        <div className="grid max-w-5xl gap-8 p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-zinc-200">策略设置</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                控制审计日志的自动保留周期，保存后由后台任务异步处理。
+              </p>
+            </div>
+            <Form layout="vertical">
+              <Form.Item
+                label="启用自动清理"
+                extra="关闭后不会自动删除记录，但已保存的保留周期仍会保留。"
               >
-                保存策略
-              </Button>
-              <Popconfirm
-                disabled={!canExecute}
-                title="确认立即执行审计清理？"
-                description="将提交异步删除任务，并按当前保留天数处理符合条件的记录。"
-                okText="执行清理"
-                cancelText="取消"
-                okButtonProps={{ danger: true, loading: executing }}
-                onConfirm={execute}
-              >
-                <Button danger loading={executing} disabled={!canExecute}>
-                  立即执行清理
+                <Switch
+                  checked={enabled}
+                  onChange={(checked) => {
+                    setEnabled(checked);
+                    if (checked && keepDays < 1) setKeepDays(90);
+                  }}
+                  aria-label="切换自动清理"
+                />
+              </Form.Item>
+              <Form.Item label="保留天数" extra="超过该天数的审计记录将被清理。">
+                <InputNumber
+                  min={enabled ? 1 : 0}
+                  precision={0}
+                  className="w-full"
+                  value={keepDays}
+                  onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
+                />
+              </Form.Item>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={save}
+                  loading={saving}
+                  disabled={!policyDirty}
+                >
+                  保存策略
                 </Button>
-              </Popconfirm>
-            </Space>
-          </Form>
+                <Popconfirm
+                  disabled={!canExecute}
+                  title="确认立即执行审计清理？"
+                  description="将提交异步删除任务，并按当前保留天数处理符合条件的记录。"
+                  okText="执行清理"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true, loading: executing }}
+                  onConfirm={execute}
+                >
+                  <Button danger loading={executing} disabled={!canExecute}>
+                    立即执行清理
+                  </Button>
+                </Popconfirm>
+              </Space>
+            </Form>
+          </div>
           <Alert
-            className="mt-5"
+            className="h-fit"
             type="warning"
             showIcon
             title="清理说明"
@@ -302,7 +310,7 @@ export function AuditRetentionPage() {
             dataSource={jobs}
             columns={jobColumns}
             pagination={false}
-            scroll={{ x: 1160 }}
+            scroll={{ x: 1160, y: "calc(100vh - 470px)" }}
           />
         )}
       </Card>

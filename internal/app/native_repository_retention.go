@@ -430,6 +430,7 @@ func (m NativeRepositoryRetention) Start(ctx context.Context, interval time.Dura
 		return
 	}
 	go func() {
+		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
 		collectionTicker := time.NewTicker(interval)
 		defer collectionTicker.Stop()
 		jobInterval := time.Minute
@@ -445,6 +446,8 @@ func (m NativeRepositoryRetention) Start(ctx context.Context, interval time.Dura
 			case <-collectionTicker.C:
 				_ = m.Collect(ctx)
 			case <-jobTicker.C:
+				_ = m.RunJobs(ctx, 200)
+			case <-wake:
 				_ = m.RunJobs(ctx, 200)
 			}
 		}

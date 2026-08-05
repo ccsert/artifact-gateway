@@ -119,7 +119,7 @@ export function AuditsPage() {
   const [limit, setLimit] = useState(100);
   const [repoOptions, setRepoOptions] = useState<string[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -505,7 +505,7 @@ export function AuditsPage() {
           />
         </Card>
       ) : (
-        <Card className="mt-4 p-0">
+        <Card className="mt-4">
           <Table<AuditTableRow>
             className="ag-console-table"
             rowKey="key"
@@ -516,12 +516,12 @@ export function AuditsPage() {
             scroll={{ x: 1200 }}
             rowClassName="cursor-pointer"
             expandable={{
-              expandedRowKeys: expanded === null ? [] : [String(expanded)],
+              expandedRowKeys: expanded === null ? [] : [expanded],
               expandedRowRender,
               expandRowByClick: true,
               onExpandedRowsChange: (keys) => {
-                const key = keys[0];
-                setExpanded(key === undefined ? null : Number(key));
+                const key = keys[keys.length - 1];
+                setExpanded(key === undefined ? null : String(key));
               },
             }}
           />

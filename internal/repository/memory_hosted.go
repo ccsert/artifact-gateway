@@ -108,11 +108,36 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	repo, ok := s.hostedRepositories[id]
-	if !ok || repo.State != RepositoryActive {
+	if !ok {
+		return HostedRepository{}, ErrNotFound
+	}
+	if repo.State == RepositoryDeleting {
+		return repo, nil
+	}
+	if repo.State != RepositoryActive {
 		return HostedRepository{}, ErrNotFound
 	}
 	repo.State = RepositoryDeleting
 	repo.Version = "2"
+	s.hostedRepositories[id] = repo
+	return repo, nil
+}
+
+func (s *MemoryStore) FinalizeHostedRepositoryDeletion(_ context.Context, id string) (HostedRepository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	repo, ok := s.hostedRepositories[id]
+	if !ok {
+		return HostedRepository{}, ErrNotFound
+	}
+	if repo.State == RepositoryDeleted {
+		return repo, nil
+	}
+	if repo.State != RepositoryDeleting {
+		return HostedRepository{}, ErrVersionConflict
+	}
+	repo.State = RepositoryDeleted
+	repo.Version = nextHostedGroupVersion(repo.Version)
 	s.hostedRepositories[id] = repo
 	return repo, nil
 }

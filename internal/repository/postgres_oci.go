@@ -406,7 +406,7 @@ func (s *PostgresStore) searchOCIManifestNames(ctx context.Context, repositoryID
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND ($2='' OR left(name,length($2))=$2) AND name>$3 ORDER BY name LIMIT $4`, repositoryID, prefix, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND ($2='' OR name LIKE $2 || '%' ESCAPE '\') AND name>$3 ORDER BY name LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
 	if err != nil {
 		return nil, err
 	}

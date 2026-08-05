@@ -227,6 +227,7 @@ type generatedRepositoryAPIAdapter struct {
 	maintenance       *CacheMaintenance
 	proxyCache        proxyCacheBrowseHandler
 	mavenProxy        mavenProxyOperationsHandler
+	searchProjection  repository.ArtifactSearchStore
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}

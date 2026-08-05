@@ -70,6 +70,7 @@ func (w AuditRetentionWorker) RunJobs(ctx context.Context, limit int) error {
 func (w AuditRetentionWorker) Start(ctx context.Context, interval time.Duration) {
 	go func() {
 		_ = w.RunJobs(ctx, 100)
+		wake := notificationWake(ctx, w.Store, "artifact_gateway_audit_cleanup")
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -77,6 +78,8 @@ func (w AuditRetentionWorker) Start(ctx context.Context, interval time.Duration)
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				_ = w.RunJobs(ctx, 100)
+			case <-wake:
 				_ = w.RunJobs(ctx, 100)
 			}
 		}

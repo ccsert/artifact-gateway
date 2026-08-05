@@ -33,17 +33,23 @@ export function PageHeader({
 export function Card({
   children,
   className = "",
+  bodyClassName = "",
 }: {
   children: ReactNode;
   className?: string;
+  bodyClassName?: string;
 }) {
   return (
     <AntdCard
       variant="outlined"
-      className={`bg-zinc-900/60 ${className}`}
+      className={`ag-card bg-zinc-900/60 ${className}`}
       styles={{ body: { padding: 0 } }}
     >
-      {children}
+      {bodyClassName ? (
+        <div className={bodyClassName}>{children}</div>
+      ) : (
+        children
+      )}
     </AntdCard>
   );
 }
@@ -75,7 +81,7 @@ export function StatCard({
   icon?: ReactNode;
 }) {
   return (
-    <Card className="px-5 py-4">
+    <Card bodyClassName="px-5 py-4">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
           {label}

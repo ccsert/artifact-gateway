@@ -26,6 +26,7 @@ func (r LifecycleJobRecovery) Start(ctx context.Context, interval time.Duration)
 	}
 	go func() {
 		_, _ = r.Run(ctx)
+		wake := notificationWake(ctx, r.Store, "artifact_gateway_lifecycle_jobs")
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -33,6 +34,8 @@ func (r LifecycleJobRecovery) Start(ctx context.Context, interval time.Duration)
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				_, _ = r.Run(ctx)
+			case <-wake:
 				_, _ = r.Run(ctx)
 			}
 		}

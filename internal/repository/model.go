@@ -21,6 +21,7 @@ type RepositoryState string
 const (
 	RepositoryActive   RepositoryState = "active"
 	RepositoryDeleting RepositoryState = "deleting"
+	RepositoryDeleted  RepositoryState = "deleted"
 )
 
 type RepositoryType string

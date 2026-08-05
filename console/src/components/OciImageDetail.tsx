@@ -8,10 +8,12 @@ import { useAuth } from "../lib/auth";
 import { Loading, ErrorBanner } from "./Feedback";
 import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
+import { UsageSnippetBlock } from "./PublicBrowsePrimitives";
+import { ociUsage, type UsageSnippet } from "../lib/usage";
 
 interface OciDescriptor {
   mediaType: string;
-  size: number;
+  size?: number;
   digest: string;
 }
 
@@ -40,6 +42,7 @@ interface OciVersionOption {
   label: string;
   searchText: string;
   digest: string;
+  size: number;
   kind: "tag" | "digest";
 }
 
@@ -117,6 +120,7 @@ function ociVersionOptions(
           label: `无标签 · ${shortDigest(manifest.digest)}`,
           searchText: `无标签 ${manifest.digest}`,
           digest: manifest.digest,
+          size: manifest.size,
           kind: "digest" as const,
         },
       ];
@@ -126,6 +130,7 @@ function ociVersionOptions(
       label: `${tag} · ${shortDigest(manifest.digest)}`,
       searchText: `${tag} ${manifest.digest}`,
       digest: manifest.digest,
+      size: manifest.size,
       kind: "tag" as const,
     }));
   });
@@ -153,6 +158,7 @@ export function OciImageDetail({
   const [manifestLoading, setManifestLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
+  const [copiedUsage, setCopiedUsage] = useState<string | null>(null);
 
   const name = `${repository}/${image}`;
   const versions = ociVersionOptions(manifests ?? []);
@@ -239,8 +245,10 @@ export function OciImageDetail({
     );
 
   const totalSize =
-    (manifest?.layers ?? []).reduce((n, l) => n + l.size, 0) +
+    (manifest?.layers ?? []).reduce((n, l) => n + (l.size ?? 0), 0) +
     (manifest?.config?.size ?? 0);
+  const hasImageDescriptors =
+    manifest?.config !== undefined || manifest?.layers !== undefined;
 
   const deleteReference = async () => {
     if (!selectedVersion) return;
@@ -264,6 +272,22 @@ export function OciImageDetail({
       setError(e);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const copyUsage = async (snippet: UsageSnippet) => {
+    try {
+      await navigator.clipboard.writeText(snippet.code);
+      setCopiedUsage(snippet.code);
+      window.setTimeout(
+        () =>
+          setCopiedUsage((current) =>
+            current === snippet.code ? null : current,
+          ),
+        1400,
+      );
+    } catch {
+      setCopiedUsage(null);
     }
   };
 
@@ -346,6 +370,29 @@ export function OciImageDetail({
         </div>
       )}
 
+      {selectedVersion && (
+        <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/30 p-3">
+          <div className="mb-2">
+            <div className="text-xs font-medium text-zinc-300">使用方式</div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              使用当前选中的标签或 Digest 访问镜像。
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {ociUsage(repository, image, selectedReference ?? undefined).map(
+              (snippet: UsageSnippet) => (
+                <UsageSnippetBlock
+                  key={snippet.label}
+                  snippet={snippet}
+                  copied={copiedUsage === snippet.code}
+                  onCopy={() => void copyUsage(snippet)}
+                />
+              ),
+            )}
+          </div>
+        </div>
+      )}
+
       {manifestLoading ? (
         <Loading label="加载清单…" />
       ) : !manifest ? null : (
@@ -354,10 +401,18 @@ export function OciImageDetail({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                总大小
+                镜像大小
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
-                {formatBytes(totalSize)}
+                {hasImageDescriptors ? formatBytes(totalSize) : "无层数据"}
+              </div>
+              {!hasImageDescriptors && (
+                <div className="mt-1 text-[10px] leading-4 text-zinc-600">
+                  仅包含 Manifest 元数据
+                </div>
+              )}
+              <div className="mt-1 text-[10px] leading-4 text-zinc-600">
+                Manifest JSON {formatBytes(selectedVersion?.size)}
               </div>
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">

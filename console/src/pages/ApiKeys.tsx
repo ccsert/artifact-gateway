@@ -183,7 +183,7 @@ export function ApiKeysPage() {
   const [filter, setFilter] = useState("");
   const [stateFilter, setStateFilter] = useState<
     "all" | "active" | "expired" | "revoked"
-  >("all");
+  >("active");
 
   const load = useCallback(async () => {
     setError(null);
@@ -375,12 +375,12 @@ export function ApiKeysPage() {
             <FilterBar
               className="border-x-0 border-t-0 rounded-none"
               actions={
-                filter || stateFilter !== "all" ? (
+                filter || stateFilter !== "active" ? (
                   <Button
                     type="text"
                     onClick={() => {
                       setFilter("");
-                      setStateFilter("all");
+                      setStateFilter("active");
                     }}
                   >
                     清除筛选

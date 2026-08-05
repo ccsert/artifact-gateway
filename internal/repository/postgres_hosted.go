@@ -152,7 +152,39 @@ func (s *PostgresStore) DisableHostedRepository(ctx context.Context, id string) 
 	var repo HostedRepository
 	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET state='deleting', version=version+1 WHERE id::text=$1 AND state='active' RETURNING `+hostedRepositoryColumns, id), &repo)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Deletion is an asynchronous lifecycle transition. Treat a retry for an
+		// already deleting repository as successful so clients can safely retry
+		// after a timeout or page refresh.
+		stateErr := scanHostedRepository(s.db.QueryRowContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE id::text=$1 AND state='deleting'`, id), &repo)
+		if stateErr == nil {
+			return repo, nil
+		}
+		if !errors.Is(stateErr, sql.ErrNoRows) {
+			return HostedRepository{}, stateErr
+		}
 		return HostedRepository{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	return repo, nil
+}
+
+func (s *PostgresStore) FinalizeHostedRepositoryDeletion(ctx context.Context, id string) (HostedRepository, error) {
+	var repo HostedRepository
+	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET state='deleted', version=version+1 WHERE id::text=$1 AND state='deleting' RETURNING `+hostedRepositoryColumns, id), &repo)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = scanHostedRepository(s.db.QueryRowContext(ctx, `SELECT `+hostedRepositoryColumns+` FROM hosted_repositories WHERE id::text=$1`, id), &repo)
+		if errors.Is(err, sql.ErrNoRows) {
+			return HostedRepository{}, ErrNotFound
+		}
+		if err != nil {
+			return HostedRepository{}, err
+		}
+		if repo.State == RepositoryDeleted {
+			return repo, nil
+		}
+		return HostedRepository{}, ErrVersionConflict
 	}
 	if err != nil {
 		return HostedRepository{}, err

@@ -1904,7 +1904,7 @@ export function PublicBrowsePage() {
             管理登录
           </Link>
         </div>
-        <Card className="p-5 sm:p-6">
+        <Card bodyClassName="p-5 sm:p-6">
           <h1 className="text-xl font-semibold text-zinc-50">公开制品</h1>
           <p className="mt-1 text-sm text-zinc-500">
             仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。
@@ -1994,7 +1994,10 @@ export function PublicBrowsePage() {
                       to={`/browse?repository=${encodeURIComponent(repository.id)}`}
                       className="block text-left"
                     >
-                      <Card className="h-full border-zinc-800 px-4 py-4 transition-colors hover:border-cyan-500/50 hover:bg-zinc-900">
+                      <Card
+                        className="h-full border-zinc-800 transition-colors hover:border-cyan-500/50 hover:bg-zinc-900"
+                        bodyClassName="px-4 py-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <span className="min-w-0 truncate font-medium text-zinc-100">
                             {repository.name}

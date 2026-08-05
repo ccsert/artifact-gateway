@@ -225,6 +225,7 @@ Repository:
       description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
     state:
       type: string
+      description: Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
       enum:
       - active
       - deleting

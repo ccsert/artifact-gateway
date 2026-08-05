@@ -50,6 +50,35 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	}
 }
 
+func TestMemoryDisableHostedRepositoryIsIdempotentWhileDeleting(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	created, err := store.CreateHostedRepository(ctx, HostedRepository{
+		ID:     "deleting-repository",
+		Name:   "deleting-repository",
+		Format: FormatOCI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := store.DisableHostedRepository(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("first disable: %v", err)
+	}
+	if first.State != RepositoryDeleting {
+		t.Fatalf("first disable state=%q, want deleting", first.State)
+	}
+
+	second, err := store.DisableHostedRepository(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("repeated disable: %v", err)
+	}
+	if second.State != RepositoryDeleting || second.ID != created.ID {
+		t.Fatalf("repeated disable=%#v, want the existing deleting repository", second)
+	}
+}
+
 func TestMemoryReplicationLeaseRecoveryFencesStaleWorker(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

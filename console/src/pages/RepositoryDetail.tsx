@@ -1353,13 +1353,16 @@ function ArtifactsTab({
             dataSource={rows}
             columns={columns}
             pagination={false}
-            scroll={{ x: format === "oci" || format === "conan" ? 520 : 980 }}
+            scroll={{
+              x: format === "oci" || format === "conan" ? 520 : 980,
+              y: "calc(100vh - 430px)",
+            }}
             expandable={{
               expandedRowKeys: expandedImage ? [expandedImage] : [],
               expandedRowRender,
               expandRowByClick: true,
-              onExpandedRowsChange: (keys) =>
-                setExpandedImage(keys.length > 0 ? String(keys[0]) : null),
+              onExpand: (expanded, record) =>
+                setExpandedImage(expanded ? record.key : null),
             }}
           />
           <Pagination hasMore={!!nextToken} onMore={() => load(q, nextToken)} />
@@ -3720,7 +3723,7 @@ export function RepositoryDetailPage() {
             !(t.key === "publish" && repo.type === "proxy"),
         ).map((t) => ({ key: t.key, label: t.label }))}
       />
-      <Card className="p-4">
+      <Card bodyClassName="p-4">
         {tab === "artifacts" && (
           <ArtifactsTab
             repo={repo}

@@ -90,6 +90,7 @@ func main() {
 	metrics := &app.Metrics{}
 	runtimeContext := signalContext()
 	app.LifecycleJobRecovery{Store: store}.Start(runtimeContext, time.Minute)
+	app.RepositoryDeletionWorker{Store: store}.Start(runtimeContext, time.Minute)
 	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
 	app.NativeMavenMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
 	app.NativeRepositoryRetention{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)

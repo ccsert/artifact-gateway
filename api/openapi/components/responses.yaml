@@ -323,7 +323,7 @@ RawDirectoryList:
       schema:
         "$ref": "../components/schemas.yaml#/RawDirectoryPage"
 Deletion:
-  description: Accepted deletion
+  description: Accepted asynchronous deletion. The repository is immediately unavailable to protocol traffic and is finalized by the background deletion worker; audit metadata is retained.
   content:
     application/json:
       schema:

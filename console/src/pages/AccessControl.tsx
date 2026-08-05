@@ -313,7 +313,7 @@ export function AccessControlPage() {
           },
         ]}
       />
-      <Card className="mt-4 px-4 py-3">
+      <Card className="mt-4" bodyClassName="px-4 py-3">
         <div className="flex items-center justify-between gap-6">
           <div>
             <div className="text-sm font-medium text-zinc-200">
@@ -410,7 +410,7 @@ export function AccessControlPage() {
           },
         ]}
       />
-      <Card className="p-0">
+      <Card>
         <CardHeader title={`授权记录（${filtered.length}）`} />
         <FilterBar
           actions={
