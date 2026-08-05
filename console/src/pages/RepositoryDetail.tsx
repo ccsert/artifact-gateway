@@ -11,9 +11,11 @@ import {
   Select,
   Space,
   Switch,
+  Table,
   Tabs,
   Tooltip,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -1504,6 +1506,55 @@ function GrantsTab({ repo }: { repo: Repository }) {
     );
   if (!grants) return <Loading />;
 
+  const grantColumns: ColumnsType<Grant> = [
+    {
+      title: "授权主体",
+      dataIndex: "principal",
+      key: "principal",
+      width: 320,
+      render: (value: string) => (
+        <div>
+          <div className="font-mono text-xs text-zinc-200">
+            {principalChoices.find((choice) => choice.value === value)?.label ??
+              value}
+          </div>
+          <div className="mt-0.5 font-mono text-[10px] text-zinc-600">
+            {value}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "权限级别",
+      key: "level",
+      width: 150,
+      render: (_, grant) => (
+        <Badge
+          tone={
+            grantLevel(grant.scopes) === "admin"
+              ? "red"
+              : grantLevel(grant.scopes) === "write"
+                ? "amber"
+                : "green"
+          }
+        >
+          {grantLevelLabel(grantLevel(grant.scopes))}
+        </Badge>
+      ),
+    },
+    {
+      title: "资源范围",
+      dataIndex: "resourcePrefix",
+      key: "resourcePrefix",
+      width: 260,
+      render: (value?: string) => (
+        <span className="font-mono text-xs text-zinc-500">
+          {value || "整个仓库"}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div>
       <div className="mb-4 flex justify-end">
@@ -1517,40 +1568,17 @@ function GrantsTab({ repo }: { repo: Repository }) {
           hint="在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。"
         />
       ) : (
-        <DataTable columns={["授权主体", "权限级别", "资源范围"]}>
-          {grants.map((g, i) => (
-            <tr key={i} className="hover:bg-zinc-800/30">
-              <td className="px-4 py-2.5">
-                <div className="font-mono text-xs text-zinc-200">
-                  {principalChoices.find(
-                    (choice) => choice.value === g.principal,
-                  )?.label ?? g.principal}
-                </div>
-                <div className="mt-0.5 font-mono text-[10px] text-zinc-600">
-                  {g.principal}
-                </div>
-              </td>
-              <td className="px-4 py-2.5">
-                <div className="flex flex-wrap gap-1">
-                  <Badge
-                    tone={
-                      grantLevel(g.scopes) === "admin"
-                        ? "red"
-                        : grantLevel(g.scopes) === "write"
-                          ? "amber"
-                          : "green"
-                    }
-                  >
-                    {grantLevelLabel(grantLevel(g.scopes))}
-                  </Badge>
-                </div>
-              </td>
-              <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                {g.resourcePrefix || "整个仓库"}
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+        <Table<Grant>
+          className="ag-console-table"
+          rowKey={(grant, index) =>
+            `${grant.principal}-${grant.resourcePrefix ?? ""}-${index}`
+          }
+          size="middle"
+          dataSource={grants}
+          columns={grantColumns}
+          pagination={false}
+          scroll={{ x: 760 }}
+        />
       )}
       <Modal
         open={editor.open}
@@ -2082,6 +2110,73 @@ function RetentionTab({ repo }: { repo: Repository }) {
     return <NotEnabled feature="Hosted 仓库保留策略" />;
   }
 
+  const dryRunColumns: ColumnsType<RetentionDryRun["candidates"][number]> = [
+    {
+      title: "清理单位",
+      dataIndex: "coordinate",
+      key: "coordinate",
+      width: 360,
+      render: (value: string) => (
+        <span
+          className="block max-w-md truncate font-mono text-xs text-zinc-200"
+          title={value}
+        >
+          {value}
+        </span>
+      ),
+    },
+    {
+      title: "摘要",
+      dataIndex: "digest",
+      key: "digest",
+      width: 180,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500">
+          {shortDigest(value)}
+        </span>
+      ),
+    },
+    {
+      title: "类型",
+      key: "versionType",
+      width: 140,
+      render: (_, candidate) => (
+        <span className="text-xs text-zinc-400">
+          {retentionCandidateTypeLabel(candidate.versionType, candidate.format)}
+        </span>
+      ),
+    },
+    {
+      title: "原因",
+      key: "reasons",
+      width: 280,
+      render: (_, candidate) => (
+        <span className="text-xs text-zinc-400">
+          {candidate.reasons
+            .map((reason) =>
+              reason === "maximum_versions"
+                ? "超过版本上限"
+                : candidate.versionType === "asset"
+                  ? `已 ${candidate.ageDays} 天未更新`
+                  : `已保留 ${candidate.ageDays} 天`,
+            )
+            .join("、")}
+        </span>
+      ),
+    },
+    {
+      title: isRaw ? "最后更新时间" : "创建时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 180,
+      render: (value: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {saveError !== null && <ErrorBanner error={saveError} />}
@@ -2268,43 +2363,17 @@ function RetentionTab({ repo }: { repo: Repository }) {
           {dryRun.candidates.length === 0 ? (
             <EmptyState title={`没有需要清理的${copy.candidateName}`} />
           ) : (
-            <DataTable
-              columns={[
-                "清理单位",
-                "摘要",
-                "类型",
-                "原因",
-                isRaw ? "最后更新时间" : "创建时间",
-              ]}
-            >
-              {dryRun.candidates.map((c) => (
-                <tr key={`${c.format}:${c.coordinate}:${c.digest}`}>
-                  <td className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200">
-                    {c.coordinate}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                    {shortDigest(c.digest)}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-zinc-400">
-                    {retentionCandidateTypeLabel(c.versionType, c.format)}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-zinc-400">
-                    {c.reasons
-                      .map((reason) =>
-                        reason === "maximum_versions"
-                          ? "超过版本上限"
-                          : c.versionType === "asset"
-                            ? `已 ${c.ageDays} 天未更新`
-                            : `已保留 ${c.ageDays} 天`,
-                      )
-                      .join("、")}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                    {formatDate(c.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
+            <Table<RetentionDryRun["candidates"][number]>
+              className="ag-console-table"
+              rowKey={(candidate) =>
+                `${candidate.format}:${candidate.coordinate}:${candidate.digest}`
+              }
+              size="middle"
+              dataSource={dryRun.candidates}
+              columns={dryRunColumns}
+              pagination={false}
+              scroll={{ x: 1080 }}
+            />
           )}
           {dryRun.nextPageToken && (
             <div className="flex justify-center border-t border-zinc-800 px-4 py-3">
@@ -2593,6 +2662,151 @@ function DistributeTab({ repo }: { repo: Repository }) {
 
   if (error !== null) return <ErrorBanner error={error} onRetry={load} />;
 
+  const planColumns: ColumnsType<ReplicationPlan> = [
+    {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 150,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500" title={value}>
+          {value.slice(0, 8)}…
+        </span>
+      ),
+    },
+    {
+      title: "目标仓库",
+      dataIndex: "targetRepositoryId",
+      key: "targetRepositoryId",
+      width: 220,
+      render: (value: string) => (
+        <span className="text-xs text-zinc-300">{repoName(value)}</span>
+      ),
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 130,
+      render: (value: string) => <StateBadge state={value} />,
+    },
+    {
+      title: "创建时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 180,
+      render: (value: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "完成时间",
+      dataIndex: "completedAt",
+      key: "completedAt",
+      width: 180,
+      render: (value?: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 180,
+      render: (_, plan) => (
+        <Space size="small">
+          <Button size="small" onClick={() => showDetail(plan.id)}>
+            进度
+          </Button>
+          {(plan.state === "pending" || plan.state === "failed") && (
+            <Popconfirm
+              title="确认取消复制计划？"
+              description="取消后工作进程将不再重试，已复制的字节不会自动删除。"
+              okText="确认取消"
+              cancelText="返回"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => cancelPlan(plan.id)}
+            >
+              <Button size="small" danger>
+                取消
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      ),
+    },
+  ];
+  const checkpointColumns: ColumnsType<
+    ReplicationPlanDetail["checkpoints"][number]
+  > = [
+    {
+      title: "对象",
+      dataIndex: "objectKey",
+      key: "objectKey",
+      width: 280,
+      render: (value: string) => (
+        <span
+          className="block max-w-64 truncate font-mono text-xs text-zinc-300"
+          title={value}
+        >
+          {value}
+        </span>
+      ),
+    },
+    {
+      title: "摘要",
+      dataIndex: "digest",
+      key: "digest",
+      width: 180,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500">
+          {shortDigest(value)}
+        </span>
+      ),
+    },
+    {
+      title: "大小",
+      dataIndex: "size",
+      key: "size",
+      width: 120,
+      render: (value: number) => (
+        <span className="text-xs text-zinc-400">{formatBytes(value)}</span>
+      ),
+    },
+    {
+      title: "进度",
+      key: "progress",
+      width: 110,
+      render: (_, checkpoint) => (
+        <span className="text-xs text-zinc-400">
+          {checkpoint.size > 0
+            ? `${Math.round((checkpoint.byteOffset / checkpoint.size) * 100)}%`
+            : "—"}
+        </span>
+      ),
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 130,
+      render: (value: string) => <StateBadge state={value} />,
+    },
+    {
+      title: "重试",
+      dataIndex: "attempts",
+      key: "attempts",
+      width: 90,
+      render: (value: number) => (
+        <span className="text-xs text-zinc-500">{value}</span>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {actionError !== null && <ErrorBanner error={actionError} />}
@@ -2673,53 +2887,15 @@ function DistributeTab({ repo }: { repo: Repository }) {
         ) : plans.length === 0 ? (
           <EmptyState title="暂无复制计划" />
         ) : (
-          <DataTable
-            columns={["ID", "目标仓库", "状态", "创建时间", "完成时间", ""]}
-          >
-            {plans.map((p) => (
-              <tr key={p.id} className="hover:bg-zinc-800/30">
-                <td
-                  className="px-4 py-2.5 font-mono text-xs text-zinc-500"
-                  title={p.id}
-                >
-                  {p.id.slice(0, 8)}…
-                </td>
-                <td className="px-4 py-2.5 text-xs text-zinc-300">
-                  {repoName(p.targetRepositoryId)}
-                </td>
-                <td className="px-4 py-2.5">
-                  <StateBadge state={p.state} />
-                </td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                  {formatDate(p.createdAt)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                  {formatDate(p.completedAt)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <Space size="small">
-                    <Button size="small" onClick={() => showDetail(p.id)}>
-                      进度
-                    </Button>
-                    {(p.state === "pending" || p.state === "failed") && (
-                      <Popconfirm
-                        title="确认取消复制计划？"
-                        description="取消后工作进程将不再重试，已复制的字节不会自动删除。"
-                        okText="确认取消"
-                        cancelText="返回"
-                        okButtonProps={{ danger: true }}
-                        onConfirm={() => cancelPlan(p.id)}
-                      >
-                        <Button size="small" danger>
-                          取消
-                        </Button>
-                      </Popconfirm>
-                    )}
-                  </Space>
-                </td>
-              </tr>
-            ))}
-          </DataTable>
+          <Table<ReplicationPlan>
+            className="ag-console-table"
+            rowKey="id"
+            size="middle"
+            dataSource={plans}
+            columns={planColumns}
+            pagination={false}
+            scroll={{ x: 1040 }}
+          />
         )}
       </div>
 
@@ -2748,37 +2924,17 @@ function DistributeTab({ repo }: { repo: Repository }) {
                 暂无检查点
               </p>
             ) : (
-              <DataTable
-                columns={["对象", "摘要", "大小", "进度", "状态", "重试"]}
-              >
-                {detail.checkpoints.map((c, i) => (
-                  <tr key={i} className="hover:bg-zinc-800/30">
-                    <td
-                      className="max-w-48 truncate px-4 py-2 font-mono text-xs text-zinc-300"
-                      title={c.objectKey}
-                    >
-                      {c.objectKey}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-zinc-500">
-                      {shortDigest(c.digest)}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-zinc-400">
-                      {formatBytes(c.size)}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-zinc-400">
-                      {c.size > 0
-                        ? `${Math.round((c.byteOffset / c.size) * 100)}%`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <StateBadge state={c.state} />
-                    </td>
-                    <td className="px-4 py-2 text-xs text-zinc-500">
-                      {c.attempts}
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
+              <Table<ReplicationPlanDetail["checkpoints"][number]>
+                className="ag-console-table"
+                rowKey={(checkpoint, index) =>
+                  `${checkpoint.objectKey}-${index}`
+                }
+                size="small"
+                dataSource={detail.checkpoints}
+                columns={checkpointColumns}
+                pagination={false}
+                scroll={{ x: 900 }}
+              />
             )}
           </div>
         )}
@@ -2817,6 +2973,7 @@ function JobsTab({ repo }: { repo: Repository }) {
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
+
   if (!jobs) return <Loading />;
   if (jobs.length === 0)
     return (
@@ -2826,37 +2983,80 @@ function JobsTab({ repo }: { repo: Repository }) {
       />
     );
 
+  const jobColumns: ColumnsType<LifecycleJob> = [
+    {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 150,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500" title={value}>
+          {value.slice(0, 8)}…
+        </span>
+      ),
+    },
+    {
+      title: "类型",
+      dataIndex: "kind",
+      key: "kind",
+      width: 150,
+      render: (value: string) => <Badge tone="blue">{value}</Badge>,
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 130,
+      render: (value: string) => <StateBadge state={value} />,
+    },
+    {
+      title: "创建时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 180,
+      render: (value: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "完成时间",
+      dataIndex: "completedAt",
+      key: "completedAt",
+      width: 180,
+      render: (value?: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "错误",
+      dataIndex: "lastError",
+      key: "lastError",
+      width: 300,
+      render: (value?: string) => (
+        <span
+          className="block max-w-72 truncate text-xs text-rose-400"
+          title={value}
+        >
+          {value ?? "—"}
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <DataTable columns={["ID", "类型", "状态", "创建时间", "完成时间", "错误"]}>
-      {jobs.map((j) => (
-        <tr key={j.id} className="hover:bg-zinc-800/30">
-          <td
-            className="px-4 py-2.5 font-mono text-xs text-zinc-500"
-            title={j.id}
-          >
-            {j.id.slice(0, 8)}…
-          </td>
-          <td className="px-4 py-2.5">
-            <Badge tone="blue">{j.kind}</Badge>
-          </td>
-          <td className="px-4 py-2.5">
-            <StateBadge state={j.state} />
-          </td>
-          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-            {formatDate(j.createdAt)}
-          </td>
-          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-            {formatDate(j.completedAt)}
-          </td>
-          <td
-            className="max-w-56 truncate px-4 py-2.5 text-xs text-rose-400"
-            title={j.lastError}
-          >
-            {j.lastError ?? "—"}
-          </td>
-        </tr>
-      ))}
-    </DataTable>
+    <Table<LifecycleJob>
+      className="ag-console-table"
+      rowKey="id"
+      size="middle"
+      dataSource={jobs}
+      columns={jobColumns}
+      pagination={false}
+      scroll={{ x: 1100 }}
+    />
   );
 }
 
@@ -2923,6 +3123,64 @@ function TombstonesTab({ repo }: { repo: Repository }) {
     );
   if (loading) return <Loading />;
 
+  const tombstoneColumns: ColumnsType<ArtifactTombstone> = [
+    {
+      title: "坐标",
+      dataIndex: "coordinate",
+      key: "coordinate",
+      width: 360,
+      render: (value: string) => (
+        <span
+          className="block max-w-md truncate font-mono text-xs text-zinc-200"
+          title={value}
+        >
+          {value}
+        </span>
+      ),
+    },
+    {
+      title: "摘要",
+      dataIndex: "digest",
+      key: "digest",
+      width: 180,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500">
+          {shortDigest(value)}
+        </span>
+      ),
+    },
+    {
+      title: "删除时间",
+      dataIndex: "tombstonedAt",
+      key: "tombstonedAt",
+      width: 190,
+      render: (value: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 100,
+      render: (_, item) => (
+        <Popconfirm
+          title="确认恢复此制品？"
+          description="恢复后制品会重新出现在仓库浏览与协议读取中。"
+          okText="恢复"
+          cancelText="取消"
+          onConfirm={() => restore(item.coordinate)}
+        >
+          <Button size="small" loading={restoring === item.coordinate}>
+            恢复
+          </Button>
+        </Popconfirm>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-3">
       {restoreError !== null && (
@@ -2938,40 +3196,17 @@ function TombstonesTab({ repo }: { repo: Repository }) {
         />
       ) : (
         <>
-          <DataTable columns={["坐标", "摘要", "删除时间", ""]}>
-            {items.map((t) => (
-              <tr
-                key={`${t.coordinate}:${t.digest}:${t.tombstonedAt}`}
-                className="hover:bg-zinc-800/30"
-              >
-                <td
-                  className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200"
-                  title={t.coordinate}
-                >
-                  {t.coordinate}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                  {shortDigest(t.digest)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                  {formatDate(t.tombstonedAt)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <Popconfirm
-                    title="确认恢复此制品？"
-                    description="恢复后制品会重新出现在仓库浏览与协议读取中。"
-                    okText="恢复"
-                    cancelText="取消"
-                    onConfirm={() => restore(t.coordinate)}
-                  >
-                    <Button size="small" loading={restoring === t.coordinate}>
-                      恢复
-                    </Button>
-                  </Popconfirm>
-                </td>
-              </tr>
-            ))}
-          </DataTable>
+          <Table<ArtifactTombstone>
+            className="ag-console-table"
+            rowKey={(item) =>
+              `${item.coordinate}:${item.digest}:${item.tombstonedAt}`
+            }
+            size="middle"
+            dataSource={items}
+            columns={tombstoneColumns}
+            pagination={false}
+            scroll={{ x: 830 }}
+          />
           <Pagination hasMore={!!nextToken} onMore={() => load(nextToken)} />
         </>
       )}
