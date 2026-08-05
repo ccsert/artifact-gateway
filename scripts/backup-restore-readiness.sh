@@ -64,8 +64,22 @@ enqueue_idempotently() {
   replay=$(curl --silent --show-error --fail \
     -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: $key" \
     --data "$payload" "$gateway_url$path") || return 1
-  [[ "$replay" == "$first" ]] || { printf 'Idempotency replay changed the response for %s.\n' "$path" >&2; exit 1; }
-  python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$first"
+  # A replay returns the same durable operation at its current state. Workers
+  # may advance it between requests, so mutable progress fields can differ.
+  python3 - "$path" "$first" "$replay" <<'PY'
+import json
+import sys
+
+path, first_raw, replay_raw = sys.argv[1:]
+first = json.loads(first_raw)
+replay = json.loads(replay_raw)
+immutable = ("id", "repositoryId", "sourceRepositoryId", "targetRepositoryId", "format", "kind", "createdAt")
+mismatches = [key for key in immutable if key in first or key in replay if first.get(key) != replay.get(key)]
+if not first.get("id") or mismatches:
+    print(f"Idempotency replay changed operation identity for {path}: {', '.join(mismatches) or 'missing id'}.", file=sys.stderr)
+    raise SystemExit(1)
+print(first["id"])
+PY
 }
 replication_completed() {
   local repository_id=$1 plan_id=$2 detail

@@ -12,6 +12,9 @@ git cat-file -e "$base_ref^{commit}"
 free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }
 project="artifact-gateway-upgrade-${RANDOM}-${RANDOM}"
 old_tree=$(mktemp -d)
+# macOS exposes /var as a symlink to /private/var. Git records the physical
+# worktree path, so normalize it before registration and cleanup.
+old_tree=$(cd "$old_tree" && pwd -P)
 isolated_environment=$(mktemp)
 gateway_port=$(free_port)
 minio_api_port=$(free_port)
