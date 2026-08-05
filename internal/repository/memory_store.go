@@ -52,6 +52,7 @@ type MemoryStore struct {
 	ociObjectIntents      map[string]OCIObjectIntent
 	artifactTombstones    map[string]ArtifactTombstone
 	lifecycleJobs         map[string]LifecycleJob
+	lifecycleCreatedAt    time.Time
 	replicationPlans      map[string]ReplicationPlan
 	replicationKeys       map[string]string
 	replicationChecks     map[string]map[string]ReplicationCheckpoint

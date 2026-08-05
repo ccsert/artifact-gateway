@@ -31,13 +31,18 @@ func (s *MemoryStore) EnqueueLifecycleJob(_ context.Context, job LifecycleJob) (
 		return cloneLifecycleJob(existing), true, nil
 	}
 	now := time.Now().UTC()
+	createdAt := now
+	if !createdAt.After(s.lifecycleCreatedAt) {
+		createdAt = s.lifecycleCreatedAt.Add(time.Nanosecond)
+	}
+	s.lifecycleCreatedAt = createdAt
 	if job.MaxAttempts <= 0 {
 		job.MaxAttempts = DefaultLifecycleJobMaxAttempts
 	}
 	if job.ProgressTotal <= 0 && job.Kind != LifecycleJobRetention {
 		job.ProgressTotal = 1
 	}
-	job.State, job.CreatedAt, job.NextAttemptAt, job.Payload = LifecycleJobPending, now, now, append([]byte(nil), job.Payload...)
+	job.State, job.CreatedAt, job.NextAttemptAt, job.Payload = LifecycleJobPending, createdAt, now, append([]byte(nil), job.Payload...)
 	s.lifecycleJobs[key] = job
 	return cloneLifecycleJob(job), false, nil
 }
