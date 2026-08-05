@@ -1489,17 +1489,19 @@ type Repository struct {
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
 
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
-	AnonymousRead bool            `json:"anonymousRead"`
-	Endpoint      *string         `json:"endpoint,omitempty"`
-	Format        Format          `json:"format"`
-	Id            string          `json:"id"`
-	Name          string          `json:"name"`
-	State         RepositoryState `json:"state"`
-	Type          *RepositoryType `json:"type,omitempty"`
-	Version       string          `json:"version"`
+	AnonymousRead bool    `json:"anonymousRead"`
+	Endpoint      *string `json:"endpoint,omitempty"`
+	Format        Format  `json:"format"`
+	Id            string  `json:"id"`
+	Name          string  `json:"name"`
+
+	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
+	State   RepositoryState `json:"state"`
+	Type    *RepositoryType `json:"type,omitempty"`
+	Version string          `json:"version"`
 }
 
-// RepositoryState defines model for Repository.State.
+// RepositoryState Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
 type RepositoryState string
 
 // RepositoryType defines model for Repository.Type.

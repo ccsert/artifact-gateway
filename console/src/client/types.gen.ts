@@ -29,6 +29,9 @@ export type Repository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead: boolean;
+  /**
+   * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
+   */
   state: "active" | "deleting" | "deleted";
   version: string;
 };
@@ -1335,7 +1338,7 @@ export type DeleteRepositoryError =
 
 export type DeleteRepositoryResponses = {
   /**
-   * Accepted deletion
+   * Accepted asynchronous deletion. The repository is immediately unavailable to protocol traffic and is finalized by the background deletion worker; audit metadata is retained.
    */
   202: Deletion;
 };
@@ -2364,7 +2367,7 @@ export type DeleteArtifactData = {
 
 export type DeleteArtifactResponses = {
   /**
-   * Accepted deletion
+   * Accepted asynchronous deletion. The repository is immediately unavailable to protocol traffic and is finalized by the background deletion worker; audit metadata is retained.
    */
   202: Deletion;
 };

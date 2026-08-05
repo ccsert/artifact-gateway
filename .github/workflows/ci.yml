@@ -118,4 +118,9 @@ jobs:
         if: always()
         env:
           GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
-        run: docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml down -v --remove-orphans
+        run: |
+          if [ -f "$GATEWAY_ENV_FILE" ]; then
+            docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml down -v --remove-orphans
+          else
+            echo "Gateway environment file was not created; nothing to clean up."
+          fi
