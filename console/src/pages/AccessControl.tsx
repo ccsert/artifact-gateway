@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Button, Collapse, Input, Popconfirm, Select, Switch } from "antd";
+import {
+  Button,
+  Collapse,
+  Input,
+  Popconfirm,
+  Select,
+  Switch,
+  Table,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { ClearOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import {
@@ -9,7 +18,7 @@ import {
   replaceAnonymousAccessPolicy,
 } from "../client";
 import type { AnonymousAccessPolicy, Repository, Grant } from "../client";
-import { PageHeader, Card, CardHeader, DataTable } from "../components/Layout";
+import { PageHeader, Card, CardHeader } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { useAuth } from "../lib/auth";
@@ -207,6 +216,75 @@ export function AccessControlPage() {
   const hasFilters = Boolean(
     principalFilter || repoFilter || scopeFilter !== "all",
   );
+  const columns: ColumnsType<GrantRow> = [
+    {
+      title: "主体",
+      dataIndex: "principal",
+      key: "principal",
+      width: 250,
+      render: (value: string) => <Principal value={value} />,
+    },
+    {
+      title: "仓库",
+      dataIndex: "repositoryName",
+      key: "repositoryName",
+      width: 220,
+      render: (value: string, row) => (
+        <Link
+          to={`/repositories/${row.repositoryId}`}
+          className="text-xs text-cyan-400 hover:text-cyan-300"
+        >
+          {value}
+        </Link>
+      ),
+    },
+    {
+      title: "格式",
+      dataIndex: "format",
+      key: "format",
+      width: 120,
+      render: (value: Repository["format"]) => <FormatBadge format={value} />,
+    },
+    {
+      title: "权限",
+      key: "scope",
+      width: 190,
+      render: (_, row) => {
+        const scope = scopeLabel(row.scopes);
+        return (
+          <span>
+            <Badge tone={scope.tone}>{scope.label}</Badge>
+            {scope.key === "admin" && (
+              <span className="ml-2 text-[10px] text-rose-300">高权限</span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      title: "资源前缀",
+      dataIndex: "resourcePrefix",
+      key: "resourcePrefix",
+      width: 240,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-500">{value || "—"}</span>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 90,
+      render: (_, row) => (
+        <Link
+          to={`/repositories/${row.repositoryId}`}
+          className="text-xs text-zinc-500 hover:text-cyan-300"
+        >
+          编辑 →
+        </Link>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -395,51 +473,17 @@ export function AccessControlPage() {
             }
           />
         ) : (
-          <DataTable columns={["主体", "仓库", "格式", "权限", "资源前缀", ""]}>
-            {filtered.map((row, index) => {
-              const scope = scopeLabel(row.scopes);
-              return (
-                <tr
-                  key={`${row.repositoryId}-${row.principal}-${index}`}
-                  className="hover:bg-zinc-800/30"
-                >
-                  <td className="px-4 py-2.5">
-                    <Principal value={row.principal} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Link
-                      to={`/repositories/${row.repositoryId}`}
-                      className="text-xs text-cyan-400 hover:text-cyan-300"
-                    >
-                      {row.repositoryName}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <FormatBadge format={row.format} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Badge tone={scope.tone}>{scope.label}</Badge>
-                    {scope.key === "admin" && (
-                      <span className="ml-2 text-[10px] text-rose-300">
-                        高权限
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
-                    {row.resourcePrefix || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <Link
-                      to={`/repositories/${row.repositoryId}`}
-                      className="text-xs text-zinc-500 hover:text-cyan-300"
-                    >
-                      编辑 →
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
+          <Table<GrantRow>
+            className="ag-console-table"
+            rowKey={(row) =>
+              `${row.repositoryId}-${row.principal}-${row.resourcePrefix}`
+            }
+            size="middle"
+            dataSource={filtered}
+            columns={columns}
+            pagination={false}
+            scroll={{ x: 1050 }}
+          />
         )}
       </Card>
     </div>

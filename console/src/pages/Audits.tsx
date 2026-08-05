@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
-import { Button, Collapse, Select, Space } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Collapse, Select, Space, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   ClearOutlined,
   DownloadOutlined,
@@ -7,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { listAudits, listRepositories, listGroups } from "../client";
 import type { AuditRecord } from "../client";
-import { PageHeader, Card, DataTable } from "../components/Layout";
+import { PageHeader, Card } from "../components/Layout";
 import {
   Loading,
   ErrorBanner,
@@ -45,6 +46,12 @@ const AUDIT_CSV_COLUMNS = [
   "Trace ID",
 ];
 const AUDIT_PAGE_SIZE = 50;
+
+type AuditTableRow = {
+  key: string;
+  rowIndex: number;
+  record: AuditRecord;
+};
 
 function auditOutcomeLabel(value: string): string {
   const labels: Record<string, string> = {
@@ -155,6 +162,11 @@ export function AuditsPage() {
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * AUDIT_PAGE_SIZE;
   const pageRecords = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
+  const tableRows: AuditTableRow[] = pageRecords.map((record, index) => ({
+    key: String(pageStart + index),
+    rowIndex: pageStart + index,
+    record,
+  }));
   const outcomeOptions = Array.from(
     new Set(filtered.map((a) => a.outcome).filter(Boolean)),
   ).map((value) => ({ value, label: auditOutcomeLabel(value) }));
@@ -204,6 +216,115 @@ export function AuditsPage() {
     setOperation("");
     setActor("");
   };
+  const columns: ColumnsType<AuditTableRow> = [
+    {
+      title: "时间",
+      key: "occurredAt",
+      width: 180,
+      render: (_, row) => (
+        <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
+          {formatDate(row.record.occurredAt)}
+        </span>
+      ),
+    },
+    {
+      title: "操作",
+      key: "operation",
+      width: 190,
+      render: (_, row) => (
+        <span
+          className="block max-w-52 truncate text-xs text-zinc-200"
+          title={row.record.operation}
+        >
+          {row.record.operation
+            ? auditOperationLabel(row.record.operation)
+            : "—"}
+        </span>
+      ),
+    },
+    {
+      title: "结果",
+      key: "outcome",
+      width: 170,
+      render: (_, row) => <StateBadge state={row.record.outcome} />,
+    },
+    {
+      title: "仓库/分组",
+      key: "repository",
+      width: 180,
+      render: (_, row) => (
+        <span className="block max-w-40 truncate font-mono text-xs text-zinc-400">
+          {row.record.repository ?? row.record.groupName ?? "—"}
+        </span>
+      ),
+    },
+    {
+      title: "格式",
+      key: "format",
+      width: 110,
+      render: (_, row) =>
+        row.record.format ? <FormatBadge format={row.record.format} /> : "—",
+    },
+    {
+      title: "状态",
+      key: "status",
+      width: 90,
+      render: (_, row) => (
+        <span className="font-mono text-xs text-zinc-400">
+          {row.record.status ?? "—"}
+        </span>
+      ),
+    },
+    {
+      title: "流量",
+      key: "bytes",
+      width: 110,
+      render: (_, row) => (
+        <span className="text-xs text-zinc-400">
+          {formatBytes(row.record.bytes)}
+        </span>
+      ),
+    },
+    {
+      title: "Actor",
+      key: "actor",
+      width: 170,
+      render: (_, row) => (
+        <span
+          className="block max-w-32 truncate text-xs text-zinc-500"
+          title={row.record.actor}
+        >
+          {row.record.actor ?? "—"}
+        </span>
+      ),
+    },
+  ];
+
+  const expandedRowRender = ({ record }: AuditTableRow) => (
+    <div className="grid grid-cols-3 gap-x-8 gap-y-2 px-2 py-1 text-xs">
+      {(
+        [
+          ["资源", record.resource],
+          ["表示", record.representation],
+          ["成员", record.memberName],
+          ["成员类型", record.memberType],
+          ["上游主机", record.upstreamHost],
+          ["缓存", record.cacheDisposition],
+          ["授权来源", record.authorizationSource],
+          ["授权原因", record.authorizationReason],
+          ["Request ID", record.requestId],
+          ["Trace ID", record.traceId],
+        ] as const
+      ).map(([label, value]) => (
+        <div key={label} className="flex min-w-0 gap-2">
+          <span className="w-20 shrink-0 text-zinc-600">{label}</span>
+          <span className="min-w-0 break-all font-mono text-zinc-400">
+            {value ?? "—"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div>
@@ -385,97 +506,25 @@ export function AuditsPage() {
         </Card>
       ) : (
         <Card className="mt-4 p-0">
-          <DataTable
-            columns={[
-              "时间",
-              "操作",
-              "结果",
-              "仓库/分组",
-              "格式",
-              "状态",
-              "流量",
-              "Actor",
-              "",
-            ]}
-          >
-            {pageRecords.map((a, i) => {
-              const rowIndex = pageStart + i;
-              const isOpen = expanded === rowIndex;
-              return (
-                <Fragment key={`${a.requestId ?? "audit"}-${rowIndex}`}>
-                  <tr
-                    className="cursor-pointer hover:bg-zinc-800/30"
-                    onClick={() => setExpanded(isOpen ? null : rowIndex)}
-                  >
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
-                      {formatDate(a.occurredAt)}
-                    </td>
-                    <td
-                      className="max-w-52 truncate px-4 py-2.5 text-xs text-zinc-200"
-                      title={a.operation}
-                    >
-                      {a.operation ? auditOperationLabel(a.operation) : "—"}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <StateBadge state={a.outcome} />
-                    </td>
-                    <td className="max-w-40 truncate px-4 py-2.5 font-mono text-xs text-zinc-400">
-                      {a.repository ?? a.groupName ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {a.format ? <FormatBadge format={a.format} /> : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-400">
-                      {a.status ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-zinc-400">
-                      {formatBytes(a.bytes)}
-                    </td>
-                    <td
-                      className="max-w-32 truncate px-4 py-2.5 text-xs text-zinc-500"
-                      title={a.actor}
-                    >
-                      {a.actor ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs text-zinc-600">
-                      {isOpen ? "▲" : "▼"}
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="bg-zinc-950/45">
-                      <td colSpan={9} className="px-4 py-3">
-                        <div className="grid grid-cols-3 gap-x-8 gap-y-2 text-xs">
-                          {(
-                            [
-                              ["资源", a.resource],
-                              ["表示", a.representation],
-                              ["成员", a.memberName],
-                              ["成员类型", a.memberType],
-                              ["上游主机", a.upstreamHost],
-                              ["缓存", a.cacheDisposition],
-                              ["授权来源", a.authorizationSource],
-                              ["授权原因", a.authorizationReason],
-                              ["Request ID", a.requestId],
-                              ["Trace ID", a.traceId],
-                            ] as const
-                          ).map(([label, value]) => (
-                            <div key={label} className="flex min-w-0 gap-2">
-                              <span className="w-20 shrink-0 text-zinc-600">
-                                {label}
-                              </span>
-                              <span className="min-w-0 break-all font-mono text-zinc-400">
-                                {value ?? "—"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </DataTable>
+          <Table<AuditTableRow>
+            className="ag-console-table"
+            rowKey="key"
+            size="middle"
+            dataSource={tableRows}
+            columns={columns}
+            pagination={false}
+            scroll={{ x: 1200 }}
+            rowClassName="cursor-pointer"
+            expandable={{
+              expandedRowKeys: expanded === null ? [] : [String(expanded)],
+              expandedRowRender,
+              expandRowByClick: true,
+              onExpandedRowsChange: (keys) => {
+                const key = keys[0];
+                setExpanded(key === undefined ? null : Number(key));
+              },
+            }}
+          />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
             <span>
               第 {currentPage} / {totalPages} 页 · 显示 {pageRecords.length} /{" "}
