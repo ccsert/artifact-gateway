@@ -55,7 +55,8 @@ api-change-check:
 	@./scripts/api-change-check.sh
 
 integration-test: integration-down
-	@docker compose -f compose.integration.yml up -d --wait postgres minio-ready
+	@docker compose -f compose.integration.yml up -d --wait postgres minio
+	@docker compose -f compose.integration.yml run --rm --no-deps minio-ready
 	@docker compose -f compose.integration.yml run --rm --no-deps migrate
 	@./scripts/migration-runner-check.sh
 	@docker compose -f compose.integration.yml run --rm --no-deps test
