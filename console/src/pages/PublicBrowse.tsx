@@ -9,7 +9,8 @@ import {
   ReloadOutlined,
   UpOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Tooltip } from "antd";
+import { Button, Input, Table, Tooltip } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   listConanRecipeRevisions,
@@ -289,6 +290,271 @@ function repositoryUsage(
   return [{ label: "Raw 仓库地址", code: `${origin}/raw/${repoName}/` }];
 }
 
+interface MavenGroupTableProps {
+  groups: MavenArtifactGroup[];
+  repository: PublicRepository;
+  artifactParam: string;
+  buildParam: string;
+  expandedGroup: string | null;
+  selectedVersionKey: string | null;
+  copiedCoordinate: string | null;
+  onExpand: (groupKey: string, versionKey: string) => void;
+  onCollapse: () => void;
+  onSelectVersion: (group: MavenArtifactGroup, versionKey: string) => void;
+  artifactHref: (coordinate: string, buildNumber?: number) => string;
+  onCopyPageLink: (href: string) => void;
+  onCopyUsage: (snippet: UsageSnippet) => void;
+}
+
+interface MavenTableRow {
+  key: string;
+  group: MavenArtifactGroup;
+  latest: ArtifactSummary;
+  expanded: boolean;
+  selectedKey: string;
+  selectedVersion: ArtifactSummary;
+  snippets: UsageSnippet[];
+}
+
+function MavenGroupTable({
+  groups,
+  repository,
+  artifactParam,
+  buildParam,
+  expandedGroup,
+  selectedVersionKey,
+  copiedCoordinate,
+  onExpand,
+  onCollapse,
+  onSelectVersion,
+  artifactHref,
+  onCopyPageLink,
+  onCopyUsage,
+}: MavenGroupTableProps) {
+  const tableRows: MavenTableRow[] = groups.map((group) => {
+    const latest = group.versions[0];
+    const urlVersion = group.versions.find(
+      (version) =>
+        version.coordinate === artifactParam &&
+        (!buildParam || String(version.buildNumber ?? 0) === buildParam),
+    );
+    const expanded = expandedGroup === group.key || Boolean(urlVersion);
+    const preferredKey =
+      selectedVersionKey &&
+      group.versions.some(
+        (version, index) =>
+          mavenVersionKey(version, index) === selectedVersionKey,
+      )
+        ? selectedVersionKey
+        : urlVersion
+          ? mavenVersionKey(urlVersion, group.versions.indexOf(urlVersion))
+          : mavenVersionKey(latest, 0);
+    const selectedKey = group.versions.some(
+      (version, index) => mavenVersionKey(version, index) === preferredKey,
+    )
+      ? preferredKey
+      : mavenVersionKey(latest, 0);
+    const selectedVersion =
+      group.versions.find(
+        (version, index) => mavenVersionKey(version, index) === selectedKey,
+      ) ?? latest;
+    return {
+      key: group.key,
+      group,
+      latest,
+      expanded,
+      selectedKey,
+      selectedVersion,
+      snippets: usageFor(
+        repository.format,
+        repository.name,
+        selectedVersion.coordinate,
+        undefined,
+        {
+          buildNumber: selectedVersion.buildNumber,
+          createdAt: selectedVersion.createdAt,
+        },
+      ),
+    };
+  });
+
+  const columns: ColumnsType<MavenTableRow> = [
+    {
+      title: "制品",
+      dataIndex: "key",
+      key: "key",
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-100">{value}</span>
+      ),
+    },
+    {
+      title: "最新版本",
+      key: "latest",
+      width: 180,
+      render: (_, row) => (
+        <span className="font-mono text-xs text-zinc-400">
+          {row.latest.coordinate.split(":").slice(2).join(":")}
+        </span>
+      ),
+    },
+    {
+      title: "版本数",
+      key: "versionCount",
+      width: 100,
+      render: (_, row) => (
+        <span className="text-xs text-zinc-500">
+          {row.group.versions.length}
+        </span>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 130,
+      render: (_, row) => (
+        <div className="text-right">
+          <Button
+            type="text"
+            size="small"
+            icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
+            onClick={() =>
+              row.expanded
+                ? onCollapse()
+                : onExpand(row.key, mavenVersionKey(row.latest, 0))
+            }
+          >
+            {row.expanded ? "收起" : "选择版本"}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const expandedRowRender = (row: MavenTableRow) => {
+    const href = artifactHref(
+      row.selectedVersion.coordinate,
+      row.selectedVersion.buildNumber,
+    );
+    return (
+      <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+        <div>
+          <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+            选择版本{" "}
+            <span className="font-normal text-zinc-600">
+              ({row.group.versions.length})
+            </span>
+          </label>
+          <SearchableVersionSelect
+            value={row.selectedKey}
+            options={row.group.versions.map((version, index) => ({
+              value: mavenVersionKey(version, index),
+              label: `${version.coordinate.split(":").slice(2).join(":")}${
+                version.buildNumber ? ` · SNAPSHOT #${version.buildNumber}` : ""
+              }`,
+            }))}
+            onChange={(value) => onSelectVersion(row.group, value)}
+            placeholder="搜索并选择 Maven 版本"
+          />
+          <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+            在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。
+          </p>
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-zinc-100">
+              {row.selectedVersion.coordinate}
+            </span>
+            {row.selectedVersion.buildNumber ? (
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                SNAPSHOT #{row.selectedVersion.buildNumber}
+              </span>
+            ) : null}
+            <Button
+              type="link"
+              size="small"
+              icon={<LinkOutlined />}
+              href={href}
+            >
+              打开版本页
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => onCopyPageLink(href)}
+            >
+              {copiedCoordinate === href ? "链接已复制" : "复制链接"}
+            </Button>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-600">
+            <span>{formatDate(row.selectedVersion.createdAt)}</span>
+            <span
+              className="max-w-[min(70vw,560px)] truncate font-mono text-zinc-500"
+              title={row.selectedVersion.digest}
+            >
+              {row.selectedVersion.digest ?? "—"}
+            </span>
+            <span>{formatBytes(row.selectedVersion.size)}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+            <MetadataItem
+              label="发布时间"
+              value={formatDate(row.selectedVersion.createdAt)}
+            />
+            <MetadataItem
+              label="发布者"
+              value={row.selectedVersion.publisher ?? "未记录"}
+              mono
+            />
+            <MetadataItem
+              label="校验摘要"
+              value={row.selectedVersion.digest ?? "未记录"}
+              mono
+            />
+            <MetadataItem
+              label="构建类型"
+              value={
+                row.selectedVersion.buildNumber
+                  ? `SNAPSHOT #${row.selectedVersion.buildNumber}`
+                  : "Release"
+              }
+            />
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {row.snippets.map((snippet) => (
+              <UsageSnippetBlock
+                key={snippet.label}
+                snippet={snippet}
+                copied={copiedCoordinate === snippet.code}
+                onCopy={() => onCopyUsage(snippet)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Table<MavenTableRow>
+      className="ag-console-table"
+      rowKey="key"
+      size="middle"
+      dataSource={tableRows}
+      columns={columns}
+      pagination={false}
+      scroll={{ x: 720 }}
+      expandable={{
+        expandedRowKeys: tableRows
+          .filter((row) => row.expanded)
+          .map((row) => row.key),
+        expandedRowRender,
+        showExpandColumn: false,
+      }}
+    />
+  );
+}
+
 interface ConanGroupTableProps {
   groups: ConanArtifactGroup[];
   repository: PublicRepository;
@@ -318,6 +584,22 @@ interface ConanGroupTableProps {
   onCopyUsage: (snippet: UsageSnippet) => void;
 }
 
+interface ConanTableRow {
+  key: string;
+  group: ConanArtifactGroup;
+  latest: ArtifactSummary;
+  selectedReference: string;
+  expanded: boolean;
+  page?: ConanRevisionPage;
+  revisions: ConanRevision[];
+  visibleRevisions: ConanRevision[];
+  selectedRevisionValue: string;
+  selectedRevisionItem?: ConanRevision;
+  referenceVersion: string;
+  versionHref: string;
+  snippets: UsageSnippet[];
+}
+
 function ConanGroupTable({
   groups,
   repository,
@@ -342,324 +624,365 @@ function ConanGroupTable({
   onCopyPageLink,
   onCopyUsage,
 }: ConanGroupTableProps) {
-  return (
-    <DataTable
-      className="min-w-[860px]"
-      columns={["Conan 包", "最新版本", "版本数", "当前 revision", ""]}
-    >
-      {groups.map((group) => {
-        const latest = group.versions[0];
-        const urlReference = group.versions.some(
-          (version) => version.coordinate === artifactParam,
+  const tableRows: ConanTableRow[] = groups.map((group) => {
+    const latest = group.versions[0];
+    const urlReference = group.versions.some(
+      (version) => version.coordinate === artifactParam,
+    )
+      ? artifactParam
+      : "";
+    const selectedReference =
+      urlReference || selectedReferences[group.key] || latest.coordinate;
+    const expanded = expandedGroup === group.key || Boolean(urlReference);
+    const page = revisionPages[selectedReference];
+    const revisions = page?.items ?? [];
+    const normalizedFilter = versionFilter.trim().toLowerCase();
+    const visibleRevisions = normalizedFilter
+      ? revisions.filter((revision) =>
+          `${revision.revision} ${revision.digest ?? ""} ${revision.createdAt ?? ""}`
+            .toLowerCase()
+            .includes(normalizedFilter),
         )
-          ? artifactParam
-          : "";
-        const selectedReference =
-          urlReference || selectedReferences[group.key] || latest.coordinate;
-        const expanded = expandedGroup === group.key || Boolean(urlReference);
-        const page = revisionPages[selectedReference];
-        const revisions = page?.items ?? [];
-        const normalizedFilter = versionFilter.trim().toLowerCase();
-        const visibleRevisions = normalizedFilter
-          ? revisions.filter((revision) =>
-              `${revision.revision} ${revision.digest ?? ""} ${revision.createdAt ?? ""}`
-                .toLowerCase()
-                .includes(normalizedFilter),
-            )
-          : revisions;
-        const selectedRevision = selectedRevisions[selectedReference];
-        const requestedRevision =
-          artifactParam === selectedReference ? revisionParam : "";
-        const preferredRevision =
-          (selectedRevision &&
-            revisions.some(
-              (revision) => revision.revision === selectedRevision,
-            ) &&
-            selectedRevision) ||
-          (requestedRevision &&
-            revisions.some(
-              (revision) => revision.revision === requestedRevision,
-            ) &&
-            requestedRevision) ||
-          revisions[0]?.revision ||
-          "";
-        const selectedRevisionValue = visibleRevisions.some(
-          (revision) => revision.revision === preferredRevision,
-        )
-          ? preferredRevision
-          : visibleRevisions[0]?.revision || preferredRevision;
-        const selectedRevisionItem = revisions.find(
-          (revision) => revision.revision === selectedRevisionValue,
-        );
-        const referenceVersion = conanReferenceParts(selectedReference).version;
-        const versionHref = selectedRevisionValue
-          ? artifactHref(selectedReference, selectedRevisionValue)
-          : artifactHref(selectedReference);
-        const snippets = usageFor(
-          repository.format,
-          repository.name,
-          selectedReference,
-        );
-        return (
-          <Fragment key={group.key}>
-            <tr className="hover:bg-zinc-800/30">
-              <td className="px-4 py-3 font-mono text-xs text-zinc-100">
-                {group.key}
-              </td>
-              <td className="px-4 py-3 font-mono text-xs text-zinc-400">
-                {conanReferenceParts(latest.coordinate).version}
-              </td>
-              <td className="px-4 py-3 text-xs text-zinc-500">
-                {group.versions.length}
-              </td>
-              <td
-                className="max-w-[240px] truncate px-4 py-3 font-mono text-xs text-zinc-500"
-                title={selectedRevisionItem?.revision}
+      : revisions;
+    const selectedRevision = selectedRevisions[selectedReference];
+    const requestedRevision =
+      artifactParam === selectedReference ? revisionParam : "";
+    const preferredRevision =
+      (selectedRevision &&
+        revisions.some((revision) => revision.revision === selectedRevision) &&
+        selectedRevision) ||
+      (requestedRevision &&
+        revisions.some((revision) => revision.revision === requestedRevision) &&
+        requestedRevision) ||
+      revisions[0]?.revision ||
+      "";
+    const selectedRevisionValue = visibleRevisions.some(
+      (revision) => revision.revision === preferredRevision,
+    )
+      ? preferredRevision
+      : visibleRevisions[0]?.revision || preferredRevision;
+    const selectedRevisionItem = revisions.find(
+      (revision) => revision.revision === selectedRevisionValue,
+    );
+    return {
+      key: group.key,
+      group,
+      latest,
+      selectedReference,
+      expanded,
+      page,
+      revisions,
+      visibleRevisions,
+      selectedRevisionValue,
+      selectedRevisionItem,
+      referenceVersion: conanReferenceParts(selectedReference).version,
+      versionHref: selectedRevisionValue
+        ? artifactHref(selectedReference, selectedRevisionValue)
+        : artifactHref(selectedReference),
+      snippets: usageFor(repository.format, repository.name, selectedReference),
+    };
+  });
+
+  const toggleRow = (row: ConanTableRow) => {
+    if (row.expanded) {
+      onCollapse();
+      onClearArtifactParams();
+      return;
+    }
+    onExpand(row.key, row.selectedReference);
+    onFilterChange("");
+    if (!revisionPages[row.selectedReference])
+      onLoadRevisions(row.selectedReference);
+    onOpenArtifact(
+      row.selectedReference,
+      row.selectedRevisionValue || undefined,
+    );
+  };
+
+  const columns: ColumnsType<ConanTableRow> = [
+    {
+      title: "Conan 包",
+      dataIndex: "key",
+      key: "key",
+      width: 260,
+      render: (value: string) => (
+        <span className="font-mono text-xs text-zinc-100">{value}</span>
+      ),
+    },
+    {
+      title: "最新版本",
+      key: "latest",
+      width: 160,
+      render: (_, row) => (
+        <span className="font-mono text-xs text-zinc-400">
+          {conanReferenceParts(row.latest.coordinate).version}
+        </span>
+      ),
+    },
+    {
+      title: "版本数",
+      key: "versionCount",
+      width: 100,
+      render: (_, row) => (
+        <span className="text-xs text-zinc-500">
+          {row.group.versions.length}
+        </span>
+      ),
+    },
+    {
+      title: "当前 revision",
+      key: "revision",
+      width: 240,
+      render: (_, row) => (
+        <span
+          className="block max-w-[220px] truncate font-mono text-xs text-zinc-500"
+          title={row.selectedRevisionItem?.revision}
+        >
+          {row.selectedRevisionItem?.revision ??
+            (row.expanded ? "读取中…" : "展开后加载")}
+        </span>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      fixed: "right",
+      width: 270,
+      render: (_, row) => (
+        <div className="whitespace-nowrap text-right">
+          <Button
+            type="text"
+            size="small"
+            icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
+            onClick={() => toggleRow(row)}
+          >
+            {row.expanded ? "收起" : "选择版本"}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<LinkOutlined />}
+            href={row.versionHref}
+          >
+            {row.selectedRevisionValue ? "打开版本" : "打开"}
+          </Button>
+          <Tooltip
+            title={
+              copiedCoordinate === row.key ? "已复制" : "复制 Conan 包标识"
+            }
+          >
+            <Button
+              type="text"
+              size="small"
+              aria-label={`复制 ${row.key}`}
+              icon={
+                copiedCoordinate === row.key ? (
+                  <CheckOutlined />
+                ) : (
+                  <CopyOutlined />
+                )
+              }
+              onClick={() => onCopyCoordinate(row.key)}
+            />
+          </Tooltip>
+        </div>
+      ),
+    },
+  ];
+
+  const expandedRowRender = (row: ConanTableRow) => (
+    <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-[11px] font-medium text-zinc-500">
+            选择包版本{" "}
+            <span className="font-normal text-zinc-600">
+              ({row.group.versions.length})
+            </span>
+          </label>
+          <span className="text-[11px] text-zinc-600">
+            {row.referenceVersion}
+          </span>
+        </div>
+        <SearchableVersionSelect
+          className="mt-1.5"
+          value={row.selectedReference}
+          options={row.group.versions.map((version) => ({
+            value: version.coordinate,
+            label: version.coordinate,
+          }))}
+          onChange={(reference) => {
+            onSelectReference(row.key, reference);
+            onFilterChange("");
+            onLoadRevisions(reference);
+            onOpenArtifact(reference);
+          }}
+          placeholder="搜索并选择 Conan 包版本"
+        />
+        <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+          同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe
+          revision。
+        </p>
+      </div>
+      <div className="min-w-0">
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-[11px] font-medium text-zinc-500">
+            Recipe revision
+          </label>
+          <span className="text-[11px] text-zinc-600">
+            {row.visibleRevisions.length}/{row.revisions.length}
+          </span>
+        </div>
+        <div className="mt-1.5 flex gap-2">
+          <Input
+            className="min-w-0 flex-1 font-mono text-xs"
+            placeholder="输入 revision 或 digest"
+            value={versionFilter}
+            onChange={(event) => onFilterChange(event.target.value)}
+            onPressEnter={() =>
+              onLoadRevisions(row.selectedReference, versionFilter)
+            }
+          />
+          <Button
+            loading={row.page?.loading === true}
+            onClick={() =>
+              onLoadRevisions(row.selectedReference, versionFilter)
+            }
+          >
+            搜索
+          </Button>
+        </div>
+        {row.page?.error && (
+          <div className="mt-2 text-[11px] text-rose-300">{row.page.error}</div>
+        )}
+        <SearchableVersionSelect
+          className="mt-3"
+          value={row.selectedRevisionValue}
+          options={row.visibleRevisions.map((revision) => ({
+            value: revision.revision,
+            label: `${revision.revision} · ${shortDigest(revision.digest)}`,
+          }))}
+          loading={row.page?.loading === true}
+          notFoundContent={
+            row.page?.loading && row.visibleRevisions.length === 0
+              ? "正在读取 revision…"
+              : "没有匹配 revision"
+          }
+          placeholder="搜索并选择 recipe revision"
+          onChange={(revision) => {
+            onSelectRevision(row.selectedReference, revision);
+            onOpenArtifact(row.selectedReference, revision);
+          }}
+        />
+        {row.page?.nextPageToken && (
+          <Button
+            block
+            size="small"
+            loading={row.page.loading}
+            onClick={() =>
+              onLoadRevisions(
+                row.selectedReference,
+                row.page?.query,
+                row.page?.nextPageToken,
+              )
+            }
+            className="mt-2"
+          >
+            {row.page.loading
+              ? "加载中…"
+              : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
+          </Button>
+        )}
+        {row.selectedRevisionItem ? (
+          <>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs text-zinc-100">
+                {row.selectedReference}
+              </span>
+              <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">
+                {row.selectedRevisionItem.revision}
+              </span>
+              <Button
+                type="link"
+                size="small"
+                icon={<LinkOutlined />}
+                href={row.versionHref}
               >
-                {selectedRevisionItem?.revision ??
-                  (expanded ? "读取中…" : "展开后加载")}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={expanded ? <UpOutlined /> : <DownOutlined />}
-                  onClick={() => {
-                    if (expanded) {
-                      onCollapse();
-                      onClearArtifactParams();
-                      return;
-                    }
-                    onExpand(group.key, selectedReference);
-                    onFilterChange("");
-                    if (!revisionPages[selectedReference])
-                      onLoadRevisions(selectedReference);
-                    onOpenArtifact(
-                      selectedReference,
-                      selectedRevisionValue || undefined,
-                    );
-                  }}
-                >
-                  {expanded ? "收起" : "选择版本"}
-                </Button>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<LinkOutlined />}
-                  href={versionHref}
-                >
-                  {selectedRevisionValue ? "打开版本" : "打开"}
-                </Button>
-                <Tooltip
-                  title={
-                    copiedCoordinate === group.key
-                      ? "已复制"
-                      : "复制 Conan 包标识"
-                  }
-                >
-                  <Button
-                    type="text"
-                    size="small"
-                    aria-label={`复制 ${group.key}`}
-                    icon={
-                      copiedCoordinate === group.key ? (
-                        <CheckOutlined />
-                      ) : (
-                        <CopyOutlined />
-                      )
-                    }
-                    onClick={() => onCopyCoordinate(group.key)}
-                  />
-                </Tooltip>
-              </td>
-            </tr>
-            {expanded && (
-              <tr>
-                <td colSpan={5} className="bg-zinc-950/50 px-4 py-4">
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="text-[11px] font-medium text-zinc-500">
-                          选择包版本{" "}
-                          <span className="font-normal text-zinc-600">
-                            ({group.versions.length})
-                          </span>
-                        </label>
-                        <span className="text-[11px] text-zinc-600">
-                          {referenceVersion}
-                        </span>
-                      </div>
-                      <SearchableVersionSelect
-                        className="mt-1.5"
-                        value={selectedReference}
-                        options={group.versions.map((version) => ({
-                          value: version.coordinate,
-                          label: version.coordinate,
-                        }))}
-                        onChange={(reference) => {
-                          onSelectReference(group.key, reference);
-                          onFilterChange("");
-                          onLoadRevisions(reference);
-                          onOpenArtifact(reference);
-                        }}
-                        placeholder="搜索并选择 Conan 包版本"
-                      />
-                      <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                        同一 name@user/channel 下收拢不同版本；选定版本后再查看
-                        recipe revision。
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="text-[11px] font-medium text-zinc-500">
-                          Recipe revision
-                        </label>
-                        <span className="text-[11px] text-zinc-600">
-                          {visibleRevisions.length}/{revisions.length}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 flex gap-2">
-                        <Input
-                          className="min-w-0 flex-1 font-mono text-xs"
-                          placeholder="输入 revision 或 digest"
-                          value={versionFilter}
-                          onChange={(event) =>
-                            onFilterChange(event.target.value)
-                          }
-                          onPressEnter={() =>
-                            onLoadRevisions(selectedReference, versionFilter)
-                          }
-                        />
-                        <Button
-                          loading={page?.loading === true}
-                          onClick={() =>
-                            onLoadRevisions(selectedReference, versionFilter)
-                          }
-                        >
-                          搜索
-                        </Button>
-                      </div>
-                      {page?.error && (
-                        <div className="mt-2 text-[11px] text-rose-300">
-                          {page.error}
-                        </div>
-                      )}
-                      <SearchableVersionSelect
-                        className="mt-3"
-                        value={selectedRevisionValue}
-                        options={visibleRevisions.map((revision) => ({
-                          value: revision.revision,
-                          label: `${revision.revision} · ${shortDigest(revision.digest)}`,
-                        }))}
-                        loading={page?.loading === true}
-                        notFoundContent={
-                          page?.loading && visibleRevisions.length === 0
-                            ? "正在读取 revision…"
-                            : "没有匹配 revision"
-                        }
-                        placeholder="搜索并选择 recipe revision"
-                        onChange={(revision) => {
-                          onSelectRevision(selectedReference, revision);
-                          onOpenArtifact(selectedReference, revision);
-                        }}
-                      />
-                      {page?.nextPageToken && (
-                        <Button
-                          block
-                          size="small"
-                          loading={page.loading}
-                          onClick={() =>
-                            onLoadRevisions(
-                              selectedReference,
-                              page.query,
-                              page.nextPageToken,
-                            )
-                          }
-                          className="mt-2"
-                        >
-                          {page.loading
-                            ? "加载中…"
-                            : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
-                        </Button>
-                      )}
-                      {selectedRevisionItem ? (
-                        <>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs text-zinc-100">
-                              {selectedReference}
-                            </span>
-                            <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">
-                              {selectedRevisionItem.revision}
-                            </span>
-                            <Button
-                              type="link"
-                              size="small"
-                              icon={<LinkOutlined />}
-                              href={versionHref}
-                            >
-                              打开版本页
-                            </Button>
-                            <Button
-                              type="link"
-                              size="small"
-                              onClick={() => onCopyPageLink(versionHref)}
-                            >
-                              {copiedCoordinate === versionHref
-                                ? "链接已复制"
-                                : "复制链接"}
-                            </Button>
-                          </div>
-                          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
-                            <MetadataItem
-                              label="Conan reference"
-                              value={selectedReference}
-                              mono
-                            />
-                            <MetadataItem
-                              label="Recipe revision"
-                              value={selectedRevisionItem.revision}
-                              mono
-                            />
-                            <MetadataItem
-                              label="发布时间"
-                              value={formatDate(selectedRevisionItem.createdAt)}
-                            />
-                            <MetadataItem
-                              label="发布者"
-                              value={latest.publisher ?? "未记录"}
-                              mono
-                            />
-                            <MetadataItem
-                              label="校验摘要"
-                              value={selectedRevisionItem.digest ?? "未记录"}
-                              mono
-                            />
-                          </div>
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {snippets.map((snippet) => (
-                              <UsageSnippetBlock
-                                key={snippet.label}
-                                snippet={snippet}
-                                copied={copiedCoordinate === snippet.code}
-                                onCopy={() => onCopyUsage(snippet)}
-                              />
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
-                          选择一个 recipe revision 查看详情与使用方式。
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </Fragment>
-        );
-      })}
-    </DataTable>
+                打开版本页
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => onCopyPageLink(row.versionHref)}
+              >
+                {copiedCoordinate === row.versionHref
+                  ? "链接已复制"
+                  : "复制链接"}
+              </Button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+              <MetadataItem
+                label="Conan reference"
+                value={row.selectedReference}
+                mono
+              />
+              <MetadataItem
+                label="Recipe revision"
+                value={row.selectedRevisionItem.revision}
+                mono
+              />
+              <MetadataItem
+                label="发布时间"
+                value={formatDate(row.selectedRevisionItem.createdAt)}
+              />
+              <MetadataItem
+                label="发布者"
+                value={row.latest.publisher ?? "未记录"}
+                mono
+              />
+              <MetadataItem
+                label="校验摘要"
+                value={row.selectedRevisionItem.digest ?? "未记录"}
+                mono
+              />
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {row.snippets.map((snippet) => (
+                <UsageSnippetBlock
+                  key={snippet.label}
+                  snippet={snippet}
+                  copied={copiedCoordinate === snippet.code}
+                  onCopy={() => onCopyUsage(snippet)}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
+            选择一个 recipe revision 查看详情与使用方式。
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <Table<ConanTableRow>
+      className="ag-console-table"
+      rowKey="key"
+      size="middle"
+      dataSource={tableRows}
+      columns={columns}
+      pagination={false}
+      scroll={{ x: 1030 }}
+      expandable={{
+        expandedRowKeys: tableRows
+          .filter((row) => row.expanded)
+          .map((row) => row.key),
+        expandedRowRender,
+        showExpandColumn: false,
+      }}
+    />
   );
 }
 
@@ -815,8 +1138,7 @@ export function PublicBrowsePage() {
               pageToken: after || undefined,
             },
           });
-          if (requestError || !data)
-            throw new Error("读取 OCI 版本失败");
+          if (requestError || !data) throw new Error("读取 OCI 版本失败");
           const page = data.items.flatMap((manifest) =>
             manifest.tags.length > 0 ? manifest.tags : [manifest.digest],
           );
@@ -1241,264 +1563,36 @@ export function PublicBrowsePage() {
                   </div>
                   <div className="text-[11px] text-zinc-600">匿名只读</div>
                 </div>
-                {groupedItems ? (
-                  <DataTable
-                    className="min-w-[720px]"
-                    columns={["制品", "最新版本", "版本数", "", ""]}
-                  >
-                    {groupedItems.map((group) => {
-                      const latest = group.versions[0];
-                      const urlVersion = group.versions.find(
-                        (version) =>
-                          version.coordinate === artifactParam &&
-                          (!buildParam ||
-                            String(version.buildNumber ?? 0) === buildParam),
+                {groupedItems && selectedRepository ? (
+                  <MavenGroupTable
+                    groups={groupedItems}
+                    repository={selectedRepository}
+                    artifactParam={artifactParam}
+                    buildParam={buildParam}
+                    expandedGroup={expandedMavenGroup}
+                    selectedVersionKey={selectedMavenVersion}
+                    copiedCoordinate={copiedCoordinate}
+                    onExpand={(groupKey, versionKey) => {
+                      setExpandedMavenGroup(groupKey);
+                      setSelectedMavenVersion(versionKey);
+                    }}
+                    onCollapse={() => {
+                      setExpandedMavenGroup(null);
+                      clearArtifactParams();
+                    }}
+                    onSelectVersion={(group, versionKey) => {
+                      setSelectedMavenVersion(versionKey);
+                      const version = group.versions.find(
+                        (item, index) =>
+                          mavenVersionKey(item, index) === versionKey,
                       );
-                      const expanded =
-                        expandedMavenGroup === group.key || Boolean(urlVersion);
-                      const visibleVersions = group.versions;
-                      const preferredKey =
-                        selectedMavenVersion &&
-                        group.versions.some(
-                          (version, index) =>
-                            mavenVersionKey(version, index) ===
-                            selectedMavenVersion,
-                        )
-                          ? selectedMavenVersion
-                          : urlVersion
-                            ? mavenVersionKey(
-                                urlVersion,
-                                group.versions.indexOf(urlVersion),
-                              )
-                            : mavenVersionKey(latest, 0);
-                      const selectedKey = visibleVersions.some(
-                        (version) =>
-                          mavenVersionKey(
-                            version,
-                            group.versions.indexOf(version),
-                          ) === preferredKey,
-                      )
-                        ? preferredKey
-                        : mavenVersionKey(
-                            visibleVersions[0] ?? latest,
-                            group.versions.indexOf(
-                              visibleVersions[0] ?? latest,
-                            ),
-                          );
-                      const selectedVersion =
-                        group.versions.find(
-                          (version, index) =>
-                            mavenVersionKey(version, index) === selectedKey,
-                        ) ?? latest;
-                      const snippets = selectedRepository
-                        ? usageFor(
-                            selectedRepository.format,
-                            selectedRepository.name,
-                            selectedVersion.coordinate,
-                            undefined,
-                            {
-                              buildNumber: selectedVersion.buildNumber,
-                              createdAt: selectedVersion.createdAt,
-                            },
-                          )
-                        : [];
-                      return (
-                        <Fragment key={group.key}>
-                          <tr className="hover:bg-zinc-800/30">
-                            <td className="px-4 py-3 font-mono text-xs text-zinc-100">
-                              {group.key}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-xs text-zinc-400">
-                              {latest.coordinate.split(":").slice(2).join(":")}
-                            </td>
-                            <td className="px-4 py-3 text-xs text-zinc-500">
-                              {group.versions.length}
-                            </td>
-                            <td />
-                            <td className="px-3 py-2 text-right">
-                              <Button
-                                type="text"
-                                size="small"
-                                icon={
-                                  expanded ? <UpOutlined /> : <DownOutlined />
-                                }
-                                onClick={() => {
-                                  if (expanded) {
-                                    setExpandedMavenGroup(null);
-                                    clearArtifactParams();
-                                    return;
-                                  }
-                                  setExpandedMavenGroup(group.key);
-                                  setSelectedMavenVersion(
-                                    mavenVersionKey(latest, 0),
-                                  );
-                                }}
-                              >
-                                {expanded ? "收起" : "选择版本"}
-                              </Button>
-                            </td>
-                          </tr>
-                          {expanded && (
-                            <tr>
-                              <td
-                                colSpan={5}
-                                className="bg-zinc-950/50 px-4 py-4"
-                              >
-                                <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                                  <div>
-                                    <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
-                                      选择版本{" "}
-                                      <span className="font-normal text-zinc-600">
-                                        ({group.versions.length})
-                                      </span>
-                                    </label>
-                                    <SearchableVersionSelect
-                                      value={selectedKey}
-                                      options={visibleVersions.map(
-                                        (version) => {
-                                          const index =
-                                            group.versions.indexOf(version);
-                                          return {
-                                            value: mavenVersionKey(
-                                              version,
-                                              index,
-                                            ),
-                                            label: `${version.coordinate.split(":").slice(2).join(":")}${
-                                              version.buildNumber
-                                                ? ` · SNAPSHOT #${version.buildNumber}`
-                                                : ""
-                                            }`,
-                                          };
-                                        },
-                                      )}
-                                      onChange={(value) => {
-                                        setSelectedMavenVersion(value);
-                                        const version = group.versions.find(
-                                          (item, index) =>
-                                            mavenVersionKey(item, index) ===
-                                            value,
-                                        );
-                                        if (version)
-                                          openArtifact(
-                                            version.coordinate,
-                                            version.buildNumber,
-                                          );
-                                      }}
-                                      placeholder="搜索并选择 Maven 版本"
-                                    />
-                                    <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-                                      在选择器中输入版本号或 SNAPSHOT
-                                      构建号即可定位，不会铺开全部版本。
-                                    </p>
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span className="font-mono text-xs text-zinc-100">
-                                        {selectedVersion.coordinate}
-                                      </span>
-                                      {selectedVersion.buildNumber ? (
-                                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
-                                          SNAPSHOT #
-                                          {selectedVersion.buildNumber}
-                                        </span>
-                                      ) : null}
-                                      <Button
-                                        type="link"
-                                        size="small"
-                                        icon={<LinkOutlined />}
-                                        href={artifactHref(
-                                          selectedVersion.coordinate,
-                                          selectedVersion.buildNumber,
-                                        )}
-                                      >
-                                        打开版本页
-                                      </Button>
-                                      <Button
-                                        type="link"
-                                        size="small"
-                                        onClick={() =>
-                                          void copyPageLink(
-                                            artifactHref(
-                                              selectedVersion.coordinate,
-                                              selectedVersion.buildNumber,
-                                            ),
-                                          )
-                                        }
-                                      >
-                                        {copiedCoordinate ===
-                                        artifactHref(
-                                          selectedVersion.coordinate,
-                                          selectedVersion.buildNumber,
-                                        )
-                                          ? "链接已复制"
-                                          : "复制链接"}
-                                      </Button>
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-600">
-                                      <span>
-                                        {formatDate(selectedVersion.createdAt)}
-                                      </span>
-                                      <span
-                                        className="max-w-[min(70vw,560px)] truncate font-mono text-zinc-500"
-                                        title={selectedVersion.digest}
-                                      >
-                                        {selectedVersion.digest ?? "—"}
-                                      </span>
-                                      <span>
-                                        {formatBytes(selectedVersion.size)}
-                                      </span>
-                                    </div>
-                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
-                                      <MetadataItem
-                                        label="发布时间"
-                                        value={formatDate(
-                                          selectedVersion.createdAt,
-                                        )}
-                                      />
-                                      <MetadataItem
-                                        label="发布者"
-                                        value={
-                                          selectedVersion.publisher ?? "未记录"
-                                        }
-                                        mono
-                                      />
-                                      <MetadataItem
-                                        label="校验摘要"
-                                        value={
-                                          selectedVersion.digest ?? "未记录"
-                                        }
-                                        mono
-                                      />
-                                      <MetadataItem
-                                        label="构建类型"
-                                        value={
-                                          selectedVersion.buildNumber
-                                            ? `SNAPSHOT #${selectedVersion.buildNumber}`
-                                            : "Release"
-                                        }
-                                      />
-                                    </div>
-                                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                      {snippets.map((snippet) => (
-                                        <UsageSnippetBlock
-                                          key={snippet.label}
-                                          snippet={snippet}
-                                          copied={
-                                            copiedCoordinate === snippet.code
-                                          }
-                                          onCopy={() => void copyUsage(snippet)}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </DataTable>
+                      if (version)
+                        openArtifact(version.coordinate, version.buildNumber);
+                    }}
+                    artifactHref={artifactHref}
+                    onCopyPageLink={(href) => void copyPageLink(href)}
+                    onCopyUsage={(snippet) => void copyUsage(snippet)}
+                  />
                 ) : groupedConanItems && selectedRepository ? (
                   <ConanGroupTable
                     groups={groupedConanItems}
@@ -1626,9 +1720,7 @@ export function PublicBrowsePage() {
                               ? `无标签 · ${shortDigest(tag)}`
                               : tag,
                             searchText: tag,
-                            digest: tag.startsWith("sha256:")
-                              ? tag
-                              : undefined,
+                            digest: tag.startsWith("sha256:") ? tag : undefined,
                           }))
                         : revisions.map((revision) => ({
                             value: revision.revision,
