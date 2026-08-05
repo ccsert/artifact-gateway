@@ -1,24 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
-import { DatabaseOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
-import { Link, useNavigate } from 'react-router-dom';
-import { listRepositories, listGroups, listAudits, getRepositoryCapacity } from '../client';
-import type { Repository, Group, AuditRecord } from '../client';
-import { PageHeader, StatCard, Card, CardHeader, DataTable } from '../components/Layout';
-import { Loading, ErrorBanner, isNotFound } from '../components/Feedback';
-import { FormatBadge, StateBadge } from '../components/Badge';
-import { Donut } from '../components/Donut';
-import { Sparkline } from '../components/Sparkline';
-import { formatBytes, formatDate, formatNumber } from '../lib/format';
-import { loadDashboardHistory, recordDashboardSample, type DashboardSample } from '../lib/history';
+import { useCallback, useEffect, useState } from "react";
+import { DatabaseOutlined } from "@ant-design/icons";
+import { Button } from "antd";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  listRepositories,
+  listGroups,
+  listAudits,
+  getRepositoryCapacity,
+} from "../client";
+import type { Repository, Group, AuditRecord } from "../client";
+import { PageHeader, Card, CardHeader, DataTable } from "../components/Layout";
+import { Loading, ErrorBanner, isNotFound } from "../components/Feedback";
+import { FormatBadge, StateBadge } from "../components/Badge";
+import { Donut } from "../components/Donut";
+import { Sparkline } from "../components/Sparkline";
+import { formatBytes, formatDate, formatNumber } from "../lib/format";
+import {
+  loadDashboardHistory,
+  recordDashboardSample,
+  type DashboardSample,
+} from "../lib/history";
+import { MetricStrip } from "../components/ConsolePrimitives";
 
 const FORMAT_COLORS: Record<string, string> = {
-  oci: '#22d3ee',
-  maven: '#fbbf24',
-  conan: '#a78bfa',
-  raw: '#38bdf8',
+  oci: "#22d3ee",
+  maven: "#fbbf24",
+  conan: "#a78bfa",
+  raw: "#38bdf8",
 };
-const FORMAT_ORDER = ['oci', 'maven', 'conan', 'raw'] as const;
+const FORMAT_ORDER = ["oci", "maven", "conan", "raw"] as const;
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -27,8 +37,13 @@ export function DashboardPage() {
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
   const [totalBytes, setTotalBytes] = useState<number | null>(null);
   const [totalObjects, setTotalObjects] = useState<number | null>(null);
-  const [bytesByFormat, setBytesByFormat] = useState<Record<string, number> | null>(null);
-  const [history, setHistory] = useState<DashboardSample[]>(() => loadDashboardHistory());
+  const [bytesByFormat, setBytesByFormat] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [history, setHistory] = useState<DashboardSample[]>(() =>
+    loadDashboardHistory(),
+  );
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
@@ -49,8 +64,12 @@ export function DashboardPage() {
       setAudits(a.data ?? []);
 
       // 汇总各 active 仓库容量（失败/404 的仓库跳过）
-      const activeRepos = repoList.filter((x) => x.state === 'active');
-      const caps = await Promise.all(activeRepos.map((x) => getRepositoryCapacity({ path: { repositoryId: x.id } })));
+      const activeRepos = repoList.filter((x) => x.state === "active");
+      const caps = await Promise.all(
+        activeRepos.map((x) =>
+          getRepositoryCapacity({ path: { repositoryId: x.id } }),
+        ),
+      );
       let bytes = 0;
       let objects = 0;
       let any = false;
@@ -68,7 +87,14 @@ export function DashboardPage() {
       setTotalBytes(any ? bytes : null);
       setTotalObjects(any ? objects : null);
       setBytesByFormat(any ? byFormat : null);
-      setHistory(recordDashboardSample({ t: Date.now(), repos: repoList.length, bytes: any ? bytes : null, objects: any ? objects : null }));
+      setHistory(
+        recordDashboardSample({
+          t: Date.now(),
+          repos: repoList.length,
+          bytes: any ? bytes : null,
+          objects: any ? objects : null,
+        }),
+      );
     } catch (e) {
       setError(e);
     }
@@ -78,18 +104,19 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  if (error) return (
-    <div>
-      <PageHeader title="总览" />
-      <ErrorBanner error={error} onRetry={load} />
-    </div>
-  );
+  if (error)
+    return (
+      <div>
+        <PageHeader title="总览" />
+        <ErrorBanner error={error} onRetry={load} />
+      </div>
+    );
   if (!repos || !groups || !audits) return <Loading />;
 
   const formatCount = (f: string) => repos.filter((r) => r.format === f).length;
-  const active = repos.filter((r) => r.state === 'active').length;
+  const active = repos.filter((r) => r.state === "active").length;
   const inactive = repos.length - active;
-  const healthTone = inactive > 0 ? 'text-amber-300' : 'text-emerald-300';
+  const healthTone = inactive > 0 ? "text-amber-300" : "text-emerald-300";
 
   return (
     <div>
@@ -97,60 +124,78 @@ export function DashboardPage() {
         title="总览"
         description="Artifact Gateway 运行状态一览"
         actions={
-          <Button type="primary" icon={<DatabaseOutlined />} onClick={() => navigate('/repositories')}>
+          <Button
+            type="primary"
+            icon={<DatabaseOutlined />}
+            onClick={() => navigate("/repositories")}
+          >
             管理仓库
           </Button>
         }
       />
-      <Card className="mb-6 border-zinc-800 bg-zinc-900/70">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 ${healthTone}`}>
-              <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_4px_rgba(52,211,153,0.12)]" />
-            </span>
-            <div>
-              <div className="text-sm font-semibold text-zinc-100">平台运行正常</div>
-              <div className="mt-0.5 text-xs text-zinc-500">
-                {active} 个活跃仓库{inactive > 0 ? `，${inactive} 个需要关注` : '，暂无待处理异常'}
-              </div>
+      <div className="mb-4 flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-amber-400/10" : "bg-emerald-400/10"} ${healthTone}`}
+          >
+            <span className="h-2 w-2 rounded-full bg-current" />
+          </span>
+          <div>
+            <div className="text-sm font-semibold text-zinc-100">
+              {inactive > 0 ? "平台需要关注" : "平台运行正常"}
             </div>
-          </div>
-          <div className="flex items-center gap-5 text-xs text-zinc-500">
-            <span><span className="mr-1.5 text-zinc-300">API</span> v2</span>
-            <span><span className="mr-1.5 text-zinc-300">采样</span> {formatDate(new Date().toISOString())}</span>
+            <div className="mt-0.5 text-xs text-zinc-500">
+              {active} 个活跃仓库
+              {inactive > 0 ? `，${inactive} 个需要关注` : "，暂无待处理异常"}
+            </div>
           </div>
         </div>
-      </Card>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="仓库总数" value={repos.length} sub={`${active} 个活跃`} />
-        <StatCard label="分组" value={groups.length} sub={`共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`} />
-        <StatCard
-          label="格式分布"
-          value={
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {(['oci', 'maven', 'conan', 'raw'] as const).map((f) => (
-                <span key={f} className="flex items-center gap-1 text-sm">
-                  <FormatBadge format={f} />
-                  <span className="text-zinc-400">{formatCount(f)}</span>
-                </span>
-              ))}
-            </div>
-          }
-        />
-        <StatCard
-          label="存储占用"
-          value={totalBytes !== null ? formatBytes(totalBytes) : '—'}
-          sub={totalObjects !== null ? `${formatNumber(totalObjects)} 个对象` : '容量未启用'}
-        />
-        <StatCard label="最近审计" value={audits.length} sub="最新记录条数" />
+        <div className="flex items-center gap-5 text-xs text-zinc-500">
+          <span>
+            <span className="mr-1.5 text-zinc-300">API</span>v2
+          </span>
+          <span>
+            <span className="mr-1.5 text-zinc-300">采样</span>
+            {formatDate(new Date().toISOString())}
+          </span>
+        </div>
       </div>
+      <MetricStrip
+        items={[
+          { label: "仓库总数", value: repos.length, hint: `${active} 个活跃` },
+          {
+            label: "分组",
+            value: groups.length,
+            hint: `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
+          },
+          {
+            label: "格式分布",
+            value: FORMAT_ORDER.map(
+              (format) => `${format} ${formatCount(format)}`,
+            ).join(" · "),
+            hint: "OCI · Maven · Conan · Raw",
+          },
+          {
+            label: "存储占用",
+            value: totalBytes !== null ? formatBytes(totalBytes) : "—",
+            hint:
+              totalObjects !== null
+                ? `${formatNumber(totalObjects)} 个对象`
+                : "容量未启用",
+          },
+          { label: "最近审计", value: audits.length, hint: "最新记录条数" },
+        ]}
+      />
 
       <div className="mt-6">
         <Card>
           <CardHeader
             title="存储占用（按格式）"
             extra={
-              <Link to="/repositories" className="text-xs text-cyan-400 hover:text-cyan-300">
+              <Link
+                to="/repositories"
+                className="text-xs text-cyan-400 hover:text-cyan-300"
+              >
                 查看仓库 →
               </Link>
             }
@@ -161,14 +206,16 @@ export function DashboardPage() {
                 segments={FORMAT_ORDER.map((f) => ({
                   label: f,
                   value: bytesByFormat[f] ?? 0,
-                  color: FORMAT_COLORS[f] ?? '#71717a',
+                  color: FORMAT_COLORS[f] ?? "#71717a",
                 }))}
                 format={(n) => formatBytes(n)}
                 centerLabel={formatBytes(totalBytes)}
                 centerSub="合计"
               />
             ) : (
-              <div className="py-8 text-center text-sm text-zinc-600">容量统计未启用或暂无数据</div>
+              <div className="py-8 text-center text-sm text-zinc-600">
+                容量统计未启用或暂无数据
+              </div>
             )}
           </div>
         </Card>
@@ -180,19 +227,31 @@ export function DashboardPage() {
             title="近期趋势"
             extra={
               history.length > 0 ? (
-                <span className="text-[11px] text-zinc-600">自 {formatDate(new Date(history[0].t).toISOString())}</span>
+                <span className="text-[11px] text-zinc-600">
+                  自 {formatDate(new Date(history[0].t).toISOString())}
+                </span>
               ) : undefined
             }
           />
           <div className="grid grid-cols-1 gap-6 px-5 py-6 sm:grid-cols-2">
             <div>
-              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">仓库数</div>
-              <Sparkline data={history.map((s) => s.repos)} color="#22d3ee" format={(n) => `${n}`} />
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                仓库数
+              </div>
+              <Sparkline
+                data={history.map((s) => s.repos)}
+                color="#22d3ee"
+                format={(n) => `${n}`}
+              />
             </div>
             <div>
-              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">存储占用</div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                存储占用
+              </div>
               <Sparkline
-                data={history.map((s) => s.bytes).filter((b): b is number => b !== null)}
+                data={history
+                  .map((s) => s.bytes)
+                  .filter((b): b is number => b !== null)}
                 color="#fbbf24"
                 format={(n) => formatBytes(n)}
                 label="容量未启用"
@@ -200,7 +259,8 @@ export function DashboardPage() {
             </div>
           </div>
           <p className="px-5 pb-4 text-[11px] text-zinc-600">
-            基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。
+            基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端
+            metrics 端点。
           </p>
         </Card>
       </div>
@@ -210,16 +270,22 @@ export function DashboardPage() {
           <CardHeader
             title="仓库"
             extra={
-              <Link to="/repositories" className="text-xs text-cyan-400 hover:text-cyan-300">
+              <Link
+                to="/repositories"
+                className="text-xs text-cyan-400 hover:text-cyan-300"
+              >
                 查看全部 →
               </Link>
             }
           />
-          <DataTable columns={['名称', '格式', '状态', 'ID']}>
+          <DataTable columns={["名称", "格式", "状态", "ID"]}>
             {repos.slice(0, 6).map((r) => (
               <tr key={r.id} className="hover:bg-zinc-800/30">
                 <td className="px-4 py-2.5">
-                  <Link to={`/repositories/${r.id}`} className="font-medium text-zinc-100 hover:text-cyan-300">
+                  <Link
+                    to={`/repositories/${r.id}`}
+                    className="font-medium text-zinc-100 hover:text-cyan-300"
+                  >
                     {r.name}
                   </Link>
                 </td>
@@ -229,12 +295,17 @@ export function DashboardPage() {
                 <td className="px-4 py-2.5">
                   <StateBadge state={r.state} />
                 </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{r.id.slice(0, 8)}…</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">
+                  {r.id.slice(0, 8)}…
+                </td>
               </tr>
             ))}
             {repos.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td
+                  colSpan={4}
+                  className="px-4 py-8 text-center text-sm text-zinc-500"
+                >
                   暂无仓库
                 </td>
               </tr>
@@ -246,31 +317,46 @@ export function DashboardPage() {
           <CardHeader
             title="最近审计事件"
             extra={
-              <Link to="/audits" className="text-xs text-cyan-400 hover:text-cyan-300">
+              <Link
+                to="/audits"
+                className="text-xs text-cyan-400 hover:text-cyan-300"
+              >
                 查看全部 →
               </Link>
             }
           />
-          <DataTable columns={['时间', '操作', '结果', 'Actor']}>
+          <DataTable columns={["时间", "操作", "结果", "Actor"]}>
             {audits.map((a, i) => (
-              <tr key={`${a.requestId ?? 'audit'}-${i}`} className="hover:bg-zinc-800/30">
+              <tr
+                key={`${a.requestId ?? "audit"}-${i}`}
+                className="hover:bg-zinc-800/30"
+              >
                 <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
                   {formatDate(a.occurredAt)}
                 </td>
-                <td className="max-w-48 truncate px-4 py-2.5 text-zinc-300" title={a.operation}>
-                  {a.operation ?? '—'}
+                <td
+                  className="max-w-48 truncate px-4 py-2.5 text-zinc-300"
+                  title={a.operation}
+                >
+                  {a.operation ?? "—"}
                 </td>
                 <td className="px-4 py-2.5">
                   <StateBadge state={a.outcome} />
                 </td>
-                <td className="max-w-32 truncate px-4 py-2.5 text-xs text-zinc-500" title={a.actor}>
-                  {a.actor ?? '—'}
+                <td
+                  className="max-w-32 truncate px-4 py-2.5 text-xs text-zinc-500"
+                  title={a.actor}
+                >
+                  {a.actor ?? "—"}
                 </td>
               </tr>
             ))}
             {audits.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td
+                  colSpan={4}
+                  className="px-4 py-8 text-center text-sm text-zinc-500"
+                >
                   暂无审计记录
                 </td>
               </tr>

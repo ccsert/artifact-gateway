@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Checkbox,
+  Collapse,
   Input,
   InputNumber,
   Popconfirm,
@@ -3010,26 +3011,48 @@ function RepositoryOverview({
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
 
   return (
-    <div className="mb-4 overflow-x-auto rounded-lg border border-zinc-800/80 bg-zinc-900/35">
-      <div className="grid min-w-0 grid-cols-[minmax(220px,1.45fr)_repeat(3,minmax(110px,.65fr))_minmax(250px,1.55fr)]">
-        <div className="px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full ${repo.state === "active" ? "bg-emerald-400" : repo.state === "deleting" ? "bg-amber-400" : "bg-rose-400"}`}
-            />
-            <span className="text-xs font-semibold text-zinc-100">
-              {repo.state === "active"
-                ? "仓库运行正常"
-                : `仓库状态：${repo.state}`}
-            </span>
+    <div className="mb-4 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/25">
+      <div className="flex items-center justify-between gap-6 border-b border-zinc-800/70 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${repo.state === "active" ? "bg-emerald-400" : repo.state === "deleting" ? "bg-amber-400" : "bg-rose-400"}`}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-zinc-100">
+                {repo.state === "active"
+                  ? "仓库运行正常"
+                  : `仓库状态：${repo.state}`}
+              </span>
+              <Badge tone={repo.type === "proxy" ? "amber" : "cyan"}>
+                {repo.type ?? "hosted"}
+              </Badge>
+              <Badge tone={repo.anonymousRead ? "green" : "zinc"}>
+                {repo.anonymousRead ? "允许匿名读取" : "私有读取"}
+              </Badge>
+            </div>
+            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+              {repo.type === "proxy"
+                ? "上游缓存与代理请求由此仓库处理。"
+                : "已发布制品及其可恢复引用由此仓库托管。"}
+            </p>
           </div>
-          <p className="mt-1 text-[11px] text-zinc-500">
-            {repo.type === "proxy"
-              ? "上游缓存与代理请求由此仓库处理。"
-              : "已发布制品及其可恢复引用由此仓库托管。"}
-          </p>
         </div>
-        <div className="border-l border-zinc-800/80 px-4 py-3">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-600">
+            协议入口
+          </span>
+          <code
+            className="max-w-[30rem] truncate font-mono text-xs text-zinc-300"
+            title={protocolPath}
+          >
+            {protocolPath}
+          </code>
+          <CopyButton text={protocolPath} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-zinc-800/80">
+        <div className="px-4 py-2.5">
           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
             已用空间
           </div>
@@ -3037,7 +3060,7 @@ function RepositoryOverview({
             {capacity ? formatBytes(capacity.usedBytes) : "读取中…"}
           </div>
         </div>
-        <div className="border-l border-zinc-800/80 px-4 py-3">
+        <div className="px-4 py-2.5">
           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
             对象数量
           </div>
@@ -3045,7 +3068,7 @@ function RepositoryOverview({
             {capacity ? formatNumber(capacity.objectCount) : "—"}
           </div>
         </div>
-        <div className="border-l border-zinc-800/80 px-4 py-3">
+        <div className="px-4 py-2.5">
           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
             配额状态
           </div>
@@ -3060,23 +3083,6 @@ function RepositoryOverview({
           >
             查看详情
           </Button>
-        </div>
-        <div className="border-l border-zinc-800/80 px-4 py-3">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-            协议入口
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-            <code
-              className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300"
-              title={protocolPath}
-            >
-              {protocolPath}
-            </code>
-            <CopyButton text={protocolPath} />
-          </div>
-          <p className="mt-1 text-[10px] text-zinc-600">
-            客户端将按请求时的权限策略读取。
-          </p>
         </div>
       </div>
     </div>
@@ -3273,12 +3279,6 @@ export function RepositoryDetailPage() {
           <div className="flex items-center gap-2">
             <EditRepositoryDialog repo={repo} onUpdated={load} />
             <FormatBadge format={repo.format} />
-            <Badge tone={repo.type === "proxy" ? "amber" : "cyan"}>
-              {repo.type ?? "hosted"}
-            </Badge>
-            <Badge tone={repo.anonymousRead ? "green" : "zinc"}>
-              {repo.anonymousRead ? "anonymous read" : "private"}
-            </Badge>
             <StateBadge state={repo.state} />
           </div>
         }
@@ -3312,70 +3312,71 @@ export function RepositoryDetailPage() {
         </div>
       )}
       {effectiveAccess && (
-        <div className="mb-4 overflow-x-auto border-y border-zinc-800/80 py-2.5 text-xs">
-          <div className="grid min-w-[900px] grid-cols-[minmax(220px,1fr)_repeat(4,minmax(130px,1fr))] items-center gap-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                当前身份
-              </div>
-              <div className="mt-1 font-mono text-xs text-zinc-200">
-                {effectiveAccess.actor}
-              </div>
-              <div className="mt-0.5 text-[10px] text-zinc-600">
-                有效权限摘要
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                匿名读取
-              </div>
-              <div
-                className={
-                  effectiveAccess.anonymousRead.allowed
-                    ? "mt-1 text-emerald-300"
-                    : "mt-1 text-zinc-500"
-                }
-              >
-                {effectiveAccess.anonymousRead.allowed ? "允许" : "拒绝"}
-              </div>
-              <div
-                className="mt-0.5 truncate text-[10px] text-zinc-600"
-                title={`${accessSourceLabel(effectiveAccess.anonymousRead.source)} · ${accessReasonLabel(effectiveAccess.anonymousRead.reason)}`}
-              >
-                {accessSourceLabel(effectiveAccess.anonymousRead.source)}
-              </div>
-            </div>
-            {(["read", "write", "admin"] as const).map((key) => (
-              <div key={key}>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                  {key === "read"
-                    ? "读取"
-                    : key === "write"
-                      ? "写入"
-                      : "管理员"}
+        <Collapse
+          ghost
+          className="mb-3"
+          items={[
+            {
+              key: "effective-access",
+              label: (
+                <span className="text-xs text-zinc-400">
+                  有效访问权限
+                  <span className="ml-2 font-mono text-zinc-600">
+                    {effectiveAccess.actor}
+                  </span>
+                </span>
+              ),
+              children: (
+                <div className="border-t border-zinc-800/70 pt-3 text-xs">
+                  <div className="grid grid-cols-4 gap-4">
+                    {[
+                      {
+                        label: "匿名读取",
+                        decision: effectiveAccess.anonymousRead,
+                      },
+                      {
+                        label: "读取",
+                        decision: effectiveAccess.permissions.read,
+                      },
+                      {
+                        label: "写入",
+                        decision: effectiveAccess.permissions.write,
+                      },
+                      {
+                        label: "管理员",
+                        decision: effectiveAccess.permissions.admin,
+                      },
+                    ].map(({ label, decision }) => (
+                      <div key={label}>
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                          {label}
+                        </div>
+                        <div
+                          className={
+                            decision.allowed
+                              ? "mt-1 text-emerald-300"
+                              : "mt-1 text-zinc-500"
+                          }
+                        >
+                          {decision.allowed ? "允许" : "拒绝"}
+                        </div>
+                        <div
+                          className="mt-0.5 truncate text-[10px] text-zinc-600"
+                          title={`${accessSourceLabel(decision.source)} · ${accessReasonLabel(decision.reason)}`}
+                        >
+                          {accessSourceLabel(decision.source)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-[10px] text-zinc-600">
+                    判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。
+                  </div>
                 </div>
-                <div
-                  className={
-                    effectiveAccess.permissions[key].allowed
-                      ? "mt-1 text-emerald-300"
-                      : "mt-1 text-zinc-500"
-                  }
-                >
-                  {effectiveAccess.permissions[key].allowed ? "允许" : "拒绝"}
-                </div>
-                <div
-                  className="mt-0.5 truncate text-[10px] text-zinc-600"
-                  title={`${accessSourceLabel(effectiveAccess.permissions[key].source)} · ${accessReasonLabel(effectiveAccess.permissions[key].reason)}`}
-                >
-                  {accessSourceLabel(effectiveAccess.permissions[key].source)}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 border-t border-zinc-800/80 pt-2 text-[10px] text-zinc-600">
-            判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。
-          </div>
-        </div>
+              ),
+            },
+          ]}
+        />
       )}
       <Tabs
         className="mb-4"
