@@ -482,9 +482,6 @@ export function RawArtifactDetail({
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
         <div>
           <div className="text-xs font-medium text-zinc-200">Raw 文件</div>
-          <div className="mt-0.5 font-mono text-xs text-zinc-500">
-            {meta.coordinate}
-          </div>
           {deleteError && (
             <div className="mt-1 text-xs text-rose-300">{deleteError}</div>
           )}

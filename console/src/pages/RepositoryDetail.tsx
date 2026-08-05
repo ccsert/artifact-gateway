@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, Fragment } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -77,7 +77,6 @@ import {
   PageHeader,
   Card,
   CardHeader,
-  DataTable,
   Pagination,
   Field,
 } from "../components/Layout";
@@ -1023,6 +1022,229 @@ function ArtifactsTab({
     raw: "搜索路径…",
   };
 
+  const columns: ColumnsType<ArtifactRow> =
+    format === "oci" || format === "conan"
+      ? [
+          {
+            title: "名称",
+            dataIndex: "coordinate",
+            key: "coordinate",
+            ellipsis: true,
+            render: (value: string, record) => (
+              <span
+                className="font-mono text-xs text-zinc-200"
+                title={record.coordinate}
+              >
+                {value}
+              </span>
+            ),
+          },
+        ]
+      : proxyMaven
+        ? [
+            {
+              title: "Maven 坐标",
+              dataIndex: "coordinate",
+              key: "coordinate",
+              ellipsis: true,
+              render: (value: string, record) => (
+                <span
+                  className="font-mono text-xs text-zinc-200"
+                  title={record.coordinate}
+                >
+                  {value}
+                </span>
+              ),
+            },
+            {
+              title: "文件",
+              key: "fileCount",
+              width: 120,
+              render: (_, record) => (
+                <Badge tone="zinc">
+                  {record.fileCount ?? record.files?.length ?? 0} 个文件
+                </Badge>
+              ),
+            },
+            {
+              title: "主文件大小",
+              key: "size",
+              width: 140,
+              render: (_, record) => (
+                <span className="text-xs text-zinc-400">
+                  {formatBytes(record.size)}
+                </span>
+              ),
+            },
+            {
+              title: "类型",
+              dataIndex: "contentType",
+              key: "contentType",
+              width: 180,
+              ellipsis: true,
+              render: (value: string | undefined) => (
+                <span className="text-xs text-zinc-500">{value ?? "—"}</span>
+              ),
+            },
+          ]
+        : format === "maven"
+          ? [
+              {
+                title: "制品",
+                dataIndex: "coordinate",
+                key: "coordinate",
+                ellipsis: true,
+                render: (value: string, record) => (
+                  <span
+                    className="font-mono text-xs text-zinc-200"
+                    title={record.coordinate}
+                  >
+                    {value}
+                  </span>
+                ),
+              },
+              {
+                title: "版本",
+                key: "versionCount",
+                width: 120,
+                render: (_, record) => (
+                  <Badge tone="zinc">{record.versionCount ?? 1} 个版本</Badge>
+                ),
+              },
+              {
+                title: "最新版本",
+                dataIndex: "latestVersion",
+                key: "latestVersion",
+                width: 160,
+                render: (value: string | undefined) => (
+                  <span className="font-mono text-xs text-cyan-300">
+                    {value ?? "—"}
+                  </span>
+                ),
+              },
+              {
+                title: "更新时间",
+                dataIndex: "createdAt",
+                key: "createdAt",
+                width: 180,
+                render: (value: string | undefined) => (
+                  <span className="whitespace-nowrap text-xs text-zinc-500">
+                    {formatDate(value)}
+                  </span>
+                ),
+              },
+            ]
+          : [
+              {
+                title: "坐标",
+                dataIndex: "coordinate",
+                key: "coordinate",
+                ellipsis: true,
+                render: (value: string, record) => (
+                  <span
+                    className="font-mono text-xs text-zinc-200"
+                    title={record.coordinate}
+                  >
+                    {value}
+                  </span>
+                ),
+              },
+              {
+                title: "摘要",
+                dataIndex: "digest",
+                key: "digest",
+                width: 180,
+                ellipsis: true,
+                render: (value: string | undefined) => (
+                  <span
+                    className="font-mono text-xs text-zinc-500"
+                    title={value}
+                  >
+                    {shortDigest(value)}
+                  </span>
+                ),
+              },
+              {
+                title: "大小",
+                dataIndex: "size",
+                key: "size",
+                width: 120,
+                render: (value: number | undefined) => (
+                  <span className="text-xs text-zinc-400">
+                    {formatBytes(value)}
+                  </span>
+                ),
+              },
+              {
+                title: "最后更新时间",
+                dataIndex: "createdAt",
+                key: "createdAt",
+                width: 180,
+                render: (value: string | undefined) => (
+                  <span className="whitespace-nowrap text-xs text-zinc-500">
+                    {formatDate(value)}
+                  </span>
+                ),
+              },
+            ];
+
+  const expandedRowRender = (r: ArtifactRow) => {
+    if (format === "oci") {
+      return (
+        <OciImageDetail
+          repositoryId={repo.id}
+          repository={repo.name}
+          image={r.coordinate}
+          onDeleted={() => void load(q)}
+        />
+      );
+    }
+    if (format === "maven" && !proxyMaven) {
+      return (
+        <MavenArtifactDetail
+          repoId={repo.id}
+          repoName={repo.name}
+          onDeleted={() => void load(q)}
+          meta={{
+            coordinate: r.coordinate,
+            digest: r.digest,
+            size: r.size,
+            createdAt: r.createdAt,
+            publisher: r.publisher,
+            buildNumber: r.buildNumber,
+          }}
+        />
+      );
+    }
+    if (proxyMaven) {
+      return <ProxyMavenCacheDetail repoName={repo.name} meta={r} />;
+    }
+    if (format === "conan") {
+      return (
+        <ConanArtifactDetail
+          repoId={repo.id}
+          repoName={repo.name}
+          managed={repo.type !== "proxy"}
+          canDelete={repo.type !== "proxy" && canWrite}
+          onDeleted={() => void load(q)}
+          meta={{ coordinate: r.coordinate, publisher: r.publisher }}
+        />
+      );
+    }
+    return (
+      <RawArtifactDetail
+        repoName={repo.name}
+        onDeleted={() => void load(q)}
+        meta={{
+          coordinate: r.coordinate,
+          digest: r.digest,
+          size: r.size,
+          createdAt: r.createdAt,
+        }}
+      />
+    );
+  };
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1124,148 +1346,22 @@ function ArtifactsTab({
               onWarmed={() => void load(q)}
             />
           )}
-          <DataTable
-            columns={
-              format === "oci" || format === "conan"
-                ? ["名称"]
-                : proxyMaven
-                  ? ["Maven 坐标", "文件", "主文件大小", "类型"]
-                  : format === "maven"
-                    ? ["制品", "版本", "最新版本", "更新时间"]
-                    : ["坐标", "摘要", "大小", "最后更新时间"]
-            }
-          >
-            {rows.map((r) => {
-              const colCount = format === "oci" || format === "conan" ? 1 : 4;
-              const expanded = expandedImage === r.key;
-              return (
-                <Fragment key={r.key}>
-                  <tr
-                    className="cursor-pointer hover:bg-zinc-800/30"
-                    onClick={() => setExpandedImage(expanded ? null : r.key)}
-                  >
-                    <td
-                      className="max-w-md truncate px-4 py-2.5 font-mono text-xs text-zinc-200"
-                      title={r.coordinate}
-                    >
-                      <span className="mr-1.5 text-zinc-600">
-                        {expanded ? "▾" : "▸"}
-                      </span>
-                      {r.coordinate}
-                    </td>
-                    {format === "maven" && !proxyMaven && (
-                      <>
-                        <td className="px-4 py-2.5">
-                          <Badge tone="zinc">
-                            {r.versionCount ?? 1} 个版本
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-cyan-300">
-                          {r.latestVersion ?? "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                          {formatDate(r.createdAt)}
-                        </td>
-                      </>
-                    )}
-                    {proxyMaven && (
-                      <>
-                        <td className="px-4 py-2.5">
-                          <Badge tone="zinc">
-                            {r.fileCount ?? r.files?.length ?? 0} 个文件
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-zinc-400">
-                          {formatBytes(r.size)}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-zinc-500">
-                          {r.contentType ?? "—"}
-                        </td>
-                      </>
-                    )}
-                    {format !== "oci" &&
-                      format !== "conan" &&
-                      format !== "maven" && (
-                        <>
-                          <td
-                            className="px-4 py-2.5 font-mono text-xs text-zinc-500"
-                            title={r.digest}
-                          >
-                            {shortDigest(r.digest)}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-zinc-400">
-                            {formatBytes(r.size)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500">
-                            {formatDate(r.createdAt)}
-                          </td>
-                        </>
-                      )}
-                  </tr>
-                  {expanded && (
-                    <tr className="bg-zinc-900/50">
-                      <td className="px-4 py-4" colSpan={colCount}>
-                        {format === "oci" && (
-                          <OciImageDetail
-                            repositoryId={repo.id}
-                            repository={repo.name}
-                            image={r.coordinate}
-                            onDeleted={() => void load(q)}
-                          />
-                        )}
-                        {format === "maven" && !proxyMaven && (
-                          <MavenArtifactDetail
-                            repoId={repo.id}
-                            repoName={repo.name}
-                            onDeleted={() => void load(q)}
-                            meta={{
-                              coordinate: r.coordinate,
-                              digest: r.digest,
-                              size: r.size,
-                              createdAt: r.createdAt,
-                              publisher: r.publisher,
-                              buildNumber: r.buildNumber,
-                            }}
-                          />
-                        )}
-                        {proxyMaven && (
-                          <ProxyMavenCacheDetail
-                            repoName={repo.name}
-                            meta={r}
-                          />
-                        )}
-                        {format === "conan" && (
-                          <ConanArtifactDetail
-                            repoId={repo.id}
-                            repoName={repo.name}
-                            managed={repo.type !== "proxy"}
-                            canDelete={repo.type !== "proxy" && canWrite}
-                            onDeleted={() => void load(q)}
-                            meta={{
-                              coordinate: r.coordinate,
-                              publisher: r.publisher,
-                            }}
-                          />
-                        )}
-                        {format === "raw" && (
-                          <RawArtifactDetail
-                            repoName={repo.name}
-                            onDeleted={() => void load(q)}
-                            meta={{
-                              coordinate: r.coordinate,
-                              digest: r.digest,
-                              size: r.size,
-                              createdAt: r.createdAt,
-                            }}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </DataTable>
+          <Table<ArtifactRow>
+            className="ag-console-table"
+            rowKey="key"
+            size="middle"
+            dataSource={rows}
+            columns={columns}
+            pagination={false}
+            scroll={{ x: format === "oci" || format === "conan" ? 520 : 980 }}
+            expandable={{
+              expandedRowKeys: expandedImage ? [expandedImage] : [],
+              expandedRowRender,
+              expandRowByClick: true,
+              onExpandedRowsChange: (keys) =>
+                setExpandedImage(keys.length > 0 ? String(keys[0]) : null),
+            }}
+          />
           <Pagination hasMore={!!nextToken} onMore={() => load(q, nextToken)} />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-zinc-800/60 px-4 py-2 text-center text-xs text-zinc-500">

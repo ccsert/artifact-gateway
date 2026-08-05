@@ -90,38 +90,6 @@ export function StatCard({
   );
 }
 
-export function DataTable({
-  columns,
-  children,
-  className = "",
-  columnClassNames,
-}: {
-  columns: ReactNode[];
-  children: ReactNode;
-  className?: string;
-  columnClassNames?: string[];
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className={`w-full text-left text-sm ${className}`}>
-        <thead>
-          <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
-            {columns.map((c, i) => (
-              <th
-                key={i}
-                className={`px-4 py-2.5 font-medium ${columnClassNames?.[i] ?? ""}`}
-              >
-                {c}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-800/60">{children}</tbody>
-      </table>
-    </div>
-  );
-}
-
 export function Pagination({
   hasMore,
   loading,
