@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -47,7 +48,14 @@ func (c UpstreamClient) Fetch(ctx context.Context, method string, member reposit
 	if rangeHeader := headers.Get("Range"); rangeHeader != "" {
 		request.Header.Set("Range", rangeHeader)
 	}
-	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
+	client := c.HTTPClient
+	if member.Type == repository.MemberProxy && customEgressConfigured(member.EgressProxy) {
+		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
+		if err != nil {
+			return nil, err
+		}
+	}
+	response, err := tracedHTTPClient(client).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("fetch OCI upstream content: %w", err)
 	}
@@ -293,7 +301,7 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 // reuses the Group proxy fetch path: upstream client, read-through cache,
 // digest verification and circuit breaking all come from fetchOCIContent.
 func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor)
 }
 

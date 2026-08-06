@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -25,21 +26,7 @@ type ConanClient interface {
 
 func (c UpstreamClient) FetchConan(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	if member.Type == repository.MemberProxy {
-		if rawProxyTLSOverride(c.HTTPClient) {
-			return nil, errors.New("raw proxy HTTP client must not override TLS dialing")
-		}
-		useEgressProxy, err := rawProxyApplies(member.Endpoint)
-		if err != nil {
-			return nil, err
-		}
-		if useEgressProxy {
-			return c.fetchConan(ctx, rawProxyEgressClient(c.HTTPClient), method, member, path, headers)
-		}
-		proxyURL, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
-		if err != nil {
-			return nil, err
-		}
-		client, err := rawProxyHTTPClient(c.HTTPClient, proxyURL.Hostname(), proxyURL.Port(), ips)
+		client, err := egress.Apply(c.HTTPClient, member.EgressProxy, member.Endpoint, rawEgressHooks())
 		if err != nil {
 			return nil, err
 		}
@@ -382,7 +369,7 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 // the cache and audit namespace (the group slot); the member binds the
 // repository so grant evaluation stays on the same target.
 func (h ConanHandler) serveNativeConanProxy(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, kind, file string, principal Principal) {
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, RepositoryID: repo.ID}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, RepositoryID: repo.ID}
 	g := repository.Group{Name: repo.Name, Enabled: true, Members: []repository.Member{member}}
 	content, status, err := h.resolve(r.Context(), g, path, kind, r.Header, principal)
 	if err != nil {

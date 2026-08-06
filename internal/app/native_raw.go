@@ -481,7 +481,7 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		http.NotFound(w, r)
 		return
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	if !rawprotocol.MemberProxyAllowed(member) {
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditProxyDenied, http.StatusForbidden, "bypass", 0)
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -37,7 +38,14 @@ func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member re
 			request.Header.Set(name, value)
 		}
 	}
-	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
+	client := c.HTTPClient
+	if member.Type == repository.MemberProxy && customEgressConfigured(member.EgressProxy) {
+		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
+		if err != nil {
+			return nil, err
+		}
+	}
+	response, err := tracedHTTPClient(client).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("fetch Maven content: %w", err)
 	}
@@ -381,7 +389,7 @@ func (h MavenHandler) serveNativeProxy(w http.ResponseWriter, request *http.Requ
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return true
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	h.serveResolvedMembers(w, request, repo.Name, artifactPath, principal.Actor, []repository.Member{member})
 	return true
 }

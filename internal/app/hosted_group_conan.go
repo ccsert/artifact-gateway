@@ -144,7 +144,7 @@ func conanContentIsEmptyListing(path, file string, content conanCacheEntry) bool
 // binds the repository so grant evaluation stays on the same target. It reuses
 // the Group proxy resolve path, including verification and read-through cache.
 func (h ConanHandler) serveV2GroupProxy(w http.ResponseWriter, r *http.Request, groupName string, repo repository.HostedRepository, path, kind, file string, principal Principal) {
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, RepositoryID: repo.ID}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, RepositoryID: repo.ID}
 	g := repository.Group{Name: groupName, Enabled: true, Members: []repository.Member{member}}
 	content, status, err := h.resolve(r.Context(), g, path, kind, r.Header, principal)
 	if err != nil {

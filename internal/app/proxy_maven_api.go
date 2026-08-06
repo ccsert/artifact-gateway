@@ -74,7 +74,7 @@ func (h mavenProxyOperationsHandler) Refresh(w http.ResponseWriter, r *http.Requ
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	if !h.cache.ProxyAllowed(member.Endpoint) {
 		writeHostedProblem(w, http.StatusForbidden, "proxy_denied", "upstream repository is not allowed")
 		return
@@ -118,7 +118,7 @@ func (h mavenProxyOperationsHandler) Health(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	result := mavenProxyHealthResponse{RepositoryID: repo.ID, Repository: repo.Name, Endpoint: repo.Endpoint, CacheEnabled: h.cache != nil, CheckedAt: time.Now().UTC()}
 	if h.cache != nil {
 		result.ProxyAllowed = h.cache.ProxyAllowed(member.Endpoint)

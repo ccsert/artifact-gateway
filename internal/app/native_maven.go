@@ -478,7 +478,7 @@ func (h nativeMavenHandler) proxyRead(w http.ResponseWriter, r *http.Request, re
 		http.NotFound(w, r)
 		return
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	proxy := MavenHandler{Store: h.store, Repositories: h.store, Authorizer: h.authorizer, Authenticator: h.authenticator, Client: h.proxyClient, Metrics: h.metrics, Cache: h.proxyCache}
 	proxy.serveResolvedMembers(w, r, repo.Name, assetPath, principal.Actor, []repository.Member{member})
 }

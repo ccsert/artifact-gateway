@@ -2,15 +2,14 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -27,29 +26,27 @@ const defaultRawMaxObjectBytes = int64(1 << 30)
 
 type RawClient = rawprotocol.Client
 
+// rawEgressHooks builds the egress hook set from the package-level injection
+// points so tests keep their existing seams.
+func rawEgressHooks() egress.Hooks {
+	return egress.Hooks{LookupIP: rawProxyLookupIP, DialContext: rawProxyDialContext, ProxyFromEnvironment: rawProxyFromEnvironment}
+}
+
+// customEgressConfigured reports whether the member carries a per-repository
+// egress override (direct or custom). Nil and environment keep the
+// transport's default HTTP(S)_PROXY behavior, which the standard library
+// already honors for OCI and Maven upstream fetches.
+func customEgressConfigured(proxy *repository.EgressProxy) bool {
+	return proxy != nil && (proxy.Mode == repository.EgressProxyModeDirect || proxy.Mode == repository.EgressProxyModeCustom)
+}
+
 func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	client := c.HTTPClient
 	if member.Type == repository.MemberProxy {
-		if rawProxyTLSOverride(client) {
-			return nil, errors.New("raw proxy HTTP client must not override TLS dialing")
-		}
-		useEgressProxy, err := rawProxyApplies(member.Endpoint)
+		var err error
+		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
 		if err != nil {
 			return nil, err
-		}
-		if useEgressProxy {
-			// 走 HTTP(S)_PROXY 时，由代理服务器负责 DNS 解析与 outbound 连接，
-			// IP-pinning 既不必要也会绕过代理，因此改用标准代理 Transport。
-			client = rawProxyEgressClient(client)
-		} else {
-			u, ips, err := resolveRawProxyEndpoint(ctx, member.Endpoint)
-			if err != nil {
-				return nil, err
-			}
-			client, err = rawProxyHTTPClient(client, u.Hostname(), u.Port(), ips)
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 	u, err := url.Parse(member.Endpoint)
@@ -75,37 +72,6 @@ func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repo
 	return client.Do(r)
 }
 
-func resolveRawProxyEndpoint(ctx context.Context, endpoint string) (*url.URL, []net.IP, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
-		return nil, nil, errors.New("raw proxy endpoint is not a valid HTTPS URL")
-	}
-	ips, err := rawProxyLookupIP(ctx, "ip", u.Hostname())
-	if err != nil || len(ips) == 0 {
-		return nil, nil, fmt.Errorf("resolve Raw proxy endpoint: %w", err)
-	}
-	for _, ip := range ips {
-		if privateAddress(ip) {
-			return nil, nil, errors.New("raw proxy endpoint resolves to a private address")
-		}
-	}
-	return u, ips, nil
-}
-
-// rawProxyApplies asks the standard proxy policy whether this endpoint will use
-// an egress proxy. A configured proxy may still be bypassed by NO_PROXY.
-func rawProxyApplies(endpoint string) (bool, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return false, fmt.Errorf("parse Raw proxy endpoint: %w", err)
-	}
-	proxy, err := rawProxyFromEnvironment(&http.Request{URL: u})
-	if err != nil {
-		return false, fmt.Errorf("resolve egress proxy: %w", err)
-	}
-	return proxy != nil, nil
-}
-
 // rawProxyEgressClient returns a client that honors the configured HTTP(S)_PROXY
 // for upstream requests. DNS resolution and the private-network check are
 // delegated to the egress proxy, so no IP-pinning is applied locally.
@@ -113,80 +79,7 @@ func rawProxyEgressClient(client *http.Client) *http.Client {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok || transport == nil {
-		transport = http.DefaultTransport.(*http.Transport).Clone()
-	} else {
-		transport = transport.Clone()
-	}
-	transport.Proxy = http.ProxyFromEnvironment
-	// An injected dial hook can bypass the selected egress proxy. Keep TLS
-	// trust configuration but let the standard transport establish the proxy hop.
-	transport.DialContext = nil
-	transport.Dial = nil //nolint:staticcheck // Clear the legacy hook too; otherwise it bypasses the egress proxy when DialContext is nil.
-	copy := *client
-	copy.Transport = transport
-	return &copy
-}
-
-// rawProxyHTTPClient pins the TCP connection to the address that passed the
-// private-network check, preventing a second DNS resolution from rebinding it.
-func rawProxyHTTPClient(client *http.Client, hostname, port string, ips []net.IP) (*http.Client, error) {
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
-	transport := client.Transport
-	if transport == nil {
-		transport = http.DefaultTransport
-	}
-	base, ok := transport.(*http.Transport)
-	if !ok {
-		return nil, errors.New("raw proxy HTTP client must use *http.Transport")
-	}
-	if rawProxyTLSOverride(client) {
-		return nil, errors.New("raw proxy HTTP client must not override TLS dialing")
-	}
-	copy := *client
-	pinnedTransport := base.Clone()
-	pinnedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		requestHost, requestPort, err := net.SplitHostPort(address)
-		if err != nil || !strings.EqualFold(requestHost, hostname) {
-			return nil, errors.New("raw proxy dial target changed")
-		}
-		if port != "" {
-			requestPort = port
-		}
-		var lastErr error
-		for _, ip := range ips {
-			connection, err := rawProxyDialContext(ctx, network, net.JoinHostPort(ip.String(), requestPort))
-			if err == nil {
-				return connection, nil
-			}
-			lastErr = err
-		}
-		return nil, lastErr
-	}
-	copy.Transport = pinnedTransport
-	return &copy, nil
-}
-
-func rawProxyTLSOverride(client *http.Client) bool {
-	if client == nil {
-		return false
-	}
-	base, ok := client.Transport.(*http.Transport)
-	return ok && base != nil && (base.DialTLSContext != nil || transportHasLegacyDialTLS(base))
-}
-
-// DialTLS is deprecated but an installed legacy hook must still be rejected:
-// it would bypass the pinned connection path below.
-func transportHasLegacyDialTLS(transport *http.Transport) bool {
-	field := reflect.ValueOf(transport).Elem().FieldByName("DialTLS")
-	return field.IsValid() && !field.IsNil()
-}
-
-func privateAddress(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
+	return egress.EnvironmentClient(client, rawEgressHooks())
 }
 
 type rawAuditCorrelation struct{ requestID, traceID string }
