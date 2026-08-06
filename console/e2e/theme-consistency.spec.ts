@@ -19,8 +19,8 @@ test("public browse surfaces stay aligned with the dark console palette", async 
   });
 
   expect(surface).toEqual({
-    background: "rgb(24, 24, 27)",
-    border: "rgb(39, 39, 42)",
+    background: "rgba(24, 24, 27, 0.55)",
+    border: "rgba(63, 63, 70, 0.35)",
     contentPadding: "24px",
   });
 });
@@ -109,7 +109,7 @@ test("management tables keep action columns opaque and cards separated", async (
     const style = getComputedStyle(element);
     return style.backgroundColor;
   });
-  expect(actionSurface).toBe("rgb(24, 24, 27)");
+  expect(actionSurface).toBe("rgb(20, 20, 23)");
 });
 
 test("deleted repositories stay archived unless explicitly requested", async ({
