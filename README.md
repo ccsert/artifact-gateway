@@ -102,6 +102,15 @@ URL defaults to the issuer's standard path. Reader, writer, and administrator
 role mappings are configured with `GATEWAY_OIDC_READER_ROLES`,
 `GATEWAY_OIDC_WRITER_ROLES`, and `GATEWAY_OIDC_ADMIN_ROLES`.
 
+Proxy repositories accept a per-repository egress proxy (`egressProxy` in the
+V2 management API) with `direct`, `environment`, and `custom` modes; custom
+supports HTTP CONNECT and SOCKS5 with optional authentication and a `noProxy`
+bypass list. Stored proxy passwords are encrypted with AES-256-GCM using
+`GATEWAY_EGRESS_PROXY_KEY` (32 bytes as hex, base64, or raw; generate with
+`openssl rand -hex 32`). `POST /api/v2/repositories/{id}/egress-proxy:test`
+probes the configured egress path, and the Console repository settings dialog
+exposes the full form. See `docs/proxy-egress-design.md`.
+
 Administrators can inspect audits at `GET /api/v1/audits`, metrics at
 `GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.
 The Console uses the generated `/api/v2` management client for Repository

@@ -8,6 +8,7 @@ import {
   InputNumber,
   Popconfirm,
   Progress,
+  Radio,
   Select,
   Space,
   Switch,
@@ -56,6 +57,7 @@ import {
   clearProxyNegativeCache,
   refreshProxyCache,
   getProxyHealth,
+  testEgressProxy,
 } from "../client";
 import type {
   Repository,
@@ -73,6 +75,7 @@ import type {
   User,
   ApiKey,
 } from "../client";
+import type { EgressProxyTestResult, EgressProxyWritable } from "../client";
 import {
   PageHeader,
   Card,
@@ -3437,7 +3440,69 @@ function EditRepositoryDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
+  const egress = repo.egressProxy;
+  const [egressMode, setEgressMode] = useState<
+    "direct" | "environment" | "custom"
+  >(egress?.mode ?? "environment");
+  const [egressProtocol, setEgressProtocol] = useState<"http" | "socks5">(
+    egress?.protocol ?? "http",
+  );
+  const [egressHost, setEgressHost] = useState(egress?.host ?? "");
+  const [egressPort, setEgressPort] = useState<number | null>(
+    egress?.port ?? null,
+  );
+  const [egressUsername, setEgressUsername] = useState(egress?.username ?? "");
+  const [egressPassword, setEgressPassword] = useState("");
+  const [egressClearCredentials, setEgressClearCredentials] = useState(false);
+  const [egressRemoteDns, setEgressRemoteDns] = useState(
+    egress?.remoteDns ?? false,
+  );
+  const [egressNoProxy, setEgressNoProxy] = useState(
+    (egress?.noProxy ?? []).join(", "),
+  );
+  const [egressTesting, setEgressTesting] = useState(false);
+  const [egressTestResult, setEgressTestResult] =
+    useState<EgressProxyTestResult | null>(null);
+
   const requiresHosts = repo.format === "raw" || repo.format === "conan";
+
+  const resetForm = () => {
+    setEndpoint(repo.endpoint ?? "");
+    setHosts((repo.allowedHosts ?? []).join(", "));
+    setAnonymousRead(repo.anonymousRead);
+    setEgressMode(repo.egressProxy?.mode ?? "environment");
+    setEgressProtocol(repo.egressProxy?.protocol ?? "http");
+    setEgressHost(repo.egressProxy?.host ?? "");
+    setEgressPort(repo.egressProxy?.port ?? null);
+    setEgressUsername(repo.egressProxy?.username ?? "");
+    setEgressPassword("");
+    setEgressClearCredentials(false);
+    setEgressRemoteDns(repo.egressProxy?.remoteDns ?? false);
+    setEgressNoProxy((repo.egressProxy?.noProxy ?? []).join(", "));
+    setEgressTestResult(null);
+    setError(null);
+  };
+
+  const buildEgressProxyBody = (): EgressProxyWritable => {
+    if (egressMode !== "custom") {
+      return { mode: egressMode };
+    }
+    const noProxy = egressNoProxy
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    return {
+      mode: "custom",
+      protocol: egressProtocol,
+      host: egressHost.trim(),
+      port: egressPort ?? 0,
+      ...(egressUsername.trim() ? { username: egressUsername.trim() } : {}),
+      ...(egressPassword ? { password: egressPassword } : {}),
+      ...(egressClearCredentials ? { clearCredentials: true } : {}),
+      remoteDns: egressProtocol === "socks5" ? egressRemoteDns : false,
+      noProxy,
+    };
+  };
 
   const submit = async () => {
     setSaving(true);
@@ -3452,7 +3517,11 @@ function EditRepositoryDialog({
       body: {
         anonymousRead,
         ...(repo.type === "proxy"
-          ? { endpoint: endpoint.trim(), allowedHosts }
+          ? {
+              endpoint: endpoint.trim(),
+              allowedHosts,
+              egressProxy: buildEgressProxyBody(),
+            }
           : {}),
       },
     });
@@ -3465,16 +3534,27 @@ function EditRepositoryDialog({
     onUpdated();
   };
 
+  const runEgressTest = async () => {
+    setEgressTesting(true);
+    setEgressTestResult(null);
+    const { data, error: err } = await testEgressProxy({
+      path: { repositoryId: repo.id },
+    });
+    setEgressTesting(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    if (data) setEgressTestResult(data);
+  };
+
   return (
     <>
       <Button
         icon={<SettingOutlined />}
         variant="outlined"
         onClick={() => {
-          setEndpoint(repo.endpoint ?? "");
-          setHosts((repo.allowedHosts ?? []).join(", "));
-          setAnonymousRead(repo.anonymousRead);
-          setError(null);
+          resetForm();
           dialog.show();
         }}
       >
@@ -3531,6 +3611,168 @@ function EditRepositoryDialog({
                   onChange={(e) => setHosts(e.target.value)}
                 />
               </Field>
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                <div className="text-sm font-medium text-zinc-200">
+                  出口代理
+                </div>
+                <div className="mt-1 text-xs leading-5 text-zinc-500">
+                  配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。
+                </div>
+                <Radio.Group
+                  className="mt-3 flex flex-col gap-2"
+                  value={egressMode}
+                  onChange={(e) => {
+                    setEgressMode(e.target.value);
+                    setEgressTestResult(null);
+                  }}
+                >
+                  <Radio value="direct">
+                    <span className="text-sm text-zinc-200">直连</span>
+                    <span className="ml-2 text-xs text-zinc-500">
+                      不经过任何代理，保留私网地址防护
+                    </span>
+                  </Radio>
+                  <Radio value="environment">
+                    <span className="text-sm text-zinc-200">跟随环境变量</span>
+                    <span className="ml-2 text-xs text-zinc-500">
+                      沿用进程级 HTTP(S)_PROXY 与 NO_PROXY
+                    </span>
+                  </Radio>
+                  <Radio value="custom">
+                    <span className="text-sm text-zinc-200">自定义代理</span>
+                    <span className="ml-2 text-xs text-zinc-500">
+                      为此仓库单独指定 HTTP 或 SOCKS5 代理
+                    </span>
+                  </Radio>
+                </Radio.Group>
+                {egressMode === "custom" && (
+                  <Space
+                    orientation="vertical"
+                    size="middle"
+                    className="mt-3 w-full border-t border-zinc-800/60 pt-3"
+                  >
+                    <div className="flex flex-wrap gap-3">
+                      <Field label="协议">
+                        <Select
+                          className="w-40"
+                          value={egressProtocol}
+                          onChange={setEgressProtocol}
+                          options={[
+                            { value: "http", label: "HTTP（CONNECT）" },
+                            { value: "socks5", label: "SOCKS5" },
+                          ]}
+                        />
+                      </Field>
+                      <Field label="代理主机">
+                        <Input
+                          className="w-64"
+                          placeholder="proxy.corp.example"
+                          value={egressHost}
+                          onChange={(e) => setEgressHost(e.target.value)}
+                        />
+                      </Field>
+                      <Field label="端口">
+                        <InputNumber
+                          className="w-28"
+                          min={1}
+                          max={65535}
+                          placeholder="1080"
+                          value={egressPort}
+                          onChange={(value) => setEgressPort(value)}
+                        />
+                      </Field>
+                    </div>
+                    {egressProtocol === "socks5" && (
+                      <div className="flex items-center justify-between gap-6">
+                        <div>
+                          <div className="text-xs font-medium text-zinc-400">
+                            远程 DNS（socks5h）
+                          </div>
+                          <div className="mt-1 text-xs leading-5 text-zinc-600">
+                            开启后由代理服务器解析上游域名，适用于本地 DNS
+                            不可达上游的网络。
+                          </div>
+                        </div>
+                        <Switch
+                          checked={egressRemoteDns}
+                          onChange={setEgressRemoteDns}
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-3">
+                      <Field label="代理认证用户名（可选）">
+                        <Input
+                          className="w-64"
+                          placeholder="gateway"
+                          value={egressUsername}
+                          onChange={(e) => setEgressUsername(e.target.value)}
+                        />
+                      </Field>
+                      <Field
+                        label="代理认证密码（可选）"
+                        hint="AES-256-GCM 加密落库，留空则保留已存凭据。"
+                      >
+                        <Input.Password
+                          className="w-64"
+                          placeholder={
+                            repo.egressProxy?.credentialsConfigured
+                              ? "已配置，输入以替换"
+                              : "未配置"
+                          }
+                          value={egressPassword}
+                          onChange={(e) => setEgressPassword(e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    {repo.egressProxy?.credentialsConfigured && (
+                      <Checkbox
+                        checked={egressClearCredentials}
+                        onChange={(e) =>
+                          setEgressClearCredentials(e.target.checked)
+                        }
+                      >
+                        <span className="text-xs text-zinc-400">
+                          清除已存储的代理凭据
+                        </span>
+                      </Checkbox>
+                    )}
+                    <Field
+                      label="绕过列表（noProxy）"
+                      hint="逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。"
+                    >
+                      <Input
+                        placeholder="*.internal.example, 10.0.0.0/8"
+                        value={egressNoProxy}
+                        onChange={(e) => setEgressNoProxy(e.target.value)}
+                      />
+                    </Field>
+                  </Space>
+                )}
+                <div className="mt-3 flex items-center gap-3 border-t border-zinc-800/60 pt-3">
+                  <Button onClick={runEgressTest} loading={egressTesting}>
+                    测试连接
+                  </Button>
+                  <span className="text-xs text-zinc-600">
+                    测试使用已保存的配置
+                  </span>
+                  {egressTestResult &&
+                    (egressTestResult.reachable ? (
+                      <span className="text-xs text-emerald-400">
+                        代理可达
+                        {egressTestResult.upstreamStatus
+                          ? ` · 上游返回 ${egressTestResult.upstreamStatus}`
+                          : ""}
+                        {egressTestResult.latencyMs !== undefined
+                          ? ` · 延迟 ${egressTestResult.latencyMs} ms`
+                          : ""}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-red-400">
+                        连接失败：{egressTestResult.error ?? "未知错误"}
+                      </span>
+                    ))}
+                </div>
+              </div>
             </Space>
           )}
           {error ? <ErrorBanner error={error} /> : null}

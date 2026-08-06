@@ -29,6 +29,7 @@ export type Repository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead: boolean;
+  egressProxy?: EgressProxy;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
    */
@@ -52,6 +53,7 @@ export type CreateRepository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  egressProxy?: EgressProxy;
 };
 
 export type Group = {
@@ -596,6 +598,45 @@ export type GlobalArtifactSearchPage = {
 };
 
 /**
+ * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ */
+export type EgressProxy = {
+  /**
+   * direct bypasses any proxy (keeping private-address protection); environment follows process HTTP(S)_PROXY/NO_PROXY; custom uses the per-repository proxy below.
+   */
+  mode: "direct" | "environment" | "custom";
+  /**
+   * Custom proxy protocol. http uses CONNECT; socks5 supports optional remote DNS.
+   */
+  protocol?: "http" | "socks5";
+  /**
+   * Custom proxy hostname or IP, without scheme or credentials.
+   */
+  host?: string;
+  port?: number;
+  /**
+   * Optional proxy authentication username.
+   */
+  username?: string;
+  /**
+   * When true on update, removes any stored proxy credentials.
+   */
+  clearCredentials?: boolean;
+  /**
+   * socks5 only. When true the proxy resolves the upstream hostname (socks5h); when false the gateway resolves locally and keeps the private-address check.
+   */
+  remoteDns?: boolean;
+  /**
+   * Upstream host suffixes or CIDR ranges that bypass the custom proxy and connect directly. Matched against the upstream host, never the proxy host.
+   */
+  noProxy?: Array<string>;
+  /**
+   * True when encrypted proxy credentials are stored.
+   */
+  readonly credentialsConfigured?: boolean;
+};
+
+/**
  * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
  */
 export type UpdateRepository = {
@@ -611,6 +652,29 @@ export type UpdateRepository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  egressProxy?: EgressProxy;
+};
+
+/**
+ * Ephemeral result of an egress proxy connection test. Nothing is persisted.
+ */
+export type EgressProxyTestResult = {
+  reachable: boolean;
+  egressMode: "direct" | "environment" | "custom";
+  /**
+   * Custom proxy host (no credentials) when mode is custom.
+   */
+  proxyHost?: string;
+  /**
+   * HTTP status returned by the upstream probe, when reached.
+   */
+  upstreamStatus?: number;
+  latencyMs?: number;
+  /**
+   * Sanitized failure reason when reachable is false.
+   */
+  error?: string;
+  checkedAt: string;
 };
 
 export type RetentionReasonCounts = {
@@ -718,6 +782,107 @@ export type ProxyCacheBrowseItem = {
   sidecarCount?: number;
   extensions?: Array<string>;
   assets?: Array<ProxyCacheAsset>;
+};
+
+export type RepositoryWritable = {
+  id: string;
+  name: string;
+  format: Format;
+  type?: "hosted" | "proxy";
+  endpoint?: string;
+  allowedHosts?: Array<string>;
+  /**
+   * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+   */
+  anonymousRead: boolean;
+  egressProxy?: EgressProxyWritable;
+  /**
+   * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
+   */
+  state: "active" | "deleting" | "deleted";
+  version: string;
+};
+
+export type CreateRepositoryWritable = {
+  name: string;
+  format: Format;
+  type?: "hosted" | "proxy";
+  /**
+   * Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
+   */
+  endpoint?: string;
+  /**
+   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   */
+  allowedHosts?: Array<string>;
+  /**
+   * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+   */
+  anonymousRead?: boolean;
+  egressProxy?: EgressProxyWritable;
+};
+
+export type RepositoryPageWritable = {
+  items: Array<RepositoryWritable>;
+  nextPageToken?: string;
+};
+
+/**
+ * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ */
+export type EgressProxyWritable = {
+  /**
+   * direct bypasses any proxy (keeping private-address protection); environment follows process HTTP(S)_PROXY/NO_PROXY; custom uses the per-repository proxy below.
+   */
+  mode: "direct" | "environment" | "custom";
+  /**
+   * Custom proxy protocol. http uses CONNECT; socks5 supports optional remote DNS.
+   */
+  protocol?: "http" | "socks5";
+  /**
+   * Custom proxy hostname or IP, without scheme or credentials.
+   */
+  host?: string;
+  port?: number;
+  /**
+   * Optional proxy authentication username.
+   */
+  username?: string;
+  /**
+   * Optional proxy authentication password. Write-only; stored encrypted. Omit on update to keep stored credentials.
+   */
+  password?: string;
+  /**
+   * When true on update, removes any stored proxy credentials.
+   */
+  clearCredentials?: boolean;
+  /**
+   * socks5 only. When true the proxy resolves the upstream hostname (socks5h); when false the gateway resolves locally and keeps the private-address check.
+   */
+  remoteDns?: boolean;
+  /**
+   * Upstream host suffixes or CIDR ranges that bypass the custom proxy and connect directly. Matched against the upstream host, never the proxy host.
+   */
+  noProxy?: Array<string>;
+};
+
+/**
+ * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
+ */
+export type UpdateRepositoryWritable = {
+  /**
+   * Upstream base URL (https). Required for proxy repositories.
+   */
+  endpoint?: string;
+  /**
+   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   */
+  allowedHosts?: Array<string>;
+  /**
+   * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
+   */
+  anonymousRead?: boolean;
+  egressProxy?: EgressProxyWritable;
 };
 
 export type RepositoryId = string;
@@ -1284,7 +1449,7 @@ export type ListRepositoriesResponse =
   ListRepositoriesResponses[keyof ListRepositoriesResponses];
 
 export type CreateRepositoryData = {
-  body: CreateRepository;
+  body: CreateRepositoryWritable;
   headers: {
     "Idempotency-Key": string;
   };
@@ -1375,7 +1540,7 @@ export type GetRepositoryResponse =
   GetRepositoryResponses[keyof GetRepositoryResponses];
 
 export type UpdateRepositoryData = {
-  body: UpdateRepository;
+  body: UpdateRepositoryWritable;
   headers: {
     "If-Match": string;
   };
@@ -1413,6 +1578,43 @@ export type UpdateRepositoryResponses = {
 
 export type UpdateRepositoryResponse =
   UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
+
+export type TestEgressProxyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/egress-proxy:test";
+};
+
+export type TestEgressProxyErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type TestEgressProxyError =
+  TestEgressProxyErrors[keyof TestEgressProxyErrors];
+
+export type TestEgressProxyResponses = {
+  /**
+   * Egress proxy connection test result
+   */
+  200: EgressProxyTestResult;
+};
+
+export type TestEgressProxyResponse =
+  TestEgressProxyResponses[keyof TestEgressProxyResponses];
 
 export type ListGrantsData = {
   body?: never;
