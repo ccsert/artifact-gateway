@@ -24,9 +24,10 @@ func (s *MemoryStore) BackgroundOperationQueueStats(_ context.Context) ([]Backgr
 			continue
 		}
 		kind := BackgroundOperationLifecycle
-		if job.Kind == LifecycleJobPromotion {
+		switch job.Kind {
+		case LifecycleJobPromotion:
 			kind = BackgroundOperationPromotion
-		} else if job.Kind == LifecycleJobReplication {
+		case LifecycleJobReplication:
 			kind = BackgroundOperationReplication
 		}
 		addBackgroundOperationQueueStat(aggregated, backgroundOperationQueueKey{kind: kind, format: format, state: job.State}, job.CreatedAt)
