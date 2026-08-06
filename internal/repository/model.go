@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"strings"
 	"time"
 )
@@ -38,10 +39,81 @@ type HostedRepository struct {
 	Type          RepositoryType  `json:"type"`
 	Endpoint      string          `json:"endpoint,omitempty"`
 	AllowedHosts  []string        `json:"allowedHosts,omitempty"`
+	EgressProxy   *EgressProxy    `json:"egressProxy,omitempty"`
 	AnonymousRead bool            `json:"anonymousRead"`
 	State         RepositoryState `json:"state"`
 	Version       string          `json:"version"`
 	CreatedAt     time.Time       `json:"-"`
+}
+
+// EgressProxyMode selects how a Proxy Repository reaches its upstream.
+type EgressProxyMode string
+
+const (
+	EgressProxyModeDirect      EgressProxyMode = "direct"
+	EgressProxyModeEnvironment EgressProxyMode = "environment"
+	EgressProxyModeCustom      EgressProxyMode = "custom"
+)
+
+// EgressProxyProtocol is the network protocol of a custom egress proxy.
+type EgressProxyProtocol string
+
+const (
+	EgressProxyProtocolHTTP   EgressProxyProtocol = "http"
+	EgressProxyProtocolSOCKS5 EgressProxyProtocol = "socks5"
+)
+
+// EgressProxy is the per-Proxy-Repository egress network proxy configuration.
+// Password holds AES-256-GCM ciphertext (base64), never plaintext; it is
+// redacted from all management API responses.
+type EgressProxy struct {
+	Mode      EgressProxyMode     `json:"mode"`
+	Protocol  EgressProxyProtocol `json:"protocol,omitempty"`
+	Host      string              `json:"host,omitempty"`
+	Port      int                 `json:"port,omitempty"`
+	Username  string              `json:"username,omitempty"`
+	Password  string              `json:"password,omitempty"`
+	RemoteDNS bool                `json:"remoteDns,omitempty"`
+	NoProxy   []string            `json:"noProxy,omitempty"`
+	// CredentialsConfigured is a response-only marker computed at encode time;
+	// it is never persisted.
+	CredentialsConfigured bool `json:"credentialsConfigured,omitempty"`
+}
+
+// Validate enforces the egress proxy invariants documented in
+// docs/proxy-egress-design.md.
+func (p *EgressProxy) Validate() error {
+	if p == nil {
+		return nil
+	}
+	switch p.Mode {
+	case EgressProxyModeDirect, EgressProxyModeEnvironment:
+		if p.Protocol != "" || p.Host != "" || p.Port != 0 || p.Username != "" || p.Password != "" || p.RemoteDNS || len(p.NoProxy) > 0 {
+			return errors.New("egress proxy custom fields require custom mode")
+		}
+		return nil
+	case EgressProxyModeCustom:
+		if p.Protocol != EgressProxyProtocolHTTP && p.Protocol != EgressProxyProtocolSOCKS5 {
+			return errors.New("egress proxy protocol must be http or socks5")
+		}
+		if p.Host == "" || strings.ContainsAny(p.Host, "/@") || strings.Contains(p.Host, "://") {
+			return errors.New("egress proxy host must be a bare hostname or IP")
+		}
+		if p.Port < 1 || p.Port > 65535 {
+			return errors.New("egress proxy port must be between 1 and 65535")
+		}
+		if p.RemoteDNS && p.Protocol != EgressProxyProtocolSOCKS5 {
+			return errors.New("remoteDns only applies to the socks5 protocol")
+		}
+		for _, entry := range p.NoProxy {
+			if strings.TrimSpace(entry) == "" || strings.Contains(entry, "://") {
+				return errors.New("egress proxy noProxy entries must be host suffixes or CIDR ranges")
+			}
+		}
+		return nil
+	default:
+		return errors.New("egress proxy mode must be direct, environment, or custom")
+	}
 }
 
 func normalizeHostedRepository(repo HostedRepository) HostedRepository {
@@ -379,13 +451,14 @@ const (
 )
 
 type Member struct {
-	Name         string     `json:"name"`
-	Type         MemberType `json:"type"`
-	Endpoint     string     `json:"endpoint"`
-	Position     int        `json:"position"`
-	Anonymous    bool       `json:"anonymous"`
-	AllowedHosts []string   `json:"allowedHosts,omitempty"`
-	RepositoryID string     `json:"repositoryId,omitempty"`
+	Name         string       `json:"name"`
+	Type         MemberType   `json:"type"`
+	Endpoint     string       `json:"endpoint"`
+	Position     int          `json:"position"`
+	Anonymous    bool         `json:"anonymous"`
+	AllowedHosts []string     `json:"allowedHosts,omitempty"`
+	EgressProxy  *EgressProxy `json:"egressProxy,omitempty"`
+	RepositoryID string       `json:"repositoryId,omitempty"`
 }
 
 type Group struct {

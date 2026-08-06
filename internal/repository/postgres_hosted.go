@@ -10,7 +10,11 @@ import (
 
 func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedRepository) (HostedRepository, error) {
 	repo = normalizeHostedRepository(repo)
-	err := s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	egressProxy, err := marshalEgressProxy(repo.EgressProxy)
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	err = s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version, egress_proxy) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1,$8) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, egressProxy).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
 	}
@@ -22,6 +26,10 @@ func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedR
 
 func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
 	repo = normalizeHostedRepository(repo)
+	egressProxy, err := marshalEgressProxy(repo.EgressProxy)
+	if err != nil {
+		return HostedRepository{}, false, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return HostedRepository{}, false, err
@@ -57,7 +65,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, false, err
 	}
-	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, state, version, egress_proxy) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,'active',1,$8) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, egressProxy).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, false, ErrNameExists
 	}
@@ -77,14 +85,39 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 // hostedRepositoryColumns is the canonical projection for hosted_repositories
 // reads. allowed_hosts is projected through array_to_json so it scans into
 // []byte and decodes into []string without a pq dependency.
-const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), anonymous_read, state, version::text, created_at`
+const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), anonymous_read, state, version::text, created_at, egress_proxy`
+
+// marshalEgressProxy encodes the egress proxy configuration for the JSONB
+// column. The response-only CredentialsConfigured marker is never persisted.
+func marshalEgressProxy(proxy *EgressProxy) (any, error) {
+	if proxy == nil {
+		return nil, nil
+	}
+	stored := *proxy
+	stored.CredentialsConfigured = false
+	encoded, err := json.Marshal(stored)
+	if err != nil {
+		return nil, err
+	}
+	return string(encoded), nil
+}
 
 func scanHostedRepository(row interface{ Scan(...any) error }, repo *HostedRepository) error {
-	var allowedHosts []byte
-	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.AnonymousRead, &repo.State, &repo.Version, &repo.CreatedAt); err != nil {
+	var allowedHosts, egressProxy []byte
+	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.AnonymousRead, &repo.State, &repo.Version, &repo.CreatedAt, &egressProxy); err != nil {
 		return err
 	}
-	return json.Unmarshal(allowedHosts, &repo.AllowedHosts)
+	if err := json.Unmarshal(allowedHosts, &repo.AllowedHosts); err != nil {
+		return err
+	}
+	if len(egressProxy) > 0 {
+		var proxy EgressProxy
+		if err := json.Unmarshal(egressProxy, &proxy); err != nil {
+			return err
+		}
+		repo.EgressProxy = &proxy
+	}
+	return nil
 }
 
 func (s *PostgresStore) ListHostedRepositories(ctx context.Context, limit int, after string) ([]HostedRepository, string, error) {
@@ -193,8 +226,12 @@ func (s *PostgresStore) FinalizeHostedRepositoryDeletion(ctx context.Context, id
 }
 
 func (s *PostgresStore) UpdateHostedRepository(ctx context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
+	egressProxy, err := marshalEgressProxy(repo.EgressProxy)
+	if err != nil {
+		return HostedRepository{}, err
+	}
 	var updated HostedRepository
-	err := scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=COALESCE($3::text[], '{}'::text[]), anonymous_read=$4, version=version+1 WHERE id::text=$1 AND state='active' AND version::text=$5 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, expectedVersion), &updated)
+	err = scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=COALESCE($3::text[], '{}'::text[]), anonymous_read=$4, version=version+1, egress_proxy=$6 WHERE id::text=$1 AND state='active' AND version::text=$5 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, expectedVersion, egressProxy), &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetHostedRepository(ctx, repo.ID); errors.Is(getErr, ErrNotFound) {
 			return HostedRepository{}, ErrNotFound

@@ -19,6 +19,7 @@ func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepos
 	repo.State = RepositoryActive
 	repo.Version = "1"
 	repo.CreatedAt = time.Now().UTC()
+	repo.EgressProxy = cloneEgressProxy(repo.EgressProxy)
 	s.hostedRepositories[repo.ID] = repo
 	return repo, nil
 }
@@ -155,9 +156,22 @@ func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepos
 	current.Endpoint = repo.Endpoint
 	current.AllowedHosts = append([]string(nil), repo.AllowedHosts...)
 	current.AnonymousRead = repo.AnonymousRead
+	current.EgressProxy = cloneEgressProxy(repo.EgressProxy)
 	current.Version = nextHostedGroupVersion(current.Version)
 	s.hostedRepositories[repo.ID] = current
 	return current, nil
+}
+
+// cloneEgressProxy deep-copies the pointer so stored repositories never share
+// mutable egress configuration with caller-owned structs.
+func cloneEgressProxy(proxy *EgressProxy) *EgressProxy {
+	if proxy == nil {
+		return nil
+	}
+	cloned := *proxy
+	cloned.NoProxy = append([]string(nil), proxy.NoProxy...)
+	cloned.CredentialsConfigured = false
+	return &cloned
 }
 
 func cloneHostedGroup(group HostedGroup) HostedGroup {
