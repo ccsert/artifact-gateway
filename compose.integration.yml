@@ -42,6 +42,8 @@ services:
     command: ["go", "test", "-p", "1", "-tags=integration", "./internal/app"]
     volumes:
       - ./:/src:ro
+      - artifact-gateway-go-mod:/go/pkg/mod
+      - artifact-gateway-go-build:/root/.cache/go-build
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -57,3 +59,9 @@ services:
         condition: service_started
     entrypoint: ["/bin/sh", "-ec"]
     command: ["until curl --fail --silent http://minio:9000/minio/health/live > /dev/null; do sleep 1; done"]
+
+volumes:
+  artifact-gateway-go-mod:
+    external: true
+  artifact-gateway-go-build:
+    external: true

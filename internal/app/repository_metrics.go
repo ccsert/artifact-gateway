@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -52,12 +53,15 @@ type Metrics struct {
 	repositoryAuthorizationDenials [repositoryAuthorizationFormatCount][repositoryGrantDenialReasonCount]atomic.Uint64
 	backgroundOperations           [backgroundOperationKindCount][backgroundOperationFormatCount][backgroundOperationOutcomeCount]atomic.Uint64
 	backgroundInFlight             [backgroundOperationKindCount][backgroundOperationFormatCount]atomic.Int64
+	backgroundJobs                 [backgroundOperationKindCount][backgroundOperationFormatCount][backgroundOperationQueueStateCount]atomic.Int64
+	backgroundOldestActionable     [backgroundOperationKindCount][backgroundOperationFormatCount]atomic.Int64
 	auditCleanupCompleted          atomic.Uint64
 	auditCleanupFailed             atomic.Uint64
 	auditCleanupDeleted            atomic.Uint64
 
 	mu           sync.RWMutex
 	repositories map[string]RepositoryMetrics
+	now          func() time.Time
 }
 
 type backgroundOperationKind uint8
@@ -92,6 +96,23 @@ const (
 var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication"}
 var backgroundOperationFormats = [...]repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven, repository.FormatConan}
 var backgroundOperationOutcomes = [...]string{"started", "completed", "failed", "retried"}
+
+type backgroundOperationQueueState uint8
+
+const (
+	backgroundOperationQueuePending backgroundOperationQueueState = iota
+	backgroundOperationQueueRetrying
+	backgroundOperationQueueRunning
+	backgroundOperationQueueFailed
+	backgroundOperationQueueStateCount
+)
+
+var backgroundOperationQueueStates = [...]repository.LifecycleJobState{
+	repository.LifecycleJobPending,
+	repository.LifecycleJobRetrying,
+	repository.LifecycleJobRunning,
+	repository.LifecycleJobFailed,
+}
 
 type repositoryAuthorizationFormat uint8
 
@@ -183,6 +204,51 @@ func (m *Metrics) AddBackgroundOperationInFlight(kind string, format repository.
 		m.backgroundInFlight[kindIndex][formatIndex].Add(delta)
 	}
 }
+
+func (m *Metrics) ReplaceBackgroundOperationQueueStats(stats []repository.BackgroundOperationQueueStat) {
+	var counts [backgroundOperationKindCount][backgroundOperationFormatCount][backgroundOperationQueueStateCount]int64
+	var oldest [backgroundOperationKindCount][backgroundOperationFormatCount]int64
+	for _, stat := range stats {
+		kindIndex, formatIndex, stateIndex := -1, -1, -1
+		for index, value := range backgroundOperationKinds {
+			if value == string(stat.Kind) {
+				kindIndex = index
+				break
+			}
+		}
+		for index, value := range backgroundOperationFormats {
+			if value == stat.Format {
+				formatIndex = index
+				break
+			}
+		}
+		for index, value := range backgroundOperationQueueStates {
+			if value == stat.State {
+				stateIndex = index
+				break
+			}
+		}
+		if kindIndex < 0 || formatIndex < 0 || stateIndex < 0 || stat.Count < 0 {
+			continue
+		}
+		counts[kindIndex][formatIndex][stateIndex] += stat.Count
+		if (stat.State == repository.LifecycleJobPending || stat.State == repository.LifecycleJobRetrying) && !stat.OldestCreatedAt.IsZero() {
+			createdAt := stat.OldestCreatedAt.Unix()
+			if oldest[kindIndex][formatIndex] == 0 || createdAt < oldest[kindIndex][formatIndex] {
+				oldest[kindIndex][formatIndex] = createdAt
+			}
+		}
+	}
+	for kindIndex := range backgroundOperationKinds {
+		for formatIndex := range backgroundOperationFormats {
+			for stateIndex := range backgroundOperationQueueStates {
+				m.backgroundJobs[kindIndex][formatIndex][stateIndex].Store(counts[kindIndex][formatIndex][stateIndex])
+			}
+			m.backgroundOldestActionable[kindIndex][formatIndex].Store(oldest[kindIndex][formatIndex])
+		}
+	}
+}
+
 func (m *Metrics) RecordAuditRetentionCleanup(outcome string, deleted int) {
 	switch outcome {
 	case "completed":
@@ -331,6 +397,23 @@ func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 				_, _ = w.Write([]byte("artifact_gateway_background_operations_total{kind=\"" + kind + "\",format=\"" + string(format) + "\",outcome=\"" + outcome + "\"} " + utoa(m.backgroundOperations[kindIndex][formatIndex][outcomeIndex].Load()) + "\n"))
 			}
 			_, _ = w.Write([]byte("artifact_gateway_background_operations_in_flight{kind=\"" + kind + "\",format=\"" + string(format) + "\"} " + itoa(m.backgroundInFlight[kindIndex][formatIndex].Load()) + "\n"))
+		}
+	}
+	now := time.Now().UTC()
+	if m.now != nil {
+		now = m.now().UTC()
+	}
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_background_jobs gauge\n# TYPE artifact_gateway_background_queue_oldest_actionable_age_seconds gauge\n"))
+	for kindIndex, kind := range backgroundOperationKinds {
+		for formatIndex, format := range backgroundOperationFormats {
+			for stateIndex, state := range backgroundOperationQueueStates {
+				_, _ = w.Write([]byte("artifact_gateway_background_jobs{kind=\"" + kind + "\",format=\"" + string(format) + "\",state=\"" + string(state) + "\"} " + itoa(m.backgroundJobs[kindIndex][formatIndex][stateIndex].Load()) + "\n"))
+			}
+			age := int64(0)
+			if oldest := m.backgroundOldestActionable[kindIndex][formatIndex].Load(); oldest > 0 && now.Unix() > oldest {
+				age = now.Unix() - oldest
+			}
+			_, _ = w.Write([]byte("artifact_gateway_background_queue_oldest_actionable_age_seconds{kind=\"" + kind + "\",format=\"" + string(format) + "\"} " + itoa(age) + "\n"))
 		}
 	}
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_audit_retention_cleanup_total counter\nartifact_gateway_audit_retention_cleanup_total{outcome=\"completed\"} " + utoa(m.auditCleanupCompleted.Load()) + "\nartifact_gateway_audit_retention_cleanup_total{outcome=\"failed\"} " + utoa(m.auditCleanupFailed.Load()) + "\n# TYPE artifact_gateway_audit_retention_deleted_total counter\nartifact_gateway_audit_retention_deleted_total " + utoa(m.auditCleanupDeleted.Load()) + "\n"))

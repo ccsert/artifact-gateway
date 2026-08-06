@@ -96,6 +96,19 @@ storage credentials, or unredacted upstream URLs in that record.
       )
       ```
 
+      Background queue gauges are rebuilt from PostgreSQL at startup and after
+      queue notifications. Review actionable depth and the oldest wait before
+      approving a release:
+
+      ```promql
+      sum by (kind, format, state) (
+        artifact_gateway_background_jobs{state=~"pending|retrying"}
+      )
+      max by (kind, format) (
+        artifact_gateway_background_queue_oldest_actionable_age_seconds
+      )
+      ```
+
 ## Default Operating Policy
 
 | Area | MVP default |

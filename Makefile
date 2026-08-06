@@ -54,15 +54,12 @@ api-contract:
 api-change-check:
 	@./scripts/api-change-check.sh
 
-integration-test: integration-down
-	@docker compose -f compose.integration.yml up -d --wait postgres minio
-	@docker compose -f compose.integration.yml run --rm --no-deps minio-ready
-	@docker compose -f compose.integration.yml run --rm --no-deps migrate
-	@./scripts/migration-runner-check.sh
-	@docker compose -f compose.integration.yml run --rm --no-deps test
-	@docker compose -f compose.integration.yml down -v
+integration-test:
+	@./scripts/integration-test.sh
 
 integration-down:
+	@docker volume create artifact-gateway-go-mod >/dev/null
+	@docker volume create artifact-gateway-go-build >/dev/null
 	@docker compose -f compose.integration.yml down -v --remove-orphans
 
 lint:

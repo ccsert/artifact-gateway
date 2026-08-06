@@ -62,6 +62,10 @@ type BackgroundOperationMetrics interface {
 	AddBackgroundOperationInFlight(string, Format, int64)
 }
 
+type BackgroundOperationQueueStore interface {
+	BackgroundOperationQueueStats(context.Context) ([]BackgroundOperationQueueStat, error)
+}
+
 type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
 	ListArtifactTombstones(context.Context, string, Format, string, int, string) ([]ArtifactTombstone, error)
