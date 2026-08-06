@@ -530,6 +530,31 @@
         }
       }
     },
+    "/repositories/{repositoryId}/egress-proxy:test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "testEgressProxy",
+        "description": "Probes the repository's egress path to its upstream using the stored egress proxy configuration. Administrator-only; the result is ephemeral and never persisted.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/EgressProxyTest"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/grants": {
       "parameters": [
         {
@@ -2063,6 +2088,9 @@
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
           },
+          "egressProxy": {
+            "$ref": "#/components/schemas/EgressProxy"
+          },
           "state": {
             "type": "string",
             "description": "Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.",
@@ -2114,6 +2142,9 @@
             "type": "boolean",
             "default": false,
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "egressProxy": {
+            "$ref": "#/components/schemas/EgressProxy"
           }
         }
       },
@@ -3926,6 +3957,73 @@
           }
         }
       },
+      "EgressProxy": {
+        "type": "object",
+        "description": "Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.",
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment",
+              "custom"
+            ],
+            "description": "direct bypasses any proxy (keeping private-address protection); environment follows process HTTP(S)_PROXY/NO_PROXY; custom uses the per-repository proxy below."
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "http",
+              "socks5"
+            ],
+            "description": "Custom proxy protocol. http uses CONNECT; socks5 supports optional remote DNS."
+          },
+          "host": {
+            "type": "string",
+            "description": "Custom proxy hostname or IP, without scheme or credentials."
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "username": {
+            "type": "string",
+            "description": "Optional proxy authentication username."
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Optional proxy authentication password. Write-only; stored encrypted. Omit on update to keep stored credentials."
+          },
+          "clearCredentials": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true on update, removes any stored proxy credentials."
+          },
+          "remoteDns": {
+            "type": "boolean",
+            "default": false,
+            "description": "socks5 only. When true the proxy resolves the upstream hostname (socks5h); when false the gateway resolves locally and keeps the private-address check."
+          },
+          "noProxy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Upstream host suffixes or CIDR ranges that bypass the custom proxy and connect directly. Matched against the upstream host, never the proxy host."
+          },
+          "credentialsConfigured": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when encrypted proxy credentials are stored."
+          }
+        }
+      },
       "UpdateRepository": {
         "type": "object",
         "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
@@ -3945,6 +4043,50 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "egressProxy": {
+            "$ref": "#/components/schemas/EgressProxy"
+          }
+        }
+      },
+      "EgressProxyTestResult": {
+        "type": "object",
+        "description": "Ephemeral result of an egress proxy connection test. Nothing is persisted.",
+        "required": [
+          "reachable",
+          "egressMode",
+          "checkedAt"
+        ],
+        "properties": {
+          "reachable": {
+            "type": "boolean"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment",
+              "custom"
+            ]
+          },
+          "proxyHost": {
+            "type": "string",
+            "description": "Custom proxy host (no credentials) when mode is custom."
+          },
+          "upstreamStatus": {
+            "type": "integer",
+            "description": "HTTP status returned by the upstream probe, when reached."
+          },
+          "latencyMs": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string",
+            "description": "Sanitized failure reason when reachable is false."
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -5033,6 +5175,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/APIKey"
+            }
+          }
+        }
+      },
+      "EgressProxyTest": {
+        "description": "Egress proxy connection test result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EgressProxyTestResult"
             }
           }
         }

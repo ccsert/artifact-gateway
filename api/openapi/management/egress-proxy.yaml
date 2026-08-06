@@ -1,0 +1,18 @@
+---
+repositories_repositoryId_egress_proxy_test:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: testEgressProxy
+    description: Probes the repository's egress path to its upstream using the
+      stored egress proxy configuration. Administrator-only; the result is
+      ephemeral and never persisted.
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/EgressProxyTest"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

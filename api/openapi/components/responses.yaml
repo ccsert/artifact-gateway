@@ -114,6 +114,12 @@ Repository:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/Repository"
+EgressProxyTest:
+  description: Egress proxy connection test result
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/EgressProxyTestResult"
 RepositoryList:
   description: Repository page
   content:

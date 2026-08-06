@@ -17,6 +17,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
+  "/repositories/{repositoryId}/egress-proxy:test":
+    "$ref": "./management/egress-proxy.yaml#/repositories_repositoryId_egress_proxy_test"
   "/repositories/{repositoryId}/grants":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":

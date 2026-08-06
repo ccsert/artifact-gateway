@@ -19,6 +19,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
+	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
@@ -38,18 +39,20 @@ type hostedRepositoryAPIHandler struct {
 }
 
 type createHostedRepositoryRequest struct {
-	Name          string            `json:"name"`
-	Format        repository.Format `json:"format"`
-	Type          string            `json:"type,omitempty"`
-	Endpoint      string            `json:"endpoint,omitempty"`
-	AllowedHosts  []string          `json:"allowedHosts,omitempty"`
-	AnonymousRead bool              `json:"anonymousRead,omitempty"`
+	Name          string              `json:"name"`
+	Format        repository.Format   `json:"format"`
+	Type          string              `json:"type,omitempty"`
+	Endpoint      string              `json:"endpoint,omitempty"`
+	AllowedHosts  []string            `json:"allowedHosts,omitempty"`
+	EgressProxy   *egressProxyRequest `json:"egressProxy,omitempty"`
+	AnonymousRead bool                `json:"anonymousRead,omitempty"`
 }
 
 type updateHostedRepositoryRequest struct {
-	Endpoint      *string  `json:"endpoint,omitempty"`
-	AllowedHosts  []string `json:"allowedHosts,omitempty"`
-	AnonymousRead *bool    `json:"anonymousRead,omitempty"`
+	Endpoint      *string             `json:"endpoint,omitempty"`
+	AllowedHosts  []string            `json:"allowedHosts,omitempty"`
+	EgressProxy   *egressProxyRequest `json:"egressProxy,omitempty"`
+	AnonymousRead *bool               `json:"anonymousRead,omitempty"`
 }
 
 type repositoryPage struct {
@@ -2485,9 +2488,22 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 	if request.Type != "" {
 		repoType = repository.RepositoryType(request.Type)
 	}
+	if repoType == repository.RepositoryTypeHosted && request.EgressProxy != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories do not accept egressProxy")
+		return
+	}
+	egressProxy, err := resolveEgressProxy(request.EgressProxy, nil)
+	if errors.Is(err, egress.ErrKeyNotConfigured) {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "egress proxy encryption key is not configured")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
 	payload, _ := json.Marshal(request)
 	digest := sha256.Sum256(payload)
-	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, AnonymousRead: request.AnonymousRead}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, EgressProxy: egressProxy, AnonymousRead: request.AnonymousRead}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 		return
@@ -2504,7 +2520,7 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 	// Returning the same documented response on a successful replay makes a
 	// lost client response safe to retry without introducing another outcome.
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(repo)
+	_ = json.NewEncoder(w).Encode(redactEgressProxy(repo))
 }
 
 func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -2554,6 +2570,9 @@ func (h hostedRepositoryAPIHandler) listBound(w http.ResponseWriter, r *http.Req
 	nextToken := ""
 	if next != "" {
 		nextToken = h.encodeCursor(next)
+	}
+	for index := range items {
+		items[index] = redactEgressProxy(items[index])
 	}
 	_ = json.NewEncoder(w).Encode(repositoryPage{Items: items, NextPageToken: nextToken})
 }
@@ -2818,7 +2837,7 @@ func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(repo)
+	_ = json.NewEncoder(w).Encode(redactEgressProxy(repo))
 }
 
 func (h hostedRepositoryAPIHandler) disable(w http.ResponseWriter, r *http.Request, id string) {
@@ -2847,7 +2866,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repository update body must be valid")
 		return
 	}
-	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), AnonymousRead: repo.AnonymousRead}
+	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), EgressProxy: repo.EgressProxy, AnonymousRead: repo.AnonymousRead}
 	if request.AnonymousRead != nil {
 		updatedRepo.AnonymousRead = *request.AnonymousRead
 	}
@@ -2862,8 +2881,18 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw and conan proxies")
 			return
 		}
+		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)
+		if errors.Is(err, egress.ErrKeyNotConfigured) {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "egress proxy encryption key is not configured")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		updatedRepo.EgressProxy = egressProxy
 	} else {
-		if request.Endpoint != nil || request.AllowedHosts != nil {
+		if request.Endpoint != nil || request.AllowedHosts != nil || request.EgressProxy != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead updates")
 			return
 		}
@@ -2887,7 +2916,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Set("ETag", updated.Version)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(updated)
+	_ = json.NewEncoder(w).Encode(redactEgressProxy(updated))
 }
 
 func validHostedRepository(request createHostedRepositoryRequest) bool {

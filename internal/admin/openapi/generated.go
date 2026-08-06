@@ -229,6 +229,66 @@ func (e DeletionState) Valid() bool {
 	}
 }
 
+// Defines values for EgressProxyMode.
+const (
+	EgressProxyModeCustom      EgressProxyMode = "custom"
+	EgressProxyModeDirect      EgressProxyMode = "direct"
+	EgressProxyModeEnvironment EgressProxyMode = "environment"
+)
+
+// Valid indicates whether the value is a known member of the EgressProxyMode enum.
+func (e EgressProxyMode) Valid() bool {
+	switch e {
+	case EgressProxyModeCustom:
+		return true
+	case EgressProxyModeDirect:
+		return true
+	case EgressProxyModeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EgressProxyProtocol.
+const (
+	Http   EgressProxyProtocol = "http"
+	Socks5 EgressProxyProtocol = "socks5"
+)
+
+// Valid indicates whether the value is a known member of the EgressProxyProtocol enum.
+func (e EgressProxyProtocol) Valid() bool {
+	switch e {
+	case Http:
+		return true
+	case Socks5:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EgressProxyTestResultEgressMode.
+const (
+	EgressProxyTestResultEgressModeCustom      EgressProxyTestResultEgressMode = "custom"
+	EgressProxyTestResultEgressModeDirect      EgressProxyTestResultEgressMode = "direct"
+	EgressProxyTestResultEgressModeEnvironment EgressProxyTestResultEgressMode = "environment"
+)
+
+// Valid indicates whether the value is a known member of the EgressProxyTestResultEgressMode enum.
+func (e EgressProxyTestResultEgressMode) Valid() bool {
+	switch e {
+	case EgressProxyTestResultEgressModeCustom:
+		return true
+	case EgressProxyTestResultEgressModeDirect:
+		return true
+	case EgressProxyTestResultEgressModeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Format.
 const (
 	FormatConan Format = "conan"
@@ -1066,6 +1126,9 @@ type CreateRepository struct {
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
 	AnonymousRead *bool `json:"anonymousRead,omitempty"`
 
+	// EgressProxy Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	EgressProxy *EgressProxy `json:"egressProxy,omitempty"`
+
 	// Endpoint Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
 	Endpoint *string               `json:"endpoint,omitempty"`
 	Format   Format                `json:"format"`
@@ -1134,6 +1197,63 @@ type EffectiveAccessPermissions struct {
 	Read  EffectiveAccessDecision `json:"read"`
 	Write EffectiveAccessDecision `json:"write"`
 }
+
+// EgressProxy Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+type EgressProxy struct {
+	// ClearCredentials When true on update, removes any stored proxy credentials.
+	ClearCredentials *bool `json:"clearCredentials,omitempty"`
+
+	// CredentialsConfigured True when encrypted proxy credentials are stored.
+	CredentialsConfigured *bool `json:"credentialsConfigured,omitempty"`
+
+	// Host Custom proxy hostname or IP, without scheme or credentials.
+	Host *string `json:"host,omitempty"`
+
+	// Mode direct bypasses any proxy (keeping private-address protection); environment follows process HTTP(S)_PROXY/NO_PROXY; custom uses the per-repository proxy below.
+	Mode EgressProxyMode `json:"mode"`
+
+	// NoProxy Upstream host suffixes or CIDR ranges that bypass the custom proxy and connect directly. Matched against the upstream host, never the proxy host.
+	NoProxy *[]string `json:"noProxy,omitempty"`
+
+	// Password Optional proxy authentication password. Write-only; stored encrypted. Omit on update to keep stored credentials.
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+
+	// Protocol Custom proxy protocol. http uses CONNECT; socks5 supports optional remote DNS.
+	Protocol *EgressProxyProtocol `json:"protocol,omitempty"`
+
+	// RemoteDns socks5 only. When true the proxy resolves the upstream hostname (socks5h); when false the gateway resolves locally and keeps the private-address check.
+	RemoteDns *bool `json:"remoteDns,omitempty"`
+
+	// Username Optional proxy authentication username.
+	Username *string `json:"username,omitempty"`
+}
+
+// EgressProxyMode direct bypasses any proxy (keeping private-address protection); environment follows process HTTP(S)_PROXY/NO_PROXY; custom uses the per-repository proxy below.
+type EgressProxyMode string
+
+// EgressProxyProtocol Custom proxy protocol. http uses CONNECT; socks5 supports optional remote DNS.
+type EgressProxyProtocol string
+
+// EgressProxyTestResult Ephemeral result of an egress proxy connection test. Nothing is persisted.
+type EgressProxyTestResult struct {
+	CheckedAt  time.Time                       `json:"checkedAt"`
+	EgressMode EgressProxyTestResultEgressMode `json:"egressMode"`
+
+	// Error Sanitized failure reason when reachable is false.
+	Error     *string `json:"error,omitempty"`
+	LatencyMs *int    `json:"latencyMs,omitempty"`
+
+	// ProxyHost Custom proxy host (no credentials) when mode is custom.
+	ProxyHost *string `json:"proxyHost,omitempty"`
+	Reachable bool    `json:"reachable"`
+
+	// UpstreamStatus HTTP status returned by the upstream probe, when reached.
+	UpstreamStatus *int `json:"upstreamStatus,omitempty"`
+}
+
+// EgressProxyTestResultEgressMode defines model for EgressProxyTestResult.EgressMode.
+type EgressProxyTestResultEgressMode string
 
 // Format defines model for Format.
 type Format string
@@ -1489,11 +1609,14 @@ type Repository struct {
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
 
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
-	AnonymousRead bool    `json:"anonymousRead"`
-	Endpoint      *string `json:"endpoint,omitempty"`
-	Format        Format  `json:"format"`
-	Id            string  `json:"id"`
-	Name          string  `json:"name"`
+	AnonymousRead bool `json:"anonymousRead"`
+
+	// EgressProxy Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	EgressProxy *EgressProxy `json:"egressProxy,omitempty"`
+	Endpoint    *string      `json:"endpoint,omitempty"`
+	Format      Format       `json:"format"`
+	Id          string       `json:"id"`
+	Name        string       `json:"name"`
 
 	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
 	State   RepositoryState `json:"state"`
@@ -1644,6 +1767,9 @@ type UpdateRepository struct {
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
 	AnonymousRead *bool `json:"anonymousRead,omitempty"`
 
+	// EgressProxy Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	EgressProxy *EgressProxy `json:"egressProxy,omitempty"`
+
 	// Endpoint Upstream base URL (https). Required for proxy repositories.
 	Endpoint *string `json:"endpoint,omitempty"`
 }
@@ -1738,6 +1864,9 @@ type AuditCleanupJobList = []AuditCleanupJob
 
 // ConanReferenceList defines model for ConanReferenceList.
 type ConanReferenceList = ConanReferencePage
+
+// EgressProxyTest Ephemeral result of an egress proxy connection test. Nothing is persisted.
+type EgressProxyTest = EgressProxyTestResult
 
 // GroupList defines model for GroupList.
 type GroupList = GroupPage
@@ -2206,6 +2335,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/effective-access)
 	GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/egress-proxy:test)
+	TestEgressProxy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -4117,6 +4249,32 @@ func (siw *ServerInterfaceWrapper) GetRepositoryEffectiveAccess(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// TestEgressProxy operation middleware
+func (siw *ServerInterfaceWrapper) TestEgressProxy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestEgressProxy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListGrants operation middleware
 func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Request) {
 
@@ -5429,6 +5587,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/recipe-revisions", wrapper.ListConanRecipeRevisions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/effective-access", wrapper.GetRepositoryEffectiveAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/egress-proxy:test", wrapper.TestEgressProxy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
@@ -5493,6 +5652,8 @@ type ConanReferenceListJSONResponse ConanReferencePage
 type CreatedAPIKeyJSONResponse CreatedAPIKey
 
 type DeletionJSONResponse Deletion
+
+type EgressProxyTestJSONResponse EgressProxyTestResult
 
 type GrantListResponseHeaders struct {
 	ETag string
@@ -7399,6 +7560,72 @@ func (response GetRepositoryEffectiveAccess404ApplicationProblemPlusJSONResponse
 	return err
 }
 
+type TestEgressProxyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type TestEgressProxyResponseObject interface {
+	VisitTestEgressProxyResponse(w http.ResponseWriter) error
+}
+
+type TestEgressProxy200JSONResponse struct{ EgressProxyTestJSONResponse }
+
+func (response TestEgressProxy200JSONResponse) VisitTestEgressProxyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEgressProxy400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response TestEgressProxy400ApplicationProblemPlusJSONResponse) VisitTestEgressProxyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEgressProxy401ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEgressProxy401ApplicationProblemPlusJSONResponse) VisitTestEgressProxyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEgressProxy404ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEgressProxy404ApplicationProblemPlusJSONResponse) VisitTestEgressProxyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListGrantsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -8874,6 +9101,9 @@ type StrictServerInterface interface {
 	// (GET /repositories/{repositoryId}/effective-access)
 	GetRepositoryEffectiveAccess(ctx context.Context, request GetRepositoryEffectiveAccessRequestObject) (GetRepositoryEffectiveAccessResponseObject, error)
 
+	// (POST /repositories/{repositoryId}/egress-proxy:test)
+	TestEgressProxy(ctx context.Context, request TestEgressProxyRequestObject) (TestEgressProxyResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(ctx context.Context, request ListGrantsRequestObject) (ListGrantsResponseObject, error)
 
@@ -10226,6 +10456,32 @@ func (sh *strictHandler) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryEffectiveAccessResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryEffectiveAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestEgressProxy operation middleware
+func (sh *strictHandler) TestEgressProxy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request TestEgressProxyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestEgressProxy(ctx, request.(TestEgressProxyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestEgressProxy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestEgressProxyResponseObject); ok {
+		if err := validResponse.VisitTestEgressProxyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
