@@ -4,14 +4,67 @@
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* 语义化动效曲线 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.45, 0, 0.15, 1);
 }
 
+/*
+ * 设计令牌（Design Tokens）
+ * - 背景层级：bg(基底) → surface(卡片/面板) → overlay(浮层)
+ * - 描边层级：border(强) / border-subtle(弱)
+ * - 品牌主色：青色系，提供 glow 用于焦点/hover 强调
+ */
 :root {
   color-scheme: dark;
+
+  --ag-bg: #08090b;
+  --ag-bg-grad-a: #0a0e13;
+  --ag-bg-grad-b: #08090b;
+  --ag-surface: rgba(24, 24, 27, 0.55);
+  --ag-surface-solid: #141417;
+  --ag-surface-hover: rgba(39, 39, 42, 0.55);
+  --ag-overlay: #1b1b1f;
+  --ag-border: rgba(63, 63, 70, 0.65);
+  --ag-border-subtle: rgba(63, 63, 70, 0.35);
+  --ag-brand: #06b6d4;
+  --ag-brand-soft: rgba(6, 182, 212, 0.12);
+  --ag-brand-glow: rgba(6, 182, 212, 0.35);
+  --ag-text: #e4e4e7;
+  --ag-text-strong: #fafafa;
+  --ag-text-dim: #a1a1aa;
+  --ag-text-mute: #71717a;
+  --ag-text-faint: #52525b;
+  --ag-radius: 10px;
+  --ag-radius-sm: 8px;
+  --ag-shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 16px -8px rgba(0, 0, 0, 0.4);
+  --ag-shadow-pop:
+    0 8px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+html {
+  background: var(--ag-bg);
 }
 
 body {
-  @apply bg-[#090a0c] text-zinc-200 antialiased;
+  @apply text-zinc-200 antialiased;
+  background:
+    radial-gradient(
+      1200px 500px at 15% -10%,
+      rgba(6, 182, 212, 0.05),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 420px at 90% -5%,
+      rgba(99, 102, 241, 0.045),
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--ag-bg-grad-a), var(--ag-bg-grad-b) 40%);
+  background-attachment: fixed;
+  font-feature-settings: "cv11", "ss01";
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
@@ -30,39 +83,92 @@ body {
 *::-webkit-scrollbar-thumb {
   @apply rounded-full bg-zinc-700;
 }
+*::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-600;
+}
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* 统一交互过渡 */
+button,
+a,
+input,
+textarea,
+select,
+[role="button"] {
+  transition-duration: 180ms;
+  transition-timing-function: var(--ease-out-expo);
+}
+
+/* 键盘可访问焦点态 */
+:focus-visible {
+  outline: 2px solid var(--ag-brand-glow);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ========== 卡片与表面 ========== */
+
+.ag-card {
+  position: relative;
+  border-color: var(--ag-border-subtle) !important;
+  border-radius: var(--ag-radius) !important;
+  background: var(--ag-surface) !important;
+  box-shadow: var(--ag-shadow-card);
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 180ms var(--ease-out-expo),
+    box-shadow 180ms var(--ease-out-expo);
+}
+.ag-card:hover {
+  border-color: var(--ag-border) !important;
+}
+
+/* Keep page-level surfaces visually distinct without affecting nested cards. */
+.ag-metric-strip + .ag-card,
+.ag-filter-bar + .ag-card {
+  margin-top: 16px;
+}
+
+/* ========== 指标条 ========== */
 
 .ag-metric-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid rgb(39 39 42 / 0.8);
-  border-radius: 8px;
-  background: rgb(24 24 27 / 0.42);
+  border: 1px solid var(--ag-border-subtle);
+  border-radius: var(--ag-radius);
+  background: var(--ag-surface);
+  box-shadow: var(--ag-shadow-card);
+  backdrop-filter: blur(8px);
 }
 
 .ag-metric-strip > :not(:first-child) {
-  border-left: 1px solid rgb(39 39 42 / 0.8);
+  border-left: 1px solid var(--ag-border-subtle);
 }
+
+.ag-metric-strip > * {
+  transition: background 180ms var(--ease-out-expo);
+}
+.ag-metric-strip > *:hover {
+  background: rgba(39, 39, 42, 0.35);
+}
+
+/* ========== 过滤栏 ========== */
 
 .ag-filter-bar {
   display: flex;
   align-items: flex-end;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid rgb(39 39 42 / 0.8);
-  border-radius: 8px;
-  background: rgb(24 24 27 / 0.42);
+  border: 1px solid var(--ag-border-subtle);
+  border-radius: var(--ag-radius);
+  background: var(--ag-surface);
+  backdrop-filter: blur(8px);
 }
 
-/* Keep page-level surfaces visually distinct without affecting nested cards. */
-.ag-metric-strip + .ag-card,
-.ag-filter-bar + .ag-card,
-.ag-card + .ag-card {
-  margin-top: 16px;
-}
+/* ========== 表格 ========== */
 
 .ag-console-table .ant-table,
 .ag-console-table .ant-table-container,
@@ -71,21 +177,25 @@ body {
 }
 
 .ag-console-table .ant-table-thead > tr > th {
-  background: transparent;
-  color: rgb(113 113 122);
-  border-bottom-color: rgb(39 39 42 / 0.8);
+  background: rgba(9, 10, 12, 0.4);
+  color: var(--ag-text-mute);
+  border-bottom-color: var(--ag-border-subtle);
   font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .ag-console-table .ant-table-tbody > tr > td {
   background: transparent;
-  border-bottom-color: rgb(39 39 42 / 0.6);
+  border-bottom-color: rgba(63, 63, 70, 0.25);
 }
 
+.ag-console-table .ant-table-tbody > tr.ant-table-row {
+  transition: background 140ms var(--ease-out-expo);
+}
 .ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td {
-  background: rgb(39 39 42 / 0.3);
+  background: rgba(39, 39, 42, 0.32);
 }
 
 /* Fixed columns are rendered outside the scrolling table surface. */
@@ -93,13 +203,104 @@ body {
 .ag-console-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
 .ag-console-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
 .ag-console-table .ant-table-tbody > tr > td.ant-table-cell-fix-end {
-  background: rgb(24 24 27);
+  background: var(--ag-surface-solid);
 }
 
-.ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-start,
-.ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-end {
-  background: rgb(39 39 42 / 0.3);
+.ag-console-table
+  .ant-table-tbody
+  > tr.ant-table-row:hover
+  > td.ant-table-cell-fix-start,
+.ag-console-table
+  .ant-table-tbody
+  > tr.ant-table-row:hover
+  > td.ant-table-cell-fix-end {
+  background: var(--ag-surface-hover);
 }
+
+/* ========== 侧边导航 ========== */
+
+.ag-sider {
+  background: rgba(12, 13, 16, 0.72);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid var(--ag-border-subtle);
+}
+
+.ag-brand-mark {
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 55%, #22d3ee 100%);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.25),
+    0 4px 14px -4px rgba(6, 182, 212, 0.55);
+  transition:
+    box-shadow 220ms var(--ease-out-expo),
+    transform 220ms var(--ease-out-expo);
+}
+.ag-brand-mark:hover {
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.45),
+    0 6px 20px -4px rgba(6, 182, 212, 0.7);
+  transform: translateY(-1px);
+}
+
+/* 导航菜单项：选中态左侧指示条 */
+.ag-nav .ant-menu-item {
+  position: relative;
+}
+.ag-nav .ant-menu-item-selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #22d3ee, #0891b2);
+  box-shadow: 0 0 8px var(--ag-brand-glow);
+}
+.ag-nav .ant-menu-item-selected {
+  background: linear-gradient(
+    90deg,
+    rgba(6, 182, 212, 0.14),
+    rgba(6, 182, 212, 0.05)
+  ) !important;
+}
+
+/* ========== 顶栏 ========== */
+
+.ag-topbar {
+  background: rgba(8, 9, 11, 0.72);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid var(--ag-border-subtle);
+}
+
+/* ========== 页面内容淡入 ========== */
+
+@keyframes ag-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ag-page-enter {
+  animation: ag-fade-up 320ms var(--ease-out-expo) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ag-page-enter {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ========== 响应式 ========== */
 
 @media (max-width: 900px) {
   .ag-metric-strip {
@@ -107,7 +308,7 @@ body {
   }
 
   .ag-metric-strip > :not(:first-child) {
-    border-top: 1px solid rgb(39 39 42 / 0.8);
+    border-top: 1px solid var(--ag-border-subtle);
     border-left: 0;
   }
 
@@ -115,12 +316,4 @@ body {
     align-items: stretch;
     flex-direction: column;
   }
-}
-
-button,
-a,
-input,
-textarea,
-select {
-  transition-duration: 160ms;
 }

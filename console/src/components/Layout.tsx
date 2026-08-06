@@ -13,8 +13,8 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-50">
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-semibold tracking-tight text-zinc-50">
           {title}
         </h1>
         {description && (
@@ -42,7 +42,7 @@ export function Card({
   return (
     <AntdCard
       variant="outlined"
-      className={`ag-card bg-zinc-900/60 ${className}`}
+      className={`ag-card ${className}`}
       styles={{ body: { padding: 0 } }}
     >
       {bodyClassName ? (
@@ -62,8 +62,10 @@ export function CardHeader({
   extra?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 py-3">
-      <h2 className="text-sm font-semibold text-zinc-200">{title}</h2>
+    <div className="flex items-center justify-between border-b border-zinc-800/60 px-5 py-3">
+      <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+        {title}
+      </h2>
       {extra}
     </div>
   );

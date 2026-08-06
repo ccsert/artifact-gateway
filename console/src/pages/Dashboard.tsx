@@ -270,8 +270,8 @@ export function DashboardPage() {
         ]}
       />
 
-      <div className="mt-6">
-        <Card>
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-5">
+        <Card className="xl:col-span-2">
           <CardHeader
             title="存储占用（按格式）"
             extra={
@@ -302,10 +302,8 @@ export function DashboardPage() {
             )}
           </div>
         </Card>
-      </div>
 
-      <div className="mt-6">
-        <Card>
+        <Card className="xl:col-span-3">
           <CardHeader
             title="近期趋势"
             extra={
@@ -341,14 +339,14 @@ export function DashboardPage() {
               />
             </div>
           </div>
-          <p className="px-5 pb-4 text-[11px] text-zinc-600">
+          <p className="border-t border-zinc-800/60 px-5 py-3 text-[11px] text-zinc-600">
             基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端
             metrics 端点。
           </p>
         </Card>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader
             title="仓库"

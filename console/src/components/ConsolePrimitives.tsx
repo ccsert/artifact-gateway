@@ -27,17 +27,17 @@ export function MetricStrip({ items }: { items: MetricItem[] }) {
       aria-label="页面摘要"
     >
       {items.map((item) => (
-        <div key={item.label} className="min-w-0 px-4 py-3">
-          <div className="text-[11px] font-medium text-zinc-500">
+        <div key={item.label} className="min-w-0 px-5 py-3.5">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
             {item.label}
           </div>
           <div
-            className={`mt-1 truncate text-lg font-semibold ${metricTone[item.tone ?? "default"]}`}
+            className={`mt-1 truncate text-xl font-semibold tracking-tight ${metricTone[item.tone ?? "default"]}`}
           >
             {item.value}
           </div>
           {item.hint && (
-            <div className="mt-1 truncate text-xs text-zinc-600">
+            <div className="mt-0.5 truncate text-xs text-zinc-600">
               {item.hint}
             </div>
           )}
