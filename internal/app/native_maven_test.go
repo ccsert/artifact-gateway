@@ -53,6 +53,25 @@ type failOnceMavenCommitStore struct {
 	fail bool
 }
 
+func TestNativeMavenValidatePOMRejectsTrailingDocument(t *testing.T) {
+	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project><extra/>")
+	sum := sha256.Sum256(pom)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	objects := NewMemoryOCIObjectStore()
+	if err := objects.Put(context.Background(), "native/maven/sha256/"+strings.TrimPrefix(digest, "sha256:"), pom); err != nil {
+		t.Fatal(err)
+	}
+	handler := newNativeMavenHandler(repository.NewMemoryStore(), objects, testAuthenticator())
+	session := repository.MavenPublishSession{
+		Coordinate: "org.example:widget:1.0.0",
+		PomObject:  "widget-1.0.0.pom",
+		Objects:    []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: digest, Size: int64(len(pom))}},
+	}
+	if err := handler.validatePOM(context.Background(), session); err == nil {
+		t.Fatal("validatePOM() error=nil, want invalid XML error")
+	}
+}
+
 func (s *failOnceMavenCommitStore) CommitMavenPublishSession(ctx context.Context, id string, assets []repository.MavenAsset) (repository.MavenArtifact, error) {
 	if s.fail {
 		s.fail = false

@@ -5,24 +5,46 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type PostgresStore struct {
-	db          *sql.DB
-	databaseURL string
+	db       *sql.DB
+	ownsDB   bool
+	notifier *postgresNotifier
 }
 
 func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
-	db, err := sql.Open("pgx", databaseURL)
+	db, err := database.OpenPostgres(databaseURL, database.DefaultPoolConfig())
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	return &PostgresStore{db: db, databaseURL: databaseURL}, nil
+	listenerDB, err := database.OpenPostgres(databaseURL, database.NotificationPoolConfig())
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open postgres notification pool: %w", err)
+	}
+	return &PostgresStore{db: db, ownsDB: true, notifier: newPostgresNotifier(listenerDB, true)}, nil
 }
 
-func (s *PostgresStore) Close() error { return s.db.Close() }
+func NewPostgresStoreWithPools(db, listenerDB *sql.DB) (*PostgresStore, error) {
+	if db == nil || listenerDB == nil {
+		return nil, errors.New("postgres store requires database and notification pools")
+	}
+	return &PostgresStore{db: db, notifier: newPostgresNotifier(listenerDB, false)}, nil
+}
+
+func (s *PostgresStore) Close() error {
+	var notifyErr error
+	if s.notifier != nil {
+		notifyErr = s.notifier.Close()
+	}
+	if s.ownsDB {
+		return errors.Join(notifyErr, s.db.Close())
+	}
+	return notifyErr
+}
 
 func isUnique(err error) bool {
 	var postgresError *pgconn.PgError

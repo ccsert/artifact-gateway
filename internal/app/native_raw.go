@@ -140,14 +140,18 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 		serveNativeRawObject(w, r, path, asset, h.objects)
 	case http.MethodPut:
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<30))
+		spool, err := spoolUpload(r.Body, 1<<30)
 		if err != nil {
-			http.Error(w, "raw object is too large", http.StatusRequestEntityTooLarge)
+			if errors.Is(err, errUploadTooLarge) {
+				http.Error(w, "raw object is too large", http.StatusRequestEntityTooLarge)
+			} else {
+				http.Error(w, "read raw object failed", http.StatusBadRequest)
+			}
 			return true
 		}
-		sum := sha256.Sum256(body)
-		digest := "sha256:" + hex.EncodeToString(sum[:])
-		if requested := r.Header.Get("Digest"); requested != "" && requested != "sha-256="+base64.StdEncoding.EncodeToString(sum[:]) {
+		defer func() { _ = spool.Close() }()
+		digest := spool.Digest()
+		if requested := r.Header.Get("Digest"); requested != "" && requested != "sha-256="+base64.StdEncoding.EncodeToString(spool.DigestBytes()) {
 			http.Error(w, "digest mismatch", http.StatusUnprocessableEntity)
 			return true
 		}
@@ -158,11 +162,11 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			return true
 		}
 		defer release()
-		if err = h.store.StageRawObject(r.Context(), repository.RawObject{RepositoryID: repo.ID, Digest: digest, ObjectKey: key, Size: int64(len(body))}); err != nil {
+		if err = h.store.StageRawObject(r.Context(), repository.RawObject{RepositoryID: repo.ID, Digest: digest, ObjectKey: key, Size: spool.Size()}); err != nil {
 			http.Error(w, "stage raw object failed", http.StatusInternalServerError)
 			return true
 		}
-		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
+		if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 			http.Error(w, "persist raw object failed", http.StatusInternalServerError)
 			return true
 		}
@@ -170,7 +174,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		if _, err = h.store.PutRawAsset(r.Context(), repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: int64(len(body)), ContentType: contentType}); err != nil {
+		if _, err = h.store.PutRawAsset(r.Context(), repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: spool.Size(), ContentType: contentType}); err != nil {
 			if repository.IsQuotaExceeded(err) {
 				http.Error(w, "repository capacity quota exceeded", http.StatusInsufficientStorage)
 				return true
@@ -179,7 +183,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 			return true
 		}
 		w.Header().Set("ETag", `"`+digest+`"`)
-		w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(sum[:]))
+		w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(spool.DigestBytes()))
 		w.WriteHeader(http.StatusCreated)
 	case http.MethodDelete:
 		if err := h.store.DeleteRawAsset(r.Context(), repo.ID, path); err != nil {
@@ -248,18 +252,18 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 				return
 			}
 		}
-		data, err := h.objects.Get(r.Context(), upload.ObjectKey)
+		spool, err := spoolStoredObject(r.Context(), h.objects, upload.ObjectKey)
 		if err != nil {
 			http.Error(w, "upload bytes are unavailable", 500)
 			return
 		}
-		sum := sha256.Sum256(data)
-		expected := "sha-256=" + base64.StdEncoding.EncodeToString(sum[:])
+		defer func() { _ = spool.Close() }()
+		digest, size := spool.Digest(), spool.Size()
+		expected := "sha-256=" + base64.StdEncoding.EncodeToString(spool.DigestBytes())
 		if r.Header.Get("Digest") != expected {
 			http.Error(w, "digest mismatch", http.StatusUnprocessableEntity)
 			return
 		}
-		digest := "sha256:" + hex.EncodeToString(sum[:])
 		key := "native/raw/sha256/" + strings.TrimPrefix(digest, "sha256:")
 		releaseObject, err := h.store.LockRawObject(r.Context(), digest)
 		if err != nil {
@@ -267,7 +271,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			return
 		}
 		defer releaseObject()
-		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+		if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), size, digest); err != nil {
 			http.Error(w, "persist raw object failed", 500)
 			return
 		}
@@ -275,7 +279,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		asset, err := h.store.CompleteRawUpload(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: int64(len(data)), ContentType: contentType})
+		asset, err := h.store.CompleteRawUpload(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: size, ContentType: contentType})
 		if err != nil {
 			http.Error(w, "raw upload cannot be completed", http.StatusConflict)
 			return
@@ -296,18 +300,15 @@ func (h nativeRawHandler) appendUpload(ctx context.Context, r *http.Request, upl
 			return upload, errors.New("offset mismatch")
 		}
 	}
-	old, err := h.objects.Get(ctx, upload.ObjectKey)
-	if err != nil {
-		old = nil
-	}
-	chunk, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, 1<<30))
+	spool, chunkSize, err := spoolObjectAppend(ctx, h.objects, upload.ObjectKey, upload.Offset, r.Body, 1<<30)
 	if err != nil {
 		return upload, err
 	}
-	if err = h.objects.PutReader(ctx, upload.ObjectKey, bytes.NewReader(append(old, chunk...)), int64(len(old)+len(chunk))); err != nil {
+	defer func() { _ = spool.Close() }()
+	if err = h.objects.PutReader(ctx, upload.ObjectKey, spool.Reader(), spool.Size()); err != nil {
 		return upload, err
 	}
-	return h.store.UpdateRawUpload(ctx, upload.ID, int64(len(old)+len(chunk)))
+	return h.store.UpdateRawUpload(ctx, upload.ID, upload.Offset+chunkSize)
 }
 func (h nativeRawHandler) uploadHeaders(w http.ResponseWriter, repositoryName string, upload repository.RawUpload) {
 	w.Header().Set("Location", "/raw/"+repositoryName+"/"+upload.Path+"?uploadId="+upload.ID)

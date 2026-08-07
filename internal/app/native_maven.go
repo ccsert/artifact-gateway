@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
@@ -286,13 +285,16 @@ func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, n
 		writeHostedProblem(w, 404, "not_found", "declared object not found")
 		return
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, declared.Size+1))
-	if err != nil || int64(len(data)) != declared.Size {
+	spool, err := spoolUpload(r.Body, declared.Size)
+	if err != nil || spool.Size() != declared.Size {
+		if spool != nil {
+			_ = spool.Close()
+		}
 		writeHostedProblem(w, 422, "digest_mismatch", "uploaded object size does not match declaration")
 		return
 	}
-	sum := sha256.Sum256(data)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
+	defer func() { _ = spool.Close() }()
+	digest := spool.Digest()
 	if digest != declared.Digest {
 		writeHostedProblem(w, 422, "digest_mismatch", "uploaded object digest does not match declaration")
 		return
@@ -304,7 +306,7 @@ func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, n
 		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
 		return
 	}
-	if err := h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+	if err := h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Maven object failed")
 		return
 	}
@@ -362,11 +364,19 @@ func (h nativeMavenHandler) promoteWithIdempotency(ctx context.Context, s reposi
 			return repository.MavenArtifact{}, false, errors.New("staged Maven object is unavailable or has changed")
 		}
 		assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name, ObjectKey: "native/maven/sha256/" + strings.TrimPrefix(o.Digest, "sha256:"), Digest: o.Digest, Size: o.Size})
-		body, err := h.objects.Get(ctx, "native/maven/sha256/"+strings.TrimPrefix(o.Digest, "sha256:"))
-		if err != nil {
+		reader, size, err := h.objects.Open(ctx, key)
+		if err != nil || size != o.Size {
+			if reader != nil {
+				_ = reader.Close()
+			}
 			return repository.MavenArtifact{}, false, errors.New("staged Maven object is unavailable")
 		}
-		for _, checksum := range generatedMavenChecksums(body) {
+		checksums, checksumErr := generatedMavenChecksumsFromReader(reader)
+		closeErr := reader.Close()
+		if checksumErr != nil || closeErr != nil {
+			return repository.MavenArtifact{}, false, errors.New("staged Maven object is unavailable")
+		}
+		for _, checksum := range checksums {
 			key := "native/maven/sha256/" + checksum.digest
 			if err := h.objects.PutVerifiedReader(ctx, key, strings.NewReader(checksum.body), int64(len(checksum.body)), "sha256:"+checksum.digest); err != nil {
 				return repository.MavenArtifact{}, false, err
@@ -687,15 +697,19 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+	spool, err := spoolUpload(r.Body, 64<<20)
 	if err != nil {
-		http.Error(w, "read Maven asset", 400)
+		if errors.Is(err, errUploadTooLarge) {
+			http.Error(w, "Maven asset is too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "read Maven asset", 400)
+		}
 		return
 	}
-	sum := sha256.Sum256(body)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
+	defer func() { _ = spool.Close() }()
+	digest := spool.Digest()
 	name = canonicalMavenAssetName(artifact, version, name)
-	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}
+	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: spool.Size()}
 	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
 	if errors.Is(err, repository.ErrNotFound) {
 		pomObject := ""
@@ -726,7 +740,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
-	if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
+	if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
@@ -749,9 +763,13 @@ func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenP
 	if !found {
 		return errors.New("staged Maven coordinate has no POM")
 	}
-	body, err := h.objects.Get(ctx, "native/maven/sha256/"+strings.TrimPrefix(pom.Digest, "sha256:"))
+	reader, size, err := h.objects.Open(ctx, "native/maven/sha256/"+strings.TrimPrefix(pom.Digest, "sha256:"))
 	if err != nil {
 		return errors.New("staged POM is unavailable")
+	}
+	defer func() { _ = reader.Close() }()
+	if size != pom.Size {
+		return errors.New("staged POM size does not match declaration")
 	}
 	var project struct {
 		GroupID    string `xml:"groupId"`
@@ -762,7 +780,12 @@ func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenP
 			Version string `xml:"version"`
 		} `xml:"parent"`
 	}
-	if err := xml.Unmarshal(body, &project); err != nil {
+	decoder := xml.NewDecoder(reader)
+	if err := decoder.Decode(&project); err != nil {
+		return errors.New("staged POM is invalid XML")
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return errors.New("staged POM is invalid XML")
 	}
 	if project.GroupID == "" {
@@ -989,18 +1012,19 @@ func mavenResourceFromPath(path string) string {
 
 type mavenChecksum struct{ extension, digest, body string }
 
-func generatedMavenChecksums(content []byte) []mavenChecksum {
-	sha256Sum := sha256.Sum256(content)
-	sha1Sum := sha1.Sum(content)
-	md5Sum := md5.Sum(content)
-	checksums := []struct{ extension, value string }{{".sha256", hex.EncodeToString(sha256Sum[:])}, {".sha1", hex.EncodeToString(sha1Sum[:])}, {".md5", hex.EncodeToString(md5Sum[:])}}
+func generatedMavenChecksumsFromReader(reader io.Reader) ([]mavenChecksum, error) {
+	sha256Hash, sha1Hash, md5Hash := sha256.New(), sha1.New(), md5.New()
+	if _, err := io.Copy(io.MultiWriter(sha256Hash, sha1Hash, md5Hash), reader); err != nil {
+		return nil, err
+	}
+	checksums := []struct{ extension, value string }{{".sha256", hex.EncodeToString(sha256Hash.Sum(nil))}, {".sha1", hex.EncodeToString(sha1Hash.Sum(nil))}, {".md5", hex.EncodeToString(md5Hash.Sum(nil))}}
 	out := make([]mavenChecksum, 0, len(checksums))
 	for _, v := range checksums {
 		body := v.value + "\n"
 		sum := sha256.Sum256([]byte(body))
 		out = append(out, mavenChecksum{extension: v.extension, digest: hex.EncodeToString(sum[:]), body: body})
 	}
-	return out
+	return out, nil
 }
 func writeNativeMavenJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

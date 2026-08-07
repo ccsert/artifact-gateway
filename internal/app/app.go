@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
@@ -33,6 +34,21 @@ func NewDependencies(cfg config.Config) Dependencies {
 	}
 }
 
+func (d Dependencies) WithDatabasePool(db *sql.DB) Dependencies {
+	if db == nil {
+		return d
+	}
+	checkers := append([]Checker(nil), d.checkers...)
+	for index, checker := range checkers {
+		if _, ok := checker.(postgresChecker); ok {
+			checkers[index] = postgresPoolChecker{db: db}
+			break
+		}
+	}
+	d.checkers = checkers
+	return d
+}
+
 func NewHandler(dependencies Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -61,6 +77,12 @@ func (p postgresChecker) Check(ctx context.Context) error {
 	}
 	defer func() { _ = connection.Close(ctx) }()
 	return connection.Ping(ctx)
+}
+
+type postgresPoolChecker struct{ db *sql.DB }
+
+func (p postgresPoolChecker) Check(ctx context.Context) error {
+	return p.db.PingContext(ctx)
 }
 
 type httpChecker struct{ url string }

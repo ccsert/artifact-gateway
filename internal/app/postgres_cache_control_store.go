@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 )
 
 // PostgresCacheControlStore stores cache indexes, negative entries, and GC
@@ -18,17 +18,30 @@ import (
 type PostgresCacheControlStore struct {
 	objects OCIObjectStore
 	db      *sql.DB
+	ownsDB  bool
 }
 
 func NewPostgresCacheControlStore(objects OCIObjectStore, databaseURL string) (*PostgresCacheControlStore, error) {
-	db, err := sql.Open("pgx", databaseURL)
+	db, err := database.OpenPostgres(databaseURL, database.DefaultPoolConfig())
 	if err != nil {
 		return nil, fmt.Errorf("open PostgreSQL cache control store: %w", err)
+	}
+	return &PostgresCacheControlStore{objects: objects, db: db, ownsDB: true}, nil
+}
+
+func NewPostgresCacheControlStoreWithDB(objects OCIObjectStore, db *sql.DB) (*PostgresCacheControlStore, error) {
+	if db == nil {
+		return nil, errors.New("PostgreSQL cache control store requires a database pool")
 	}
 	return &PostgresCacheControlStore{objects: objects, db: db}, nil
 }
 
-func (s *PostgresCacheControlStore) Close() error { return s.db.Close() }
+func (s *PostgresCacheControlStore) Close() error {
+	if !s.ownsDB {
+		return nil
+	}
+	return s.db.Close()
+}
 
 func isCacheControlKey(key string) bool {
 	for _, prefix := range []string{"oci/index/", "oci/gc/", "maven/index/", "raw/index/", "conan/index/"} {

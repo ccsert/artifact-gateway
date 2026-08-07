@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const cacheCollectionTask = "cache_collect"
@@ -21,19 +20,59 @@ type postgresCacheTask struct {
 // are claimed in short PostgreSQL transactions with SKIP LOCKED; an abandoned
 // claim becomes eligible again after its lease period.
 type PostgresCacheTaskQueue struct {
-	db          *sql.DB
-	databaseURL string
+	db             *sql.DB
+	listenerDB     *sql.DB
+	ownsDB         bool
+	ownsListenerDB bool
 }
 
 func NewPostgresCacheTaskQueue(databaseURL string) (*PostgresCacheTaskQueue, error) {
-	db, err := sql.Open("pgx", databaseURL)
+	db, err := database.OpenPostgres(databaseURL, database.DefaultPoolConfig())
 	if err != nil {
 		return nil, fmt.Errorf("open PostgreSQL cache task queue: %w", err)
 	}
-	return &PostgresCacheTaskQueue{db: db, databaseURL: databaseURL}, nil
+	listenerDB, err := database.OpenPostgres(databaseURL, database.NotificationPoolConfig())
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open PostgreSQL cache task listener: %w", err)
+	}
+	return &PostgresCacheTaskQueue{db: db, listenerDB: listenerDB, ownsDB: true, ownsListenerDB: true}, nil
 }
 
-func (q *PostgresCacheTaskQueue) Close() error { return q.db.Close() }
+func NewPostgresCacheTaskQueueWithDB(db *sql.DB, databaseURL string) (*PostgresCacheTaskQueue, error) {
+	if db == nil {
+		return nil, fmt.Errorf("PostgreSQL cache task queue requires a database pool")
+	}
+	listenerDB, err := database.OpenPostgres(databaseURL, database.NotificationPoolConfig())
+	if err != nil {
+		return nil, fmt.Errorf("open PostgreSQL cache task listener: %w", err)
+	}
+	return &PostgresCacheTaskQueue{db: db, listenerDB: listenerDB, ownsListenerDB: true}, nil
+}
+
+func NewPostgresCacheTaskQueueWithPools(db, listenerDB *sql.DB) (*PostgresCacheTaskQueue, error) {
+	if db == nil || listenerDB == nil {
+		return nil, fmt.Errorf("PostgreSQL cache task queue requires database and listener pools")
+	}
+	return &PostgresCacheTaskQueue{db: db, listenerDB: listenerDB}, nil
+}
+
+func (q *PostgresCacheTaskQueue) Close() error {
+	var listenerErr error
+	if q.ownsListenerDB {
+		listenerErr = q.listenerDB.Close()
+	}
+	if q.ownsDB {
+		if err := q.db.Close(); err != nil {
+			return err
+		}
+	}
+	return listenerErr
+}
+
+func (q *PostgresCacheTaskQueue) ListenerDatabaseStats() sql.DBStats {
+	return q.listenerDB.Stats()
+}
 
 func (q *PostgresCacheTaskQueue) EnqueueCollection(ctx context.Context) error {
 	if _, err := q.db.ExecContext(ctx, `INSERT INTO cache_tasks (id, task_type, dedupe_key) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, uuid.NewString(), cacheCollectionTask, cacheCollectionTask); err != nil {
@@ -126,13 +165,13 @@ func (q *PostgresCacheTaskQueue) listenForTasks(ctx context.Context) <-chan stru
 	wake := make(chan struct{}, 1)
 	go func() {
 		for ctx.Err() == nil {
-			conn, err := pgx.Connect(ctx, q.databaseURL)
+			conn, err := q.listenerDB.Conn(ctx)
 			if err == nil {
-				_, err = conn.Exec(ctx, `LISTEN artifact_gateway_cache_tasks`)
+				err = database.ListenChannels(ctx, conn, "artifact_gateway_cache_tasks")
 			}
 			if err != nil {
 				if conn != nil {
-					_ = conn.Close(context.Background())
+					_ = conn.Close()
 				}
 				select {
 				case <-ctx.Done():
@@ -142,7 +181,7 @@ func (q *PostgresCacheTaskQueue) listenForTasks(ctx context.Context) <-chan stru
 				continue
 			}
 			for ctx.Err() == nil {
-				if _, err := conn.WaitForNotification(ctx); err != nil {
+				if _, err := database.WaitForNotification(ctx, conn); err != nil {
 					break
 				}
 				select {
@@ -150,7 +189,7 @@ func (q *PostgresCacheTaskQueue) listenForTasks(ctx context.Context) <-chan stru
 				default:
 				}
 			}
-			_ = conn.Close(context.Background())
+			_ = conn.Close()
 		}
 	}()
 	return wake

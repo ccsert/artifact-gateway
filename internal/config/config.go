@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 )
 
 type Config struct {
 	ListenAddress            string
 	DatabaseURL              string
+	DatabasePool             database.PoolConfig
+	DatabaseCoordinatorPool  database.PoolConfig
 	S3Endpoint               string
 	S3Bucket                 string
 	S3AccessKey              string
@@ -49,6 +52,8 @@ func Load() (Config, error) {
 	cfg := Config{
 		ListenAddress:            value("GATEWAY_LISTEN_ADDRESS", ":8080"),
 		DatabaseURL:              os.Getenv("GATEWAY_DATABASE_URL"),
+		DatabasePool:             database.DefaultPoolConfig(),
+		DatabaseCoordinatorPool:  database.DefaultCoordinatorPoolConfig(),
 		S3Endpoint:               os.Getenv("GATEWAY_S3_ENDPOINT"),
 		S3Bucket:                 os.Getenv("GATEWAY_S3_BUCKET"),
 		S3AccessKey:              os.Getenv("GATEWAY_S3_ACCESS_KEY"),
@@ -112,6 +117,44 @@ func Load() (Config, error) {
 		}
 		cfg.OTELSamplingRatio = ratio
 	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_MAX_OPEN_CONNS", cfg.DatabasePool.MaxOpenConns, false); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabasePool.MaxOpenConns = value
+	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_MAX_IDLE_CONNS", cfg.DatabasePool.MaxIdleConns, true); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabasePool.MaxIdleConns = value
+	}
+	if ttl, err := durationEnv("GATEWAY_DATABASE_CONN_MAX_LIFETIME", cfg.DatabasePool.ConnMaxLifetime); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabasePool.ConnMaxLifetime = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_DATABASE_CONN_MAX_IDLE_TIME", cfg.DatabasePool.ConnMaxIdleTime); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabasePool.ConnMaxIdleTime = ttl
+	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS", cfg.DatabaseCoordinatorPool.MaxOpenConns, false); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabaseCoordinatorPool.MaxOpenConns = value
+	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_COORDINATOR_MAX_IDLE_CONNS", cfg.DatabaseCoordinatorPool.MaxIdleConns, true); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabaseCoordinatorPool.MaxIdleConns = value
+	}
+	cfg.DatabaseCoordinatorPool.ConnMaxLifetime = cfg.DatabasePool.ConnMaxLifetime
+	cfg.DatabaseCoordinatorPool.ConnMaxIdleTime = cfg.DatabasePool.ConnMaxIdleTime
+	if err := cfg.DatabasePool.Validate(); err != nil {
+		return Config{}, fmt.Errorf("invalid database pool configuration: %w", err)
+	}
+	if err := cfg.DatabaseCoordinatorPool.Validate(); err != nil {
+		return Config{}, fmt.Errorf("invalid database coordinator pool configuration: %w", err)
+	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES")); raw != "" {
 		bytes, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || bytes <= 0 {
@@ -157,6 +200,21 @@ func Load() (Config, error) {
 		cfg.ConanCacheTTL = ttl
 	}
 	return cfg, nil
+}
+
+func positiveIntEnv(name string, fallback int, allowZero bool) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 || !allowZero && value == 0 {
+		if allowZero {
+			return 0, fmt.Errorf("%s must be a non-negative integer", name)
+		}
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
 }
 
 // durationEnv parses a cache TTL override. The value is either a Go duration

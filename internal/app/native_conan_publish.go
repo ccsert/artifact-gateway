@@ -1,12 +1,10 @@
 package app
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -108,19 +106,22 @@ func (h nativeConanPublishHandler) upload(w http.ResponseWriter, r *http.Request
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "declared object not found")
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, declared.Size+1))
-	if err != nil || int64(len(body)) != declared.Size {
+	spool, err := spoolUpload(r.Body, declared.Size)
+	if err != nil || spool.Size() != declared.Size {
+		if spool != nil {
+			_ = spool.Close()
+		}
 		writeHostedProblem(w, http.StatusUnprocessableEntity, "digest_mismatch", "uploaded object size does not match declaration")
 		return
 	}
-	sum := sha256.Sum256(body)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
+	defer func() { _ = spool.Close() }()
+	digest := spool.Digest()
 	if digest != declared.Digest {
 		writeHostedProblem(w, http.StatusUnprocessableEntity, "digest_mismatch", "uploaded object digest does not match declaration")
 		return
 	}
 	key := "native/conan/sessions/" + session.ID + "/" + name
-	if err = h.store.StageConanObject(r.Context(), repository.ConanObjectIntent{RepositoryID: session.RepositoryID, ObjectKey: key, Digest: digest, Size: int64(len(body))}); err != nil {
+	if err = h.store.StageConanObject(r.Context(), repository.ConanObjectIntent{RepositoryID: session.RepositoryID, ObjectKey: key, Digest: digest, Size: spool.Size()}); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Conan object failed")
 		return
 	}
@@ -128,7 +129,7 @@ func (h nativeConanPublishHandler) upload(w http.ResponseWriter, r *http.Request
 		writeHostedProblem(w, http.StatusConflict, "session_closed", "publish session is closed")
 		return
 	}
-	if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
+	if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Conan object failed")
 		return
 	}

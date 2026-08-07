@@ -410,13 +410,14 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			writeOCIError(w, 400, "DIGEST_INVALID", "valid sha256 digest is required")
 			return
 		}
-		data, err := h.objects.Get(r.Context(), upload.ObjectKey)
+		spool, err := spoolStoredObject(r.Context(), h.objects, upload.ObjectKey)
 		if err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "upload bytes are unavailable")
 			return
 		}
-		sum := sha256.Sum256(data)
-		if digest != "sha256:"+hex.EncodeToString(sum[:]) {
+		defer func() { _ = spool.Close() }()
+		actualDigest, size := spool.Digest(), spool.Size()
+		if digest != actualDigest {
 			writeOCIError(w, 400, "DIGEST_INVALID", "provided digest did not match uploaded content")
 			return
 		}
@@ -427,15 +428,15 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			return
 		}
 		defer releaseObject()
-		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: int64(len(data))}); err != nil {
+		if err = h.store.StageOCIObjectIntent(r.Context(), repository.OCIObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: size}); err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "stage blob intent failed")
 			return
 		}
-		if err = h.objects.PutVerifiedReader(r.Context(), key, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+		if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), size, digest); err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "persist blob failed")
 			return
 		}
-		blob, err := h.store.CompleteOCIUpload(r.Context(), id, repository.OCIBlob{Digest: digest, ObjectKey: key, Size: int64(len(data))})
+		blob, err := h.store.CompleteOCIUpload(r.Context(), id, repository.OCIBlob{Digest: digest, ObjectKey: key, Size: size})
 		if err != nil {
 			if repository.IsQuotaExceeded(err) {
 				writeOCIError(w, http.StatusInsufficientStorage, "DENIED", "repository capacity quota exceeded")
@@ -457,18 +458,15 @@ func (h nativeOCIHandler) appendUpload(ctx context.Context, r *http.Request, upl
 	if start, ok := uploadRangeStart(r.Header.Get("Content-Range")); ok && start != upload.Offset {
 		return upload, errors.New("offset mismatch")
 	}
-	old, err := h.objects.Get(ctx, upload.ObjectKey)
-	if err != nil && !errors.Is(err, errOCICacheMiss) {
-		return upload, err
-	}
-	chunk, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, 1<<30))
+	spool, chunkSize, err := spoolObjectAppend(ctx, h.objects, upload.ObjectKey, upload.Offset, r.Body, 1<<30)
 	if err != nil {
 		return upload, err
 	}
-	if err = h.objects.PutReader(ctx, upload.ObjectKey, io.MultiReader(bytes.NewReader(old), bytes.NewReader(chunk)), int64(len(old)+len(chunk))); err != nil {
+	defer func() { _ = spool.Close() }()
+	if err = h.objects.PutReader(ctx, upload.ObjectKey, spool.Reader(), spool.Size()); err != nil {
 		return upload, err
 	}
-	return h.store.UpdateOCIUpload(ctx, upload.ID, int64(len(old)+len(chunk)))
+	return h.store.UpdateOCIUpload(ctx, upload.ID, upload.Offset+chunkSize)
 }
 
 func uploadRangeStart(value string) (int64, bool) {

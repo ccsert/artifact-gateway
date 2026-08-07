@@ -39,7 +39,7 @@ services:
       TEST_S3_ACCESS_KEY: integration-minio
       TEST_S3_SECRET_KEY: integration-password
     working_dir: /src
-    command: ["go", "test", "-p", "1", "-tags=integration", "./internal/app"]
+    command: ["go", "test", "-p", "1", "-tags=integration", "./internal/app", "./internal/repository"]
     volumes:
       - ./:/src:ro
       - artifact-gateway-go-mod:/go/pkg/mod

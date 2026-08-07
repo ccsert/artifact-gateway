@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 )
 
 type checkerFunc func(context.Context) error
@@ -53,6 +55,19 @@ func TestNewDependenciesChecksS3Endpoint(t *testing.T) {
 	}
 	if s3Checker.url != "https://objects.example.test/prefix/" {
 		t.Fatalf("S3 checker URL = %q", s3Checker.url)
+	}
+}
+
+func TestDependenciesUseSharedDatabasePoolForReadiness(t *testing.T) {
+	pool, err := database.OpenPostgres("postgres://gateway:password@db:5432/gateway", database.PoolConfig{MaxOpenConns: 2, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pool.Close() }()
+	dependencies := NewDependencies(config.Config{DatabaseURL: "postgres://gateway:password@db:5432/gateway"}).WithDatabasePool(pool)
+	checker, ok := dependencies.checkers[0].(postgresPoolChecker)
+	if !ok || checker.db != pool {
+		t.Fatalf("database checker=%T pool=%p want=%p", dependencies.checkers[0], checker.db, pool)
 	}
 }
 

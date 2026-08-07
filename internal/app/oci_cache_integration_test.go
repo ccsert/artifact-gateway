@@ -14,8 +14,53 @@ import (
 	"testing"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+func TestPostgresCacheCoordinatorCloseReleasesBorrowedAdvisoryLocks(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("PostgreSQL integration environment is required")
+	}
+	lockConfig := database.DefaultCoordinatorPoolConfig()
+	lockConfig.MaxOpenConns = 1
+	lockConfig.MaxIdleConns = 1
+	lockDB, err := database.OpenPostgres(databaseURL, lockConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lockDB.Close() }()
+	stateDB, err := database.OpenPostgres(databaseURL, database.DefaultPoolConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stateDB.Close() }()
+	coordinator, err := NewPostgresCacheCoordinatorWithPools(lockDB, stateDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := fmt.Sprintf("close-release-%d", time.Now().UnixNano())
+	if _, acquired, err := coordinator.Acquire(context.Background(), key, time.Minute); err != nil || !acquired {
+		t.Fatalf("Acquire() acquired=%t err=%v", acquired, err)
+	}
+	if err := coordinator.Close(); err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := database.OpenPostgres(databaseURL, lockConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = verifier.Close() }()
+	lockKey := "artifact-gateway:cache:" + key
+	var acquired bool
+	if err := verifier.QueryRow(`SELECT pg_try_advisory_lock(hashtextextended($1, 0))`, lockKey).Scan(&acquired); err != nil || !acquired {
+		t.Fatalf("advisory lock remained after Close(): acquired=%t err=%v", acquired, err)
+	}
+	if _, err := verifier.Exec(`SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey); err != nil {
+		t.Fatal(err)
+	}
+}
 
 type integrationOCIUpstream struct {
 	mu        sync.Mutex

@@ -191,6 +191,63 @@ func TestLoadUsesMavenCacheDefaultsSuitedToImmutableComponents(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresDatabasePool(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_DATABASE_MAX_OPEN_CONNS", "24")
+	t.Setenv("GATEWAY_DATABASE_MAX_IDLE_CONNS", "6")
+	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS", "5")
+	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_IDLE_CONNS", "1")
+	t.Setenv("GATEWAY_DATABASE_CONN_MAX_LIFETIME", "20m")
+	t.Setenv("GATEWAY_DATABASE_CONN_MAX_IDLE_TIME", "2m")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabasePool.MaxOpenConns != 24 || cfg.DatabasePool.MaxIdleConns != 6 || cfg.DatabasePool.ConnMaxLifetime != 20*time.Minute || cfg.DatabasePool.ConnMaxIdleTime != 2*time.Minute {
+		t.Fatalf("database pool=%+v", cfg.DatabasePool)
+	}
+	if cfg.DatabaseCoordinatorPool.MaxOpenConns != 5 || cfg.DatabaseCoordinatorPool.MaxIdleConns != 1 || cfg.DatabaseCoordinatorPool.ConnMaxLifetime != 20*time.Minute || cfg.DatabaseCoordinatorPool.ConnMaxIdleTime != 2*time.Minute {
+		t.Fatalf("database coordinator pool=%+v", cfg.DatabaseCoordinatorPool)
+	}
+}
+
+func TestLoadRejectsDatabaseIdleConnectionsAboveOpenLimit(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_DATABASE_MAX_OPEN_CONNS", "2")
+	t.Setenv("GATEWAY_DATABASE_MAX_IDLE_CONNS", "3")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want database pool validation error")
+	}
+}
+
+func TestLoadRejectsCoordinatorIdleConnectionsAboveOpenLimit(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS", "1")
+	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_IDLE_CONNS", "2")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want database coordinator pool validation error")
+	}
+}
+
 func TestLoadRejectsInvalidCacheTTL(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")

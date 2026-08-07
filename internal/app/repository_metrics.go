@@ -11,6 +11,8 @@ import (
 )
 
 type Metrics struct {
+	httpRequests                   requestMetrics
+	databaseStats                  []namedDatabaseStats
 	resolved                       atomic.Uint64
 	failed                         atomic.Uint64
 	ociCacheHit                    atomic.Uint64
@@ -383,6 +385,9 @@ func (m *Metrics) repository(repositoryName string) RepositoryMetrics {
 
 func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	m.writeHTTPMetrics(w)
+	m.writeRuntimeMetrics(w)
+	m.writeDatabaseMetrics(w)
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_cache_quota_rejections_total counter\nartifact_gateway_cache_quota_rejections_total " + utoa(m.cacheQuotaDenied.Load()) + "\n# TYPE artifact_gateway_anonymous_reads_total counter\nartifact_gateway_anonymous_reads_total " + utoa(m.anonymousReads.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_repository_authorization_denials_total counter\n"))
 	for formatIndex, format := range repositoryAuthorizationFormats {

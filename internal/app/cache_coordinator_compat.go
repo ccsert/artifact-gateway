@@ -9,5 +9,6 @@ type PostgresCacheCoordinator = cache.PostgresCoordinator
 type CacheQuota = cache.Quota
 
 var NewPostgresCacheCoordinator = cache.NewPostgresCoordinator
+var NewPostgresCacheCoordinatorWithPools = cache.NewPostgresCoordinatorWithPools
 var NewCacheQuota = cache.NewQuota
 var ErrCacheQuotaExceeded = cache.ErrQuotaExceeded
