@@ -9,7 +9,7 @@ export function Spinner({ className = '' }: { className?: string }) {
 
 export function Loading({ label = '加载中…' }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-16 text-zinc-400">
+    <div className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-zinc-400">
       <Spinner />
       <span className="text-sm">{label}</span>
     </div>
@@ -31,6 +31,7 @@ export function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () =
     problem?.message ?? (error instanceof Error ? error.message : '请求失败，请检查网络或 Token');
   return (
     <Alert
+      className="ag-feedback-enter"
       type="error"
       showIcon
       title="请求出错"
@@ -57,7 +58,7 @@ export function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () =
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <Empty
-      className="py-12"
+      className="ag-feedback-enter py-12"
       image={Empty.PRESENTED_IMAGE_SIMPLE}
       description={
         <div className="space-y-1 text-center">
