@@ -31,6 +31,60 @@ func retentionPolicyForTest(t *testing.T, store *repository.MemoryStore, reposit
 	}
 }
 
+func retentionRepositoriesForFormats(t *testing.T, store *repository.MemoryStore, formats ...repository.Format) map[repository.Format]repository.HostedRepository {
+	t.Helper()
+	result := make(map[repository.Format]repository.HostedRepository, len(formats))
+	for _, format := range formats {
+		repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "retention-" + string(format) + "-" + uuid.NewString(), Format: format})
+		if err != nil {
+			t.Fatal(err)
+		}
+		retentionPolicyForTest(t, store, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 30})
+		result[format] = repo
+	}
+	return result
+}
+
+func TestNativeRepositoryRetentionSchedulerIgnoresWorkerFormatFilters(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repositories := retentionRepositoriesForFormats(t, store, repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatRaw)
+
+	retention := NativeRepositoryRetention{Store: store, WorkerFormats: []string{"oci"}}
+	if err := retention.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for format, repo := range repositories {
+		jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10)
+		if err != nil || len(jobs) != 1 {
+			t.Fatalf("%s scheduled jobs=%#v err=%v", format, jobs, err)
+		}
+	}
+}
+
+func TestNativeRepositoryRetentionWorkerClaimsOnlyConfiguredFormats(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repositories := retentionRepositoriesForFormats(t, store, repository.FormatOCI, repository.FormatRaw)
+	if err := (NativeRepositoryRetention{Store: store}).Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	worker := NativeRepositoryRetention{Store: store, WorkerFormats: []string{"oci"}}
+	if err := worker.RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	for format, want := range map[repository.Format]repository.LifecycleJobState{
+		repository.FormatOCI: repository.LifecycleJobCompleted,
+		repository.FormatRaw: repository.LifecycleJobPending,
+	} {
+		jobs, err := store.ListLifecycleJobs(ctx, repositories[format].ID, 10)
+		if err != nil || len(jobs) != 1 || jobs[0].State != want {
+			t.Fatalf("%s jobs=%#v err=%v, want state %s", format, jobs, err, want)
+		}
+	}
+}
+
 func TestNativeRepositoryRetentionPlansOCIByImageAndRestoresTombstones(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()

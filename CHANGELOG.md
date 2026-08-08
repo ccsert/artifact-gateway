@@ -29,6 +29,8 @@ a dated version heading without rewriting their meaning.
 
 - Resolved public artifact deep links even when the target coordinate is beyond
   the first browse page.
+- Fixed PostgreSQL OCI upload expiry scans so scheduled reclaim jobs are
+  created and completed reliably across worker instances.
 - Stabilized generated OpenAPI output, dependency installation, integration
   readiness, and lifecycle ordering in CI.
 

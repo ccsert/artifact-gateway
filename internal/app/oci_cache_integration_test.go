@@ -15,8 +15,32 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
+
+type countingDeleteObjectStore struct {
+	objectstore.Store
+	mu      sync.Mutex
+	deletes map[string]int
+}
+
+func (s *countingDeleteObjectStore) Delete(ctx context.Context, key string) error {
+	s.mu.Lock()
+	if s.deletes == nil {
+		s.deletes = make(map[string]int)
+	}
+	s.deletes[key]++
+	s.mu.Unlock()
+	return s.Store.Delete(ctx, key)
+}
+
+func (s *countingDeleteObjectStore) deleteCount(key string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deletes[key]
+}
 
 func TestPostgresCacheCoordinatorCloseReleasesBorrowedAdvisoryLocks(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -211,6 +235,115 @@ func TestPostgresCacheTaskQueueClaimsWorkOnceAcrossGatewayInstances(t *testing.T
 	}
 	if err := queueB.complete(context.Background(), rawClaimed); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPostgresCacheWorkerLeavesUnconfiguredFormatsUnclaimed(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	queue, err := NewPostgresCacheTaskQueue(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer queue.Close()
+	if err = queue.EnqueueCollectionForFormat(context.Background(), cacheCollectionFormatOCI); err != nil {
+		t.Fatal(err)
+	}
+	if err = queue.EnqueueCollectionForFormat(context.Background(), cacheCollectionFormatRaw); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collected := make(chan string, 1)
+	queue.StartCacheWorker(ctx, []string{cacheCollectionFormatRaw}, func(_ context.Context, format string) error {
+		collected <- format
+		return nil
+	})
+	select {
+	case format := <-collected:
+		if format != cacheCollectionFormatRaw {
+			t.Fatalf("collected format=%q want=%q", format, cacheCollectionFormatRaw)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Raw cache worker did not collect its configured format")
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		var remaining int
+		err = queue.db.QueryRowContext(context.Background(), `SELECT count(*) FROM cache_tasks WHERE task_type=$1 AND completed_at IS NULL`, cacheCollectionTaskPrefix+cacheCollectionFormatRaw).Scan(&remaining)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if remaining == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Raw cache worker did not complete its claimed task")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+
+	ociTask, claimed, err := queue.claimCollection(context.Background(), cacheCollectionFormatOCI, time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("OCI task after Raw worker=%#v claimed=%t err=%v", ociTask, claimed, err)
+	}
+	if err = queue.complete(context.Background(), ociTask); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostgresNativeOCIReclaimLeasePreventsDuplicateDeletion(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	repo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "reclaim-lease-" + uuid.NewString(), Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	upload := repository.OCIUpload{ID: uuid.NewString(), RepositoryID: repo.ID, Name: "team/app", ObjectKey: "native/oci/uploads/" + uuid.NewString(), State: "open", ExpiresAt: now.Add(-time.Minute)}
+	if _, err = storeA.CreateOCIUpload(ctx, upload); err != nil {
+		t.Fatal(err)
+	}
+	objects := &countingDeleteObjectStore{Store: NewMemoryOCIObjectStore()}
+	if err = objects.Put(ctx, upload.ObjectKey, []byte("partial")); err != nil {
+		t.Fatal(err)
+	}
+	maintenanceA := NativeOCIMaintenance{Store: storeA, Objects: objects, Now: func() time.Time { return now }}
+	if err = maintenanceA.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	maintenanceB := NativeOCIMaintenance{Store: storeB, Objects: objects, Now: func() time.Time { return now }}
+	results := make(chan error, 2)
+	go func() { results <- maintenanceA.RunReclaimJobs(ctx, 10) }()
+	go func() { results <- maintenanceB.RunReclaimJobs(ctx, 10) }()
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := objects.deleteCount(upload.ObjectKey); got != 1 {
+		t.Fatalf("target OCI upload deleted %d times, want 1", got)
+	}
+	state, err := storeA.GetOCIUpload(ctx, upload.ID)
+	if err != nil || state.CollectedAt.IsZero() {
+		t.Fatalf("collected upload=%#v err=%v", state, err)
 	}
 }
 

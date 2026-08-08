@@ -75,9 +75,6 @@ func (m NativeRepositoryRetention) Schedule(ctx context.Context) error {
 			if repo.State != repository.RepositoryActive || repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
 				continue
 			}
-			if !m.handlesFormat(repo.Format) {
-				continue
-			}
 			policy, policyErr := m.Store.GetRepositoryRetentionPolicy(ctx, repo.ID)
 			if policyErr != nil {
 				return policyErr

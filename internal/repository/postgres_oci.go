@@ -16,6 +16,19 @@ func nullableString(value string) any {
 	return value
 }
 
+const ociUploadColumns = "id::text,repository_id::text,name,object_key,byte_offset,state,expires_at,collected_at"
+
+func scanOCIUpload(scanner interface{ Scan(...any) error }, upload *OCIUpload) error {
+	var collectedAt sql.NullTime
+	if err := scanner.Scan(&upload.ID, &upload.RepositoryID, &upload.Name, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &collectedAt); err != nil {
+		return err
+	}
+	if collectedAt.Valid {
+		upload.CollectedAt = collectedAt.Time
+	}
+	return nil
+}
+
 func (s *PostgresStore) CreateOCIUpload(ctx context.Context, v OCIUpload) (OCIUpload, error) {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_oci_uploads (id,repository_id,name,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Name, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
 	return v, err
@@ -61,7 +74,7 @@ func (s *PostgresStore) LockOCIObject(ctx context.Context, objectKey string) (fu
 }
 func (s *PostgresStore) GetOCIUpload(ctx context.Context, id string) (OCIUpload, error) {
 	var v OCIUpload
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,name,object_key,byte_offset,state,expires_at FROM native_oci_uploads WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Name, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	err := scanOCIUpload(s.db.QueryRowContext(ctx, `SELECT `+ociUploadColumns+` FROM native_oci_uploads WHERE id::text=$1`, id), &v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OCIUpload{}, ErrNotFound
 	}
@@ -77,10 +90,10 @@ func (s *PostgresStore) UpdateOCIUpload(ctx context.Context, id string, offset i
 }
 func (s *PostgresStore) CancelOCIUpload(ctx context.Context, id string) (OCIUpload, error) {
 	var v OCIUpload
-	err := s.db.QueryRowContext(ctx, `UPDATE native_oci_uploads
+	err := scanOCIUpload(s.db.QueryRowContext(ctx, `UPDATE native_oci_uploads
         SET state='expired', collected_at=now()
         WHERE id::text=$1 AND state='open'
-        RETURNING id::text,repository_id::text,name,object_key,byte_offset,state,expires_at,collected_at`, id).Scan(&v.ID, &v.RepositoryID, &v.Name, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt, &v.CollectedAt)
+		RETURNING `+ociUploadColumns, id), &v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OCIUpload{}, ErrNotFound
 	}
@@ -132,7 +145,7 @@ func (s *PostgresStore) ExpireOCIUploads(ctx context.Context, before time.Time, 
         ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT $2
     ) UPDATE native_oci_uploads u SET state='expired'
     FROM candidates c WHERE u.id=c.id
-    RETURNING u.id::text,u.repository_id::text,u.name,u.object_key,u.byte_offset,u.state,u.expires_at,u.collected_at`, before, limit)
+	RETURNING `+prefixedOCIUploadColumns("u"), before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +153,7 @@ func (s *PostgresStore) ExpireOCIUploads(ctx context.Context, before time.Time, 
 	var uploads []OCIUpload
 	for rows.Next() {
 		var upload OCIUpload
-		if err = rows.Scan(&upload.ID, &upload.RepositoryID, &upload.Name, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &upload.CollectedAt); err != nil {
+		if err = scanOCIUpload(rows, &upload); err != nil {
 			return nil, err
 		}
 		uploads = append(uploads, upload)
@@ -154,7 +167,7 @@ func (s *PostgresStore) ListUncollectedOCIUploads(ctx context.Context, limit int
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,name,object_key,byte_offset,state,expires_at,collected_at FROM native_oci_uploads WHERE state='expired' AND collected_at IS NULL ORDER BY expires_at LIMIT $1`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+ociUploadColumns+` FROM native_oci_uploads WHERE state='expired' AND collected_at IS NULL ORDER BY expires_at LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -162,12 +175,16 @@ func (s *PostgresStore) ListUncollectedOCIUploads(ctx context.Context, limit int
 	var uploads []OCIUpload
 	for rows.Next() {
 		var upload OCIUpload
-		if err = rows.Scan(&upload.ID, &upload.RepositoryID, &upload.Name, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &upload.CollectedAt); err != nil {
+		if err = scanOCIUpload(rows, &upload); err != nil {
 			return nil, err
 		}
 		uploads = append(uploads, upload)
 	}
 	return uploads, rows.Err()
+}
+
+func prefixedOCIUploadColumns(prefix string) string {
+	return prefix + ".id::text," + prefix + ".repository_id::text," + prefix + ".name," + prefix + ".object_key," + prefix + ".byte_offset," + prefix + ".state," + prefix + ".expires_at," + prefix + ".collected_at"
 }
 func (s *PostgresStore) MarkOCIUploadCollected(ctx context.Context, id string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE native_oci_uploads SET collected_at=now() WHERE id::text=$1 AND state='expired' AND collected_at IS NULL`, id)
