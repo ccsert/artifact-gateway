@@ -371,7 +371,7 @@ Group-only interactions:
 
 ### Phase 6: Documentation And Product Copy
 
-- [ ] Add UI help text for Repository, Hosted, Proxy, Group, Artifact, Asset,
+- [x] Add UI help text for Repository, Hosted, Proxy, Group, Artifact, Asset,
   Cache Entry, Publication, Tombstone, Retention Policy, and Cache Policy.
 - [x] Add operator docs for anonymous access.
 - [x] Add protocol usage examples for authenticated and anonymous modes.
