@@ -112,6 +112,16 @@ func main() {
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds)
+	heartbeat := &app.RuntimeNodeHeartbeat{
+		Store: store,
+		Node: repository.RuntimeNode{
+			InstanceID:    cfg.InstanceID,
+			Roles:         nodeRoleStrings(cfg.NodeRoles),
+			WorkerFormats: append([]string(nil), cfg.WorkerFormats...),
+			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
+		},
+	}
+	heartbeat.Start(runtimeContext, 10*time.Second)
 	(backgroundRuntime{store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {

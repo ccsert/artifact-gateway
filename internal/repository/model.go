@@ -220,6 +220,17 @@ type OCIUpload struct {
 	CollectedAt                              time.Time
 }
 
+// RuntimeNode is the durable inventory record for one Gateway process. The
+// instance ID is deployment-owned and must be unique across live processes.
+type RuntimeNode struct {
+	InstanceID    string
+	Roles         []string
+	WorkerFormats []string
+	WorkerKinds   []string
+	StartedAt     time.Time
+	LastSeenAt    time.Time
+}
+
 type OCIBlob struct {
 	Digest, ObjectKey string
 	Size              int64

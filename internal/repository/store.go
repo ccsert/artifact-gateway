@@ -13,6 +13,7 @@ var (
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
 	ErrVersionConflict     = errors.New("resource version conflicts with current state")
 	ErrQuotaExceeded       = errors.New("repository capacity quota exceeded")
+	ErrInvalidRuntimeNode  = errors.New("runtime node identity is invalid")
 )
 
 type HostedRepositoryStore interface {
@@ -202,6 +203,11 @@ type Store interface {
 	DisableGroup(context.Context, string) error
 	RecordAudit(context.Context, AuditRecord) error
 	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
+}
+
+type RuntimeNodeStore interface {
+	UpsertRuntimeNodeHeartbeat(context.Context, RuntimeNode) error
+	ListRuntimeNodes(context.Context) ([]RuntimeNode, error)
 }
 
 type AuditStore interface {
