@@ -31,6 +31,7 @@ import {
   conanReferenceParts,
   mavenArtifactGroups,
   mavenVersionKey,
+  missingDeepLinkedArtifact,
   type ConanArtifactGroup,
   type MavenArtifactGroup,
 } from "../lib/publicBrowseModel";
@@ -1028,6 +1029,42 @@ export function PublicBrowsePage() {
       cancelled = true;
     };
   }, [repositoryId, query]);
+
+  useEffect(() => {
+    if (!repositoryId || !items) return;
+    const coordinate = missingDeepLinkedArtifact(items, artifactParam);
+    if (!coordinate) return;
+
+    let cancelled = false;
+    void searchRepositoryArtifacts({
+      path: { repositoryId },
+      query: { q: coordinate, pageSize: 100 },
+    }).then(({ data, error: requestError }) => {
+      if (cancelled) return;
+      if (requestError) {
+        setError(requestError);
+        return;
+      }
+      const matches = (data?.items ?? []).filter(
+        (item) => item.coordinate === coordinate,
+      );
+      if (matches.length === 0) return;
+      setItems((current) => [
+        ...(current ?? []),
+        ...matches.filter(
+          (match) =>
+            !(current ?? []).some(
+              (item) =>
+                item.coordinate === match.coordinate &&
+                item.buildNumber === match.buildNumber,
+            ),
+        ),
+      ]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artifactParam, items, repositoryId]);
 
   useEffect(() => {
     setOciTagPages({});

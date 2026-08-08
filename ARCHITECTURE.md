@@ -118,4 +118,3 @@ exact client and server impact of a contract change.
 4. Keep retries idempotent and fence writes from expired workers.
 5. Evolve external APIs through OpenAPI first.
 6. Prove database locking and object-store behavior with integration tests.
-

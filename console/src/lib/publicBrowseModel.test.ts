@@ -5,6 +5,7 @@ import {
   conanReferenceParts,
   mavenArtifactGroups,
   mavenVersionKey,
+  missingDeepLinkedArtifact,
 } from "./publicBrowseModel";
 
 describe("public artifact version model", () => {
@@ -76,5 +77,15 @@ describe("public artifact version model", () => {
     ).toBe(
       "/browse?repository=repo-1&q=demo&artifact=library%2Fpostgres&tag=17.2",
     );
+  });
+
+  it("requests a deep-linked coordinate only when the current page misses it", () => {
+    const items = [{ coordinate: "library/alpine" }];
+
+    expect(missingDeepLinkedArtifact(items, "library/postgres")).toBe(
+      "library/postgres",
+    );
+    expect(missingDeepLinkedArtifact(items, "library/alpine")).toBeUndefined();
+    expect(missingDeepLinkedArtifact(items, "  ")).toBeUndefined();
   });
 });

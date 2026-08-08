@@ -107,4 +107,3 @@ docs: describe clustered runtime roles
 
 Choose the narrowest useful scope. Keep generated output in the same commit as
 the contract or source change that produced it.
-

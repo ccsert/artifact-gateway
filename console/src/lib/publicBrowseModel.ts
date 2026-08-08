@@ -17,6 +17,17 @@ export interface ArtifactBrowseSelection {
   revision?: string;
 }
 
+export function missingDeepLinkedArtifact(
+  items: ArtifactSummary[],
+  coordinate: string,
+): string | undefined {
+  const target = coordinate.trim();
+  if (!target || items.some((item) => item.coordinate === target)) {
+    return undefined;
+  }
+  return target;
+}
+
 export function mavenArtifactGroups(
   items: ArtifactSummary[],
 ): MavenArtifactGroup[] {

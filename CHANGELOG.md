@@ -27,6 +27,8 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Resolved public artifact deep links even when the target coordinate is beyond
+  the first browse page.
 - Stabilized generated OpenAPI output, dependency installation, integration
   readiness, and lifecycle ordering in CI.
 

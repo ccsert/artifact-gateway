@@ -54,4 +54,3 @@ Run the repository's dependency audit before a release candidate:
 ```sh
 make dependency-audit
 ```
-
