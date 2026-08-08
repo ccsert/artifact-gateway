@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -423,6 +424,60 @@ func TestAdminCanQueryRepositoryAudits(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("resolver status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminCanPageAuditsWithScopedCursor(t *testing.T) {
+	store := repository.NewMemoryStore()
+	base := time.Date(2026, 8, 8, 10, 0, 0, 0, time.UTC)
+	for index := 0; index < 3; index++ {
+		_ = store.RecordAudit(context.Background(), repository.AuditRecord{
+			GroupName: "engineering", Repository: "team/app", Actor: "build", Outcome: repository.AuditResolved,
+			OccurredAt: base.Add(time.Duration(index) * time.Minute),
+		})
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/audits/page?repository=team/app&pageSize=1&from=2026-08-08T10:01:00Z", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("first page status=%d body=%s", response.Code, response.Body.String())
+	}
+	var first struct {
+		Items         []repository.AuditRecord `json:"items"`
+		NextPageToken string                   `json:"nextPageToken"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&first); err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 1 || first.Items[0].OccurredAt != base.Add(2*time.Minute) || first.NextPageToken == "" {
+		t.Fatalf("first page=%#v", first)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v2/audits/page?repository=team/app&pageSize=1&from=2026-08-08T10:01:00Z&pageToken="+url.QueryEscape(first.NextPageToken), nil)
+	authorize(request, "admin-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("second page status=%d body=%s", response.Code, response.Body.String())
+	}
+	var second struct {
+		Items []repository.AuditRecord `json:"items"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&second); err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].OccurredAt != base.Add(time.Minute) {
+		t.Fatalf("second page=%#v", second)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v2/audits/page?repository=other&pageSize=1&pageToken="+url.QueryEscape(first.NextPageToken), nil)
+	authorize(request, "admin-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_page_token") {
+		t.Fatalf("scoped token status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

@@ -14,30 +14,58 @@ func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) erro
 }
 
 func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]AuditRecord, error) {
+	page, err := s.ListAuditPage(ctx, query)
+	return page.Items, err
+}
+
+func (s *PostgresStore) ListAuditPage(ctx context.Context, query AuditQuery) (AuditPage, error) {
 	limit := query.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT group_name, repository, member_name, outcome, actor, occurred_at,
+	var from any
+	if !query.From.IsZero() {
+		from = query.From
+	}
+	var to any
+	if !query.To.IsZero() {
+		to = query.To
+	}
+	var before any
+	if !query.Before.OccurredAt.IsZero() {
+		before = query.Before.OccurredAt
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, group_name, repository, member_name, outcome, actor, occurred_at,
 		COALESCE(format, ''), COALESCE(resource, ''), COALESCE(representation, ''), COALESCE(member_type, ''), COALESCE(upstream_host, ''), COALESCE(operation, ''),
 		COALESCE(http_status, 0), COALESCE(cache_disposition, ''), COALESCE(bytes, 0), COALESCE(authorization_source, ''), COALESCE(authorization_reason, ''), COALESCE(request_id, ''), COALESCE(trace_id, '')
 		FROM resolver_audit_log
 		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
 		  AND ($3 = '' OR outcome = $3) AND ($4 = '' OR format = $4)
 		  AND ($5 = '' OR operation = $5) AND ($6 = '' OR actor = $6)
+		  AND ($7::timestamptz IS NULL OR occurred_at >= $7)
+		  AND ($8::timestamptz IS NULL OR occurred_at <= $8)
+		  AND ($9::timestamptz IS NULL OR occurred_at < $9 OR (occurred_at = $9 AND id < $10))
 		ORDER BY occurred_at DESC, id DESC
-		LIMIT $7`, query.GroupName, query.Repository, query.Outcome, query.Format, query.Operation, query.Actor, limit)
+		LIMIT $11`, query.GroupName, query.Repository, query.Outcome, query.Format, query.Operation, query.Actor, from, to, before, query.Before.ID, limit+1)
 	if err != nil {
-		return nil, err
+		return AuditPage{}, err
 	}
 	defer func() { _ = rows.Close() }()
-	var audits []AuditRecord
+	page := AuditPage{Items: make([]AuditRecord, 0, limit)}
 	for rows.Next() {
 		var audit AuditRecord
-		if err := rows.Scan(&audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt, &audit.Format, &audit.Resource, &audit.Representation, &audit.MemberType, &audit.UpstreamHost, &audit.Operation, &audit.Status, &audit.CacheDisposition, &audit.Bytes, &audit.AuthorizationSource, &audit.AuthorizationReason, &audit.RequestID, &audit.TraceID); err != nil {
-			return nil, err
+		if err := rows.Scan(&audit.ID, &audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt, &audit.Format, &audit.Resource, &audit.Representation, &audit.MemberType, &audit.UpstreamHost, &audit.Operation, &audit.Status, &audit.CacheDisposition, &audit.Bytes, &audit.AuthorizationSource, &audit.AuthorizationReason, &audit.RequestID, &audit.TraceID); err != nil {
+			return AuditPage{}, err
 		}
-		audits = append(audits, audit)
+		page.Items = append(page.Items, audit)
 	}
-	return audits, rows.Err()
+	if err := rows.Err(); err != nil {
+		return AuditPage{}, err
+	}
+	if len(page.Items) > limit {
+		last := page.Items[limit-1]
+		page.Items = page.Items[:limit]
+		page.Next = &AuditCursor{OccurredAt: last.OccurredAt, ID: last.ID}
+	}
+	return page, nil
 }

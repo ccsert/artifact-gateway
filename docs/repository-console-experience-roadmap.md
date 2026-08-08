@@ -44,6 +44,12 @@ Progress update 2026-07-31:
 - Anonymous read decisions are recorded with the anonymous actor and bounded
   authorization source/reason values across protocol and management browse paths.
 
+Progress update 2026-08-08:
+
+- The audit Console now uses a server-side cursor page endpoint with signed,
+  filter-scoped tokens and inclusive time-range filters. The original array
+  endpoint remains available for compatibility.
+
 ## Goals
 
 - Make Hosted Repository, Proxy Repository, and Group pages feel like one
@@ -376,6 +382,15 @@ Group-only interactions:
 - [x] Add operator docs for anonymous access.
 - [x] Add protocol usage examples for authenticated and anonymous modes.
 - [x] Add migration notes from legacy V1 Groups to V2 Proxy Repository views.
+
+### Phase 7: Audit Operations
+
+- [x] Add a cursor-paginated audit page endpoint without changing the legacy
+  array response.
+- [x] Scope and sign audit page tokens by every active filter and expiration.
+- [x] Add inclusive server-side `from` and `to` time-range filters.
+- [x] Add PostgreSQL and Memory Store parity tests for ordering and cursors.
+- [x] Move the Console audit table from client-side slicing to server paging.
 
 ## Definition Of Done
 

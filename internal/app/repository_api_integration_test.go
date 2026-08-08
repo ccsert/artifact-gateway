@@ -559,6 +559,35 @@ func TestPostgresAuditRetainsRepositoryGrantDecision(t *testing.T) {
 	}
 }
 
+func TestPostgresAuditPageUsesIDToBreakTimestampTies(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	group := "cursor-audit-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	occurredAt := time.Now().UTC().Truncate(time.Microsecond)
+	for _, actor := range []string{"first", "second", "third"} {
+		if err := store.RecordAudit(context.Background(), repository.AuditRecord{
+			GroupName: group, Repository: group, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: occurredAt,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := store.ListAuditPage(context.Background(), repository.AuditQuery{GroupName: group, Limit: 2})
+	if err != nil || len(first.Items) != 2 || first.Items[0].Actor != "third" || first.Items[1].Actor != "second" || first.Next == nil {
+		t.Fatalf("first page=%#v err=%v", first, err)
+	}
+	second, err := store.ListAuditPage(context.Background(), repository.AuditQuery{GroupName: group, Limit: 2, Before: *first.Next})
+	if err != nil || len(second.Items) != 1 || second.Items[0].Actor != "first" || second.Next != nil {
+		t.Fatalf("second page=%#v err=%v", second, err)
+	}
+}
+
 func TestPostgresLegacyAuditsRemainQueryable(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

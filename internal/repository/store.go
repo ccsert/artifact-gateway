@@ -216,6 +216,13 @@ type AuditStore interface {
 	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
 }
 
+// AuditPageStore is implemented by stores that support stable cursor paging.
+// It is optional so legacy Store implementations can continue serving the
+// original array-shaped audit endpoint.
+type AuditPageStore interface {
+	ListAuditPage(context.Context, AuditQuery) (AuditPage, error)
+}
+
 type AuditRetentionStore interface {
 	GetAuditRetentionPolicy(context.Context) (AuditRetentionPolicy, error)
 	ReplaceAuditRetentionPolicy(context.Context, AuditRetentionPolicy, string) (AuditRetentionPolicy, error)

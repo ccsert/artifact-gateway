@@ -522,6 +522,9 @@ const (
 )
 
 type AuditRecord struct {
+	// ID is an internal stable tie-breaker for cursor pagination. It is never
+	// serialized as part of the public audit representation.
+	ID                                                                                      int64 `json:"-"`
 	GroupName                                                                               string
 	Repository                                                                              string
 	MemberName                                                                              string
@@ -543,6 +546,22 @@ type AuditQuery struct {
 	Operation  string
 	Actor      string
 	Limit      int
+	From       time.Time
+	To         time.Time
+	Before     AuditCursor
+}
+
+// AuditCursor identifies the last item in a descending audit page.
+type AuditCursor struct {
+	OccurredAt time.Time
+	ID         int64
+}
+
+// AuditPage is the storage-level result for cursor-paginated audit queries.
+// The API layer signs Next before returning it to callers.
+type AuditPage struct {
+	Items []AuditRecord
+	Next  *AuditCursor
 }
 
 // AuditRetentionPolicy governs global resolver audit cleanup. It is disabled by

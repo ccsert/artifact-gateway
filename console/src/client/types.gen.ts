@@ -648,6 +648,11 @@ export type RuntimeNodeList = {
   health: RuntimeNodeHealth;
 };
 
+export type AuditPage = {
+  items: Array<AuditRecord>;
+  nextPageToken?: string;
+};
+
 /**
  * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
@@ -1424,6 +1429,65 @@ export type ListAuditsResponses = {
 };
 
 export type ListAuditsResponse = ListAuditsResponses[keyof ListAuditsResponses];
+
+export type ListAuditPageData = {
+  body?: never;
+  path?: never;
+  query?: {
+    group?: string;
+    repository?: string;
+    /**
+     * Exact audit outcome filter.
+     */
+    outcome?: string;
+    /**
+     * Exact artifact format filter.
+     */
+    format?: string;
+    /**
+     * Exact HTTP or management operation filter.
+     */
+    operation?: string;
+    /**
+     * Exact actor or principal filter.
+     */
+    actor?: string;
+    /**
+     * Inclusive lower bound for occurredAt.
+     */
+    from?: string;
+    /**
+     * Inclusive upper bound for occurredAt.
+     */
+    to?: string;
+    pageSize?: number;
+    pageToken?: string;
+  };
+  url: "/audits/page";
+};
+
+export type ListAuditPageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListAuditPageError = ListAuditPageErrors[keyof ListAuditPageErrors];
+
+export type ListAuditPageResponses = {
+  /**
+   * Cursor-paginated administrative audit records, ordered newest first.
+   */
+  200: AuditPage;
+};
+
+export type ListAuditPageResponse =
+  ListAuditPageResponses[keyof ListAuditPageResponses];
 
 export type GetAuditRetentionPolicyData = {
   body?: never;

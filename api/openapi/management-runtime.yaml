@@ -25,6 +25,8 @@ paths:
     "$ref": "./management/users.yaml#/users_userId"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
+  "/audits/page":
+    "$ref": "./management/audits.yaml#/audits_page"
   "/audit-retention-policy":
     "$ref": "./management/audits.yaml#/audit_retention_policy"
   "/audit-retention:execute":

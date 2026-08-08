@@ -220,10 +220,12 @@ is invisible once the user navigates away.
 ### Audit Experience
 
 The audit page (`console/src/pages/Audits.tsx:9`) is view-only with filters by
-repository, group, outcome, and format. There is no CSV or other export, no
-saved searches, and no saved filter presets. Audit-log retention is
-configurable and executable (`console/src/pages/AuditRetention.tsx:14`), which
-is a point of parity.
+repository, group, outcome, format, actor, operation, and an inclusive time
+range. It exports the current server page as CSV and uses the signed
+`/api/v2/audits/page` cursor endpoint, so the browser does not load the entire
+audit table into memory. Saved searches and filter presets remain future work.
+Audit-log retention is configurable and executable
+(`console/src/pages/AuditRetention.tsx:14`), which is a point of parity.
 
 ### Internationalization And Responsive Design
 
@@ -264,6 +266,10 @@ referenced commits.
   links including Maven SNAPSHOT build numbers.
 - **Audit CSV export (P3).** The audits page exports the currently filtered
   records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
+- **Audit cursor paging (P1).** The audit Console uses a signed, filter-scoped
+  cursor with server-side time bounds; PostgreSQL and Memory Store share the
+  same descending timestamp/id ordering while the legacy array endpoint stays
+  compatible.
 - **Dashboard storage-by-format donut (P2).** The overview page renders a
   reusable SVG `Donut` of per-format storage usage from existing capacity
   data. (`b7a0beb8`)

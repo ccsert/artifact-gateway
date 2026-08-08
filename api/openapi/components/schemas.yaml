@@ -1564,3 +1564,14 @@ AuditList:
   type: array
   items:
     "$ref": "#/AuditRecord"
+AuditPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/AuditRecord"
+    nextPageToken:
+      type: string

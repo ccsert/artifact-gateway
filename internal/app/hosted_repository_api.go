@@ -112,6 +112,14 @@ type tombstonePageCursor struct {
 	ExpiresAt                                          int64
 }
 
+type auditPageCursor struct {
+	Endpoint, GroupName, Repository, Outcome, Format, Operation, Actor string
+	From, To                                                           time.Time
+	OccurredAt                                                         time.Time
+	ID                                                                 int64
+	ExpiresAt                                                          int64
+}
+
 func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
@@ -508,6 +516,65 @@ func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
+func (h generatedRepositoryAPIAdapter) ListAuditPage(w http.ResponseWriter, r *http.Request, params adminopenapi.ListAuditPageParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	pageSize := 100
+	if params.PageSize != nil {
+		pageSize = int(*params.PageSize)
+	}
+	if pageSize < 1 || pageSize > 200 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+		return
+	}
+	from := time.Time{}
+	if params.From != nil {
+		from = params.From.UTC()
+	}
+	to := time.Time{}
+	if params.To != nil {
+		to = params.To.UTC()
+	}
+	if !from.IsZero() && !to.IsZero() && from.After(to) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "from must be before or equal to to")
+		return
+	}
+	query := repository.AuditQuery{
+		GroupName: auditString(params.Group), Repository: auditString(params.Repository), Outcome: auditString(params.Outcome),
+		Format: auditString(params.Format), Operation: auditString(params.Operation), Actor: auditString(params.Actor), Limit: pageSize,
+		From: from, To: to,
+	}
+	if token := auditToken(params.PageToken); token != "" {
+		var cursor auditPageCursor
+		if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "audits" || time.Now().UTC().Unix() >= cursor.ExpiresAt ||
+			cursor.GroupName != query.GroupName || cursor.Repository != query.Repository || cursor.Outcome != query.Outcome || cursor.Format != query.Format ||
+			cursor.Operation != query.Operation || cursor.Actor != query.Actor || !cursor.From.Equal(query.From) || !cursor.To.Equal(query.To) || cursor.OccurredAt.IsZero() || cursor.ID <= 0 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+			return
+		}
+		query.Before = repository.AuditCursor{OccurredAt: cursor.OccurredAt, ID: cursor.ID}
+	}
+	pageStore, ok := h.audit.(repository.AuditPageStore)
+	if !ok {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "audit cursor paging is unavailable")
+		return
+	}
+	page, err := pageStore.ListAuditPage(r.Context(), query)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list audit page failed")
+		return
+	}
+	response := auditPageResponse{Items: make([]auditResponse, 0, len(page.Items))}
+	for _, audit := range page.Items {
+		response.Items = append(response.Items, auditResponseFromRecord(audit))
+	}
+	if page.Next != nil {
+		response.NextPageToken = h.encodeAuditCursor(query, *page.Next)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
 func (h generatedRepositoryAPIAdapter) GetAnonymousAccessPolicy(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
@@ -659,6 +726,33 @@ type auditResponse struct {
 	AuthorizationReason string                  `json:"authorizationReason,omitempty"`
 	RequestID           string                  `json:"requestId,omitempty"`
 	TraceID             string                  `json:"traceId,omitempty"`
+}
+
+type auditPageResponse struct {
+	Items         []auditResponse `json:"items"`
+	NextPageToken string          `json:"nextPageToken,omitempty"`
+}
+
+func auditString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func auditToken(value *adminopenapi.PageToken) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
+}
+
+func (h generatedRepositoryAPIAdapter) encodeAuditCursor(query repository.AuditQuery, cursor repository.AuditCursor) string {
+	return encodeSignedCursor(h.authenticator.AdminToken, auditPageCursor{
+		Endpoint: "audits", GroupName: query.GroupName, Repository: query.Repository, Outcome: query.Outcome,
+		Format: query.Format, Operation: query.Operation, Actor: query.Actor, From: query.From, To: query.To,
+		OccurredAt: cursor.OccurredAt, ID: cursor.ID, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
+	})
 }
 
 func auditResponseFromRecord(audit repository.AuditRecord) auditResponse {

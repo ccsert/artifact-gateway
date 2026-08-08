@@ -23,28 +23,30 @@ test("audit rows switch the single expanded detail row", async ({ page }) => {
       body: JSON.stringify({ items: [] }),
     }),
   );
-  await page.route("**/api/v2/audits**", (route) =>
+  await page.route("**/api/v2/audits/page**", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          occurredAt: "2026-08-05T00:00:00Z",
-          operation: "get",
-          outcome: "resolved",
-          status: 200,
-          resource: "resource-a",
-          requestId: "request-a",
-        },
-        {
-          occurredAt: "2026-08-05T00:01:00Z",
-          operation: "get",
-          outcome: "failed",
-          status: 500,
-          resource: "resource-b",
-          requestId: "request-b",
-        },
-      ]),
+      body: JSON.stringify({
+        items: [
+          {
+            occurredAt: "2026-08-05T00:00:00Z",
+            operation: "get",
+            outcome: "resolved",
+            status: 200,
+            resource: "resource-a",
+            requestId: "request-a",
+          },
+          {
+            occurredAt: "2026-08-05T00:01:00Z",
+            operation: "get",
+            outcome: "failed",
+            status: 500,
+            resource: "resource-b",
+            requestId: "request-b",
+          },
+        ],
+      }),
     }),
   );
 

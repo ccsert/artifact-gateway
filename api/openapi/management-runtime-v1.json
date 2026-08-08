@@ -369,6 +369,103 @@
         }
       }
     },
+    "/audits/page": {
+      "get": {
+        "operationId": "listAuditPage",
+        "summary": "Lists administrative audit records using a stable cursor",
+        "description": "Returns a bounded audit page. The page token is scoped to all filters and expires.",
+        "parameters": [
+          {
+            "name": "group",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repository",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "description": "Exact audit outcome filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Exact artifact format filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "in": "query",
+            "description": "Exact HTTP or management operation filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "description": "Exact actor or principal filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Inclusive lower bound for occurredAt.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Inclusive upper bound for occurredAt.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated administrative audit records, ordered newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/audit-retention-policy": {
       "get": {
         "operationId": "getAuditRetentionPolicy",
@@ -4190,6 +4287,23 @@
           },
           "health": {
             "$ref": "#/components/schemas/RuntimeNodeHealth"
+          }
+        }
+      },
+      "AuditPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditRecord"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
           }
         }
       },

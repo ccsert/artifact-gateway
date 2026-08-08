@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Collapse, Select, Space, Table } from "antd";
+import { Button, Collapse, Input, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   ClearOutlined,
   DownloadOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { listAudits, listRepositories, listGroups } from "../client";
+import { listAuditPage, listRepositories, listGroups } from "../client";
 import type { AuditRecord } from "../client";
 import { PageHeader, Card } from "../components/Layout";
 import {
@@ -45,8 +45,6 @@ const AUDIT_CSV_COLUMNS = [
   "Request ID",
   "Trace ID",
 ];
-const AUDIT_PAGE_SIZE = 50;
-
 type AuditTableRow = {
   key: string;
   rowIndex: number;
@@ -117,10 +115,14 @@ export function AuditsPage() {
   const [operation, setOperation] = useState("");
   const [actor, setActor] = useState("");
   const [limit, setLimit] = useState(100);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [repoOptions, setRepoOptions] = useState<string[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [pageTokens, setPageTokens] = useState<string[]>([""]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
 
   useEffect(() => {
     void listRepositories({ query: { pageSize: 200 } }).then(({ data }) =>
@@ -131,40 +133,50 @@ export function AuditsPage() {
     );
   }, []);
 
-  const load = useCallback(async () => {
-    setError(null);
-    setRecords(null);
-    setExpanded(null);
-    setPage(1);
-    const { data, error: err } = await listAudits({
-      query: {
-        repository: repository || undefined,
-        group: group || undefined,
-        outcome: outcome || undefined,
-        format: format || undefined,
-        operation: operation || undefined,
-        actor: actor || undefined,
-        limit,
-      },
-    });
-    if (err) {
-      setError(err);
-      return;
-    }
-    setRecords(data ?? []);
-  }, [repository, group, outcome, format, operation, actor, limit]);
+  const load = useCallback(
+    async (token = "", pageNumber = 1) => {
+      setError(null);
+      setRecords(null);
+      setExpanded(null);
+      setPage(pageNumber);
+      setPageTokens((current) =>
+        pageNumber === 1
+          ? [token]
+          : [...current.slice(0, pageNumber - 1), token],
+      );
+      const { data, error: err } = await listAuditPage({
+        query: {
+          repository: repository || undefined,
+          group: group || undefined,
+          outcome: outcome || undefined,
+          format: format || undefined,
+          operation: operation || undefined,
+          actor: actor || undefined,
+          from: from ? new Date(from).toISOString() : undefined,
+          to: to ? new Date(to).toISOString() : undefined,
+          pageSize: limit,
+          pageToken: token || undefined,
+        },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      setRecords(data?.items ?? []);
+      setNextPageToken(data?.nextPageToken ?? null);
+    },
+    [repository, group, outcome, format, operation, actor, limit, from, to],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
   const filtered = records ?? [];
-  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageStart = (currentPage - 1) * AUDIT_PAGE_SIZE;
-  const pageRecords = filtered.slice(pageStart, pageStart + AUDIT_PAGE_SIZE);
+  const currentPage = page;
+  const pageRecords = filtered;
   const tableRows: AuditTableRow[] = pageRecords.map((record, index) => ({
-    key: String(pageStart + index),
-    rowIndex: pageStart + index,
+    key: String(index),
+    rowIndex: index,
     record,
   }));
   const outcomeOptions = Array.from(
@@ -206,7 +218,14 @@ export function AuditsPage() {
     filtered.map((record) => record.actor).filter(Boolean),
   ).size;
   const hasFilters = Boolean(
-    repository || group || outcome || format || operation || actor,
+    repository ||
+    group ||
+    outcome ||
+    format ||
+    operation ||
+    actor ||
+    from ||
+    to,
   );
   const clearFilters = () => {
     setRepository("");
@@ -215,6 +234,8 @@ export function AuditsPage() {
     setFormat("");
     setOperation("");
     setActor("");
+    setFrom("");
+    setTo("");
   };
   const columns: ColumnsType<AuditTableRow> = [
     {
@@ -337,7 +358,7 @@ export function AuditsPage() {
           {
             label: "当前记录",
             value: records ? filtered.length : "—",
-            hint: `当前检索窗口 ${limit} 条`,
+            hint: `当前页最多 ${limit} 条`,
           },
           {
             label: "失败请求",
@@ -398,7 +419,7 @@ export function AuditsPage() {
                   );
                 }}
               >
-                导出 CSV
+                导出当前页 CSV
               </Button>
             </Space>
           }
@@ -421,11 +442,25 @@ export function AuditsPage() {
             <Select
               className="min-w-[150px]"
               value={String(limit)}
-              options={[50, 100, 200, 500].map((value) => ({
+              options={[50, 100, 200].map((value) => ({
                 value: String(value),
                 label: `最近 ${value} 条`,
               }))}
               onChange={(value) => setLimit(Number(value))}
+            />
+          </FilterField>
+          <FilterField label="起始时间">
+            <Input
+              type="datetime-local"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </FilterField>
+          <FilterField label="结束时间">
+            <Input
+              type="datetime-local"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
             />
           </FilterField>
         </FilterBar>
@@ -513,7 +548,10 @@ export function AuditsPage() {
             dataSource={tableRows}
             columns={columns}
             pagination={false}
-            scroll={{ x: 1200 }}
+            scroll={{
+              x: 1200,
+              y: "clamp(240px, calc(100vh - 610px), 520px)",
+            }}
             rowClassName="cursor-pointer"
             expandable={{
               expandedRowKeys: expanded === null ? [] : [expanded],
@@ -527,20 +565,22 @@ export function AuditsPage() {
           />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
             <span>
-              第 {currentPage} / {totalPages} 页 · 显示 {pageRecords.length} /{" "}
-              {filtered.length} 条
+              第 {currentPage} 页 · 当前页 {pageRecords.length} 条
             </span>
             <Space size="small">
               <Button
-                disabled={currentPage <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                disabled={currentPage <= 1 || !records}
+                onClick={() => {
+                  const previousPage = Math.max(1, currentPage - 1);
+                  void load(pageTokens[previousPage - 1] ?? "", previousPage);
+                }}
               >
                 上一页
               </Button>
               <Button
-                disabled={currentPage >= totalPages}
+                disabled={!nextPageToken || !records}
                 onClick={() =>
-                  setPage((value) => Math.min(totalPages, value + 1))
+                  nextPageToken && void load(nextPageToken, currentPage + 1)
                 }
               >
                 下一页
