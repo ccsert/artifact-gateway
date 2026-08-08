@@ -5,6 +5,18 @@ using PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
 verified bytes. Legacy Groups remain available for allowlisted external Proxy
 reads, while V2 Groups resolve managed Hosted and Proxy members.
 
+> **Project status:** active development. The core team is hardening contracts,
+> operations, and contributor-facing engineering practices before a stable
+> public release. Do not infer production support commitments from the current
+> package version.
+
+Artifact Gateway is intended to be a complete repository manager for the four
+admitted formats: native client reads and publication, Hosted/Proxy/Group
+resolution, browsing and search, authorization, audit, retention, recovery,
+promotion, and replication. It is not a transparent rewrite proxy, a generic
+object browser, or a vulnerability scanner. New formats are added only after
+their protocol and full lifecycle contract are defined.
+
 ## Local development
 
 ```sh
@@ -16,6 +28,17 @@ make up
 `make up` starts Gateway, PostgreSQL, and MinIO. `GET /livez` reports process
 liveness; `GET /readyz` verifies PostgreSQL and object storage. `make down`
 preserves local volumes.
+
+Start the Console separately and open `http://127.0.0.1:4173`:
+
+```sh
+npm --prefix console ci
+npm --prefix console run dev -- --host 127.0.0.1
+```
+
+Use the `GATEWAY_ADMIN_TOKEN` from the local `.env` file to sign in. Anonymous
+browse remains available at `/browse` when the global policy and repository
+policy both permit it.
 
 ### 单机与集群运行模式
 
@@ -54,14 +77,23 @@ make conan-e2e
 ```
 
 The repository console is generated from the same OpenAPI contract. Check its
-client, types, production build, and browser flow with:
+client, types, lint rules, component behavior, production build, and browser
+flow with:
 
 ```sh
 make console-api-check
 make console-typecheck
+make console-check
+make console-test
 make console-build
 make console-e2e
 ```
+
+The high-level runtime and ownership boundaries are documented in
+[`ARCHITECTURE.md`](ARCHITECTURE.md). Engineering changes follow
+[`CONTRIBUTING.md`](CONTRIBUTING.md); security-sensitive findings follow
+[`SECURITY.md`](SECURITY.md), and user-visible changes are collected in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## OpenAPI contract workflow
 
