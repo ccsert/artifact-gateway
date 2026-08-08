@@ -14,7 +14,7 @@ const (
 
 func runtimeNodeStatus(now, lastSeen time.Time) adminopenapi.RuntimeNodeStatus {
 	age := now.Sub(lastSeen)
-	if age < 0 || age <= runtimeNodeStaleAfter {
+	if age < 0 || age < runtimeNodeStaleAfter {
 		return adminopenapi.Online
 	}
 	if age <= runtimeNodeOfflineAfter {

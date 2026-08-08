@@ -1,0 +1,85 @@
+import { act, cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { listRuntimeNodes } from "../client";
+import type { RuntimeNode } from "../client";
+import { RuntimeNodesPanel } from "./RuntimeNodesPanel";
+
+vi.mock("../client", () => ({
+  listRuntimeNodes: vi.fn(),
+}));
+
+const mockListRuntimeNodes = vi.mocked(listRuntimeNodes);
+
+function runtimeNode(status: RuntimeNode["status"]): RuntimeNode {
+  return {
+    instanceId: "worker-01",
+    roles: ["worker"],
+    workerFormats: ["oci"],
+    workerKinds: ["reclaim"],
+    startedAt: "2026-08-08T08:00:00Z",
+    lastSeenAt: "2026-08-08T08:01:00Z",
+    status,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.clearAllMocks();
+});
+
+describe("RuntimeNodesPanel", () => {
+  it("loads and renders runtime capabilities independently", async () => {
+    mockListRuntimeNodes.mockResolvedValue({
+      data: { items: [runtimeNode("online")] },
+    } as never);
+
+    render(<RuntimeNodesPanel />);
+
+    expect(await screen.findByText("worker-01")).toBeInTheDocument();
+    expect(screen.getByText("online")).toBeInTheDocument();
+    expect(screen.getByText("oci")).toBeInTheDocument();
+    expect(screen.getByText("reclaim")).toBeInTheDocument();
+    expect(screen.getByText("1 个实例")).toBeInTheDocument();
+  });
+
+  it("keeps polling while no lifecycle task is active", async () => {
+    vi.useFakeTimers();
+    mockListRuntimeNodes
+      .mockResolvedValueOnce({
+        data: { items: [runtimeNode("online")] },
+      } as never)
+      .mockResolvedValueOnce({
+        data: { items: [runtimeNode("stale")] },
+      } as never);
+
+    render(<RuntimeNodesPanel />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText("online")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(mockListRuntimeNodes).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("stale")).toBeInTheDocument();
+  });
+
+  it("retries a node-specific error without involving task loading", async () => {
+    const user = userEvent.setup();
+    mockListRuntimeNodes
+      .mockResolvedValueOnce({
+        error: new Error("node request failed"),
+      } as never)
+      .mockResolvedValueOnce({ data: { items: [] } } as never);
+
+    render(<RuntimeNodesPanel />);
+    expect(await screen.findByText("node request failed")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText("暂未收到节点心跳")).toBeInTheDocument();
+    expect(mockListRuntimeNodes).toHaveBeenCalledTimes(2);
+  });
+});

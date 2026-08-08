@@ -54,6 +54,16 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 	}
 }
 
+func TestRuntimeNodeStatusMarksThirtySecondsAsStale(t *testing.T) {
+	now := time.Date(2026, 8, 8, 8, 0, 0, 0, time.UTC)
+	if got := runtimeNodeStatus(now, now.Add(-30*time.Second)); got != adminopenapi.Stale {
+		t.Fatalf("status at stale boundary=%q", got)
+	}
+	if got := runtimeNodeStatus(now, now.Add(-29*time.Second)); got != adminopenapi.Online {
+		t.Fatalf("status before stale boundary=%q", got)
+	}
+}
+
 func TestRuntimeNodesAPIRequiresAdministrator(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	response := httptest.NewRecorder()

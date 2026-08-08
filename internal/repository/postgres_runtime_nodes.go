@@ -42,8 +42,8 @@ func scanRuntimeNode(scanner interface{ Scan(...any) error }) (RuntimeNode, erro
 }
 
 func (s *PostgresStore) UpsertRuntimeNodeHeartbeat(ctx context.Context, node RuntimeNode) error {
-	if node.InstanceID == "" || node.LastSeenAt.IsZero() || node.StartedAt.IsZero() {
-		return ErrInvalidRuntimeNode
+	if err := node.Validate(); err != nil {
+		return err
 	}
 	roles, formats, kinds, err := encodeRuntimeNodeValues(node)
 	if err != nil {

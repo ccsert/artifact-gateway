@@ -21,15 +21,15 @@ import {
   cancelRepositoryLifecycleJob,
   listAuditRetentionJobs,
   listLifecycleJobs,
-  listRuntimeNodes,
   retryRepositoryLifecycleJob,
   runRepositoryLifecycleJobNow,
 } from "../client";
-import type { LifecycleJob, RuntimeNode } from "../client";
-import { PageHeader, Card, CardHeader } from "../components/Layout";
+import type { LifecycleJob } from "../client";
+import { Card, PageHeader } from "../components/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../components/Feedback";
-import { FormatBadge, StateBadge } from "../components/Badge";
+import { StateBadge } from "../components/Badge";
 import { formatDate } from "../lib/format";
+import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
 import {
   FilterBar,
   FilterField,
@@ -71,8 +71,6 @@ export function OperationsPage() {
     Array<{ id: string; name: string }>
   >([]);
   const [rows, setRows] = useState<OperationRow[] | null>(null);
-  const [nodes, setNodes] = useState<RuntimeNode[] | null>(null);
-  const [nodeError, setNodeError] = useState<unknown>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [stateFilter, setStateFilter] = useState("all");
@@ -139,13 +137,6 @@ export function OperationsPage() {
           b.createdAt.localeCompare(a.createdAt),
         ),
       );
-      const runtimeResult = await listRuntimeNodes();
-      if (runtimeResult.error) {
-        setNodeError(runtimeResult.error);
-      } else {
-        setNodeError(null);
-        setNodes(runtimeResult.data?.items ?? []);
-      }
     } catch (nextError) {
       setError(nextError);
     } finally {
@@ -157,17 +148,20 @@ export function OperationsPage() {
     void load();
   }, [load]);
 
+  const hasActiveJobs = useMemo(
+    () =>
+      rows?.some((row) =>
+        ["pending", "running", "retrying"].includes(row.state),
+      ) ?? false,
+    [rows],
+  );
+
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (
-        rows?.some((row) =>
-          ["pending", "running", "retrying"].includes(row.state),
-        )
-      )
-        void load();
+      if (hasActiveJobs) void load();
     }, 15_000);
     return () => window.clearInterval(timer);
-  }, [load, rows]);
+  }, [hasActiveJobs, load]);
 
   const controlJob = async (
     row: OperationRow,
@@ -216,66 +210,6 @@ export function OperationsPage() {
   const kindOptions = Array.from(
     new Set((rows ?? []).map((row) => row.kind)),
   ).sort();
-
-  const nodeColumns: ColumnsType<RuntimeNode> = [
-    {
-      title: "实例",
-      dataIndex: "instanceId",
-      key: "instanceId",
-      width: 190,
-      render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-200">{value}</span>
-      ),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      key: "status",
-      width: 100,
-      render: (value: RuntimeNode["status"]) => <StateBadge state={value} />,
-    },
-    {
-      title: "角色",
-      dataIndex: "roles",
-      key: "roles",
-      width: 150,
-      render: (roles: string[]) => (
-        <span className="text-xs text-zinc-400">{roles.join(" · ")}</span>
-      ),
-    },
-    {
-      title: "Worker 能力",
-      key: "capabilities",
-      width: 330,
-      render: (_, node) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {node.workerFormats.length > 0 ? (
-            node.workerFormats.map((format) => (
-              <FormatBadge key={format} format={format} />
-            ))
-          ) : (
-            <span className="text-xs text-zinc-600">无格式 Worker</span>
-          )}
-          {node.workerKinds.length > 0 && (
-            <span className="ml-1 text-[11px] text-zinc-500">
-              {node.workerKinds.join(" · ")}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: "最近心跳",
-      dataIndex: "lastSeenAt",
-      key: "lastSeenAt",
-      width: 190,
-      render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
-        </span>
-      ),
-    },
-  ];
 
   const columns: ColumnsType<OperationRow> = [
     {
@@ -467,7 +401,7 @@ export function OperationsPage() {
             onClick={() => void load()}
             loading={loading}
           >
-            刷新
+            刷新任务
           </Button>
         }
       />
@@ -498,40 +432,7 @@ export function OperationsPage() {
           },
         ]}
       />
-      <Card className="mt-4">
-        <CardHeader
-          title="运行节点"
-          extra={
-            <span className="text-xs text-zinc-500">
-              {nodes ? `${nodes.length} 个实例` : "加载中"}
-            </span>
-          }
-        />
-        {nodeError ? (
-          <ErrorBanner error={nodeError} onRetry={load} />
-        ) : nodes === null ? (
-          <div className="px-5 py-6">
-            <Loading label="加载节点清单…" />
-          </div>
-        ) : nodes.length === 0 ? (
-          <div className="px-5 py-6">
-            <EmptyState
-              title="暂未收到节点心跳"
-              hint="节点启动后会自动出现在这里。"
-            />
-          </div>
-        ) : (
-          <Table<RuntimeNode>
-            className="ag-console-table"
-            rowKey={(node) => node.instanceId}
-            size="small"
-            dataSource={nodes}
-            columns={nodeColumns}
-            pagination={false}
-            scroll={{ x: 960, y: 260 }}
-          />
-        )}
-      </Card>
+      <RuntimeNodesPanel />
       <FilterBar
         className="mt-4 mb-4"
         actions={

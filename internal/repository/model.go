@@ -231,6 +231,13 @@ type RuntimeNode struct {
 	LastSeenAt    time.Time
 }
 
+func (n RuntimeNode) Validate() error {
+	if n.InstanceID == "" || n.LastSeenAt.IsZero() || n.StartedAt.IsZero() {
+		return ErrInvalidRuntimeNode
+	}
+	return nil
+}
+
 type OCIBlob struct {
 	Digest, ObjectKey string
 	Size              int64

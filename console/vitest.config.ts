@@ -14,6 +14,7 @@ export default defineConfig({
       include: [
         "src/lib/publicBrowseModel.ts",
         "src/components/PublicBrowsePrimitives.tsx",
+        "src/components/RuntimeNodesPanel.tsx",
       ],
       thresholds: {
         lines: 70,

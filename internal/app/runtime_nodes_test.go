@@ -42,7 +42,7 @@ func TestRuntimeNodeHeartbeatStartStopsOnContextCancellation(t *testing.T) {
 	clock := time.Date(2026, 8, 8, 8, 0, 0, 0, time.UTC)
 	heartbeat := &RuntimeNodeHeartbeat{Store: store, Node: repository.RuntimeNode{InstanceID: "scheduler-01"}, Now: func() time.Time { return clock }}
 	ctx, cancel := context.WithCancel(context.Background())
-	heartbeat.Start(ctx, time.Millisecond)
+	heartbeat.Start(ctx, 100*time.Millisecond)
 	deadline := time.Now().Add(time.Second)
 	for {
 		nodes, err := store.ListRuntimeNodes(context.Background())
@@ -58,4 +58,13 @@ func TestRuntimeNodeHeartbeatStartStopsOnContextCancellation(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
+	clock = clock.Add(time.Hour)
+	time.Sleep(150 * time.Millisecond)
+	nodes, err := store.ListRuntimeNodes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || !nodes[0].LastSeenAt.Equal(time.Date(2026, 8, 8, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("heartbeat continued after cancellation: %#v", nodes)
+	}
 }

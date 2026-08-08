@@ -13,8 +13,8 @@ func cloneRuntimeNode(node RuntimeNode) RuntimeNode {
 }
 
 func (s *MemoryStore) UpsertRuntimeNodeHeartbeat(_ context.Context, node RuntimeNode) error {
-	if node.InstanceID == "" || node.LastSeenAt.IsZero() || node.StartedAt.IsZero() {
-		return ErrInvalidRuntimeNode
+	if err := node.Validate(); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	s.runtimeNodes[node.InstanceID] = cloneRuntimeNode(node)

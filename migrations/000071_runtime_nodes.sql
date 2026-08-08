@@ -12,4 +12,4 @@ CREATE INDEX IF NOT EXISTS runtime_nodes_last_seen_idx
     ON runtime_nodes (last_seen_at DESC);
 
 -- +goose Down
-DROP TABLE IF EXISTS runtime_nodes;
+-- Forward-only: retain node inventory for operational history and rollbacks.
