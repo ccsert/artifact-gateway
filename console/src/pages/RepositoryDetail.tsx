@@ -334,7 +334,7 @@ function ProxyMavenUsage({
         error instanceof Error ? error.message : "读取上游状态失败",
       );
     }
-  }, [repoId, token]);
+  }, [repoId]);
 
   useEffect(() => {
     void loadHealth();
@@ -1003,11 +1003,9 @@ function ArtifactsTab({
     },
     [
       repo.id,
-      repo.name,
       format,
       proxyMaven,
       proxyAssetFilter,
-      token,
       artifactTarget,
       buildTarget,
     ],
@@ -1016,7 +1014,6 @@ function ArtifactsTab({
   useEffect(() => {
     setQ(artifactTarget);
     void load(artifactTarget);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, artifactTarget]);
 
   const searchPlaceholder: Record<string, string> = {

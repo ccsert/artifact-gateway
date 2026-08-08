@@ -9,11 +9,21 @@ interface SparklineProps {
 
 // A tiny inline-SVG sparkline with no chart dependency. Values are scaled to
 // the observed min/max; a flat series still renders as a centered line.
-export function Sparkline({ data, width = 120, height = 32, color = '#22d3ee', format, label }: SparklineProps) {
+export function Sparkline({
+  data,
+  width = 120,
+  height = 32,
+  color = "#22d3ee",
+  format,
+  label,
+}: SparklineProps) {
   if (data.length < 2) {
     return (
-      <div className="flex h-8 items-center text-[10px] text-zinc-600" style={{ width }}>
-        {label ?? '暂无历史数据'}
+      <div
+        className="flex h-8 items-center text-[10px] text-zinc-600"
+        style={{ width }}
+      >
+        {label ?? "暂无历史数据"}
       </div>
     );
   }
@@ -29,14 +39,28 @@ export function Sparkline({ data, width = 120, height = 32, color = '#22d3ee', f
       const y = pad + usableH - ((v - min) / span) * usableH;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
-    .join(' ');
+    .join(" ");
   const latest = data[data.length - 1];
   return (
     <div className="flex items-center gap-2">
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
-        <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="shrink-0"
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
       </svg>
-      {format && <span className="text-[11px] text-zinc-500">{format(latest)}</span>}
+      {format && (
+        <span className="text-[11px] text-zinc-500">{format(latest)}</span>
+      )}
     </div>
   );
 }

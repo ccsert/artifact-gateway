@@ -1,6 +1,6 @@
-import { Button, Modal as AntdModal, Space } from 'antd';
-import { useState } from 'react';
-import type { ReactNode } from 'react';
+import { Button, Modal as AntdModal, Space } from "antd";
+import { useState } from "react";
+import type { ReactNode } from "react";
 
 export function Modal({
   open,
@@ -28,8 +28,8 @@ export function Modal({
       width={wide ? 1152 : 520}
       styles={{
         body: {
-          maxHeight: 'calc(85vh - 112px)',
-          overflowY: 'auto',
+          maxHeight: "calc(85vh - 112px)",
+          overflowY: "auto",
         },
       }}
     >
@@ -42,7 +42,7 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = '确认',
+  confirmLabel = "确认",
   danger,
   busy,
   onConfirm,

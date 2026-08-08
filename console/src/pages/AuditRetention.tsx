@@ -235,7 +235,10 @@ export function AuditRetentionPage() {
                   aria-label="切换自动清理"
                 />
               </Form.Item>
-              <Form.Item label="保留天数" extra="超过该天数的审计记录将被清理。">
+              <Form.Item
+                label="保留天数"
+                extra="超过该天数的审计记录将被清理。"
+              >
                 <InputNumber
                   min={enabled ? 1 : 0}
                   precision={0}

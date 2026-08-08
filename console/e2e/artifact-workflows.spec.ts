@@ -214,12 +214,13 @@ test("a deleted artifact can be restored from the repository tombstone tab", asy
   const tombstoneTable = page
     .getByRole("table")
     .filter({ has: page.getByRole("columnheader", { name: "坐标" }) });
-  const row = tombstoneTable
-    .getByRole("row")
-    .filter({ hasText: artifactPath });
+  const row = tombstoneTable.getByRole("row").filter({ hasText: artifactPath });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: /恢\s*复/ }).click();
-  await page.getByRole("button", { name: /恢\s*复/ }).last().click();
+  await page
+    .getByRole("button", { name: /恢\s*复/ })
+    .last()
+    .click();
   await expect(
     page.getByText(`已恢复 ${artifactPath}`, { exact: true }),
   ).toBeVisible();

@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react';
-import { ReloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Spin } from 'antd';
-import type { Problem } from '../client';
+import type { ReactNode } from "react";
+import { ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Empty, Spin } from "antd";
+import type { Problem } from "../client";
 
-export function Spinner({ className = '' }: { className?: string }) {
+export function Spinner({ className = "" }: { className?: string }) {
   return <Spin className={className} size="small" />;
 }
 
-export function Loading({ label = '加载中…' }: { label?: string }) {
+export function Loading({ label = "加载中…" }: { label?: string }) {
   return (
     <div className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-zinc-400">
       <Spinner />
@@ -19,16 +19,23 @@ export function Loading({ label = '加载中…' }: { label?: string }) {
 export function isNotFound(error: unknown): boolean {
   // JSON Problem 形态
   const p = error as Problem | undefined;
-  if (p?.status === 404 || p?.code === 'not_found') return true;
+  if (p?.status === 404 || p?.code === "not_found") return true;
   // 后端未挂载路由时返回纯文本 "404 page not found"
-  if (typeof error === 'string' && /404|not found/i.test(error)) return true;
+  if (typeof error === "string" && /404|not found/i.test(error)) return true;
   return false;
 }
 
-export function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorBanner({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+}) {
   const problem = error as Problem | undefined;
   const message =
-    problem?.message ?? (error instanceof Error ? error.message : '请求失败，请检查网络或 Token');
+    problem?.message ??
+    (error instanceof Error ? error.message : "请求失败，请检查网络或 Token");
   return (
     <Alert
       className="ag-feedback-enter"
@@ -38,15 +45,26 @@ export function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () =
       description={
         <span>
           {message}
-          {problem?.code && <span className="ml-2 font-mono text-xs text-rose-400/70">[{problem.code}]</span>}
+          {problem?.code && (
+            <span className="ml-2 font-mono text-xs text-rose-400/70">
+              [{problem.code}]
+            </span>
+          )}
           {problem?.requestId && (
-            <span className="ml-2 font-mono text-xs text-rose-400/50">req: {problem.requestId}</span>
+            <span className="ml-2 font-mono text-xs text-rose-400/50">
+              req: {problem.requestId}
+            </span>
           )}
         </span>
       }
       action={
         onRetry ? (
-          <Button danger size="small" icon={<ReloadOutlined />} onClick={onRetry}>
+          <Button
+            danger
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={onRetry}
+          >
             重试
           </Button>
         ) : undefined
@@ -55,7 +73,15 @@ export function ErrorBanner({ error, onRetry }: { error: unknown; onRetry?: () =
   );
 }
 
-export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
   return (
     <Empty
       className="ag-feedback-enter py-12"

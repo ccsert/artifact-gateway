@@ -11,7 +11,7 @@ export interface DashboardSample {
   objects: number | null;
 }
 
-const KEY = 'ag.console.dashboardHistory';
+const KEY = "ag.console.dashboardHistory";
 const MAX_POINTS = 240;
 const THROTTLE_MS = 5 * 60 * 1000;
 
@@ -20,7 +20,9 @@ export function loadDashboardHistory(): DashboardSample[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as DashboardSample[];
-    return Array.isArray(parsed) ? parsed.filter((s) => s && typeof s.t === 'number') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((s) => s && typeof s.t === "number")
+      : [];
   } catch {
     return [];
   }
@@ -28,7 +30,9 @@ export function loadDashboardHistory(): DashboardSample[] {
 
 // Appends a sample unless the last one is within the throttle window, in
 // which case it is replaced. Returns the resulting series.
-export function recordDashboardSample(sample: DashboardSample): DashboardSample[] {
+export function recordDashboardSample(
+  sample: DashboardSample,
+): DashboardSample[] {
   const history = loadDashboardHistory();
   const last = history[history.length - 1];
   let next: DashboardSample[];

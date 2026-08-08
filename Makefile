@@ -6,10 +6,10 @@ OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 openapi-bundle:
 	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
@@ -31,6 +31,13 @@ console-build:
 console-typecheck:
 	@cd console && npm run typecheck
 
+console-check:
+	@cd console && npm run lint
+	@cd console && npm run format:check
+
+console-test:
+	@cd console && npm run test:coverage
+
 console-api-check:
 	@cd console && npm run check:api
 
@@ -46,7 +53,7 @@ down:
 test:
 	@./scripts/release-readiness-check.sh
 	@python3 -m unittest scripts/maven_proxy_fixture_test.py
-	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./...
+	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) sh -ec 'go list ./... | grep -v "/console/node_modules/" | xargs go test'
 
 api-contract:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) go test ./contracts
@@ -66,7 +73,7 @@ lint:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run
 
 vet:
-	@go vet ./...
+	@packages="$$(go list ./... | grep -v '/console/node_modules/')"; go vet $$packages
 
 race:
 	@go test -race ./internal/...

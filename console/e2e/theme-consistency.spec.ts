@@ -233,6 +233,9 @@ test("dashboard excludes archived repositories from operational status", async (
   await expect(page.getByText("active-repository")).toBeVisible();
   await expect(page.getByText("archived-repository")).not.toBeVisible();
   await expect(
-    page.getByRole("group", { name: "页面摘要" }).locator(":scope > div").first(),
+    page
+      .getByRole("group", { name: "页面摘要" })
+      .locator(":scope > div")
+      .first(),
   ).toContainText("1");
 });

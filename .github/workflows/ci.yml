@@ -90,6 +90,10 @@ jobs:
         run: make console-api-check
       - name: Type check console
         run: make console-typecheck
+      - name: Lint and check Console formatting
+        run: make console-check
+      - name: Run Console unit tests
+        run: make console-test
       - name: Build console
         run: make console-build
       - name: Install browser

@@ -19,6 +19,8 @@ make oci-performance-e2e
 make cache-operations-e2e
 make openapi-check
 make console-typecheck
+make console-check
+make console-test
 make console-build
 make console-e2e
 make upgrade-readiness
@@ -56,10 +58,12 @@ storage credentials, or unredacted upstream URLs in that record.
       succeeds for an administrator, and increases the successful-run count.
       Its deterministic retention behavior is covered by
       `internal/app/cache_maintenance_test.go`.
-- [ ] `make openapi-check`, `make console-typecheck`, `make console-build`,
-      and `make console-e2e` verify the generated `/api/v2` management client,
-      the Console production build, and an authenticated administrator dashboard
-      session through the Console API proxy.
+- [ ] `make openapi-check`, `make console-typecheck`, `make console-check`,
+      `make console-test`, `make console-build`, and `make console-e2e` verify
+      the generated `/api/v2` management client, lint/format/accessibility
+      rules, component behavior and coverage, the Console production build,
+      and an authenticated administrator dashboard session through the Console
+      API proxy.
 - [ ] Maven retention maintenance runs outside request handling, preserves the
       configured newest versions per module, and tombstones only expired excess
       coordinates before the Maven orphan collector reclaims bytes.

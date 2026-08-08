@@ -1,9 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { client } from '../client/client.gen';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+import { client } from "../client/client.gen";
 
-const TOKEN_KEY = 'ag.console.token';
-const ROLE_KEY = 'ag.console.role';
+const TOKEN_KEY = "ag.console.token";
+const ROLE_KEY = "ag.console.role";
 
 interface AuthContextValue {
   token: string;
@@ -16,24 +22,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function applyToken(token: string) {
   client.setConfig({
-    baseUrl: '/api/v2',
+    baseUrl: "/api/v2",
     auth: () => (token ? token : undefined),
   });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string>(() => {
-    const stored = localStorage.getItem(TOKEN_KEY) ?? '';
+    const stored = localStorage.getItem(TOKEN_KEY) ?? "";
     applyToken(stored);
     return stored;
   });
-  const [role, setRole] = useState<string>(() => localStorage.getItem(ROLE_KEY) ?? '');
+  const [role, setRole] = useState<string>(
+    () => localStorage.getItem(ROLE_KEY) ?? "",
+  );
 
   useEffect(() => {
     applyToken(token);
   }, [token]);
 
-  const setToken = useCallback((next: string, nextRole = '') => {
+  const setToken = useCallback((next: string, nextRole = "") => {
     const trimmed = next.trim();
     localStorage.setItem(TOKEN_KEY, trimmed);
     setTokenState(trimmed);
@@ -45,22 +53,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearToken = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ROLE_KEY);
-    setTokenState('');
-    setRole('');
+    setTokenState("");
+    setRole("");
   }, []);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    void fetch('/api/v2/repositories?pageSize=1', {
+    void fetch("/api/v2/repositories?pageSize=1", {
       headers: { Authorization: `Bearer ${token}` },
-    }).then((response) => {
-      if (!cancelled && response.status === 401) {
-        clearToken();
-      }
-    }).catch(() => {
-      // A temporary network failure should not log the operator out.
-    });
+    })
+      .then((response) => {
+        if (!cancelled && response.status === 401) {
+          clearToken();
+        }
+      })
+      .catch(() => {
+        // A temporary network failure should not log the operator out.
+      });
     return () => {
       cancelled = true;
     };
@@ -75,6 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

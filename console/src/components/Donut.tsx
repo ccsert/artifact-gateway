@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 export interface DonutSegment {
   label: string;
@@ -32,7 +32,14 @@ export function Donut({
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           <g transform={`rotate(-90 ${center} ${center})`}>
-            <circle cx={center} cy={center} r={radius} fill="none" stroke="rgb(39 39 42)" strokeWidth={thickness} />
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="rgb(39 39 42)"
+              strokeWidth={thickness}
+            />
             {total > 0 &&
               segments
                 .filter((s) => s.value > 0)
@@ -58,18 +65,31 @@ export function Donut({
         </svg>
         {(centerLabel || centerSub) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {centerLabel && <span className="text-lg font-semibold text-zinc-100">{centerLabel}</span>}
-            {centerSub && <span className="text-[10px] uppercase tracking-wider text-zinc-500">{centerSub}</span>}
+            {centerLabel && (
+              <span className="text-lg font-semibold text-zinc-100">
+                {centerLabel}
+              </span>
+            )}
+            {centerSub && (
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+                {centerSub}
+              </span>
+            )}
           </div>
         )}
       </div>
       <ul className="space-y-1.5">
         {segments.map((s) => (
           <li key={s.label} className="flex items-center gap-2 text-xs">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
+            <span
+              className="h-2.5 w-2.5 rounded-sm"
+              style={{ backgroundColor: s.color }}
+            />
             <span className="text-zinc-300">{s.label}</span>
             <span className="text-zinc-500">{format(s.value)}</span>
-            <span className="ml-3 text-zinc-600">{total > 0 ? `${Math.round((s.value / total) * 100)}%` : '—'}</span>
+            <span className="ml-3 text-zinc-600">
+              {total > 0 ? `${Math.round((s.value / total) * 100)}%` : "—"}
+            </span>
           </li>
         ))}
       </ul>

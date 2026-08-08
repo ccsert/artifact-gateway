@@ -1,13 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import { LoginOutlined } from '@ant-design/icons';
-import { Alert, Button, Input, Segmented } from 'antd';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
-import { client } from '../client/client.gen';
-import { listRepositories } from '../client';
-import { Field } from '../components/Layout';
+import { useState, type FormEvent } from "react";
+import { LoginOutlined } from "@ant-design/icons";
+import { Alert, Button, Input, Segmented } from "antd";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../lib/auth";
+import { client } from "../client/client.gen";
+import { listRepositories } from "../client";
+import { Field } from "../components/Layout";
 
-type Mode = 'password' | 'token';
+type Mode = "password" | "token";
 
 // Standalone login route. The primary path is username/password against
 // POST /auth/login; a token mode remains for static/OIDC/API-key bearers.
@@ -17,14 +17,14 @@ export function LoginPage() {
   const { setToken } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const redirect = params.get('redirect') || '/';
+  const redirect = params.get("redirect") || "/";
 
-  const [mode, setMode] = useState<Mode>('password');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [token, setTokenDraft] = useState('');
+  const [mode, setMode] = useState<Mode>("password");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [token, setTokenDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const finish = (next: string, role?: string) => {
     setToken(next, role);
@@ -35,25 +35,29 @@ export function LoginPage() {
     e.preventDefault();
     if (!username.trim() || !password) return;
     setBusy(true);
-    setError('');
+    setError("");
     try {
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password }),
       });
       if (!res.ok) {
-        setError(res.status === 401 ? '用户名或密码错误。' : `登录失败 (${res.status})。`);
+        setError(
+          res.status === 401
+            ? "用户名或密码错误。"
+            : `登录失败 (${res.status})。`,
+        );
         return;
       }
       const body = (await res.json()) as { token?: string; role?: string };
       if (!body.token) {
-        setError('登录响应缺少令牌。');
+        setError("登录响应缺少令牌。");
         return;
       }
       finish(body.token, body.role);
     } catch {
-      setError('网络错误，请重试。');
+      setError("网络错误，请重试。");
     } finally {
       setBusy(false);
     }
@@ -64,12 +68,12 @@ export function LoginPage() {
     const trimmed = token.trim();
     if (!trimmed) return;
     setBusy(true);
-    setError('');
-    client.setConfig({ baseUrl: '/api/v2', auth: () => trimmed });
+    setError("");
+    client.setConfig({ baseUrl: "/api/v2", auth: () => trimmed });
     const { error: err } = await listRepositories({ query: { pageSize: 1 } });
     setBusy(false);
     if (err) {
-      setError('令牌无效或已过期，请检查后重试。');
+      setError("令牌无效或已过期，请检查后重试。");
       return;
     }
     finish(trimmed);
@@ -83,8 +87,12 @@ export function LoginPage() {
             AG
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-zinc-100">Artifact Gateway</div>
-            <div className="text-xs uppercase tracking-widest text-zinc-600">Console 登录</div>
+            <div className="text-lg font-semibold text-zinc-100">
+              Artifact Gateway
+            </div>
+            <div className="text-xs uppercase tracking-widest text-zinc-600">
+              Console 登录
+            </div>
           </div>
         </div>
 
@@ -93,22 +101,24 @@ export function LoginPage() {
           className="mb-4"
           value={mode}
           options={[
-            { value: 'password', label: '账号密码' },
-            { value: 'token', label: '访问令牌' },
+            { value: "password", label: "账号密码" },
+            { value: "token", label: "访问令牌" },
           ]}
           onChange={(nextMode) => {
             setMode(nextMode);
-            setError('');
+            setError("");
           }}
         />
 
-        {mode === 'password' ? (
-          <form onSubmit={submitPassword} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6">
+        {mode === "password" ? (
+          <form
+            onSubmit={submitPassword}
+            className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6"
+          >
             <Field label="用户名">
               <Input
                 placeholder="alice"
                 autoComplete="username"
-                autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -121,9 +131,7 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
-            {error && (
-              <Alert type="error" showIcon title={error} />
-            )}
+            {error && <Alert type="error" showIcon title={error} />}
             <Button
               type="primary"
               htmlType="submit"
@@ -136,20 +144,23 @@ export function LoginPage() {
             </Button>
           </form>
         ) : (
-          <form onSubmit={submitToken} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6">
-            <Field label="访问令牌" hint="静态令牌、OIDC 或 API 密钥的 Bearer；仅保存在本浏览器 localStorage。">
+          <form
+            onSubmit={submitToken}
+            className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-6"
+          >
+            <Field
+              label="访问令牌"
+              hint="静态令牌、OIDC 或 API 密钥的 Bearer；仅保存在本浏览器 localStorage。"
+            >
               <Input.TextArea
                 className="font-mono text-xs"
                 autoSize={{ minRows: 4, maxRows: 8 }}
                 placeholder="粘贴 Bearer Token…"
-                autoFocus
                 value={token}
                 onChange={(e) => setTokenDraft(e.target.value)}
               />
             </Field>
-            {error && (
-              <Alert type="error" showIcon title={error} />
-            )}
+            {error && <Alert type="error" showIcon title={error} />}
             <Button
               type="primary"
               htmlType="submit"
@@ -163,7 +174,9 @@ export function LoginPage() {
           </form>
         )}
         <div className="mt-5 text-center text-xs text-zinc-600">
-          <Link to="/browse" className="text-zinc-400 hover:text-cyan-300">浏览公开制品</Link>
+          <Link to="/browse" className="text-zinc-400 hover:text-cyan-300">
+            浏览公开制品
+          </Link>
         </div>
       </div>
     </div>

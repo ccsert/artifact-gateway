@@ -24,6 +24,17 @@ import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usageFor, type UsageSnippet } from "../lib/usage";
 import {
+  artifactBrowseParams,
+  artifactBrowsePath,
+  clearArtifactBrowseParams,
+  conanArtifactGroups,
+  conanReferenceParts,
+  mavenArtifactGroups,
+  mavenVersionKey,
+  type ConanArtifactGroup,
+  type MavenArtifactGroup,
+} from "../lib/publicBrowseModel";
+import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
@@ -196,80 +207,6 @@ interface PublicArtifactTableRow {
   ociDetail?: OciManifestDetail;
   selectedProtocolHref: string;
   snippets: UsageSnippet[];
-}
-
-interface MavenArtifactGroup {
-  key: string;
-  versions: ArtifactSummary[];
-}
-
-interface ConanArtifactGroup {
-  key: string;
-  versions: ArtifactSummary[];
-}
-
-function mavenArtifactGroups(items: ArtifactSummary[]): MavenArtifactGroup[] {
-  const groups = new Map<string, ArtifactSummary[]>();
-  for (const item of items) {
-    const parts = item.coordinate.split(":");
-    const key = parts.length >= 2 ? `${parts[0]}:${parts[1]}` : item.coordinate;
-    groups.set(key, [...(groups.get(key) ?? []), item]);
-  }
-  return [...groups.entries()]
-    .map(([key, versions]) => ({
-      key,
-      versions: versions.sort((a, b) =>
-        b.coordinate.localeCompare(a.coordinate),
-      ),
-    }))
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function mavenVersionKey(version: ArtifactSummary, index: number): string {
-  return `${version.coordinate}-${version.buildNumber ?? index}`;
-}
-
-function conanReferenceParts(reference: string): {
-  key: string;
-  version: string;
-} {
-  const canonical = reference.split("/");
-  if (canonical.length >= 4 && !reference.includes("@")) {
-    return {
-      key: `${canonical[0]}/${canonical[2]}/${canonical.slice(3).join("/")}`,
-      version: canonical[1],
-    };
-  }
-  const [nameAndVersion, channel = ""] = reference.split("@", 2);
-  const separator = nameAndVersion.indexOf("/");
-  if (separator < 0) return { key: reference, version: reference };
-  const name = nameAndVersion.slice(0, separator);
-  const version = nameAndVersion.slice(separator + 1);
-  return { key: channel ? `${name}@${channel}` : name, version };
-}
-
-function conanArtifactGroups(items: ArtifactSummary[]): ConanArtifactGroup[] {
-  const groups = new Map<string, ArtifactSummary[]>();
-  for (const item of items) {
-    const { key } = conanReferenceParts(item.coordinate);
-    const current = groups.get(key) ?? [];
-    if (!current.some((entry) => entry.coordinate === item.coordinate))
-      current.push(item);
-    groups.set(key, current);
-  }
-  return [...groups.entries()]
-    .map(([key, versions]) => ({
-      key,
-      versions: versions.sort((a, b) => {
-        const left = conanReferenceParts(a.coordinate).version;
-        const right = conanReferenceParts(b.coordinate).version;
-        return right.localeCompare(left, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      }),
-    }))
-    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
 function repositoryUsage(
@@ -845,9 +782,9 @@ function ConanGroupTable({
       </div>
       <div className="min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <label className="text-[11px] font-medium text-zinc-500">
+          <span className="text-[11px] font-medium text-zinc-500">
             Recipe revision
-          </label>
+          </span>
           <span className="text-[11px] text-zinc-600">
             {row.visibleRevisions.length}/{row.revisions.length}
           </span>
@@ -1361,15 +1298,12 @@ export function PublicBrowsePage() {
     tag?: string,
     revision?: string,
   ) => {
-    const next = new URLSearchParams(params);
-    next.set("artifact", coordinate);
-    if (buildNumber && buildNumber > 0) next.set("build", String(buildNumber));
-    else next.delete("build");
-    if (tag) next.set("tag", tag);
-    else next.delete("tag");
-    if (revision) next.set("revision", revision);
-    else next.delete("revision");
-    return `/browse?${next.toString()}`;
+    return artifactBrowsePath(params, {
+      coordinate,
+      buildNumber,
+      tag,
+      revision,
+    });
   };
 
   const openArtifact = (
@@ -1378,23 +1312,17 @@ export function PublicBrowsePage() {
     tag?: string,
     revision?: string,
   ) => {
-    const next = new URLSearchParams(params);
-    next.set("artifact", coordinate);
-    if (buildNumber && buildNumber > 0) next.set("build", String(buildNumber));
-    else next.delete("build");
-    if (tag) next.set("tag", tag);
-    else next.delete("tag");
-    if (revision) next.set("revision", revision);
-    else next.delete("revision");
+    const next = artifactBrowseParams(params, {
+      coordinate,
+      buildNumber,
+      tag,
+      revision,
+    });
     setParams(next, { replace: true, preventScrollReset: true });
   };
 
   const clearArtifactParams = () => {
-    const next = new URLSearchParams(params);
-    next.delete("artifact");
-    next.delete("build");
-    next.delete("tag");
-    next.delete("revision");
+    const next = clearArtifactBrowseParams(params);
     setParams(next, { replace: true, preventScrollReset: true });
   };
 
@@ -1714,9 +1642,9 @@ export function PublicBrowsePage() {
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
           <div className="flex items-center justify-between gap-3">
-            <label className="block text-[11px] font-medium text-zinc-500">
+            <span className="block text-[11px] font-medium text-zinc-500">
               选择镜像版本
-            </label>
+            </span>
             <span className="text-[11px] text-zinc-600">
               已加载 {row.protocolVersions.length}
             </span>
