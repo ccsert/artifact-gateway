@@ -1,4 +1,22 @@
 ---
+lifecycle_jobs:
+  get:
+    operationId: listLifecycleJobs
+    description: Lists the newest lifecycle jobs across all repositories for the administrator console.
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 500
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryLifecycleJobList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+
 repositories_repositoryId_lifecycle_jobs:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

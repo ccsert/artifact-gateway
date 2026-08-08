@@ -908,6 +908,40 @@ func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ListRepositoryGrants(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	store, ok := h.grants.(repository.RepositoryGrantRecordStore)
+	if !ok {
+		writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "repository grant aggregation is unavailable")
+		return
+	}
+	records, err := store.ListRepositoryGrantRecords(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list repository grants failed")
+		return
+	}
+	items := make(adminopenapi.RepositoryGrantRecordList, 0, len(records))
+	for _, record := range records {
+		item := adminopenapi.RepositoryGrantRecord{
+			RepositoryId:   uuid.MustParse(record.RepositoryID),
+			RepositoryName: record.RepositoryName,
+			Format:         adminopenapi.Format(record.Format),
+			Principal:      record.Grant.Principal,
+			Scopes:         make([]adminopenapi.RepositoryGrantRecordScopes, 0, len(record.Grant.Scopes)),
+		}
+		for _, scope := range record.Grant.Scopes {
+			item.Scopes = append(item.Scopes, adminopenapi.RepositoryGrantRecordScopes(scope))
+		}
+		if record.Grant.ResourcePrefix != "" {
+			item.ResourcePrefix = &record.Grant.ResourcePrefix
+		}
+		items = append(items, item)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, items)
+}
+
 func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		var grants []repository.RepositoryGrant
@@ -1077,6 +1111,54 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWrit
 		}
 		writeNativeMavenJSON(w, http.StatusOK, capacity)
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListRepositoryCapacities(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	store, ok := h.capacities.(repository.RepositoryCapacityRecordStore)
+	if !ok {
+		writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "repository capacity aggregation is unavailable")
+		return
+	}
+	records, err := store.ListRepositoryCapacityRecords(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list repository capacities failed")
+		return
+	}
+	proxyCapacities, proxyErr := (proxyCacheBrowseHandler{store: h.store, maintenance: h.maintenance, authenticator: h.authenticator, authorizer: h.authorizer}).proxyCacheCapacities(r.Context(), records)
+	items := make(adminopenapi.RepositoryCapacityList, 0, len(records))
+	for _, record := range records {
+		capacity := record.Capacity
+		if proxyErr == nil {
+			capacity = proxyCapacities[capacity.RepositoryID]
+		}
+		item := adminopenapi.RepositoryCapacity{
+			RepositoryId: uuid.MustParse(capacity.RepositoryID),
+			Format:       adminopenapi.Format(capacity.Format),
+			UsedBytes:    capacity.UsedBytes,
+			ObjectCount:  capacity.ObjectCount,
+			QuotaBytes:   capacity.QuotaBytes,
+		}
+		if capacity.PrimaryBytes != 0 {
+			item.PrimaryBytes = &capacity.PrimaryBytes
+		}
+		if capacity.SidecarBytes != 0 {
+			item.SidecarBytes = &capacity.SidecarBytes
+		}
+		if capacity.NegativeCount != 0 {
+			item.NegativeCount = &capacity.NegativeCount
+		}
+		if capacity.ExpiredObjectCount != 0 {
+			item.ExpiredObjectCount = &capacity.ExpiredObjectCount
+		}
+		if capacity.ReclaimableBytes != 0 {
+			item.ReclaimableBytes = &capacity.ReclaimableBytes
+		}
+		items = append(items, item)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, items)
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
@@ -1646,6 +1728,39 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.Respon
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.LifecycleJobList(items))
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params adminopenapi.ListLifecycleJobsParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	limit := 500
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+	if limit < 1 || limit > 500 {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "limit must be between 1 and 500")
+		return
+	}
+	store, ok := h.lifecycleJobs.(repository.RepositoryLifecycleJobStore)
+	if !ok {
+		writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "lifecycle job aggregation is unavailable")
+		return
+	}
+	records, err := store.ListAllLifecycleJobs(r.Context(), limit)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list lifecycle jobs failed")
+		return
+	}
+	items := make(adminopenapi.RepositoryLifecycleJobList, 0, len(records))
+	for _, record := range records {
+		items = append(items, adminopenapi.RepositoryLifecycleJob{
+			RepositoryId:   uuid.MustParse(record.Job.RepositoryID),
+			RepositoryName: record.RepositoryName,
+			Job:            lifecycleJobResponse(record.Job),
+		})
+	}
+	writeNativeMavenJSON(w, http.StatusOK, items)
 }
 
 func lifecycleJobResponse(job repository.LifecycleJob) adminopenapi.LifecycleJob {

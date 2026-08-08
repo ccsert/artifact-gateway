@@ -1,4 +1,13 @@
 ---
+repository_capacities:
+  get:
+    operationId: listRepositoryCapacities
+    description: Lists logical capacity snapshots across all repositories for the administrator console.
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryCapacityList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId_capacity:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

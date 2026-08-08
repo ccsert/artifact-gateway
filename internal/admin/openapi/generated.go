@@ -315,19 +315,19 @@ func (e Format) Valid() bool {
 
 // Defines values for GrantScopes.
 const (
-	RepositoriesAdmin GrantScopes = "repositories:admin"
-	RepositoriesRead  GrantScopes = "repositories:read"
-	RepositoriesWrite GrantScopes = "repositories:write"
+	GrantScopesRepositoriesAdmin GrantScopes = "repositories:admin"
+	GrantScopesRepositoriesRead  GrantScopes = "repositories:read"
+	GrantScopesRepositoriesWrite GrantScopes = "repositories:write"
 )
 
 // Valid indicates whether the value is a known member of the GrantScopes enum.
 func (e GrantScopes) Valid() bool {
 	switch e {
-	case RepositoriesAdmin:
+	case GrantScopesRepositoriesAdmin:
 		return true
-	case RepositoriesRead:
+	case GrantScopesRepositoriesRead:
 		return true
-	case RepositoriesWrite:
+	case GrantScopesRepositoriesWrite:
 		return true
 	default:
 		return false
@@ -721,6 +721,27 @@ func (e RepositoryEffectiveAccessRepositoryType) Valid() bool {
 	case RepositoryEffectiveAccessRepositoryTypeHosted:
 		return true
 	case RepositoryEffectiveAccessRepositoryTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryGrantRecordScopes.
+const (
+	RepositoryGrantRecordScopesRepositoriesAdmin RepositoryGrantRecordScopes = "repositories:admin"
+	RepositoryGrantRecordScopesRepositoriesRead  RepositoryGrantRecordScopes = "repositories:read"
+	RepositoryGrantRecordScopesRepositoriesWrite RepositoryGrantRecordScopes = "repositories:write"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryGrantRecordScopes enum.
+func (e RepositoryGrantRecordScopes) Valid() bool {
+	switch e {
+	case RepositoryGrantRecordScopesRepositoriesAdmin:
+		return true
+	case RepositoryGrantRecordScopesRepositoriesRead:
+		return true
+	case RepositoryGrantRecordScopesRepositoriesWrite:
 		return true
 	default:
 		return false
@@ -1645,14 +1666,31 @@ type RepositoryCapabilitiesType string
 
 // RepositoryCapacity defines model for RepositoryCapacity.
 type RepositoryCapacity struct {
-	Format      Format `json:"format"`
-	ObjectCount int64  `json:"objectCount"`
+	// ExpiredObjectCount Expired cache entries eligible for reclamation.
+	ExpiredObjectCount *int64 `json:"expiredObjectCount,omitempty"`
+	Format             Format `json:"format"`
+
+	// NegativeCount Active negative-cache entries.
+	NegativeCount *int64 `json:"negativeCount,omitempty"`
+	ObjectCount   int64  `json:"objectCount"`
+
+	// PrimaryBytes Cached primary artifact bytes when the repository exposes cache projections.
+	PrimaryBytes *int64 `json:"primaryBytes,omitempty"`
 
 	// QuotaBytes Zero disables the quota.
-	QuotaBytes   int64              `json:"quotaBytes"`
-	RepositoryId openapi_types.UUID `json:"repositoryId"`
-	UsedBytes    int64              `json:"usedBytes"`
+	QuotaBytes int64 `json:"quotaBytes"`
+
+	// ReclaimableBytes Expired cached bytes eligible for reclamation.
+	ReclaimableBytes *int64             `json:"reclaimableBytes,omitempty"`
+	RepositoryId     openapi_types.UUID `json:"repositoryId"`
+
+	// SidecarBytes Cached metadata and checksum sidecar bytes.
+	SidecarBytes *int64 `json:"sidecarBytes,omitempty"`
+	UsedBytes    int64  `json:"usedBytes"`
 }
+
+// RepositoryCapacityList defines model for RepositoryCapacityList.
+type RepositoryCapacityList = []RepositoryCapacity
 
 // RepositoryCapacityQuota defines model for RepositoryCapacityQuota.
 type RepositoryCapacityQuota struct {
@@ -1678,6 +1716,32 @@ type RepositoryEffectiveAccessRepositoryState string
 
 // RepositoryEffectiveAccessRepositoryType defines model for RepositoryEffectiveAccess.Repository.Type.
 type RepositoryEffectiveAccessRepositoryType string
+
+// RepositoryGrantRecord defines model for RepositoryGrantRecord.
+type RepositoryGrantRecord struct {
+	Format         Format                        `json:"format"`
+	Principal      string                        `json:"principal"`
+	RepositoryId   openapi_types.UUID            `json:"repositoryId"`
+	RepositoryName string                        `json:"repositoryName"`
+	ResourcePrefix *string                       `json:"resourcePrefix,omitempty"`
+	Scopes         []RepositoryGrantRecordScopes `json:"scopes"`
+}
+
+// RepositoryGrantRecordScopes defines model for RepositoryGrantRecord.Scopes.
+type RepositoryGrantRecordScopes string
+
+// RepositoryGrantRecordList defines model for RepositoryGrantRecordList.
+type RepositoryGrantRecordList = []RepositoryGrantRecord
+
+// RepositoryLifecycleJob defines model for RepositoryLifecycleJob.
+type RepositoryLifecycleJob struct {
+	Job            LifecycleJob       `json:"job"`
+	RepositoryId   openapi_types.UUID `json:"repositoryId"`
+	RepositoryName string             `json:"repositoryName"`
+}
+
+// RepositoryLifecycleJobList defines model for RepositoryLifecycleJobList.
+type RepositoryLifecycleJobList = []RepositoryLifecycleJob
 
 // RepositoryPage defines model for RepositoryPage.
 type RepositoryPage struct {
@@ -1947,6 +2011,11 @@ type ReplaceGroupParams struct {
 // ReplaceGroupMembersParams defines parameters for ReplaceGroupMembers.
 type ReplaceGroupMembersParams struct {
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListLifecycleJobsParams defines parameters for ListLifecycleJobs.
+type ListLifecycleJobsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListRepositoriesParams defines parameters for ListRepositories.
@@ -2261,6 +2330,9 @@ type ServerInterface interface {
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupId, params ReplaceGroupMembersParams)
 
+	// (GET /lifecycle-jobs)
+	ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams)
+
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
 
@@ -2404,6 +2476,12 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams)
+
+	// (GET /repository-capacities)
+	ListRepositoryCapacities(w http.ResponseWriter, r *http.Request)
+
+	// (GET /repository-grants)
+	ListRepositoryGrants(w http.ResponseWriter, r *http.Request)
 
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -3138,6 +3216,39 @@ func (siw *ServerInterfaceWrapper) ReplaceGroupMembers(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceGroupMembers(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLifecycleJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListLifecycleJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLifecycleJobsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLifecycleJobs(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5289,6 +5400,34 @@ func (siw *ServerInterfaceWrapper) ListRepositoryTombstones(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryCapacities operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryCapacities(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryCapacities(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryGrants(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryGrants(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -5562,6 +5701,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/capacity", wrapper.GetGroupCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ListGroupMembers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ReplaceGroupMembers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -5610,6 +5750,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:dry-run", wrapper.DryRunRepositoryRetention)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:execute", wrapper.ExecuteRepositoryRetention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CreateUser)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
@@ -5702,7 +5844,13 @@ type RepositoryCapabilitiesJSONResponse RepositoryCapabilities
 
 type RepositoryCapacityJSONResponse RepositoryCapacity
 
+type RepositoryCapacityListJSONResponse RepositoryCapacityList
+
 type RepositoryEffectiveAccessJSONResponse RepositoryEffectiveAccess
+
+type RepositoryGrantRecordListJSONResponse RepositoryGrantRecordList
+
+type RepositoryLifecycleJobListJSONResponse RepositoryLifecycleJobList
 
 type RepositoryListJSONResponse RepositoryPage
 
@@ -6404,6 +6552,46 @@ func (response ReplaceGroupMembers412ApplicationProblemPlusJSONResponse) VisitRe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLifecycleJobsRequestObject struct {
+	Params ListLifecycleJobsParams
+}
+
+type ListLifecycleJobsResponseObject interface {
+	VisitListLifecycleJobsResponse(w http.ResponseWriter) error
+}
+
+type ListLifecycleJobs200JSONResponse struct {
+	RepositoryLifecycleJobListJSONResponse
+}
+
+func (response ListLifecycleJobs200JSONResponse) VisitListLifecycleJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLifecycleJobs401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListLifecycleJobs401ApplicationProblemPlusJSONResponse) VisitListLifecycleJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8697,6 +8885,84 @@ func (response ListRepositoryTombstones200JSONResponse) VisitListRepositoryTombs
 	return err
 }
 
+type ListRepositoryCapacitiesRequestObject struct {
+}
+
+type ListRepositoryCapacitiesResponseObject interface {
+	VisitListRepositoryCapacitiesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryCapacities200JSONResponse struct {
+	RepositoryCapacityListJSONResponse
+}
+
+func (response ListRepositoryCapacities200JSONResponse) VisitListRepositoryCapacitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryCapacities401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryCapacities401ApplicationProblemPlusJSONResponse) VisitListRepositoryCapacitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryGrantsRequestObject struct {
+}
+
+type ListRepositoryGrantsResponseObject interface {
+	VisitListRepositoryGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryGrants200JSONResponse struct {
+	RepositoryGrantRecordListJSONResponse
+}
+
+func (response ListRepositoryGrants200JSONResponse) VisitListRepositoryGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryGrants401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryGrants401ApplicationProblemPlusJSONResponse) VisitListRepositoryGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 }
 
@@ -9026,6 +9292,9 @@ type StrictServerInterface interface {
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(ctx context.Context, request ReplaceGroupMembersRequestObject) (ReplaceGroupMembersResponseObject, error)
 
+	// (GET /lifecycle-jobs)
+	ListLifecycleJobs(ctx context.Context, request ListLifecycleJobsRequestObject) (ListLifecycleJobsResponseObject, error)
+
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
 
@@ -9169,6 +9438,12 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(ctx context.Context, request ListRepositoryTombstonesRequestObject) (ListRepositoryTombstonesResponseObject, error)
+
+	// (GET /repository-capacities)
+	ListRepositoryCapacities(ctx context.Context, request ListRepositoryCapacitiesRequestObject) (ListRepositoryCapacitiesResponseObject, error)
+
+	// (GET /repository-grants)
+	ListRepositoryGrants(ctx context.Context, request ListRepositoryGrantsRequestObject) (ListRepositoryGrantsResponseObject, error)
 
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -9746,6 +10021,32 @@ func (sh *strictHandler) ReplaceGroupMembers(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGroupMembersResponseObject); ok {
 		if err := validResponse.VisitReplaceGroupMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLifecycleJobs operation middleware
+func (sh *strictHandler) ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams) {
+	var request ListLifecycleJobsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLifecycleJobs(ctx, request.(ListLifecycleJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLifecycleJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLifecycleJobsResponseObject); ok {
+		if err := validResponse.VisitListLifecycleJobsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11112,6 +11413,54 @@ func (sh *strictHandler) ListRepositoryTombstones(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryTombstonesResponseObject); ok {
 		if err := validResponse.VisitListRepositoryTombstonesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryCapacities operation middleware
+func (sh *strictHandler) ListRepositoryCapacities(w http.ResponseWriter, r *http.Request) {
+	var request ListRepositoryCapacitiesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryCapacities(ctx, request.(ListRepositoryCapacitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryCapacities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryCapacitiesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryCapacitiesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryGrants operation middleware
+func (sh *strictHandler) ListRepositoryGrants(w http.ResponseWriter, r *http.Request) {
+	var request ListRepositoryGrantsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryGrants(ctx, request.(ListRepositoryGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryGrantsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryGrantsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

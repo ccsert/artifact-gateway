@@ -469,6 +469,60 @@
         }
       }
     },
+    "/repository-grants": {
+      "get": {
+        "operationId": "listRepositoryGrants",
+        "description": "Lists repository grant records across all repositories for the administrator console.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryGrantRecordList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repository-capacities": {
+      "get": {
+        "operationId": "listRepositoryCapacities",
+        "description": "Lists logical capacity snapshots across all repositories for the administrator console.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryCapacityList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/lifecycle-jobs": {
+      "get": {
+        "operationId": "listLifecycleJobs",
+        "description": "Lists the newest lifecycle jobs across all repositories for the administrator console.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryLifecycleJobList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}": {
       "parameters": [
         {
@@ -2354,6 +2408,36 @@
             "format": "int64",
             "minimum": 0,
             "description": "Zero disables the quota."
+          },
+          "primaryBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Cached primary artifact bytes when the repository exposes cache projections."
+          },
+          "sidecarBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Cached metadata and checksum sidecar bytes."
+          },
+          "negativeCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Active negative-cache entries."
+          },
+          "expiredObjectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Expired cache entries eligible for reclamation."
+          },
+          "reclaimableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Expired cached bytes eligible for reclamation."
           }
         }
       },
@@ -4024,6 +4108,84 @@
           }
         }
       },
+      "RepositoryGrantRecord": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "repositoryName",
+          "format",
+          "principal",
+          "scopes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "repositories:read",
+                "repositories:write",
+                "repositories:admin"
+              ]
+            }
+          },
+          "resourcePrefix": {
+            "type": "string",
+            "maxLength": 255
+          }
+        }
+      },
+      "RepositoryGrantRecordList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RepositoryGrantRecord"
+        }
+      },
+      "RepositoryCapacityList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RepositoryCapacity"
+        }
+      },
+      "RepositoryLifecycleJob": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "repositoryName",
+          "job"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "job": {
+            "$ref": "#/components/schemas/LifecycleJob"
+          }
+        }
+      },
+      "RepositoryLifecycleJobList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RepositoryLifecycleJob"
+        }
+      },
       "UpdateRepository": {
         "type": "object",
         "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
@@ -5175,6 +5337,36 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/APIKey"
+            }
+          }
+        }
+      },
+      "RepositoryGrantRecordList": {
+        "description": "Repository grants across all repositories",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryGrantRecordList"
+            }
+          }
+        }
+      },
+      "RepositoryCapacityList": {
+        "description": "Logical capacity snapshots across all repositories",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryCapacityList"
+            }
+          }
+        }
+      },
+      "RepositoryLifecycleJobList": {
+        "description": "Lifecycle jobs across all repositories, newest first",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryLifecycleJobList"
             }
           }
         }

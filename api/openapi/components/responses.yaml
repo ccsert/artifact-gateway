@@ -155,6 +155,12 @@ GrantList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/GrantList"
+RepositoryGrantRecordList:
+  description: Repository grants across all repositories
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryGrantRecordList"
 RetentionPolicy:
   description: Retention policy
   content:
@@ -189,6 +195,12 @@ RepositoryCapacity:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RepositoryCapacity"
+RepositoryCapacityList:
+  description: Logical capacity snapshots across all repositories
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryCapacityList"
 GroupCapacity:
   description: Logical capacity contribution from Group members.
   content:
@@ -218,6 +230,12 @@ LifecycleJobList:
         type: array
         items:
           "$ref": "../components/schemas.yaml#/LifecycleJob"
+RepositoryLifecycleJobList:
+  description: Lifecycle jobs across all repositories, newest first
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryLifecycleJobList"
 ArtifactTombstoneList:
   description: Tombstoned artifacts for one repository
   content:

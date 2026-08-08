@@ -27,6 +27,15 @@ repositories:
         "$ref": "../components/responses.yaml#/Problem"
       '409':
         "$ref": "../components/responses.yaml#/Problem"
+repository_grants:
+  get:
+    operationId: listRepositoryGrants
+    description: Lists repository grant records across all repositories for the administrator console.
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryGrantRecordList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

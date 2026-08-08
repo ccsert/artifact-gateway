@@ -319,6 +319,32 @@ func (s *MemoryStore) GetRepositoryGrants(_ context.Context, repositoryID string
 	return cloneRepositoryGrantSet(set), nil
 }
 
+func (s *MemoryStore) ListRepositoryGrantRecords(_ context.Context) ([]RepositoryGrantRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	records := []RepositoryGrantRecord{}
+	for repositoryID, set := range s.repositoryGrants {
+		repo, ok := s.hostedRepositories[repositoryID]
+		if !ok {
+			continue
+		}
+		for _, grant := range set.Grants {
+			grant.Scopes = append([]string(nil), grant.Scopes...)
+			records = append(records, RepositoryGrantRecord{RepositoryID: repositoryID, RepositoryName: repo.Name, Format: repo.Format, Grant: grant})
+		}
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Grant.Principal != records[j].Grant.Principal {
+			return records[i].Grant.Principal < records[j].Grant.Principal
+		}
+		if records[i].RepositoryName != records[j].RepositoryName {
+			return records[i].RepositoryName < records[j].RepositoryName
+		}
+		return records[i].Grant.ResourcePrefix < records[j].Grant.ResourcePrefix
+	})
+	return records, nil
+}
+
 func (s *MemoryStore) ReplaceRepositoryGrants(_ context.Context, repositoryID string, grants []RepositoryGrant, expectedVersion string) (RepositoryGrantSet, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

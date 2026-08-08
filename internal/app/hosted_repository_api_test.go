@@ -1131,6 +1131,68 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	}
 }
 
+func TestRepositoryConsoleAggregatesRequireAdminAndReturnCrossRepositoryData(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "aggregate-first", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "aggregate-second", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, first.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read"}, ResourcePrefix: "releases/"}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: first.ID, Path: "release.txt", Digest: "sha256:aggregate", Size: 17}); err != nil {
+		t.Fatal(err)
+	}
+	job := repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: second.ID, Kind: repository.LifecycleJobRetention, IdempotencyKey: "aggregate-retention"}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(path, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if token != "" {
+			authorize(req, token)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if response := request("/api/v2/repository-grants", ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous grants=%d body=%s", response.Code, response.Body.String())
+	}
+
+	grantsResponse := request("/api/v2/repository-grants", "admin-secret")
+	var grants adminopenapi.RepositoryGrantRecordList
+	if grantsResponse.Code != http.StatusOK || json.Unmarshal(grantsResponse.Body.Bytes(), &grants) != nil || len(grants) != 1 || grants[0].RepositoryId.String() != first.ID || grants[0].Principal != "build-agent" {
+		t.Fatalf("grants=%d body=%s decoded=%#v", grantsResponse.Code, grantsResponse.Body.String(), grants)
+	}
+
+	capacitiesResponse := request("/api/v2/repository-capacities", "admin-secret")
+	var capacities adminopenapi.RepositoryCapacityList
+	if capacitiesResponse.Code != http.StatusOK || json.Unmarshal(capacitiesResponse.Body.Bytes(), &capacities) != nil || len(capacities) != 2 {
+		t.Fatalf("capacities=%d body=%s decoded=%#v", capacitiesResponse.Code, capacitiesResponse.Body.String(), capacities)
+	}
+	capacityByID := make(map[string]adminopenapi.RepositoryCapacity, len(capacities))
+	for _, capacity := range capacities {
+		capacityByID[capacity.RepositoryId.String()] = capacity
+	}
+	if capacityByID[first.ID].UsedBytes != 17 || capacityByID[first.ID].ObjectCount != 1 {
+		t.Fatalf("raw capacity=%#v", capacityByID[first.ID])
+	}
+
+	jobsResponse := request("/api/v2/lifecycle-jobs?limit=10", "admin-secret")
+	var jobs adminopenapi.RepositoryLifecycleJobList
+	if jobsResponse.Code != http.StatusOK || json.Unmarshal(jobsResponse.Body.Bytes(), &jobs) != nil || len(jobs) != 1 || jobs[0].RepositoryId.String() != second.ID || jobs[0].RepositoryName != second.Name || jobs[0].Job.Id != job.ID {
+		t.Fatalf("jobs=%d body=%s decoded=%#v", jobsResponse.Code, jobsResponse.Body.String(), jobs)
+	}
+}
+
 func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "scoped-target", Format: repository.FormatRaw})

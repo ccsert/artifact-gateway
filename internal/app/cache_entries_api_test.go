@@ -321,6 +321,20 @@ func TestV2ProxyCacheBrowseListsMavenVersionsWithPagination(t *testing.T) {
 	if capacity.UsedBytes == 0 || capacity.ObjectCount != 4 || capacity.PrimaryBytes == 0 || capacity.SidecarBytes == 0 || capacity.NegativeCount != 1 || capacity.ExpiredObjectCount != 1 || capacity.ReclaimableBytes == 0 {
 		t.Fatalf("capacity = %+v", capacity)
 	}
+	batchCapacityRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repository-capacities", nil)
+	authorize(batchCapacityRequest, testAuthenticator().AdminToken)
+	batchCapacityResponse := httptest.NewRecorder()
+	handler.ServeHTTP(batchCapacityResponse, batchCapacityRequest)
+	if batchCapacityResponse.Code != http.StatusOK {
+		t.Fatalf("batch capacity status = %d %s", batchCapacityResponse.Code, batchCapacityResponse.Body.String())
+	}
+	var batchCapacities []repository.RepositoryCapacity
+	if err := json.Unmarshal(batchCapacityResponse.Body.Bytes(), &batchCapacities); err != nil {
+		t.Fatal(err)
+	}
+	if len(batchCapacities) != 1 || batchCapacities[0] != capacity {
+		t.Fatalf("batch capacities = %+v, single = %+v", batchCapacities, capacity)
+	}
 
 	invalidate := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/cache/invalidate", strings.NewReader(`{"path":"aopalliance/aopalliance/1.0/aopalliance-1.0.jar"}`))
 	authorize(invalidate, testAuthenticator().AdminToken)

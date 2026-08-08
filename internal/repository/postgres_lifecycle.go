@@ -54,6 +54,29 @@ func (s *PostgresStore) ListLifecycleJobs(ctx context.Context, repositoryID stri
 	return jobs, rows.Err()
 }
 
+func (s *PostgresStore) ListAllLifecycleJobs(ctx context.Context, limit int) ([]RepositoryLifecycleJob, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT h.name,`+prefixedLifecycleJobColumns("jobs")+`
+		FROM lifecycle_jobs jobs
+		JOIN hosted_repositories h ON h.id=jobs.repository_id
+		ORDER BY jobs.created_at DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	records := make([]RepositoryLifecycleJob, 0, limit)
+	for rows.Next() {
+		var record RepositoryLifecycleJob
+		if err := scanRepositoryLifecycleJob(rows, &record); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
 func (s *PostgresStore) GetLifecycleJob(ctx context.Context, repositoryID, id string) (LifecycleJob, error) {
 	var job LifecycleJob
 	err := scanLifecycleJob(s.db.QueryRowContext(ctx, `SELECT `+lifecycleJobColumns+` FROM lifecycle_jobs WHERE repository_id::text=$1 AND id::text=$2`, repositoryID, id), &job)
@@ -208,6 +231,27 @@ type lifecycleJobScanner interface {
 func scanLifecycleJob(scanner lifecycleJobScanner, job *LifecycleJob) error {
 	var startedAt, completedAt, nextAttemptAt, leaseExpiresAt sql.NullTime
 	if err := scanner.Scan(&job.ID, &job.RepositoryID, &job.Kind, &job.IdempotencyKey, &job.Payload, &job.State, &job.CreatedAt, &startedAt, &completedAt, &job.LastError, &job.Attempts, &job.MaxAttempts, &nextAttemptAt, &leaseExpiresAt, &job.LeaseToken, &job.ProgressCurrent, &job.ProgressTotal, &job.ProgressMessage); err != nil {
+		return err
+	}
+	if startedAt.Valid {
+		job.StartedAt = startedAt.Time
+	}
+	if completedAt.Valid {
+		job.CompletedAt = completedAt.Time
+	}
+	if nextAttemptAt.Valid {
+		job.NextAttemptAt = nextAttemptAt.Time
+	}
+	if leaseExpiresAt.Valid {
+		job.LeaseExpiresAt = leaseExpiresAt.Time
+	}
+	return nil
+}
+
+func scanRepositoryLifecycleJob(scanner lifecycleJobScanner, record *RepositoryLifecycleJob) error {
+	job := &record.Job
+	var startedAt, completedAt, nextAttemptAt, leaseExpiresAt sql.NullTime
+	if err := scanner.Scan(&record.RepositoryName, &job.ID, &job.RepositoryID, &job.Kind, &job.IdempotencyKey, &job.Payload, &job.State, &job.CreatedAt, &startedAt, &completedAt, &job.LastError, &job.Attempts, &job.MaxAttempts, &nextAttemptAt, &leaseExpiresAt, &job.LeaseToken, &job.ProgressCurrent, &job.ProgressTotal, &job.ProgressMessage); err != nil {
 		return err
 	}
 	if startedAt.Valid {

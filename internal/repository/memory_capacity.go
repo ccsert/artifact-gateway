@@ -1,10 +1,17 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"sort"
+)
 
 func (s *MemoryStore) GetRepositoryCapacity(_ context.Context, id string) (RepositoryCapacity, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.repositoryCapacityLocked(id)
+}
+
+func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, error) {
 	repo, ok := s.hostedRepositories[id]
 	if !ok {
 		return RepositoryCapacity{}, ErrNotFound
@@ -47,6 +54,21 @@ func (s *MemoryStore) GetRepositoryCapacity(_ context.Context, id string) (Repos
 		}
 	}
 	return capacity, nil
+}
+
+func (s *MemoryStore) ListRepositoryCapacityRecords(_ context.Context) ([]RepositoryCapacityRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	records := make([]RepositoryCapacityRecord, 0, len(s.hostedRepositories))
+	for id, repo := range s.hostedRepositories {
+		capacity, err := s.repositoryCapacityLocked(id)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, RepositoryCapacityRecord{Repository: repo, Capacity: capacity})
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].Repository.ID < records[j].Repository.ID })
+	return records, nil
 }
 
 func (s *MemoryStore) mavenAssetVisibleLocked(asset MavenAsset) bool {

@@ -461,6 +461,26 @@ GrantList:
   type: array
   items:
     "$ref": "#/Grant"
+RepositoryGrantRecord:
+  type: object
+  required: [repositoryId, repositoryName, format, principal, scopes]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    repositoryName: {type: string}
+    format: {"$ref": "#/Format"}
+    principal: {type: string}
+    scopes:
+      type: array
+      items:
+        type: string
+        enum: [repositories:read, repositories:write, repositories:admin]
+    resourcePrefix:
+      type: string
+      maxLength: 255
+RepositoryGrantRecordList:
+  type: array
+  items:
+    "$ref": "#/RepositoryGrantRecord"
 RetentionPolicy:
   type: object
   required:
@@ -510,6 +530,15 @@ RepositoryCapacity:
     usedBytes: {type: integer, format: int64, minimum: 0}
     objectCount: {type: integer, format: int64, minimum: 0}
     quotaBytes: {type: integer, format: int64, minimum: 0, description: "Zero disables the quota."}
+    primaryBytes: {type: integer, format: int64, minimum: 0, description: "Cached primary artifact bytes when the repository exposes cache projections."}
+    sidecarBytes: {type: integer, format: int64, minimum: 0, description: "Cached metadata and checksum sidecar bytes."}
+    negativeCount: {type: integer, format: int64, minimum: 0, description: "Active negative-cache entries."}
+    expiredObjectCount: {type: integer, format: int64, minimum: 0, description: "Expired cache entries eligible for reclamation."}
+    reclaimableBytes: {type: integer, format: int64, minimum: 0, description: "Expired cached bytes eligible for reclamation."}
+RepositoryCapacityList:
+  type: array
+  items:
+    "$ref": "#/RepositoryCapacity"
 RepositoryCapacityQuota:
   type: object
   required: [quotaBytes]
@@ -671,6 +700,17 @@ LifecycleJob:
     lastError:
       type: string
       maxLength: 1024
+RepositoryLifecycleJob:
+  type: object
+  required: [repositoryId, repositoryName, job]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    repositoryName: {type: string}
+    job: {"$ref": "#/LifecycleJob"}
+RepositoryLifecycleJobList:
+  type: array
+  items:
+    "$ref": "#/RepositoryLifecycleJob"
 AuditRetentionPolicy:
   type: object
   required: [version, enabled, keepDays]

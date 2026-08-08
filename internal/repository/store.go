@@ -45,6 +45,10 @@ type RepositoryGrantStore interface {
 	ReplaceRepositoryGrants(context.Context, string, []RepositoryGrant, string) (RepositoryGrantSet, error)
 }
 
+type RepositoryGrantRecordStore interface {
+	ListRepositoryGrantRecords(context.Context) ([]RepositoryGrantRecord, error)
+}
+
 type RepositoryRetentionPolicyStore interface {
 	GetRepositoryRetentionPolicy(context.Context, string) (RepositoryRetentionPolicy, error)
 	ReplaceRepositoryRetentionPolicy(context.Context, string, RepositoryRetentionPolicy, string) (RepositoryRetentionPolicy, error)
@@ -53,6 +57,10 @@ type RepositoryRetentionPolicyStore interface {
 type RepositoryCapacityStore interface {
 	GetRepositoryCapacity(context.Context, string) (RepositoryCapacity, error)
 	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (RepositoryCapacity, error)
+}
+
+type RepositoryCapacityRecordStore interface {
+	ListRepositoryCapacityRecords(context.Context) ([]RepositoryCapacityRecord, error)
 }
 
 // BackgroundOperationMetrics accepts only bounded operation dimensions. It is
@@ -85,6 +93,10 @@ type LifecycleJobStore interface {
 	UpdateLifecycleJobProgress(context.Context, string, string, int, int, string) error
 	CompleteLifecycleJob(context.Context, string, string) error
 	FailLifecycleJob(context.Context, string, string, string) error
+}
+
+type RepositoryLifecycleJobStore interface {
+	ListAllLifecycleJobs(context.Context, int) ([]RepositoryLifecycleJob, error)
 }
 
 type ReplicationStore interface {

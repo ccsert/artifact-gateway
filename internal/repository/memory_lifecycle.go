@@ -66,6 +66,27 @@ func (s *MemoryStore) ListLifecycleJobs(_ context.Context, repositoryID string, 
 	return jobs, nil
 }
 
+func (s *MemoryStore) ListAllLifecycleJobs(_ context.Context, limit int) ([]RepositoryLifecycleJob, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	records := make([]RepositoryLifecycleJob, 0, len(s.lifecycleJobs))
+	for _, job := range s.lifecycleJobs {
+		repo, ok := s.hostedRepositories[job.RepositoryID]
+		if !ok {
+			continue
+		}
+		records = append(records, RepositoryLifecycleJob{RepositoryName: repo.Name, Job: cloneLifecycleJob(job)})
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].Job.CreatedAt.After(records[j].Job.CreatedAt) })
+	if len(records) > limit {
+		records = records[:limit]
+	}
+	return records, nil
+}
+
 func (s *MemoryStore) GetLifecycleJob(_ context.Context, repositoryID, id string) (LifecycleJob, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

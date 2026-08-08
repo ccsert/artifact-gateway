@@ -139,6 +139,26 @@ export type RepositoryCapacity = {
    * Zero disables the quota.
    */
   quotaBytes: number;
+  /**
+   * Cached primary artifact bytes when the repository exposes cache projections.
+   */
+  primaryBytes?: number;
+  /**
+   * Cached metadata and checksum sidecar bytes.
+   */
+  sidecarBytes?: number;
+  /**
+   * Active negative-cache entries.
+   */
+  negativeCount?: number;
+  /**
+   * Expired cache entries eligible for reclamation.
+   */
+  expiredObjectCount?: number;
+  /**
+   * Expired cached bytes eligible for reclamation.
+   */
+  reclaimableBytes?: number;
 };
 
 export type RepositoryCapacityQuota = {
@@ -635,6 +655,29 @@ export type EgressProxy = {
    */
   readonly credentialsConfigured?: boolean;
 };
+
+export type RepositoryGrantRecord = {
+  repositoryId: string;
+  repositoryName: string;
+  format: Format;
+  principal: string;
+  scopes: Array<
+    "repositories:read" | "repositories:write" | "repositories:admin"
+  >;
+  resourcePrefix?: string;
+};
+
+export type RepositoryGrantRecordList = Array<RepositoryGrantRecord>;
+
+export type RepositoryCapacityList = Array<RepositoryCapacity>;
+
+export type RepositoryLifecycleJob = {
+  repositoryId: string;
+  repositoryName: string;
+  job: LifecycleJob;
+};
+
+export type RepositoryLifecycleJobList = Array<RepositoryLifecycleJob>;
 
 /**
  * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
@@ -1481,6 +1524,89 @@ export type CreateRepositoryResponses = {
 
 export type CreateRepositoryResponse =
   CreateRepositoryResponses[keyof CreateRepositoryResponses];
+
+export type ListRepositoryGrantsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/repository-grants";
+};
+
+export type ListRepositoryGrantsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListRepositoryGrantsError =
+  ListRepositoryGrantsErrors[keyof ListRepositoryGrantsErrors];
+
+export type ListRepositoryGrantsResponses = {
+  /**
+   * Repository grants across all repositories
+   */
+  200: RepositoryGrantRecordList;
+};
+
+export type ListRepositoryGrantsResponse =
+  ListRepositoryGrantsResponses[keyof ListRepositoryGrantsResponses];
+
+export type ListRepositoryCapacitiesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/repository-capacities";
+};
+
+export type ListRepositoryCapacitiesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListRepositoryCapacitiesError =
+  ListRepositoryCapacitiesErrors[keyof ListRepositoryCapacitiesErrors];
+
+export type ListRepositoryCapacitiesResponses = {
+  /**
+   * Logical capacity snapshots across all repositories
+   */
+  200: RepositoryCapacityList;
+};
+
+export type ListRepositoryCapacitiesResponse =
+  ListRepositoryCapacitiesResponses[keyof ListRepositoryCapacitiesResponses];
+
+export type ListLifecycleJobsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+  };
+  url: "/lifecycle-jobs";
+};
+
+export type ListLifecycleJobsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListLifecycleJobsError =
+  ListLifecycleJobsErrors[keyof ListLifecycleJobsErrors];
+
+export type ListLifecycleJobsResponses = {
+  /**
+   * Lifecycle jobs across all repositories, newest first
+   */
+  200: RepositoryLifecycleJobList;
+};
+
+export type ListLifecycleJobsResponse =
+  ListLifecycleJobsResponses[keyof ListLifecycleJobsResponses];
 
 export type DeleteRepositoryData = {
   body?: never;

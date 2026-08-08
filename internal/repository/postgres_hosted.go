@@ -476,6 +476,30 @@ func (s *PostgresStore) GetRepositoryGrants(ctx context.Context, repositoryID st
 	return loadRepositoryGrants(ctx, s.db, repositoryID, version)
 }
 
+func (s *PostgresStore) ListRepositoryGrantRecords(ctx context.Context) ([]RepositoryGrantRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT h.id::text,h.name,h.format,g.principal,array_to_json(g.scopes),g.resource_prefix
+		FROM hosted_repositories h
+		JOIN repository_grants g ON g.repository_id=h.id
+		ORDER BY g.principal,h.name,g.resource_prefix`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	records := []RepositoryGrantRecord{}
+	for rows.Next() {
+		var record RepositoryGrantRecord
+		var scopes []byte
+		if err := rows.Scan(&record.RepositoryID, &record.RepositoryName, &record.Format, &record.Grant.Principal, &scopes, &record.Grant.ResourcePrefix); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(scopes, &record.Grant.Scopes); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
 func (s *PostgresStore) ReplaceRepositoryGrants(ctx context.Context, repositoryID string, grants []RepositoryGrant, expectedVersion string) (RepositoryGrantSet, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

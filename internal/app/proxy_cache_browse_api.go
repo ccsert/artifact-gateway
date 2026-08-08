@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -392,16 +393,23 @@ func genericProxyCacheBrowseItems(entries []CacheEntry, query string) []proxyCac
 }
 
 func (h proxyCacheBrowseHandler) proxyCacheCapacity(ctx context.Context, repo repository.HostedRepository, capacity repository.RepositoryCapacity) (repository.RepositoryCapacity, error) {
-	if h.maintenance == nil {
-		return capacity, nil
+	records := []repository.RepositoryCapacityRecord{{Repository: repo, Capacity: capacity}}
+	capacities, err := h.proxyCacheCapacities(ctx, records)
+	if err != nil {
+		return capacity, err
 	}
-	switch repo.Format {
-	case repository.FormatMaven:
-		keys, err := h.maintenance.store.List(ctx, "maven/index/")
-		if err != nil {
-			return capacity, err
+	return capacities[capacity.RepositoryID], nil
+}
+
+func (h proxyCacheBrowseHandler) proxyCacheCapacities(ctx context.Context, records []repository.RepositoryCapacityRecord) (map[string]repository.RepositoryCapacity, error) {
+	capacities := make(map[string]repository.RepositoryCapacity, len(records))
+	mavenTargets := make(map[string]string)
+	for _, record := range records {
+		capacity := record.Capacity
+		capacities[capacity.RepositoryID] = capacity
+		if record.Repository.Type != repository.RepositoryTypeProxy || record.Repository.Format != repository.FormatMaven {
+			continue
 		}
-		now := time.Now().UTC()
 		capacity.UsedBytes = 0
 		capacity.ObjectCount = 0
 		capacity.PrimaryBytes = 0
@@ -409,43 +417,80 @@ func (h proxyCacheBrowseHandler) proxyCacheCapacity(ctx context.Context, repo re
 		capacity.NegativeCount = 0
 		capacity.ExpiredObjectCount = 0
 		capacity.ReclaimableBytes = 0
-		for _, key := range keys {
-			encoded, err := h.maintenance.store.Get(ctx, key)
-			if err != nil {
-				continue
-			}
-			var index cacheIndexRecord
-			if json.Unmarshal(encoded, &index) != nil || index.endpoint() != repo.Endpoint || index.repository() != repo.Name {
-				continue
-			}
-			expired := !now.Before(index.expiresAt())
-			if index.negative() {
-				if expired {
-					capacity.ExpiredObjectCount++
-				} else {
-					capacity.NegativeCount++
+		capacities[capacity.RepositoryID] = capacity
+		mavenTargets[record.Repository.Endpoint+"\x00"+record.Repository.Name] = capacity.RepositoryID
+	}
+	if h.maintenance == nil {
+		return capacities, nil
+	}
+	if len(mavenTargets) == 0 {
+		return capacities, nil
+	}
+	keys, err := h.maintenance.store.List(ctx, "maven/index/")
+	if err != nil {
+		return capacities, err
+	}
+	workerCount := min(8, len(keys))
+	jobs := make(chan string, len(keys))
+	indices := make(chan cacheIndexRecord, len(keys))
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer workers.Done()
+			for key := range jobs {
+				encoded, getErr := h.maintenance.store.Get(ctx, key)
+				if getErr != nil {
+					continue
 				}
-				continue
+				var index cacheIndexRecord
+				if json.Unmarshal(encoded, &index) != nil {
+					continue
+				}
+				if _, ok := mavenTargets[index.endpoint()+"\x00"+index.repository()]; ok {
+					indices <- index
+				}
 			}
-			size := index.size()
+		}()
+	}
+	for _, key := range keys {
+		jobs <- key
+	}
+	close(jobs)
+	workers.Wait()
+	close(indices)
+	now := time.Now().UTC()
+	for index := range indices {
+		repositoryID := mavenTargets[index.endpoint()+"\x00"+index.repository()]
+		capacity := capacities[repositoryID]
+		expired := !now.Before(index.expiresAt())
+		if index.negative() {
 			if expired {
 				capacity.ExpiredObjectCount++
-				capacity.ReclaimableBytes += size
-				continue
-			}
-			capacity.UsedBytes += size
-			capacity.ObjectCount++
-			parsed, ok := parseMavenCacheCoordinate(index.coordinate())
-			if ok && isMavenSidecar(parsed.FileName) {
-				capacity.SidecarBytes += size
 			} else {
-				capacity.PrimaryBytes += size
+				capacity.NegativeCount++
 			}
+			capacities[repositoryID] = capacity
+			continue
 		}
-		return capacity, nil
-	default:
-		return capacity, nil
+		size := index.size()
+		if expired {
+			capacity.ExpiredObjectCount++
+			capacity.ReclaimableBytes += size
+			capacities[repositoryID] = capacity
+			continue
+		}
+		capacity.UsedBytes += size
+		capacity.ObjectCount++
+		parsed, parsedOK := parseMavenCacheCoordinate(index.coordinate())
+		if parsedOK && isMavenSidecar(parsed.FileName) {
+			capacity.SidecarBytes += size
+		} else {
+			capacity.PrimaryBytes += size
+		}
+		capacities[repositoryID] = capacity
 	}
+	return capacities, nil
 }
 
 func (h proxyCacheBrowseHandler) decodeProxyCacheCursor(raw, repositoryID, format, groupBy, assetFilter, query string) (int, error) {

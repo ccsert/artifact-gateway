@@ -15,6 +15,12 @@ paths:
     "$ref": "./management/audits.yaml#/audits"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
+  "/repository-grants":
+    "$ref": "./management/repositories.yaml#/repository_grants"
+  "/repository-capacities":
+    "$ref": "./management/capacity.yaml#/repository_capacities"
+  "/lifecycle-jobs":
+    "$ref": "./management/lifecycle.yaml#/lifecycle_jobs"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
   "/repositories/{repositoryId}/egress-proxy:test":

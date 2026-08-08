@@ -149,6 +149,11 @@ type RepositoryCapacity struct {
 	ReclaimableBytes   int64  `json:"reclaimableBytes,omitempty"`
 }
 
+type RepositoryCapacityRecord struct {
+	Repository HostedRepository
+	Capacity   RepositoryCapacity
+}
+
 type HostedGroup struct {
 	ID            string        `json:"id"`
 	Name          string        `json:"name"`
@@ -172,6 +177,13 @@ type RepositoryGrant struct {
 type RepositoryGrantSet struct {
 	Version string
 	Grants  []RepositoryGrant
+}
+
+type RepositoryGrantRecord struct {
+	RepositoryID   string
+	RepositoryName string
+	Format         Format
+	Grant          RepositoryGrant
 }
 
 type RepositoryRetentionPolicy struct {
@@ -277,6 +289,11 @@ type LifecycleJob struct {
 	ProgressTotal   int
 	ProgressMessage string
 	LastError       string
+}
+
+type RepositoryLifecycleJob struct {
+	RepositoryName string
+	Job            LifecycleJob
 }
 
 type ReplicationPlan struct {
