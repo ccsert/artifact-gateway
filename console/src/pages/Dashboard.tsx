@@ -386,8 +386,10 @@ export function DashboardPage() {
           />
           <Table<AuditRecord>
             className="ag-console-table"
-            rowKey={(record, index) =>
-              `${record.requestId ?? "audit"}-${index}`
+            rowKey={(record) =>
+              record.requestId ??
+              record.traceId ??
+              `${record.occurredAt}-${record.actor ?? ""}-${record.operation ?? ""}-${record.resource ?? ""}`
             }
             size="middle"
             dataSource={audits}

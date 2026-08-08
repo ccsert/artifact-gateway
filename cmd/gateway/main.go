@@ -16,6 +16,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -116,12 +117,15 @@ func main() {
 		Store: store,
 		Node: repository.RuntimeNode{
 			InstanceID:    cfg.InstanceID,
+			SessionID:     uuid.NewString(),
 			Roles:         nodeRoleStrings(cfg.NodeRoles),
 			WorkerFormats: append([]string(nil), cfg.WorkerFormats...),
 			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
 		},
+		Retention:     cfg.RuntimeNodeRetention,
+		PruneInterval: cfg.RuntimeNodePruneInterval,
 	}
-	heartbeat.Start(runtimeContext, 10*time.Second)
+	heartbeatDone := heartbeat.Start(runtimeContext, 10*time.Second)
 	(backgroundRuntime{store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -159,6 +163,16 @@ func main() {
 			os.Exit(1)
 		}
 	case <-runtimeContext.Done():
+		select {
+		case <-heartbeatDone:
+		case <-time.After(time.Second):
+			slog.Warn("runtime node heartbeat did not stop before shutdown")
+		}
+		heartbeatContext, heartbeatCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if err := heartbeat.Stop(heartbeatContext); err != nil {
+			slog.Warn("mark runtime node stopped", "error", err)
+		}
+		heartbeatCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {

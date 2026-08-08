@@ -45,6 +45,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	if cfg.InstanceID == "" || !cfg.WorkerEnabled("maven", "promotion") {
 		t.Fatalf("runtime config = instance %q roles %#v formats %#v kinds %#v", cfg.InstanceID, cfg.NodeRoles, cfg.WorkerFormats, cfg.WorkerKinds)
 	}
+	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
+		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
 }
 
 func TestLoadParsesClusterNodeRolesAndWorkerFilters(t *testing.T) {
@@ -53,6 +56,8 @@ func TestLoadParsesClusterNodeRolesAndWorkerFilters(t *testing.T) {
 	t.Setenv("GATEWAY_INSTANCE_ID", "oci-worker-01")
 	t.Setenv("GATEWAY_WORKER_FORMATS", "OCI, raw,oci")
 	t.Setenv("GATEWAY_WORKER_KINDS", "Replication,reclaim,replication")
+	t.Setenv("GATEWAY_RUNTIME_NODE_RETENTION", "48h")
+	t.Setenv("GATEWAY_RUNTIME_NODE_PRUNE_INTERVAL", "900")
 
 	cfg, err := Load()
 	if err != nil {
@@ -63,6 +68,9 @@ func TestLoadParsesClusterNodeRolesAndWorkerFilters(t *testing.T) {
 	}
 	if len(cfg.WorkerFormats) != 2 || len(cfg.WorkerKinds) != 2 || !cfg.WorkerEnabled("oci", "replication") || !cfg.WorkerEnabled("raw", "reclaim") || cfg.WorkerEnabled("maven", "reclaim") || cfg.WorkerEnabled("oci", "promotion") {
 		t.Fatalf("worker filters formats=%#v kinds=%#v", cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+	if cfg.RuntimeNodeRetention != 48*time.Hour || cfg.RuntimeNodePruneInterval != 15*time.Minute {
+		t.Fatalf("runtime node cleanup = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
 	}
 }
 

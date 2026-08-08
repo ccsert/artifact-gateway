@@ -53,6 +53,9 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   online: "green",
   stale: "amber",
   offline: "red",
+  healthy: "green",
+  degraded: "amber",
+  critical: "red",
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {

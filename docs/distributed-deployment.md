@@ -38,7 +38,8 @@ GATEWAY_WORKER_KINDS=reclaim,replication
 
 1. 所有节点必须使用同一个 PostgreSQL 数据库和同一个 S3/MinIO bucket。
 2. 迁移必须由独立的 migration job 在启动副本前完成，Gateway 进程不负责竞争执行迁移。
-3. 每个实例设置唯一的 `GATEWAY_INSTANCE_ID`，用于日志和故障定位。
+3. 每个实例设置稳定的 `GATEWAY_INSTANCE_ID`，用于日志和故障定位；Gateway 会为每次
+   进程启动生成独立会话 ID，因此重复配置实例 ID 也不会覆盖节点会话。
 4. 多副本部署时按副本数降低 `GATEWAY_DATABASE_MAX_OPEN_CONNS`，并为 coordinator
    和 notification pool 预留连接。
 5. `LISTEN/NOTIFY` 只是唤醒提示，任务表和租约才是事实来源；通知丢失后 worker
@@ -63,10 +64,19 @@ API 节点可以使用负载均衡器扩容。Scheduler 一般部署一个副本
 副本，扫描写入必须依赖任务幂等键。Worker 可以按格式独立扩容，任务领取通过
 `FOR UPDATE SKIP LOCKED`、advisory lock 和 lease token 防止重复提交。
 
-每个进程都会将实例 ID、角色、Worker 格式/任务过滤器和最近心跳写入
-`runtime_nodes`。管理员可通过管理 API 的 `GET /api/v2/runtime/nodes` 查看节点状态；
-30 秒未更新标记为 `stale`，超过 2 分钟标记为 `offline`。该清单用于运维可见性，
-不参与任务领取决策，任务表中的租约仍是唯一事实来源。
+每个进程都会将实例 ID、启动会话、角色、Worker 格式/任务过滤器和最近心跳写入
+`runtime_node_sessions`，同时维护 `runtime_nodes` 兼容投影。正常关闭会将对应会话
+立即标记为 `offline`；异常退出依赖心跳超时，30 秒未更新标记为 `stale`，超过 2 分钟
+标记为 `offline`。长期离线记录默认保留 7 天，可通过以下变量调整：
+
+```env
+GATEWAY_RUNTIME_NODE_RETENTION=168h
+GATEWAY_RUNTIME_NODE_PRUNE_INTERVAL=1h
+```
+
+管理员通过 `GET /api/v2/runtime/nodes` 可同时查看节点清单和集群健康摘要。摘要会提示
+没有在线 API、Scheduler 或 Worker、重复实例 ID，以及过期心跳。该清单和摘要用于运维
+可见性，不参与任务领取决策，任务表中的租约仍是唯一事实来源。
 
 ## 单机回退
 

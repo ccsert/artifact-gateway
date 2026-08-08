@@ -47,6 +47,8 @@ type Config struct {
 	InstanceID               string
 	WorkerFormats            []string
 	WorkerKinds              []string
+	RuntimeNodeRetention     time.Duration
+	RuntimeNodePruneInterval time.Duration
 	DatabaseURL              string
 	DatabasePool             database.PoolConfig
 	DatabaseCoordinatorPool  database.PoolConfig
@@ -87,6 +89,8 @@ func Load() (Config, error) {
 		InstanceID:               value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
 		WorkerFormats:            parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:              parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
+		RuntimeNodeRetention:     7 * 24 * time.Hour,
+		RuntimeNodePruneInterval: time.Hour,
 		DatabaseURL:              os.Getenv("GATEWAY_DATABASE_URL"),
 		DatabasePool:             database.DefaultPoolConfig(),
 		DatabaseCoordinatorPool:  database.DefaultCoordinatorPoolConfig(),
@@ -237,6 +241,16 @@ func Load() (Config, error) {
 		return Config{}, err
 	} else {
 		cfg.ConanCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_RUNTIME_NODE_RETENTION", cfg.RuntimeNodeRetention); err != nil {
+		return Config{}, err
+	} else {
+		cfg.RuntimeNodeRetention = ttl
+	}
+	if interval, err := durationEnv("GATEWAY_RUNTIME_NODE_PRUNE_INTERVAL", cfg.RuntimeNodePruneInterval); err != nil {
+		return Config{}, err
+	} else {
+		cfg.RuntimeNodePruneInterval = interval
 	}
 	return cfg, nil
 }

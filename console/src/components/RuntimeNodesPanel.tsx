@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
-import { Button, Table, Tooltip } from "antd";
+import { Alert, Button, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listRuntimeNodes } from "../client";
-import type { RuntimeNode } from "../client";
+import type { RuntimeNode, RuntimeNodeList } from "../client";
 import { formatDate } from "../lib/format";
 import { FormatBadge, StateBadge } from "./Badge";
 import { EmptyState, ErrorBanner, Loading } from "./Feedback";
@@ -15,8 +15,16 @@ const nodeColumns: ColumnsType<RuntimeNode> = [
     dataIndex: "instanceId",
     key: "instanceId",
     width: 190,
-    render: (value: string) => (
-      <span className="font-mono text-xs text-zinc-200">{value}</span>
+    render: (value: string, node) => (
+      <div className="min-w-0">
+        <div className="font-mono text-xs text-zinc-200">{value}</div>
+        <div
+          className="truncate text-[11px] text-zinc-600"
+          title={node.sessionId}
+        >
+          会话 {node.sessionId.slice(0, 12)}…
+        </div>
+      </div>
     ),
   },
   {
@@ -61,13 +69,39 @@ const nodeColumns: ColumnsType<RuntimeNode> = [
     dataIndex: "lastSeenAt",
     key: "lastSeenAt",
     width: 190,
-    render: (value: string) => (
-      <span className="whitespace-nowrap text-xs text-zinc-500">
-        {formatDate(value)}
-      </span>
-    ),
+    render: (value: string, node) =>
+      node.stoppedAt ? (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          已退出 {formatDate(node.stoppedAt)}
+        </span>
+      ) : (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value)}
+        </span>
+      ),
   },
 ];
+
+// Older persisted node rows may contain NULL for fields introduced after the
+// initial runtime inventory schema. Normalize those responses before they
+// reach table renderers so a single legacy row cannot take down Operations.
+function normalizeRuntimeNode(node: RuntimeNode): RuntimeNode {
+  const raw = node as RuntimeNode & {
+    instanceId?: string | null;
+    sessionId?: string | null;
+    roles?: string[] | null;
+    workerFormats?: string[] | null;
+    workerKinds?: string[] | null;
+  };
+  return {
+    ...node,
+    instanceId: raw.instanceId ?? "unknown",
+    sessionId: raw.sessionId ?? raw.instanceId ?? "unknown",
+    roles: raw.roles ?? [],
+    workerFormats: raw.workerFormats ?? [],
+    workerKinds: raw.workerKinds ?? [],
+  };
+}
 
 export function RuntimeNodesPanel({
   pollIntervalMs = 15_000,
@@ -75,6 +109,7 @@ export function RuntimeNodesPanel({
   pollIntervalMs?: number;
 }) {
   const [nodes, setNodes] = useState<RuntimeNode[] | null>(null);
+  const [health, setHealth] = useState<RuntimeNodeList["health"] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mounted = useRef(false);
@@ -92,7 +127,15 @@ export function RuntimeNodesPanel({
         return;
       }
       setError(null);
-      setNodes(result.data?.items ?? []);
+      setNodes((result.data?.items ?? []).map(normalizeRuntimeNode));
+      setHealth(
+        result.data?.health
+          ? {
+              ...result.data.health,
+              issues: result.data.health.issues ?? [],
+            }
+          : null,
+      );
     } catch (nextError) {
       if (mounted.current) setError(nextError);
     } finally {
@@ -117,6 +160,7 @@ export function RuntimeNodesPanel({
         title="运行节点"
         extra={
           <div className="flex items-center gap-2">
+            {health && <StateBadge state={health.status} />}
             <span className="text-xs text-zinc-500">
               {nodes ? `${nodes.length} 个实例` : "加载中"}
             </span>
@@ -133,6 +177,26 @@ export function RuntimeNodesPanel({
           </div>
         }
       />
+      {health && (health.issues ?? []).length > 0 && (
+        <Alert
+          className="ag-feedback-enter rounded-none border-x-0 border-t-0"
+          type={health.status === "critical" ? "error" : "warning"}
+          showIcon
+          title="集群运行能力需要关注"
+          description={
+            <div className="space-y-1">
+              {(health.issues ?? []).map((issue) => (
+                <div key={issue.code}>
+                  <span className="font-mono text-[11px] text-zinc-500">
+                    {issue.code}
+                  </span>
+                  <span className="ml-2">{issue.message}</span>
+                </div>
+              ))}
+            </div>
+          }
+        />
+      )}
       {error ? (
         <ErrorBanner error={error} onRetry={load} />
       ) : nodes === null ? (
@@ -149,7 +213,7 @@ export function RuntimeNodesPanel({
       ) : (
         <Table<RuntimeNode>
           className="ag-console-table"
-          rowKey={(node) => node.instanceId}
+          rowKey={(node) => node.sessionId}
           size="small"
           dataSource={nodes}
           columns={nodeColumns}

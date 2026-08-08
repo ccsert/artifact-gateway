@@ -26,6 +26,8 @@ a dated version heading without rewriting their meaning.
   resource usage.
 - Added package-level Go coverage floors and Console lint, formatting,
   accessibility, component-test, and coverage gates.
+- Added session-aware distributed node inventory, graceful offline state,
+  retention cleanup, and cluster capability health summaries.
 
 ### Fixed
 

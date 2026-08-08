@@ -207,7 +207,9 @@ type Store interface {
 
 type RuntimeNodeStore interface {
 	UpsertRuntimeNodeHeartbeat(context.Context, RuntimeNode) error
+	MarkRuntimeNodeStopped(context.Context, string, string, time.Time) error
 	ListRuntimeNodes(context.Context) ([]RuntimeNode, error)
+	PruneRuntimeNodes(context.Context, time.Time) (int64, error)
 }
 
 type AuditStore interface {

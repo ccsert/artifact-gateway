@@ -220,19 +220,22 @@ type OCIUpload struct {
 	CollectedAt                              time.Time
 }
 
-// RuntimeNode is the durable inventory record for one Gateway process. The
-// instance ID is deployment-owned and must be unique across live processes.
+// RuntimeNode is the durable inventory record for one Gateway process session.
+// Instance IDs are deployment-owned labels; SessionID fences restarts and
+// exposes accidental duplicate instance IDs without collapsing their records.
 type RuntimeNode struct {
 	InstanceID    string
+	SessionID     string
 	Roles         []string
 	WorkerFormats []string
 	WorkerKinds   []string
 	StartedAt     time.Time
 	LastSeenAt    time.Time
+	StoppedAt     time.Time
 }
 
 func (n RuntimeNode) Validate() error {
-	if n.InstanceID == "" || n.LastSeenAt.IsZero() || n.StartedAt.IsZero() {
+	if n.InstanceID == "" || n.SessionID == "" || n.LastSeenAt.IsZero() || n.StartedAt.IsZero() {
 		return ErrInvalidRuntimeNode
 	}
 	return nil

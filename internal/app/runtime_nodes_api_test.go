@@ -17,9 +17,9 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 	store := repository.NewMemoryStore()
 	now := time.Now().UTC()
 	for _, node := range []repository.RuntimeNode{
-		{InstanceID: "api-01", Roles: []string{"api"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-time.Second)},
-		{InstanceID: "worker-01", Roles: []string{"worker"}, WorkerFormats: []string{"oci"}, WorkerKinds: []string{"reclaim", "replication"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-time.Minute)},
-		{InstanceID: "scheduler-01", Roles: []string{"scheduler"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-3 * time.Minute)},
+		{InstanceID: "api-01", SessionID: "session-api", Roles: []string{"api"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-time.Second)},
+		{InstanceID: "worker-01", SessionID: "session-worker", Roles: []string{"worker"}, WorkerFormats: []string{"oci"}, WorkerKinds: []string{"reclaim", "replication"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-time.Minute)},
+		{InstanceID: "scheduler-01", SessionID: "session-scheduler", Roles: []string{"scheduler"}, StartedAt: now.Add(-time.Hour), LastSeenAt: now.Add(-3 * time.Minute)},
 	} {
 		if err := store.UpsertRuntimeNodeHeartbeat(ctx, node); err != nil {
 			t.Fatal(err)
@@ -48,10 +48,33 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 	if byID["api-01"].Status != adminopenapi.Online || byID["worker-01"].Status != adminopenapi.Stale || byID["scheduler-01"].Status != adminopenapi.Offline {
 		t.Fatalf("runtime node statuses=%#v", byID)
 	}
+	if body.Health.Status != adminopenapi.Degraded || body.Health.Online != 1 || body.Health.Stale != 1 || body.Health.Offline != 1 {
+		t.Fatalf("runtime node health=%#v", body.Health)
+	}
 	worker := byID["worker-01"]
 	if len(worker.WorkerFormats) != 1 || worker.WorkerFormats[0] != adminopenapi.FormatOci || len(worker.WorkerKinds) != 2 {
 		t.Fatalf("worker capabilities=%#v", worker)
 	}
+}
+
+func TestRuntimeNodeHealthReportsDuplicateSessionsAndMissingRoles(t *testing.T) {
+	health := runtimeNodeHealth([]adminopenapi.RuntimeNode{
+		{InstanceId: "api-01", SessionId: "api-session", Roles: []string{"api"}, Status: adminopenapi.Online},
+		{InstanceId: "worker-01", SessionId: "worker-session-1", Roles: []string{"worker"}, Status: adminopenapi.Online},
+		{InstanceId: "worker-01", SessionId: "worker-session-2", Roles: []string{"worker"}, Status: adminopenapi.Online},
+	})
+	if health.Status != adminopenapi.Degraded {
+		t.Fatalf("health status=%q", health.Status)
+	}
+	if len(health.Issues) != 2 {
+		t.Fatalf("health issues=%#v", health.Issues)
+	}
+	for _, issue := range health.Issues {
+		if issue.Code == "duplicate_instance_id" {
+			return
+		}
+	}
+	t.Fatalf("duplicate session issue missing: %#v", health.Issues)
 }
 
 func TestRuntimeNodeStatusMarksThirtySecondsAsStale(t *testing.T) {

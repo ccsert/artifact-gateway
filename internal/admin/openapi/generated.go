@@ -811,6 +811,45 @@ func (e RuntimeNodeStatus) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeNodeHealthStatus.
+const (
+	Critical RuntimeNodeHealthStatus = "critical"
+	Degraded RuntimeNodeHealthStatus = "degraded"
+	Healthy  RuntimeNodeHealthStatus = "healthy"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNodeHealthStatus enum.
+func (e RuntimeNodeHealthStatus) Valid() bool {
+	switch e {
+	case Critical:
+		return true
+	case Degraded:
+		return true
+	case Healthy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeNodeHealthIssueSeverity.
+const (
+	Error   RuntimeNodeHealthIssueSeverity = "error"
+	Warning RuntimeNodeHealthIssueSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNodeHealthIssueSeverity enum.
+func (e RuntimeNodeHealthIssueSeverity) Valid() bool {
+	switch e {
+	case Error:
+		return true
+	case Warning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
@@ -1849,8 +1888,10 @@ type RuntimeNode struct {
 	InstanceId    string            `json:"instanceId"`
 	LastSeenAt    time.Time         `json:"lastSeenAt"`
 	Roles         []string          `json:"roles"`
+	SessionId     string            `json:"sessionId"`
 	StartedAt     time.Time         `json:"startedAt"`
 	Status        RuntimeNodeStatus `json:"status"`
+	StoppedAt     *time.Time        `json:"stoppedAt,omitempty"`
 	WorkerFormats []Format          `json:"workerFormats"`
 	WorkerKinds   []string          `json:"workerKinds"`
 }
@@ -1858,9 +1899,32 @@ type RuntimeNode struct {
 // RuntimeNodeStatus defines model for RuntimeNode.Status.
 type RuntimeNodeStatus string
 
+// RuntimeNodeHealth defines model for RuntimeNodeHealth.
+type RuntimeNodeHealth struct {
+	Issues  []RuntimeNodeHealthIssue `json:"issues"`
+	Offline int                      `json:"offline"`
+	Online  int                      `json:"online"`
+	Stale   int                      `json:"stale"`
+	Status  RuntimeNodeHealthStatus  `json:"status"`
+}
+
+// RuntimeNodeHealthStatus defines model for RuntimeNodeHealth.Status.
+type RuntimeNodeHealthStatus string
+
+// RuntimeNodeHealthIssue defines model for RuntimeNodeHealthIssue.
+type RuntimeNodeHealthIssue struct {
+	Code     string                         `json:"code"`
+	Message  string                         `json:"message"`
+	Severity RuntimeNodeHealthIssueSeverity `json:"severity"`
+}
+
+// RuntimeNodeHealthIssueSeverity defines model for RuntimeNodeHealthIssue.Severity.
+type RuntimeNodeHealthIssueSeverity string
+
 // RuntimeNodeList defines model for RuntimeNodeList.
 type RuntimeNodeList struct {
-	Items []RuntimeNode `json:"items"`
+	Health RuntimeNodeHealth `json:"health"`
+	Items  []RuntimeNode     `json:"items"`
 }
 
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.

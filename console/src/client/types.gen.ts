@@ -619,16 +619,33 @@ export type GlobalArtifactSearchPage = {
 
 export type RuntimeNode = {
   instanceId: string;
+  sessionId: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
   workerKinds: Array<string>;
   startedAt: string;
   lastSeenAt: string;
+  stoppedAt?: string;
   status: "online" | "stale" | "offline";
+};
+
+export type RuntimeNodeHealthIssue = {
+  code: string;
+  severity: "warning" | "error";
+  message: string;
+};
+
+export type RuntimeNodeHealth = {
+  status: "healthy" | "degraded" | "critical";
+  online: number;
+  stale: number;
+  offline: number;
+  issues: Array<RuntimeNodeHealthIssue>;
 };
 
 export type RuntimeNodeList = {
   items: Array<RuntimeNode>;
+  health: RuntimeNodeHealth;
 };
 
 /**
