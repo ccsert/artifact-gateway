@@ -17,6 +17,25 @@ make up
 liveness; `GET /readyz` verifies PostgreSQL and object storage. `make down`
 preserves local volumes.
 
+### 单机与集群运行模式
+
+Gateway 默认以 `GATEWAY_NODE_ROLES=standalone` 启动，同时提供协议 API、
+周期调度和后台 worker。生产环境可以使用同一个镜像拆分节点职责：
+
+```text
+GATEWAY_NODE_ROLES=api
+GATEWAY_NODE_ROLES=scheduler
+GATEWAY_NODE_ROLES=worker GATEWAY_WORKER_FORMATS=oci
+```
+
+所有节点共享 PostgreSQL 和 S3/MinIO；任务领取由数据库租约保证幂等。worker
+可以用 `GATEWAY_WORKER_FORMATS` 和 `GATEWAY_WORKER_KINDS` 限制格式与任务类型，
+例如只部署 OCI 的 `reclaim,replication` worker。非 API 节点仅暴露
+`/livez`、`/readyz` 和 `/metrics`，不会暴露制品协议或管理接口。
+
+拆分部署时应按副本数降低每个节点的数据库连接池上限，避免连接总数超过
+PostgreSQL 的 `max_connections`。
+
 Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean
 checkout. `make integration-test` creates isolated PostgreSQL and MinIO
 containers, applies every migration, verifies a second migration run is a

@@ -63,17 +63,42 @@ func (m *CacheMaintenance) Status(ctx context.Context) (CacheMaintenanceStatus, 
 }
 
 func (m *CacheMaintenance) Run(ctx context.Context) error {
+	return m.runFormats(ctx, cacheCollectionFormats)
+}
+
+// RunFormat collects only one cache format so format-specialized workers do
+// not consume work owned by another worker pool.
+func (m *CacheMaintenance) RunFormat(ctx context.Context, format string) error {
+	return m.runFormats(ctx, []string{format})
+}
+
+func (m *CacheMaintenance) runFormats(ctx context.Context, formats []string) error {
 	m.mu.Lock()
 	m.status.LastStartedAt = time.Now().UTC()
 	m.status.LastError = ""
 	m.mu.Unlock()
 
-	err := m.oci.CollectGarbage(ctx)
-	if err == nil && m.raw != nil {
-		err = m.raw.CollectGarbage(ctx)
-	}
-	if err == nil && m.conan != nil {
-		err = m.conan.CollectGarbage(ctx)
+	var err error
+	for _, format := range formats {
+		switch format {
+		case cacheCollectionFormatOCI:
+			if m.oci != nil {
+				err = m.oci.CollectGarbage(ctx)
+			}
+		case cacheCollectionFormatRaw:
+			if m.raw != nil {
+				err = m.raw.CollectGarbage(ctx)
+			}
+		case cacheCollectionFormatConan:
+			if m.conan != nil {
+				err = m.conan.CollectGarbage(ctx)
+			}
+		default:
+			err = fmt.Errorf("unsupported cache maintenance format %q", format)
+		}
+		if err != nil {
+			break
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

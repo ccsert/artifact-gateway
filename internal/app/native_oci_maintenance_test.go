@@ -23,13 +23,23 @@ func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	maintenance := NativeOCIMaintenance{Store: store, Objects: objects, Now: func() time.Time { return now }}
-	if err := maintenance.Collect(context.Background()); err != nil {
+	if err := maintenance.Schedule(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if body, err := objects.Get(context.Background(), upload.ObjectKey); err != nil || string(body) != "partial" {
+		t.Fatalf("scheduler changed partial object body=%q err=%v", body, err)
+	}
+	remaining, err := store.ListUncollectedOCIUploads(context.Background(), 10)
+	if err != nil || len(remaining) != 1 {
+		t.Fatalf("scheduled uncollected=%#v err=%v", remaining, err)
+	}
+	if err := maintenance.RunReclaimJobs(context.Background(), 10); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := objects.Get(context.Background(), upload.ObjectKey); !errors.Is(err, errOCICacheMiss) {
 		t.Fatalf("partial object err=%v", err)
 	}
-	remaining, err := store.ListUncollectedOCIUploads(context.Background(), 10)
+	remaining, err = store.ListUncollectedOCIUploads(context.Background(), 10)
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("uncollected=%#v err=%v", remaining, err)
 	}

@@ -14,10 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
-	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
-	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
-	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -110,29 +107,15 @@ func main() {
 	metrics := (&app.Metrics{}).
 		WithDatabaseStats(databasePool.Stats).
 		WithDatabasePoolStats("coordinator", coordinatorPool.Stats).
-		WithDatabasePoolStats("notifications", notificationPool.Stats)
+		WithDatabasePoolStats("notifications", notificationPool.Stats).
+		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
-	app.LifecycleJobRecovery{Store: store}.Start(runtimeContext, time.Minute)
-	app.BackgroundOperationQueueObserver{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.RepositoryDeletionWorker{Store: store}.Start(runtimeContext, time.Minute)
-	taskQueue.StartCacheCollection(runtimeContext, 5*time.Minute, maintenance.Run)
-	app.NativeMavenMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.NativeRepositoryRetention{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.AuditRetentionWorker{Store: store, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.NativeMavenPromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.NativeOCIMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.NativeOCIPromotion{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	rawprotocol.NativePromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	rawmaintenance.Collector{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	app.NativeConanMaintenance{Store: store, Objects: objectStore, Metrics: metrics}.Start(runtimeContext, time.Hour)
-	conanprotocol.NativePromotion{Store: store, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.RawReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.OCIReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.MavenReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	app.ConanReplication{Store: store, Source: objectStore, Destination: objectStore, Metrics: metrics}.Start(runtimeContext, time.Minute)
-	server := &http.Server{
-		Addr: cfg.ListenAddress,
-		Handler: metrics.Instrument(app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
+	startAPI := cfg.HasRole(config.NodeRoleAPI)
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds)
+	(backgroundRuntime{store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics}).Start(runtimeContext, cfg)
+	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
+	if startAPI {
+		handler = app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
 			AdminToken:        cfg.AdminToken,
 			ResolverToken:     cfg.ResolverToken,
 			AdminActor:        cfg.AdminActor,
@@ -146,7 +129,11 @@ func main() {
 				Roles:         cfg.OIDCRoles,
 			}),
 			APIKeys: store,
-		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})),
+		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})
+	}
+	server := &http.Server{
+		Addr:              cfg.ListenAddress,
+		Handler:           metrics.Instrument(handler),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
@@ -174,4 +161,12 @@ func signalContext() context.Context {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	go func() { <-ctx.Done(); stop() }()
 	return ctx
+}
+
+func nodeRoleStrings(roles []config.NodeRole) []string {
+	values := make([]string, 0, len(roles))
+	for _, role := range roles {
+		values = append(values, string(role))
+	}
+	return values
 }

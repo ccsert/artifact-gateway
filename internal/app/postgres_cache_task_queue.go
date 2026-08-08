@@ -10,7 +10,15 @@ import (
 	"github.com/google/uuid"
 )
 
-const cacheCollectionTask = "cache_collect"
+const (
+	legacyCacheCollectionTask  = "cache_collect"
+	cacheCollectionTaskPrefix  = "cache_collect:"
+	cacheCollectionFormatOCI   = "oci"
+	cacheCollectionFormatRaw   = "raw"
+	cacheCollectionFormatConan = "conan"
+)
+
+var cacheCollectionFormats = []string{cacheCollectionFormatOCI, cacheCollectionFormatRaw, cacheCollectionFormatConan}
 
 type postgresCacheTask struct {
 	ID, ClaimToken string
@@ -75,14 +83,35 @@ func (q *PostgresCacheTaskQueue) ListenerDatabaseStats() sql.DBStats {
 }
 
 func (q *PostgresCacheTaskQueue) EnqueueCollection(ctx context.Context) error {
-	if _, err := q.db.ExecContext(ctx, `INSERT INTO cache_tasks (id, task_type, dedupe_key) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, uuid.NewString(), cacheCollectionTask, cacheCollectionTask); err != nil {
+	// Retire the pre-format queue entry during rolling upgrades. The format
+	// tasks below replace it without losing a scheduled collection pass.
+	if _, err := q.db.ExecContext(ctx, `UPDATE cache_tasks SET completed_at=now() WHERE task_type=$1 AND completed_at IS NULL`, legacyCacheCollectionTask); err != nil {
 		return err
 	}
-	_, err := q.db.ExecContext(ctx, `SELECT pg_notify('artifact_gateway_cache_tasks', $1)`, cacheCollectionTask)
+	for _, format := range cacheCollectionFormats {
+		if err := q.EnqueueCollectionForFormat(ctx, format); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (q *PostgresCacheTaskQueue) EnqueueCollectionForFormat(ctx context.Context, format string) error {
+	if !supportsCacheCollectionFormat(format) {
+		return fmt.Errorf("unsupported cache collection format %q", format)
+	}
+	taskType := cacheCollectionTaskPrefix + format
+	if _, err := q.db.ExecContext(ctx, `INSERT INTO cache_tasks (id, task_type, dedupe_key) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, uuid.NewString(), taskType, taskType); err != nil {
+		return err
+	}
+	_, err := q.db.ExecContext(ctx, `SELECT pg_notify('artifact_gateway_cache_tasks', $1)`, format)
 	return err
 }
 
-func (q *PostgresCacheTaskQueue) claimCollection(ctx context.Context, lease time.Duration) (postgresCacheTask, bool, error) {
+func (q *PostgresCacheTaskQueue) claimCollection(ctx context.Context, format string, lease time.Duration) (postgresCacheTask, bool, error) {
+	if !supportsCacheCollectionFormat(format) {
+		return postgresCacheTask{}, false, fmt.Errorf("unsupported cache collection format %q", format)
+	}
 	token := uuid.NewString()
 	var task postgresCacheTask
 	err := q.db.QueryRowContext(ctx, `WITH candidate AS (
@@ -97,7 +126,7 @@ UPDATE cache_tasks AS task
 SET claimed_at=now(), claim_token=$3::uuid, attempts=task.attempts+1
 FROM candidate
 WHERE task.id=candidate.id
-RETURNING task.id::text, task.claim_token::text`, cacheCollectionTask, lease.String(), token).Scan(&task.ID, &task.ClaimToken)
+RETURNING task.id::text, task.claim_token::text`, cacheCollectionTaskPrefix+format, lease.String(), token).Scan(&task.ID, &task.ClaimToken)
 	if err == sql.ErrNoRows {
 		return postgresCacheTask{}, false, nil
 	}
@@ -126,39 +155,91 @@ func (q *PostgresCacheTaskQueue) retry(ctx context.Context, task postgresCacheTa
 	return err
 }
 
-func (q *PostgresCacheTaskQueue) StartCacheCollection(ctx context.Context, interval time.Duration, collect func(context.Context) error) {
+func (q *PostgresCacheTaskQueue) StartCacheCollection(ctx context.Context, interval time.Duration, collect func(context.Context, string) error) {
+	q.StartCacheScheduler(ctx, interval)
+	q.StartCacheWorker(ctx, cacheCollectionFormats, collect)
+}
+
+// StartCacheScheduler periodically creates one durable, deduplicated cache
+// collection task per supported format. It does not claim or execute work, so
+// scheduler replicas can be separated from worker replicas.
+func (q *PostgresCacheTaskQueue) StartCacheScheduler(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
 	go func() {
 		_ = q.EnqueueCollection(ctx)
-		wake := q.listenForTasks(ctx)
 		enqueue := time.NewTicker(interval)
-		// LISTEN/NOTIFY wakes healthy workers immediately. This low-frequency
-		// poll recovers queued work if a listener connection is interrupted.
-		poll := time.NewTicker(5 * time.Second)
 		defer enqueue.Stop()
-		defer poll.Stop()
 		for {
-			task, claimed, err := q.claimCollection(ctx, interval*2)
-			if err == nil && claimed {
-				if err := collect(ctx); err != nil {
-					_ = q.retry(ctx, task, time.Second)
-				} else {
-					_ = q.complete(ctx, task)
-				}
-				continue
-			}
 			select {
 			case <-ctx.Done():
 				return
 			case <-enqueue.C:
 				_ = q.EnqueueCollection(ctx)
+			}
+		}
+	}()
+}
+
+// StartCacheWorker claims and executes durable collection tasks. A low
+// frequency poll remains as a recovery path when LISTEN/NOTIFY is interrupted.
+func (q *PostgresCacheTaskQueue) StartCacheWorker(ctx context.Context, formats []string, collect func(context.Context, string) error) {
+	formats = supportedCacheCollectionFormats(formats)
+	if collect == nil || len(formats) == 0 {
+		return
+	}
+	go func() {
+		wake := q.listenForTasks(ctx)
+		poll := time.NewTicker(5 * time.Second)
+		defer poll.Stop()
+		for ctx.Err() == nil {
+			processed := false
+			for _, format := range formats {
+				task, claimed, err := q.claimCollection(ctx, format, 10*time.Minute)
+				if err == nil && claimed {
+					if err := collect(ctx, format); err != nil {
+						_ = q.retry(ctx, task, time.Second)
+					} else {
+						_ = q.complete(ctx, task)
+					}
+					processed = true
+					break
+				}
+			}
+			if processed {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
 			case <-wake:
 			case <-poll.C:
 			}
 		}
 	}()
+}
+
+func supportsCacheCollectionFormat(format string) bool {
+	for _, supported := range cacheCollectionFormats {
+		if format == supported {
+			return true
+		}
+	}
+	return false
+}
+
+func supportedCacheCollectionFormats(formats []string) []string {
+	result := make([]string, 0, len(cacheCollectionFormats))
+	for _, supported := range cacheCollectionFormats {
+		for _, format := range formats {
+			if format == supported {
+				result = append(result, supported)
+				break
+			}
+		}
+	}
+	return result
 }
 
 func (q *PostgresCacheTaskQueue) listenForTasks(ctx context.Context) <-chan struct{} {

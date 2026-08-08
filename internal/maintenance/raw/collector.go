@@ -136,6 +136,16 @@ func (c Collector) failReclaimJob(ctx context.Context, job repository.LifecycleJ
 }
 
 func (c Collector) Start(ctx context.Context, interval time.Duration) {
+	c.StartScheduler(ctx, interval)
+	c.StartWorker(ctx, interval)
+}
+
+// StartScheduler discovers unreferenced Raw objects and records durable
+// reclaim jobs. It does not touch object-store bytes.
+func (c Collector) StartScheduler(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -144,8 +154,46 @@ func (c Collector) Start(ctx context.Context, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_ = c.Collect(ctx)
+				now := time.Now
+				if c.Now != nil {
+					now = c.Now
+				}
+				_ = c.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100)
 			}
 		}
 	}()
+}
+
+// StartWorker only claims and executes Raw reclaim jobs.
+func (c Collector) StartWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		_ = c.RunReclaimJobs(ctx, 100)
+		wake := notificationWake(ctx, c.Store, "artifact_gateway_lifecycle_jobs")
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = c.RunReclaimJobs(ctx, 100)
+			case <-wake:
+				_ = c.RunReclaimJobs(ctx, 100)
+			}
+		}
+	}()
+}
+
+type postgresNotificationSource interface {
+	Listen(context.Context, string) <-chan struct{}
+}
+
+func notificationWake(ctx context.Context, store any, channel string) <-chan struct{} {
+	if source, ok := store.(postgresNotificationSource); ok {
+		return source.Listen(ctx, channel)
+	}
+	return nil
 }

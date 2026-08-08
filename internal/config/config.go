@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,8 +14,39 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 )
 
+// NodeRole controls which parts of the Gateway runtime are enabled. The
+// standalone role is the default and expands to every role for local use.
+type NodeRole string
+
+const (
+	NodeRoleStandalone NodeRole = "standalone"
+	NodeRoleAPI        NodeRole = "api"
+	NodeRoleScheduler  NodeRole = "scheduler"
+	NodeRoleWorker     NodeRole = "worker"
+)
+
+var supportedNodeRoles = map[NodeRole]struct{}{
+	NodeRoleStandalone: {},
+	NodeRoleAPI:        {},
+	NodeRoleScheduler:  {},
+	NodeRoleWorker:     {},
+}
+
+var supportedWorkerFormats = map[string]struct{}{
+	"maven": {}, "oci": {}, "raw": {}, "conan": {},
+}
+
+var supportedWorkerKinds = map[string]struct{}{
+	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},
+	"deletion": {}, "recovery": {}, "cache": {}, "audit": {},
+}
+
 type Config struct {
 	ListenAddress            string
+	NodeRoles                []NodeRole
+	InstanceID               string
+	WorkerFormats            []string
+	WorkerKinds              []string
 	DatabaseURL              string
 	DatabasePool             database.PoolConfig
 	DatabaseCoordinatorPool  database.PoolConfig
@@ -51,6 +83,10 @@ type Config struct {
 func Load() (Config, error) {
 	cfg := Config{
 		ListenAddress:            value("GATEWAY_LISTEN_ADDRESS", ":8080"),
+		NodeRoles:                parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
+		InstanceID:               value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
+		WorkerFormats:            parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
+		WorkerKinds:              parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
 		DatabaseURL:              os.Getenv("GATEWAY_DATABASE_URL"),
 		DatabasePool:             database.DefaultPoolConfig(),
 		DatabaseCoordinatorPool:  database.DefaultCoordinatorPoolConfig(),
@@ -86,6 +122,9 @@ func Load() (Config, error) {
 		},
 		OTLPHTTPEndpoint:  strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
 		OTELSamplingRatio: 1,
+	}
+	if err := validateRuntimeConfig(cfg); err != nil {
+		return Config{}, err
 	}
 
 	if cfg.DatabaseURL == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
@@ -200,6 +239,125 @@ func Load() (Config, error) {
 		cfg.ConanCacheTTL = ttl
 	}
 	return cfg, nil
+}
+
+func (c Config) HasRole(role NodeRole) bool {
+	for _, configured := range c.NodeRoles {
+		if configured == NodeRoleStandalone || configured == role {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) WorkerEnabled(format, kind string) bool {
+	if !c.HasRole(NodeRoleWorker) {
+		return false
+	}
+	return c.WorkerFormatEnabled(format) && c.WorkerKindEnabled(kind)
+}
+
+func (c Config) WorkerFormatEnabled(format string) bool {
+	return contains(c.WorkerFormats, format)
+}
+
+func (c Config) WorkerKindEnabled(kind string) bool {
+	return contains(c.WorkerKinds, kind)
+}
+
+func validateRuntimeConfig(cfg Config) error {
+	if strings.TrimSpace(cfg.InstanceID) == "" {
+		return fmt.Errorf("GATEWAY_INSTANCE_ID must not be empty")
+	}
+	if len(cfg.NodeRoles) == 0 {
+		return fmt.Errorf("GATEWAY_NODE_ROLES must include at least one role")
+	}
+	standalone := false
+	for _, role := range cfg.NodeRoles {
+		if _, ok := supportedNodeRoles[role]; !ok {
+			return fmt.Errorf("GATEWAY_NODE_ROLES contains unsupported role %q", role)
+		}
+		if role == NodeRoleStandalone {
+			standalone = true
+		}
+	}
+	if standalone && len(cfg.NodeRoles) != 1 {
+		return fmt.Errorf("GATEWAY_NODE_ROLES=standalone cannot be combined with other roles")
+	}
+	for _, format := range cfg.WorkerFormats {
+		if _, ok := supportedWorkerFormats[format]; !ok {
+			return fmt.Errorf("GATEWAY_WORKER_FORMATS contains unsupported format %q", format)
+		}
+	}
+	for _, kind := range cfg.WorkerKinds {
+		if _, ok := supportedWorkerKinds[kind]; !ok {
+			return fmt.Errorf("GATEWAY_WORKER_KINDS contains unsupported kind %q", kind)
+		}
+	}
+	return nil
+}
+
+func parseNodeRoles(raw string) []NodeRole {
+	values := splitCSV(raw)
+	if len(values) == 0 {
+		return []NodeRole{NodeRoleStandalone}
+	}
+	roles := make([]NodeRole, 0, len(values))
+	seen := make(map[NodeRole]struct{}, len(values))
+	for _, value := range values {
+		role := NodeRole(strings.ToLower(value))
+		if _, exists := seen[role]; exists {
+			continue
+		}
+		seen[role] = struct{}{}
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+func parseFilter(raw string, supported map[string]struct{}) []string {
+	values := splitCSV(raw)
+	if len(values) == 0 {
+		for value := range supported {
+			values = append(values, value)
+		}
+		// Map iteration is intentionally normalized so the effective config is
+		// deterministic in logs and tests.
+		sort.Strings(values)
+		return values
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.ToLower(value)
+		if _, ok := supported[value]; !ok {
+			result = append(result, value)
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func contains(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil || strings.TrimSpace(name) == "" {
+		return "local"
+	}
+	return strings.TrimSpace(name)
 }
 
 func positiveIntEnv(name string, fallback int, allowZero bool) (int, error) {

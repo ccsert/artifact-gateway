@@ -189,17 +189,27 @@ func TestPostgresCacheTaskQueueClaimsWorkOnceAcrossGatewayInstances(t *testing.T
 		t.Fatal(err)
 	}
 	defer queueB.Close()
-	if err := queueA.EnqueueCollection(context.Background()); err != nil {
+	if err := queueA.EnqueueCollectionForFormat(context.Background(), cacheCollectionFormatOCI); err != nil {
 		t.Fatal(err)
 	}
-	claimed, ok, err := queueA.claimCollection(context.Background(), time.Minute)
+	if err := queueA.EnqueueCollectionForFormat(context.Background(), cacheCollectionFormatRaw); err != nil {
+		t.Fatal(err)
+	}
+	claimed, ok, err := queueA.claimCollection(context.Background(), cacheCollectionFormatOCI, time.Minute)
 	if err != nil || !ok {
 		t.Fatalf("first claim = %#v, %t, %v", claimed, ok, err)
 	}
-	if _, ok, err := queueB.claimCollection(context.Background(), time.Minute); err != nil || ok {
+	if _, ok, err := queueB.claimCollection(context.Background(), cacheCollectionFormatOCI, time.Minute); err != nil || ok {
 		t.Fatalf("second claim while leased = %t, %v; want unavailable", ok, err)
 	}
+	rawClaimed, ok, err := queueB.claimCollection(context.Background(), cacheCollectionFormatRaw, time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("different-format claim = %#v, %t, %v", rawClaimed, ok, err)
+	}
 	if err := queueA.complete(context.Background(), claimed); err != nil {
+		t.Fatal(err)
+	}
+	if err := queueB.complete(context.Background(), rawClaimed); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -139,6 +139,13 @@ func (m *Metrics) writeHTTPMetrics(w io.Writer) {
 }
 
 func (m *Metrics) writeRuntimeMetrics(w io.Writer) {
+	if m.instanceID != "" {
+		roles := make([]string, 0, len(m.nodeRoles))
+		for _, role := range m.nodeRoles {
+			roles = append(roles, escapeMetricLabel(role))
+		}
+		_, _ = io.WriteString(w, "# TYPE artifact_gateway_node_info gauge\nartifact_gateway_node_info{instance_id=\""+escapeMetricLabel(m.instanceID)+"\",roles=\""+strings.Join(roles, ",")+"\"} 1\n")
+	}
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	_, _ = io.WriteString(w, "# TYPE artifact_gateway_runtime_goroutines gauge\nartifact_gateway_runtime_goroutines "+utoa(uint64(runtime.NumGoroutine()))+"\n")
@@ -147,6 +154,12 @@ func (m *Metrics) writeRuntimeMetrics(w io.Writer) {
 	_, _ = io.WriteString(w, "# TYPE artifact_gateway_runtime_heap_sys_bytes gauge\nartifact_gateway_runtime_heap_sys_bytes "+utoa(stats.HeapSys)+"\n")
 	_, _ = io.WriteString(w, "# TYPE artifact_gateway_runtime_gc_cycles_total counter\nartifact_gateway_runtime_gc_cycles_total "+utoa(uint64(stats.NumGC))+"\n")
 	_, _ = io.WriteString(w, "# TYPE artifact_gateway_runtime_gc_pause_seconds_total counter\nartifact_gateway_runtime_gc_pause_seconds_total "+strconv.FormatFloat(float64(stats.PauseTotalNs)/float64(time.Second), 'f', 9, 64)+"\n")
+}
+
+func escapeMetricLabel(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return strings.ReplaceAll(value, "\n", `\n`)
 }
 
 func (m *Metrics) writeDatabaseMetrics(w io.Writer) {

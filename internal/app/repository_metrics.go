@@ -64,6 +64,16 @@ type Metrics struct {
 	mu           sync.RWMutex
 	repositories map[string]RepositoryMetrics
 	now          func() time.Time
+	instanceID   string
+	nodeRoles    []string
+}
+
+// WithNodeIdentity adds bounded deployment labels to metrics. The values are
+// configured once at startup and never come from request paths.
+func (m *Metrics) WithNodeIdentity(instanceID string, roles []string) *Metrics {
+	m.instanceID = instanceID
+	m.nodeRoles = append([]string(nil), roles...)
+	return m
 }
 
 type backgroundOperationKind uint8

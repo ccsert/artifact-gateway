@@ -88,6 +88,15 @@ func TestRuntimeAndDatabasePoolMetrics(t *testing.T) {
 	}
 }
 
+func TestNodeInfoMetricEscapesConfiguredIdentity(t *testing.T) {
+	metrics := (&Metrics{}).WithNodeIdentity("worker\"01\n", []string{"worker"})
+	response := httptest.NewRecorder()
+	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(response.Body.String(), `artifact_gateway_node_info{instance_id="worker\"01\n",roles="worker"} 1`) {
+		t.Fatalf("node metric is missing or malformed:\n%s", response.Body.String())
+	}
+}
+
 type basicResponseWriter struct{ header http.Header }
 
 func (w *basicResponseWriter) Header() http.Header          { return w.header }

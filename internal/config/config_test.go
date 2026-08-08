@@ -39,6 +39,65 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	if cfg.RawCacheMaxObjectBytes != 12345 {
 		t.Fatalf("RawCacheMaxObjectBytes = %d", cfg.RawCacheMaxObjectBytes)
 	}
+	if !cfg.HasRole(NodeRoleAPI) || !cfg.HasRole(NodeRoleScheduler) || !cfg.HasRole(NodeRoleWorker) {
+		t.Fatalf("default node roles = %#v", cfg.NodeRoles)
+	}
+	if cfg.InstanceID == "" || !cfg.WorkerEnabled("maven", "promotion") {
+		t.Fatalf("runtime config = instance %q roles %#v formats %#v kinds %#v", cfg.InstanceID, cfg.NodeRoles, cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+}
+
+func TestLoadParsesClusterNodeRolesAndWorkerFilters(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_NODE_ROLES", "WORKER,worker")
+	t.Setenv("GATEWAY_INSTANCE_ID", "oci-worker-01")
+	t.Setenv("GATEWAY_WORKER_FORMATS", "OCI, raw,oci")
+	t.Setenv("GATEWAY_WORKER_KINDS", "Replication,reclaim,replication")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.InstanceID != "oci-worker-01" || cfg.HasRole(NodeRoleAPI) || !cfg.HasRole(NodeRoleWorker) || len(cfg.NodeRoles) != 1 {
+		t.Fatalf("cluster roles = %#v instance=%q", cfg.NodeRoles, cfg.InstanceID)
+	}
+	if len(cfg.WorkerFormats) != 2 || len(cfg.WorkerKinds) != 2 || !cfg.WorkerEnabled("oci", "replication") || !cfg.WorkerEnabled("raw", "reclaim") || cfg.WorkerEnabled("maven", "reclaim") || cfg.WorkerEnabled("oci", "promotion") {
+		t.Fatalf("worker filters formats=%#v kinds=%#v", cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+}
+
+func TestLoadRejectsUnknownClusterRoleOrWorkerFilter(t *testing.T) {
+	setCompleteConfiguration(t)
+	for name, value := range map[string]string{
+		"GATEWAY_NODE_ROLES":     "worker,unknown",
+		"GATEWAY_WORKER_FORMATS": "oci,unknown",
+		"GATEWAY_WORKER_KINDS":   "replication,unknown",
+	} {
+		t.Setenv(name, value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() accepted %s=%q", name, value)
+		}
+		t.Setenv(name, "")
+	}
+}
+
+func TestLoadRejectsStandaloneRoleCombination(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_NODE_ROLES", "standalone,worker")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted standalone role combination")
+	}
+}
+
+func setCompleteConfiguration(t *testing.T) {
+	t.Helper()
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 }
 
 func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {

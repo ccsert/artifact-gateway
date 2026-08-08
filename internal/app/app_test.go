@@ -103,3 +103,17 @@ func TestReadinessSucceedsWhenDependenciesAreAvailable(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 }
+
+func TestOperationalHandlerDoesNotExposeArtifactRoutes(t *testing.T) {
+	handler := NewOperationalHandler(Dependencies{checkers: []Checker{}}, nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v2/catalog", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("artifact route status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/livez", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("liveness status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+}

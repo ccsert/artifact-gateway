@@ -124,6 +124,15 @@ func (m NativeConanMaintenance) fail(ctx context.Context, job repository.Lifecyc
 	return fmt.Errorf("%s", message)
 }
 func (m NativeConanMaintenance) Start(ctx context.Context, interval time.Duration) {
+	m.StartScheduler(ctx, interval)
+	m.StartWorker(ctx, interval)
+}
+
+// StartScheduler discovers reclaimable Conan objects and records durable jobs.
+func (m NativeConanMaintenance) StartScheduler(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -132,7 +141,34 @@ func (m NativeConanMaintenance) Start(ctx context.Context, interval time.Duratio
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_ = m.Collect(ctx)
+				now := time.Now
+				if m.Now != nil {
+					now = m.Now
+				}
+				_ = m.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100)
+			}
+		}
+	}()
+}
+
+// StartWorker only claims and executes Conan reclaim jobs.
+func (m NativeConanMaintenance) StartWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		_ = m.RunReclaimJobs(ctx, 100)
+		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RunReclaimJobs(ctx, 100)
+			case <-wake:
+				_ = m.RunReclaimJobs(ctx, 100)
 			}
 		}
 	}()

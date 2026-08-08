@@ -3,6 +3,7 @@ package oci
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,29 +31,11 @@ type OCIReclaimStore interface {
 type reclaimPayload struct {
 	Format    repository.Format `json:"format"`
 	ObjectKey string            `json:"objectKey"`
+	UploadID  string            `json:"uploadId,omitempty"`
 }
 
 func (m NativeMaintenance) Collect(ctx context.Context) error {
-	now := time.Now
-	if m.Now != nil {
-		now = m.Now
-	}
-	if _, err := m.Store.ExpireOCIUploads(ctx, now().UTC(), 100); err != nil {
-		return err
-	}
-	uploads, err := m.Store.ListUncollectedOCIUploads(ctx, 100)
-	if err != nil {
-		return err
-	}
-	for _, upload := range uploads {
-		if err := m.Objects.Delete(ctx, upload.ObjectKey); err != nil {
-			return err
-		}
-		if err := m.Store.MarkOCIUploadCollected(ctx, upload.ID); err != nil {
-			return err
-		}
-	}
-	if err := m.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100); err != nil {
+	if err := m.Schedule(ctx); err != nil {
 		return err
 	}
 	return m.RunReclaimJobs(ctx, 100)
@@ -124,6 +107,9 @@ func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.Lif
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" {
 		return m.failReclaimJob(ctx, job, "invalid OCI reclaim payload")
 	}
+	if payload.UploadID != "" {
+		return m.runUploadReclaimJob(ctx, job, payload)
+	}
 	release, err := m.Store.LockOCIObject(ctx, payload.ObjectKey)
 	if err != nil {
 		return m.failReclaimJob(ctx, job, "OCI object coordination failed")
@@ -145,6 +131,34 @@ func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.Lif
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
+func (m NativeMaintenance) runUploadReclaimJob(ctx context.Context, job repository.LifecycleJob, payload reclaimPayload) error {
+	release, err := m.Store.LockOCIUpload(ctx, payload.UploadID)
+	if err != nil {
+		return m.failReclaimJob(ctx, job, "OCI upload coordination failed")
+	}
+	defer release()
+	upload, err := m.Store.GetOCIUpload(ctx, payload.UploadID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+		}
+		return m.failReclaimJob(ctx, job, "OCI upload lookup failed")
+	}
+	if upload.State != "expired" || !upload.CollectedAt.IsZero() {
+		return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+	}
+	if upload.ObjectKey != payload.ObjectKey {
+		return m.failReclaimJob(ctx, job, "OCI upload reclaim payload does not match upload")
+	}
+	if err = m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
+		return m.failReclaimJob(ctx, job, fmt.Sprintf("delete OCI upload object: %v", err))
+	}
+	if err = m.Store.MarkOCIUploadCollected(ctx, payload.UploadID); err != nil {
+		return m.failReclaimJob(ctx, job, "mark OCI upload collected failed")
+	}
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+}
+
 func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.LifecycleJob, message string) error {
 	if err := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); err != nil {
 		return err
@@ -153,6 +167,37 @@ func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.Li
 }
 
 func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {
+	m.StartScheduler(ctx, interval)
+	m.StartWorker(ctx, interval)
+}
+
+// Schedule expires abandoned uploads and records durable reclaim jobs without
+// touching object-store bytes. Physical cleanup is left to StartWorker.
+func (m NativeMaintenance) Schedule(ctx context.Context) error {
+	now := time.Now
+	if m.Now != nil {
+		now = m.Now
+	}
+	if _, err := m.Store.ExpireOCIUploads(ctx, now().UTC(), 100); err != nil {
+		return err
+	}
+	uploads, err := m.Store.ListUncollectedOCIUploads(ctx, 100)
+	if err != nil {
+		return err
+	}
+	for _, upload := range uploads {
+		payload, err := json.Marshal(reclaimPayload{Format: repository.FormatOCI, ObjectKey: upload.ObjectKey, UploadID: upload.ID})
+		if err != nil {
+			return err
+		}
+		if _, _, err = m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: upload.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "oci-upload:" + upload.ID, Payload: payload}); err != nil {
+			return err
+		}
+	}
+	return m.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100)
+}
+
+func (m NativeMaintenance) StartScheduler(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
@@ -164,8 +209,41 @@ func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_ = m.Collect(ctx)
+				_ = m.Schedule(ctx)
 			}
 		}
 	}()
+}
+
+func (m NativeMaintenance) StartWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		_ = m.RunReclaimJobs(ctx, 100)
+		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RunReclaimJobs(ctx, 100)
+			case <-wake:
+				_ = m.RunReclaimJobs(ctx, 100)
+			}
+		}
+	}()
+}
+
+type notificationSource interface {
+	Listen(context.Context, string) <-chan struct{}
+}
+
+func notificationWake(ctx context.Context, store any, channel string) <-chan struct{} {
+	if source, ok := store.(notificationSource); ok {
+		return source.Listen(ctx, channel)
+	}
+	return nil
 }

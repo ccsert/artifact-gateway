@@ -28,6 +28,9 @@ type NativeRepositoryRetention struct {
 	Store   repositoryRetentionStore
 	Now     func() time.Time
 	Metrics repository.BackgroundOperationMetrics
+	// WorkerFormats limits execution on a format-specialized worker. An empty
+	// slice preserves the single-node behavior and handles every format.
+	WorkerFormats []string
 }
 
 type RepositoryRetentionCandidate struct {
@@ -52,6 +55,15 @@ type repositoryRetentionPayload struct {
 }
 
 func (m NativeRepositoryRetention) Collect(ctx context.Context) error {
+	if err := m.Schedule(ctx); err != nil {
+		return err
+	}
+	return m.RunJobs(ctx, 200)
+}
+
+// Schedule discovers enabled repository policies and records one durable
+// retention job per repository. It does not tombstone artifacts.
+func (m NativeRepositoryRetention) Schedule(ctx context.Context) error {
 	now := m.now()
 	after := ""
 	for {
@@ -61,6 +73,9 @@ func (m NativeRepositoryRetention) Collect(ctx context.Context) error {
 		}
 		for _, repo := range repositories {
 			if repo.State != repository.RepositoryActive || repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
+				continue
+			}
+			if !m.handlesFormat(repo.Format) {
 				continue
 			}
 			policy, policyErr := m.Store.GetRepositoryRetentionPolicy(ctx, repo.ID)
@@ -75,7 +90,7 @@ func (m NativeRepositoryRetention) Collect(ctx context.Context) error {
 			}
 		}
 		if next == "" {
-			return m.RunJobs(ctx, 200)
+			return nil
 		}
 		after = next
 	}
@@ -107,6 +122,9 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 	var firstErr error
 	remaining := limit
 	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatRaw} {
+		if !m.handlesFormat(format) {
+			continue
+		}
 		if remaining <= 0 {
 			break
 		}
@@ -128,6 +146,18 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 		remaining -= len(jobs)
 	}
 	return firstErr
+}
+
+func (m NativeRepositoryRetention) handlesFormat(format repository.Format) bool {
+	if len(m.WorkerFormats) == 0 {
+		return true
+	}
+	for _, candidate := range m.WorkerFormats {
+		if candidate == string(format) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m NativeRepositoryRetention) runJob(ctx context.Context, job repository.LifecycleJob) error {
@@ -426,13 +456,35 @@ func (m NativeRepositoryRetention) end(format repository.Format, outcome string)
 }
 
 func (m NativeRepositoryRetention) Start(ctx context.Context, interval time.Duration) {
+	m.StartScheduler(ctx, interval)
+	m.StartWorker(ctx, interval)
+}
+
+func (m NativeRepositoryRetention) StartScheduler(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
 	go func() {
-		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
 		collectionTicker := time.NewTicker(interval)
 		defer collectionTicker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-collectionTicker.C:
+				_ = m.Schedule(ctx)
+			}
+		}
+	}()
+}
+
+func (m NativeRepositoryRetention) StartWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		_ = m.RunJobs(ctx, 200)
+		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
 		jobInterval := time.Minute
 		if interval < jobInterval {
 			jobInterval = interval
@@ -443,8 +495,6 @@ func (m NativeRepositoryRetention) Start(ctx context.Context, interval time.Dura
 			select {
 			case <-ctx.Done():
 				return
-			case <-collectionTicker.C:
-				_ = m.Collect(ctx)
 			case <-jobTicker.C:
 				_ = m.RunJobs(ctx, 200)
 			case <-wake:

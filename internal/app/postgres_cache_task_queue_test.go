@@ -1,11 +1,20 @@
 package app
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 )
+
+func TestCacheTaskQueueFiltersUnsupportedWorkerFormats(t *testing.T) {
+	got := supportedCacheCollectionFormats([]string{"maven", "raw", "oci", "raw"})
+	want := []string{"oci", "raw"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("supported formats = %#v, want %#v", got, want)
+	}
+}
 
 func TestCacheTaskQueueUsesDedicatedBoundedListenerPool(t *testing.T) {
 	db, err := database.OpenPostgres("postgres://gateway:password@localhost:5432/gateway", database.PoolConfig{MaxOpenConns: 3, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute})

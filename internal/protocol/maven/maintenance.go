@@ -151,6 +151,12 @@ func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.Li
 }
 
 func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {
+	m.StartScheduler(ctx, interval)
+	m.StartWorker(ctx, interval)
+}
+
+// StartScheduler only discovers reclaimable objects and records durable jobs.
+func (m NativeMaintenance) StartScheduler(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
@@ -162,10 +168,47 @@ func (m NativeMaintenance) Start(ctx context.Context, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_ = m.Collect(ctx)
+				now := time.Now
+				if m.Now != nil {
+					now = m.Now
+				}
+				_ = m.EnqueueReclaimJobs(ctx, now().UTC().Add(-24*time.Hour), 100)
 			}
 		}
 	}()
+}
+
+// StartWorker only claims and executes durable reclaim jobs.
+func (m NativeMaintenance) StartWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	go func() {
+		wake := notificationWake(ctx, m.Store, "artifact_gateway_lifecycle_jobs")
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RunReclaimJobs(ctx, 100)
+			case <-wake:
+				_ = m.RunReclaimJobs(ctx, 100)
+			}
+		}
+	}()
+}
+
+type notificationSource interface {
+	Listen(context.Context, string) <-chan struct{}
+}
+
+func notificationWake(ctx context.Context, store any, channel string) <-chan struct{} {
+	if source, ok := store.(notificationSource); ok {
+		return source.Listen(ctx, channel)
+	}
+	return nil
 }
 
 // NativeRetention evaluates durable Maven retention policy outside publish and
