@@ -21,7 +21,6 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   PlusOutlined,
-  SettingOutlined,
 } from "@ant-design/icons";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -117,7 +116,8 @@ type Tab =
   | "capacity"
   | "distribute"
   | "jobs"
-  | "tombstones";
+  | "tombstones"
+  | "settings";
 
 const TABS: {
   key: Tab;
@@ -138,6 +138,7 @@ const TABS: {
   { key: "distribute", label: "晋升 / 复制" },
   { key: "jobs", label: "生命周期任务" },
   { key: "tombstones", label: "墓碑" },
+  { key: "settings", label: "设置" },
 ];
 
 /* ---------------- Artifacts ---------------- */
@@ -1358,7 +1359,7 @@ function ArtifactsTab({
             pagination={false}
             scroll={{
               x: format === "oci" || format === "conan" ? 520 : 980,
-              y: "calc(100vh - 430px)",
+              y: "calc(100vh - 350px)",
             }}
             expandable={{
               expandedRowKeys: expandedImage ? [expandedImage] : [],
@@ -3327,7 +3328,7 @@ function NotEnabled({ feature }: { feature: string }) {
   );
 }
 
-function RepositoryOverview({
+function RepositorySummary({
   repo,
   capacity,
   onOpenCapacity,
@@ -3336,51 +3337,37 @@ function RepositoryOverview({
   capacity: RepositoryCapacity | null;
   onOpenCapacity: () => void;
 }) {
-  const usage = capacity?.quotaBytes
-    ? Math.min(100, (capacity.usedBytes / capacity.quotaBytes) * 100)
-    : null;
-  const usageTone =
-    usage !== null && usage > 90
-      ? "text-rose-300"
-      : usage !== null && usage > 70
-        ? "text-amber-300"
-        : "text-emerald-300";
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
 
   return (
-    <div className="mb-4 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/25">
-      <div className="flex items-center justify-between gap-6 border-b border-zinc-800/70 px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${repo.state === "active" ? "bg-emerald-400" : repo.state === "deleting" ? "bg-amber-400" : "bg-rose-400"}`}
-          />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-zinc-100">
-                {repo.state === "active"
-                  ? "仓库运行正常"
-                  : `仓库状态：${repo.state}`}
-              </span>
-              <Badge tone={repo.type === "proxy" ? "amber" : "cyan"}>
-                {repo.type ?? "hosted"}
-              </Badge>
-              <Badge tone={repo.anonymousRead ? "green" : "zinc"}>
-                {repo.anonymousRead ? "允许匿名读取" : "私有读取"}
-              </Badge>
-            </div>
-            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
-              {repo.type === "proxy"
-                ? "上游缓存与代理请求由此仓库处理。"
-                : "已发布制品及其可恢复引用由此仓库托管。"}
-            </p>
+    <div
+      className="mb-3 border-b border-zinc-800/70 pb-3"
+      role="group"
+      aria-label="仓库摘要"
+    >
+      <div className="flex min-w-0 items-start justify-between gap-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-xl font-semibold text-zinc-50">
+              {repo.name}
+            </h1>
+            <FormatBadge format={repo.format} />
+            <StateBadge state={repo.state} />
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+            <span>{repo.type ?? "hosted"}</span>
+            <span aria-hidden="true">·</span>
+            <span>{repo.anonymousRead ? "允许匿名读取" : "私有读取"}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono">ID {repo.id}</span>
+            <span aria-hidden="true">·</span>
+            <span>v{repo.version}</span>
           </div>
         </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-600">
-            协议入口
-          </span>
+        <div className="flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
+          <span className="text-xs text-zinc-500">协议入口</span>
           <code
-            className="max-w-[30rem] truncate font-mono text-xs text-zinc-300"
+            className="max-w-[32rem] truncate font-mono text-xs text-zinc-300"
             title={protocolPath}
           >
             {protocolPath}
@@ -3388,57 +3375,119 @@ function RepositoryOverview({
           <CopyButton text={protocolPath} />
         </div>
       </div>
-      <div className="grid grid-cols-3 divide-x divide-zinc-800/80">
-        <div className="px-4 py-2.5">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-            已用空间
-          </div>
-          <div className="mt-1 text-sm font-semibold text-zinc-100">
-            {capacity ? formatBytes(capacity.usedBytes) : "读取中…"}
-          </div>
-        </div>
-        <div className="px-4 py-2.5">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-            对象数量
-          </div>
-          <div className="mt-1 text-sm font-semibold text-zinc-100">
-            {capacity ? formatNumber(capacity.objectCount) : "—"}
-          </div>
-        </div>
-        <div className="px-4 py-2.5">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-            配额状态
-          </div>
-          <div className={`mt-1 text-sm font-semibold ${usageTone}`}>
-            {usage === null ? "未设置限制" : `${usage.toFixed(1)}% 已使用`}
-          </div>
-          <Button
-            type="link"
-            size="small"
-            className="mt-0.5 h-auto p-0 text-xs"
-            onClick={onOpenCapacity}
+      <div className="mt-2 flex items-center gap-4 text-xs">
+        {repo.anonymousRead && (
+          <Link
+            to={`/browse?repository=${encodeURIComponent(repo.id)}`}
+            className="font-medium text-cyan-300 hover:text-cyan-200"
           >
-            查看详情
-          </Button>
-        </div>
+            打开公开浏览
+          </Link>
+        )}
+        <Button
+          type="link"
+          size="small"
+          className="h-auto p-0 text-xs text-zinc-400"
+          onClick={onOpenCapacity}
+        >
+          {capacity
+            ? `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`
+            : "查看容量"}
+        </Button>
       </div>
     </div>
   );
 }
 
-function EditRepositoryDialog({
+function EffectiveAccessPanel({
+  effectiveAccess,
+}: {
+  effectiveAccess: RepositoryEffectiveAccess;
+}) {
+  return (
+    <Collapse
+      ghost
+      className="mb-4 border-b border-zinc-800/60"
+      items={[
+        {
+          key: "effective-access",
+          label: (
+            <span className="text-xs text-zinc-400">
+              当前访问判定
+              <span className="ml-2 font-mono text-zinc-600">
+                {effectiveAccess.actor}
+              </span>
+            </span>
+          ),
+          children: (
+            <div className="border-t border-zinc-800/70 pt-3 text-xs">
+              <div className="grid grid-cols-4 gap-4">
+                {[
+                  {
+                    label: "匿名读取",
+                    decision: effectiveAccess.anonymousRead,
+                  },
+                  {
+                    label: "读取",
+                    decision: effectiveAccess.permissions.read,
+                  },
+                  {
+                    label: "写入",
+                    decision: effectiveAccess.permissions.write,
+                  },
+                  {
+                    label: "管理员",
+                    decision: effectiveAccess.permissions.admin,
+                  },
+                ].map(({ label, decision }) => (
+                  <div key={label}>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                      {label}
+                    </div>
+                    <div
+                      className={
+                        decision.allowed
+                          ? "mt-1 text-emerald-300"
+                          : "mt-1 text-zinc-500"
+                      }
+                    >
+                      {decision.allowed ? "允许" : "拒绝"}
+                    </div>
+                    <div
+                      className="mt-0.5 truncate text-[10px] text-zinc-600"
+                      title={`${accessSourceLabel(decision.source)} · ${accessReasonLabel(decision.reason)}`}
+                    >
+                      {accessSourceLabel(decision.source)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-[10px] text-zinc-600">
+                判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。
+              </div>
+            </div>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+function RepositorySettingsTab({
   repo,
+  capabilities,
   onUpdated,
 }: {
   repo: Repository;
+  capabilities: RepositoryCapabilities | null;
   onUpdated: () => void;
 }) {
-  const dialog = useDisclosure();
   const [endpoint, setEndpoint] = useState(repo.endpoint ?? "");
   const [hosts, setHosts] = useState((repo.allowedHosts ?? []).join(", "));
   const [anonymousRead, setAnonymousRead] = useState(repo.anonymousRead);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [notice, setNotice] = useState("");
 
   const egress = repo.egressProxy;
   const [egressMode, setEgressMode] = useState<
@@ -3481,6 +3530,7 @@ function EditRepositoryDialog({
     setEgressNoProxy((repo.egressProxy?.noProxy ?? []).join(", "));
     setEgressTestResult(null);
     setError(null);
+    setNotice("");
   };
 
   const buildEgressProxyBody = (): EgressProxyWritable => {
@@ -3507,6 +3557,7 @@ function EditRepositoryDialog({
   const submit = async () => {
     setSaving(true);
     setError(null);
+    setNotice("");
     const allowedHosts = hosts
       .split(",")
       .map((h) => h.trim())
@@ -3530,7 +3581,7 @@ function EditRepositoryDialog({
       setError(err);
       return;
     }
-    dialog.hide();
+    setNotice("仓库设置已保存");
     onUpdated();
   };
 
@@ -3549,236 +3600,239 @@ function EditRepositoryDialog({
   };
 
   return (
-    <>
-      <Button
-        icon={<SettingOutlined />}
-        variant="outlined"
-        onClick={() => {
-          resetForm();
-          dialog.show();
-        }}
-      >
-        设置
-      </Button>
-      <Modal
-        open={dialog.open}
-        title={`设置仓库：${repo.name}`}
-        onClose={dialog.hide}
-        footer={
-          <Space>
-            <Button onClick={dialog.hide}>取消</Button>
-            <Button type="primary" onClick={submit} loading={saving}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Space orientation="vertical" size="large" className="w-full">
-          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-            <div>
-              <div className="text-sm font-medium text-zinc-200">
-                允许匿名读取
-              </div>
-              <div className="mt-1 text-xs leading-5 text-zinc-500">
-                开启后协议层 GET/HEAD 可在无需凭据时读取该 Repository。
-              </div>
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-5 flex items-start justify-between gap-6 border-b border-zinc-800/70 pb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">仓库设置</h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            管理读取方式与代理仓库的上游连接。仓库名称、格式和类型创建后不可修改。
+          </p>
+        </div>
+        <Space>
+          <Button onClick={resetForm} disabled={saving}>
+            重置
+          </Button>
+          <Button type="primary" onClick={submit} loading={saving}>
+            保存更改
+          </Button>
+        </Space>
+      </div>
+      {notice && (
+        <Alert className="mb-4" type="success" showIcon title={notice} />
+      )}
+      <Space orientation="vertical" size="large" className="w-full">
+        <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-zinc-200">
+              允许匿名读取
             </div>
-            <Switch checked={anonymousRead} onChange={setAnonymousRead} />
+            <div className="mt-1 text-xs leading-5 text-zinc-500">
+              开启后协议层 GET/HEAD 可在无需凭据时读取该 Repository。
+            </div>
           </div>
-          {repo.type === "proxy" && (
-            <Space orientation="vertical" size="middle" className="w-full">
-              <Field
-                label="上游地址"
-                hint="https 基础地址，修改后立即生效（按请求读取）。"
+          <Switch checked={anonymousRead} onChange={setAnonymousRead} />
+        </div>
+        {repo.type === "proxy" && (
+          <Space orientation="vertical" size="middle" className="w-full">
+            <Field
+              label="上游地址"
+              hint="https 基础地址，修改后立即生效（按请求读取）。"
+            >
+              <Input
+                placeholder="https://upstream.example"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="允许主机"
+              hint={
+                requiresHosts
+                  ? "逗号分隔，raw / conan 代理必填。"
+                  : "逗号分隔；oci / maven 代理可留空。"
+              }
+            >
+              <Input
+                placeholder="upstream.example, mirror.example"
+                value={hosts}
+                onChange={(e) => setHosts(e.target.value)}
+              />
+            </Field>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+              <div className="text-sm font-medium text-zinc-200">出口代理</div>
+              <div className="mt-1 text-xs leading-5 text-zinc-500">
+                配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。
+              </div>
+              <Radio.Group
+                className="mt-3 flex flex-col gap-2"
+                value={egressMode}
+                onChange={(e) => {
+                  setEgressMode(e.target.value);
+                  setEgressTestResult(null);
+                }}
               >
-                <Input
-                  placeholder="https://upstream.example"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="允许主机"
-                hint={
-                  requiresHosts
-                    ? "逗号分隔，raw / conan 代理必填。"
-                    : "逗号分隔；oci / maven 代理可留空。"
-                }
-              >
-                <Input
-                  placeholder="upstream.example, mirror.example"
-                  value={hosts}
-                  onChange={(e) => setHosts(e.target.value)}
-                />
-              </Field>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-                <div className="text-sm font-medium text-zinc-200">
-                  出口代理
-                </div>
-                <div className="mt-1 text-xs leading-5 text-zinc-500">
-                  配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。
-                </div>
-                <Radio.Group
-                  className="mt-3 flex flex-col gap-2"
-                  value={egressMode}
-                  onChange={(e) => {
-                    setEgressMode(e.target.value);
-                    setEgressTestResult(null);
-                  }}
+                <Radio value="direct">
+                  <span className="text-sm text-zinc-200">直连</span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    不经过任何代理，保留私网地址防护
+                  </span>
+                </Radio>
+                <Radio value="environment">
+                  <span className="text-sm text-zinc-200">跟随环境变量</span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    沿用进程级 HTTP(S)_PROXY 与 NO_PROXY
+                  </span>
+                </Radio>
+                <Radio value="custom">
+                  <span className="text-sm text-zinc-200">自定义代理</span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    为此仓库单独指定 HTTP 或 SOCKS5 代理
+                  </span>
+                </Radio>
+              </Radio.Group>
+              {egressMode === "custom" && (
+                <Space
+                  orientation="vertical"
+                  size="middle"
+                  className="mt-3 w-full border-t border-zinc-800/60 pt-3"
                 >
-                  <Radio value="direct">
-                    <span className="text-sm text-zinc-200">直连</span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      不经过任何代理，保留私网地址防护
-                    </span>
-                  </Radio>
-                  <Radio value="environment">
-                    <span className="text-sm text-zinc-200">跟随环境变量</span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      沿用进程级 HTTP(S)_PROXY 与 NO_PROXY
-                    </span>
-                  </Radio>
-                  <Radio value="custom">
-                    <span className="text-sm text-zinc-200">自定义代理</span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      为此仓库单独指定 HTTP 或 SOCKS5 代理
-                    </span>
-                  </Radio>
-                </Radio.Group>
-                {egressMode === "custom" && (
-                  <Space
-                    orientation="vertical"
-                    size="middle"
-                    className="mt-3 w-full border-t border-zinc-800/60 pt-3"
-                  >
-                    <div className="flex flex-wrap gap-3">
-                      <Field label="协议">
-                        <Select
-                          className="w-40"
-                          value={egressProtocol}
-                          onChange={setEgressProtocol}
-                          options={[
-                            { value: "http", label: "HTTP（CONNECT）" },
-                            { value: "socks5", label: "SOCKS5" },
-                          ]}
-                        />
-                      </Field>
-                      <Field label="代理主机">
-                        <Input
-                          className="w-64"
-                          placeholder="proxy.corp.example"
-                          value={egressHost}
-                          onChange={(e) => setEgressHost(e.target.value)}
-                        />
-                      </Field>
-                      <Field label="端口">
-                        <InputNumber
-                          className="w-28"
-                          min={1}
-                          max={65535}
-                          placeholder="1080"
-                          value={egressPort}
-                          onChange={(value) => setEgressPort(value)}
-                        />
-                      </Field>
-                    </div>
-                    {egressProtocol === "socks5" && (
-                      <div className="flex items-center justify-between gap-6">
-                        <div>
-                          <div className="text-xs font-medium text-zinc-400">
-                            远程 DNS（socks5h）
-                          </div>
-                          <div className="mt-1 text-xs leading-5 text-zinc-600">
-                            开启后由代理服务器解析上游域名，适用于本地 DNS
-                            不可达上游的网络。
-                          </div>
-                        </div>
-                        <Switch
-                          checked={egressRemoteDns}
-                          onChange={setEgressRemoteDns}
-                        />
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-3">
-                      <Field label="代理认证用户名（可选）">
-                        <Input
-                          className="w-64"
-                          placeholder="gateway"
-                          value={egressUsername}
-                          onChange={(e) => setEgressUsername(e.target.value)}
-                        />
-                      </Field>
-                      <Field
-                        label="代理认证密码（可选）"
-                        hint="AES-256-GCM 加密落库，留空则保留已存凭据。"
-                      >
-                        <Input.Password
-                          className="w-64"
-                          placeholder={
-                            repo.egressProxy?.credentialsConfigured
-                              ? "已配置，输入以替换"
-                              : "未配置"
-                          }
-                          value={egressPassword}
-                          onChange={(e) => setEgressPassword(e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                    {repo.egressProxy?.credentialsConfigured && (
-                      <Checkbox
-                        checked={egressClearCredentials}
-                        onChange={(e) =>
-                          setEgressClearCredentials(e.target.checked)
-                        }
-                      >
-                        <span className="text-xs text-zinc-400">
-                          清除已存储的代理凭据
-                        </span>
-                      </Checkbox>
-                    )}
-                    <Field
-                      label="绕过列表（noProxy）"
-                      hint="逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。"
-                    >
-                      <Input
-                        placeholder="*.internal.example, 10.0.0.0/8"
-                        value={egressNoProxy}
-                        onChange={(e) => setEgressNoProxy(e.target.value)}
+                  <div className="flex flex-wrap gap-3">
+                    <Field label="协议">
+                      <Select
+                        className="w-40"
+                        value={egressProtocol}
+                        onChange={setEgressProtocol}
+                        options={[
+                          { value: "http", label: "HTTP（CONNECT）" },
+                          { value: "socks5", label: "SOCKS5" },
+                        ]}
                       />
                     </Field>
-                  </Space>
-                )}
-                <div className="mt-3 flex items-center gap-3 border-t border-zinc-800/60 pt-3">
-                  <Button onClick={runEgressTest} loading={egressTesting}>
-                    测试连接
-                  </Button>
-                  <span className="text-xs text-zinc-600">
-                    测试使用已保存的配置
-                  </span>
-                  {egressTestResult &&
-                    (egressTestResult.reachable ? (
-                      <span className="text-xs text-emerald-400">
-                        代理可达
-                        {egressTestResult.upstreamStatus
-                          ? ` · 上游返回 ${egressTestResult.upstreamStatus}`
-                          : ""}
-                        {egressTestResult.latencyMs !== undefined
-                          ? ` · 延迟 ${egressTestResult.latencyMs} ms`
-                          : ""}
+                    <Field label="代理主机">
+                      <Input
+                        className="w-64"
+                        placeholder="proxy.corp.example"
+                        value={egressHost}
+                        onChange={(e) => setEgressHost(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="端口">
+                      <InputNumber
+                        className="w-28"
+                        min={1}
+                        max={65535}
+                        placeholder="1080"
+                        value={egressPort}
+                        onChange={(value) => setEgressPort(value)}
+                      />
+                    </Field>
+                  </div>
+                  {egressProtocol === "socks5" && (
+                    <div className="flex items-center justify-between gap-6">
+                      <div>
+                        <div className="text-xs font-medium text-zinc-400">
+                          远程 DNS（socks5h）
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-zinc-600">
+                          开启后由代理服务器解析上游域名，适用于本地 DNS
+                          不可达上游的网络。
+                        </div>
+                      </div>
+                      <Switch
+                        checked={egressRemoteDns}
+                        onChange={setEgressRemoteDns}
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    <Field label="代理认证用户名（可选）">
+                      <Input
+                        className="w-64"
+                        placeholder="gateway"
+                        value={egressUsername}
+                        onChange={(e) => setEgressUsername(e.target.value)}
+                      />
+                    </Field>
+                    <Field
+                      label="代理认证密码（可选）"
+                      hint="AES-256-GCM 加密落库，留空则保留已存凭据。"
+                    >
+                      <Input.Password
+                        className="w-64"
+                        placeholder={
+                          repo.egressProxy?.credentialsConfigured
+                            ? "已配置，输入以替换"
+                            : "未配置"
+                        }
+                        value={egressPassword}
+                        onChange={(e) => setEgressPassword(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                  {repo.egressProxy?.credentialsConfigured && (
+                    <Checkbox
+                      checked={egressClearCredentials}
+                      onChange={(e) =>
+                        setEgressClearCredentials(e.target.checked)
+                      }
+                    >
+                      <span className="text-xs text-zinc-400">
+                        清除已存储的代理凭据
                       </span>
-                    ) : (
-                      <span className="text-xs text-red-400">
-                        连接失败：{egressTestResult.error ?? "未知错误"}
-                      </span>
-                    ))}
-                </div>
+                    </Checkbox>
+                  )}
+                  <Field
+                    label="绕过列表（noProxy）"
+                    hint="逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。"
+                  >
+                    <Input
+                      placeholder="*.internal.example, 10.0.0.0/8"
+                      value={egressNoProxy}
+                      onChange={(e) => setEgressNoProxy(e.target.value)}
+                    />
+                  </Field>
+                </Space>
+              )}
+              <div className="mt-3 flex items-center gap-3 border-t border-zinc-800/60 pt-3">
+                <Button onClick={runEgressTest} loading={egressTesting}>
+                  测试连接
+                </Button>
+                <span className="text-xs text-zinc-600">
+                  测试使用已保存的配置
+                </span>
+                {egressTestResult &&
+                  (egressTestResult.reachable ? (
+                    <span className="text-xs text-emerald-400">
+                      代理可达
+                      {egressTestResult.upstreamStatus
+                        ? ` · 上游返回 ${egressTestResult.upstreamStatus}`
+                        : ""}
+                      {egressTestResult.latencyMs !== undefined
+                        ? ` · 延迟 ${egressTestResult.latencyMs} ms`
+                        : ""}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-400">
+                      连接失败：{egressTestResult.error ?? "未知错误"}
+                    </span>
+                  ))}
               </div>
-            </Space>
-          )}
-          {error ? <ErrorBanner error={error} /> : null}
-        </Space>
-      </Modal>
-    </>
+            </div>
+          </Space>
+        )}
+        {capabilities && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-4 text-[11px] text-zinc-500">
+            <span className="mr-1">支持的操作</span>
+            {capabilities.operations.map((operation) => (
+              <Badge key={operation} tone="zinc">
+                {operation}
+              </Badge>
+            ))}
+          </div>
+        )}
+        {error ? <ErrorBanner error={error} /> : null}
+      </Space>
+    </div>
   );
 }
 
@@ -3848,114 +3902,14 @@ export function RepositoryDetailPage() {
         <span className="mx-1.5">/</span>
         <span className="text-zinc-400">{repo.name}</span>
       </div>
-      <PageHeader
-        title={repo.name}
-        description={`ID: ${repo.id} · 版本 v${repo.version}`}
-        actions={
-          <div className="flex items-center gap-2">
-            <EditRepositoryDialog repo={repo} onUpdated={load} />
-            <FormatBadge format={repo.format} />
-            <StateBadge state={repo.state} />
-          </div>
-        }
-      />
-      {repo.anonymousRead && (
-        <div className="mb-3 flex items-center justify-between gap-3 border-b border-emerald-500/20 pb-2 text-xs">
-          <span className="text-emerald-200">
-            此仓库允许匿名读取；全局匿名策略启用时可公开浏览。
-          </span>
-          <Link
-            to={`/browse?repository=${encodeURIComponent(repo.id)}`}
-            className="text-xs font-medium text-cyan-300 hover:text-cyan-200"
-          >
-            打开公开浏览
-          </Link>
-        </div>
-      )}
-      <RepositoryOverview
+      <RepositorySummary
         repo={repo}
         capacity={capacity}
         onOpenCapacity={() => setTab("capacity")}
       />
-      {caps && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
-          <span className="mr-1">支持的操作:</span>
-          {caps.operations.map((op) => (
-            <Badge key={op} tone="zinc">
-              {op}
-            </Badge>
-          ))}
-        </div>
-      )}
-      {effectiveAccess && (
-        <Collapse
-          ghost
-          className="mb-3"
-          items={[
-            {
-              key: "effective-access",
-              label: (
-                <span className="text-xs text-zinc-400">
-                  有效访问权限
-                  <span className="ml-2 font-mono text-zinc-600">
-                    {effectiveAccess.actor}
-                  </span>
-                </span>
-              ),
-              children: (
-                <div className="border-t border-zinc-800/70 pt-3 text-xs">
-                  <div className="grid grid-cols-4 gap-4">
-                    {[
-                      {
-                        label: "匿名读取",
-                        decision: effectiveAccess.anonymousRead,
-                      },
-                      {
-                        label: "读取",
-                        decision: effectiveAccess.permissions.read,
-                      },
-                      {
-                        label: "写入",
-                        decision: effectiveAccess.permissions.write,
-                      },
-                      {
-                        label: "管理员",
-                        decision: effectiveAccess.permissions.admin,
-                      },
-                    ].map(({ label, decision }) => (
-                      <div key={label}>
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                          {label}
-                        </div>
-                        <div
-                          className={
-                            decision.allowed
-                              ? "mt-1 text-emerald-300"
-                              : "mt-1 text-zinc-500"
-                          }
-                        >
-                          {decision.allowed ? "允许" : "拒绝"}
-                        </div>
-                        <div
-                          className="mt-0.5 truncate text-[10px] text-zinc-600"
-                          title={`${accessSourceLabel(decision.source)} · ${accessReasonLabel(decision.reason)}`}
-                        >
-                          {accessSourceLabel(decision.source)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 text-[10px] text-zinc-600">
-                    判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。
-                  </div>
-                </div>
-              ),
-            },
-          ]}
-        />
-      )}
       <Tabs
-        className="mb-4"
+        className="mb-3"
+        size="small"
         activeKey={tab}
         onChange={(key) => setTab(key as Tab)}
         items={TABS.filter(
@@ -3982,12 +3936,26 @@ export function RepositoryDetailPage() {
               onPublished={() => setTab("artifacts")}
             />
           )}
-        {tab === "grants" && <GrantsTab repo={repo} />}
+        {tab === "grants" && (
+          <>
+            {effectiveAccess && (
+              <EffectiveAccessPanel effectiveAccess={effectiveAccess} />
+            )}
+            <GrantsTab repo={repo} />
+          </>
+        )}
         {tab === "retention" && <RetentionTab repo={repo} />}
         {tab === "capacity" && <CapacityTab repo={repo} />}
         {tab === "distribute" && <DistributeTab repo={repo} />}
         {tab === "jobs" && <JobsTab repo={repo} />}
         {tab === "tombstones" && <TombstonesTab repo={repo} />}
+        {tab === "settings" && (
+          <RepositorySettingsTab
+            repo={repo}
+            capabilities={caps}
+            onUpdated={load}
+          />
+        )}
       </Card>
     </div>
   );
