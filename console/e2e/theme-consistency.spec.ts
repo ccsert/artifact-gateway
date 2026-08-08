@@ -168,3 +168,71 @@ test("deleted repositories stay archived unless explicitly requested", async ({
   await expect(page.getByText("archived-repository")).toBeVisible();
   await expect(page.getByText("active-repository")).not.toBeVisible();
 });
+
+test("dashboard excludes archived repositories from operational status", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("ag.console.token", "mock-admin-token");
+    localStorage.setItem("ag.console.role", "admin");
+  });
+  await page.route("**/api/v2/repositories**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [
+          {
+            id: "repo-deleted",
+            name: "archived-repository",
+            format: "raw",
+            type: "hosted",
+            state: "deleted",
+            version: "3",
+          },
+          {
+            id: "repo-active",
+            name: "active-repository",
+            format: "oci",
+            type: "hosted",
+            state: "active",
+            version: "1",
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route("**/api/v2/groups**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [] }),
+    }),
+  );
+  await page.route("**/api/v2/audits**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
+  await page.route("**/api/v2/repository-capacities**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          repositoryId: "repo-active",
+          format: "oci",
+          usedBytes: 1024,
+          objectCount: 1,
+          quotaBytes: 0,
+        },
+      ]),
+    }),
+  );
+
+  await page.goto("/");
+  await expect(page.getByText("平台运行正常")).toBeVisible();
+  await expect(page.getByText("active-repository")).toBeVisible();
+  await expect(page.getByText("archived-repository")).not.toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "页面摘要" }).locator(":scope > div").first(),
+  ).toContainText("1");
+});

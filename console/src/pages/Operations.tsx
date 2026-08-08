@@ -20,12 +20,11 @@ import type { ColumnsType } from "antd/es/table";
 import {
   cancelRepositoryLifecycleJob,
   listAuditRetentionJobs,
-  listRepositories,
-  listRepositoryLifecycleJobs,
+  listLifecycleJobs,
   retryRepositoryLifecycleJob,
   runRepositoryLifecycleJobNow,
 } from "../client";
-import type { LifecycleJob, Repository } from "../client";
+import type { LifecycleJob } from "../client";
 import { PageHeader, Card } from "../components/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../components/Feedback";
 import { StateBadge } from "../components/Badge";
@@ -67,7 +66,9 @@ function kindLabel(kind: string): string {
 }
 
 export function OperationsPage() {
-  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositories, setRepositories] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [rows, setRows] = useState<OperationRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
@@ -80,50 +81,45 @@ export function OperationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const repositoryResult = await listRepositories({
-        query: { pageSize: 200 },
-      });
-      if (repositoryResult.error) throw repositoryResult.error;
-      const nextRepositories = repositoryResult.data?.items ?? [];
-      setRepositories(nextRepositories);
-
-      const lifecycle = await Promise.all(
-        nextRepositories.map(async (repo) => {
-          const result = await listRepositoryLifecycleJobs({
-            path: { repositoryId: repo.id },
-          });
-          if (result.error) throw result.error;
-          return (
-            result.data?.map((job: LifecycleJob) => {
-              const isHistoricalJob =
-                job.state === "completed" &&
-                job.attempts === 0 &&
-                !job.progressTotal;
-              return {
-                id: job.id,
-                kind: job.kind,
-                state: job.state,
-                repository: repo.name,
-                repositoryId: repo.id,
-                createdAt: job.createdAt,
-                startedAt: job.startedAt,
-                completedAt: job.completedAt,
-                nextAttemptAt: job.nextAttemptAt,
-                attempts: isHistoricalJob ? undefined : job.attempts,
-                maxAttempts: isHistoricalJob ? undefined : job.maxAttempts,
-                progressCurrent: job.progressCurrent,
-                progressTotal: job.progressTotal,
-                progressMessage: isHistoricalJob
-                  ? "历史任务"
-                  : job.progressMessage,
-                lastError: job.lastError,
-              };
-            }) ?? []
-          );
-        }),
-      );
-      const auditRetention = await listAuditRetentionJobs();
+      const [lifecycleResult, auditRetention] = await Promise.all([
+        listLifecycleJobs({ query: { limit: 500 } }),
+        listAuditRetentionJobs(),
+      ]);
+      if (lifecycleResult.error) throw lifecycleResult.error;
       if (auditRetention.error) throw auditRetention.error;
+      const lifecycleRecords = lifecycleResult.data ?? [];
+      setRepositories(
+        Array.from(
+          new Map(
+            lifecycleRecords.map((record) => [
+              record.repositoryId,
+              { id: record.repositoryId, name: record.repositoryName },
+            ]),
+          ).values(),
+        ).sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      const lifecycle: OperationRow[] = lifecycleRecords.map((record) => {
+        const job: LifecycleJob = record.job;
+        const isHistoricalJob =
+          job.state === "completed" && job.attempts === 0 && !job.progressTotal;
+        return {
+          id: job.id,
+          kind: job.kind,
+          state: job.state,
+          repository: record.repositoryName,
+          repositoryId: record.repositoryId,
+          createdAt: job.createdAt,
+          startedAt: job.startedAt,
+          completedAt: job.completedAt,
+          nextAttemptAt: job.nextAttemptAt,
+          attempts: isHistoricalJob ? undefined : job.attempts,
+          maxAttempts: isHistoricalJob ? undefined : job.maxAttempts,
+          progressCurrent: job.progressCurrent,
+          progressTotal: job.progressTotal,
+          progressMessage: isHistoricalJob ? "历史任务" : job.progressMessage,
+          lastError: job.lastError,
+        };
+      });
       const auditRows: OperationRow[] = (auditRetention.data ?? []).map(
         (job) => ({
           id: job.id,
@@ -136,7 +132,7 @@ export function OperationsPage() {
         }),
       );
       setRows(
-        [...lifecycle.flat(), ...auditRows].sort((a, b) =>
+        [...lifecycle, ...auditRows].sort((a, b) =>
           b.createdAt.localeCompare(a.createdAt),
         ),
       );
@@ -487,6 +483,7 @@ export function OperationsPage() {
             className="w-full"
             value={repositoryFilter}
             onChange={setRepositoryFilter}
+            showSearch={{ optionFilterProp: "label" }}
             options={[
               { value: "all", label: "全部仓库" },
               ...repositories.map((repo) => ({
@@ -517,7 +514,8 @@ export function OperationsPage() {
             dataSource={visibleRows}
             columns={columns}
             pagination={false}
-            scroll={{ x: 1520 }}
+            virtual
+            scroll={{ x: 1520, y: 520 }}
           />
         </Card>
       )}

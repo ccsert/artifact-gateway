@@ -7,7 +7,7 @@ import {
   listRepositories,
   listGroups,
   listAudits,
-  getRepositoryCapacity,
+  listRepositoryCapacities,
 } from "../client";
 import type { Repository, Group, AuditRecord } from "../client";
 import { PageHeader, Card, CardHeader } from "../components/Layout";
@@ -50,39 +50,40 @@ export function DashboardPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [r, g, a] = await Promise.all([
+      const [r, g, a, c] = await Promise.all([
         listRepositories({ query: { pageSize: 200 } }),
         listGroups({ query: { pageSize: 200 } }),
         listAudits({ query: { limit: 8 } }),
+        listRepositoryCapacities(),
       ]);
       if (r.error) throw r.error;
       // groups / audits 在当前后端构建中可能未启用（404），降级为空数据
       if (g.error && !isNotFound(g.error)) throw g.error;
       if (a.error && !isNotFound(a.error)) throw a.error;
       const repoList = r.data?.items ?? [];
-      setRepos(repoList);
+      const operationalRepos = repoList.filter(
+        (repository) => repository.state !== "deleted",
+      );
+      setRepos(operationalRepos);
       setGroups(g.data?.items ?? []);
       setAudits(a.data ?? []);
 
       // 汇总各 active 仓库容量（失败/404 的仓库跳过）
-      const activeRepos = repoList.filter((x) => x.state === "active");
-      const caps = await Promise.all(
-        activeRepos.map((x) =>
-          getRepositoryCapacity({ path: { repositoryId: x.id } }),
-        ),
+      const activeRepos = operationalRepos.filter(
+        (repository) => repository.state === "active",
       );
+      const activeRepositoryIds = new Set(activeRepos.map((repo) => repo.id));
       let bytes = 0;
       let objects = 0;
       let any = false;
       const byFormat: Record<string, number> = {};
-      for (let i = 0; i < activeRepos.length; i++) {
-        const c = caps[i];
-        if (c.data) {
-          bytes += c.data.usedBytes;
-          objects += c.data.objectCount;
+      for (const capacity of c.data ?? []) {
+        if (activeRepositoryIds.has(capacity.repositoryId)) {
+          bytes += capacity.usedBytes;
+          objects += capacity.objectCount;
           any = true;
-          const f = activeRepos[i].format;
-          byFormat[f] = (byFormat[f] ?? 0) + c.data.usedBytes;
+          byFormat[capacity.format] =
+            (byFormat[capacity.format] ?? 0) + capacity.usedBytes;
         }
       }
       setTotalBytes(any ? bytes : null);
@@ -91,7 +92,7 @@ export function DashboardPage() {
       setHistory(
         recordDashboardSample({
           t: Date.now(),
-          repos: repoList.length,
+          repos: operationalRepos.length,
           bytes: any ? bytes : null,
           objects: any ? objects : null,
         }),

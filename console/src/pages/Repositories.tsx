@@ -12,7 +12,7 @@ import {
   listRepositories,
   createRepository,
   deleteRepository,
-  getRepositoryCapacity,
+  listRepositoryCapacities,
 } from "../client";
 import type { Repository, Format } from "../client";
 import { PageHeader, Card, Pagination, Field } from "../components/Layout";
@@ -209,9 +209,11 @@ export function RepositoriesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await listRepositories({
-      query: { pageSize: 100 },
-    });
+    const [repositoryResult, capacityResult] = await Promise.all([
+      listRepositories({ query: { pageSize: 100 } }),
+      listRepositoryCapacities(),
+    ]);
+    const { data, error: err } = repositoryResult;
     setLoading(false);
     if (err) {
       setError(err);
@@ -220,22 +222,12 @@ export function RepositoriesPage() {
     const nextItems = data?.items ?? [];
     setItems(nextItems);
     setNextToken(data?.nextPageToken);
-    const activeItems = nextItems.filter(
-      (repository) => repository.state === "active",
-    );
-    const capacityResults = await Promise.all(
-      activeItems.map(async (repository) => {
-        const result = await getRepositoryCapacity({
-          path: { repositoryId: repository.id },
-        });
-        return result.data ? ([repository.id, result.data] as const) : null;
-      }),
-    );
     setCapacities(
       Object.fromEntries(
-        capacityResults.filter(
-          (entry): entry is NonNullable<typeof entry> => entry !== null,
-        ),
+        (capacityResult.data ?? []).map((capacity) => [
+          capacity.repositoryId,
+          capacity,
+        ]),
       ),
     );
   }, []);
@@ -258,25 +250,6 @@ export function RepositoriesPage() {
     const nextItems = data?.items ?? [];
     setItems((prev) => [...prev, ...nextItems]);
     setNextToken(data?.nextPageToken);
-    const activeItems = nextItems.filter(
-      (repository) => repository.state === "active",
-    );
-    const capacityResults = await Promise.all(
-      activeItems.map(async (repository) => {
-        const result = await getRepositoryCapacity({
-          path: { repositoryId: repository.id },
-        });
-        return result.data ? ([repository.id, result.data] as const) : null;
-      }),
-    );
-    setCapacities((previous) => ({
-      ...previous,
-      ...Object.fromEntries(
-        capacityResults.filter(
-          (entry): entry is NonNullable<typeof entry> => entry !== null,
-        ),
-      ),
-    }));
     setLoadingMore(false);
   };
 

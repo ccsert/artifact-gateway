@@ -13,11 +13,10 @@ import { ClearOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import {
   getAnonymousAccessPolicy,
-  listRepositories,
-  listGrants,
+  listRepositoryGrants,
   replaceAnonymousAccessPolicy,
 } from "../client";
-import type { AnonymousAccessPolicy, Repository, Grant } from "../client";
+import type { AnonymousAccessPolicy, Repository } from "../client";
 import { PageHeader, Card, CardHeader } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
@@ -122,33 +121,17 @@ export function AccessControlPage() {
     void (async () => {
       setError(null);
       try {
-        const { data, error: err } = await listRepositories({
-          query: { pageSize: 200 },
-        });
-        if (err || !data) throw err ?? new Error("加载仓库失败");
-        const results = await Promise.all(
-          data.items.map((repository) =>
-            listGrants({ path: { repositoryId: repository.id } }).catch(
-              () => null,
-            ),
-          ),
-        );
+        const { data, error: err } = await listRepositoryGrants();
+        if (err || !data) throw err ?? new Error("加载访问规则失败");
         if (cancelled) return;
-        const out: GrantRow[] = [];
-        data.items.forEach((repository, index) => {
-          const grants =
-            (results[index] as { data?: Grant[] } | null)?.data ?? [];
-          grants.forEach((grant) =>
-            out.push({
-              repositoryId: repository.id,
-              repositoryName: repository.name,
-              format: repository.format,
-              principal: grant.principal,
-              scopes: grant.scopes,
-              resourcePrefix: grant.resourcePrefix ?? "",
-            }),
-          );
-        });
+        const out: GrantRow[] = data.map((record) => ({
+          repositoryId: record.repositoryId,
+          repositoryName: record.repositoryName,
+          format: record.format,
+          principal: record.principal,
+          scopes: record.scopes,
+          resourcePrefix: record.resourcePrefix ?? "",
+        }));
         out.sort(
           (a, b) =>
             a.principal.localeCompare(b.principal) ||
