@@ -7,6 +7,7 @@ import {
   Input,
   InputNumber,
   Popconfirm,
+  Popover,
   Progress,
   Radio,
   Select,
@@ -20,6 +21,7 @@ import type { ColumnsType } from "antd/es/table";
 import {
   DeleteOutlined,
   DownloadOutlined,
+  InfoCircleOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -3325,6 +3327,63 @@ function NotEnabled({ feature }: { feature: string }) {
   );
 }
 
+function RepositoryConceptHelp({ repo }: { repo: Repository }) {
+  const typeLabel =
+    repo.type === "proxy" ? "Proxy Repository" : "Hosted Repository";
+  const concepts = [
+    ["Repository", "一个格式命名空间，承载访问策略、制品或上游配置。"],
+    [
+      typeLabel,
+      repo.type === "proxy"
+        ? "按需从上游拉取并缓存响应，不提供发布入口。"
+        : "保存已校验并发布的制品，可执行删除、恢复和保留。",
+    ],
+    ["Artifact", "用户可见的逻辑制品身份，例如 Maven 坐标或 OCI 镜像。"],
+    ["Asset", "制品下的不可变文件或 Blob，例如 JAR、POM 或镜像层。"],
+    ...(repo.type === "proxy"
+      ? [["Cache Entry", "上游响应的缓存索引与字节，不等同于 Hosted 制品。"]]
+      : []),
+    ...(repo.type === "hosted"
+      ? [
+          ["Publication", "将完整且通过校验的 staged 内容转为可见制品。"],
+          ["Tombstone", "删除后的可恢复记录；字节会在确认无引用后回收。"],
+          [
+            "Retention Policy",
+            "按格式规则选择过期版本或路径，生成可审阅的回收任务。",
+          ],
+        ]
+      : []),
+  ];
+
+  return (
+    <Popover
+      placement="bottomRight"
+      title="概念说明"
+      content={
+        <div className="grid max-w-[34rem] grid-cols-2 gap-x-5 gap-y-3 text-xs">
+          {concepts.map(([term, description]) => (
+            <div key={term}>
+              <div className="font-medium text-zinc-200">{term}</div>
+              <div className="mt-0.5 leading-5 text-zinc-500">
+                {description}
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    >
+      <Tooltip title="查看概念说明">
+        <Button
+          type="text"
+          size="small"
+          icon={<InfoCircleOutlined />}
+          aria-label="查看概念说明"
+        />
+      </Tooltip>
+    </Popover>
+  );
+}
+
 function RepositorySummary({
   repo,
   capacity,
@@ -3362,6 +3421,7 @@ function RepositorySummary({
           </div>
         </div>
         <div className="flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
+          <RepositoryConceptHelp repo={repo} />
           <span className="text-xs text-zinc-500">协议入口</span>
           <code
             className="max-w-[32rem] truncate font-mono text-xs text-zinc-300"

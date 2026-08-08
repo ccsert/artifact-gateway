@@ -115,6 +115,13 @@ test("repository detail keeps operational content above the fold", async ({
     (await summary.boundingBox())?.height ?? Number.POSITIVE_INFINITY,
   ).toBeLessThan(110);
 
+  await page.getByRole("button", { name: "查看概念说明" }).click();
+  await expect(page.getByText("概念说明", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Hosted Repository", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
   await expect(page.getByRole("tab", { name: "设置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "设置" })).toHaveCount(0);
 
