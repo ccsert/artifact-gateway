@@ -6,6 +6,52 @@ Format:
   - oci
   - maven
   - conan
+RuntimeNode:
+  type: object
+  required:
+  - instanceId
+  - roles
+  - workerFormats
+  - workerKinds
+  - startedAt
+  - lastSeenAt
+  - status
+  properties:
+    instanceId:
+      type: string
+    roles:
+      type: array
+      items:
+        type: string
+    workerFormats:
+      type: array
+      items:
+        "$ref": "#/Format"
+    workerKinds:
+      type: array
+      items:
+        type: string
+    startedAt:
+      type: string
+      format: date-time
+    lastSeenAt:
+      type: string
+      format: date-time
+    status:
+      type: string
+      enum:
+      - online
+      - stale
+      - offline
+RuntimeNodeList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/RuntimeNode"
 EgressProxy:
   type: object
   description: Per-Proxy-Repository egress network proxy configuration. Only

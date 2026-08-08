@@ -63,6 +63,11 @@ API 节点可以使用负载均衡器扩容。Scheduler 一般部署一个副本
 副本，扫描写入必须依赖任务幂等键。Worker 可以按格式独立扩容，任务领取通过
 `FOR UPDATE SKIP LOCKED`、advisory lock 和 lease token 防止重复提交。
 
+每个进程都会将实例 ID、角色、Worker 格式/任务过滤器和最近心跳写入
+`runtime_nodes`。管理员可通过管理 API 的 `GET /api/v2/runtime/nodes` 查看节点状态；
+30 秒未更新标记为 `stale`，超过 2 分钟标记为 `offline`。该清单用于运维可见性，
+不参与任务领取决策，任务表中的租约仍是唯一事实来源。
+
 ## 单机回退
 
 本地开发和小规模安装继续使用：

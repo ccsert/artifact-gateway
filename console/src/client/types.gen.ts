@@ -617,6 +617,20 @@ export type GlobalArtifactSearchPage = {
   nextPageToken?: string;
 };
 
+export type RuntimeNode = {
+  instanceId: string;
+  roles: Array<string>;
+  workerFormats: Array<Format>;
+  workerKinds: Array<string>;
+  startedAt: string;
+  lastSeenAt: string;
+  status: "online" | "stale" | "offline";
+};
+
+export type RuntimeNodeList = {
+  items: Array<RuntimeNode>;
+};
+
 /**
  * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
@@ -1075,6 +1089,33 @@ export type ReplaceAnonymousAccessPolicyResponses = {
 
 export type ReplaceAnonymousAccessPolicyResponse =
   ReplaceAnonymousAccessPolicyResponses[keyof ReplaceAnonymousAccessPolicyResponses];
+
+export type ListRuntimeNodesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/runtime/nodes";
+};
+
+export type ListRuntimeNodesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListRuntimeNodesError =
+  ListRuntimeNodesErrors[keyof ListRuntimeNodesErrors];
+
+export type ListRuntimeNodesResponses = {
+  /**
+   * Gateway runtime node inventory and capabilities
+   */
+  200: RuntimeNodeList;
+};
+
+export type ListRuntimeNodesResponse =
+  ListRuntimeNodesResponses[keyof ListRuntimeNodesResponses];
 
 export type ListApiKeysData = {
   body?: never;

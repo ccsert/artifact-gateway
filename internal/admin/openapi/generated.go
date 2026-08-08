@@ -790,6 +790,27 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeNodeStatus.
+const (
+	Offline RuntimeNodeStatus = "offline"
+	Online  RuntimeNodeStatus = "online"
+	Stale   RuntimeNodeStatus = "stale"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNodeStatus enum.
+func (e RuntimeNodeStatus) Valid() bool {
+	switch e {
+	case Offline:
+		return true
+	case Online:
+		return true
+	case Stale:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
@@ -1823,6 +1844,25 @@ type RetentionVersionTypeCounts struct {
 	Version  int `json:"version"`
 }
 
+// RuntimeNode defines model for RuntimeNode.
+type RuntimeNode struct {
+	InstanceId    string            `json:"instanceId"`
+	LastSeenAt    time.Time         `json:"lastSeenAt"`
+	Roles         []string          `json:"roles"`
+	StartedAt     time.Time         `json:"startedAt"`
+	Status        RuntimeNodeStatus `json:"status"`
+	WorkerFormats []Format          `json:"workerFormats"`
+	WorkerKinds   []string          `json:"workerKinds"`
+}
+
+// RuntimeNodeStatus defines model for RuntimeNode.Status.
+type RuntimeNodeStatus string
+
+// RuntimeNodeList defines model for RuntimeNodeList.
+type RuntimeNodeList struct {
+	Items []RuntimeNode `json:"items"`
+}
+
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
@@ -2482,6 +2522,9 @@ type ServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(w http.ResponseWriter, r *http.Request)
+	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
+	// (GET /runtime/nodes)
+	ListRuntimeNodes(w http.ResponseWriter, r *http.Request)
 
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -5428,6 +5471,20 @@ func (siw *ServerInterfaceWrapper) ListRepositoryGrants(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListRuntimeNodes operation middleware
+func (siw *ServerInterfaceWrapper) ListRuntimeNodes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRuntimeNodes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -5752,6 +5809,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/nodes", wrapper.ListRuntimeNodes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CreateUser)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
@@ -5862,6 +5920,8 @@ type RetentionDryRunTextcsvResponse struct {
 }
 
 type RetentionPolicyJSONResponse RetentionPolicy
+
+type RuntimeNodeListJSONResponse RuntimeNodeList
 
 type UserJSONResponse User
 
@@ -8963,6 +9023,43 @@ func (response ListRepositoryGrants401ApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type ListRuntimeNodesRequestObject struct {
+}
+
+type ListRuntimeNodesResponseObject interface {
+	VisitListRuntimeNodesResponse(w http.ResponseWriter) error
+}
+
+type ListRuntimeNodes200JSONResponse struct{ RuntimeNodeListJSONResponse }
+
+func (response ListRuntimeNodes200JSONResponse) VisitListRuntimeNodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeNodes401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRuntimeNodes401ApplicationProblemPlusJSONResponse) VisitListRuntimeNodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 }
 
@@ -9444,6 +9541,9 @@ type StrictServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(ctx context.Context, request ListRepositoryGrantsRequestObject) (ListRepositoryGrantsResponseObject, error)
+	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
+	// (GET /runtime/nodes)
+	ListRuntimeNodes(ctx context.Context, request ListRuntimeNodesRequestObject) (ListRuntimeNodesResponseObject, error)
 
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -11461,6 +11561,30 @@ func (sh *strictHandler) ListRepositoryGrants(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryGrantsResponseObject); ok {
 		if err := validResponse.VisitListRepositoryGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRuntimeNodes operation middleware
+func (sh *strictHandler) ListRuntimeNodes(w http.ResponseWriter, r *http.Request) {
+	var request ListRuntimeNodesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRuntimeNodes(ctx, request.(ListRuntimeNodesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRuntimeNodes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRuntimeNodesResponseObject); ok {
+		if err := validResponse.VisitListRuntimeNodesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

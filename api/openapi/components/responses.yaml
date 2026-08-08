@@ -5,6 +5,12 @@ Problem:
     application/problem+json:
       schema:
         "$ref": "../components/schemas.yaml#/Problem"
+RuntimeNodeList:
+  description: Gateway runtime node inventory and capabilities
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RuntimeNodeList"
 APIKey:
   description: Revocable API key metadata
   content:

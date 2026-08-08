@@ -107,6 +107,20 @@
         }
       }
     },
+    "/runtime/nodes": {
+      "get": {
+        "operationId": "listRuntimeNodes",
+        "summary": "List Gateway runtime nodes and worker capabilities",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RuntimeNodeList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api-keys": {
       "get": {
         "operationId": "listApiKeys",
@@ -4041,6 +4055,71 @@
           }
         }
       },
+      "RuntimeNode": {
+        "type": "object",
+        "required": [
+          "instanceId",
+          "roles",
+          "workerFormats",
+          "workerKinds",
+          "startedAt",
+          "lastSeenAt",
+          "status"
+        ],
+        "properties": {
+          "instanceId": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workerFormats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Format"
+            }
+          },
+          "workerKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "stale",
+              "offline"
+            ]
+          }
+        }
+      },
+      "RuntimeNodeList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeNode"
+            }
+          }
+        }
+      },
       "EgressProxy": {
         "type": "object",
         "description": "Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.",
@@ -5307,6 +5386,16 @@
               "items": {
                 "$ref": "#/components/schemas/AuditCleanupJob"
               }
+            }
+          }
+        }
+      },
+      "RuntimeNodeList": {
+        "description": "Gateway runtime node inventory and capabilities",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RuntimeNodeList"
             }
           }
         }

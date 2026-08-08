@@ -13,6 +13,8 @@ paths:
     "$ref": "./management/search.yaml#/artifact_search"
   "/anonymous-access-policy":
     "$ref": "./management/anonymous-access.yaml#/anonymous_access_policy"
+  "/runtime/nodes":
+    "$ref": "./management/runtime.yaml#/runtime_nodes"
   "/api-keys":
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":

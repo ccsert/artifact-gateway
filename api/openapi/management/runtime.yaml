@@ -1,0 +1,10 @@
+---
+runtime_nodes:
+  get:
+    operationId: listRuntimeNodes
+    summary: List Gateway runtime nodes and worker capabilities
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RuntimeNodeList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"

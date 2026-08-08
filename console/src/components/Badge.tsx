@@ -50,6 +50,9 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   revoked: "red",
   enabled: "green",
   disabled: "zinc",
+  online: "green",
+  stale: "amber",
+  offline: "red",
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {

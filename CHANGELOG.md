@@ -12,6 +12,8 @@ a dated version heading without rewriting their meaning.
 
 - Role-based `api`, `scheduler`, and `worker` deployments with format- and
   job-specific worker filters.
+- PostgreSQL-backed runtime node heartbeats and an administrator inventory of
+  node roles and Worker capabilities.
 - Server-side aggregate repository management and cross-repository search APIs.
 - Per-repository outbound proxy configuration and connectivity checks.
 
