@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 const ids = {
   maven: "10000000-0000-0000-0000-000000000001",
@@ -84,10 +85,7 @@ test("managed Maven deep links scan later pages for the exact snapshot build", a
 }) => {
   const coordinate = "com.example:deep-link:1.0-SNAPSHOT";
   let laterPageRequests = 0;
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories?**", (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/repositories")) {

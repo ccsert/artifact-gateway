@@ -770,6 +770,14 @@ func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r
 	}
 }
 
+func (h generatedRepositoryAPIAdapter) GetCurrentIdentity(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, currentIdentityResponse(principal))
+}
+
 func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.disable(w, r, id.String())
@@ -808,24 +816,47 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
 		return
 	}
-	readDecision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead)
-	if !readDecision.Allowed {
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
-		return
-	}
 	writeNativeMavenJSON(w, http.StatusOK, h.repositoryEffectiveAccess(r.Context(), principal, repo))
+}
+
+func currentIdentityResponse(principal Principal) adminopenapi.CurrentIdentity {
+	response := adminopenapi.CurrentIdentity{
+		Actor:         principal.Actor,
+		Administrator: principal.Admin,
+		Kind:          adminopenapi.AuthenticationKind(principal.AuthenticationKind),
+	}
+	if principal.Role != "" {
+		role := adminopenapi.CurrentIdentityRole(principal.Role)
+		response.Role = &role
+	}
+	if principal.AuthenticationKind == authorization.AuthenticationOIDC {
+		details := adminopenapi.OIDCIdentityDetails{
+			AdminSubject: principal.OIDCAdminSubject,
+			RoleMappings: make([]adminopenapi.OIDCRoleMappingMatch, 0, len(principal.OIDCRoleMappings)),
+		}
+		for _, mapping := range principal.OIDCRoleMappings {
+			details.RoleMappings = append(details.RoleMappings, adminopenapi.OIDCRoleMappingMatch{
+				ExternalRole: mapping.ExternalRole,
+				GatewayRole:  adminopenapi.OIDCRoleMappingMatchGatewayRole(mapping.GatewayRole),
+			})
+		}
+		response.Oidc = &details
+	}
+	return response
 }
 
 func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository) adminopenapi.RepositoryEffectiveAccess {
 	decision := func(operation RepositoryOperation) adminopenapi.EffectiveAccessDecision {
 		return effectiveAccessDecision(h.authorizer.Authorize(ctx, principal, repo, operation))
 	}
+	anonymousReason := anonymousRepositoryReason(ctx, h.store, repo)
 	response := adminopenapi.RepositoryEffectiveAccess{
-		Actor: principal.Actor,
+		Actor:    principal.Actor,
+		Identity: currentIdentityResponse(principal),
 		AnonymousRead: adminopenapi.EffectiveAccessDecision{
-			Allowed: anonymousHostedRepositoryReadAllowed(ctx, h.store, repo, http.MethodGet),
+			Allowed: anonymousReason == "repository_anonymous_read_enabled",
 			Source:  "anonymous_policy",
-			Reason:  anonymousRepositoryReason(ctx, h.store, repo),
+			Reason:  anonymousReason,
 		},
 		Permissions: adminopenapi.EffectiveAccessPermissions{
 			Read:  decision(RepositoryRead),

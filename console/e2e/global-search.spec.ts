@@ -1,14 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 const repositoryId = "20000000-0000-0000-0000-000000000001";
 
 test("global Maven search groups versions and preserves an exact deep link", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );

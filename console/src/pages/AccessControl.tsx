@@ -18,8 +18,14 @@ import {
 } from "../client";
 import type { AnonymousAccessPolicy, Repository } from "../client";
 import { PageHeader, Card, CardHeader } from "../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
+import {
+  Loading,
+  ErrorBanner,
+  EmptyState,
+  Spinner,
+} from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
+import { IdentitySummary } from "../components/IdentitySummary";
 import { useAuth } from "../lib/auth";
 import {
   CopyableValue,
@@ -101,8 +107,8 @@ function Principal({ value }: { value: string }) {
 }
 
 export function AccessControlPage() {
-  const { role } = useAuth();
-  const canManageAnonymousPolicy = role === "" || role === "admin";
+  const { identity, identityLoading } = useAuth();
+  const canManageAnonymousPolicy = identity?.administrator === true;
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState("");
@@ -275,6 +281,26 @@ export function AccessControlPage() {
         title="访问控制"
         description="跨仓库查看匿名策略与逐仓库授权；规则在对应仓库中编辑。"
       />
+      <Card className="mb-4" bodyClassName="px-4 py-3">
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-zinc-200">
+              当前登录身份
+            </div>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              权限判定使用的真实凭据来源与全局角色
+            </p>
+          </div>
+          {identityLoading && <Spinner />}
+        </div>
+        {identity ? (
+          <IdentitySummary identity={identity} />
+        ) : (
+          !identityLoading && (
+            <span className="text-xs text-zinc-500">暂时无法读取身份信息</span>
+          )
+        )}
+      </Card>
       <MetricStrip
         items={[
           {

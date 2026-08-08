@@ -40,13 +40,13 @@ func TestOIDCAuthenticatorValidatesRS256ClaimsAndRepositoryAccess(t *testing.T) 
 	}
 	token := signedOIDCToken(t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "ci-user", time.Now().Add(time.Minute))
 	principal, ok := authenticator.Authenticate("Bearer " + token)
-	if !ok || principal.Actor != "ci-user" || principal.Admin || !authenticator.CanReadRepository(principal, "team/app") || authenticator.CanReadRepository(principal, "other/app") {
+	if !ok || principal.Actor != "ci-user" || principal.Admin || principal.AuthenticationKind != "oidc" || !authenticator.CanReadRepository(principal, "team/app") || authenticator.CanReadRepository(principal, "other/app") {
 		t.Fatalf("principal = %#v, authenticated=%t", principal, ok)
 	}
 
 	adminToken := signedOIDCToken(t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "gateway-admin", time.Now().Add(time.Minute))
 	admin, ok := authenticator.Authenticate("Bearer " + adminToken)
-	if !ok || !admin.Admin {
+	if !ok || !admin.Admin || !admin.OIDCAdminSubject || admin.Role != RoleAdmin {
 		t.Fatalf("admin = %#v, authenticated=%t", admin, ok)
 	}
 }
@@ -92,20 +92,21 @@ func TestOIDCAuthenticatorMapsRealmRolesByHighestPrivilege(t *testing.T) {
 	})}
 
 	for _, tc := range []struct {
-		name  string
-		roles []string
-		want  Role
-		admin bool
+		name    string
+		roles   []string
+		want    Role
+		admin   bool
+		matches int
 	}{
-		{name: "reader", roles: []string{"gateway-reader"}, want: RoleReader},
-		{name: "writer wins reader", roles: []string{"gateway-reader", "gateway-writer"}, want: RoleWriter},
-		{name: "admin wins writer", roles: []string{"gateway-writer", "gateway-admin"}, want: RoleAdmin, admin: true},
+		{name: "reader", roles: []string{"gateway-reader"}, want: RoleReader, matches: 1},
+		{name: "writer wins reader", roles: []string{"gateway-reader", "gateway-writer"}, want: RoleWriter, matches: 2},
+		{name: "admin wins writer", roles: []string{"gateway-writer", "gateway-admin"}, want: RoleAdmin, admin: true, matches: 2},
 		{name: "unmapped", roles: []string{"other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			token := signedOIDCTokenWithRoles(t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "ci-user", time.Now().Add(time.Minute), tc.roles)
 			principal, ok := authenticator.Authenticate("Bearer " + token)
-			if !ok || principal.Role != tc.want || principal.Admin != tc.admin {
+			if !ok || principal.AuthenticationKind != "oidc" || principal.Role != tc.want || principal.Admin != tc.admin || len(principal.OIDCRoleMappings) != tc.matches {
 				t.Fatalf("principal=%#v authenticated=%t", principal, ok)
 			}
 		})

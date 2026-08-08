@@ -1,12 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 test("operations survives legacy runtime node null arrays", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
 
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({

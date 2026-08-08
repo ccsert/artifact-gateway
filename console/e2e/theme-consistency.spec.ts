@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 test("public browse surfaces stay aligned with the dark console palette", async ({
   page,
@@ -29,10 +30,7 @@ test("management tables keep action columns opaque and cards separated", async (
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 800 });
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
       status: 200,
@@ -115,10 +113,7 @@ test("management tables keep action columns opaque and cards separated", async (
 test("deleted repositories stay archived unless explicitly requested", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
       status: 200,
@@ -172,10 +167,7 @@ test("deleted repositories stay archived unless explicitly requested", async ({
 test("dashboard excludes archived repositories from operational status", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
       status: 200,

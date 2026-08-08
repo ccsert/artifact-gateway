@@ -25,7 +25,7 @@ func TestAuthenticatorAcceptsActiveAdministrativeAPIKeyAndRejectsRevokedKey(t *t
 	}
 	authenticator := Authenticator{APIKeys: store}
 	principal, ok := authenticator.Authenticate("Bearer " + token)
-	if !ok || !principal.Admin || principal.Actor != "api-key:"+key.ID {
+	if !ok || !principal.Admin || principal.Actor != "api-key:"+key.ID || principal.AuthenticationKind != AuthenticationAPIKey {
 		t.Fatalf("principal=%#v authenticated=%t", principal, ok)
 	}
 	if _, err := store.RevokeAPIKey(context.Background(), key.ID); err != nil {
@@ -97,7 +97,7 @@ func TestAuthenticateBasicReturnsConfiguredActorPrincipal(t *testing.T) {
 	}
 
 	principal, ok := authenticator.AuthenticateBasic("ci", "resolver-secret")
-	if !ok || principal.Actor != "ci" || !authenticator.CanReadRepository(principal, "team/app") {
+	if !ok || principal.Actor != "ci" || principal.AuthenticationKind != AuthenticationStaticResolver || !authenticator.CanReadRepository(principal, "team/app") {
 		t.Fatalf("principal=%+v authenticated=%t", principal, ok)
 	}
 	if _, ok := authenticator.AuthenticateBasic("ci", "wrong-secret"); ok {
@@ -259,13 +259,13 @@ func TestAuthenticatorRestoresUserRoleForIssuedProtocolToken(t *testing.T) {
 	authenticator := Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", Users: store}
 	session := authenticator.IssueUserSession(user.ID)
 	principal, ok := authenticator.Authenticate("Bearer " + session)
-	if !ok || !principal.Admin || principal.Role != RoleAdmin {
+	if !ok || !principal.Admin || principal.Role != RoleAdmin || principal.AuthenticationKind != AuthenticationLocalSession {
 		t.Fatalf("session principal = %#v, ok=%v", principal, ok)
 	}
 
 	protocolToken := authenticator.IssueToken(principal.Actor)
 	protocolPrincipal, ok := authenticator.Authenticate("Bearer " + protocolToken)
-	if !ok || !protocolPrincipal.Admin || protocolPrincipal.Role != RoleAdmin {
+	if !ok || !protocolPrincipal.Admin || protocolPrincipal.Role != RoleAdmin || protocolPrincipal.AuthenticationKind != AuthenticationLocalSession {
 		t.Fatalf("protocol principal = %#v, ok=%v", protocolPrincipal, ok)
 	}
 }
@@ -282,7 +282,7 @@ func TestAuthenticatorRestoresStaticAdminForIssuedProtocolToken(t *testing.T) {
 	}
 	protocolToken := authenticator.IssuePrincipalToken(managementPrincipal)
 	principal, ok := authenticator.Authenticate("Bearer " + protocolToken)
-	if !ok || principal.Actor != "gateway-admin" || !principal.Admin {
+	if !ok || principal.Actor != "gateway-admin" || !principal.Admin || principal.Role != RoleAdmin || principal.AuthenticationKind != AuthenticationStaticAdmin {
 		t.Fatalf("protocol principal = %#v, ok=%v", principal, ok)
 	}
 }

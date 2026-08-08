@@ -133,6 +133,7 @@ button:not(:disabled):active,
 }
 
 /* Keep page-level surfaces visually distinct without affecting nested cards. */
+.ag-card + .ag-metric-strip,
 .ag-metric-strip + .ag-card,
 .ag-filter-bar + .ag-card {
   margin-top: 16px;

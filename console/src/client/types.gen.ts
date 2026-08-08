@@ -302,6 +302,14 @@ export type UserList = {
   items: Array<User>;
 };
 
+export type CurrentIdentity = {
+  actor: string;
+  kind: AuthenticationKind;
+  role?: "admin" | "writer" | "reader";
+  administrator: boolean;
+  oidc?: OidcIdentityDetails;
+};
+
 export type CreateUser = {
   name: string;
   password: string;
@@ -602,6 +610,19 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type AuthenticationKind =
+  "static_admin" | "static_resolver" | "local_session" | "api_key" | "oidc";
+
+export type OidcRoleMappingMatch = {
+  externalRole: string;
+  gatewayRole: "admin" | "writer" | "reader";
+};
+
+export type OidcIdentityDetails = {
+  adminSubject: boolean;
+  roleMappings: Array<OidcRoleMappingMatch>;
+};
+
 export type GlobalArtifactSearchHit = ArtifactSummary & {
   repositoryId: string;
   repositoryName: string;
@@ -794,6 +815,7 @@ export type EffectiveAccessPermissions = {
 
 export type RepositoryEffectiveAccess = {
   actor: string;
+  identity: CurrentIdentity;
   repository: {
     id: string;
     name: string;
@@ -1014,6 +1036,33 @@ export type LifecycleJobId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetCurrentIdentityData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/identity";
+};
+
+export type GetCurrentIdentityErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type GetCurrentIdentityError =
+  GetCurrentIdentityErrors[keyof GetCurrentIdentityErrors];
+
+export type GetCurrentIdentityResponses = {
+  /**
+   * Safe authentication source and global-role explanation for the caller
+   */
+  200: CurrentIdentity;
+};
+
+export type GetCurrentIdentityResponse =
+  GetCurrentIdentityResponses[keyof GetCurrentIdentityResponses];
 
 export type SearchArtifactsData = {
   body?: never;
@@ -2502,7 +2551,7 @@ export type GetRepositoryEffectiveAccessErrors = {
   /**
    * Problem response
    */
-  403: Problem;
+  401: Problem;
   /**
    * Problem response
    */

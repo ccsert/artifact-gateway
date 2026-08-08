@@ -658,11 +658,45 @@ EffectiveAccessPermissions:
     read: {"$ref": "#/EffectiveAccessDecision"}
     write: {"$ref": "#/EffectiveAccessDecision"}
     admin: {"$ref": "#/EffectiveAccessDecision"}
+AuthenticationKind:
+  type: string
+  enum: [static_admin, static_resolver, local_session, api_key, oidc]
+OIDCRoleMappingMatch:
+  type: object
+  required: [externalRole, gatewayRole]
+  additionalProperties: false
+  properties:
+    externalRole: {type: string, minLength: 1}
+    gatewayRole:
+      type: string
+      enum: [admin, writer, reader]
+OIDCIdentityDetails:
+  type: object
+  required: [adminSubject, roleMappings]
+  additionalProperties: false
+  properties:
+    adminSubject: {type: boolean}
+    roleMappings:
+      type: array
+      items: {"$ref": "#/OIDCRoleMappingMatch"}
+CurrentIdentity:
+  type: object
+  required: [actor, kind, administrator]
+  additionalProperties: false
+  properties:
+    actor: {type: string, minLength: 1}
+    kind: {"$ref": "#/AuthenticationKind"}
+    role:
+      type: string
+      enum: [admin, writer, reader]
+    administrator: {type: boolean}
+    oidc: {"$ref": "#/OIDCIdentityDetails"}
 RepositoryEffectiveAccess:
   type: object
-  required: [actor, repository, anonymousRead, permissions]
+  required: [actor, identity, repository, anonymousRead, permissions]
   properties:
     actor: {type: string}
+    identity: {"$ref": "#/CurrentIdentity"}
     repository:
       type: object
       required: [id, name, format, type, state]

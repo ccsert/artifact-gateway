@@ -4,7 +4,7 @@ import { Alert, Button, Input, Segmented } from "antd";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { client } from "../client/client.gen";
-import { listRepositories } from "../client";
+import { getCurrentIdentity } from "../client";
 import { Field } from "../components/Layout";
 
 type Mode = "password" | "token";
@@ -70,13 +70,13 @@ export function LoginPage() {
     setBusy(true);
     setError("");
     client.setConfig({ baseUrl: "/api/v2", auth: () => trimmed });
-    const { error: err } = await listRepositories({ query: { pageSize: 1 } });
+    const { data: identity, error: err } = await getCurrentIdentity();
     setBusy(false);
-    if (err) {
+    if (err || !identity) {
       setError("令牌无效或已过期，请检查后重试。");
       return;
     }
-    finish(trimmed);
+    finish(trimmed, identity.role);
   };
 
   return (

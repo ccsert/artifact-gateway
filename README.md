@@ -153,6 +153,22 @@ URL defaults to the issuer's standard path. Reader, writer, and administrator
 role mappings are configured with `GATEWAY_OIDC_READER_ROLES`,
 `GATEWAY_OIDC_WRITER_ROLES`, and `GATEWAY_OIDC_ADMIN_ROLES`.
 
+An authenticated client can inspect the identity used by authorization with
+`GET /api/v2/identity`. The response reports a bounded credential source
+(`static_admin`, `static_resolver`, `local_session`, `api_key`, or `oidc`), the
+effective global role, and administrator status. For OIDC, it includes only
+configured role mappings that matched the validated token and whether the
+subject matched the configured administrator list; raw claims and token
+material are never returned.
+
+`GET /api/v2/repositories/{repositoryId}/effective-access` explains the same
+caller's read, write, admin, and anonymous-read decisions for a known
+Repository. Any authenticated caller may inspect its own denied decisions, so
+operators can diagnose a missing grant without first granting Repository read
+access. The endpoint cannot evaluate another actor and remains unavailable to
+anonymous requests. See `docs/anonymous-access-operations.md` for the anonymous
+policy gates and operational checks.
+
 Proxy repositories accept a per-repository egress proxy (`egressProxy` in the
 V2 management API) with `direct`, `environment`, and `custom` modes; custom
 supports HTTP CONNECT and SOCKS5 with optional authentication and a `noProxy`

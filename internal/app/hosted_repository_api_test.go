@@ -2350,7 +2350,10 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 		t.Fatalf("effective access = %d %s", response.Code, response.Body.String())
 	}
 	var body struct {
-		Actor         string `json:"actor"`
+		Actor    string `json:"actor"`
+		Identity struct {
+			Kind string `json:"kind"`
+		} `json:"identity"`
 		AnonymousRead struct {
 			Allowed bool   `json:"allowed"`
 			Reason  string `json:"reason"`
@@ -2364,7 +2367,7 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Actor != "reader" || !body.AnonymousRead.Allowed || body.AnonymousRead.Reason != "repository_anonymous_read_enabled" || !body.Permissions.Read.Allowed || body.Permissions.Write.Allowed || body.Permissions.Admin.Allowed {
+	if body.Actor != "reader" || body.Identity.Kind != "static_resolver" || !body.AnonymousRead.Allowed || body.AnonymousRead.Reason != "repository_anonymous_read_enabled" || !body.Permissions.Read.Allowed || body.Permissions.Write.Allowed || body.Permissions.Admin.Allowed {
 		t.Fatalf("effective access body=%#v", body)
 	}
 
@@ -2372,8 +2375,41 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	authorize(denied, authenticator.IssueToken("stranger"))
 	deniedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(deniedResponse, denied)
-	if deniedResponse.Code != http.StatusForbidden {
+	if deniedResponse.Code != http.StatusOK || !strings.Contains(deniedResponse.Body.String(), `"actor":"stranger"`) || !strings.Contains(deniedResponse.Body.String(), `"read":{"allowed":false`) {
 		t.Fatalf("denied effective access = %d %s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+
+	if _, err := store.DisableHostedRepository(context.Background(), repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FinalizeHostedRepositoryDeletion(context.Background(), repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	deleted := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
+	authorize(deleted, authenticator.IssueToken("reader"))
+	deletedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deletedResponse, deleted)
+	if deletedResponse.Code != http.StatusOK || !strings.Contains(deletedResponse.Body.String(), `"anonymousRead":{"allowed":false,"reason":"repository_not_active"`) {
+		t.Fatalf("deleted effective access = %d %s", deletedResponse.Code, deletedResponse.Body.String())
+	}
+}
+
+func TestCurrentIdentityReportsSafeCredentialMetadata(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"actor":"alice"`) || !strings.Contains(response.Body.String(), `"kind":"static_admin"`) || !strings.Contains(response.Body.String(), `"role":"admin"`) || !strings.Contains(response.Body.String(), `"administrator":true`) {
+		t.Fatalf("identity = %d %s", response.Code, response.Body.String())
+	}
+
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil))
+	if unauthenticated.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated identity = %d %s", unauthenticated.Code, unauthenticated.Body.String())
 	}
 }
 
@@ -2648,6 +2684,13 @@ func TestUserManagementLoginAndSessionAuth(t *testing.T) {
 	}
 	if code := asSession("/api/v2/users"); code != http.StatusOK {
 		t.Fatalf("admin session list users=%d want 200", code)
+	}
+	identityRequest := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
+	authorize(identityRequest, token)
+	identityResponse := httptest.NewRecorder()
+	handler.ServeHTTP(identityResponse, identityRequest)
+	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"kind":"local_session"`) || !strings.Contains(identityResponse.Body.String(), `"role":"admin"`) {
+		t.Fatalf("admin session identity=%d body=%s", identityResponse.Code, identityResponse.Body.String())
 	}
 
 	_, readerToken := login(`{"username":"alice","password":"supersecret"}`)

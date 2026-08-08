@@ -1,12 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 const repositoryId = "repo-layout";
 
 async function mockRepositoryDetail(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
 
   await page.route("**/api/v2/repositories?**", (route) =>
     route.fulfill({ json: { items: [] } }),
@@ -59,6 +57,12 @@ async function mockRepositoryDetail(page: Page) {
       return route.fulfill({
         json: {
           actor: "admin",
+          identity: {
+            actor: "mock-admin",
+            kind: "local_session",
+            role: "admin",
+            administrator: true,
+          },
           repository: {
             id: repositoryId,
             name: "release-files",

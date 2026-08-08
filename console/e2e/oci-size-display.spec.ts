@@ -1,12 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { authenticateAsAdmin } from "./support/auth";
 
 test("OCI manifest without image descriptors is not shown as 0 B", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("ag.console.token", "mock-admin-token");
-    localStorage.setItem("ag.console.role", "admin");
-  });
+  await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories?pageSize=1", (route) =>
     route.fulfill({
       status: 200,

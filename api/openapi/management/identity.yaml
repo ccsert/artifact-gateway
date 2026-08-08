@@ -1,0 +1,10 @@
+---
+identity:
+  get:
+    operationId: getCurrentIdentity
+    summary: Explain the authenticated caller's identity and global role
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/CurrentIdentity"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"

@@ -36,7 +36,7 @@ func anonymousAccessAllowed(ctx context.Context, source any) bool {
 }
 
 func anonymousHostedRepositoryReadAllowed(ctx context.Context, source any, repo repository.HostedRepository, method string) bool {
-	return anonymousReadMethod(method) && repo.AnonymousRead && anonymousAccessAllowed(ctx, source)
+	return anonymousReadMethod(method) && repo.State == repository.RepositoryActive && repo.AnonymousRead && anonymousAccessAllowed(ctx, source)
 }
 
 func anonymousHostedGroupReadAllowed(ctx context.Context, policySource any, repositories repository.HostedRepositoryStore, group repository.HostedGroup, method string) bool {

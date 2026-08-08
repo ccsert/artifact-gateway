@@ -54,13 +54,17 @@ func TestAnonymousPolicyRequiresGroupAndMember(t *testing.T) {
 
 func TestAnonymousHostedRepositoryReadRequiresGlobalPolicy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	repo := repository.HostedRepository{AnonymousRead: true}
+	repo := repository.HostedRepository{State: repository.RepositoryActive, AnonymousRead: true}
 	if anonymousHostedRepositoryReadAllowed(context.Background(), store, repo, http.MethodGet) {
 		t.Fatal("repository policy bypassed disabled global policy")
 	}
 	enableAnonymousAccess(t, store)
 	if !anonymousHostedRepositoryReadAllowed(context.Background(), store, repo, http.MethodGet) {
 		t.Fatal("global and repository policies did not admit anonymous read")
+	}
+	repo.State = repository.RepositoryDeleted
+	if anonymousHostedRepositoryReadAllowed(context.Background(), store, repo, http.MethodGet) {
+		t.Fatal("deleted repository admitted anonymous read")
 	}
 }
 

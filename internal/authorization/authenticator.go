@@ -21,6 +21,30 @@ type Principal struct {
 	Admin              bool
 	Role               Role
 	RepositoryPatterns []string
+	AuthenticationKind AuthenticationKind
+	OIDCAdminSubject   bool
+	OIDCRoleMappings   []OIDCRoleMappingMatch
+}
+
+// AuthenticationKind is the bounded credential source retained after
+// authentication. It is safe to expose in authorization diagnostics and never
+// contains token material or provider claims.
+type AuthenticationKind string
+
+const (
+	AuthenticationStaticAdmin    AuthenticationKind = "static_admin"
+	AuthenticationStaticResolver AuthenticationKind = "static_resolver"
+	AuthenticationLocalSession   AuthenticationKind = "local_session"
+	AuthenticationAPIKey         AuthenticationKind = "api_key"
+	AuthenticationOIDC           AuthenticationKind = "oidc"
+)
+
+// OIDCRoleMappingMatch records only configured realm-role mappings that were
+// present in a validated token. Unmapped provider roles are deliberately not
+// retained.
+type OIDCRoleMappingMatch struct {
+	ExternalRole string `json:"externalRole"`
+	GatewayRole  Role   `json:"gatewayRole"`
 }
 
 type Authenticator struct {
@@ -46,10 +70,12 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	token := strings.TrimPrefix(header, bearer)
 	if tokenMatches(token, a.AdminToken) {
-		return Principal{Actor: a.AdminActor, Admin: true}, true
+		return Principal{Actor: a.AdminActor, Admin: true, Role: RoleAdmin, AuthenticationKind: AuthenticationStaticAdmin}, true
 	}
 	if tokenMatches(token, a.ResolverToken) {
-		return a.PrincipalForActor(a.ResolverActor), true
+		principal := a.PrincipalForActor(a.ResolverActor)
+		principal.AuthenticationKind = AuthenticationStaticResolver
+		return principal, true
 	}
 	if principal, ok := a.principalToken(token); ok {
 		return principal, true
@@ -62,14 +88,14 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
 		if err == nil {
 			role := RoleFromRoles(key.Roles)
-			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role}, true
+			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationAPIKey}, true
 		}
 	}
 	if userID, ok := a.userSessionActor(token); ok && a.Users != nil {
 		user, err := a.Users.GetUser(context.Background(), userID)
 		if err == nil && user.State == repository.UserActive {
 			role := Role(user.Role)
-			return Principal{Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role}, true
+			return Principal{Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationLocalSession}, true
 		}
 	}
 	if a.OIDC != nil {
@@ -77,6 +103,9 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 			principal := a.PrincipalForActor(identity.Subject)
 			principal.Admin = identity.Admin
 			principal.Role = identity.Role
+			principal.AuthenticationKind = AuthenticationOIDC
+			principal.OIDCAdminSubject = identity.AdminSubject
+			principal.OIDCRoleMappings = identity.RoleMappings
 			return principal, true
 		}
 	}
@@ -93,7 +122,7 @@ func (a Authenticator) principalForTokenActor(actor string) (Principal, bool) {
 		return Principal{}, false
 	}
 	role := Role(user.Role)
-	return Principal{Actor: actor, Admin: role == RoleAdmin, Role: role, RepositoryPatterns: a.RepositoryReaders[actor]}, true
+	return Principal{Actor: actor, Admin: role == RoleAdmin, Role: role, RepositoryPatterns: a.RepositoryReaders[actor], AuthenticationKind: AuthenticationLocalSession}, true
 }
 
 // AuthenticateBasic validates the resolver credential used by Maven, Conan,
@@ -102,7 +131,9 @@ func (a Authenticator) AuthenticateBasic(username, password string) (Principal, 
 	if username == "" || !a.ResolverPasswordMatches(password) {
 		return Principal{}, false
 	}
-	return a.PrincipalForActor(username), true
+	principal := a.PrincipalForActor(username)
+	principal.AuthenticationKind = AuthenticationStaticResolver
+	return principal, true
 }
 
 // ResolverPasswordMatches validates a resolver secret without exposing the
@@ -112,7 +143,7 @@ func (a Authenticator) ResolverPasswordMatches(password string) bool {
 }
 
 func (a Authenticator) PrincipalForActor(actor string) Principal {
-	return Principal{Actor: actor, RepositoryPatterns: a.RepositoryReaders[actor]}
+	return Principal{Actor: actor, RepositoryPatterns: a.RepositoryReaders[actor], AuthenticationKind: AuthenticationStaticResolver}
 }
 
 func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
@@ -172,10 +203,17 @@ func (a Authenticator) IssueToken(actor string) string {
 func (a Authenticator) IssuePrincipalToken(principal Principal) string {
 	expiresAt := time.Now().UTC().Add(5 * time.Minute).Unix()
 	claims, _ := json.Marshal(struct {
-		Actor string `json:"a"`
-		Role  Role   `json:"r,omitempty"`
-		Admin bool   `json:"d,omitempty"`
-	}{Actor: principal.Actor, Role: principal.Role, Admin: principal.Admin})
+		Actor            string                 `json:"a"`
+		Role             Role                   `json:"r,omitempty"`
+		Admin            bool                   `json:"d,omitempty"`
+		Authentication   AuthenticationKind     `json:"k,omitempty"`
+		OIDCAdminSubject bool                   `json:"s,omitempty"`
+		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m,omitempty"`
+	}{
+		Actor: principal.Actor, Role: principal.Role, Admin: principal.Admin,
+		Authentication: principal.AuthenticationKind, OIDCAdminSubject: principal.OIDCAdminSubject,
+		OIDCRoleMappings: principal.OIDCRoleMappings,
+	})
 	payload := "v2." + base64.RawURLEncoding.EncodeToString(claims) + "." + strconv.FormatInt(expiresAt, 10)
 	mac := hmac.New(sha256.New, []byte(a.ResolverToken))
 	_, _ = mac.Write([]byte(payload))
@@ -267,9 +305,12 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 		return Principal{}, false
 	}
 	var claims struct {
-		Actor string `json:"a"`
-		Role  Role   `json:"r"`
-		Admin bool   `json:"d"`
+		Actor            string                 `json:"a"`
+		Role             Role                   `json:"r"`
+		Admin            bool                   `json:"d"`
+		Authentication   AuthenticationKind     `json:"k"`
+		OIDCAdminSubject bool                   `json:"s"`
+		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m"`
 	}
 	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" {
 		return Principal{}, false
@@ -280,12 +321,42 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 	if claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin {
 		return Principal{}, false
 	}
+	if claims.Authentication == "" {
+		claims.Authentication = AuthenticationStaticResolver
+	}
+	if !validAuthenticationKind(claims.Authentication) || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
+		return Principal{}, false
+	}
 	return Principal{
 		Actor:              claims.Actor,
 		Admin:              claims.Admin,
 		Role:               claims.Role,
 		RepositoryPatterns: a.RepositoryReaders[claims.Actor],
+		AuthenticationKind: claims.Authentication,
+		OIDCAdminSubject:   claims.OIDCAdminSubject,
+		OIDCRoleMappings:   claims.OIDCRoleMappings,
 	}, true
+}
+
+func validAuthenticationKind(kind AuthenticationKind) bool {
+	switch kind {
+	case "", AuthenticationStaticAdmin, AuthenticationStaticResolver, AuthenticationLocalSession, AuthenticationAPIKey, AuthenticationOIDC:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOIDCMetadata(kind AuthenticationKind, adminSubject bool, mappings []OIDCRoleMappingMatch) bool {
+	if kind != AuthenticationOIDC && (adminSubject || len(mappings) != 0) {
+		return false
+	}
+	for _, mapping := range mappings {
+		if mapping.ExternalRole == "" || mapping.GatewayRole != RoleReader && mapping.GatewayRole != RoleWriter && mapping.GatewayRole != RoleAdmin {
+			return false
+		}
+	}
+	return true
 }
 
 func tokenMatches(value, expected string) bool {

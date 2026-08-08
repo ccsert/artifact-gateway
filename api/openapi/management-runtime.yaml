@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/identity":
+    "$ref": "./management/identity.yaml#/identity"
   "/artifact-search":
     "$ref": "./management/search.yaml#/artifact_search"
   "/anonymous-access-policy":
@@ -187,6 +189,8 @@ components:
       "$ref": "./components/schemas.yaml#/User"
     UserList:
       "$ref": "./components/schemas.yaml#/UserList"
+    CurrentIdentity:
+      "$ref": "./components/schemas.yaml#/CurrentIdentity"
     CreateUser:
       "$ref": "./components/schemas.yaml#/CreateUser"
     UpdateUser:
@@ -375,6 +379,8 @@ components:
       "$ref": "./components/responses.yaml#/User"
     UserList:
       "$ref": "./components/responses.yaml#/UserList"
+    CurrentIdentity:
+      "$ref": "./components/responses.yaml#/CurrentIdentity"
     AuditList:
       "$ref": "./components/responses.yaml#/AuditList"
     AuditRetentionPolicy:

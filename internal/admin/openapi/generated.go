@@ -82,6 +82,33 @@ func (e AuditCleanupJobState) Valid() bool {
 	}
 }
 
+// Defines values for AuthenticationKind.
+const (
+	ApiKey         AuthenticationKind = "api_key"
+	LocalSession   AuthenticationKind = "local_session"
+	Oidc           AuthenticationKind = "oidc"
+	StaticAdmin    AuthenticationKind = "static_admin"
+	StaticResolver AuthenticationKind = "static_resolver"
+)
+
+// Valid indicates whether the value is a known member of the AuthenticationKind enum.
+func (e AuthenticationKind) Valid() bool {
+	switch e {
+	case ApiKey:
+		return true
+	case LocalSession:
+		return true
+	case Oidc:
+		return true
+	case StaticAdmin:
+		return true
+	case StaticResolver:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConanPackageRevisionState.
 const (
 	ConanPackageRevisionStateDeleted ConanPackageRevisionState = "deleted"
@@ -208,6 +235,27 @@ func (e CreatedAPIKeyRoles) Valid() bool {
 	case CreatedAPIKeyRolesReader:
 		return true
 	case CreatedAPIKeyRolesWriter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CurrentIdentityRole.
+const (
+	CurrentIdentityRoleAdmin  CurrentIdentityRole = "admin"
+	CurrentIdentityRoleReader CurrentIdentityRole = "reader"
+	CurrentIdentityRoleWriter CurrentIdentityRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the CurrentIdentityRole enum.
+func (e CurrentIdentityRole) Valid() bool {
+	switch e {
+	case CurrentIdentityRoleAdmin:
+		return true
+	case CurrentIdentityRoleReader:
+		return true
+	case CurrentIdentityRoleWriter:
 		return true
 	default:
 		return false
@@ -400,6 +448,27 @@ func (e LifecycleJobState) Valid() bool {
 	case LifecycleJobStateRetrying:
 		return true
 	case LifecycleJobStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OIDCRoleMappingMatchGatewayRole.
+const (
+	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
+	OIDCRoleMappingMatchGatewayRoleReader OIDCRoleMappingMatchGatewayRole = "reader"
+	OIDCRoleMappingMatchGatewayRoleWriter OIDCRoleMappingMatchGatewayRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the OIDCRoleMappingMatchGatewayRole enum.
+func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
+	switch e {
+	case OIDCRoleMappingMatchGatewayRoleAdmin:
+		return true
+	case OIDCRoleMappingMatchGatewayRoleReader:
+		return true
+	case OIDCRoleMappingMatchGatewayRoleWriter:
 		return true
 	default:
 		return false
@@ -1114,6 +1183,9 @@ type AuditRetentionPolicy struct {
 	Version  string `json:"version"`
 }
 
+// AuthenticationKind defines model for AuthenticationKind.
+type AuthenticationKind string
+
 // ConanPackageIdList defines model for ConanPackageIdList.
 type ConanPackageIdList struct {
 	Items []string `json:"items"`
@@ -1254,6 +1326,18 @@ type CreatedAPIKey struct {
 
 // CreatedAPIKeyRoles defines model for CreatedAPIKey.Roles.
 type CreatedAPIKeyRoles string
+
+// CurrentIdentity defines model for CurrentIdentity.
+type CurrentIdentity struct {
+	Actor         string               `json:"actor"`
+	Administrator bool                 `json:"administrator"`
+	Kind          AuthenticationKind   `json:"kind"`
+	Oidc          *OIDCIdentityDetails `json:"oidc,omitempty"`
+	Role          *CurrentIdentityRole `json:"role,omitempty"`
+}
+
+// CurrentIdentityRole defines model for CurrentIdentity.Role.
+type CurrentIdentityRole string
 
 // DeclaredObject defines model for DeclaredObject.
 type DeclaredObject struct {
@@ -1536,6 +1620,21 @@ type OCIManifestSummaryPage struct {
 	NextPageToken *string              `json:"nextPageToken,omitempty"`
 }
 
+// OIDCIdentityDetails defines model for OIDCIdentityDetails.
+type OIDCIdentityDetails struct {
+	AdminSubject bool                   `json:"adminSubject"`
+	RoleMappings []OIDCRoleMappingMatch `json:"roleMappings"`
+}
+
+// OIDCRoleMappingMatch defines model for OIDCRoleMappingMatch.
+type OIDCRoleMappingMatch struct {
+	ExternalRole string                          `json:"externalRole"`
+	GatewayRole  OIDCRoleMappingMatchGatewayRole `json:"gatewayRole"`
+}
+
+// OIDCRoleMappingMatchGatewayRole defines model for OIDCRoleMappingMatch.GatewayRole.
+type OIDCRoleMappingMatchGatewayRole string
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code      ProblemCode `json:"code"`
@@ -1767,6 +1866,7 @@ type RepositoryCapacityQuota struct {
 type RepositoryEffectiveAccess struct {
 	Actor         string                     `json:"actor"`
 	AnonymousRead EffectiveAccessDecision    `json:"anonymousRead"`
+	Identity      CurrentIdentity            `json:"identity"`
 	Permissions   EffectiveAccessPermissions `json:"permissions"`
 	Repository    struct {
 		Format Format                                   `json:"format"`
@@ -2468,6 +2568,9 @@ type ServerInterface interface {
 
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupId, params ReplaceGroupMembersParams)
+	// GetCurrentIdentity Explain the authenticated caller's identity and global role
+	// (GET /identity)
+	GetCurrentIdentity(w http.ResponseWriter, r *http.Request)
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams)
@@ -2543,7 +2646,7 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
-
+	// GetRepositoryEffectiveAccess Explain the authenticated caller's access, including denied decisions
 	// (GET /repositories/{repositoryId}/effective-access)
 	GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
@@ -3508,6 +3611,20 @@ func (siw *ServerInterfaceWrapper) ReplaceGroupMembers(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceGroupMembers(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCurrentIdentity operation middleware
+func (siw *ServerInterfaceWrapper) GetCurrentIdentity(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCurrentIdentity(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6008,6 +6125,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/capacity", wrapper.GetGroupCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ListGroupMembers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ReplaceGroupMembers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetCurrentIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
@@ -6100,6 +6218,8 @@ type ConanRecipeRevisionListJSONResponse ConanRecipeRevisionList
 type ConanReferenceListJSONResponse ConanReferencePage
 
 type CreatedAPIKeyJSONResponse CreatedAPIKey
+
+type CurrentIdentityJSONResponse CurrentIdentity
 
 type DeletionJSONResponse Deletion
 
@@ -6914,6 +7034,43 @@ func (response ReplaceGroupMembers412ApplicationProblemPlusJSONResponse) VisitRe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentIdentityRequestObject struct {
+}
+
+type GetCurrentIdentityResponseObject interface {
+	VisitGetCurrentIdentityResponse(w http.ResponseWriter) error
+}
+
+type GetCurrentIdentity200JSONResponse struct{ CurrentIdentityJSONResponse }
+
+func (response GetCurrentIdentity200JSONResponse) VisitGetCurrentIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentIdentity401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetCurrentIdentity401ApplicationProblemPlusJSONResponse) VisitGetCurrentIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8080,18 +8237,18 @@ func (response GetRepositoryEffectiveAccess200JSONResponse) VisitGetRepositoryEf
 	return err
 }
 
-type GetRepositoryEffectiveAccess403ApplicationProblemPlusJSONResponse struct {
+type GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
 
-func (response GetRepositoryEffectiveAccess403ApplicationProblemPlusJSONResponse) VisitGetRepositoryEffectiveAccessResponse(w http.ResponseWriter) error {
+func (response GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse) VisitGetRepositoryEffectiveAccessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9693,6 +9850,9 @@ type StrictServerInterface interface {
 
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(ctx context.Context, request ReplaceGroupMembersRequestObject) (ReplaceGroupMembersResponseObject, error)
+	// GetCurrentIdentity Explain the authenticated caller's identity and global role
+	// (GET /identity)
+	GetCurrentIdentity(ctx context.Context, request GetCurrentIdentityRequestObject) (GetCurrentIdentityResponseObject, error)
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(ctx context.Context, request ListLifecycleJobsRequestObject) (ListLifecycleJobsResponseObject, error)
@@ -9768,7 +9928,7 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
-
+	// GetRepositoryEffectiveAccess Explain the authenticated caller's access, including denied decisions
 	// (GET /repositories/{repositoryId}/effective-access)
 	GetRepositoryEffectiveAccess(ctx context.Context, request GetRepositoryEffectiveAccessRequestObject) (GetRepositoryEffectiveAccessResponseObject, error)
 
@@ -10452,6 +10612,30 @@ func (sh *strictHandler) ReplaceGroupMembers(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGroupMembersResponseObject); ok {
 		if err := validResponse.VisitReplaceGroupMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCurrentIdentity operation middleware
+func (sh *strictHandler) GetCurrentIdentity(w http.ResponseWriter, r *http.Request) {
+	var request GetCurrentIdentityRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCurrentIdentity(ctx, request.(GetCurrentIdentityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCurrentIdentity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCurrentIdentityResponseObject); ok {
+		if err := validResponse.VisitGetCurrentIdentityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

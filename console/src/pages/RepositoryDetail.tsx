@@ -91,6 +91,7 @@ import {
   isNotFound,
 } from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
+import { IdentitySummary } from "../components/IdentitySummary";
 import { Modal, useDisclosure } from "../components/Modal";
 import { OciImageDetail } from "../components/OciImageDetail";
 import { MavenPublishWizard } from "../components/MavenPublishWizard";
@@ -1672,9 +1673,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
       ) : (
         <Table<Grant>
           className="ag-console-table"
-          rowKey={(grant, index) =>
-            `${grant.principal}-${grant.resourcePrefix ?? ""}-${index}`
-          }
+          rowKey={(grant) => `${grant.principal}-${grant.resourcePrefix ?? ""}`}
           size="middle"
           dataSource={grants}
           columns={grantColumns}
@@ -3478,7 +3477,8 @@ function EffectiveAccessPanel({
           ),
           children: (
             <div className="border-t border-zinc-800/70 pt-3 text-xs">
-              <div className="grid grid-cols-4 gap-4">
+              <IdentitySummary identity={effectiveAccess.identity} />
+              <div className="mt-4 grid grid-cols-4 gap-4 border-t border-zinc-800/70 pt-3">
                 {[
                   {
                     label: "匿名读取",

@@ -16,6 +16,20 @@
     }
   ],
   "paths": {
+    "/identity": {
+      "get": {
+        "operationId": "getCurrentIdentity",
+        "summary": "Explain the authenticated caller's identity and global role",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CurrentIdentity"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/artifact-search": {
       "get": {
         "operationId": "searchArtifacts",
@@ -1264,11 +1278,12 @@
       ],
       "get": {
         "operationId": "getRepositoryEffectiveAccess",
+        "summary": "Explain the authenticated caller's access, including denied decisions",
         "responses": {
           "200": {
             "$ref": "#/components/responses/RepositoryEffectiveAccess"
           },
-          "403": {
+          "401": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
@@ -3135,6 +3150,38 @@
           }
         }
       },
+      "CurrentIdentity": {
+        "type": "object",
+        "required": [
+          "actor",
+          "kind",
+          "administrator"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AuthenticationKind"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
+          },
+          "administrator": {
+            "type": "boolean"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OIDCIdentityDetails"
+          }
+        }
+      },
       "CreateUser": {
         "type": "object",
         "required": [
@@ -4102,6 +4149,57 @@
           }
         }
       },
+      "AuthenticationKind": {
+        "type": "string",
+        "enum": [
+          "static_admin",
+          "static_resolver",
+          "local_session",
+          "api_key",
+          "oidc"
+        ]
+      },
+      "OIDCRoleMappingMatch": {
+        "type": "object",
+        "required": [
+          "externalRole",
+          "gatewayRole"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "externalRole": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gatewayRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
+          }
+        }
+      },
+      "OIDCIdentityDetails": {
+        "type": "object",
+        "required": [
+          "adminSubject",
+          "roleMappings"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "adminSubject": {
+            "type": "boolean"
+          },
+          "roleMappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OIDCRoleMappingMatch"
+            }
+          }
+        }
+      },
       "GlobalArtifactSearchHit": {
         "allOf": [
           {
@@ -4647,6 +4745,7 @@
         "type": "object",
         "required": [
           "actor",
+          "identity",
           "repository",
           "anonymousRead",
           "permissions"
@@ -4654,6 +4753,9 @@
         "properties": {
           "actor": {
             "type": "string"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/CurrentIdentity"
           },
           "repository": {
             "type": "object",
@@ -5520,6 +5622,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/UserList"
+            }
+          }
+        }
+      },
+      "CurrentIdentity": {
+        "description": "Safe authentication source and global-role explanation for the caller",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CurrentIdentity"
             }
           }
         }

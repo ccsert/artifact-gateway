@@ -35,12 +35,14 @@ const navItems = [
     exact: true,
     icon: <DashboardOutlined />,
     group: "运行",
+    admin: true,
   },
   {
     to: "/repositories",
     label: "仓库",
     icon: <InboxOutlined />,
     group: "运行",
+    admin: true,
   },
   { to: "/search", label: "制品搜索", icon: <SearchOutlined />, group: "运行" },
   {
@@ -50,24 +52,33 @@ const navItems = [
     group: "运行",
     admin: true,
   },
-  { to: "/groups", label: "分组", icon: <TeamOutlined />, group: "治理" },
+  {
+    to: "/groups",
+    label: "分组",
+    icon: <TeamOutlined />,
+    group: "治理",
+    admin: true,
+  },
   {
     to: "/access",
     label: "访问控制",
     icon: <SafetyCertificateOutlined />,
     group: "治理",
+    admin: true,
   },
   {
     to: "/audits",
     label: "审计日志",
     icon: <FileSearchOutlined />,
     group: "治理",
+    admin: true,
   },
   {
     to: "/audit-retention",
     label: "审计保留",
     icon: <ClockCircleOutlined />,
     group: "治理",
+    admin: true,
   },
   {
     to: "/keys",
@@ -158,7 +169,7 @@ function TokenDialog() {
                 disabled={!draft.trim()}
                 onClick={() => {
                   setToken(draft);
-                  dialog.hide();
+                  window.location.reload();
                 }}
               >
                 保存
@@ -185,7 +196,7 @@ function TokenDialog() {
 }
 
 export function AppLayout() {
-  const { token, role, clearToken } = useAuth();
+  const { token, identity, clearToken } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -215,10 +226,23 @@ export function AppLayout() {
     return <Navigate to={`/login?redirect=${target}`} replace />;
   }
 
-  // Static admin and OIDC tokens do not always carry a locally persisted role.
-  // Keep the management entries discoverable and let the API enforce authority.
+  const adminOnlyPath = [
+    "/",
+    "/repositories",
+    "/operations",
+    "/groups",
+    "/access",
+    "/audits",
+    "/audit-retention",
+    "/keys",
+    "/users",
+  ].includes(location.pathname);
+  if (identity && !identity.administrator && adminOnlyPath) {
+    return <Navigate to="/search" replace />;
+  }
+
   const visibleNavItems = navItems.filter(
-    (item) => !("admin" in item) || role === "admin" || role === "",
+    (item) => !("admin" in item) || identity?.administrator,
   );
   const selectedItem = visibleNavItems.find((item) =>
     "exact" in item

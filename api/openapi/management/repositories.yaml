@@ -100,10 +100,11 @@ repositories_repositoryId_effective_access:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   get:
     operationId: getRepositoryEffectiveAccess
+    summary: Explain the authenticated caller's access, including denied decisions
     responses:
       '200':
         "$ref": "../components/responses.yaml#/RepositoryEffectiveAccess"
-      '403':
+      '401':
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"

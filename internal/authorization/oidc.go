@@ -36,9 +36,11 @@ type OIDCConfig struct {
 }
 
 type OIDCIdentity struct {
-	Subject string
-	Admin   bool
-	Role    Role
+	Subject      string
+	Admin        bool
+	Role         Role
+	AdminSubject bool
+	RoleMappings []OIDCRoleMappingMatch
 }
 
 type OIDCValidator struct {
@@ -106,15 +108,17 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 		if subject == identity.Subject {
 			identity.Admin = true
 			identity.Role = RoleAdmin
+			identity.AdminSubject = true
 			break
 		}
 	}
-	if containsAny(claims.RealmAccess.Roles, v.config.Roles.Admin) {
+	identity.RoleMappings = matchedOIDCRoleMappings(claims.RealmAccess.Roles, v.config.Roles)
+	if containsMappedGatewayRole(identity.RoleMappings, RoleAdmin) {
 		identity.Admin = true
 		identity.Role = RoleAdmin
-	} else if containsAny(claims.RealmAccess.Roles, v.config.Roles.Writer) {
+	} else if containsMappedGatewayRole(identity.RoleMappings, RoleWriter) {
 		identity.Role = RoleWriter
-	} else if containsAny(claims.RealmAccess.Roles, v.config.Roles.Reader) {
+	} else if containsMappedGatewayRole(identity.RoleMappings, RoleReader) {
 		identity.Role = RoleReader
 	}
 	return identity, true
@@ -221,9 +225,31 @@ func (v *OIDCValidator) discoverJWKSURL(ctx context.Context) bool {
 	return true
 }
 
-func containsAny(values, expected []string) bool {
+func matchedOIDCRoleMappings(values []string, mapping OIDCRoleMapping) []OIDCRoleMappingMatch {
+	matches := make([]OIDCRoleMappingMatch, 0)
+	seen := make(map[OIDCRoleMappingMatch]struct{})
 	for _, value := range values {
-		if containsRole(expected, value) {
+		for _, candidate := range []struct {
+			roles []string
+			role  Role
+		}{{mapping.Admin, RoleAdmin}, {mapping.Writer, RoleWriter}, {mapping.Reader, RoleReader}} {
+			match := OIDCRoleMappingMatch{ExternalRole: value, GatewayRole: candidate.role}
+			if !containsRole(candidate.roles, value) {
+				continue
+			}
+			if _, ok := seen[match]; ok {
+				continue
+			}
+			seen[match] = struct{}{}
+			matches = append(matches, match)
+		}
+	}
+	return matches
+}
+
+func containsMappedGatewayRole(mappings []OIDCRoleMappingMatch, expected Role) bool {
+	for _, mapping := range mappings {
+		if mapping.GatewayRole == expected {
 			return true
 		}
 	}

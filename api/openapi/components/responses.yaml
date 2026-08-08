@@ -213,6 +213,12 @@ GroupCapacity:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/GroupCapacity"
+CurrentIdentity:
+  description: Safe authentication source and global-role explanation for the caller
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/CurrentIdentity"
 RepositoryEffectiveAccess:
   description: Effective repository access decisions for the authenticated actor and anonymous read policy
   content:
