@@ -208,9 +208,33 @@ type NativeNPMStore interface {
 	StoreNPMProxyNegative(context.Context, NPMPackage) error
 	CacheNPMProxyTarball(context.Context, NPMVersion) (NPMVersion, error)
 	LockNPMProxy(context.Context, string) (func(), error)
+	LockNPMObject(context.Context, string) (func(), error)
 	GetNPMPackage(context.Context, string, string) (NPMPackage, error)
+	ListNPMVersions(context.Context, string, string) ([]NPMVersion, error)
+	GetNPMVersion(context.Context, string, string, string) (NPMVersion, error)
+	TombstoneNPMVersion(context.Context, string, string, string) (NPMVersion, error)
+	RestoreNPMVersion(context.Context, string, string, string) (NPMVersion, error)
+	ListReclaimableNPMObjects(context.Context, time.Time, int) ([]NPMObject, error)
+	NPMObjectHasVisibleReference(context.Context, string) (bool, error)
+	MarkNPMObjectCollected(context.Context, string) error
 	GetNPMVersionByTarball(context.Context, string, string, string) (NPMVersion, error)
 	SearchNPMPackages(context.Context, string, string, int, string) ([]NPMPackageSummary, error)
+}
+
+type NativePyPIStore interface {
+	PublishPyPIFile(context.Context, PyPIFile) (PyPIFile, error)
+	PublishPyPIVersion(context.Context, []PyPIFile) ([]PyPIFile, error)
+	SyncPyPIProxyFiles(context.Context, string, string, []PyPIFile) error
+	CachePyPIProxyFile(context.Context, PyPIFile) (PyPIFile, error)
+	LockPyPIObject(context.Context, string) (func(), error)
+	GetPyPIFile(context.Context, string, string) (PyPIFile, error)
+	ListPyPIProjectFiles(context.Context, string, string) ([]PyPIFile, error)
+	ListPyPIProjects(context.Context, string, string, int, string) ([]PyPIProjectSummary, error)
+	TombstonePyPIVersion(context.Context, string, string, string) ([]PyPIFile, error)
+	RestorePyPIVersion(context.Context, string, string, string) ([]PyPIFile, error)
+	ListReclaimablePyPIObjects(context.Context, time.Time, int) ([]PyPIObject, error)
+	PyPIObjectHasVisibleReference(context.Context, string) (bool, error)
+	MarkPyPIObjectCollected(context.Context, string) error
 }
 
 type Store interface {

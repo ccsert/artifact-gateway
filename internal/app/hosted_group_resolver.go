@@ -83,6 +83,8 @@ func v2GroupName(format repository.Format, path string) string {
 		prefix = "/maven/"
 	case repository.FormatNPM:
 		prefix = "/npm/"
+	case repository.FormatPyPI:
+		prefix = "/pypi/"
 	case repository.FormatConan:
 		rest := strings.TrimPrefix(path, "/conan/v2/")
 		if rest == path || rest == "" {
@@ -192,6 +194,7 @@ type v2GroupRouter struct {
 	raw        *v2GroupRawHandler
 	conan      *v2GroupConanHandler
 	npm        *v2GroupNPMHandler
+	pypi       *v2GroupPyPIHandler
 	next       http.Handler
 }
 
@@ -201,9 +204,9 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.next.ServeHTTP(w, req)
 		return
 	}
-	if r.format == repository.FormatNPM {
+	if r.format == repository.FormatNPM || r.format == repository.FormatPyPI {
 		repo, lookupErr := r.repos.GetHostedRepositoryByName(req.Context(), name)
-		if lookupErr == nil && repo.Format == repository.FormatNPM {
+		if lookupErr == nil && repo.Format == r.format {
 			r.next.ServeHTTP(w, req)
 			return
 		}
@@ -246,6 +249,11 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case repository.FormatNPM:
 		if r.npm != nil {
 			r.npm.serve(w, req, resolver, group)
+			return
+		}
+	case repository.FormatPyPI:
+		if r.pypi != nil {
+			r.pypi.serve(w, req, resolver, group)
 			return
 		}
 	}

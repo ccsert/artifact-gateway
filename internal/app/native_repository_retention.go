@@ -22,6 +22,8 @@ type repositoryRetentionStore interface {
 	repository.NativeOCIStore
 	repository.NativeRawStore
 	repository.NativeConanStore
+	repository.NativeNPMStore
+	repository.NativePyPIStore
 }
 
 type NativeRepositoryRetention struct {
@@ -47,6 +49,10 @@ type RepositoryRetentionCandidate struct {
 	conanRef      string
 	conanRevision string
 	rawPath       string
+	npmPackage    string
+	npmVersion    string
+	pypiProject   string
+	pypiVersion   string
 }
 
 type repositoryRetentionPayload struct {
@@ -211,6 +217,12 @@ func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID s
 		return err
 	case repository.FormatRaw:
 		return m.Store.DeleteRawAsset(ctx, repositoryID, candidate.rawPath)
+	case repository.FormatNPM:
+		_, err := m.Store.TombstoneNPMVersion(ctx, repositoryID, candidate.npmPackage, candidate.npmVersion)
+		return err
+	case repository.FormatPyPI:
+		_, err := m.Store.TombstonePyPIVersion(ctx, repositoryID, candidate.pypiProject, candidate.pypiVersion)
+		return err
 	default:
 		return repository.ErrDisabled
 	}
@@ -249,6 +261,10 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 		candidates, err = m.planConan(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	case repository.FormatRaw:
 		candidates, err = m.planRaw(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+	case repository.FormatNPM:
+		candidates, err = m.planNPM(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+	case repository.FormatPyPI:
+		candidates, err = m.planPyPI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	default:
 		return nil, repository.ErrDisabled
 	}
@@ -262,6 +278,71 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 		return candidates[i].Coordinate < candidates[j].Coordinate
 	})
 	return candidates, nil
+}
+
+func (m NativeRepositoryRetention) planPyPI(ctx context.Context, repositoryID string, policy repository.RepositoryRetentionPolicy, coordinatePatterns, protectedPatterns []*regexp.Regexp) ([]RepositoryRetentionCandidate, error) {
+	var candidates []RepositoryRetentionCandidate
+	after := ""
+	for {
+		projects, err := m.Store.ListPyPIProjects(ctx, repositoryID, "", 200, after)
+		if err != nil {
+			return nil, err
+		}
+		for _, project := range projects {
+			files, err := m.Store.ListPyPIProjectFiles(ctx, repositoryID, project.Project)
+			if err != nil {
+				return nil, err
+			}
+			seenVersions := make(map[string]bool)
+			versionIndex := 0
+			for _, file := range files {
+				if seenVersions[file.Version] {
+					continue
+				}
+				seenVersions[file.Version] = true
+				coordinate := project.Project + "@" + file.Version
+				candidate, ok := m.versionedCandidate(repository.FormatPyPI, coordinate, file.Digest, file.CreatedAt, versionIndex, policy, []string{coordinate, project.Project}, coordinatePatterns, protectedPatterns)
+				versionIndex++
+				if ok {
+					candidate.CursorID, candidate.pypiProject, candidate.pypiVersion = coordinate, project.Project, file.Version
+					candidates = append(candidates, candidate)
+				}
+			}
+		}
+		if len(projects) < 200 {
+			return candidates, nil
+		}
+		after = projects[len(projects)-1].Project
+	}
+}
+
+func (m NativeRepositoryRetention) planNPM(ctx context.Context, repositoryID string, policy repository.RepositoryRetentionPolicy, coordinatePatterns, protectedPatterns []*regexp.Regexp) ([]RepositoryRetentionCandidate, error) {
+	var candidates []RepositoryRetentionCandidate
+	after := ""
+	for {
+		packages, err := m.Store.SearchNPMPackages(ctx, repositoryID, "", 200, after)
+		if err != nil {
+			return nil, err
+		}
+		for _, pkg := range packages {
+			versions, err := m.Store.ListNPMVersions(ctx, repositoryID, pkg.Name)
+			if err != nil {
+				return nil, err
+			}
+			for index, version := range versions {
+				coordinate := pkg.Name + "@" + version.Version
+				candidate, ok := m.versionedCandidate(repository.FormatNPM, coordinate, version.Digest, version.CreatedAt, index, policy, []string{coordinate, pkg.Name}, coordinatePatterns, protectedPatterns)
+				if ok {
+					candidate.CursorID, candidate.npmPackage, candidate.npmVersion = coordinate, pkg.Name, version.Version
+					candidates = append(candidates, candidate)
+				}
+			}
+		}
+		if len(packages) < 200 {
+			return candidates, nil
+		}
+		after = packages[len(packages)-1].Name
+	}
 }
 
 func (m NativeRepositoryRetention) planMaven(ctx context.Context, repositoryID string) ([]RepositoryRetentionCandidate, error) {

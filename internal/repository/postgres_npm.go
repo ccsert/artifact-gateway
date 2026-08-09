@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 func (s *PostgresStore) PublishNPMVersion(ctx context.Context, version NPMVersion, distTags map[string]string) (NPMVersion, error) {
@@ -66,6 +67,22 @@ func (s *PostgresStore) LockNPMProxy(ctx context.Context, key string) (func(), e
 		return nil, err
 	}
 	lockKey := "native-npm-proxy:" + key
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
+		_ = conn.Close()
+	}, nil
+}
+
+func (s *PostgresStore) LockNPMObject(ctx context.Context, objectKey string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lockKey := "native-npm-object:" + objectKey
 	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -214,7 +231,7 @@ func (s *PostgresStore) CacheNPMProxyTarball(ctx context.Context, incoming NPMVe
 	var stored NPMVersion
 	err = scanNPMVersion(tx.QueryRowContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
-		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at
 		FROM native_npm_versions
 		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 FOR UPDATE`,
 		incoming.RepositoryID, incoming.PackageName, incoming.Version), &stored)
@@ -235,7 +252,7 @@ func (s *PostgresStore) CacheNPMProxyTarball(ctx context.Context, incoming NPMVe
 		SET digest=$4,object_key=$5,size=$6,cached_at=$7
 		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3
 		RETURNING repository_id::text,package_name,version,digest,integrity,shasum,
-		          tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at`,
+		          tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at`,
 		incoming.RepositoryID, incoming.PackageName, incoming.Version, incoming.Digest,
 		incoming.ObjectKey, incoming.Size, incoming.CachedAt), &stored)
 	if err != nil {
@@ -274,9 +291,9 @@ func (s *PostgresStore) GetNPMPackage(ctx context.Context, repositoryID, name st
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
-		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at
 		FROM native_npm_versions
-		WHERE repository_id::text=$1 AND package_name=$2
+		WHERE repository_id::text=$1 AND package_name=$2 AND state='visible'
 		ORDER BY created_at DESC,version DESC`, repositoryID, name)
 	if err != nil {
 		return NPMPackage{}, err
@@ -289,16 +306,195 @@ func (s *PostgresStore) GetNPMPackage(ctx context.Context, repositoryID, name st
 		}
 		pkg.Versions = append(pkg.Versions, version)
 	}
-	return pkg, rows.Err()
+	if err = rows.Err(); err != nil {
+		return NPMPackage{}, err
+	}
+	if len(pkg.Versions) == 0 && !pkg.Negative {
+		return NPMPackage{}, ErrNotFound
+	}
+	return pkg, nil
+}
+
+func (s *PostgresStore) ListNPMVersions(ctx context.Context, repositoryID, name string) ([]NPMVersion, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at
+		FROM native_npm_versions
+		WHERE repository_id::text=$1 AND package_name=$2 AND state='visible'
+		ORDER BY created_at DESC,version DESC`, repositoryID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	versions := make([]NPMVersion, 0)
+	for rows.Next() {
+		var version NPMVersion
+		if err = scanNPMVersion(rows, &version); err != nil {
+			return nil, err
+		}
+		versions = append(versions, version)
+	}
+	return versions, rows.Err()
+}
+
+func (s *PostgresStore) GetNPMVersion(ctx context.Context, repositoryID, name, version string) (NPMVersion, error) {
+	var item NPMVersion
+	err := scanNPMVersion(s.db.QueryRowContext(ctx, `
+		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at
+		FROM native_npm_versions
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 AND state='visible'`, repositoryID, name, version), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrNotFound
+	}
+	return item, err
+}
+
+func (s *PostgresStore) TombstoneNPMVersion(ctx context.Context, repositoryID, name, version string) (NPMVersion, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var item NPMVersion
+	err = scanNPMVersion(tx.QueryRowContext(ctx, `
+		UPDATE native_npm_versions SET state='deleted',deleted_at=now()
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 AND state='visible'
+		RETURNING repository_id::text,package_name,version,digest,integrity,shasum,
+		          tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at`,
+		repositoryID, name, version), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE native_npm_packages
+		SET dist_tags=COALESCE((SELECT jsonb_object_agg(key,value) FROM jsonb_each_text(dist_tags) WHERE value<>$3),'{}'::jsonb),updated_at=now()
+		WHERE repository_id::text=$1 AND name=$2`, repositoryID, name, version); err != nil {
+		return NPMVersion{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `
+		INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest)
+		VALUES ($1,'npm',$2,$3)
+		ON CONFLICT (repository_id,format,coordinate)
+		DO UPDATE SET digest=EXCLUDED.digest,tombstoned_at=now()`, repositoryID, name+"@"+version, item.Digest); err != nil {
+		return NPMVersion{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMVersion{}, err
+	}
+	return item, nil
+}
+
+func (s *PostgresStore) RestoreNPMVersion(ctx context.Context, repositoryID, name, version string) (NPMVersion, error) {
+	var objectKey string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT object_key FROM native_npm_versions
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 AND state='deleted'`,
+		repositoryID, name, version).Scan(&objectKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrDisabled
+	}
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	release, err := s.LockNPMObject(ctx, objectKey)
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	defer release()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var item NPMVersion
+	err = scanNPMVersion(tx.QueryRowContext(ctx, `
+		UPDATE native_npm_versions SET state='visible',deleted_at=NULL
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 AND state='deleted' AND collected_at IS NULL
+		RETURNING repository_id::text,package_name,version,digest,integrity,shasum,
+		          tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at`,
+		repositoryID, name, version), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrDisabled
+	}
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE native_npm_packages
+		SET dist_tags=CASE WHEN dist_tags ? 'latest' THEN dist_tags ELSE dist_tags || jsonb_build_object('latest',$3::text) END,updated_at=now()
+		WHERE repository_id::text=$1 AND name=$2`, repositoryID, name, version); err != nil {
+		return NPMVersion{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='npm' AND coordinate=$2`, repositoryID, name+"@"+version); err != nil {
+		return NPMVersion{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMVersion{}, err
+	}
+	return item, nil
+}
+
+func (s *PostgresStore) ListReclaimableNPMObjects(ctx context.Context, before time.Time, limit int) ([]NPMObject, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT min(d.repository_id::text),d.object_key,min(d.digest),max(d.size),min(d.deleted_at)
+		FROM native_npm_versions d
+		WHERE d.state='deleted' AND d.collected_at IS NULL AND d.object_key<>'' AND d.deleted_at<$1
+		  AND NOT EXISTS (SELECT 1 FROM native_npm_versions v WHERE v.object_key=d.object_key AND v.state='visible')
+		GROUP BY d.object_key ORDER BY d.object_key LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	objects := make([]NPMObject, 0)
+	for rows.Next() {
+		var object NPMObject
+		if err = rows.Scan(&object.RepositoryID, &object.ObjectKey, &object.Digest, &object.Size, &object.DeletedAt); err != nil {
+			return nil, err
+		}
+		objects = append(objects, object)
+	}
+	return objects, rows.Err()
+}
+
+func (s *PostgresStore) NPMObjectHasVisibleReference(ctx context.Context, objectKey string) (bool, error) {
+	var referenced bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_npm_versions WHERE object_key=$1 AND state='visible')`, objectKey).Scan(&referenced)
+	return referenced, err
+}
+
+func (s *PostgresStore) MarkNPMObjectCollected(ctx context.Context, objectKey string) error {
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE native_npm_versions SET collected_at=now()
+		WHERE object_key=$1 AND state='deleted' AND collected_at IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM native_npm_versions v WHERE v.object_key=$1 AND v.state='visible')`, objectKey)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) GetNPMVersionByTarball(ctx context.Context, repositoryID, name, tarballName string) (NPMVersion, error) {
 	var version NPMVersion
 	err := scanNPMVersion(s.db.QueryRowContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
-		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,state,cached_at,deleted_at,collected_at,created_at
 		FROM native_npm_versions
-		WHERE repository_id::text=$1 AND package_name=$2 AND tarball_name=$3`, repositoryID, name, tarballName), &version)
+		WHERE repository_id::text=$1 AND package_name=$2 AND tarball_name=$3 AND state='visible'`, repositoryID, name, tarballName), &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return NPMVersion{}, ErrNotFound
 	}
@@ -315,10 +511,10 @@ func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, pre
 		       COALESCE(latest.shasum,''),COALESCE(latest.tarball_name,''),COALESCE(latest.object_key,''),
 		       COALESCE(latest.size,0),COALESCE(latest.manifest,'{}'::jsonb),COALESCE(latest.publisher,''),latest.created_at
 		FROM native_npm_packages p
-		JOIN native_npm_versions v ON v.repository_id=p.repository_id AND v.package_name=p.name
+		JOIN native_npm_versions v ON v.repository_id=p.repository_id AND v.package_name=p.name AND v.state='visible'
 		LEFT JOIN LATERAL (
 			SELECT nv.* FROM native_npm_versions nv
-			WHERE nv.repository_id=p.repository_id AND nv.package_name=p.name
+			WHERE nv.repository_id=p.repository_id AND nv.package_name=p.name AND nv.state='visible'
 			ORDER BY (nv.version=p.dist_tags->>'latest') DESC,nv.created_at DESC,nv.version DESC
 			LIMIT 1
 		) latest ON true
@@ -351,12 +547,18 @@ func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, pre
 }
 
 func scanNPMVersion(row interface{ Scan(...any) error }, version *NPMVersion) error {
-	var cachedAt sql.NullTime
+	var cachedAt, deletedAt, collectedAt sql.NullTime
 	err := row.Scan(&version.RepositoryID, &version.PackageName, &version.Version, &version.Digest,
 		&version.Integrity, &version.Shasum, &version.TarballName, &version.UpstreamTarball, &version.ObjectKey,
-		&version.Size, &version.Manifest, &version.Publisher, &cachedAt, &version.CreatedAt)
+		&version.Size, &version.Manifest, &version.Publisher, &version.State, &cachedAt, &deletedAt, &collectedAt, &version.CreatedAt)
 	if cachedAt.Valid {
 		version.CachedAt = cachedAt.Time
+	}
+	if deletedAt.Valid {
+		version.DeletedAt = deletedAt.Time
+	}
+	if collectedAt.Valid {
+		version.CollectedAt = collectedAt.Time
 	}
 	return err
 }

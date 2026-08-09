@@ -59,6 +59,13 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 				capacity.ObjectCount++
 			}
 		}
+	case FormatPyPI:
+		for _, file := range s.pypiFiles {
+			if file.RepositoryID == id && file.State == "visible" && file.ObjectKey != "" {
+				capacity.UsedBytes += file.Size
+				capacity.ObjectCount++
+			}
+		}
 	}
 	return capacity, nil
 }

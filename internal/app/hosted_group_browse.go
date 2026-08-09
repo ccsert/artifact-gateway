@@ -192,6 +192,16 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			versionCount := int32(pkg.VersionCount)
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: pkg.Name, Version: &version, VersionCount: &versionCount, Digest: &digest, Size: &size, CreatedAt: &updatedAt, Publisher: optionalPublisher(pkg.Latest.Publisher)})
 		}
+	case repository.FormatPyPI:
+		projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query.Value), limit, after.Coordinate)
+		if err != nil {
+			return nil, err
+		}
+		for _, project := range projects {
+			digest, version, size, updatedAt := project.Latest.Digest, project.Latest.Version, project.Latest.Size, project.UpdatedAt
+			versionCount := int32(project.VersionCount)
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: project.Project, Version: &version, VersionCount: &versionCount, Digest: &digest, Size: &size, CreatedAt: &updatedAt, Publisher: optionalPublisher(project.Latest.Publisher)})
+		}
 	}
 	return items, nil
 }

@@ -98,6 +98,7 @@ type GatewayStore interface {
 	repository.NativeRawStore
 	repository.NativeConanStore
 	repository.NativeNPMStore
+	repository.NativePyPIStore
 	repository.APIKeyStore
 	repository.UserStore
 	repository.RuntimeNodeStore
@@ -165,6 +166,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := ociClient.(NPMClient); ok {
 		npmClient = client
 	}
+	pypiClient := PyPIClient(UpstreamClient{})
+	if client, ok := ociClient.(PyPIClient); ok {
+		pypiClient = client
+	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci)
 	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache)
@@ -204,6 +209,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeNPM.negativeTTL = dependencies.NPMNegativeTTL
 	}
 	nativeNPM.protection = newNPMProxyProtection(dependencies.NPMProxyCoordinator, dependencies.NPMBreakerTTL)
+	nativePyPIObjects := dependencies.NativePyPIObjectStore
+	if nativePyPIObjects == nil {
+		nativePyPIObjects = NewMemoryOCIObjectStore()
+	}
+	nativePyPI := newNativePyPIHandler(store, nativePyPIObjects, authenticator).withMetrics(metrics).withProxy(pypiClient)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	var searchProjection repository.ArtifactSearchStore
@@ -269,6 +279,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			}
 		})}
 	mux.Handle("/npm/", npmGroupRouter)
+	pypiGroupRouter := v2GroupRouter{format: repository.FormatPyPI, groups: store, repos: store, audit: store, auth: authenticator,
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		pypi:       &v2GroupPyPIHandler{native: &nativePyPI},
+		next:       nativePyPI}
+	mux.Handle("/pypi/", pypiGroupRouter)
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},

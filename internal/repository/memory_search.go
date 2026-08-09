@@ -97,13 +97,25 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 		}
 	case FormatNPM:
 		for _, version := range s.npmVersions {
-			if version.RepositoryID != repositoryID {
+			if version.RepositoryID != repositoryID || version.State != "visible" {
 				continue
 			}
 			createdAt, size := version.CreatedAt, version.Size
 			items = append(items, ArtifactSearchItem{
 				Coordinate: version.PackageName, Version: version.Version, Digest: version.Digest,
 				CreatedAt: &createdAt, Size: &size, Publisher: version.Publisher,
+				ContentType: "application/octet-stream",
+			})
+		}
+	case FormatPyPI:
+		for _, file := range s.pypiFiles {
+			if file.RepositoryID != repositoryID || file.State != "visible" {
+				continue
+			}
+			createdAt, size := file.CreatedAt, file.Size
+			items = append(items, ArtifactSearchItem{
+				Coordinate: file.Project, Version: file.Version, Digest: file.Digest,
+				CreatedAt: &createdAt, Size: &size, Publisher: file.Publisher,
 				ContentType: "application/octet-stream",
 			})
 		}

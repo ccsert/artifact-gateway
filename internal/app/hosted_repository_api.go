@@ -1067,6 +1067,25 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				})
 				lastCoordinate = pkg.Name
 			}
+		case repository.FormatPyPI:
+			projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query), pageSize+1, after.Coordinate)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search PyPI projects failed")
+				return
+			}
+			hasMore = len(projects) > pageSize
+			if hasMore {
+				projects = projects[:pageSize]
+			}
+			for _, project := range projects {
+				digest, version, createdAt, size := project.Latest.Digest, project.Latest.Version, project.UpdatedAt, project.Latest.Size
+				versionCount := int32(project.VersionCount)
+				items = append(items, adminopenapi.ArtifactSummary{
+					Coordinate: project.Project, Digest: &digest, Version: &version, VersionCount: &versionCount,
+					CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(project.Latest.Publisher),
+				})
+				lastCoordinate = project.Project
+			}
 		}
 		var next *string
 		if hasMore {
@@ -1598,12 +1617,12 @@ func (h generatedRepositoryAPIAdapter) ExecuteRepositoryRetention(w http.Respons
 
 func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryPromotionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
-		if source.Format != repository.FormatMaven && source.Format != repository.FormatOCI && source.Format != repository.FormatRaw && source.Format != repository.FormatConan {
-			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is currently supported only for Maven, OCI, Raw, and Conan repositories")
+		if source.Format != repository.FormatMaven && source.Format != repository.FormatOCI && source.Format != repository.FormatRaw && source.Format != repository.FormatConan && source.Format != repository.FormatNPM && source.Format != repository.FormatPyPI {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is not supported for this repository format")
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || request.Digest == "" || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !strings.Contains(request.Coordinate, "#")) {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || request.Digest == "" || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !strings.Contains(request.Coordinate, "#")) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
@@ -1622,9 +1641,15 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 				job, _, err = (ociprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: request.Coordinate, Digest: request.Digest})
 			case repository.FormatRaw:
 				job, _, err = (rawprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), rawprotocol.PromotionPayload{SourceRepositoryID: source.ID, Path: request.Coordinate, Digest: request.Digest})
-			default:
+			case repository.FormatConan:
 				reference, revision, _ := strings.Cut(request.Coordinate, "#")
 				job, _, err = (conanprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), conanprotocol.PromotionPayload{SourceRepositoryID: source.ID, Reference: reference, Revision: revision, Digest: request.Digest})
+			case repository.FormatNPM:
+				packageName, version, _ := parseNPMVersionCoordinate(request.Coordinate)
+				job, _, err = (npmprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), npmprotocol.PromotionPayload{SourceRepositoryID: source.ID, PackageName: packageName, Version: version, Digest: request.Digest})
+			case repository.FormatPyPI:
+				project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
+				job, _, err = (NativePyPIPromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), PyPIPromotionPayload{SourceRepositoryID: source.ID, Project: project, Version: version, Digest: request.Digest})
 			}
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
@@ -1645,8 +1670,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Maven, OCI, Raw, or Conan replication requires a visible coordinate and sha256 digest")
+		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "replication requires a visible format-specific coordinate and sha256 digest")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
@@ -1704,6 +1729,41 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					return
 				}
 				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: manifest.ObjectKey, ObjectKey: ociReplicationTargetObjectKey(target.ID, manifest.Name, manifest.Digest), Digest: manifest.Digest, Size: manifest.Size}}
+			} else if format == repository.FormatNPM {
+				packageName, version, _ := parseNPMVersionCoordinate(request.Coordinate)
+				item, lookupErr := h.sessions.store.GetNPMVersion(r.Context(), source.ID, packageName, version)
+				if errors.Is(lookupErr, repository.ErrNotFound) || item.Digest != request.Digest || item.ObjectKey == "" {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source npm version is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source npm version failed")
+					return
+				}
+				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: item.ObjectKey, ObjectKey: npmReplicationTargetObjectKey(target.ID, item.Digest), Digest: item.Digest, Size: item.Size}}
+			} else if format == repository.FormatPyPI {
+				project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
+				files, lookupErr := h.sessions.store.ListPyPIProjectFiles(r.Context(), source.ID, project)
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source PyPI version is unavailable")
+					return
+				}
+				digestMatched := false
+				for _, file := range files {
+					if file.Version != version {
+						continue
+					}
+					if file.ObjectKey == "" {
+						writeHostedProblem(w, http.StatusConflict, "not_cached", "source PyPI version is not fully cached")
+						return
+					}
+					digestMatched = digestMatched || file.Digest == request.Digest
+					checkpoints = append(checkpoints, repository.ReplicationCheckpoint{SourceObjectKey: file.ObjectKey, ObjectKey: pypiReplicationTargetObjectKey(target.ID, file.Filename, file.Digest), Digest: file.Digest, Size: file.Size})
+				}
+				if len(checkpoints) == 0 || !digestMatched {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source PyPI version is unavailable")
+					return
+				}
 			} else {
 				reference, revision, _ := strings.Cut(request.Coordinate, "#")
 				recipe, lookupErr := h.conan.GetConanRecipeRevision(r.Context(), source.ID, reference, revision)
@@ -1879,7 +1939,7 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) {
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) || (repo.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
@@ -1908,6 +1968,12 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		case repository.FormatOCI:
 			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
 			_, err = h.oci.RestoreOCIManifest(r.Context(), repo.ID, name, digest)
+		case repository.FormatNPM:
+			name, version, _ := parseNPMVersionCoordinate(request.Coordinate)
+			_, err = h.sessions.store.RestoreNPMVersion(r.Context(), repo.ID, name, version)
+		case repository.FormatPyPI:
+			project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
+			_, err = h.sessions.store.RestorePyPIVersion(r.Context(), repo.ID, project, version)
 		default:
 			_, err = h.sessions.store.RestoreRawAsset(r.Context(), repo.ID, request.Coordinate)
 		}
@@ -2094,6 +2160,81 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryTombstones(w http.ResponseW
 		}
 		writeNativeMavenJSON(w, 200, adminopenapi.ArtifactTombstonePage{Items: out, NextPageToken: next})
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) TombstoneRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		if repo.Type != repository.RepositoryTypeHosted || !repository.FormatSupportsOperation(repo.Format, repo.Type, repository.RepositoryOperationDelete) {
+			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "artifact deletion is not supported for this repository")
+			return
+		}
+		var request adminopenapi.RestoreArtifact
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || !validTombstoneCoordinate(repo.Format, request.Coordinate) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a visible artifact")
+			return
+		}
+		var err error
+		switch repo.Format {
+		case repository.FormatMaven:
+			artifact, lookupErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), repo.ID, request.Coordinate)
+			if lookupErr != nil {
+				err = lookupErr
+			} else {
+				_, err = h.sessions.store.TombstoneMavenArtifact(r.Context(), repo.ID, artifact.ID)
+			}
+		case repository.FormatOCI:
+			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
+			err = h.oci.DeleteOCIManifest(r.Context(), repo.ID, name, digest)
+		case repository.FormatConan:
+			reference, revision, packageID, packageRevision, packageDelete, _ := parseConanRestoreCoordinate(request.Coordinate)
+			if packageDelete {
+				_, err = h.conan.TombstoneConanPackageRevision(r.Context(), repo.ID, reference, revision, packageID, packageRevision)
+			} else {
+				_, err = h.conan.TombstoneConanRecipeRevision(r.Context(), repo.ID, reference, revision)
+			}
+		case repository.FormatRaw:
+			err = h.sessions.store.DeleteRawAsset(r.Context(), repo.ID, request.Coordinate)
+		case repository.FormatNPM:
+			name, version, _ := parseNPMVersionCoordinate(request.Coordinate)
+			_, err = h.sessions.store.TombstoneNPMVersion(r.Context(), repo.ID, name, version)
+		case repository.FormatPyPI:
+			project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
+			_, err = h.sessions.store.TombstonePyPIVersion(r.Context(), repo.ID, project, version)
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "artifact not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "tombstone artifact failed")
+			return
+		}
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: request.Coordinate, Operation: "artifact.tombstone", Status: http.StatusNoContent, CacheDisposition: "bypass"})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func validTombstoneCoordinate(format repository.Format, coordinate string) bool {
+	switch format {
+	case repository.FormatMaven:
+		return validMavenCoordinate(coordinate)
+	case repository.FormatOCI:
+		return validOCIRestoreCoordinate(coordinate)
+	case repository.FormatConan:
+		return validConanRestoreCoordinate(coordinate)
+	case repository.FormatRaw:
+		return coordinate != "" && validRawAssetPrefix(coordinate)
+	case repository.FormatNPM:
+		return validNPMVersionCoordinate(coordinate)
+	case repository.FormatPyPI:
+		return validPyPIVersionCoordinate(coordinate)
+	default:
+		return false
+	}
 }
 
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
@@ -3041,9 +3182,39 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return validRawAssetPrefix(query)
 	case repository.FormatNPM:
 		return npmprotocol.ValidPackagePrefix(query)
+	case repository.FormatPyPI:
+		return validPyPIProjectSearchPrefix(query)
 	default:
 		return false
 	}
+}
+
+func parseNPMVersionCoordinate(value string) (string, string, bool) {
+	separator := strings.LastIndex(value, "@")
+	if separator <= 0 || separator == len(value)-1 {
+		return "", "", false
+	}
+	name, version := value[:separator], value[separator+1:]
+	return name, version, npmprotocol.ValidPackageName(name) && npmprotocol.ValidVersion(version)
+}
+
+func validNPMVersionCoordinate(value string) bool {
+	_, _, ok := parseNPMVersionCoordinate(value)
+	return ok
+}
+
+func parsePyPIVersionCoordinate(value string) (string, string, bool) {
+	separator := strings.LastIndex(value, "@")
+	if separator <= 0 || separator == len(value)-1 {
+		return "", "", false
+	}
+	project, version := value[:separator], value[separator+1:]
+	return project, version, validPyPIProject(project) && normalizePyPIProject(project) == project && pypiVersionPattern.MatchString(version)
+}
+
+func validPyPIVersionCoordinate(value string) bool {
+	_, _, ok := parsePyPIVersionCoordinate(value)
+	return ok
 }
 
 func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
@@ -3217,7 +3388,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			updatedRepo.AllowedHosts = request.AllowedHosts
 		}
 		if !validProxyUpdate(repo.Format, updatedRepo.Endpoint, updatedRepo.AllowedHosts) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw, conan, and npm proxies")
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw, conan, npm, and PyPI proxies")
 			return
 		}
 		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)
@@ -3281,7 +3452,7 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 		}
 		// Raw, Conan, and npm proxies resolve upstream assets by host, so they must
 		// declare which hosts they may egress to.
-		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM) && len(request.AllowedHosts) == 0 {
+		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM || request.Format == repository.FormatPyPI) && len(request.AllowedHosts) == 0 {
 			return false
 		}
 		return true
@@ -3299,7 +3470,7 @@ func validProxyUpdate(format repository.Format, endpoint string, allowedHosts []
 	if !validProxyEndpoint(endpoint) {
 		return false
 	}
-	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM) && len(allowedHosts) == 0 {
+	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM || format == repository.FormatPyPI) && len(allowedHosts) == 0 {
 		return false
 	}
 	return true

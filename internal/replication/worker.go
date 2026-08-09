@@ -25,7 +25,10 @@ type Worker struct {
 	// Publish makes verified bytes visible through a format-specific metadata
 	// transaction. It must be idempotent because a publish failure is retried.
 	Publish func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error
-	Metrics repository.BackgroundOperationMetrics
+	// LockObject coordinates source reads and destination publication with
+	// format-specific garbage collectors. It is optional for legacy formats.
+	LockObject func(context.Context, string) (func(), error)
+	Metrics    repository.BackgroundOperationMetrics
 }
 
 func (w Worker) Run(ctx context.Context, limit int) error {
@@ -98,6 +101,17 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 				break
 			}
 		}
+	}
+	if w.LockObject != nil {
+		objectKeys := make([]string, 0, len(checks)*2)
+		for _, checkpoint := range checks {
+			objectKeys = append(objectKeys, checkpoint.SourceObjectKey, checkpoint.ObjectKey)
+		}
+		release, lockErr := repository.LockObjectKeys(ctx, objectKeys, w.LockObject)
+		if lockErr != nil {
+			return w.failPlan(ctx, plan.ID, "replication object coordination failed", plan.LeaseToken)
+		}
+		defer release()
 	}
 	for _, checkpoint := range checks {
 		if checkpoint.State == "verified" {

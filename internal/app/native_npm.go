@@ -286,6 +286,12 @@ func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo r
 		document.DistTags = map[string]string{"latest": version}
 	}
 	objectKey := "native/npm/sha256/" + strings.TrimPrefix(digest, "sha256:")
+	objectRelease, err := h.store.LockNPMObject(r.Context(), objectKey)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "npm object coordination is unavailable")
+		return
+	}
+	defer objectRelease()
 	if err = h.objects.PutVerifiedReader(r.Context(), objectKey, bytes.NewReader(body), int64(len(body)), digest); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "persist npm tarball failed")
 		return
@@ -779,6 +785,13 @@ func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.R
 	}
 	digest := spool.Digest()
 	objectKey := "native/npm/sha256/" + strings.TrimPrefix(digest, "sha256:")
+	objectRelease, lockErr := h.store.LockNPMObject(r.Context(), objectKey)
+	if lockErr != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "npm object coordination is unavailable")
+		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "miss")
+		return
+	}
+	defer objectRelease()
 	if err = h.objects.PutVerifiedReader(r.Context(), objectKey, spool.Reader(), spool.Size(), digest); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "persist npm proxy tarball failed")
 		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusInternalServerError, 0, "miss")
@@ -872,19 +885,11 @@ func (h nativeNPMHandler) recordAuditForTarget(r *http.Request, repo repository.
 	}
 }
 
-func (h nativeNPMHandler) recordNPMNegativeHit(r *http.Request, repo repository.HostedRepository, resource, actor string) {
-	h.recordNPMNegativeHitForTarget(r, repo, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, resource, actor)
-}
-
 func (h nativeNPMHandler) recordNPMNegativeHitForTarget(r *http.Request, repo repository.HostedRepository, target npmAuditTarget, resource, actor string) {
 	if h.metrics != nil {
 		h.metrics.recordNPMNegativeCacheHit()
 	}
 	h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditNotFound, http.StatusNotFound, 0, "negative")
-}
-
-func (h nativeNPMHandler) recordNPMUpstreamFailure(r *http.Request, repo repository.HostedRepository, resource, actor string, integrityFailure bool) {
-	h.recordNPMUpstreamFailureForTarget(r, repo, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, resource, actor, integrityFailure)
 }
 
 func (h nativeNPMHandler) recordNPMUpstreamFailureForTarget(r *http.Request, repo repository.HostedRepository, target npmAuditTarget, resource, actor string, integrityFailure bool) {

@@ -7,9 +7,11 @@ import (
 	"context"
 	"crypto/sha1"
 	"crypto/sha512"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +19,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -124,6 +127,63 @@ func TestPostgresMinIONPMPublicationIsVisibleAcrossGatewayInstances(t *testing.T
 	projection, err := storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatNPM, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: packageName}, 10, repository.ArtifactSearchPosition{})
 	if err != nil || len(projection) != 1 || projection[0].Version != version {
 		t.Fatalf("projection=%#v err=%v", projection, err)
+	}
+	if _, err = storeA.TombstoneNPMVersion(ctx, repo.ID, packageName, version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = storeB.GetNPMPackage(ctx, repo.ID, packageName); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("cross-instance tombstone remained visible: %v", err)
+	}
+	projection, err = storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatNPM, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: packageName}, 10, repository.ArtifactSearchPosition{})
+	if err != nil || len(projection) != 0 {
+		t.Fatalf("tombstoned projection=%#v err=%v", projection, err)
+	}
+	if _, err = storeB.RestoreNPMVersion(ctx, repo.ID, packageName, version); err != nil {
+		t.Fatal(err)
+	}
+	if restored, restoreErr := storeA.GetNPMVersion(ctx, repo.ID, packageName, version); restoreErr != nil || restored.Digest == "" {
+		t.Fatalf("cross-instance restore=%#v err=%v", restored, restoreErr)
+	}
+
+	if _, err = storeA.TombstoneNPMVersion(ctx, repo.ID, packageName, version); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err = db.ExecContext(ctx, `UPDATE native_npm_versions SET deleted_at=now()-interval '25 hours' WHERE repository_id::text=$1 AND package_name=$2 AND version=$3`, repo.ID, packageName, version); err != nil {
+		t.Fatal(err)
+	}
+	blocking := blockingLifecycleDeleteStore{OCIObjectStore: objectsA, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	maintenance := NativeNPMMaintenance{Store: storeA, Objects: blocking}
+	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(-24*time.Hour), 10); err != nil {
+		t.Fatal(err)
+	}
+	reclaimResult := make(chan error, 1)
+	go func() { reclaimResult <- maintenance.RunReclaimJobs(ctx, 10) }()
+	select {
+	case <-blocking.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cross-instance npm reclaim did not reach object deletion")
+	}
+	restoreResult := make(chan error, 1)
+	go func() {
+		_, restoreErr := storeB.RestoreNPMVersion(ctx, repo.ID, packageName, version)
+		restoreResult <- restoreErr
+	}()
+	select {
+	case restoreErr := <-restoreResult:
+		t.Fatalf("cross-instance npm restore bypassed advisory lock: %v", restoreErr)
+	case <-time.After(150 * time.Millisecond):
+	}
+	close(blocking.release)
+	if err = <-reclaimResult; err != nil {
+		t.Fatal(err)
+	}
+	if restoreErr := <-restoreResult; !errors.Is(restoreErr, repository.ErrDisabled) {
+		t.Fatalf("cross-instance npm restore after reclaim error=%v", restoreErr)
 	}
 }
 

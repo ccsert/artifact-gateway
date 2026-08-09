@@ -8,6 +8,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
+	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -36,6 +37,8 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.Na
 	app.NativeOCIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	rawmaintenance.Collector{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	retention.StartScheduler(ctx, time.Hour)
 }
 
@@ -59,6 +62,38 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	r.startOCIWorkers(ctx, cfg)
 	r.startRawWorkers(ctx, cfg)
 	r.startConanWorkers(ctx, cfg)
+	r.startNPMWorkers(ctx, cfg)
+	r.startPyPIWorkers(ctx, cfg)
+}
+
+func (r backgroundRuntime) startPyPIWorkers(ctx context.Context, cfg config.Config) {
+	if !cfg.WorkerFormatEnabled("pypi") {
+		return
+	}
+	if cfg.WorkerKindEnabled("reclaim") {
+		app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("promotion") {
+		app.NativePyPIPromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("replication") {
+		app.PyPIReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+}
+
+func (r backgroundRuntime) startNPMWorkers(ctx context.Context, cfg config.Config) {
+	if !cfg.WorkerFormatEnabled("npm") {
+		return
+	}
+	if cfg.WorkerKindEnabled("reclaim") {
+		app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("promotion") {
+		npmprotocol.NativePromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("replication") {
+		app.NPMReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
 }
 
 func (r backgroundRuntime) startMavenWorkers(ctx context.Context, cfg config.Config) {

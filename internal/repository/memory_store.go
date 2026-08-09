@@ -53,6 +53,9 @@ type MemoryStore struct {
 	npmPackages           map[string]NPMPackage
 	npmVersions           map[string]NPMVersion
 	npmProxyLocks         map[string]*sync.Mutex
+	npmObjectLocks        map[string]*sync.Mutex
+	pypiFiles             map[string]PyPIFile
+	pypiObjectLocks       map[string]*sync.Mutex
 	ociObjectIntents      map[string]OCIObjectIntent
 	artifactTombstones    map[string]ArtifactTombstone
 	lifecycleJobs         map[string]LifecycleJob
@@ -81,5 +84,17 @@ type mavenCommitRecord struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), repositoryGrants: make(map[string]RepositoryGrantSet), retentionPolicies: make(map[string]RepositoryRetentionPolicy), capacityQuotas: make(map[string]int64), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenCommitKeys: make(map[string]mavenCommitRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), conanObjects: make(map[string]ConanObjectIntent), conanSessions: make(map[string]ConanPublishSession), conanUploads: make(map[string]map[string]string), conanAssets: make(map[string]ConanAsset), conanRecipes: make(map[string]ConanRecipeRevision), conanPackages: make(map[string]ConanPackageRevision), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociDeletedManifests: make(map[string]ociDeletedManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawAssetTombstones: make(map[string]RawAsset), rawObjectLocks: make(map[string]*sync.Mutex), rawUploads: make(map[string]RawUpload), rawUploadLocks: make(map[string]*sync.Mutex), npmPackages: make(map[string]NPMPackage), npmVersions: make(map[string]NPMVersion), npmProxyLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent), artifactTombstones: make(map[string]ArtifactTombstone), lifecycleJobs: make(map[string]LifecycleJob), auditCleanupJobs: make(map[string]AuditCleanupJob), replicationPlans: make(map[string]ReplicationPlan), replicationKeys: make(map[string]string), replicationChecks: make(map[string]map[string]ReplicationCheckpoint), apiKeys: make(map[string]APIKey), users: make(map[string]User), runtimeNodes: make(map[string]RuntimeNode)}
+	return &MemoryStore{groups: make(map[string]Group), mavenGroups: make(map[string]Group), rawGroups: make(map[string]Group), conanGroups: make(map[string]Group), hostedRepositories: make(map[string]HostedRepository), hostedGroups: make(map[string]HostedGroup), repositoryGrants: make(map[string]RepositoryGrantSet), retentionPolicies: make(map[string]RepositoryRetentionPolicy), capacityQuotas: make(map[string]int64), idempotencyRecords: make(map[string]idempotencyRecord), mavenSessions: make(map[string]MavenPublishSession), mavenUploads: make(map[string]map[string]string), mavenAssets: make(map[string]MavenAsset), mavenArtifacts: make(map[string]MavenArtifact), mavenSessionKeys: make(map[string]idempotencyRecord), mavenCommitKeys: make(map[string]mavenCommitRecord), mavenObjectIntents: make(map[string]mavenObjectIntent), mavenObjectRefs: make(map[string]bool), conanObjects: make(map[string]ConanObjectIntent), conanSessions: make(map[string]ConanPublishSession), conanUploads: make(map[string]map[string]string), conanAssets: make(map[string]ConanAsset), conanRecipes: make(map[string]ConanRecipeRevision), conanPackages: make(map[string]ConanPackageRevision), ociUploads: make(map[string]OCIUpload), ociBlobs: make(map[string]OCIBlob), ociRepositoryBlobs: make(map[string]map[string]bool), ociManifests: make(map[string]OCIManifest), ociDeletedManifests: make(map[string]ociDeletedManifest), ociTags: make(map[string]string), ociUploadLocks: make(map[string]*sync.Mutex), ociObjectLocks: make(map[string]*sync.Mutex), rawAssets: make(map[string]RawAsset), rawObjects: make(map[string]RawObject), rawAssetTombstones: make(map[string]RawAsset), rawObjectLocks: make(map[string]*sync.Mutex), rawUploads: make(map[string]RawUpload), rawUploadLocks: make(map[string]*sync.Mutex), npmPackages: make(map[string]NPMPackage), npmVersions: make(map[string]NPMVersion), npmProxyLocks: make(map[string]*sync.Mutex), npmObjectLocks: make(map[string]*sync.Mutex), pypiFiles: make(map[string]PyPIFile), pypiObjectLocks: make(map[string]*sync.Mutex), ociObjectIntents: make(map[string]OCIObjectIntent), artifactTombstones: make(map[string]ArtifactTombstone), lifecycleJobs: make(map[string]LifecycleJob), auditCleanupJobs: make(map[string]AuditCleanupJob), replicationPlans: make(map[string]ReplicationPlan), replicationKeys: make(map[string]string), replicationChecks: make(map[string]map[string]ReplicationCheckpoint), apiKeys: make(map[string]APIKey), users: make(map[string]User), runtimeNodes: make(map[string]RuntimeNode)}
+}
+
+func (s *MemoryStore) lockMemoryObject(locks map[string]*sync.Mutex, key string) (func(), error) {
+	s.mu.Lock()
+	lock := locks[key]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		locks[key] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock, nil
 }

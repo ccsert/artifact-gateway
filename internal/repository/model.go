@@ -13,6 +13,7 @@ const (
 	FormatOCI   Format = "oci"
 	FormatMaven Format = "maven"
 	FormatNPM   Format = "npm"
+	FormatPyPI  Format = "pypi"
 	// FormatConan is a managed authorization target with native Hosted, Proxy,
 	// and Group protocol routes.
 	FormatConan Format = "conan"
@@ -247,8 +248,59 @@ type NPMVersion struct {
 	Size            int64
 	Manifest        []byte
 	Publisher       string
+	State           string
 	CachedAt        time.Time
+	DeletedAt       time.Time
+	CollectedAt     time.Time
 	CreatedAt       time.Time
+}
+
+type NPMObject struct {
+	RepositoryID string
+	ObjectKey    string
+	Digest       string
+	Size         int64
+	DeletedAt    time.Time
+}
+
+// PyPIFile is one immutable wheel or source distribution exposed through the
+// PEP 503 Simple Repository API.
+type PyPIFile struct {
+	RepositoryID   string
+	Project        string
+	Version        string
+	Filename       string
+	FileType       string
+	PythonVersion  string
+	RequiresPython string
+	Digest         string
+	ObjectKey      string
+	Size           int64
+	Publisher      string
+	SourceURL      string
+	State          string
+	CachedAt       time.Time
+	DeletedAt      time.Time
+	CollectedAt    time.Time
+	CreatedAt      time.Time
+}
+
+type PyPIProjectSummary struct {
+	RepositoryID string
+	Project      string
+	Latest       PyPIFile
+	VersionCount int
+	FileCount    int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type PyPIObject struct {
+	RepositoryID string
+	ObjectKey    string
+	Digest       string
+	Size         int64
+	DeletedAt    time.Time
 }
 
 type NPMPackageSummary struct {
