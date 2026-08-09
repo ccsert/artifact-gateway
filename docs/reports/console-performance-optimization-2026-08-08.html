@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111821'/%3E%3Cpath d='M14 18h36v9H14zm0 19h36v9H14z' fill='%2322d3ee'/%3E%3C/svg%3E">
+<title>Artifact Gateway Console 性能优化报告</title>
+<style>
+:root{color-scheme:dark;--bg:#080b0d;--panel:#111518;--line:#293036;--text:#edf2f4;--muted:#8c989f;--cyan:#22d3ee;--green:#34d399;--amber:#fbbf24;--red:#fb7185}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0}main{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:42px 0 64px}header{display:flex;justify-content:space-between;gap:32px;padding-bottom:28px;border-bottom:1px solid var(--line)}h1{margin:4px 0 6px;font-size:30px;letter-spacing:0}.eyebrow{color:var(--cyan);font-size:12px;text-transform:uppercase}.muted,small{color:var(--muted)}small{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.stamp{text-align:right;color:var(--muted);font-size:12px}a{color:var(--cyan)}section{margin-top:28px}h2{margin:0 0 14px;font-size:18px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--panel)}.metric{padding:18px;border-right:1px solid var(--line)}.metric:last-child{border-right:0}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;margin-top:7px;font-size:23px}.metric em{display:block;margin-top:2px;color:var(--green);font-style:normal;font-size:12px}.note{padding:14px 16px;border-left:3px solid var(--amber);background:#171612;color:#d8d3bd}.table-wrap{overflow:auto;border:1px solid var(--line);background:var(--panel)}table{width:100%;border-collapse:collapse;white-space:nowrap}th,td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-size:12px;font-weight:600}tr:last-child td{border-bottom:0}.good{color:var(--green)}.bad{color:var(--red)}ul{margin:0;padding-left:20px}.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.check{padding:12px 14px;border:1px solid var(--line);background:var(--panel)}footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}@media(max-width:800px){.metrics,.checks{grid-template-columns:1fr 1fr}.stamp{display:none}} 
+</style></head><body><main>
+<header><div><div class="eyebrow">Artifact Gateway / Console</div><h1>网页性能优化报告</h1><div class="muted">批量管理 API、Proxy 容量归集、任务表格虚拟化与路由拆包的实测结果。</div></div><div class="stamp">2026-08-08T04:43:37.664Z<br>Chromium / 1440x900 / 冷缓存<br><a href="console-performance-optimization-2026-08-08.json">原始 JSON</a></div></header>
+<section><div class="metrics"><div class="metric"><span>高扇出页面</span><strong>2 → 0</strong><em>已清零</em></div><div class="metric"><span>容量查询 P95</span><strong>76 ms</strong><em>较基线 -72.0%</em></div><div class="metric"><span>公开目录编码体积</span><strong>361.1 KB</strong><em>较基线 -15.5%</em></div><div class="metric"><span>页面错误</span><strong>0</strong><em>17 个页面</em></div></div></section>
+<section><h2>关键对比</h2><div class="table-wrap"><table><thead><tr><th>指标</th><th>优化前</th><th>优化后</th><th>变化</th></tr></thead><tbody><tr><td>访问控制 API 请求</td><td>40 次</td><td>3 次</td><td class="good">-92.5%</td></tr><tr><td>任务中心 API 请求</td><td>40 次</td><td>3 次</td><td class="good">-92.5%</td></tr><tr><td>管理总览 API 请求</td><td>9 次</td><td>5 次</td><td class="good">-44.4%</td></tr><tr><td>仓库管理 API 请求</td><td>7 次</td><td>3 次</td><td class="good">-57.1%</td></tr><tr><td>公开目录冷加载编码体积</td><td>427.4 KB</td><td>361.1 KB</td><td class="good">-15.5%</td></tr><tr><td>容量查询延迟</td><td>270 ms</td><td>76 ms</td><td class="good">-72.0%</td></tr></tbody></table></div></section>
+<section><h2>路由采样</h2><div class="table-wrap"><table><thead><tr><th>页面</th><th>API</th><th>FCP</th><th>LCP</th><th>编码体积</th><th>DOM</th><th>错误</th></tr></thead><tbody><tr>
+      <td><strong>公开制品目录</strong><small>/browse</small></td>
+      <td>1</td><td>104 ms</td><td>120 ms</td>
+      <td>361.1 KB</td><td>88</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>公开 OCI 仓库</strong><small>/browse?repository=58e5718c-e39a-4ee2-9937-1df28456877c</small></td>
+      <td>2</td><td>104 ms</td><td>180 ms</td>
+      <td>361.2 KB</td><td>311</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>公开 MAVEN 仓库</strong><small>/browse?repository=e7d347d5-5d6a-4578-a140-2fc7d45f0363</small></td>
+      <td>2</td><td>104 ms</td><td>168 ms</td>
+      <td>364.4 KB</td><td>164</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>公开 CONAN 仓库</strong><small>/browse?repository=67925f3d-68d5-4a6d-9d00-77da86ff27dd</small></td>
+      <td>2</td><td>100 ms</td><td>132 ms</td>
+      <td>361.4 KB</td><td>191</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>公开 OCI 分组</strong><small>/browse?repository=67afe8a7-cb62-477a-9163-76aa097f4b0f</small></td>
+      <td>2</td><td>96 ms</td><td>144 ms</td>
+      <td>362.4 KB</td><td>311</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>登录页</strong><small>/login</small></td>
+      <td>0</td><td>100 ms</td><td>132 ms</td>
+      <td>253.6 KB</td><td>75</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>管理总览</strong><small>/</small></td>
+      <td>5</td><td>100 ms</td><td>272 ms</td>
+      <td>376.6 KB</td><td>478</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>仓库管理</strong><small>/repositories</small></td>
+      <td>3</td><td>100 ms</td><td>272 ms</td>
+      <td>377.7 KB</td><td>441</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>OCI 仓库详情</strong><small>/repositories/58e5718c-e39a-4ee2-9937-1df28456877c</small></td>
+      <td>6</td><td>100 ms</td><td>200 ms</td>
+      <td>443.5 KB</td><td>370</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>仓库分组</strong><small>/groups</small></td>
+      <td>3</td><td>100 ms</td><td>156 ms</td>
+      <td>379.9 KB</td><td>361</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>访问控制</strong><small>/access</small></td>
+      <td>3</td><td>96 ms</td><td>172 ms</td>
+      <td>372.1 KB</td><td>431</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>全局制品搜索</strong><small>/search?q=nginx</small></td>
+      <td>2</td><td>100 ms</td><td>192 ms</td>
+      <td>381.6 KB</td><td>293</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>审计日志</strong><small>/audits</small></td>
+      <td>4</td><td>96 ms</td><td>232 ms</td>
+      <td>398.9 KB</td><td>1,331</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>审计保留策略</strong><small>/audit-retention</small></td>
+      <td>3</td><td>100 ms</td><td>184 ms</td>
+      <td>383.4 KB</td><td>291</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>API 密钥</strong><small>/keys</small></td>
+      <td>2</td><td>104 ms</td><td>152 ms</td>
+      <td>374.6 KB</td><td>318</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>用户管理</strong><small>/users</small></td>
+      <td>2</td><td>104 ms</td><td>164 ms</td>
+      <td>367.4 KB</td><td>317</td>
+      <td class="good">0</td>
+    </tr><tr>
+      <td><strong>任务中心</strong><small>/operations</small></td>
+      <td>3</td><td>104 ms</td><td>348 ms</td>
+      <td>389.6 KB</td><td>467</td>
+      <td class="good">0</td>
+    </tr></tbody></table></div></section>
+<section><h2>构建权衡</h2><div class="note">总代码 gzip 从 493.8 KB 增至 515.9 KB（4.5%），但公开目录冷加载减少 15.5%，任务中心减少 12.1%。这是路由按需加载换取少量跨路由重复代码的明确权衡，首屏收益优先。</div></section>
+<section><h2>本轮实现</h2><ul><li>新增跨仓库授权、生命周期任务和容量快照三个管理员批量端点。</li><li>PostgreSQL 容量按格式一次聚合；Maven Proxy 缓存索引一次扫描并以 8 个 worker 有界并发读取。</li><li>访问控制与任务中心从 40 个 API 降为 3 个；总览和仓库列表移除逐仓库容量请求。</li><li>任务中心启用 Ant Design Table 虚拟滚动，只渲染可见任务行。</li><li>取消强制合并整包 Ant Design，使公开浏览页不再加载 315.5 KB gzip 的全量共享 chunk。</li></ul></section>
+<section><h2>验证</h2><div class="checks"><div class="check"><span class="good">通过</span><br>Go 全量测试</div><div class="check"><span class="good">通过</span><br>TypeScript / Build</div><div class="check"><span class="good">0 issues</span><br>Ant Design lint</div><div class="check"><span class="good">16 passed</span><br>Console E2E</div><div class="check"><span class="good">healthy</span><br>Gateway / PostgreSQL / MinIO</div><div class="check"><span class="good">0 errors</span><br>浏览器采样</div></div></section>
+<section><h2>口径</h2><p class="muted">每个路由使用独立 Chromium 上下文并禁用缓存，页面 load 后等待 800 ms。FCP/LCP 来自 PerformanceObserver；编码体积来自浏览器资源计时。容量延迟为本地真实 PostgreSQL + MinIO 的 5 次请求样本。绝对值代表本机基准，前后相对变化更具参考意义。</p></section>
+<footer>Artifact Gateway Console 性能优化报告 · 2026-08-08T04:43:37.664Z</footer>
+</main></body></html>

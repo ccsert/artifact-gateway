@@ -1,0 +1,3407 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-08T04:43:37.664Z",
+  "target": "http://127.0.0.1:4175",
+  "methodology": {
+    "browser": "Chromium via Playwright CLI",
+    "viewport": "1440x900",
+    "cacheDisabled": true,
+    "waitAfterLoadMs": 800,
+    "samplesPerRoute": 1,
+    "capacitySamplesMs": [
+      75.65,
+      69.16,
+      64.76,
+      68.97,
+      58.16
+    ]
+  },
+  "baseline": {
+    "source": "console-performance-2026-08-08.json",
+    "summary": {
+      "rating": "良好，有优化项",
+      "routeCount": 17,
+      "errorCount": 0,
+      "p75FcpMs": 88,
+      "p75LcpMs": 236,
+      "maxLcpMs": 668,
+      "maxApiMs": 270,
+      "maxRouteTransferBytes": 473604,
+      "highFanoutRoutes": [
+        {
+          "label": "访问控制",
+          "apiCount": 40
+        },
+        {
+          "label": "任务中心",
+          "apiCount": 40
+        }
+      ]
+    },
+    "build": {
+      "totalRawBytes": 1569268,
+      "totalGzipBytes": 505632,
+      "files": [
+        {
+          "file": "assets/antd-EYn0clUG.js",
+          "rawBytes": 983299,
+          "gzipBytes": 315530
+        },
+        {
+          "file": "assets/react-LuyjSvaS.js",
+          "rawBytes": 284837,
+          "gzipBytes": 91306
+        },
+        {
+          "file": "assets/RepositoryDetail-HokyscFy.js",
+          "rawBytes": 77492,
+          "gzipBytes": 22659
+        },
+        {
+          "file": "assets/index-CLXxtDQg.css",
+          "rawBytes": 37712,
+          "gzipBytes": 7656
+        },
+        {
+          "file": "assets/PublicBrowse-DgLOvgYW.js",
+          "rawBytes": 32450,
+          "gzipBytes": 9442
+        },
+        {
+          "file": "assets/OciImageDetail-DJV3gA5d.js",
+          "rawBytes": 20175,
+          "gzipBytes": 6269
+        },
+        {
+          "file": "assets/index-C1aOyq8A.js",
+          "rawBytes": 18591,
+          "gzipBytes": 7110
+        },
+        {
+          "file": "assets/Groups-RcyKF2AU.js",
+          "rawBytes": 13544,
+          "gzipBytes": 4847
+        },
+        {
+          "file": "assets/sdk.gen-EoMFulnJ.js",
+          "rawBytes": 10619,
+          "gzipBytes": 1202
+        },
+        {
+          "file": "assets/Dashboard-1l06SJTY.js",
+          "rawBytes": 9503,
+          "gzipBytes": 3852
+        },
+        {
+          "file": "assets/Search-DCh_io90.js",
+          "rawBytes": 9366,
+          "gzipBytes": 3744
+        },
+        {
+          "file": "assets/Repositories-BTdrtUNs.js",
+          "rawBytes": 8709,
+          "gzipBytes": 3740
+        },
+        {
+          "file": "assets/Audits-BGvzejgp.js",
+          "rawBytes": 8305,
+          "gzipBytes": 3498
+        },
+        {
+          "file": "assets/AccessControl-CGIpHRGj.js",
+          "rawBytes": 8250,
+          "gzipBytes": 3634
+        },
+        {
+          "file": "assets/Operations-DPmrLuKi.js",
+          "rawBytes": 7673,
+          "gzipBytes": 3092
+        },
+        {
+          "file": "assets/ApiKeys-BqETuS4G.js",
+          "rawBytes": 6996,
+          "gzipBytes": 3188
+        },
+        {
+          "file": "assets/Users-DrVgxgD4.js",
+          "rawBytes": 6293,
+          "gzipBytes": 2755
+        },
+        {
+          "file": "assets/AuditRetention-C6Z7NEBP.js",
+          "rawBytes": 5199,
+          "gzipBytes": 2390
+        },
+        {
+          "file": "assets/Layout-BsCNoPgS.js",
+          "rawBytes": 5121,
+          "gzipBytes": 2330
+        },
+        {
+          "file": "assets/PublicBrowsePrimitives-ffMSbuPq.js",
+          "rawBytes": 3544,
+          "gzipBytes": 1713
+        },
+        {
+          "file": "assets/Login-D1UfcOto.js",
+          "rawBytes": 3382,
+          "gzipBytes": 1649
+        },
+        {
+          "file": "assets/Badge-D88ZSHRU.js",
+          "rawBytes": 2624,
+          "gzipBytes": 1208
+        },
+        {
+          "file": "assets/ConsolePrimitives-CKfnfjT3.js",
+          "rawBytes": 1878,
+          "gzipBytes": 896
+        },
+        {
+          "file": "assets/Layout-CfPrv2hZ.js",
+          "rawBytes": 1776,
+          "gzipBytes": 692
+        },
+        {
+          "file": "assets/Modal-CeEs-2kE.js",
+          "rawBytes": 842,
+          "gzipBytes": 519
+        },
+        {
+          "file": "assets/format-C8Vbglpr.js",
+          "rawBytes": 611,
+          "gzipBytes": 386
+        },
+        {
+          "file": "assets/csv-CLRUGbo3.js",
+          "rawBytes": 477,
+          "gzipBytes": 325
+        }
+      ]
+    }
+  },
+  "current": {
+    "summary": {
+      "routeCount": 17,
+      "errorCount": 0,
+      "p75FcpMs": 104,
+      "p75LcpMs": 200,
+      "maxLcpMs": 348,
+      "maxApiMs": 230,
+      "maxRouteEncodedBytes": 454193,
+      "highFanoutRoutes": []
+    },
+    "build": {
+      "totalRawBytes": 1581201,
+      "totalGzipBytes": 528251,
+      "files": [
+        {
+          "file": "assets/index-CW6murjG.js",
+          "rawBytes": 289792,
+          "gzipBytes": 101365
+        },
+        {
+          "file": "assets/Badge-B5vTxMAj.js",
+          "rawBytes": 292354,
+          "gzipBytes": 94449
+        },
+        {
+          "file": "assets/react-LuyjSvaS.js",
+          "rawBytes": 284837,
+          "gzipBytes": 91443
+        },
+        {
+          "file": "assets/RepositoryDetail-B7QA_gxA.js",
+          "rawBytes": 174273,
+          "gzipBytes": 52684
+        },
+        {
+          "file": "assets/Layout-CF5i3hVF.js",
+          "rawBytes": 130379,
+          "gzipBytes": 40554
+        },
+        {
+          "file": "assets/AuditRetention-DATYsFgD.js",
+          "rawBytes": 29584,
+          "gzipBytes": 11932
+        },
+        {
+          "file": "assets/ApiKeys-DHCbhVza.js",
+          "rawBytes": 27143,
+          "gzipBytes": 11036
+        },
+        {
+          "file": "assets/PublicBrowse-C2rhrsiK.js",
+          "rawBytes": 33389,
+          "gzipBytes": 10034
+        },
+        {
+          "file": "assets/index-CAADWy0S.js",
+          "rawBytes": 21231,
+          "gzipBytes": 8511
+        },
+        {
+          "file": "assets/index-CLXxtDQg.css",
+          "rawBytes": 37712,
+          "gzipBytes": 7707
+        },
+        {
+          "file": "assets/index-B6Nm_vBH.js",
+          "rawBytes": 20961,
+          "gzipBytes": 7566
+        },
+        {
+          "file": "assets/index-BngTDDox.js",
+          "rawBytes": 24657,
+          "gzipBytes": 7381
+        },
+        {
+          "file": "assets/Layout-C9dGXRuF.js",
+          "rawBytes": 17880,
+          "gzipBytes": 6414
+        },
+        {
+          "file": "assets/Search-RHI3-art.js",
+          "rawBytes": 17308,
+          "gzipBytes": 6392
+        },
+        {
+          "file": "assets/OciImageDetail-Dku7re4z.js",
+          "rawBytes": 20289,
+          "gzipBytes": 6328
+        },
+        {
+          "file": "assets/progress-GaLxREnH.js",
+          "rawBytes": 15037,
+          "gzipBytes": 5794
+        },
+        {
+          "file": "assets/Groups-CgQ_pgrH.js",
+          "rawBytes": 15452,
+          "gzipBytes": 5667
+        },
+        {
+          "file": "assets/Operations-D1tFL1Jw.js",
+          "rawBytes": 10127,
+          "gzipBytes": 4222
+        },
+        {
+          "file": "assets/sdk.gen-Bqu8D4m0.js",
+          "rawBytes": 17434,
+          "gzipBytes": 3907
+        },
+        {
+          "file": "assets/Dashboard-BoLhQBpY.js",
+          "rawBytes": 9494,
+          "gzipBytes": 3850
+        },
+        {
+          "file": "assets/Repositories-tVl05vEy.js",
+          "rawBytes": 8530,
+          "gzipBytes": 3765
+        },
+        {
+          "file": "assets/Collapse-CSQjMsNz.js",
+          "rawBytes": 9925,
+          "gzipBytes": 3719
+        },
+        {
+          "file": "assets/AccessControl-EB6GW4LQ.js",
+          "rawBytes": 8276,
+          "gzipBytes": 3606
+        },
+        {
+          "file": "assets/index-C930BROq.js",
+          "rawBytes": 9216,
+          "gzipBytes": 3584
+        },
+        {
+          "file": "assets/Audits-CdH0CBcn.js",
+          "rawBytes": 8382,
+          "gzipBytes": 3526
+        },
+        {
+          "file": "assets/index-C4fc-ffk.js",
+          "rawBytes": 7669,
+          "gzipBytes": 3016
+        },
+        {
+          "file": "assets/Users-DHUdIl_o.js",
+          "rawBytes": 6430,
+          "gzipBytes": 2799
+        },
+        {
+          "file": "assets/index-l5mJAcnw.js",
+          "rawBytes": 7571,
+          "gzipBytes": 2604
+        },
+        {
+          "file": "assets/PublicBrowsePrimitives-LPblVr5R.js",
+          "rawBytes": 3612,
+          "gzipBytes": 1748
+        },
+        {
+          "file": "assets/Login-N2sbg-ul.js",
+          "rawBytes": 3457,
+          "gzipBytes": 1675
+        },
+        {
+          "file": "assets/SettingOutlined-DDJbOaR1.js",
+          "rawBytes": 2492,
+          "gzipBytes": 1300
+        },
+        {
+          "file": "assets/Modal-DkE6eRly.js",
+          "rawBytes": 2142,
+          "gzipBytes": 1132
+        },
+        {
+          "file": "assets/ConsolePrimitives-Di1xSIkG.js",
+          "rawBytes": 1946,
+          "gzipBytes": 932
+        },
+        {
+          "file": "assets/LoginOutlined-DIbC9Fca.js",
+          "rawBytes": 1514,
+          "gzipBytes": 916
+        },
+        {
+          "file": "assets/SyncOutlined-Dc7PX28G.js",
+          "rawBytes": 1411,
+          "gzipBytes": 896
+        },
+        {
+          "file": "assets/csv-CoJf0Eaj.js",
+          "rawBytes": 1455,
+          "gzipBytes": 888
+        },
+        {
+          "file": "assets/LinkOutlined-Dw1b6X7C.js",
+          "rawBytes": 1377,
+          "gzipBytes": 742
+        },
+        {
+          "file": "assets/EditOutlined-COgf0Gft.js",
+          "rawBytes": 1082,
+          "gzipBytes": 720
+        },
+        {
+          "file": "assets/ClearOutlined-Mo5wbGSf.js",
+          "rawBytes": 1128,
+          "gzipBytes": 706
+        },
+        {
+          "file": "assets/DeleteOutlined-BxUG-3QX.js",
+          "rawBytes": 1023,
+          "gzipBytes": 680
+        },
+        {
+          "file": "assets/DatabaseOutlined-dC206ap1.js",
+          "rawBytes": 983,
+          "gzipBytes": 610
+        },
+        {
+          "file": "assets/UpOutlined-CFoqhw-a.js",
+          "rawBytes": 857,
+          "gzipBytes": 594
+        },
+        {
+          "file": "index.html",
+          "rawBytes": 779,
+          "gzipBytes": 471
+        },
+        {
+          "file": "assets/format-C8Vbglpr.js",
+          "rawBytes": 611,
+          "gzipBytes": 386
+        }
+      ]
+    },
+    "routes": [
+      {
+        "label": "公开制品目录",
+        "path": "/browse",
+        "elapsedMs": 876,
+        "finalUrl": "http://127.0.0.1:4175/browse",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/public/repositories",
+            "status": 200,
+            "durationMs": 8
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 54.60000014305115,
+          "fcpMs": 104,
+          "lcpMs": 120,
+          "domNodes": 88,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 8.5,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 8.400000095367432,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 3.3999998569488525,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/PublicBrowse-C2rhrsiK.js",
+              "initiatorType": "script",
+              "durationMs": 2.8999998569488525,
+              "encodedBodySize": 10034,
+              "decodedBodySize": 33389
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.8999998569488525,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 7.599999904632568,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 3.1000001430511475,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 3.6999998092651367,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/api/v2/public/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 8.099999904632568,
+              "encodedBodySize": 427,
+              "decodedBodySize": 427
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "公开 OCI 仓库",
+        "path": "/browse?repository=58e5718c-e39a-4ee2-9937-1df28456877c",
+        "elapsedMs": 878,
+        "finalUrl": "http://127.0.0.1:4175/browse?repository=58e5718c-e39a-4ee2-9937-1df28456877c",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/public/repositories",
+            "status": 200,
+            "durationMs": 6
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/artifact-search?pageSize=100",
+            "status": 200,
+            "durationMs": 6
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.5,
+          "fcpMs": 104,
+          "lcpMs": 180,
+          "domNodes": 311,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.799999952316284,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.300000190734863,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/PublicBrowse-C2rhrsiK.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 10034,
+              "decodedBodySize": 33389
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.1000001430511475,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.8999998569488525,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 6.900000095367432,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 2.8999998569488525,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5999999046325684,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 2.8000001907348633,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/api/v2/public/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.6000001430511475,
+              "encodedBodySize": 427,
+              "decodedBodySize": 427
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/artifact-search",
+              "initiatorType": "fetch",
+              "durationMs": 3.4000000953674316,
+              "encodedBodySize": 167,
+              "decodedBodySize": 167
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "公开 MAVEN 仓库",
+        "path": "/browse?repository=e7d347d5-5d6a-4578-a140-2fc7d45f0363",
+        "elapsedMs": 873,
+        "finalUrl": "http://127.0.0.1:4175/browse?repository=e7d347d5-5d6a-4578-a140-2fc7d45f0363",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/public/repositories",
+            "status": 200,
+            "durationMs": 6
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/e7d347d5-5d6a-4578-a140-2fc7d45f0363/artifact-search?pageSize=100",
+            "status": 200,
+            "durationMs": 6
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.799999952316284,
+          "fcpMs": 104,
+          "lcpMs": 168,
+          "domNodes": 164,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.8999998569488525,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.799999952316284,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/PublicBrowse-C2rhrsiK.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 10034,
+              "decodedBodySize": 33389
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 1.7999999523162842,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 1.9000000953674316,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 6.299999952316284,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/api/v2/public/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 7.5,
+              "encodedBodySize": 427,
+              "decodedBodySize": 427
+            },
+            {
+              "path": "/api/v2/repositories/e7d347d5-5d6a-4578-a140-2fc7d45f0363/artifact-search",
+              "initiatorType": "fetch",
+              "durationMs": 6.299999952316284,
+              "encodedBodySize": 3387,
+              "decodedBodySize": 3387
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "公开 CONAN 仓库",
+        "path": "/browse?repository=67925f3d-68d5-4a6d-9d00-77da86ff27dd",
+        "elapsedMs": 878,
+        "finalUrl": "http://127.0.0.1:4175/browse?repository=67925f3d-68d5-4a6d-9d00-77da86ff27dd",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/public/repositories",
+            "status": 200,
+            "durationMs": 6
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/67925f3d-68d5-4a6d-9d00-77da86ff27dd/artifact-search?pageSize=100",
+            "status": 200,
+            "durationMs": 6
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.200000047683716,
+          "fcpMs": 100,
+          "lcpMs": 132,
+          "domNodes": 191,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.700000047683716,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.200000047683716,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/PublicBrowse-C2rhrsiK.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 10034,
+              "decodedBodySize": 33389
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.8999998569488525,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 7.099999904632568,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 3.299999952316284,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3.799999952316284,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/api/v2/public/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 5.199999809265137,
+              "encodedBodySize": 427,
+              "decodedBodySize": 427
+            },
+            {
+              "path": "/api/v2/repositories/67925f3d-68d5-4a6d-9d00-77da86ff27dd/artifact-search",
+              "initiatorType": "fetch",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 343,
+              "decodedBodySize": 343
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "公开 OCI 分组",
+        "path": "/browse?repository=67afe8a7-cb62-477a-9163-76aa097f4b0f",
+        "elapsedMs": 874,
+        "finalUrl": "http://127.0.0.1:4175/browse?repository=67afe8a7-cb62-477a-9163-76aa097f4b0f",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/public/repositories",
+            "status": 200,
+            "durationMs": 7
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/67afe8a7-cb62-477a-9163-76aa097f4b0f/artifact-search?pageSize=100",
+            "status": 200,
+            "durationMs": 13
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52,
+          "fcpMs": 96,
+          "lcpMs": 144,
+          "domNodes": 311,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.900000095367432,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.599999904632568,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/PublicBrowse-C2rhrsiK.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 10034,
+              "decodedBodySize": 33389
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.5999999046325684,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 6.799999952316284,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 2.8999998569488525,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3.1999998092651367,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/api/v2/public/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 8.299999952316284,
+              "encodedBodySize": 427,
+              "decodedBodySize": 427
+            },
+            {
+              "path": "/api/v2/repositories/67afe8a7-cb62-477a-9163-76aa097f4b0f/artifact-search",
+              "initiatorType": "fetch",
+              "durationMs": 10.399999856948853,
+              "encodedBodySize": 1356,
+              "decodedBodySize": 1356
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "登录页",
+        "path": "/login",
+        "elapsedMs": 875,
+        "finalUrl": "http://127.0.0.1:4175/login",
+        "navigationError": null,
+        "apiRequests": [],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 51.700000047683716,
+          "fcpMs": 100,
+          "lcpMs": 132,
+          "domNodes": 75,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.700000047683716,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 1.9000000953674316,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 6.900000095367432,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Login-N2sbg-ul.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 1675,
+              "decodedBodySize": 3457
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/index-C930BROq.js",
+              "initiatorType": "script",
+              "durationMs": 2.5999999046325684,
+              "encodedBodySize": 3584,
+              "decodedBodySize": 9216
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 3.5999999046325684,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "管理总览",
+        "path": "/",
+        "elapsedMs": 875,
+        "finalUrl": "http://127.0.0.1:4175/",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 10
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/groups?pageSize=200",
+            "status": 200,
+            "durationMs": 19
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=200",
+            "status": 200,
+            "durationMs": 19
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/audits?limit=8",
+            "status": 200,
+            "durationMs": 19
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repository-capacities",
+            "status": 200,
+            "durationMs": 78
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.59999990463257,
+          "fcpMs": 100,
+          "lcpMs": 272,
+          "domNodes": 478,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 7.299999952316284,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.4000000953674316,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 8.299999952316284,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.4000000953674316,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.5,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.4000000953674316,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3.1999998092651367,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.6999998092651367,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/Dashboard-BoLhQBpY.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 3850,
+              "decodedBodySize": 9494
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.3000001907348633,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 3.3999998569488525,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.099999904632568,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/DatabaseOutlined-dC206ap1.js",
+              "initiatorType": "script",
+              "durationMs": 3.6000001430511475,
+              "encodedBodySize": 983,
+              "decodedBodySize": 983
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 6.300000190734863,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 19,
+              "encodedBodySize": 6670,
+              "decodedBodySize": 6670
+            },
+            {
+              "path": "/api/v2/groups",
+              "initiatorType": "fetch",
+              "durationMs": 18.700000047683716,
+              "encodedBodySize": 500,
+              "decodedBodySize": 500
+            },
+            {
+              "path": "/api/v2/audits",
+              "initiatorType": "fetch",
+              "durationMs": 18.90000009536743,
+              "encodedBodySize": 2625,
+              "decodedBodySize": 2625
+            },
+            {
+              "path": "/api/v2/repository-capacities",
+              "initiatorType": "fetch",
+              "durationMs": 78.20000004768372,
+              "encodedBodySize": 4441,
+              "decodedBodySize": 4441
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "仓库管理",
+        "path": "/repositories",
+        "elapsedMs": 881,
+        "finalUrl": "http://127.0.0.1:4175/repositories",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 5
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=100",
+            "status": 200,
+            "durationMs": 12
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repository-capacities",
+            "status": 200,
+            "durationMs": 75
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 53.89999985694885,
+          "fcpMs": 100,
+          "lcpMs": 272,
+          "domNodes": 441,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 7,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.099999904632568,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.8999998569488525,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.599999904632568,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/Repositories-tVl05vEy.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 3765,
+              "decodedBodySize": 8530
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 3.299999952316284,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.200000047683716,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.6000001430511475,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/ClearOutlined-Mo5wbGSf.js",
+              "initiatorType": "script",
+              "durationMs": 3.799999952316284,
+              "encodedBodySize": 706,
+              "decodedBodySize": 1128
+            },
+            {
+              "path": "/assets/index-C930BROq.js",
+              "initiatorType": "script",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 3584,
+              "decodedBodySize": 9216
+            },
+            {
+              "path": "/assets/DeleteOutlined-BxUG-3QX.js",
+              "initiatorType": "script",
+              "durationMs": 3.6999998092651367,
+              "encodedBodySize": 1023,
+              "decodedBodySize": 1023
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.700000047683716,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 5.400000095367432,
+              "encodedBodySize": 6670,
+              "decodedBodySize": 6670
+            },
+            {
+              "path": "/api/v2/repository-capacities",
+              "initiatorType": "fetch",
+              "durationMs": 75.5,
+              "encodedBodySize": 4441,
+              "decodedBodySize": 4441
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "OCI 仓库详情",
+        "path": "/repositories/58e5718c-e39a-4ee2-9937-1df28456877c",
+        "elapsedMs": 876,
+        "finalUrl": "http://127.0.0.1:4175/repositories/58e5718c-e39a-4ee2-9937-1df28456877c",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 5
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c",
+            "status": 200,
+            "durationMs": 9
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/capabilities",
+            "status": 200,
+            "durationMs": 23
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/effective-access",
+            "status": 200,
+            "durationMs": 23
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/capacity",
+            "status": 200,
+            "durationMs": 23
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/oci/images?pageSize=50",
+            "status": 200,
+            "durationMs": 6
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.69999980926514,
+          "fcpMs": 100,
+          "lcpMs": 200,
+          "domNodes": 370,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 7,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.299999952316284,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.7999999523162842,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.3999998569488525,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 2.5999999046325684,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/RepositoryDetail-B7QA_gxA.js",
+              "initiatorType": "script",
+              "durationMs": 5.5,
+              "encodedBodySize": 52684,
+              "decodedBodySize": 174273
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.200000047683716,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/OciImageDetail-Dku7re4z.js",
+              "initiatorType": "script",
+              "durationMs": 3.700000047683716,
+              "encodedBodySize": 6328,
+              "decodedBodySize": 20289
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 3.6999998092651367,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/Collapse-CSQjMsNz.js",
+              "initiatorType": "script",
+              "durationMs": 4.599999904632568,
+              "encodedBodySize": 3719,
+              "decodedBodySize": 9925
+            },
+            {
+              "path": "/assets/DeleteOutlined-BxUG-3QX.js",
+              "initiatorType": "script",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 1023,
+              "decodedBodySize": 1023
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/assets/SettingOutlined-DDJbOaR1.js",
+              "initiatorType": "script",
+              "durationMs": 5.300000190734863,
+              "encodedBodySize": 1300,
+              "decodedBodySize": 2492
+            },
+            {
+              "path": "/assets/csv-CoJf0Eaj.js",
+              "initiatorType": "script",
+              "durationMs": 5.200000047683716,
+              "encodedBodySize": 888,
+              "decodedBodySize": 1455
+            },
+            {
+              "path": "/assets/progress-GaLxREnH.js",
+              "initiatorType": "script",
+              "durationMs": 5.400000095367432,
+              "encodedBodySize": 5794,
+              "decodedBodySize": 15037
+            },
+            {
+              "path": "/assets/index-l5mJAcnw.js",
+              "initiatorType": "script",
+              "durationMs": 5.599999904632568,
+              "encodedBodySize": 2604,
+              "decodedBodySize": 7571
+            },
+            {
+              "path": "/assets/index-B6Nm_vBH.js",
+              "initiatorType": "script",
+              "durationMs": 6,
+              "encodedBodySize": 7566,
+              "decodedBodySize": 20961
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 5.6000001430511475,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c",
+              "initiatorType": "fetch",
+              "durationMs": 3.5,
+              "encodedBodySize": 152,
+              "decodedBodySize": 152
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/capabilities",
+              "initiatorType": "fetch",
+              "durationMs": 4.200000047683716,
+              "encodedBodySize": 103,
+              "decodedBodySize": 103
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/effective-access",
+              "initiatorType": "fetch",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 502,
+              "decodedBodySize": 502
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/capacity",
+              "initiatorType": "fetch",
+              "durationMs": 6,
+              "encodedBodySize": 125,
+              "decodedBodySize": 125
+            },
+            {
+              "path": "/api/v2/repositories/58e5718c-e39a-4ee2-9937-1df28456877c/oci/images",
+              "initiatorType": "fetch",
+              "durationMs": 4.5,
+              "encodedBodySize": 131,
+              "decodedBodySize": 131
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "仓库分组",
+        "path": "/groups",
+        "elapsedMs": 883,
+        "finalUrl": "http://127.0.0.1:4175/groups",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 3
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=200",
+            "status": 200,
+            "durationMs": 10
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/groups?pageSize=100",
+            "status": 200,
+            "durationMs": 10
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52,
+          "fcpMs": 100,
+          "lcpMs": 156,
+          "domNodes": 361,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.799999952316284,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.200000047683716,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.1000001430511475,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/Groups-CgQ_pgrH.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 5667,
+              "decodedBodySize": 15452
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 10.200000047683716,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/index-C930BROq.js",
+              "initiatorType": "script",
+              "durationMs": 4.3999998569488525,
+              "encodedBodySize": 3584,
+              "decodedBodySize": 9216
+            },
+            {
+              "path": "/assets/index-l5mJAcnw.js",
+              "initiatorType": "script",
+              "durationMs": 4.5,
+              "encodedBodySize": 2604,
+              "decodedBodySize": 7571
+            },
+            {
+              "path": "/assets/DeleteOutlined-BxUG-3QX.js",
+              "initiatorType": "script",
+              "durationMs": 3.6000001430511475,
+              "encodedBodySize": 1023,
+              "decodedBodySize": 1023
+            },
+            {
+              "path": "/assets/DatabaseOutlined-dC206ap1.js",
+              "initiatorType": "script",
+              "durationMs": 4.699999809265137,
+              "encodedBodySize": 983,
+              "decodedBodySize": 983
+            },
+            {
+              "path": "/assets/SettingOutlined-DDJbOaR1.js",
+              "initiatorType": "script",
+              "durationMs": 4.699999809265137,
+              "encodedBodySize": 1300,
+              "decodedBodySize": 2492
+            },
+            {
+              "path": "/assets/EditOutlined-COgf0Gft.js",
+              "initiatorType": "script",
+              "durationMs": 4.699999809265137,
+              "encodedBodySize": 720,
+              "decodedBodySize": 1082
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.6999998092651367,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.6000001430511475,
+              "encodedBodySize": 6670,
+              "decodedBodySize": 6670
+            },
+            {
+              "path": "/api/v2/groups",
+              "initiatorType": "fetch",
+              "durationMs": 4.6000001430511475,
+              "encodedBodySize": 500,
+              "decodedBodySize": 500
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "访问控制",
+        "path": "/access",
+        "elapsedMs": 882,
+        "finalUrl": "http://127.0.0.1:4175/access",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 2
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/anonymous-access-policy",
+            "status": 200,
+            "durationMs": 13
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repository-grants",
+            "status": 200,
+            "durationMs": 13
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 52.200000047683716,
+          "fcpMs": 96,
+          "lcpMs": 172,
+          "domNodes": 431,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.8999998569488525,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.200000047683716,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 1.8999998569488525,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 2.1999998092651367,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.5999999046325684,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.200000047683716,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/AccessControl-EB6GW4LQ.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 3606,
+              "decodedBodySize": 8276
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.199999809265137,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 4,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/assets/ClearOutlined-Mo5wbGSf.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 706,
+              "decodedBodySize": 1128
+            },
+            {
+              "path": "/assets/index-l5mJAcnw.js",
+              "initiatorType": "script",
+              "durationMs": 4,
+              "encodedBodySize": 2604,
+              "decodedBodySize": 7571
+            },
+            {
+              "path": "/assets/Collapse-CSQjMsNz.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 3719,
+              "decodedBodySize": 9925
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.700000047683716,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/anonymous-access-policy",
+              "initiatorType": "fetch",
+              "durationMs": 4.3999998569488525,
+              "encodedBodySize": 31,
+              "decodedBodySize": 31
+            },
+            {
+              "path": "/api/v2/repository-grants",
+              "initiatorType": "fetch",
+              "durationMs": 5.099999904632568,
+              "encodedBodySize": 1354,
+              "decodedBodySize": 1354
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "全局制品搜索",
+        "path": "/search?q=nginx",
+        "elapsedMs": 876,
+        "finalUrl": "http://127.0.0.1:4175/search?q=nginx",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 7
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/artifact-search?q=nginx&pageSize=100",
+            "status": 200,
+            "durationMs": 11
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 53.200000047683716,
+          "fcpMs": 100,
+          "lcpMs": 192,
+          "domNodes": 293,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 7.1000001430511475,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.8999998569488525,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.5,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.7999999523162842,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5999999046325684,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 1.9000000953674316,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 2.3999998569488525,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/Search-RHI3-art.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 6392,
+              "decodedBodySize": 17308
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 9.199999809265137,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/PublicBrowsePrimitives-LPblVr5R.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 1748,
+              "decodedBodySize": 3612
+            },
+            {
+              "path": "/assets/OciImageDetail-Dku7re4z.js",
+              "initiatorType": "script",
+              "durationMs": 4.700000047683716,
+              "encodedBodySize": 6328,
+              "decodedBodySize": 20289
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 5.200000047683716,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/assets/Collapse-CSQjMsNz.js",
+              "initiatorType": "script",
+              "durationMs": 4.6000001430511475,
+              "encodedBodySize": 3719,
+              "decodedBodySize": 9925
+            },
+            {
+              "path": "/assets/DeleteOutlined-BxUG-3QX.js",
+              "initiatorType": "script",
+              "durationMs": 4.8999998569488525,
+              "encodedBodySize": 1023,
+              "decodedBodySize": 1023
+            },
+            {
+              "path": "/assets/LinkOutlined-Dw1b6X7C.js",
+              "initiatorType": "script",
+              "durationMs": 5.5,
+              "encodedBodySize": 742,
+              "decodedBodySize": 1377
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 5.299999952316284,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 5.299999952316284,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 4.6000001430511475,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/artifact-search",
+              "initiatorType": "fetch",
+              "durationMs": 8.799999952316284,
+              "encodedBodySize": 357,
+              "decodedBodySize": 357
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "审计日志",
+        "path": "/audits",
+        "elapsedMs": 878,
+        "finalUrl": "http://127.0.0.1:4175/audits",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 3
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=200",
+            "status": 200,
+            "durationMs": 12
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/audits?limit=100",
+            "status": 200,
+            "durationMs": 12
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/groups?pageSize=200",
+            "status": 200,
+            "durationMs": 12
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 51.09999990463257,
+          "fcpMs": 96,
+          "lcpMs": 232,
+          "domNodes": 1331,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.5,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 1.8999998569488525,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.199999809265137,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.7999999523162842,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/Audits-CdH0CBcn.js",
+              "initiatorType": "script",
+              "durationMs": 2.8000001907348633,
+              "encodedBodySize": 3526,
+              "decodedBodySize": 8382
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/csv-CoJf0Eaj.js",
+              "initiatorType": "script",
+              "durationMs": 3.5,
+              "encodedBodySize": 888,
+              "decodedBodySize": 1455
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.0999999046325684,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.200000047683716,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/ClearOutlined-Mo5wbGSf.js",
+              "initiatorType": "script",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 706,
+              "decodedBodySize": 1128
+            },
+            {
+              "path": "/assets/Collapse-CSQjMsNz.js",
+              "initiatorType": "script",
+              "durationMs": 4.3999998569488525,
+              "encodedBodySize": 3719,
+              "decodedBodySize": 9925
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 4.5,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 6670,
+              "decodedBodySize": 6670
+            },
+            {
+              "path": "/api/v2/groups",
+              "initiatorType": "fetch",
+              "durationMs": 5.8999998569488525,
+              "encodedBodySize": 500,
+              "decodedBodySize": 500
+            },
+            {
+              "path": "/api/v2/audits",
+              "initiatorType": "fetch",
+              "durationMs": 5.799999952316284,
+              "encodedBodySize": 25925,
+              "decodedBodySize": 25925
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "审计保留策略",
+        "path": "/audit-retention",
+        "elapsedMs": 881,
+        "finalUrl": "http://127.0.0.1:4175/audit-retention",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 15
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/audit-retention-policy",
+            "status": 200,
+            "durationMs": 8
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/audit-retention/jobs",
+            "status": 200,
+            "durationMs": 9
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 51.200000047683716,
+          "fcpMs": 100,
+          "lcpMs": 184,
+          "domNodes": 291,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.700000047683716,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.200000047683716,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 1.7999999523162842,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.299999952316284,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.9000000953674316,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.5,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/AuditRetention-DATYsFgD.js",
+              "initiatorType": "script",
+              "durationMs": 3.3999998569488525,
+              "encodedBodySize": 11932,
+              "decodedBodySize": 29584
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 4.200000047683716,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.799999952316284,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 4.299999952316284,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/index-B6Nm_vBH.js",
+              "initiatorType": "script",
+              "durationMs": 4.599999904632568,
+              "encodedBodySize": 7566,
+              "decodedBodySize": 20961
+            },
+            {
+              "path": "/assets/index-l5mJAcnw.js",
+              "initiatorType": "script",
+              "durationMs": 4.3999998569488525,
+              "encodedBodySize": 2604,
+              "decodedBodySize": 7571
+            },
+            {
+              "path": "/assets/UpOutlined-CFoqhw-a.js",
+              "initiatorType": "script",
+              "durationMs": 4.5,
+              "encodedBodySize": 857,
+              "decodedBodySize": 857
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 4.799999952316284,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/audit-retention-policy",
+              "initiatorType": "fetch",
+              "durationMs": 3.3999998569488525,
+              "encodedBodySize": 45,
+              "decodedBodySize": 45
+            },
+            {
+              "path": "/api/v2/audit-retention/jobs",
+              "initiatorType": "fetch",
+              "durationMs": 3.5,
+              "encodedBodySize": 3,
+              "decodedBodySize": 3
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "API 密钥",
+        "path": "/keys",
+        "elapsedMs": 885,
+        "finalUrl": "http://127.0.0.1:4175/keys",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 6
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/api-keys",
+            "status": 200,
+            "durationMs": 10
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 53,
+          "fcpMs": 104,
+          "lcpMs": 152,
+          "domNodes": 318,
+          "resources": [
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.1000001430511475,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.700000047683716,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 1.8000001907348633,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 1.5999999046325684,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 1.7000000476837158,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/ApiKeys-DHCbhVza.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 11036,
+              "decodedBodySize": 27143
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.5,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 3.5999999046325684,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.799999952316284,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/EditOutlined-COgf0Gft.js",
+              "initiatorType": "script",
+              "durationMs": 3.8999998569488525,
+              "encodedBodySize": 720,
+              "decodedBodySize": 1082
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 3.5,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/api-keys",
+              "initiatorType": "fetch",
+              "durationMs": 5.299999952316284,
+              "encodedBodySize": 5209,
+              "decodedBodySize": 5209
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "用户管理",
+        "path": "/users",
+        "elapsedMs": 875,
+        "finalUrl": "http://127.0.0.1:4175/users",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 5
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/users",
+            "status": 200,
+            "durationMs": 10
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 53.09999990463257,
+          "fcpMs": 104,
+          "lcpMs": 164,
+          "domNodes": 317,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.799999952316284,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.099999904632568,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.5,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2.0999999046325684,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.799999952316284,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.8000001907348633,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/Users-DHUdIl_o.js",
+              "initiatorType": "script",
+              "durationMs": 3.200000047683716,
+              "encodedBodySize": 2799,
+              "decodedBodySize": 6430
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 3.5999999046325684,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.8999998569488525,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3.299999952316284,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 8.399999856948853,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/index-l5mJAcnw.js",
+              "initiatorType": "script",
+              "durationMs": 4.599999904632568,
+              "encodedBodySize": 2604,
+              "decodedBodySize": 7571
+            },
+            {
+              "path": "/assets/DeleteOutlined-BxUG-3QX.js",
+              "initiatorType": "script",
+              "durationMs": 4.799999952316284,
+              "encodedBodySize": 1023,
+              "decodedBodySize": 1023
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 4.400000095367432,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 4.5,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/users",
+              "initiatorType": "fetch",
+              "durationMs": 4.799999952316284,
+              "encodedBodySize": 202,
+              "decodedBodySize": 202
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      },
+      {
+        "label": "任务中心",
+        "path": "/operations",
+        "elapsedMs": 876,
+        "finalUrl": "http://127.0.0.1:4175/operations",
+        "navigationError": null,
+        "apiRequests": [
+          {
+            "url": "http://127.0.0.1:4175/api/v2/repositories?pageSize=1",
+            "status": 200,
+            "durationMs": 230
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/audit-retention/jobs",
+            "status": 200,
+            "durationMs": 182
+          },
+          {
+            "url": "http://127.0.0.1:4175/api/v2/lifecycle-jobs?limit=500",
+            "status": 200,
+            "durationMs": 182
+          }
+        ],
+        "failedRequests": [],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "metrics": {
+          "navigationMs": 51.700000047683716,
+          "fcpMs": 104,
+          "lcpMs": 348,
+          "domNodes": 467,
+          "resources": [
+            {
+              "path": "/assets/index-CW6murjG.js",
+              "initiatorType": "script",
+              "durationMs": 6.800000190734863,
+              "encodedBodySize": 101365,
+              "decodedBodySize": 289792
+            },
+            {
+              "path": "/assets/index-CLXxtDQg.css",
+              "initiatorType": "link",
+              "durationMs": 2,
+              "encodedBodySize": 7707,
+              "decodedBodySize": 37712
+            },
+            {
+              "path": "/assets/react-LuyjSvaS.js",
+              "initiatorType": "other",
+              "durationMs": 7.099999904632568,
+              "encodedBodySize": 91443,
+              "decodedBodySize": 284837
+            },
+            {
+              "path": "/assets/Layout-C9dGXRuF.js",
+              "initiatorType": "script",
+              "durationMs": 2.200000047683716,
+              "encodedBodySize": 6414,
+              "decodedBodySize": 17880
+            },
+            {
+              "path": "/assets/Modal-DkE6eRly.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 1132,
+              "decodedBodySize": 2142
+            },
+            {
+              "path": "/assets/Layout-CF5i3hVF.js",
+              "initiatorType": "script",
+              "durationMs": 4.200000047683716,
+              "encodedBodySize": 40554,
+              "decodedBodySize": 130379
+            },
+            {
+              "path": "/assets/index-BngTDDox.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 7381,
+              "decodedBodySize": 24657
+            },
+            {
+              "path": "/assets/LoginOutlined-DIbC9Fca.js",
+              "initiatorType": "script",
+              "durationMs": 2,
+              "encodedBodySize": 916,
+              "decodedBodySize": 1514
+            },
+            {
+              "path": "/assets/index-CAADWy0S.js",
+              "initiatorType": "script",
+              "durationMs": 2.5,
+              "encodedBodySize": 8511,
+              "decodedBodySize": 21231
+            },
+            {
+              "path": "/assets/SyncOutlined-Dc7PX28G.js",
+              "initiatorType": "script",
+              "durationMs": 2.700000047683716,
+              "encodedBodySize": 896,
+              "decodedBodySize": 1411
+            },
+            {
+              "path": "/assets/Operations-D1tFL1Jw.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 4222,
+              "decodedBodySize": 10127
+            },
+            {
+              "path": "/assets/sdk.gen-Bqu8D4m0.js",
+              "initiatorType": "script",
+              "durationMs": 3,
+              "encodedBodySize": 3907,
+              "decodedBodySize": 17434
+            },
+            {
+              "path": "/assets/Badge-B5vTxMAj.js",
+              "initiatorType": "script",
+              "durationMs": 7.5,
+              "encodedBodySize": 94449,
+              "decodedBodySize": 292354
+            },
+            {
+              "path": "/assets/format-C8Vbglpr.js",
+              "initiatorType": "script",
+              "durationMs": 2.9000000953674316,
+              "encodedBodySize": 611,
+              "decodedBodySize": 611
+            },
+            {
+              "path": "/assets/ClearOutlined-Mo5wbGSf.js",
+              "initiatorType": "script",
+              "durationMs": 3.9000000953674316,
+              "encodedBodySize": 706,
+              "decodedBodySize": 1128
+            },
+            {
+              "path": "/assets/ConsolePrimitives-Di1xSIkG.js",
+              "initiatorType": "script",
+              "durationMs": 3.1000001430511475,
+              "encodedBodySize": 932,
+              "decodedBodySize": 1946
+            },
+            {
+              "path": "/assets/index-C4fc-ffk.js",
+              "initiatorType": "script",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 3016,
+              "decodedBodySize": 7669
+            },
+            {
+              "path": "/assets/progress-GaLxREnH.js",
+              "initiatorType": "script",
+              "durationMs": 4.099999904632568,
+              "encodedBodySize": 5794,
+              "decodedBodySize": 15037
+            },
+            {
+              "path": "/api/v2/repositories",
+              "initiatorType": "fetch",
+              "durationMs": 194.09999990463257,
+              "encodedBodySize": 367,
+              "decodedBodySize": 367
+            },
+            {
+              "path": "/api/v2/lifecycle-jobs",
+              "initiatorType": "fetch",
+              "durationMs": 146.5,
+              "encodedBodySize": 18598,
+              "decodedBodySize": 18598
+            },
+            {
+              "path": "/api/v2/audit-retention/jobs",
+              "initiatorType": "fetch",
+              "durationMs": 146.29999995231628,
+              "encodedBodySize": 3,
+              "decodedBodySize": 3
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalDurationMs": 0,
+            "maxDurationMs": 0
+          }
+        }
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "metric": "访问控制 API 请求",
+      "before": 40,
+      "after": 3,
+      "unit": "次"
+    },
+    {
+      "metric": "任务中心 API 请求",
+      "before": 40,
+      "after": 3,
+      "unit": "次"
+    },
+    {
+      "metric": "管理总览 API 请求",
+      "before": 9,
+      "after": 5,
+      "unit": "次"
+    },
+    {
+      "metric": "仓库管理 API 请求",
+      "before": 7,
+      "after": 3,
+      "unit": "次"
+    },
+    {
+      "metric": "公开目录冷加载编码体积",
+      "before": 437607,
+      "after": 369736,
+      "unit": "bytes"
+    },
+    {
+      "metric": "容量查询延迟",
+      "before": 270,
+      "after": 75.65,
+      "unit": "ms"
+    }
+  ],
+  "verification": {
+    "goTests": "passed: go test ./...",
+    "consoleTypecheck": "passed",
+    "consoleBuild": "passed",
+    "antdLint": "0 issues",
+    "consoleE2E": "16 passed, 0 failed",
+    "gateway": "rebuilt and healthy"
+  }
+}
