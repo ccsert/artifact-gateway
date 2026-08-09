@@ -134,6 +134,27 @@ export function rawUsage(repoName: string, path: string): UsageSnippet[] {
   ];
 }
 
+export function npmUsage(
+  repoName: string,
+  packageName: string,
+  version: string,
+): UsageSnippet[] {
+  const registry = `${gatewayBase()}/npm/${repoName}/`;
+  const scope = packageName.startsWith("@")
+    ? packageName.slice(0, packageName.indexOf("/"))
+    : "";
+  return [
+    {
+      label: "npm install",
+      code: `npm install ${packageName}@${version} --registry ${registry}`,
+    },
+    {
+      label: ".npmrc",
+      code: scope ? `${scope}:registry=${registry}` : `registry=${registry}`,
+    },
+  ];
+}
+
 export function usageFor(
   format: Format | string,
   repoName: string,
@@ -150,6 +171,8 @@ export function usageFor(
       return conanUsage(repoName, coordinate);
     case "raw":
       return rawUsage(repoName, coordinate);
+    case "npm":
+      return npmUsage(repoName, coordinate, tag ?? "latest");
     default:
       return [];
   }

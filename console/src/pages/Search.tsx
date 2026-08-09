@@ -16,6 +16,7 @@ import {
   RawArtifactDetail,
 } from "../components/ArtifactRowDetail";
 import { OciImageDetail } from "../components/OciImageDetail";
+import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
@@ -47,7 +48,15 @@ export function artifactTarget(hit: GlobalArtifactSearchHit): string {
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
   if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
+  if (hit.format === "npm" && hit.version) params.set("version", hit.version);
   return `/repositories/${hit.repositoryId}?${params.toString()}`;
+}
+
+export function artifactVersionSizeLabel(hit: GlobalArtifactSearchHit): string {
+  const size = formatBytes(hit.size);
+  return hit.format === "npm" && hit.version
+    ? `${hit.version} · ${size}`
+    : size;
 }
 
 function buildRows(hits: GlobalArtifactSearchHit[]): SearchRow[] {
@@ -263,7 +272,7 @@ export function SearchPage() {
                 `${tableRow.row.hits.length} 个版本`,
                 `${tableRow.row.hits.length} versions`,
               )
-            : formatBytes(tableRow.row.size)}
+            : artifactVersionSizeLabel(tableRow.row)}
         </span>
       ),
     },
@@ -564,6 +573,15 @@ export function SearchPage() {
             }}
           />
         )}
+        {row.format === "npm" && (
+          <NpmPackageDetail
+            repoName={row.repositoryName}
+            packageName={row.coordinate}
+            initialVersion={row.version}
+            size={row.size}
+            publisher={row.publisher}
+          />
+        )}
         <div className="mt-4 flex justify-end">
           <Button
             type="primary"
@@ -588,8 +606,8 @@ export function SearchPage() {
                 `Searching all repositories for “${q}”`,
               )
             : text(
-                "跨仓库搜索制品坐标、路径、引用与 SHA-256",
-                "Search artifact coordinates, paths, references, and SHA-256 digests across repositories",
+                "跨仓库搜索制品坐标、包名、路径、引用与 SHA-256",
+                "Search artifact coordinates, package names, paths, references, and SHA-256 digests across repositories",
               )
         }
       />
@@ -617,8 +635,8 @@ export function SearchPage() {
         <EmptyState
           title={text("输入关键词开始搜索", "Enter a keyword to search")}
           hint={text(
-            "支持 Maven 坐标、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
-            "Supports Maven coordinates, OCI images, Conan references, Raw paths, and full SHA-256 digests",
+            "支持 Maven 坐标、npm 包名、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
+            "Supports Maven coordinates, npm packages, OCI images, Conan references, Raw paths, and full SHA-256 digests",
           )}
         />
       ) : error && hits.length === 0 ? (

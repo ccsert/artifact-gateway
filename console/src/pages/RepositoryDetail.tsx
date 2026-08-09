@@ -103,6 +103,7 @@ import {
   RawArtifactDetail,
 } from "../components/ArtifactRowDetail";
 import { RawUploadDialog } from "../components/RawUploadDialog";
+import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { useAuth } from "../lib/auth";
 import { usePreferences } from "../lib/preferences";
 import { downloadCsv } from "../lib/csv";
@@ -135,7 +136,12 @@ const TABS: {
   hostedOnly?: boolean;
 }[] = [
   { key: "artifacts", label: "制品", labelEn: "Artifacts" },
-  { key: "publish", label: "发布", labelEn: "Publish", formats: ["maven"] },
+  {
+    key: "publish",
+    label: "发布",
+    labelEn: "Publish",
+    formats: ["maven", "npm"],
+  },
   { key: "grants", label: "访问授权", labelEn: "Access grants" },
   {
     key: "retention",
@@ -145,9 +151,24 @@ const TABS: {
     hostedOnly: true,
   },
   { key: "capacity", label: "容量", labelEn: "Capacity" },
-  { key: "distribute", label: "晋升 / 复制", labelEn: "Promote / replicate" },
-  { key: "jobs", label: "生命周期任务", labelEn: "Lifecycle jobs" },
-  { key: "tombstones", label: "墓碑", labelEn: "Tombstones" },
+  {
+    key: "distribute",
+    label: "晋升 / 复制",
+    labelEn: "Promote / replicate",
+    formats: ["maven", "oci", "conan", "raw"],
+  },
+  {
+    key: "jobs",
+    label: "生命周期任务",
+    labelEn: "Lifecycle jobs",
+    formats: ["maven", "oci", "conan", "raw"],
+  },
+  {
+    key: "tombstones",
+    label: "墓碑",
+    labelEn: "Tombstones",
+    formats: ["maven", "oci", "conan", "raw"],
+  },
   { key: "settings", label: "设置", labelEn: "Settings" },
 ];
 
@@ -245,6 +266,37 @@ function SnippetBlock({ label, code }: { label: string; code: string }) {
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">
         {code}
       </code>
+    </div>
+  );
+}
+
+function NpmPublishGuide({ repoName }: { repoName: string }) {
+  const { text } = usePreferences();
+  const registry = `${window.location.origin}/npm/${repoName}/`;
+  const authPath = `//${window.location.host}/npm/${repoName}/:_authToken=\${ARTIFACT_GATEWAY_TOKEN}`;
+  return (
+    <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
+      <div>
+        <h3 className="text-sm font-medium text-zinc-100">
+          {text("注册 npm 仓库", "Configure npm registry")}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          {text(
+            "认证令牌使用 Gateway API Key 或 resolver token。",
+            "Use a Gateway API key or resolver token for authentication.",
+          )}
+        </p>
+      </div>
+      <div className="space-y-3">
+        <SnippetBlock
+          label=".npmrc"
+          code={`registry=${registry}\n${authPath}`}
+        />
+        <SnippetBlock
+          label={text("发布", "Publish")}
+          code={`npm publish --registry ${registry}`}
+        />
+      </div>
     </div>
   );
 }
@@ -883,12 +935,16 @@ function ArtifactsTab({
   artifactTarget = "",
   buildTarget,
   referenceTarget,
+  versionTarget,
+  onVersionChange,
 }: {
   repo: Repository;
   canWrite: boolean;
   artifactTarget?: string;
   buildTarget?: number;
   referenceTarget?: string;
+  versionTarget?: string;
+  onVersionChange?: (coordinate: string, version: string) => void;
 }) {
   const { token } = useAuth();
   const { text } = usePreferences();
@@ -1038,6 +1094,23 @@ function ArtifactsTab({
           });
           next = r.data?.nextPageToken;
         }
+      } else if (format === "npm") {
+        const r = await searchRepositoryArtifacts({
+          path: { repositoryId: repo.id },
+          query: { q: query || undefined, ...page },
+        });
+        err = r.error;
+        items = (r.data?.items ?? []).map((item) => ({
+          key: item.coordinate,
+          coordinate: item.coordinate,
+          digest: item.digest,
+          createdAt: item.createdAt,
+          size: item.size,
+          publisher: item.publisher,
+          versionCount: item.versionCount,
+          latestVersion: item.version,
+        }));
+        next = r.data?.nextPageToken;
       } else if (format === "conan") {
         const r = await listConanReferences({
           path: { repositoryId: repo.id },
@@ -1106,6 +1179,7 @@ function ArtifactsTab({
     oci: text("按镜像名前缀过滤…", "Filter by image name prefix…"),
     maven: text("搜索 GAV 坐标…", "Search GAV coordinates…"),
     conan: text("按引用名过滤…", "Filter by reference…"),
+    npm: text("按包名前缀过滤…", "Filter by package name prefix…"),
     raw: text("搜索路径…", "Search paths…"),
   };
 
@@ -1177,10 +1251,13 @@ function ArtifactsTab({
               ),
             },
           ]
-        : format === "maven"
+        : format === "maven" || format === "npm"
           ? [
               {
-                title: text("制品", "Artifact"),
+                title:
+                  format === "npm"
+                    ? text("包", "Package")
+                    : text("制品", "Artifact"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -1314,6 +1391,22 @@ function ArtifactsTab({
     }
     if (proxyMaven) {
       return <ProxyMavenCacheDetail repoName={repo.name} meta={r} />;
+    }
+    if (format === "npm") {
+      return (
+        <NpmPackageDetail
+          repoName={repo.name}
+          packageName={r.coordinate}
+          initialVersion={
+            artifactTarget === r.coordinate ? versionTarget : undefined
+          }
+          size={r.size}
+          publisher={r.publisher}
+          onVersionChange={(version) =>
+            onVersionChange?.(r.coordinate, version)
+          }
+        />
+      );
     }
     if (format === "conan") {
       return (
@@ -1537,6 +1630,11 @@ function resourcePrefixHint(
       return text(
         "例如 releases/2026（路径前缀）",
         "For example: releases/2026 (path prefix)",
+      );
+    case "npm":
+      return text(
+        "例如 @scope/package（npm 包名前缀）",
+        "For example: @scope/package (npm package prefix)",
       );
   }
 }
@@ -4380,6 +4478,7 @@ export function RepositoryDetailPage() {
   const requestedTab = searchParams.get("tab");
   const artifactTarget = searchParams.get("artifact")?.trim() ?? "";
   const referenceTarget = searchParams.get("reference")?.trim() || undefined;
+  const versionTarget = searchParams.get("version")?.trim() || undefined;
   const parsedBuildTarget = Number(searchParams.get("build") ?? "");
   const buildTarget =
     Number.isInteger(parsedBuildTarget) && parsedBuildTarget > 0
@@ -4495,6 +4594,18 @@ export function RepositoryDetailPage() {
             artifactTarget={artifactTarget}
             buildTarget={buildTarget}
             referenceTarget={referenceTarget}
+            versionTarget={versionTarget}
+            onVersionChange={(coordinate, version) =>
+              setSearchParams(
+                (current) => {
+                  const next = new URLSearchParams(current);
+                  next.set("artifact", coordinate);
+                  next.set("version", version);
+                  return next;
+                },
+                { replace: true },
+              )
+            }
           />
         )}
         {tab === "publish" &&
@@ -4505,6 +4616,9 @@ export function RepositoryDetailPage() {
               onPublished={() => selectTab("artifacts")}
             />
           )}
+        {tab === "publish" &&
+          repo.format === "npm" &&
+          repo.type !== "proxy" && <NpmPublishGuide repoName={repo.name} />}
         {tab === "grants" && (
           <>
             {effectiveAccess && (

@@ -77,6 +77,14 @@ describe("public artifact version model", () => {
     ).toBe(
       "/browse?repository=repo-1&q=demo&artifact=library%2Fpostgres&tag=17.2",
     );
+    expect(
+      artifactBrowsePath(current, {
+        coordinate: "@scope/widget",
+        version: "2.0.0-beta.1",
+      }),
+    ).toBe(
+      "/browse?repository=repo-1&q=demo&artifact=%40scope%2Fwidget&version=2.0.0-beta.1",
+    );
   });
 
   it("requests a deep-linked coordinate only when the current page misses it", () => {

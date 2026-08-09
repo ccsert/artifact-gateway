@@ -15,6 +15,7 @@ export interface ArtifactBrowseSelection {
   buildNumber?: number;
   tag?: string;
   revision?: string;
+  version?: string;
 }
 
 export function missingDeepLinkedArtifact(
@@ -115,6 +116,7 @@ export function artifactBrowseParams(
   );
   setOptionalParam(next, "tag", selection.tag);
   setOptionalParam(next, "revision", selection.revision);
+  setOptionalParam(next, "version", selection.version);
   return next;
 }
 
@@ -129,7 +131,7 @@ export function clearArtifactBrowseParams(
   current: URLSearchParams,
 ): URLSearchParams {
   const next = new URLSearchParams(current);
-  for (const key of ["artifact", "build", "tag", "revision"]) {
+  for (const key of ["artifact", "build", "tag", "revision", "version"]) {
     next.delete(key);
   }
   return next;

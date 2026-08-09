@@ -42,11 +42,12 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../components/PublicBrowsePrimitives";
+import { NpmPackageDetail } from "../components/NpmPackageDetail";
 
 interface PublicRepository {
   id: string;
   name: string;
-  format: "oci" | "maven" | "conan" | "raw";
+  format: "oci" | "maven" | "conan" | "raw" | "npm";
   type?: string;
 }
 
@@ -251,6 +252,13 @@ function repositoryUsage(
         label: text("Conan remote 地址", "Conan remote address"),
         code: `conan remote add ${repoName} ${origin}/conan/v2/${repoName}`,
       },
+    ];
+  }
+  if (format === "npm") {
+    const registry = `${origin}/npm/${repoName}/`;
+    return [
+      { label: text("npm Registry 地址", "npm registry URL"), code: registry },
+      { label: ".npmrc", code: `registry=${registry}` },
     ];
   }
   return [{ label: "Raw 仓库地址", code: `${origin}/raw/${repoName}/` }];
@@ -1002,6 +1010,7 @@ export function PublicBrowsePage() {
   const buildParam = params.get("build") ?? "";
   const tagParam = params.get("tag") ?? "";
   const revisionParam = params.get("revision") ?? "";
+  const versionParam = params.get("version") ?? "";
   const [queryDraft, setQueryDraft] = useState(query);
   const [items, setItems] = useState<ArtifactSummary[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -1385,12 +1394,14 @@ export function PublicBrowsePage() {
     buildNumber?: number,
     tag?: string,
     revision?: string,
+    version?: string,
   ) => {
     return artifactBrowsePath(params, {
       coordinate,
       buildNumber,
       tag,
       revision,
+      version,
     });
   };
 
@@ -1399,12 +1410,14 @@ export function PublicBrowsePage() {
     buildNumber?: number,
     tag?: string,
     revision?: string,
+    version?: string,
   ) => {
     const next = artifactBrowseParams(params, {
       coordinate,
       buildNumber,
       tag,
       revision,
+      version,
     });
     setParams(next, { replace: true, preventScrollReset: true });
   };
@@ -1437,7 +1450,9 @@ export function PublicBrowsePage() {
         ? text("注册 Maven 仓库源", "Register a Maven repository")
         : selectedRepository?.format === "conan"
           ? text("注册 Conan remote", "Register a Conan remote")
-          : text("注册 Raw 源地址", "Register a Raw source");
+          : selectedRepository?.format === "npm"
+            ? text("注册 npm 仓库源", "Register an npm registry")
+            : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -1671,7 +1686,15 @@ export function PublicBrowsePage() {
             href={
               row.isOci
                 ? row.selectedProtocolHref
-                : artifactHref(row.item.coordinate)
+                : artifactHref(
+                    row.item.coordinate,
+                    undefined,
+                    undefined,
+                    undefined,
+                    selectedRepository?.format === "npm"
+                      ? (row.item.version ?? versionParam)
+                      : undefined,
+                  )
             }
           >
             {row.isOci && row.selectedProtocolVersionItem
@@ -1708,6 +1731,30 @@ export function PublicBrowsePage() {
   ];
 
   const expandedArtifactRowRender = (row: PublicArtifactTableRow) => {
+    if (selectedRepository?.format === "npm") {
+      return (
+        <NpmPackageDetail
+          repoName={selectedRepository.name}
+          packageName={row.item.coordinate}
+          initialVersion={
+            artifactParam === row.item.coordinate
+              ? versionParam || row.item.version
+              : row.item.version
+          }
+          size={row.item.size}
+          publisher={row.item.publisher}
+          onVersionChange={(version) =>
+            openArtifact(
+              row.item.coordinate,
+              undefined,
+              undefined,
+              undefined,
+              version,
+            )
+          }
+        />
+      );
+    }
     if (!row.isOci) {
       return (
         <div className="px-2 py-1">

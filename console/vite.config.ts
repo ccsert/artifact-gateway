@@ -44,6 +44,7 @@ export default defineConfig(({ mode }) => {
         "/repository": gateway,
         "/maven": gateway,
         "/conan": gateway,
+        "/npm": gateway,
       },
     },
   };

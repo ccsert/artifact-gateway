@@ -97,6 +97,7 @@ const formatTone: Record<string, keyof typeof toneClasses> = {
   maven: "amber",
   conan: "violet",
   raw: "blue",
+  npm: "green",
 };
 
 export function FormatBadge({ format }: { format: string | undefined }) {
