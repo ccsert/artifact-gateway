@@ -572,6 +572,26 @@ type AuditRetentionPolicy struct {
 	KeepDays int    `json:"keepDays"`
 }
 
+// OIDCSettings is the persisted singleton configuration for API bearer and
+// browser OIDC authentication. ClientSecret contains ciphertext at the
+// repository boundary and must never be serialized by an API response.
+type OIDCSettings struct {
+	Version       string    `json:"version"`
+	Enabled       bool      `json:"enabled"`
+	Issuer        string    `json:"issuer"`
+	Audience      string    `json:"audience"`
+	JWKSURL       string    `json:"jwksUrl,omitempty"`
+	ClientID      string    `json:"clientId"`
+	ClientSecret  string    `json:"-"`
+	RedirectURL   string    `json:"redirectUrl"`
+	Scopes        []string  `json:"scopes"`
+	AdminSubjects []string  `json:"adminSubjects"`
+	ReaderRoles   []string  `json:"readerRoles"`
+	WriterRoles   []string  `json:"writerRoles"`
+	AdminRoles    []string  `json:"adminRoles"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
 type AuditCleanupJob struct {
 	ID             string
 	IdempotencyKey string

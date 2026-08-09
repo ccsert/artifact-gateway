@@ -34,6 +34,7 @@ require_command() {
 require_command docker
 require_command kubectl
 require_command curl
+require_command jq
 require_command npm
 
 for port in "$gateway_port" "$keycloak_port" "$console_port"; do
@@ -73,6 +74,35 @@ processes+=("$!")
 
 until curl --silent --show-error --fail "http://127.0.0.1:${gateway_port}/readyz" >/dev/null; do sleep 1; done
 until curl --silent --show-error --fail "http://127.0.0.1:${keycloak_port}/realms/artifact-gateway/.well-known/openid-configuration" >/dev/null; do sleep 1; done
+
+oidc_settings=$(jq -n \
+  --arg issuer "http://127.0.0.1:${keycloak_port}/realms/artifact-gateway" \
+  --arg redirect "http://127.0.0.1:${console_port}/auth/oidc/callback" \
+  '{
+    enabled: true,
+    issuer: $issuer,
+    audience: "artifact-gateway-api",
+    clientId: "artifact-gateway-console",
+    redirectUrl: $redirect,
+    scopes: ["openid", "profile", "email"],
+    adminSubjects: [],
+    readerRoles: ["artifact-reader"],
+    writerRoles: ["artifact-writer"],
+    adminRoles: ["artifact-admin"]
+  }')
+curl --silent --show-error --fail-with-body \
+  -X PUT \
+  -H "Authorization: Bearer gateway-oidc-test-admin-token" \
+  -H "Content-Type: application/json" \
+  -H "If-Match: 0" \
+  --data "$oidc_settings" \
+  "http://127.0.0.1:${gateway_port}/api/v2/authentication/oidc" \
+  | jq -e '.source == "database" and .version == "1" and .enabled == true' >/dev/null
+curl --silent --show-error --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer gateway-oidc-test-admin-token" \
+  "http://127.0.0.1:${gateway_port}/api/v2/authentication/oidc:test" \
+  | jq -e '.reachable == true' >/dev/null
 
 VITE_GATEWAY_PROXY_TARGET="http://127.0.0.1:${gateway_port}" \
   npm --prefix "$root/console" run dev -- --host 127.0.0.1 --port "$console_port" >"$work_dir/console.log" 2>&1 &

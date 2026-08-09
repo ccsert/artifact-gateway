@@ -14,6 +14,7 @@ type MemoryStore struct {
 	Audits                []AuditRecord
 	auditRetentionPolicy  AuditRetentionPolicy
 	anonymousAccessPolicy AnonymousAccessPolicy
+	oidcSettings          *OIDCSettings
 	auditCleanupJobs      map[string]AuditCleanupJob
 	hostedRepositories    map[string]HostedRepository
 	hostedGroups          map[string]HostedGroup

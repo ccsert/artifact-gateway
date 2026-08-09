@@ -475,6 +475,24 @@ func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
 	}
 }
 
+// Defines values for OIDCSettingsSource.
+const (
+	OIDCSettingsSourceDatabase    OIDCSettingsSource = "database"
+	OIDCSettingsSourceEnvironment OIDCSettingsSource = "environment"
+)
+
+// Valid indicates whether the value is a known member of the OIDCSettingsSource enum.
+func (e OIDCSettingsSource) Valid() bool {
+	switch e {
+	case OIDCSettingsSourceDatabase:
+		return true
+	case OIDCSettingsSourceEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemCode.
 const (
 	AccessDenied        ProblemCode = "access_denied"
@@ -1620,6 +1638,17 @@ type OCIManifestSummaryPage struct {
 	NextPageToken *string              `json:"nextPageToken,omitempty"`
 }
 
+// OIDCConnectionTest defines model for OIDCConnectionTest.
+type OIDCConnectionTest struct {
+	AuthorizationEndpoint *string   `json:"authorizationEndpoint,omitempty"`
+	CheckedAt             time.Time `json:"checkedAt"`
+	Issuer                string    `json:"issuer"`
+	JwksUrl               *string   `json:"jwksUrl,omitempty"`
+	LatencyMs             int       `json:"latencyMs"`
+	Reachable             bool      `json:"reachable"`
+	TokenEndpoint         *string   `json:"tokenEndpoint,omitempty"`
+}
+
 // OIDCIdentityDetails defines model for OIDCIdentityDetails.
 type OIDCIdentityDetails struct {
 	AdminSubject bool                   `json:"adminSubject"`
@@ -1634,6 +1663,45 @@ type OIDCRoleMappingMatch struct {
 
 // OIDCRoleMappingMatchGatewayRole defines model for OIDCRoleMappingMatch.GatewayRole.
 type OIDCRoleMappingMatchGatewayRole string
+
+// OIDCSettings defines model for OIDCSettings.
+type OIDCSettings struct {
+	AdminRoles             []string           `json:"adminRoles"`
+	AdminSubjects          []string           `json:"adminSubjects"`
+	Audience               string             `json:"audience"`
+	ClientId               string             `json:"clientId"`
+	ClientSecretConfigured bool               `json:"clientSecretConfigured"`
+	Enabled                bool               `json:"enabled"`
+	Issuer                 string             `json:"issuer"`
+	JwksUrl                *string            `json:"jwksUrl,omitempty"`
+	ReaderRoles            []string           `json:"readerRoles"`
+	RedirectUrl            string             `json:"redirectUrl"`
+	Scopes                 []string           `json:"scopes"`
+	Source                 OIDCSettingsSource `json:"source"`
+	UpdatedAt              *time.Time         `json:"updatedAt,omitempty"`
+	Version                string             `json:"version"`
+	WriterRoles            []string           `json:"writerRoles"`
+}
+
+// OIDCSettingsSource defines model for OIDCSettings.Source.
+type OIDCSettingsSource string
+
+// OIDCSettingsUpdate defines model for OIDCSettingsUpdate.
+type OIDCSettingsUpdate struct {
+	AdminRoles        []string `json:"adminRoles"`
+	AdminSubjects     []string `json:"adminSubjects"`
+	Audience          string   `json:"audience"`
+	ClearClientSecret *bool    `json:"clearClientSecret,omitempty"`
+	ClientId          string   `json:"clientId"`
+	ClientSecret      *string  `json:"clientSecret,omitempty"`
+	Enabled           bool     `json:"enabled"`
+	Issuer            string   `json:"issuer"`
+	JwksUrl           *string  `json:"jwksUrl,omitempty"`
+	ReaderRoles       []string `json:"readerRoles"`
+	RedirectUrl       string   `json:"redirectUrl"`
+	Scopes            []string `json:"scopes"`
+	WriterRoles       []string `json:"writerRoles"`
+}
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -2228,6 +2296,11 @@ type ListAuditPageParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ReplaceOIDCSettingsParams defines parameters for ReplaceOIDCSettings.
+type ReplaceOIDCSettingsParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListGroupsParams defines parameters for ListGroups.
 type ListGroupsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -2419,6 +2492,9 @@ type CreateApiKeyJSONRequestBody = CreateAPIKey
 // ReplaceAuditRetentionPolicyJSONRequestBody defines body for ReplaceAuditRetentionPolicy for application/json ContentType.
 type ReplaceAuditRetentionPolicyJSONRequestBody = AuditRetentionPolicy
 
+// ReplaceOIDCSettingsJSONRequestBody defines body for ReplaceOIDCSettings for application/json ContentType.
+type ReplaceOIDCSettingsJSONRequestBody = OIDCSettingsUpdate
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -2544,6 +2620,15 @@ type ServerInterface interface {
 	// ListAuditPage Lists administrative audit records using a stable cursor
 	// (GET /audits/page)
 	ListAuditPage(w http.ResponseWriter, r *http.Request, params ListAuditPageParams)
+
+	// (GET /authentication/oidc)
+	GetOIDCSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /authentication/oidc)
+	ReplaceOIDCSettings(w http.ResponseWriter, r *http.Request, params ReplaceOIDCSettingsParams)
+
+	// (POST /authentication/oidc:test)
+	TestOIDCSettings(w http.ResponseWriter, r *http.Request)
 
 	// (GET /groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, params ListGroupsParams)
@@ -3308,6 +3393,79 @@ func (siw *ServerInterfaceWrapper) ListAuditPage(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAuditPage(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOIDCSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetOIDCSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOIDCSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceOIDCSettings operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceOIDCSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceOIDCSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceOIDCSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestOIDCSettings operation middleware
+func (siw *ServerInterfaceWrapper) TestOIDCSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestOIDCSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6117,6 +6275,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/audit-retention:execute", wrapper.ExecuteAuditRetention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audits", wrapper.ListAudits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audits/page", wrapper.ListAuditPage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authentication/oidc", wrapper.GetOIDCSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authentication/oidc", wrapper.ReplaceOIDCSettings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authentication/oidc:test", wrapper.TestOIDCSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/groups/{groupId}", wrapper.DeleteGroup)
@@ -6255,6 +6416,10 @@ type MemberListJSONResponse MemberList
 type OCIImageListJSONResponse OCIImagePage
 
 type OCIManifestSummaryListJSONResponse OCIManifestSummaryPage
+
+type OIDCConnectionTestJSONResponse OIDCConnectionTest
+
+type OIDCSettingsJSONResponse OIDCSettings
 
 type ProblemApplicationProblemPlusJSONResponse Problem
 
@@ -6795,6 +6960,189 @@ func (response ListAuditPage401ApplicationProblemPlusJSONResponse) VisitListAudi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOIDCSettingsRequestObject struct {
+}
+
+type GetOIDCSettingsResponseObject interface {
+	VisitGetOIDCSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetOIDCSettings200JSONResponse struct{ OIDCSettingsJSONResponse }
+
+func (response GetOIDCSettings200JSONResponse) VisitGetOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOIDCSettings401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOIDCSettings401ApplicationProblemPlusJSONResponse) VisitGetOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceOIDCSettingsRequestObject struct {
+	Params ReplaceOIDCSettingsParams
+	Body   *ReplaceOIDCSettingsJSONRequestBody
+}
+
+type ReplaceOIDCSettingsResponseObject interface {
+	VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error
+}
+
+type ReplaceOIDCSettings200JSONResponse struct{ OIDCSettingsJSONResponse }
+
+func (response ReplaceOIDCSettings200JSONResponse) VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceOIDCSettings400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceOIDCSettings400ApplicationProblemPlusJSONResponse) VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceOIDCSettings401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceOIDCSettings401ApplicationProblemPlusJSONResponse) VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceOIDCSettings412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceOIDCSettings412ApplicationProblemPlusJSONResponse) VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceOIDCSettings503ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceOIDCSettings503ApplicationProblemPlusJSONResponse) VisitReplaceOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestOIDCSettingsRequestObject struct {
+}
+
+type TestOIDCSettingsResponseObject interface {
+	VisitTestOIDCSettingsResponse(w http.ResponseWriter) error
+}
+
+type TestOIDCSettings200JSONResponse struct{ OIDCConnectionTestJSONResponse }
+
+func (response TestOIDCSettings200JSONResponse) VisitTestOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestOIDCSettings400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response TestOIDCSettings400ApplicationProblemPlusJSONResponse) VisitTestOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestOIDCSettings401ApplicationProblemPlusJSONResponse Problem
+
+func (response TestOIDCSettings401ApplicationProblemPlusJSONResponse) VisitTestOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestOIDCSettings503ApplicationProblemPlusJSONResponse Problem
+
+func (response TestOIDCSettings503ApplicationProblemPlusJSONResponse) VisitTestOIDCSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9827,6 +10175,15 @@ type StrictServerInterface interface {
 	// (GET /audits/page)
 	ListAuditPage(ctx context.Context, request ListAuditPageRequestObject) (ListAuditPageResponseObject, error)
 
+	// (GET /authentication/oidc)
+	GetOIDCSettings(ctx context.Context, request GetOIDCSettingsRequestObject) (GetOIDCSettingsResponseObject, error)
+
+	// (PUT /authentication/oidc)
+	ReplaceOIDCSettings(ctx context.Context, request ReplaceOIDCSettingsRequestObject) (ReplaceOIDCSettingsResponseObject, error)
+
+	// (POST /authentication/oidc:test)
+	TestOIDCSettings(ctx context.Context, request TestOIDCSettingsRequestObject) (TestOIDCSettingsResponseObject, error)
+
 	// (GET /groups)
 	ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error)
 
@@ -10381,6 +10738,87 @@ func (sh *strictHandler) ListAuditPage(w http.ResponseWriter, r *http.Request, p
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListAuditPageResponseObject); ok {
 		if err := validResponse.VisitListAuditPageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOIDCSettings operation middleware
+func (sh *strictHandler) GetOIDCSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetOIDCSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOIDCSettings(ctx, request.(GetOIDCSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOIDCSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOIDCSettingsResponseObject); ok {
+		if err := validResponse.VisitGetOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceOIDCSettings operation middleware
+func (sh *strictHandler) ReplaceOIDCSettings(w http.ResponseWriter, r *http.Request, params ReplaceOIDCSettingsParams) {
+	var request ReplaceOIDCSettingsRequestObject
+
+	request.Params = params
+
+	var body ReplaceOIDCSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceOIDCSettings(ctx, request.(ReplaceOIDCSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceOIDCSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceOIDCSettingsResponseObject); ok {
+		if err := validResponse.VisitReplaceOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestOIDCSettings operation middleware
+func (sh *strictHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request) {
+	var request TestOIDCSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestOIDCSettings(ctx, request.(TestOIDCSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestOIDCSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestOIDCSettingsResponseObject); ok {
+		if err := validResponse.VisitTestOIDCSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

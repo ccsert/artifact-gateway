@@ -13,6 +13,10 @@ paths:
     "$ref": "./management/search.yaml#/artifact_search"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
+  "/authentication/oidc":
+    "$ref": "./management/authentication.yaml#/oidc_settings"
+  "/authentication/oidc:test":
+    "$ref": "./management/authentication.yaml#/oidc_settings_test"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
   "/repository-grants":

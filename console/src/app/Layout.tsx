@@ -89,6 +89,13 @@ const navItems = [
     admin: true,
   },
   {
+    to: "/identity-providers",
+    label: "nav.authentication",
+    icon: <LoginOutlined />,
+    group: "management",
+    admin: true,
+  },
+  {
     to: "/keys",
     label: "nav.apiKeys",
     icon: <KeyOutlined />,
@@ -250,6 +257,7 @@ export function AppLayout() {
     "/access",
     "/audits",
     "/audit-retention",
+    "/identity-providers",
     "/keys",
     "/users",
   ].includes(location.pathname);

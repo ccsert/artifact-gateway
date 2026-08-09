@@ -80,6 +80,13 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "/identity-providers",
+        lazy: async () => ({
+          Component: (await import("../pages/Authentication"))
+            .AuthenticationPage,
+        }),
+      },
+      {
         path: "/keys",
         lazy: async () => ({
           Component: (await import("../pages/ApiKeys")).ApiKeysPage,

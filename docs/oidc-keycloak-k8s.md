@@ -11,7 +11,10 @@ Keycloak locally, starts the Console, and executes the browser SSO test.
 
 The test proves the full browser flow: discovery, Authorization Code with
 PKCE, `state` and `nonce` validation, code exchange, ID-token signature and
-role mapping validation, and issuance of the HttpOnly Gateway session cookie.
+role mapping validation, issuance of the HttpOnly Gateway session cookie, and
+logout invalidation. Before browser login, the script moves the fixture from
+environment bootstrap to the versioned database configuration API and tests
+provider discovery through that runtime configuration.
 
 The fixture uses a non-production Keycloak realm and an intentionally known
 test account. It is deleted at the end of the run. Set

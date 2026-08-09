@@ -57,24 +57,6 @@ func main() {
 	dependencies.NativeMavenObjectStore = objectStore
 	dependencies.NativeOCIObjectStore = objectStore
 	dependencies.NativeConanObjectStore = objectStore
-	dependencies.OIDCClient = app.NewOIDCClient(app.OIDCClientConfig{
-		Issuer:       cfg.OIDCIssuer,
-		ClientID:     cfg.OIDCClientID,
-		ClientSecret: cfg.OIDCClientSecret,
-		RedirectURL:  cfg.OIDCRedirectURL,
-		Scopes:       cfg.OIDCScopes,
-	})
-	if dependencies.OIDCClient != nil {
-		// Browser ID tokens are issued to the OAuth client, independently of
-		// the audience accepted for API Bearer tokens.
-		dependencies.OIDCLoginValidator = app.NewOIDCValidator(app.OIDCConfig{
-			Issuer:        cfg.OIDCIssuer,
-			Audience:      cfg.OIDCClientID,
-			JWKSURL:       cfg.OIDCJWKSURL,
-			AdminSubjects: cfg.OIDCAdminSubjects,
-			Roles:         cfg.OIDCRoles,
-		})
-	}
 	databasePool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL connection pool", "error", err)
@@ -94,6 +76,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = store.Close() }()
+	oidcRuntime := app.NewOIDCRuntime(store, app.OIDCRuntimeConfig{
+		Enabled: cfg.OIDCIssuer != "" && cfg.OIDCAudience != "", Issuer: cfg.OIDCIssuer,
+		Audience: cfg.OIDCAudience, JWKSURL: cfg.OIDCJWKSURL, ClientID: cfg.OIDCClientID,
+		ClientSecret: cfg.OIDCClientSecret, RedirectURL: cfg.OIDCRedirectURL, Scopes: cfg.OIDCScopes,
+		AdminSubjects: cfg.OIDCAdminSubjects, Roles: cfg.OIDCRoles,
+	})
+	dependencies.OIDCRuntime = oidcRuntime
 	coordinatorPool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabaseCoordinatorPool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache coordinator pool", "error", err)
@@ -153,14 +142,8 @@ func main() {
 			AdminActor:        cfg.AdminActor,
 			ResolverActor:     cfg.ResolverActor,
 			RepositoryReaders: cfg.RepositoryReaders,
-			OIDC: app.NewOIDCValidator(app.OIDCConfig{
-				Issuer:        cfg.OIDCIssuer,
-				Audience:      cfg.OIDCAudience,
-				JWKSURL:       cfg.OIDCJWKSURL,
-				AdminSubjects: cfg.OIDCAdminSubjects,
-				Roles:         cfg.OIDCRoles,
-			}),
-			APIKeys: store,
+			OIDCSource:        oidcRuntime,
+			APIKeys:           store,
 		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})
 	}
 	server := &http.Server{

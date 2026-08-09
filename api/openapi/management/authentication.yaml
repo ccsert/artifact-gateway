@@ -1,0 +1,43 @@
+---
+oidc_settings:
+  get:
+    operationId: getOIDCSettings
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OIDCSettings"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: replaceOIDCSettings
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/OIDCSettingsUpdate"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OIDCSettings"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+
+oidc_settings_test:
+  post:
+    operationId: testOIDCSettings
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/OIDCConnectionTest"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"

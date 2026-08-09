@@ -183,6 +183,16 @@ AnonymousAccessPolicy:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/AnonymousAccessPolicy"}
+OIDCSettings:
+  description: Effective runtime OIDC authentication settings with credentials redacted
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/OIDCSettings"}
+OIDCConnectionTest:
+  description: OIDC discovery connectivity result
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/OIDCConnectionTest"}
 AuditCleanupJob:
   description: Audit cleanup job
   content:

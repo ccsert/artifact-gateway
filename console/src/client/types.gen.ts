@@ -597,6 +597,49 @@ export type AnonymousAccessPolicy = {
   enabled: boolean;
 };
 
+export type OidcSettings = {
+  version: string;
+  source: "environment" | "database";
+  enabled: boolean;
+  issuer: string;
+  audience: string;
+  jwksUrl?: string;
+  clientId: string;
+  clientSecretConfigured: boolean;
+  redirectUrl: string;
+  scopes: Array<string>;
+  adminSubjects: Array<string>;
+  readerRoles: Array<string>;
+  writerRoles: Array<string>;
+  adminRoles: Array<string>;
+  updatedAt?: string;
+};
+
+export type OidcSettingsUpdate = {
+  enabled: boolean;
+  issuer: string;
+  audience: string;
+  jwksUrl?: string;
+  clientId: string;
+  clearClientSecret?: boolean;
+  redirectUrl: string;
+  scopes: Array<string>;
+  adminSubjects: Array<string>;
+  readerRoles: Array<string>;
+  writerRoles: Array<string>;
+  adminRoles: Array<string>;
+};
+
+export type OidcConnectionTest = {
+  reachable: boolean;
+  issuer: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  jwksUrl?: string;
+  latencyMs: number;
+  checkedAt: string;
+};
+
 export type AuditCleanupJob = {
   id: string;
   policyVersion: string;
@@ -928,6 +971,22 @@ export type RepositoryPageWritable = {
   nextPageToken?: string;
 };
 
+export type OidcSettingsUpdateWritable = {
+  enabled: boolean;
+  issuer: string;
+  audience: string;
+  jwksUrl?: string;
+  clientId: string;
+  clientSecret?: string;
+  clearClientSecret?: boolean;
+  redirectUrl: string;
+  scopes: Array<string>;
+  adminSubjects: Array<string>;
+  readerRoles: Array<string>;
+  writerRoles: Array<string>;
+  adminRoles: Array<string>;
+};
+
 /**
  * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
@@ -1160,6 +1219,110 @@ export type ReplaceAnonymousAccessPolicyResponses = {
 
 export type ReplaceAnonymousAccessPolicyResponse =
   ReplaceAnonymousAccessPolicyResponses[keyof ReplaceAnonymousAccessPolicyResponses];
+
+export type GetOidcSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/authentication/oidc";
+};
+
+export type GetOidcSettingsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type GetOidcSettingsError =
+  GetOidcSettingsErrors[keyof GetOidcSettingsErrors];
+
+export type GetOidcSettingsResponses = {
+  /**
+   * Effective runtime OIDC authentication settings with credentials redacted
+   */
+  200: OidcSettings;
+};
+
+export type GetOidcSettingsResponse =
+  GetOidcSettingsResponses[keyof GetOidcSettingsResponses];
+
+export type ReplaceOidcSettingsData = {
+  body: OidcSettingsUpdateWritable;
+  headers: {
+    "If-Match": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/authentication/oidc";
+};
+
+export type ReplaceOidcSettingsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ReplaceOidcSettingsError =
+  ReplaceOidcSettingsErrors[keyof ReplaceOidcSettingsErrors];
+
+export type ReplaceOidcSettingsResponses = {
+  /**
+   * Effective runtime OIDC authentication settings with credentials redacted
+   */
+  200: OidcSettings;
+};
+
+export type ReplaceOidcSettingsResponse =
+  ReplaceOidcSettingsResponses[keyof ReplaceOidcSettingsResponses];
+
+export type TestOidcSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/authentication/oidc:test";
+};
+
+export type TestOidcSettingsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type TestOidcSettingsError =
+  TestOidcSettingsErrors[keyof TestOidcSettingsErrors];
+
+export type TestOidcSettingsResponses = {
+  /**
+   * OIDC discovery connectivity result
+   */
+  200: OidcConnectionTest;
+};
+
+export type TestOidcSettingsResponse =
+  TestOidcSettingsResponses[keyof TestOidcSettingsResponses];
 
 export type ListRuntimeNodesData = {
   body?: never;

@@ -11,6 +11,10 @@ openapi: 3.1.0
 paths:
   "/artifact-search":
     "$ref": "./management/search.yaml#/artifact_search"
+  "/authentication/oidc":
+    "$ref": "./management/authentication.yaml#/oidc_settings"
+  "/authentication/oidc:test":
+    "$ref": "./management/authentication.yaml#/oidc_settings_test"
   "/api-keys":
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":

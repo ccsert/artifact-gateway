@@ -15,6 +15,10 @@ paths:
     "$ref": "./management/search.yaml#/artifact_search"
   "/anonymous-access-policy":
     "$ref": "./management/anonymous-access.yaml#/anonymous_access_policy"
+  "/authentication/oidc":
+    "$ref": "./management/authentication.yaml#/oidc_settings"
+  "/authentication/oidc:test":
+    "$ref": "./management/authentication.yaml#/oidc_settings_test"
   "/runtime/nodes":
     "$ref": "./management/runtime.yaml#/runtime_nodes"
   "/api-keys":
@@ -267,6 +271,12 @@ components:
       "$ref": "./components/schemas.yaml#/AuditRetentionPolicy"
     AnonymousAccessPolicy:
       "$ref": "./components/schemas.yaml#/AnonymousAccessPolicy"
+    OIDCSettings:
+      "$ref": "./components/schemas.yaml#/OIDCSettings"
+    OIDCSettingsUpdate:
+      "$ref": "./components/schemas.yaml#/OIDCSettingsUpdate"
+    OIDCConnectionTest:
+      "$ref": "./components/schemas.yaml#/OIDCConnectionTest"
     AuditCleanupJob:
       "$ref": "./components/schemas.yaml#/AuditCleanupJob"
   parameters:
@@ -387,6 +397,10 @@ components:
       "$ref": "./components/responses.yaml#/AuditRetentionPolicy"
     AnonymousAccessPolicy:
       "$ref": "./components/responses.yaml#/AnonymousAccessPolicy"
+    OIDCSettings:
+      "$ref": "./components/responses.yaml#/OIDCSettings"
+    OIDCConnectionTest:
+      "$ref": "./components/responses.yaml#/OIDCConnectionTest"
     AuditCleanupJob:
       "$ref": "./components/responses.yaml#/AuditCleanupJob"
     AuditCleanupJobList:

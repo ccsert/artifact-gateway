@@ -227,6 +227,7 @@ type generatedRepositoryAPIAdapter struct {
 	lifecycleJobs     repository.LifecycleJobStore
 	auditRetention    repository.AuditRetentionStore
 	anonymousAccess   repository.AnonymousAccessPolicyStore
+	oidcRuntime       *OIDCRuntime
 	replication       repository.ReplicationStore
 	oci               repository.NativeOCIStore
 	conan             repository.NativeConanStore

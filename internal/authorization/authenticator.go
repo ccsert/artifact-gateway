@@ -47,6 +47,10 @@ type OIDCRoleMappingMatch struct {
 	GatewayRole  Role   `json:"gatewayRole"`
 }
 
+type OIDCValidatorSource interface {
+	OIDCValidator(context.Context) (*OIDCValidator, error)
+}
+
 type Authenticator struct {
 	AdminToken    string
 	ResolverToken string
@@ -59,6 +63,7 @@ type Authenticator struct {
 	// must never turn a download grant into publication authority.
 	RepositoryWriters map[string][]string
 	OIDC              *OIDCValidator
+	OIDCSource        OIDCValidatorSource
 	APIKeys           repository.APIKeyStore
 	Users             repository.UserStore
 }
@@ -101,8 +106,14 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 			return Principal{Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationLocalSession}, true
 		}
 	}
-	if a.OIDC != nil {
-		if identity, ok := a.OIDC.Validate(context.Background(), token); ok {
+	oidcValidator := a.OIDC
+	if a.OIDCSource != nil {
+		if resolved, err := a.OIDCSource.OIDCValidator(context.Background()); err == nil {
+			oidcValidator = resolved
+		}
+	}
+	if oidcValidator != nil {
+		if identity, ok := oidcValidator.Validate(context.Background(), token); ok {
 			principal := a.PrincipalForActor(identity.Subject)
 			principal.Admin = identity.Admin
 			principal.Role = identity.Role

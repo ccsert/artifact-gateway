@@ -17,13 +17,23 @@ GATEWAY_OIDC_CLIENT_ID=artifact-gateway-console
 GATEWAY_OIDC_CLIENT_SECRET=
 GATEWAY_OIDC_REDIRECT_URL=https://gateway.example.com/auth/oidc/callback
 GATEWAY_OIDC_SCOPES=openid profile email
+GATEWAY_SETTINGS_ENCRYPTION_KEY=<32-byte-key>
 ```
 
 Set `GATEWAY_OIDC_CLIENT_SECRET` for a confidential client. Leave it empty for
 a public client that requires PKCE. Issuer and JWKS endpoints must use HTTPS,
 except for the loopback hosts `localhost`, `127.0.0.1`, and `::1` in local
 development. The redirect URL must use HTTPS except for those same local
-development callbacks.
+development callbacks. API-only bearer validation may leave both
+`GATEWAY_OIDC_CLIENT_ID` and `GATEWAY_OIDC_REDIRECT_URL` empty; when browser
+login is enabled, those two values must be configured together.
+
+Environment variables are the bootstrap source. Administrators can then open
+**Authentication** in the Console and save a runtime configuration. The first
+save creates the singleton database record; subsequent changes use versioned
+`If-Match` updates. `GATEWAY_SETTINGS_ENCRYPTION_KEY` encrypts confidential
+client secrets with AES-256-GCM. Responses expose only
+`clientSecretConfigured` and never return plaintext or ciphertext.
 
 The provider discovery document must contain matching `issuer`,
 `authorization_endpoint`, and `token_endpoint` values. Artifact Gateway never
@@ -62,10 +72,12 @@ variables above.
 
 ## Operational checks
 
-`gateway preflight` reports both `oidc_enabled` and
-`oidc_browser_login_enabled`, and checks that discovery or the configured JWKS
-endpoint is reachable. A browser login configuration change requires a Gateway
-restart, but never a Console rebuild.
+`gateway preflight` reports `oidc_enabled`, `oidc_browser_login_enabled`, and
+whether the runtime settings encryption key is configured. The Console can
+test the saved discovery document from the Authentication page. Runtime saves
+take effect immediately on the current node; other API nodes observe the new
+database version after the bounded settings-cache window. No Gateway restart
+or Console rebuild is required.
 
 For a real Keycloak browser callback check in the local Kubernetes environment,
 see [Keycloak Kubernetes acceptance](oidc-keycloak-k8s.md).

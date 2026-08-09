@@ -26,6 +26,7 @@ const (
 type oidcLoginHandler struct {
 	client        *authorization.OIDCClient
 	validator     *authorization.OIDCValidator
+	runtime       *OIDCRuntime
 	authenticator Authenticator
 }
 
@@ -38,30 +39,40 @@ type oidcFlowState struct {
 }
 
 func (h oidcLoginHandler) config(w http.ResponseWriter, r *http.Request) {
-	if h.client == nil {
+	client, _, err := h.browser(r.Context())
+	if errors.Is(err, errOIDCNotEnabled) || client == nil {
 		writeNativeMavenJSON(w, http.StatusOK, map[string]any{"enabled": false})
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusServiceUnavailable, "oidc_unavailable", "OIDC configuration is unavailable")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	metadata, err := h.client.Metadata(ctx)
+	metadata, err := client.Metadata(ctx)
 	if err != nil {
 		writeHostedProblem(w, http.StatusServiceUnavailable, "oidc_unavailable", "OIDC provider discovery failed")
 		return
 	}
 	writeNativeMavenJSON(w, http.StatusOK, map[string]any{
 		"enabled":          true,
-		"issuer":           h.client.Issuer(),
-		"clientId":         h.client.ClientID(),
-		"redirectUrl":      h.client.RedirectURL(),
-		"scopes":           h.client.Scopes(),
+		"issuer":           client.Issuer(),
+		"clientId":         client.ClientID(),
+		"redirectUrl":      client.RedirectURL(),
+		"scopes":           client.Scopes(),
 		"authorizationUrl": metadata.AuthorizationEndpoint,
 	})
 }
 
 func (h oidcLoginHandler) start(w http.ResponseWriter, r *http.Request) {
-	if h.client == nil {
+	client, _, err := h.browser(r.Context())
+	if errors.Is(err, errOIDCNotEnabled) || client == nil {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "OIDC browser login is not configured")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusServiceUnavailable, "oidc_unavailable", "OIDC configuration is unavailable")
 		return
 	}
 	state, err := randomURLToken(32)
@@ -90,50 +101,51 @@ func (h oidcLoginHandler) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	challenge := sha256.Sum256([]byte(verifier))
-	authorizationURL, err := h.client.AuthorizationURL(r.Context(), state, nonce, base64.RawURLEncoding.EncodeToString(challenge[:]))
+	authorizationURL, err := client.AuthorizationURL(r.Context(), state, nonce, base64.RawURLEncoding.EncodeToString(challenge[:]))
 	if err != nil {
 		writeHostedProblem(w, http.StatusServiceUnavailable, "oidc_unavailable", "OIDC provider discovery failed")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: oidcStateCookieName, Value: encoded, Path: "/auth/oidc", MaxAge: int(oidcFlowLifetime.Seconds()),
-		HttpOnly: true, Secure: oidcSecureCookie(h.client.RedirectURL()), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: oidcSecureCookie(client.RedirectURL()), SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, authorizationURL, http.StatusFound)
 }
 
 func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
-	if h.client == nil {
+	client, validator, resolveErr := h.browser(r.Context())
+	if resolveErr != nil || client == nil || validator == nil {
 		h.redirectError(w, r, "not_configured")
 		return
 	}
 	if providerError := r.URL.Query().Get("error"); providerError != "" {
-		h.clearFlowCookie(w)
+		h.clearFlowCookie(w, r)
 		h.redirectError(w, r, providerError)
 		return
 	}
 	code, state := r.URL.Query().Get("code"), r.URL.Query().Get("state")
 	cookie, err := r.Cookie(oidcStateCookieName)
 	if err != nil || code == "" || state == "" {
-		h.clearFlowCookie(w)
+		h.clearFlowCookie(w, r)
 		h.redirectError(w, r, "invalid_callback")
 		return
 	}
 	flow, err := verifyOIDCFlow(cookie.Value, h.authenticator.AdminToken)
 	if err != nil || flow.State != state || time.Now().UTC().Unix() >= flow.ExpiresAt {
-		h.clearFlowCookie(w)
+		h.clearFlowCookie(w, r)
 		h.redirectError(w, r, "invalid_state")
 		return
 	}
-	h.clearFlowCookie(w)
+	h.clearFlowCookie(w, r)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	tokens, err := h.client.Exchange(ctx, code, flow.Verifier)
-	if err != nil || h.validator == nil {
+	tokens, err := client.Exchange(ctx, code, flow.Verifier)
+	if err != nil {
 		h.redirectError(w, r, "exchange_failed")
 		return
 	}
-	identity, ok := h.validator.ValidateNonce(ctx, tokens.IDToken, flow.Nonce)
+	identity, ok := validator.ValidateNonce(ctx, tokens.IDToken, flow.Nonce)
 	if !ok {
 		h.redirectError(w, r, "invalid_identity")
 		return
@@ -147,16 +159,16 @@ func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
 	session := h.authenticator.IssueWebSession(principal)
 	http.SetCookie(w, &http.Cookie{
 		Name: webSessionCookieName, Value: session, Path: "/", MaxAge: int(webSessionLifetime.Seconds()),
-		HttpOnly: true, Secure: oidcSecureCookie(h.client.RedirectURL()), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: oidcSecureCookie(client.RedirectURL()), SameSite: http.SameSiteLaxMode,
 	})
 	values := url.Values{"oidc": {"success"}, "redirect": {safeConsoleRedirect(flow.Redirect)}}
 	http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
 }
 
-func (h oidcLoginHandler) logout(w http.ResponseWriter, _ *http.Request) {
+func (h oidcLoginHandler) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: webSessionCookieName, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: h.client != nil && oidcSecureCookie(h.client.RedirectURL()), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: oidcSecureRequest(r), SameSite: http.SameSiteLaxMode,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -178,11 +190,21 @@ func (h oidcLoginHandler) redirectError(w http.ResponseWriter, r *http.Request, 
 	http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
 }
 
-func (h oidcLoginHandler) clearFlowCookie(w http.ResponseWriter) {
+func (h oidcLoginHandler) clearFlowCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: oidcStateCookieName, Value: "", Path: "/auth/oidc", MaxAge: -1,
-		HttpOnly: true, Secure: h.client != nil && oidcSecureCookie(h.client.RedirectURL()), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: oidcSecureRequest(r), SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (h oidcLoginHandler) browser(ctx context.Context) (*authorization.OIDCClient, *authorization.OIDCValidator, error) {
+	if h.runtime != nil {
+		return h.runtime.Browser(ctx)
+	}
+	if h.client == nil || h.validator == nil {
+		return nil, nil, errOIDCNotEnabled
+	}
+	return h.client, h.validator, nil
 }
 
 func sessionCookieAuthentication(next http.Handler) http.Handler {
@@ -255,4 +277,8 @@ func safeConsoleRedirect(value string) string {
 func oidcSecureCookie(redirectURL string) bool {
 	parsed, err := url.Parse(redirectURL)
 	return err == nil && parsed.Scheme == "https"
+}
+
+func oidcSecureRequest(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

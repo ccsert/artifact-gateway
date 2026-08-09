@@ -84,6 +84,7 @@ type GatewayStore interface {
 	repository.ConanStore
 	repository.HostedRepositoryStore
 	repository.AnonymousAccessPolicyStore
+	repository.OIDCSettingsStore
 	repository.HostedGroupStore
 	repository.RepositoryGrantStore
 	repository.RepositoryRetentionPolicyStore
@@ -138,8 +139,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
 	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, groups: store, anonymous: store})
-	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	authenticator.Users = store
+	if dependencies.OIDCRuntime != nil {
+		authenticator.OIDCSource = dependencies.OIDCRuntime
+	}
+	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	ociClient := OCIClient(UpstreamClient{})
 	if len(ociClients) > 0 {
 		ociClient = ociClients[0]
@@ -189,7 +193,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -255,7 +259,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	oidcLogin := oidcLoginHandler{
 		client: dependencies.OIDCClient, validator: oidcLoginValidator,
-		authenticator: authenticator,
+		runtime: dependencies.OIDCRuntime, authenticator: authenticator,
 	}
 	mux.HandleFunc("GET /auth/oidc/config", oidcLogin.config)
 	mux.HandleFunc("GET /auth/oidc/login", oidcLogin.start)

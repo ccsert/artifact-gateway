@@ -26,6 +26,7 @@ type Dependencies struct {
 	NativeConanObjectStore OCIObjectStore
 	OIDCClient             *authorization.OIDCClient
 	OIDCLoginValidator     *authorization.OIDCValidator
+	OIDCRuntime            *OIDCRuntime
 }
 
 func NewDependencies(cfg config.Config) Dependencies {

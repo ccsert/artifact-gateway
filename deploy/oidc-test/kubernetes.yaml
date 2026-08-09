@@ -188,6 +188,8 @@ spec:
               value: gateway-oidc-test-admin-token
             - name: GATEWAY_RESOLVER_TOKEN
               value: gateway-oidc-test-resolver-token
+            - name: GATEWAY_SETTINGS_ENCRYPTION_KEY
+              value: 0123456789abcdef0123456789abcdef
             - name: GATEWAY_OIDC_ISSUER
               value: http://127.0.0.1:8081/realms/artifact-gateway
             - name: GATEWAY_OIDC_AUDIENCE

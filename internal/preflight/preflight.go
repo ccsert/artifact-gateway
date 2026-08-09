@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
+	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -105,14 +107,15 @@ func configurationResult(cfg config.Config) Result {
 		Status:  StatusPass,
 		Summary: "required configuration loaded",
 		Details: map[string]any{
-			"oidc_enabled":                   cfg.OIDCIssuer != "",
-			"oidc_browser_login_enabled":     cfg.OIDCClientID != "",
-			"oci_proxy_allowed_host_count":   len(cfg.OCIProxyAllowedHosts),
-			"maven_proxy_allowed_host_count": len(cfg.MavenProxyAllowedHosts),
-			"raw_proxy_allowed_host_count":   len(cfg.RawProxyAllowedHosts),
-			"repository_grant_actor_count":   len(cfg.RepositoryReaders),
-			"repository_cache_quota_count":   len(cfg.RepositoryCacheQuotas),
-			"oidc_admin_subject_count":       len(cfg.OIDCAdminSubjects),
+			"oidc_enabled":                       cfg.OIDCIssuer != "",
+			"oidc_browser_login_enabled":         cfg.OIDCClientID != "",
+			"oci_proxy_allowed_host_count":       len(cfg.OCIProxyAllowedHosts),
+			"maven_proxy_allowed_host_count":     len(cfg.MavenProxyAllowedHosts),
+			"raw_proxy_allowed_host_count":       len(cfg.RawProxyAllowedHosts),
+			"repository_grant_actor_count":       len(cfg.RepositoryReaders),
+			"repository_cache_quota_count":       len(cfg.RepositoryCacheQuotas),
+			"oidc_admin_subject_count":           len(cfg.OIDCAdminSubjects),
+			"settings_encryption_key_configured": strings.TrimSpace(os.Getenv(secrets.KeyEnv)) != "",
 		},
 	}
 }

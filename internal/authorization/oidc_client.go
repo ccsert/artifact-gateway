@@ -27,6 +27,7 @@ type OIDCProviderMetadata struct {
 	AuthorizationEndpoint string
 	TokenEndpoint         string
 	EndSessionEndpoint    string
+	JWKSURI               string
 }
 
 type OIDCTokenResponse struct {
@@ -50,11 +51,26 @@ type OIDCClient struct {
 }
 
 func NewOIDCClient(config OIDCClientConfig) *OIDCClient {
+	client := newOIDCClient(config)
+	if client == nil || client.config.ClientID == "" || client.config.RedirectURL == "" {
+		return nil
+	}
+	return client
+}
+
+// NewOIDCDiscoveryClient creates a provider metadata client without enabling
+// the browser Authorization Code flow. API-only OIDC deployments use it to
+// discover and validate the provider JWKS endpoint.
+func NewOIDCDiscoveryClient(issuer string) *OIDCClient {
+	return newOIDCClient(OIDCClientConfig{Issuer: issuer})
+}
+
+func newOIDCClient(config OIDCClientConfig) *OIDCClient {
 	config.Issuer = strings.TrimRight(strings.TrimSpace(config.Issuer), "/")
 	config.ClientID = strings.TrimSpace(config.ClientID)
 	config.RedirectURL = strings.TrimSpace(config.RedirectURL)
 	config.Scopes = normalizedOIDCScopes(config.Scopes)
-	if config.Issuer == "" || config.ClientID == "" || config.RedirectURL == "" {
+	if config.Issuer == "" {
 		return nil
 	}
 	return &OIDCClient{config: config, client: &http.Client{Timeout: 10 * time.Second}}
@@ -91,6 +107,7 @@ func (c *OIDCClient) Metadata(ctx context.Context) (OIDCProviderMetadata, error)
 		AuthorizationEndpoint string `json:"authorization_endpoint"`
 		TokenEndpoint         string `json:"token_endpoint"`
 		EndSessionEndpoint    string `json:"end_session_endpoint"`
+		JWKSURI               string `json:"jwks_uri"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&document); err != nil {
 		return OIDCProviderMetadata{}, fmt.Errorf("decode OIDC discovery: %w", err)
@@ -109,10 +126,17 @@ func (c *OIDCClient) Metadata(ctx context.Context) (OIDCProviderMetadata, error)
 			return OIDCProviderMetadata{}, fmt.Errorf("invalid OIDC end-session endpoint: %w", err)
 		}
 	}
+	if document.JWKSURI == "" {
+		return OIDCProviderMetadata{}, errors.New("OIDC discovery metadata is missing jwks_uri")
+	}
+	if err := validateOIDCProviderEndpoint(c.config.Issuer, document.JWKSURI); err != nil {
+		return OIDCProviderMetadata{}, fmt.Errorf("invalid OIDC JWKS endpoint: %w", err)
+	}
 	c.metadata = OIDCProviderMetadata{
 		AuthorizationEndpoint: document.AuthorizationEndpoint,
 		TokenEndpoint:         document.TokenEndpoint,
 		EndSessionEndpoint:    document.EndSessionEndpoint,
+		JWKSURI:               document.JWKSURI,
 	}
 	c.expires = time.Now().UTC().Add(oidcDiscoveryCacheTTL)
 	return c.metadata, nil

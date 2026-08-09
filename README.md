@@ -149,7 +149,8 @@ and negative-cache lifetimes default to 15 and 10 minutes and can be overridden
 with `GATEWAY_MAVEN_CACHE_TTL`, `GATEWAY_MAVEN_METADATA_CACHE_TTL`, and
 `GATEWAY_MAVEN_NEGATIVE_CACHE_TTL`.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
-`GATEWAY_OIDC_AUDIENCE`; the JWKS URL defaults to the issuer's standard path.
+`GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
+explicitly configured.
 To enable browser SSO through Authorization Code + PKCE, also configure
 `GATEWAY_OIDC_CLIENT_ID` and `GATEWAY_OIDC_REDIRECT_URL`;
 `GATEWAY_OIDC_CLIENT_SECRET` is optional for public clients. The Console reads
@@ -158,6 +159,10 @@ providers does not require a frontend rebuild. Keycloak realm/client roles,
 top-level roles, and GitLab-style groups can be mapped with
 `GATEWAY_OIDC_READER_ROLES`, `GATEWAY_OIDC_WRITER_ROLES`, and
 `GATEWAY_OIDC_ADMIN_ROLES`.
+Administrators can persist and apply the same settings from the Console's
+Authentication page without restarting the Gateway. Runtime client secrets are
+encrypted with `GATEWAY_SETTINGS_ENCRYPTION_KEY` and are never returned by the
+management API.
 
 An authenticated client can inspect the identity used by authorization with
 `GET /api/v2/identity`. The response reports a bounded credential source

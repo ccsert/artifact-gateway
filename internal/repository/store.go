@@ -32,6 +32,11 @@ type AnonymousAccessPolicyStore interface {
 	ReplaceAnonymousAccessPolicy(context.Context, AnonymousAccessPolicy, string) (AnonymousAccessPolicy, error)
 }
 
+type OIDCSettingsStore interface {
+	GetOIDCSettings(context.Context) (OIDCSettings, error)
+	ReplaceOIDCSettings(context.Context, OIDCSettings, string) (OIDCSettings, error)
+}
+
 type HostedGroupStore interface {
 	CreateHostedGroupIdempotently(context.Context, HostedGroup, string, string, string) (HostedGroup, bool, error)
 	ListHostedGroups(context.Context, int, string) ([]HostedGroup, string, error)

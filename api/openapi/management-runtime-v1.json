@@ -121,6 +121,73 @@
         }
       }
     },
+    "/authentication/oidc": {
+      "get": {
+        "operationId": "getOIDCSettings",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OIDCSettings"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceOIDCSettings",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OIDCSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OIDCSettings"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/authentication/oidc:test": {
+      "post": {
+        "operationId": "testOIDCSettings",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OIDCConnectionTest"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/runtime/nodes": {
       "get": {
         "operationId": "listRuntimeNodes",
@@ -4090,6 +4157,211 @@
           }
         }
       },
+      "OIDCSettings": {
+        "type": "object",
+        "required": [
+          "version",
+          "source",
+          "enabled",
+          "issuer",
+          "audience",
+          "clientId",
+          "clientSecretConfigured",
+          "redirectUrl",
+          "scopes",
+          "adminSubjects",
+          "readerRoles",
+          "writerRoles",
+          "adminRoles"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "database"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "audience": {
+            "type": "string"
+          },
+          "jwksUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecretConfigured": {
+            "type": "boolean"
+          },
+          "redirectUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminSubjects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readerRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writerRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OIDCSettingsUpdate": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "issuer",
+          "audience",
+          "clientId",
+          "redirectUrl",
+          "scopes",
+          "adminSubjects",
+          "readerRoles",
+          "writerRoles",
+          "adminRoles"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "audience": {
+            "type": "string"
+          },
+          "jwksUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "clearClientSecret": {
+            "type": "boolean",
+            "default": false
+          },
+          "redirectUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminSubjects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readerRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writerRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "OIDCConnectionTest": {
+        "type": "object",
+        "required": [
+          "reachable",
+          "issuer",
+          "latencyMs",
+          "checkedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "reachable": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "authorizationEndpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "tokenEndpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "jwksUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "latencyMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "AuditCleanupJob": {
         "type": "object",
         "required": [
@@ -5662,6 +5934,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AnonymousAccessPolicy"
+            }
+          }
+        }
+      },
+      "OIDCSettings": {
+        "description": "Effective runtime OIDC authentication settings with credentials redacted",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OIDCSettings"
+            }
+          }
+        }
+      },
+      "OIDCConnectionTest": {
+        "description": "OIDC discovery connectivity result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OIDCConnectionTest"
             }
           }
         }

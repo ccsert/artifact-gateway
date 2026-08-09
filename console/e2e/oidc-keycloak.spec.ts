@@ -52,5 +52,19 @@ test.describe("Keycloak OIDC browser sign-in", () => {
         (cookie) => cookie.name === "ag_session",
       ),
     ).toMatchObject({ httpOnly: true, sameSite: "Lax" });
+
+    await page.goto("/identity-providers");
+    await expect(
+      page.getByRole("heading", { name: /身份认证|Authentication/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/运行时配置|Runtime settings/, { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: /退出|Sign out/ }).click();
+    await expect(page).toHaveURL(/\/login\?redirect=/);
+    const loggedOutSession = await page.request.get("/auth/session");
+    await expect(loggedOutSession).toBeOK();
+    expect(await loggedOutSession.json()).toEqual({ authenticated: false });
   });
 });
