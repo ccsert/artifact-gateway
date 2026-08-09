@@ -217,30 +217,38 @@ type RawUpload struct {
 // NPMPackage is the registry packument identity projected from immutable
 // versions and mutable distribution tags.
 type NPMPackage struct {
-	RepositoryID string
-	Name         string
-	DistTags     map[string]string
-	Versions     []NPMVersion
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	RepositoryID      string
+	Name              string
+	DistTags          map[string]string
+	Versions          []NPMVersion
+	SourceEndpoint    string
+	UpstreamETag      string
+	UpstreamModified  string
+	MetadataExpiresAt time.Time
+	NegativeExpiresAt time.Time
+	Negative          bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // NPMVersion is one immutable package publication. Manifest retains the
 // protocol-native version document; dist URLs and integrity fields are
 // overwritten from trusted server metadata when the packument is served.
 type NPMVersion struct {
-	RepositoryID string
-	PackageName  string
-	Version      string
-	Digest       string
-	Integrity    string
-	Shasum       string
-	TarballName  string
-	ObjectKey    string
-	Size         int64
-	Manifest     []byte
-	Publisher    string
-	CreatedAt    time.Time
+	RepositoryID    string
+	PackageName     string
+	Version         string
+	Digest          string
+	Integrity       string
+	Shasum          string
+	TarballName     string
+	UpstreamTarball string
+	ObjectKey       string
+	Size            int64
+	Manifest        []byte
+	Publisher       string
+	CachedAt        time.Time
+	CreatedAt       time.Time
 }
 
 type NPMPackageSummary struct {

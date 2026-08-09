@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
@@ -16,9 +17,20 @@ import (
 func main() {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	if _, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
-		ID: uuid.NewString(), Name: "packages", Format: repository.FormatNPM, AnonymousRead: true,
-	}); err != nil {
+	repo := repository.HostedRepository{
+		ID: uuid.NewString(), Name: "packages", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeHosted, AnonymousRead: true,
+	}
+	if endpoint := os.Getenv("NPM_PROXY_ENDPOINT"); endpoint != "" {
+		parsed, err := url.Parse(endpoint)
+		if err != nil || parsed.Hostname() == "" {
+			log.Fatal("NPM_PROXY_ENDPOINT must be an absolute URL")
+		}
+		repo.Type = repository.RepositoryTypeProxy
+		repo.Endpoint = endpoint
+		repo.AllowedHosts = []string{parsed.Hostname()}
+	}
+	if _, err := store.CreateHostedRepository(ctx, repo); err != nil {
 		log.Fatal(err)
 	}
 	if _, err := store.ReplaceAnonymousAccessPolicy(ctx, repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
@@ -34,6 +46,6 @@ func main() {
 		app.TestAdapter{},
 		app.Authenticator{ResolverToken: "fixture-secret", ResolverActor: "npm-fixture"},
 	)
-	log.Printf("Native npm fixture listening on %s", address)
+	log.Printf("Native npm %s fixture listening on %s", repo.Type, address)
 	log.Fatal(http.ListenAndServe(address, handler))
 }

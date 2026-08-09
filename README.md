@@ -130,10 +130,11 @@ docker compose ps gateway
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an
-idempotency key and a `format` of `oci`, `raw`, `maven`, or `conan`. OCI
+idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, or `npm`. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
-Conan 2 uses `/conan/v2/<repository>/...`.
+Conan 2 uses `/conan/v2/<repository>/...`; npm uses
+`/npm/<repository>/<package>`.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
@@ -153,6 +154,12 @@ Maven Proxy caches immutable components for 24 hours by default; its metadata
 and negative-cache lifetimes default to 15 and 10 minutes and can be overridden
 with `GATEWAY_MAVEN_CACHE_TTL`, `GATEWAY_MAVEN_METADATA_CACHE_TTL`, and
 `GATEWAY_MAVEN_NEGATIVE_CACHE_TTL`.
+npm Proxy metadata, negative-cache, and circuit-breaker lifetimes default to
+15 minutes, 10 minutes, and 30 seconds. Override them with
+`GATEWAY_NPM_METADATA_CACHE_TTL`, `GATEWAY_NPM_NEGATIVE_CACHE_TTL`, and
+`GATEWAY_NPM_PROXY_BREAKER_TTL`. Each npm Proxy repository requires an HTTPS
+endpoint and an `allowedHosts` list covering the registry and any tarball CDN
+hosts it may use.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

@@ -3217,7 +3217,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			updatedRepo.AllowedHosts = request.AllowedHosts
 		}
 		if !validProxyUpdate(repo.Format, updatedRepo.Endpoint, updatedRepo.AllowedHosts) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw and conan proxies")
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw, conan, and npm proxies")
 			return
 		}
 		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)
@@ -3279,9 +3279,9 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 		if !validProxyEndpoint(request.Endpoint) {
 			return false
 		}
-		// Raw and Conan proxies resolve upstream assets by host, so they must
+		// Raw, Conan, and npm proxies resolve upstream assets by host, so they must
 		// declare which hosts they may egress to.
-		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan) && len(request.AllowedHosts) == 0 {
+		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM) && len(request.AllowedHosts) == 0 {
 			return false
 		}
 		return true
@@ -3299,7 +3299,7 @@ func validProxyUpdate(format repository.Format, endpoint string, allowedHosts []
 	if !validProxyEndpoint(endpoint) {
 		return false
 	}
-	if (format == repository.FormatRaw || format == repository.FormatConan) && len(allowedHosts) == 0 {
+	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM) && len(allowedHosts) == 0 {
 		return false
 	}
 	return true

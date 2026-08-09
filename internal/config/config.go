@@ -70,6 +70,9 @@ type Config struct {
 	MavenCacheTTL            time.Duration
 	MavenMetadataCacheTTL    time.Duration
 	MavenNegativeCacheTTL    time.Duration
+	NPMMetadataCacheTTL      time.Duration
+	NPMNegativeCacheTTL      time.Duration
+	NPMProxyBreakerTTL       time.Duration
 	RawCacheTTL              time.Duration
 	ConanCacheTTL            time.Duration
 	AdminToken               string
@@ -116,6 +119,9 @@ func Load() (Config, error) {
 		MavenCacheTTL:            24 * time.Hour,
 		MavenMetadataCacheTTL:    15 * time.Minute,
 		MavenNegativeCacheTTL:    10 * time.Minute,
+		NPMMetadataCacheTTL:      15 * time.Minute,
+		NPMNegativeCacheTTL:      10 * time.Minute,
+		NPMProxyBreakerTTL:       30 * time.Second,
 		RawCacheTTL:              15 * time.Minute,
 		ConanCacheTTL:            15 * time.Minute,
 		AdminToken:               os.Getenv("GATEWAY_ADMIN_TOKEN"),
@@ -260,6 +266,21 @@ func Load() (Config, error) {
 		return Config{}, err
 	} else {
 		cfg.MavenNegativeCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_NPM_METADATA_CACHE_TTL", cfg.NPMMetadataCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.NPMMetadataCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_NPM_NEGATIVE_CACHE_TTL", cfg.NPMNegativeCacheTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.NPMNegativeCacheTTL = ttl
+	}
+	if ttl, err := durationEnv("GATEWAY_NPM_PROXY_BREAKER_TTL", cfg.NPMProxyBreakerTTL); err != nil {
+		return Config{}, err
+	} else {
+		cfg.NPMProxyBreakerTTL = ttl
 	}
 	if ttl, err := durationEnv("GATEWAY_RAW_CACHE_TTL", cfg.RawCacheTTL); err != nil {
 		return Config{}, err

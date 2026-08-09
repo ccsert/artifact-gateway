@@ -16,6 +16,8 @@ a dated version heading without rewriting their meaning.
   node roles and Worker capabilities.
 - Server-side aggregate repository management and cross-repository search APIs.
 - Per-repository outbound proxy configuration and connectivity checks.
+- npm Proxy repositories with verified read-through metadata and tarball
+  caching, stale-if-error reads, negative caching, and offline installs.
 
 ### Changed
 

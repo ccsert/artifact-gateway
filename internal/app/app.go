@@ -25,6 +25,10 @@ type Dependencies struct {
 	NativeOCIObjectStore   OCIObjectStore
 	NativeConanObjectStore OCIObjectStore
 	NativeNPMObjectStore   OCIObjectStore
+	NPMMetadataTTL         time.Duration
+	NPMNegativeTTL         time.Duration
+	NPMBreakerTTL          time.Duration
+	NPMProxyCoordinator    OCICacheCoordinator
 	OIDCClient             *authorization.OIDCClient
 	OIDCLoginValidator     *authorization.OIDCValidator
 	OIDCRuntime            *OIDCRuntime

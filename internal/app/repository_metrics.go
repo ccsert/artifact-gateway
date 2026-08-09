@@ -52,6 +52,18 @@ type Metrics struct {
 	conanUpstreamFailure           atomic.Uint64
 	conanResponseBytes             atomic.Uint64
 	conanCacheQuotaDenied          atomic.Uint64
+	npmGetRequests                 atomic.Uint64
+	npmHeadRequests                atomic.Uint64
+	npmOtherRequests               atomic.Uint64
+	npmAuthorizationDenied         atomic.Uint64
+	npmCacheHit                    atomic.Uint64
+	npmCacheMiss                   atomic.Uint64
+	npmNegativeHit                 atomic.Uint64
+	npmRetry                       atomic.Uint64
+	npmCircuitOpen                 atomic.Uint64
+	npmIntegrityFailure            atomic.Uint64
+	npmUpstreamFailure             atomic.Uint64
+	npmResponseBytes               atomic.Uint64
 	repositoryAuthorizationDenials [repositoryAuthorizationFormatCount][repositoryGrantDenialReasonCount]atomic.Uint64
 	backgroundOperations           [backgroundOperationKindCount][backgroundOperationFormatCount][backgroundOperationOutcomeCount]atomic.Uint64
 	backgroundInFlight             [backgroundOperationKindCount][backgroundOperationFormatCount]atomic.Int64
@@ -361,6 +373,40 @@ func (m *Metrics) recordConanAudit(outcome repository.AuditOutcome, bytes int64,
 func (m *Metrics) recordConanCacheHit()         { m.conanCacheHit.Add(1) }
 func (m *Metrics) recordConanCacheMiss()        { m.conanCacheMiss.Add(1) }
 func (m *Metrics) recordConanNegativeCacheHit() { m.conanNegativeHit.Add(1) }
+
+func (m *Metrics) recordNPMRequest(method string) {
+	switch strings.ToLower(method) {
+	case "get":
+		m.npmGetRequests.Add(1)
+	case "head":
+		m.npmHeadRequests.Add(1)
+	default:
+		m.npmOtherRequests.Add(1)
+	}
+}
+
+func (m *Metrics) recordNPMAudit(outcome repository.AuditOutcome, bytes int64, integrityFailure bool) {
+	switch outcome {
+	case repository.AuditAccessDenied:
+		m.npmAuthorizationDenied.Add(1)
+	case repository.AuditUpstreamError:
+		if integrityFailure {
+			m.npmIntegrityFailure.Add(1)
+		} else {
+			m.npmUpstreamFailure.Add(1)
+		}
+	}
+	if bytes > 0 {
+		m.npmResponseBytes.Add(uint64(bytes))
+	}
+}
+
+func (m *Metrics) recordNPMCacheHit()         { m.npmCacheHit.Add(1) }
+func (m *Metrics) recordNPMCacheMiss()        { m.npmCacheMiss.Add(1) }
+func (m *Metrics) recordNPMNegativeCacheHit() { m.npmNegativeHit.Add(1) }
+func (m *Metrics) recordNPMRetry()            { m.npmRetry.Add(1) }
+func (m *Metrics) recordNPMCircuitOpen()      { m.npmCircuitOpen.Add(1) }
+
 func (m *Metrics) recordCache(repositoryName string, hit bool) {
 	m.updateRepository(repositoryName, func(metric *RepositoryMetrics) {
 		if hit {
@@ -436,6 +482,7 @@ func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_resolver_requests_total counter\nartifact_gateway_resolver_requests_total{outcome=\"resolved\"} " + utoa(m.resolved.Load()) + "\nartifact_gateway_resolver_requests_total{outcome=\"failed\"} " + utoa(m.failed.Load()) + "\n# TYPE artifact_gateway_oci_cache_requests_total counter\nartifact_gateway_oci_cache_requests_total{outcome=\"hit\"} " + utoa(m.ociCacheHit.Load()) + "\nartifact_gateway_oci_cache_requests_total{outcome=\"miss\"} " + utoa(m.ociCacheMiss.Load()) + "\n# TYPE artifact_gateway_oci_upstream_circuit_open_total counter\nartifact_gateway_oci_upstream_circuit_open_total " + utoa(m.ociCircuitOpen.Load()) + "\n# TYPE artifact_gateway_oci_negative_cache_hits_total counter\nartifact_gateway_oci_negative_cache_hits_total " + utoa(m.ociNegativeHit.Load()) + "\n# TYPE artifact_gateway_oci_proxy_denied_total counter\nartifact_gateway_oci_proxy_denied_total " + utoa(m.ociProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_requests_total counter\nartifact_gateway_maven_cache_requests_total{outcome=\"hit\"} " + utoa(m.mavenCacheHit.Load()) + "\nartifact_gateway_maven_cache_requests_total{outcome=\"miss\"} " + utoa(m.mavenCacheMiss.Load()) + "\n# TYPE artifact_gateway_maven_upstream_circuit_open_total counter\nartifact_gateway_maven_upstream_circuit_open_total " + utoa(m.mavenCircuitOpen.Load()) + "\n# TYPE artifact_gateway_maven_upstream_retries_total counter\nartifact_gateway_maven_upstream_retries_total " + utoa(m.mavenRetry.Load()) + "\n# TYPE artifact_gateway_maven_negative_cache_hits_total counter\nartifact_gateway_maven_negative_cache_hits_total " + utoa(m.mavenNegativeHit.Load()) + "\n# TYPE artifact_gateway_maven_proxy_denied_total counter\nartifact_gateway_maven_proxy_denied_total " + utoa(m.mavenProxyDenied.Load()) + "\n# TYPE artifact_gateway_maven_cache_invalidations_total counter\nartifact_gateway_maven_cache_invalidations_total " + utoa(m.mavenCacheInvalidated.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_raw_requests_total counter\nartifact_gateway_raw_requests_total{method=\"get\"} " + utoa(m.rawGetRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"head\"} " + utoa(m.rawHeadRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"other\"} " + utoa(m.rawOtherRequests.Load()) + "\n# TYPE artifact_gateway_raw_authorization_denials_total counter\nartifact_gateway_raw_authorization_denials_total " + utoa(m.rawAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_raw_cache_requests_total counter\nartifact_gateway_raw_cache_requests_total{outcome=\"hit\"} " + utoa(m.rawCacheHit.Load()) + "\nartifact_gateway_raw_cache_requests_total{outcome=\"miss\"} " + utoa(m.rawCacheMiss.Load()) + "\n# TYPE artifact_gateway_raw_negative_cache_hits_total counter\nartifact_gateway_raw_negative_cache_hits_total " + utoa(m.rawNegativeHit.Load()) + "\n# TYPE artifact_gateway_raw_proxy_denied_total counter\nartifact_gateway_raw_proxy_denied_total " + utoa(m.rawProxyDenied.Load()) + "\n# TYPE artifact_gateway_raw_checksum_failures_total counter\nartifact_gateway_raw_checksum_failures_total " + utoa(m.rawChecksumFailure.Load()) + "\n# TYPE artifact_gateway_raw_upstream_failures_total counter\nartifact_gateway_raw_upstream_failures_total " + utoa(m.rawUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_raw_response_bytes_total counter\nartifact_gateway_raw_response_bytes_total " + utoa(m.rawResponseBytes.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_conan_requests_total counter\nartifact_gateway_conan_requests_total{method=\"get\"} " + utoa(m.conanGetRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"head\"} " + utoa(m.conanHeadRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"other\"} " + utoa(m.conanOtherRequests.Load()) + "\n# TYPE artifact_gateway_conan_authorization_denials_total counter\nartifact_gateway_conan_authorization_denials_total " + utoa(m.conanAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_conan_cache_requests_total counter\nartifact_gateway_conan_cache_requests_total{outcome=\"hit\"} " + utoa(m.conanCacheHit.Load()) + "\nartifact_gateway_conan_cache_requests_total{outcome=\"miss\"} " + utoa(m.conanCacheMiss.Load()) + "\n# TYPE artifact_gateway_conan_negative_cache_hits_total counter\nartifact_gateway_conan_negative_cache_hits_total " + utoa(m.conanNegativeHit.Load()) + "\n# TYPE artifact_gateway_conan_proxy_denied_total counter\nartifact_gateway_conan_proxy_denied_total " + utoa(m.conanProxyDenied.Load()) + "\n# TYPE artifact_gateway_conan_checksum_failures_total counter\nartifact_gateway_conan_checksum_failures_total " + utoa(m.conanChecksumFailure.Load()) + "\n# TYPE artifact_gateway_conan_upstream_failures_total counter\nartifact_gateway_conan_upstream_failures_total " + utoa(m.conanUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_conan_response_bytes_total counter\nartifact_gateway_conan_response_bytes_total " + utoa(m.conanResponseBytes.Load()) + "\n# TYPE artifact_gateway_conan_cache_quota_rejections_total counter\nartifact_gateway_conan_cache_quota_rejections_total " + utoa(m.conanCacheQuotaDenied.Load()) + "\n"))
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_npm_requests_total counter\nartifact_gateway_npm_requests_total{method=\"get\"} " + utoa(m.npmGetRequests.Load()) + "\nartifact_gateway_npm_requests_total{method=\"head\"} " + utoa(m.npmHeadRequests.Load()) + "\nartifact_gateway_npm_requests_total{method=\"other\"} " + utoa(m.npmOtherRequests.Load()) + "\n# TYPE artifact_gateway_npm_authorization_denials_total counter\nartifact_gateway_npm_authorization_denials_total " + utoa(m.npmAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_npm_cache_requests_total counter\nartifact_gateway_npm_cache_requests_total{outcome=\"hit\"} " + utoa(m.npmCacheHit.Load()) + "\nartifact_gateway_npm_cache_requests_total{outcome=\"miss\"} " + utoa(m.npmCacheMiss.Load()) + "\n# TYPE artifact_gateway_npm_negative_cache_hits_total counter\nartifact_gateway_npm_negative_cache_hits_total " + utoa(m.npmNegativeHit.Load()) + "\n# TYPE artifact_gateway_npm_upstream_retries_total counter\nartifact_gateway_npm_upstream_retries_total " + utoa(m.npmRetry.Load()) + "\n# TYPE artifact_gateway_npm_upstream_circuit_open_total counter\nartifact_gateway_npm_upstream_circuit_open_total " + utoa(m.npmCircuitOpen.Load()) + "\n# TYPE artifact_gateway_npm_integrity_failures_total counter\nartifact_gateway_npm_integrity_failures_total " + utoa(m.npmIntegrityFailure.Load()) + "\n# TYPE artifact_gateway_npm_upstream_failures_total counter\nartifact_gateway_npm_upstream_failures_total " + utoa(m.npmUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_npm_response_bytes_total counter\nartifact_gateway_npm_response_bytes_total " + utoa(m.npmResponseBytes.Load()) + "\n"))
 }
 
 func itoa(value int64) string {

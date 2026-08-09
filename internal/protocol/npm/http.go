@@ -187,7 +187,11 @@ func allDigits(value string) bool {
 }
 
 func ValidateTarball(body []byte, packageName, version string) error {
-	gzipReader, err := gzip.NewReader(bytes.NewReader(body))
+	return ValidateTarballReader(bytes.NewReader(body), packageName, version)
+}
+
+func ValidateTarballReader(body io.Reader, packageName, version string) error {
+	gzipReader, err := gzip.NewReader(body)
 	if err != nil {
 		return errors.New("attachment is not a gzip-compressed npm tarball")
 	}

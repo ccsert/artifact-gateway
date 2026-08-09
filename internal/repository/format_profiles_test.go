@@ -20,8 +20,8 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
 		if profile.Format == FormatNPM {
-			if profile.GroupSupported || FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
-				t.Errorf("npm must remain hosted-only without group support: %#v", profile)
+			if profile.GroupSupported || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
+				t.Errorf("npm must support Hosted and Proxy without Group: %#v", profile)
 			}
 			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
@@ -31,6 +31,16 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			for _, operation := range []RepositoryOperation{RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate} {
 				if FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
 					t.Errorf("npm advertises unimplemented operation %q", operation)
+				}
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationBrowse} {
+				if !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
+					t.Errorf("npm missing proxy operation %q", operation)
+				}
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationPublish, RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate} {
+				if FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
+					t.Errorf("npm proxy advertises unimplemented operation %q", operation)
 				}
 			}
 			continue

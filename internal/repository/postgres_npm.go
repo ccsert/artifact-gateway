@@ -22,10 +22,10 @@ func (s *PostgresStore) PublishNPMVersion(ctx context.Context, version NPMVersio
 	}
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO native_npm_versions
-		(repository_id,package_name,version,digest,integrity,shasum,tarball_name,object_key,size,manifest,publisher)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11)
-		RETURNING created_at`, version.RepositoryID, version.PackageName, version.Version, version.Digest,
-		version.Integrity, version.Shasum, version.TarballName, version.ObjectKey, version.Size, version.Manifest, version.Publisher).Scan(&version.CreatedAt)
+		(repository_id,package_name,version,digest,integrity,shasum,tarball_name,object_key,size,manifest,publisher,cached_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,now())
+		RETURNING created_at,cached_at`, version.RepositoryID, version.PackageName, version.Version, version.Digest,
+		version.Integrity, version.Shasum, version.TarballName, version.ObjectKey, version.Size, version.Manifest, version.Publisher).Scan(&version.CreatedAt, &version.CachedAt)
 	if isUnique(err) {
 		return NPMVersion{}, ErrNameExists
 	}
@@ -60,13 +60,203 @@ func (s *PostgresStore) PublishNPMVersion(ctx context.Context, version NPMVersio
 	return version, nil
 }
 
+func (s *PostgresStore) LockNPMProxy(ctx context.Context, key string) (func(), error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lockKey := "native-npm-proxy:" + key
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
+		_ = conn.Close()
+	}, nil
+}
+
+func (s *PostgresStore) SyncNPMProxyPackage(ctx context.Context, incoming NPMPackage) (NPMPackage, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMPackage{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	lockKey := "native-npm-proxy-package:" + incoming.RepositoryID + ":" + incoming.Name
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return NPMPackage{}, err
+	}
+	var existingEndpoint string
+	err = tx.QueryRowContext(ctx, `
+		SELECT source_endpoint FROM native_npm_packages
+		WHERE repository_id::text=$1 AND name=$2 FOR UPDATE`, incoming.RepositoryID, incoming.Name).Scan(&existingEndpoint)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO native_npm_packages (repository_id,name,dist_tags,source_endpoint)
+			VALUES ($1,$2,'{}'::jsonb,$3)`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint)
+	} else if err == nil && existingEndpoint != "" && existingEndpoint != incoming.SourceEndpoint {
+		_, err = tx.ExecContext(ctx, `DELETE FROM native_npm_packages WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO native_npm_packages (repository_id,name,dist_tags,source_endpoint)
+				VALUES ($1,$2,'{}'::jsonb,$3)`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint)
+		}
+	}
+	if err != nil {
+		return NPMPackage{}, err
+	}
+
+	for _, version := range incoming.Versions {
+		var storedIntegrity, storedShasum, storedTarball, storedObject string
+		lookupErr := tx.QueryRowContext(ctx, `
+			SELECT integrity,shasum,upstream_tarball,object_key
+			FROM native_npm_versions
+			WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 FOR UPDATE`,
+			incoming.RepositoryID, incoming.Name, version.Version).
+			Scan(&storedIntegrity, &storedShasum, &storedTarball, &storedObject)
+		if errors.Is(lookupErr, sql.ErrNoRows) {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO native_npm_versions
+				(repository_id,package_name,version,digest,integrity,shasum,tarball_name,upstream_tarball,
+				 object_key,size,manifest,publisher,created_at)
+				VALUES ($1,$2,$3,'',$4,$5,$6,$7,'',0,$8::jsonb,$9,$10)`,
+				incoming.RepositoryID, incoming.Name, version.Version, version.Integrity, version.Shasum,
+				version.TarballName, version.UpstreamTarball, version.Manifest, version.Publisher, version.CreatedAt)
+		} else if lookupErr != nil {
+			return NPMPackage{}, lookupErr
+		} else {
+			if storedObject != "" && (storedIntegrity != version.Integrity || storedShasum != version.Shasum || storedTarball != version.UpstreamTarball) {
+				return NPMPackage{}, ErrUpstreamChanged
+			}
+			_, err = tx.ExecContext(ctx, `
+				UPDATE native_npm_versions
+				SET integrity=$4,shasum=$5,tarball_name=$6,upstream_tarball=$7,
+				    manifest=$8::jsonb,publisher=$9
+				WHERE repository_id::text=$1 AND package_name=$2 AND version=$3`,
+				incoming.RepositoryID, incoming.Name, version.Version, version.Integrity, version.Shasum,
+				version.TarballName, version.UpstreamTarball, version.Manifest, version.Publisher)
+		}
+		if err != nil {
+			return NPMPackage{}, err
+		}
+	}
+	for _, target := range incoming.DistTags {
+		var exists bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM native_npm_versions
+			WHERE repository_id::text=$1 AND package_name=$2 AND version=$3
+		)`, incoming.RepositoryID, incoming.Name, target).Scan(&exists); err != nil {
+			return NPMPackage{}, err
+		}
+		if !exists {
+			return NPMPackage{}, ErrNotFound
+		}
+	}
+	tagsJSON, err := json.Marshal(incoming.DistTags)
+	if err != nil {
+		return NPMPackage{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE native_npm_packages
+		SET dist_tags=$3::jsonb,source_endpoint=$4,upstream_etag=$5,upstream_modified=$6,
+		    metadata_expires_at=$7,negative_expires_at=NULL,negative=false,updated_at=now()
+		WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name, tagsJSON,
+		incoming.SourceEndpoint, incoming.UpstreamETag, incoming.UpstreamModified, incoming.MetadataExpiresAt); err != nil {
+		return NPMPackage{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMPackage{}, err
+	}
+	return s.GetNPMPackage(ctx, incoming.RepositoryID, incoming.Name)
+}
+
+func (s *PostgresStore) StoreNPMProxyNegative(ctx context.Context, incoming NPMPackage) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	lockKey := "native-npm-proxy-package:" + incoming.RepositoryID + ":" + incoming.Name
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return err
+	}
+	var existingEndpoint string
+	err = tx.QueryRowContext(ctx, `SELECT source_endpoint FROM native_npm_packages WHERE repository_id::text=$1 AND name=$2 FOR UPDATE`, incoming.RepositoryID, incoming.Name).Scan(&existingEndpoint)
+	if err == nil && existingEndpoint != "" && existingEndpoint != incoming.SourceEndpoint {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM native_npm_packages WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name); err != nil {
+			return err
+		}
+		err = sql.ErrNoRows
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO native_npm_packages
+			(repository_id,name,dist_tags,source_endpoint,negative_expires_at,negative)
+			VALUES ($1,$2,'{}'::jsonb,$3,$4,true)`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt)
+	} else if err == nil {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE native_npm_packages
+			SET source_endpoint=$3,metadata_expires_at=NULL,negative_expires_at=$4,negative=true,updated_at=now()
+			WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *PostgresStore) CacheNPMProxyTarball(ctx context.Context, incoming NPMVersion) (NPMVersion, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var stored NPMVersion
+	err = scanNPMVersion(tx.QueryRowContext(ctx, `
+		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
+		FROM native_npm_versions
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 FOR UPDATE`,
+		incoming.RepositoryID, incoming.PackageName, incoming.Version), &stored)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	if stored.ObjectKey != "" {
+		if stored.Digest != incoming.Digest {
+			return NPMVersion{}, ErrUpstreamChanged
+		}
+		return stored, tx.Commit()
+	}
+	err = scanNPMVersion(tx.QueryRowContext(ctx, `
+		UPDATE native_npm_versions
+		SET digest=$4,object_key=$5,size=$6,cached_at=$7
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3
+		RETURNING repository_id::text,package_name,version,digest,integrity,shasum,
+		          tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at`,
+		incoming.RepositoryID, incoming.PackageName, incoming.Version, incoming.Digest,
+		incoming.ObjectKey, incoming.Size, incoming.CachedAt), &stored)
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMVersion{}, err
+	}
+	return stored, nil
+}
+
 func (s *PostgresStore) GetNPMPackage(ctx context.Context, repositoryID, name string) (NPMPackage, error) {
 	var pkg NPMPackage
 	var tags []byte
+	var metadataExpiresAt, negativeExpiresAt sql.NullTime
 	err := s.db.QueryRowContext(ctx, `
-		SELECT repository_id::text,name,dist_tags,created_at,updated_at
+		SELECT repository_id::text,name,dist_tags,source_endpoint,upstream_etag,upstream_modified,
+		       metadata_expires_at,negative_expires_at,negative,created_at,updated_at
 		FROM native_npm_packages WHERE repository_id::text=$1 AND name=$2`, repositoryID, name).
-		Scan(&pkg.RepositoryID, &pkg.Name, &tags, &pkg.CreatedAt, &pkg.UpdatedAt)
+		Scan(&pkg.RepositoryID, &pkg.Name, &tags, &pkg.SourceEndpoint, &pkg.UpstreamETag, &pkg.UpstreamModified,
+			&metadataExpiresAt, &negativeExpiresAt, &pkg.Negative, &pkg.CreatedAt, &pkg.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return NPMPackage{}, ErrNotFound
 	}
@@ -76,9 +266,15 @@ func (s *PostgresStore) GetNPMPackage(ctx context.Context, repositoryID, name st
 	if err = json.Unmarshal(tags, &pkg.DistTags); err != nil {
 		return NPMPackage{}, err
 	}
+	if metadataExpiresAt.Valid {
+		pkg.MetadataExpiresAt = metadataExpiresAt.Time
+	}
+	if negativeExpiresAt.Valid {
+		pkg.NegativeExpiresAt = negativeExpiresAt.Time
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
-		       tarball_name,object_key,size,manifest,publisher,created_at
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
 		FROM native_npm_versions
 		WHERE repository_id::text=$1 AND package_name=$2
 		ORDER BY created_at DESC,version DESC`, repositoryID, name)
@@ -100,7 +296,7 @@ func (s *PostgresStore) GetNPMVersionByTarball(ctx context.Context, repositoryID
 	var version NPMVersion
 	err := scanNPMVersion(s.db.QueryRowContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
-		       tarball_name,object_key,size,manifest,publisher,created_at
+		       tarball_name,upstream_tarball,object_key,size,manifest,publisher,cached_at,created_at
 		FROM native_npm_versions
 		WHERE repository_id::text=$1 AND package_name=$2 AND tarball_name=$3`, repositoryID, name, tarballName), &version)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -126,7 +322,7 @@ func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, pre
 			ORDER BY (nv.version=p.dist_tags->>'latest') DESC,nv.created_at DESC,nv.version DESC
 			LIMIT 1
 		) latest ON true
-		WHERE p.repository_id::text=$1 AND ($2='' OR p.name LIKE $2 || '%' ESCAPE '\') AND p.name>$3
+		WHERE p.repository_id::text=$1 AND NOT p.negative AND ($2='' OR p.name LIKE $2 || '%' ESCAPE '\') AND p.name>$3
 		GROUP BY p.repository_id,p.name,p.created_at,p.updated_at,latest.version,latest.digest,latest.integrity,
 		         latest.shasum,latest.tarball_name,latest.object_key,latest.size,latest.manifest,latest.publisher,latest.created_at
 		ORDER BY p.name LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
@@ -155,7 +351,12 @@ func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, pre
 }
 
 func scanNPMVersion(row interface{ Scan(...any) error }, version *NPMVersion) error {
-	return row.Scan(&version.RepositoryID, &version.PackageName, &version.Version, &version.Digest,
-		&version.Integrity, &version.Shasum, &version.TarballName, &version.ObjectKey,
-		&version.Size, &version.Manifest, &version.Publisher, &version.CreatedAt)
+	var cachedAt sql.NullTime
+	err := row.Scan(&version.RepositoryID, &version.PackageName, &version.Version, &version.Digest,
+		&version.Integrity, &version.Shasum, &version.TarballName, &version.UpstreamTarball, &version.ObjectKey,
+		&version.Size, &version.Manifest, &version.Publisher, &cachedAt, &version.CreatedAt)
+	if cachedAt.Valid {
+		version.CachedAt = cachedAt.Time
+	}
+	return err
 }

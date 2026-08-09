@@ -26,6 +26,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS", "raw.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES", "12345")
+	t.Setenv("GATEWAY_NPM_METADATA_CACHE_TTL", "2m")
+	t.Setenv("GATEWAY_NPM_NEGATIVE_CACHE_TTL", "45s")
+	t.Setenv("GATEWAY_NPM_PROXY_BREAKER_TTL", "12s")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -38,6 +41,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.RawCacheMaxObjectBytes != 12345 {
 		t.Fatalf("RawCacheMaxObjectBytes = %d", cfg.RawCacheMaxObjectBytes)
+	}
+	if cfg.NPMMetadataCacheTTL != 2*time.Minute || cfg.NPMNegativeCacheTTL != 45*time.Second || cfg.NPMProxyBreakerTTL != 12*time.Second {
+		t.Fatalf("npm proxy TTLs = metadata %s negative %s breaker %s", cfg.NPMMetadataCacheTTL, cfg.NPMNegativeCacheTTL, cfg.NPMProxyBreakerTTL)
 	}
 	if !cfg.HasRole(NodeRoleAPI) || !cfg.HasRole(NodeRoleScheduler) || !cfg.HasRole(NodeRoleWorker) {
 		t.Fatalf("default node roles = %#v", cfg.NodeRoles)

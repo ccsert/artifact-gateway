@@ -96,6 +96,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = coordinator.Close() }()
+	dependencies.NPMMetadataTTL = cfg.NPMMetadataCacheTTL
+	dependencies.NPMNegativeTTL = cfg.NPMNegativeCacheTTL
+	dependencies.NPMBreakerTTL = cfg.NPMProxyBreakerTTL
+	dependencies.NPMProxyCoordinator = coordinator
 	cacheStore, err := app.NewPostgresCacheControlStoreWithDB(objectStore, databasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache control store", "error", err)

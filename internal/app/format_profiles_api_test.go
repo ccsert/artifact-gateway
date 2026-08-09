@@ -48,8 +48,8 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 			t.Errorf("incomplete profile: %#v", item)
 		}
 		if item.Format == adminopenapi.FormatNpm {
-			if item.GroupSupported || len(item.RepositoryTypes) != 1 || len(item.ProxyOperations) != 0 {
-				t.Errorf("npm must remain hosted-only: %#v", item)
+			if item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.ProxyOperations) != 2 {
+				t.Errorf("npm must expose only Hosted and Proxy read/browse: %#v", item)
 			}
 			continue
 		}

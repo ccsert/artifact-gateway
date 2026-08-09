@@ -13,6 +13,7 @@ var (
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
 	ErrVersionConflict     = errors.New("resource version conflicts with current state")
 	ErrQuotaExceeded       = errors.New("repository capacity quota exceeded")
+	ErrUpstreamChanged     = errors.New("upstream immutable artifact metadata changed")
 	ErrInvalidRuntimeNode  = errors.New("runtime node identity is invalid")
 )
 
@@ -203,6 +204,10 @@ type NativeRawStore interface {
 
 type NativeNPMStore interface {
 	PublishNPMVersion(context.Context, NPMVersion, map[string]string) (NPMVersion, error)
+	SyncNPMProxyPackage(context.Context, NPMPackage) (NPMPackage, error)
+	StoreNPMProxyNegative(context.Context, NPMPackage) error
+	CacheNPMProxyTarball(context.Context, NPMVersion) (NPMVersion, error)
+	LockNPMProxy(context.Context, string) (func(), error)
 	GetNPMPackage(context.Context, string, string) (NPMPackage, error)
 	GetNPMVersionByTarball(context.Context, string, string, string) (NPMVersion, error)
 	SearchNPMPackages(context.Context, string, string, int, string) ([]NPMPackageSummary, error)

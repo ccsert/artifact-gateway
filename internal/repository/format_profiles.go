@@ -34,11 +34,15 @@ var supportedFormatProfiles = []FormatProfile{
 	formatProfile(FormatRaw),
 	{
 		Format:          FormatNPM,
-		RepositoryTypes: []RepositoryType{RepositoryTypeHosted},
+		RepositoryTypes: []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
 		AnonymousRead:   true,
 		HostedOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
+			RepositoryOperationBrowse,
+		},
+		ProxyOperations: []RepositoryOperation{
+			RepositoryOperationRead,
 			RepositoryOperationBrowse,
 		},
 	},

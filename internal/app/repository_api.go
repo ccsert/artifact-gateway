@@ -161,6 +161,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := ociClient.(ConanClient); ok {
 		conanClient = client
 	}
+	npmClient := NPMClient(UpstreamClient{})
+	if client, ok := ociClient.(NPMClient); ok {
+		npmClient = client
+	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci)
 	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache)
@@ -192,7 +196,14 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if nativeNPMObjects == nil {
 		nativeNPMObjects = NewMemoryOCIObjectStore()
 	}
-	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics)
+	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient)
+	if dependencies.NPMMetadataTTL > 0 {
+		nativeNPM.metadataTTL = dependencies.NPMMetadataTTL
+	}
+	if dependencies.NPMNegativeTTL > 0 {
+		nativeNPM.negativeTTL = dependencies.NPMNegativeTTL
+	}
+	nativeNPM.protection = newNPMProxyProtection(dependencies.NPMProxyCoordinator, dependencies.NPMBreakerTTL)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	var searchProjection repository.ArtifactSearchStore

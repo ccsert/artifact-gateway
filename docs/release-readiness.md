@@ -1,7 +1,7 @@
 # Full Artifact Repository V1 Release Readiness
 
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
-Conan, and npm Hosted lifecycle and distribution paths.
+Conan, and npm Hosted/Proxy lifecycle and distribution paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -50,7 +50,9 @@ storage credentials, or unredacted upstream URLs in that record.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
       npm scoped/unscoped publication, immutable versions, dist-tags, anonymous
-      installation, and audit pass through the native npm fixture.
+      installation, and audit pass through the native npm fixture. The same
+      real npm CLI then installs through npm Proxy, shuts down its upstream,
+      clears the client cache, and installs again from Gateway cache.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2

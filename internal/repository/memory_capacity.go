@@ -54,7 +54,7 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 		}
 	case FormatNPM:
 		for _, version := range s.npmVersions {
-			if version.RepositoryID == id {
+			if version.RepositoryID == id && version.ObjectKey != "" {
 				capacity.UsedBytes += version.Size
 				capacity.ObjectCount++
 			}

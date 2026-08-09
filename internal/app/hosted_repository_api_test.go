@@ -556,6 +556,10 @@ func TestHostedRepositoryManagementCreatesProxyRepository(t *testing.T) {
 	if hosted.Code != http.StatusCreated || !strings.Contains(hosted.Body.String(), `"type":"hosted"`) {
 		t.Fatalf("default hosted=%d body=%s", hosted.Code, hosted.Body.String())
 	}
+	npmProxy := create(`{"name":"npm-proxy","format":"npm","type":"proxy","endpoint":"https://registry.npmjs.org","allowedHosts":["registry.npmjs.org"]}`, "create-npm-proxy")
+	if npmProxy.Code != http.StatusCreated {
+		t.Fatalf("create npm proxy=%d body=%s", npmProxy.Code, npmProxy.Body.String())
+	}
 }
 
 func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
@@ -575,6 +579,7 @@ func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
 		"proxy with malformed endpoint":    `{"name":"proxy-bad-url","format":"raw","type":"proxy","endpoint":"not a url","allowedHosts":["upstream.example"]}`,
 		"raw proxy without allowedHosts":   `{"name":"proxy-no-hosts","format":"raw","type":"proxy","endpoint":"https://upstream.example"}`,
 		"conan proxy without allowedHosts": `{"name":"proxy-conan-no-hosts","format":"conan","type":"proxy","endpoint":"https://upstream.example"}`,
+		"npm proxy without allowedHosts":   `{"name":"proxy-npm-no-hosts","format":"npm","type":"proxy","endpoint":"https://registry.npmjs.org"}`,
 		"hosted with endpoint":             `{"name":"hosted-endpoint","format":"raw","endpoint":"https://upstream.example"}`,
 		"hosted with allowedHosts":         `{"name":"hosted-hosts","format":"raw","allowedHosts":["upstream.example"]}`,
 		"unknown type":                     `{"name":"unknown-type","format":"raw","type":"virtual"}`,

@@ -1369,7 +1369,7 @@ type CreatePublishSession struct {
 
 // CreateRepository defines model for CreateRepository.
 type CreateRepository struct {
-	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
+	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
 
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
@@ -2211,7 +2211,7 @@ type RuntimeNodeList struct {
 
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
-	// AllowedHosts Hosts the proxy may egress to. Required for raw and conan proxies.
+	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
 
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.

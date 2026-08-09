@@ -70,7 +70,7 @@ export type CreateRepository = {
    */
   endpoint?: string;
   /**
-   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   * Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
    */
   allowedHosts?: Array<string>;
   /**
@@ -822,7 +822,7 @@ export type UpdateRepository = {
    */
   endpoint?: string;
   /**
-   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   * Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
    */
   allowedHosts?: Array<string>;
   /**
@@ -998,7 +998,7 @@ export type CreateRepositoryWritable = {
    */
   endpoint?: string;
   /**
-   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   * Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
    */
   allowedHosts?: Array<string>;
   /**
@@ -1077,7 +1077,7 @@ export type UpdateRepositoryWritable = {
    */
   endpoint?: string;
   /**
-   * Hosts the proxy may egress to. Required for raw and conan proxies.
+   * Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
    */
   allowedHosts?: Array<string>;
   /**

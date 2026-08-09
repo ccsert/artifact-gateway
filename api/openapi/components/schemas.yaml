@@ -507,8 +507,8 @@ CreateRepository:
       type: array
       items:
         type: string
-      description: Hosts the proxy may egress to. Required for raw and conan
-        proxies.
+      description: Hosts the proxy may egress to. Required for raw, conan,
+        and npm proxies. npm tarball redirects are limited to this list.
     anonymousRead:
       type: boolean
       default: false
@@ -527,8 +527,8 @@ UpdateRepository:
       type: array
       items:
         type: string
-      description: Hosts the proxy may egress to. Required for raw and conan
-        proxies.
+      description: Hosts the proxy may egress to. Required for raw, conan,
+        and npm proxies. npm tarball redirects are limited to this list.
     anonymousRead:
       type: boolean
       description: Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
