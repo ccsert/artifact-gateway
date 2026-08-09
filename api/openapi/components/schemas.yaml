@@ -908,6 +908,72 @@ RepositoryLifecycleJobList:
   type: array
   items:
     "$ref": "#/RepositoryLifecycleJob"
+CreateScheduledTask:
+  type: object
+  required: [name, kind, intervalMinutes, enabled]
+  additionalProperties: false
+  properties:
+    name: {type: string, minLength: 1, maxLength: 100}
+    description: {type: string, maxLength: 500, default: ""}
+    kind:
+      type: string
+      enum: [repository-retention, audit-retention]
+    repositoryId:
+      type: string
+      format: uuid
+      description: Required for repository-retention and omitted for audit-retention.
+    intervalMinutes: {type: integer, minimum: 15, maximum: 525600}
+    enabled: {type: boolean}
+    nextRunAt:
+      type: string
+      format: date-time
+      description: Defaults to one interval after creation.
+UpdateScheduledTask:
+  allOf:
+  - "$ref": "#/CreateScheduledTask"
+ScheduledTask:
+  type: object
+  required: [id, name, description, kind, intervalMinutes, enabled, nextRunAt, version, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    description: {type: string}
+    kind:
+      type: string
+      enum: [repository-retention, audit-retention]
+    repositoryId: {type: string, format: uuid}
+    intervalMinutes: {type: integer, minimum: 15, maximum: 525600}
+    enabled: {type: boolean}
+    nextRunAt: {type: string, format: date-time}
+    lastRunAt: {type: string, format: date-time}
+    lastRunId: {type: string, format: uuid}
+    lastRunState:
+      type: string
+      enum: [submitted, failed]
+    lastError: {type: string, maxLength: 1024}
+    version: {type: string}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+ScheduledTaskRun:
+  type: object
+  required: [id, taskId, trigger, state, scheduledAt, createdAt]
+  properties:
+    id: {type: string, format: uuid}
+    taskId: {type: string, format: uuid}
+    trigger:
+      type: string
+      enum: [scheduled, manual]
+    state:
+      type: string
+      enum: [submitted, failed]
+    scheduledAt: {type: string, format: date-time}
+    createdAt: {type: string, format: date-time}
+    completedAt: {type: string, format: date-time}
+    targetKind:
+      type: string
+      enum: [lifecycle, audit-cleanup]
+    targetId: {type: string}
+    lastError: {type: string, maxLength: 1024}
 AuditRetentionPolicy:
   type: object
   required: [version, enabled, keepDays]

@@ -106,6 +106,18 @@ type RepositoryLifecycleJobStore interface {
 	ListAllLifecycleJobs(context.Context, int) ([]RepositoryLifecycleJob, error)
 }
 
+type ScheduledTaskStore interface {
+	CreateScheduledTask(context.Context, ScheduledTask) (ScheduledTask, error)
+	ListScheduledTasks(context.Context) ([]ScheduledTask, error)
+	GetScheduledTask(context.Context, string) (ScheduledTask, error)
+	UpdateScheduledTask(context.Context, ScheduledTask, string) (ScheduledTask, error)
+	DeleteScheduledTask(context.Context, string) error
+	ClaimDueScheduledTasks(context.Context, time.Time, int) ([]ScheduledTaskClaim, error)
+	CreateScheduledTaskRun(context.Context, string, string, time.Time) (ScheduledTaskRun, error)
+	ListScheduledTaskRuns(context.Context, string, int) ([]ScheduledTaskRun, error)
+	UpdateScheduledTaskRun(context.Context, ScheduledTaskRun) error
+}
+
 type ReplicationStore interface {
 	CreateReplicationPlan(context.Context, ReplicationPlan, []ReplicationCheckpoint) (ReplicationPlan, bool, error)
 	ClaimReplicationPlans(context.Context, int) ([]ReplicationPlan, error)

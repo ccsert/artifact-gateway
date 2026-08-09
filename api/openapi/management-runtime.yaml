@@ -49,6 +49,14 @@ paths:
     "$ref": "./management/capacity.yaml#/repository_capacities"
   "/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/lifecycle_jobs"
+  "/scheduled-tasks":
+    "$ref": "./management/scheduled-tasks.yaml#/scheduled_tasks"
+  "/scheduled-tasks/{taskId}":
+    "$ref": "./management/scheduled-tasks.yaml#/scheduled_tasks_taskId"
+  "/scheduled-tasks/{taskId}/run":
+    "$ref": "./management/scheduled-tasks.yaml#/scheduled_tasks_taskId_run"
+  "/scheduled-tasks/{taskId}/runs":
+    "$ref": "./management/scheduled-tasks.yaml#/scheduled_tasks_taskId_runs"
   "/repositories/{repositoryId}":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId"
   "/repositories/{repositoryId}/egress-proxy:test":
@@ -175,6 +183,10 @@ components:
       "$ref": "./components/schemas.yaml#/RestoreArtifact"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
+    ScheduledTask:
+      "$ref": "./components/schemas.yaml#/ScheduledTask"
+    ScheduledTaskRun:
+      "$ref": "./components/schemas.yaml#/ScheduledTaskRun"
     ReplicationRequest:
       "$ref": "./components/schemas.yaml#/ReplicationRequest"
     ReplicationPlan:

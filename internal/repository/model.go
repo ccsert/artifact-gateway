@@ -406,6 +406,59 @@ const (
 	LifecycleJobReclaim     LifecycleJobKind = "reclaim"
 )
 
+// ScheduledTaskKind is intentionally a closed set. Scheduled tasks may only
+// dispatch operations implemented by the gateway; they never execute user
+// supplied commands or SQL.
+type ScheduledTaskKind string
+
+const (
+	ScheduledTaskRepositoryRetention ScheduledTaskKind = "repository-retention"
+	ScheduledTaskAuditRetention      ScheduledTaskKind = "audit-retention"
+)
+
+type ScheduledTaskState string
+
+const (
+	ScheduledTaskSubmitted ScheduledTaskState = "submitted"
+	ScheduledTaskFailed    ScheduledTaskState = "failed"
+)
+
+type ScheduledTask struct {
+	ID              string
+	Name            string
+	Description     string
+	Kind            ScheduledTaskKind
+	RepositoryID    string
+	IntervalSeconds int
+	Enabled         bool
+	NextRunAt       time.Time
+	LastRunAt       time.Time
+	LastRunID       string
+	LastRunState    ScheduledTaskState
+	LastError       string
+	Version         string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type ScheduledTaskRun struct {
+	ID          string
+	TaskID      string
+	Trigger     string
+	State       ScheduledTaskState
+	ScheduledAt time.Time
+	CreatedAt   time.Time
+	CompletedAt time.Time
+	TargetKind  string
+	TargetID    string
+	LastError   string
+}
+
+type ScheduledTaskClaim struct {
+	Task ScheduledTask
+	Run  ScheduledTaskRun
+}
+
 type LifecycleJobState string
 
 const (

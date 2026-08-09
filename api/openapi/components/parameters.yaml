@@ -34,6 +34,13 @@ LifecycleJobId:
   schema:
     type: string
     format: uuid
+ScheduledTaskId:
+  name: taskId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
 RepositoryName:
   name: repository
   in: path

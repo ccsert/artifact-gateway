@@ -199,6 +199,24 @@ func (e CreateRepositoryType) Valid() bool {
 	}
 }
 
+// Defines values for CreateScheduledTaskKind.
+const (
+	CreateScheduledTaskKindAuditRetention      CreateScheduledTaskKind = "audit-retention"
+	CreateScheduledTaskKindRepositoryRetention CreateScheduledTaskKind = "repository-retention"
+)
+
+// Valid indicates whether the value is a known member of the CreateScheduledTaskKind enum.
+func (e CreateScheduledTaskKind) Valid() bool {
+	switch e {
+	case CreateScheduledTaskKindAuditRetention:
+		return true
+	case CreateScheduledTaskKindRepositoryRetention:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateUserRole.
 const (
 	CreateUserRoleAdmin  CreateUserRole = "admin"
@@ -988,6 +1006,96 @@ func (e RuntimeNodeHealthIssueSeverity) Valid() bool {
 	}
 }
 
+// Defines values for ScheduledTaskKind.
+const (
+	ScheduledTaskKindAuditRetention      ScheduledTaskKind = "audit-retention"
+	ScheduledTaskKindRepositoryRetention ScheduledTaskKind = "repository-retention"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledTaskKind enum.
+func (e ScheduledTaskKind) Valid() bool {
+	switch e {
+	case ScheduledTaskKindAuditRetention:
+		return true
+	case ScheduledTaskKindRepositoryRetention:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledTaskLastRunState.
+const (
+	ScheduledTaskLastRunStateFailed    ScheduledTaskLastRunState = "failed"
+	ScheduledTaskLastRunStateSubmitted ScheduledTaskLastRunState = "submitted"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledTaskLastRunState enum.
+func (e ScheduledTaskLastRunState) Valid() bool {
+	switch e {
+	case ScheduledTaskLastRunStateFailed:
+		return true
+	case ScheduledTaskLastRunStateSubmitted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledTaskRunState.
+const (
+	ScheduledTaskRunStateFailed    ScheduledTaskRunState = "failed"
+	ScheduledTaskRunStateSubmitted ScheduledTaskRunState = "submitted"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledTaskRunState enum.
+func (e ScheduledTaskRunState) Valid() bool {
+	switch e {
+	case ScheduledTaskRunStateFailed:
+		return true
+	case ScheduledTaskRunStateSubmitted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledTaskRunTargetKind.
+const (
+	AuditCleanup ScheduledTaskRunTargetKind = "audit-cleanup"
+	Lifecycle    ScheduledTaskRunTargetKind = "lifecycle"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledTaskRunTargetKind enum.
+func (e ScheduledTaskRunTargetKind) Valid() bool {
+	switch e {
+	case AuditCleanup:
+		return true
+	case Lifecycle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledTaskRunTrigger.
+const (
+	Manual    ScheduledTaskRunTrigger = "manual"
+	Scheduled ScheduledTaskRunTrigger = "scheduled"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledTaskRunTrigger enum.
+func (e ScheduledTaskRunTrigger) Valid() bool {
+	switch e {
+	case Manual:
+		return true
+	case Scheduled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
@@ -1393,6 +1501,24 @@ type CreateRepository struct {
 
 // CreateRepositoryType defines model for CreateRepository.Type.
 type CreateRepositoryType string
+
+// CreateScheduledTask defines model for CreateScheduledTask.
+type CreateScheduledTask struct {
+	Description     *string                 `json:"description,omitempty"`
+	Enabled         bool                    `json:"enabled"`
+	IntervalMinutes int                     `json:"intervalMinutes"`
+	Kind            CreateScheduledTaskKind `json:"kind"`
+	Name            string                  `json:"name"`
+
+	// NextRunAt Defaults to one interval after creation.
+	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
+
+	// RepositoryId Required for repository-retention and omitted for audit-retention.
+	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
+}
+
+// CreateScheduledTaskKind defines model for CreateScheduledTask.Kind.
+type CreateScheduledTaskKind string
 
 // CreateUser defines model for CreateUser.
 type CreateUser struct {
@@ -2215,6 +2341,54 @@ type RuntimeNodeList struct {
 	Items  []RuntimeNode     `json:"items"`
 }
 
+// ScheduledTask defines model for ScheduledTask.
+type ScheduledTask struct {
+	CreatedAt       time.Time                  `json:"createdAt"`
+	Description     string                     `json:"description"`
+	Enabled         bool                       `json:"enabled"`
+	Id              openapi_types.UUID         `json:"id"`
+	IntervalMinutes int                        `json:"intervalMinutes"`
+	Kind            ScheduledTaskKind          `json:"kind"`
+	LastError       *string                    `json:"lastError,omitempty"`
+	LastRunAt       *time.Time                 `json:"lastRunAt,omitempty"`
+	LastRunId       *openapi_types.UUID        `json:"lastRunId,omitempty"`
+	LastRunState    *ScheduledTaskLastRunState `json:"lastRunState,omitempty"`
+	Name            string                     `json:"name"`
+	NextRunAt       time.Time                  `json:"nextRunAt"`
+	RepositoryId    *openapi_types.UUID        `json:"repositoryId,omitempty"`
+	UpdatedAt       time.Time                  `json:"updatedAt"`
+	Version         string                     `json:"version"`
+}
+
+// ScheduledTaskKind defines model for ScheduledTask.Kind.
+type ScheduledTaskKind string
+
+// ScheduledTaskLastRunState defines model for ScheduledTask.LastRunState.
+type ScheduledTaskLastRunState string
+
+// ScheduledTaskRun defines model for ScheduledTaskRun.
+type ScheduledTaskRun struct {
+	CompletedAt *time.Time                  `json:"completedAt,omitempty"`
+	CreatedAt   time.Time                   `json:"createdAt"`
+	Id          openapi_types.UUID          `json:"id"`
+	LastError   *string                     `json:"lastError,omitempty"`
+	ScheduledAt time.Time                   `json:"scheduledAt"`
+	State       ScheduledTaskRunState       `json:"state"`
+	TargetId    *string                     `json:"targetId,omitempty"`
+	TargetKind  *ScheduledTaskRunTargetKind `json:"targetKind,omitempty"`
+	TaskId      openapi_types.UUID          `json:"taskId"`
+	Trigger     ScheduledTaskRunTrigger     `json:"trigger"`
+}
+
+// ScheduledTaskRunState defines model for ScheduledTaskRun.State.
+type ScheduledTaskRunState string
+
+// ScheduledTaskRunTargetKind defines model for ScheduledTaskRun.TargetKind.
+type ScheduledTaskRunTargetKind string
+
+// ScheduledTaskRunTrigger defines model for ScheduledTaskRun.Trigger.
+type ScheduledTaskRunTrigger string
+
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
@@ -2229,6 +2403,9 @@ type UpdateRepository struct {
 	// Endpoint Upstream base URL (https). Required for proxy repositories.
 	Endpoint *string `json:"endpoint,omitempty"`
 }
+
+// UpdateScheduledTask defines model for UpdateScheduledTask.
+type UpdateScheduledTask = CreateScheduledTask
 
 // UpdateUser defines model for UpdateUser.
 type UpdateUser struct {
@@ -2302,6 +2479,9 @@ type ReplicationPlanId = openapi_types.UUID
 
 // RepositoryId defines model for RepositoryId.
 type RepositoryId = openapi_types.UUID
+
+// ScheduledTaskId defines model for ScheduledTaskId.
+type ScheduledTaskId = openapi_types.UUID
 
 // SessionId defines model for SessionId.
 type SessionId = openapi_types.UUID
@@ -2603,6 +2783,16 @@ type ListRepositoryTombstonesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// UpdateScheduledTaskParams defines parameters for UpdateScheduledTask.
+type UpdateScheduledTaskParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListScheduledTaskRunsParams defines parameters for ListScheduledTaskRuns.
+type ListScheduledTaskRunsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // UpdateUserParams defines parameters for UpdateUser.
 type UpdateUserParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -2667,6 +2857,12 @@ type ReplaceRetentionPolicyJSONRequestBody = RetentionPolicy
 
 // TombstoneRepositoryArtifactJSONRequestBody defines body for TombstoneRepositoryArtifact for application/json ContentType.
 type TombstoneRepositoryArtifactJSONRequestBody = RestoreArtifact
+
+// CreateScheduledTaskJSONRequestBody defines body for CreateScheduledTask for application/json ContentType.
+type CreateScheduledTaskJSONRequestBody = CreateScheduledTask
+
+// UpdateScheduledTaskJSONRequestBody defines body for UpdateScheduledTask for application/json ContentType.
+type UpdateScheduledTaskJSONRequestBody = UpdateScheduledTask
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUser
@@ -2946,6 +3142,27 @@ type ServerInterface interface {
 	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
 	// (GET /runtime/nodes)
 	ListRuntimeNodes(w http.ResponseWriter, r *http.Request)
+
+	// (GET /scheduled-tasks)
+	ListScheduledTasks(w http.ResponseWriter, r *http.Request)
+
+	// (POST /scheduled-tasks)
+	CreateScheduledTask(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /scheduled-tasks/{taskId})
+	DeleteScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId)
+
+	// (GET /scheduled-tasks/{taskId})
+	GetScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId)
+
+	// (PUT /scheduled-tasks/{taskId})
+	UpdateScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params UpdateScheduledTaskParams)
+
+	// (POST /scheduled-tasks/{taskId}/run)
+	RunScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId)
+
+	// (GET /scheduled-tasks/{taskId}/runs)
+	ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params ListScheduledTaskRunsParams)
 
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -6225,6 +6442,208 @@ func (siw *ServerInterfaceWrapper) ListRuntimeNodes(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListScheduledTasks operation middleware
+func (siw *ServerInterfaceWrapper) ListScheduledTasks(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScheduledTasks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateScheduledTask operation middleware
+func (siw *ServerInterfaceWrapper) CreateScheduledTask(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateScheduledTask(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteScheduledTask operation middleware
+func (siw *ServerInterfaceWrapper) DeleteScheduledTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId ScheduledTaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteScheduledTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScheduledTask operation middleware
+func (siw *ServerInterfaceWrapper) GetScheduledTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId ScheduledTaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScheduledTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateScheduledTask operation middleware
+func (siw *ServerInterfaceWrapper) UpdateScheduledTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId ScheduledTaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateScheduledTaskParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateScheduledTask(w, r, taskId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunScheduledTask operation middleware
+func (siw *ServerInterfaceWrapper) RunScheduledTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId ScheduledTaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunScheduledTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScheduledTaskRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId ScheduledTaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", r.PathValue("taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListScheduledTaskRunsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScheduledTaskRuns(w, r, taskId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -6557,6 +6976,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/nodes", wrapper.ListRuntimeNodes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks", wrapper.ListScheduledTasks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/scheduled-tasks", wrapper.CreateScheduledTask)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/scheduled-tasks/{taskId}", wrapper.DeleteScheduledTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks/{taskId}", wrapper.GetScheduledTask)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/scheduled-tasks/{taskId}", wrapper.UpdateScheduledTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/scheduled-tasks/{taskId}/run", wrapper.RunScheduledTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks/{taskId}/runs", wrapper.ListScheduledTaskRuns)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CreateUser)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
@@ -10170,6 +10596,436 @@ func (response ListRuntimeNodes401ApplicationProblemPlusJSONResponse) VisitListR
 	return err
 }
 
+type ListScheduledTasksRequestObject struct {
+}
+
+type ListScheduledTasksResponseObject interface {
+	VisitListScheduledTasksResponse(w http.ResponseWriter) error
+}
+
+type ListScheduledTasks200JSONResponse []ScheduledTask
+
+func (response ListScheduledTasks200JSONResponse) VisitListScheduledTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTasks401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListScheduledTasks401ApplicationProblemPlusJSONResponse) VisitListScheduledTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScheduledTaskRequestObject struct {
+	Body *CreateScheduledTaskJSONRequestBody
+}
+
+type CreateScheduledTaskResponseObject interface {
+	VisitCreateScheduledTaskResponse(w http.ResponseWriter) error
+}
+
+type CreateScheduledTask201JSONResponse ScheduledTask
+
+func (response CreateScheduledTask201JSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScheduledTask400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScheduledTask400ApplicationProblemPlusJSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScheduledTask401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateScheduledTask401ApplicationProblemPlusJSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScheduledTask409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateScheduledTask409ApplicationProblemPlusJSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScheduledTaskRequestObject struct {
+	TaskId ScheduledTaskId `json:"taskId"`
+}
+
+type DeleteScheduledTaskResponseObject interface {
+	VisitDeleteScheduledTaskResponse(w http.ResponseWriter) error
+}
+
+type DeleteScheduledTask204Response struct {
+}
+
+func (response DeleteScheduledTask204Response) VisitDeleteScheduledTaskResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteScheduledTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScheduledTask401ApplicationProblemPlusJSONResponse) VisitDeleteScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScheduledTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteScheduledTask404ApplicationProblemPlusJSONResponse) VisitDeleteScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScheduledTaskRequestObject struct {
+	TaskId ScheduledTaskId `json:"taskId"`
+}
+
+type GetScheduledTaskResponseObject interface {
+	VisitGetScheduledTaskResponse(w http.ResponseWriter) error
+}
+
+type GetScheduledTask200JSONResponse ScheduledTask
+
+func (response GetScheduledTask200JSONResponse) VisitGetScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScheduledTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetScheduledTask401ApplicationProblemPlusJSONResponse) VisitGetScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScheduledTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetScheduledTask404ApplicationProblemPlusJSONResponse) VisitGetScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTaskRequestObject struct {
+	TaskId ScheduledTaskId `json:"taskId"`
+	Params UpdateScheduledTaskParams
+	Body   *UpdateScheduledTaskJSONRequestBody
+}
+
+type UpdateScheduledTaskResponseObject interface {
+	VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error
+}
+
+type UpdateScheduledTask200JSONResponse ScheduledTask
+
+func (response UpdateScheduledTask200JSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateScheduledTask400ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateScheduledTask401ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateScheduledTask404ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateScheduledTask409ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateScheduledTask412ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunScheduledTaskRequestObject struct {
+	TaskId ScheduledTaskId `json:"taskId"`
+}
+
+type RunScheduledTaskResponseObject interface {
+	VisitRunScheduledTaskResponse(w http.ResponseWriter) error
+}
+
+type RunScheduledTask202JSONResponse ScheduledTaskRun
+
+func (response RunScheduledTask202JSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunScheduledTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RunScheduledTask401ApplicationProblemPlusJSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunScheduledTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response RunScheduledTask404ApplicationProblemPlusJSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunScheduledTask409ApplicationProblemPlusJSONResponse Problem
+
+func (response RunScheduledTask409ApplicationProblemPlusJSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTaskRunsRequestObject struct {
+	TaskId ScheduledTaskId `json:"taskId"`
+	Params ListScheduledTaskRunsParams
+}
+
+type ListScheduledTaskRunsResponseObject interface {
+	VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error
+}
+
+type ListScheduledTaskRuns200JSONResponse []ScheduledTaskRun
+
+func (response ListScheduledTaskRuns200JSONResponse) VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTaskRuns400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListScheduledTaskRuns400ApplicationProblemPlusJSONResponse) VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTaskRuns401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListScheduledTaskRuns401ApplicationProblemPlusJSONResponse) VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTaskRuns404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListScheduledTaskRuns404ApplicationProblemPlusJSONResponse) VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 }
 
@@ -10675,6 +11531,27 @@ type StrictServerInterface interface {
 	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
 	// (GET /runtime/nodes)
 	ListRuntimeNodes(ctx context.Context, request ListRuntimeNodesRequestObject) (ListRuntimeNodesResponseObject, error)
+
+	// (GET /scheduled-tasks)
+	ListScheduledTasks(ctx context.Context, request ListScheduledTasksRequestObject) (ListScheduledTasksResponseObject, error)
+
+	// (POST /scheduled-tasks)
+	CreateScheduledTask(ctx context.Context, request CreateScheduledTaskRequestObject) (CreateScheduledTaskResponseObject, error)
+
+	// (DELETE /scheduled-tasks/{taskId})
+	DeleteScheduledTask(ctx context.Context, request DeleteScheduledTaskRequestObject) (DeleteScheduledTaskResponseObject, error)
+
+	// (GET /scheduled-tasks/{taskId})
+	GetScheduledTask(ctx context.Context, request GetScheduledTaskRequestObject) (GetScheduledTaskResponseObject, error)
+
+	// (PUT /scheduled-tasks/{taskId})
+	UpdateScheduledTask(ctx context.Context, request UpdateScheduledTaskRequestObject) (UpdateScheduledTaskResponseObject, error)
+
+	// (POST /scheduled-tasks/{taskId}/run)
+	RunScheduledTask(ctx context.Context, request RunScheduledTaskRequestObject) (RunScheduledTaskResponseObject, error)
+
+	// (GET /scheduled-tasks/{taskId}/runs)
+	ListScheduledTaskRuns(ctx context.Context, request ListScheduledTaskRunsRequestObject) (ListScheduledTaskRunsResponseObject, error)
 
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -12905,6 +13782,200 @@ func (sh *strictHandler) ListRuntimeNodes(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRuntimeNodesResponseObject); ok {
 		if err := validResponse.VisitListRuntimeNodesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScheduledTasks operation middleware
+func (sh *strictHandler) ListScheduledTasks(w http.ResponseWriter, r *http.Request) {
+	var request ListScheduledTasksRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScheduledTasks(ctx, request.(ListScheduledTasksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScheduledTasks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScheduledTasksResponseObject); ok {
+		if err := validResponse.VisitListScheduledTasksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateScheduledTask operation middleware
+func (sh *strictHandler) CreateScheduledTask(w http.ResponseWriter, r *http.Request) {
+	var request CreateScheduledTaskRequestObject
+
+	var body CreateScheduledTaskJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateScheduledTask(ctx, request.(CreateScheduledTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateScheduledTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateScheduledTaskResponseObject); ok {
+		if err := validResponse.VisitCreateScheduledTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteScheduledTask operation middleware
+func (sh *strictHandler) DeleteScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId) {
+	var request DeleteScheduledTaskRequestObject
+
+	request.TaskId = taskId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteScheduledTask(ctx, request.(DeleteScheduledTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteScheduledTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteScheduledTaskResponseObject); ok {
+		if err := validResponse.VisitDeleteScheduledTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScheduledTask operation middleware
+func (sh *strictHandler) GetScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId) {
+	var request GetScheduledTaskRequestObject
+
+	request.TaskId = taskId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScheduledTask(ctx, request.(GetScheduledTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScheduledTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScheduledTaskResponseObject); ok {
+		if err := validResponse.VisitGetScheduledTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateScheduledTask operation middleware
+func (sh *strictHandler) UpdateScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params UpdateScheduledTaskParams) {
+	var request UpdateScheduledTaskRequestObject
+
+	request.TaskId = taskId
+	request.Params = params
+
+	var body UpdateScheduledTaskJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateScheduledTask(ctx, request.(UpdateScheduledTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateScheduledTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateScheduledTaskResponseObject); ok {
+		if err := validResponse.VisitUpdateScheduledTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RunScheduledTask operation middleware
+func (sh *strictHandler) RunScheduledTask(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId) {
+	var request RunScheduledTaskRequestObject
+
+	request.TaskId = taskId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RunScheduledTask(ctx, request.(RunScheduledTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RunScheduledTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RunScheduledTaskResponseObject); ok {
+		if err := validResponse.VisitRunScheduledTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScheduledTaskRuns operation middleware
+func (sh *strictHandler) ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params ListScheduledTaskRunsParams) {
+	var request ListScheduledTaskRunsRequestObject
+
+	request.TaskId = taskId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScheduledTaskRuns(ctx, request.(ListScheduledTaskRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScheduledTaskRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScheduledTaskRunsResponseObject); ok {
+		if err := validResponse.VisitListScheduledTaskRunsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

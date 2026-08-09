@@ -227,6 +227,37 @@ export type LifecycleJob = {
   lastError?: string;
 };
 
+export type ScheduledTask = {
+  id: string;
+  name: string;
+  description: string;
+  kind: "repository-retention" | "audit-retention";
+  repositoryId?: string;
+  intervalMinutes: number;
+  enabled: boolean;
+  nextRunAt: string;
+  lastRunAt?: string;
+  lastRunId?: string;
+  lastRunState?: "submitted" | "failed";
+  lastError?: string;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduledTaskRun = {
+  id: string;
+  taskId: string;
+  trigger: "scheduled" | "manual";
+  state: "submitted" | "failed";
+  scheduledAt: string;
+  createdAt: string;
+  completedAt?: string;
+  targetKind?: "lifecycle" | "audit-cleanup";
+  targetId?: string;
+  lastError?: string;
+};
+
 export type ReplicationRequest = {
   targetRepositoryId: string;
   coordinate: string;
@@ -813,6 +844,24 @@ export type RepositoryLifecycleJob = {
 
 export type RepositoryLifecycleJobList = Array<RepositoryLifecycleJob>;
 
+export type CreateScheduledTask = {
+  name: string;
+  description?: string;
+  kind: "repository-retention" | "audit-retention";
+  /**
+   * Required for repository-retention and omitted for audit-retention.
+   */
+  repositoryId?: string;
+  intervalMinutes: number;
+  enabled: boolean;
+  /**
+   * Defaults to one interval after creation.
+   */
+  nextRunAt?: string;
+};
+
+export type UpdateScheduledTask = CreateScheduledTask;
+
 /**
  * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
  */
@@ -1128,6 +1177,8 @@ export type ConanReferencePrefix = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type ScheduledTaskId = string;
 
 export type OptionalIfMatch = string;
 
@@ -2013,6 +2064,258 @@ export type ListLifecycleJobsResponses = {
 
 export type ListLifecycleJobsResponse =
   ListLifecycleJobsResponses[keyof ListLifecycleJobsResponses];
+
+export type ListScheduledTasksData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/scheduled-tasks";
+};
+
+export type ListScheduledTasksErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListScheduledTasksError =
+  ListScheduledTasksErrors[keyof ListScheduledTasksErrors];
+
+export type ListScheduledTasksResponses = {
+  /**
+   * Scheduled task catalog
+   */
+  200: Array<ScheduledTask>;
+};
+
+export type ListScheduledTasksResponse =
+  ListScheduledTasksResponses[keyof ListScheduledTasksResponses];
+
+export type CreateScheduledTaskData = {
+  body: CreateScheduledTask;
+  path?: never;
+  query?: never;
+  url: "/scheduled-tasks";
+};
+
+export type CreateScheduledTaskErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateScheduledTaskError =
+  CreateScheduledTaskErrors[keyof CreateScheduledTaskErrors];
+
+export type CreateScheduledTaskResponses = {
+  /**
+   * Scheduled task created
+   */
+  201: ScheduledTask;
+};
+
+export type CreateScheduledTaskResponse =
+  CreateScheduledTaskResponses[keyof CreateScheduledTaskResponses];
+
+export type DeleteScheduledTaskData = {
+  body?: never;
+  path: {
+    taskId: string;
+  };
+  query?: never;
+  url: "/scheduled-tasks/{taskId}";
+};
+
+export type DeleteScheduledTaskErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type DeleteScheduledTaskError =
+  DeleteScheduledTaskErrors[keyof DeleteScheduledTaskErrors];
+
+export type DeleteScheduledTaskResponses = {
+  /**
+   * Scheduled task deleted
+   */
+  204: void;
+};
+
+export type DeleteScheduledTaskResponse =
+  DeleteScheduledTaskResponses[keyof DeleteScheduledTaskResponses];
+
+export type GetScheduledTaskData = {
+  body?: never;
+  path: {
+    taskId: string;
+  };
+  query?: never;
+  url: "/scheduled-tasks/{taskId}";
+};
+
+export type GetScheduledTaskErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetScheduledTaskError =
+  GetScheduledTaskErrors[keyof GetScheduledTaskErrors];
+
+export type GetScheduledTaskResponses = {
+  /**
+   * Scheduled task
+   */
+  200: ScheduledTask;
+};
+
+export type GetScheduledTaskResponse =
+  GetScheduledTaskResponses[keyof GetScheduledTaskResponses];
+
+export type UpdateScheduledTaskData = {
+  body: UpdateScheduledTask;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    taskId: string;
+  };
+  query?: never;
+  url: "/scheduled-tasks/{taskId}";
+};
+
+export type UpdateScheduledTaskErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type UpdateScheduledTaskError =
+  UpdateScheduledTaskErrors[keyof UpdateScheduledTaskErrors];
+
+export type UpdateScheduledTaskResponses = {
+  /**
+   * Scheduled task updated
+   */
+  200: ScheduledTask;
+};
+
+export type UpdateScheduledTaskResponse =
+  UpdateScheduledTaskResponses[keyof UpdateScheduledTaskResponses];
+
+export type RunScheduledTaskData = {
+  body?: never;
+  path: {
+    taskId: string;
+  };
+  query?: never;
+  url: "/scheduled-tasks/{taskId}/run";
+};
+
+export type RunScheduledTaskErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type RunScheduledTaskError =
+  RunScheduledTaskErrors[keyof RunScheduledTaskErrors];
+
+export type RunScheduledTaskResponses = {
+  /**
+   * Scheduled task dispatched
+   */
+  202: ScheduledTaskRun;
+};
+
+export type RunScheduledTaskResponse =
+  RunScheduledTaskResponses[keyof RunScheduledTaskResponses];
+
+export type ListScheduledTaskRunsData = {
+  body?: never;
+  path: {
+    taskId: string;
+  };
+  query?: {
+    limit?: number;
+  };
+  url: "/scheduled-tasks/{taskId}/runs";
+};
+
+export type ListScheduledTaskRunsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListScheduledTaskRunsError =
+  ListScheduledTaskRunsErrors[keyof ListScheduledTaskRunsErrors];
+
+export type ListScheduledTaskRunsResponses = {
+  /**
+   * Scheduled task dispatch history
+   */
+  200: Array<ScheduledTaskRun>;
+};
+
+export type ListScheduledTaskRunsResponse =
+  ListScheduledTaskRunsResponses[keyof ListScheduledTaskRunsResponses];
 
 export type DeleteRepositoryData = {
   body?: never;

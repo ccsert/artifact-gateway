@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelRepositoryLifecycleJobData, CancelRepositoryLifecycleJobErrors, CancelRepositoryLifecycleJobResponses, ClearProxyNegativeCacheData, ClearProxyNegativeCacheErrors, ClearProxyNegativeCacheResponses, CommitPublishSessionData, CommitPublishSessionErrors, CommitPublishSessionResponses, CreateApiKeyData, CreateApiKeyErrors, CreateApiKeyResponses, CreateGroupData, CreateGroupErrors, CreateGroupResponses, CreatePublishSessionData, CreatePublishSessionErrors, CreatePublishSessionResponses, CreateRepositoryData, CreateRepositoryErrors, CreateRepositoryPromotionData, CreateRepositoryPromotionResponses, CreateRepositoryReplicationData, CreateRepositoryReplicationErrors, CreateRepositoryReplicationResponses, CreateRepositoryResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteArtifactData, DeleteArtifactResponses, DeleteConanPackageRevisionData, DeleteConanPackageRevisionErrors, DeleteConanPackageRevisionResponses, DeleteGroupData, DeleteGroupResponses, DeleteRepositoryData, DeleteRepositoryErrors, DeleteRepositoryReplicationData, DeleteRepositoryReplicationErrors, DeleteRepositoryReplicationResponses, DeleteRepositoryResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, DryRunRepositoryRetentionData, DryRunRepositoryRetentionErrors, DryRunRepositoryRetentionResponses, ExecuteAuditRetentionData, ExecuteAuditRetentionErrors, ExecuteAuditRetentionResponses, ExecuteRepositoryRetentionData, ExecuteRepositoryRetentionErrors, ExecuteRepositoryRetentionResponses, GetAnonymousAccessPolicyData, GetAnonymousAccessPolicyErrors, GetAnonymousAccessPolicyResponses, GetArtifactData, GetArtifactResponses, GetAuditRetentionPolicyData, GetAuditRetentionPolicyResponses, GetCurrentIdentityData, GetCurrentIdentityErrors, GetCurrentIdentityResponses, GetGroupCapacityData, GetGroupCapacityErrors, GetGroupCapacityResponses, GetGroupData, GetGroupResponses, GetOidcSettingsData, GetOidcSettingsErrors, GetOidcSettingsResponses, GetProxyHealthData, GetProxyHealthErrors, GetProxyHealthResponses, GetPublishSessionData, GetPublishSessionErrors, GetPublishSessionResponses, GetRepositoryCapabilitiesData, GetRepositoryCapabilitiesErrors, GetRepositoryCapabilitiesResponses, GetRepositoryCapacityData, GetRepositoryCapacityErrors, GetRepositoryCapacityResponses, GetRepositoryData, GetRepositoryEffectiveAccessData, GetRepositoryEffectiveAccessErrors, GetRepositoryEffectiveAccessResponses, GetRepositoryErrors, GetRepositoryReplicationData, GetRepositoryReplicationErrors, GetRepositoryReplicationResponses, GetRepositoryResponses, GetRetentionPolicyData, GetRetentionPolicyResponses, GetUserData, GetUserErrors, GetUserResponses, InvalidateProxyCacheData, InvalidateProxyCacheErrors, InvalidateProxyCacheResponses, ListApiKeysData, ListApiKeysErrors, ListApiKeysResponses, ListArtifactsData, ListArtifactsResponses, ListAuditPageData, ListAuditPageErrors, ListAuditPageResponses, ListAuditRetentionJobsData, ListAuditRetentionJobsResponses, ListAuditsData, ListAuditsErrors, ListAuditsResponses, ListConanPackageIdsData, ListConanPackageIdsErrors, ListConanPackageIdsResponses, ListConanPackageRevisionsData, ListConanPackageRevisionsErrors, ListConanPackageRevisionsResponses, ListConanRecipeRevisionsData, ListConanRecipeRevisionsErrors, ListConanRecipeRevisionsResponses, ListConanReferencesData, ListConanReferencesErrors, ListConanReferencesResponses, ListFormatProfilesData, ListFormatProfilesErrors, ListFormatProfilesResponses, ListGrantsData, ListGrantsResponses, ListGroupMembersData, ListGroupMembersResponses, ListGroupsData, ListGroupsResponses, ListLifecycleJobsData, ListLifecycleJobsErrors, ListLifecycleJobsResponses, ListMavenCoordinatesData, ListMavenCoordinatesErrors, ListMavenCoordinatesResponses, ListOciImagesData, ListOciImagesErrors, ListOciImagesResponses, ListOciManifestsData, ListOciManifestsErrors, ListOciManifestsResponses, ListProxyCacheEntriesData, ListProxyCacheEntriesErrors, ListProxyCacheEntriesResponses, ListRepositoriesData, ListRepositoriesErrors, ListRepositoriesResponses, ListRepositoryCapacitiesData, ListRepositoryCapacitiesErrors, ListRepositoryCapacitiesResponses, ListRepositoryGrantsData, ListRepositoryGrantsErrors, ListRepositoryGrantsResponses, ListRepositoryLifecycleJobsData, ListRepositoryLifecycleJobsErrors, ListRepositoryLifecycleJobsResponses, ListRepositoryReplicationsData, ListRepositoryReplicationsErrors, ListRepositoryReplicationsResponses, ListRepositoryTombstonesData, ListRepositoryTombstonesResponses, ListRuntimeNodesData, ListRuntimeNodesErrors, ListRuntimeNodesResponses, ListUsersData, ListUsersErrors, ListUsersResponses, RefreshProxyCacheData, RefreshProxyCacheErrors, RefreshProxyCacheResponses, ReplaceAnonymousAccessPolicyData, ReplaceAnonymousAccessPolicyErrors, ReplaceAnonymousAccessPolicyResponses, ReplaceAuditRetentionPolicyData, ReplaceAuditRetentionPolicyErrors, ReplaceAuditRetentionPolicyResponses, ReplaceGrantsData, ReplaceGrantsErrors, ReplaceGrantsResponses, ReplaceGroupData, ReplaceGroupErrors, ReplaceGroupMembersData, ReplaceGroupMembersErrors, ReplaceGroupMembersResponses, ReplaceGroupResponses, ReplaceOidcSettingsData, ReplaceOidcSettingsErrors, ReplaceOidcSettingsResponses, ReplaceRepositoryCapacityData, ReplaceRepositoryCapacityErrors, ReplaceRepositoryCapacityResponses, ReplaceRetentionPolicyData, ReplaceRetentionPolicyErrors, ReplaceRetentionPolicyResponses, RestoreRepositoryArtifactData, RestoreRepositoryArtifactResponses, RetryRepositoryLifecycleJobData, RetryRepositoryLifecycleJobErrors, RetryRepositoryLifecycleJobResponses, RevokeApiKeyData, RevokeApiKeyErrors, RevokeApiKeyResponses, RunRepositoryLifecycleJobNowData, RunRepositoryLifecycleJobNowErrors, RunRepositoryLifecycleJobNowResponses, SearchArtifactsData, SearchArtifactsErrors, SearchArtifactsResponses, SearchRepositoryArtifactsData, SearchRepositoryArtifactsErrors, SearchRepositoryArtifactsResponses, TestEgressProxyData, TestEgressProxyErrors, TestEgressProxyResponses, TestOidcSettingsData, TestOidcSettingsErrors, TestOidcSettingsResponses, TombstoneRepositoryArtifactData, TombstoneRepositoryArtifactResponses, UpdateRepositoryData, UpdateRepositoryErrors, UpdateRepositoryResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadPublishObjectData, UploadPublishObjectErrors, UploadPublishObjectResponses } from './types.gen';
+import type { CancelRepositoryLifecycleJobData, CancelRepositoryLifecycleJobErrors, CancelRepositoryLifecycleJobResponses, ClearProxyNegativeCacheData, ClearProxyNegativeCacheErrors, ClearProxyNegativeCacheResponses, CommitPublishSessionData, CommitPublishSessionErrors, CommitPublishSessionResponses, CreateApiKeyData, CreateApiKeyErrors, CreateApiKeyResponses, CreateGroupData, CreateGroupErrors, CreateGroupResponses, CreatePublishSessionData, CreatePublishSessionErrors, CreatePublishSessionResponses, CreateRepositoryData, CreateRepositoryErrors, CreateRepositoryPromotionData, CreateRepositoryPromotionResponses, CreateRepositoryReplicationData, CreateRepositoryReplicationErrors, CreateRepositoryReplicationResponses, CreateRepositoryResponses, CreateScheduledTaskData, CreateScheduledTaskErrors, CreateScheduledTaskResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteArtifactData, DeleteArtifactResponses, DeleteConanPackageRevisionData, DeleteConanPackageRevisionErrors, DeleteConanPackageRevisionResponses, DeleteGroupData, DeleteGroupResponses, DeleteRepositoryData, DeleteRepositoryErrors, DeleteRepositoryReplicationData, DeleteRepositoryReplicationErrors, DeleteRepositoryReplicationResponses, DeleteRepositoryResponses, DeleteScheduledTaskData, DeleteScheduledTaskErrors, DeleteScheduledTaskResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, DryRunRepositoryRetentionData, DryRunRepositoryRetentionErrors, DryRunRepositoryRetentionResponses, ExecuteAuditRetentionData, ExecuteAuditRetentionErrors, ExecuteAuditRetentionResponses, ExecuteRepositoryRetentionData, ExecuteRepositoryRetentionErrors, ExecuteRepositoryRetentionResponses, GetAnonymousAccessPolicyData, GetAnonymousAccessPolicyErrors, GetAnonymousAccessPolicyResponses, GetArtifactData, GetArtifactResponses, GetAuditRetentionPolicyData, GetAuditRetentionPolicyResponses, GetCurrentIdentityData, GetCurrentIdentityErrors, GetCurrentIdentityResponses, GetGroupCapacityData, GetGroupCapacityErrors, GetGroupCapacityResponses, GetGroupData, GetGroupResponses, GetOidcSettingsData, GetOidcSettingsErrors, GetOidcSettingsResponses, GetProxyHealthData, GetProxyHealthErrors, GetProxyHealthResponses, GetPublishSessionData, GetPublishSessionErrors, GetPublishSessionResponses, GetRepositoryCapabilitiesData, GetRepositoryCapabilitiesErrors, GetRepositoryCapabilitiesResponses, GetRepositoryCapacityData, GetRepositoryCapacityErrors, GetRepositoryCapacityResponses, GetRepositoryData, GetRepositoryEffectiveAccessData, GetRepositoryEffectiveAccessErrors, GetRepositoryEffectiveAccessResponses, GetRepositoryErrors, GetRepositoryReplicationData, GetRepositoryReplicationErrors, GetRepositoryReplicationResponses, GetRepositoryResponses, GetRetentionPolicyData, GetRetentionPolicyResponses, GetScheduledTaskData, GetScheduledTaskErrors, GetScheduledTaskResponses, GetUserData, GetUserErrors, GetUserResponses, InvalidateProxyCacheData, InvalidateProxyCacheErrors, InvalidateProxyCacheResponses, ListApiKeysData, ListApiKeysErrors, ListApiKeysResponses, ListArtifactsData, ListArtifactsResponses, ListAuditPageData, ListAuditPageErrors, ListAuditPageResponses, ListAuditRetentionJobsData, ListAuditRetentionJobsResponses, ListAuditsData, ListAuditsErrors, ListAuditsResponses, ListConanPackageIdsData, ListConanPackageIdsErrors, ListConanPackageIdsResponses, ListConanPackageRevisionsData, ListConanPackageRevisionsErrors, ListConanPackageRevisionsResponses, ListConanRecipeRevisionsData, ListConanRecipeRevisionsErrors, ListConanRecipeRevisionsResponses, ListConanReferencesData, ListConanReferencesErrors, ListConanReferencesResponses, ListFormatProfilesData, ListFormatProfilesErrors, ListFormatProfilesResponses, ListGrantsData, ListGrantsResponses, ListGroupMembersData, ListGroupMembersResponses, ListGroupsData, ListGroupsResponses, ListLifecycleJobsData, ListLifecycleJobsErrors, ListLifecycleJobsResponses, ListMavenCoordinatesData, ListMavenCoordinatesErrors, ListMavenCoordinatesResponses, ListOciImagesData, ListOciImagesErrors, ListOciImagesResponses, ListOciManifestsData, ListOciManifestsErrors, ListOciManifestsResponses, ListProxyCacheEntriesData, ListProxyCacheEntriesErrors, ListProxyCacheEntriesResponses, ListRepositoriesData, ListRepositoriesErrors, ListRepositoriesResponses, ListRepositoryCapacitiesData, ListRepositoryCapacitiesErrors, ListRepositoryCapacitiesResponses, ListRepositoryGrantsData, ListRepositoryGrantsErrors, ListRepositoryGrantsResponses, ListRepositoryLifecycleJobsData, ListRepositoryLifecycleJobsErrors, ListRepositoryLifecycleJobsResponses, ListRepositoryReplicationsData, ListRepositoryReplicationsErrors, ListRepositoryReplicationsResponses, ListRepositoryTombstonesData, ListRepositoryTombstonesResponses, ListRuntimeNodesData, ListRuntimeNodesErrors, ListRuntimeNodesResponses, ListScheduledTaskRunsData, ListScheduledTaskRunsErrors, ListScheduledTaskRunsResponses, ListScheduledTasksData, ListScheduledTasksErrors, ListScheduledTasksResponses, ListUsersData, ListUsersErrors, ListUsersResponses, RefreshProxyCacheData, RefreshProxyCacheErrors, RefreshProxyCacheResponses, ReplaceAnonymousAccessPolicyData, ReplaceAnonymousAccessPolicyErrors, ReplaceAnonymousAccessPolicyResponses, ReplaceAuditRetentionPolicyData, ReplaceAuditRetentionPolicyErrors, ReplaceAuditRetentionPolicyResponses, ReplaceGrantsData, ReplaceGrantsErrors, ReplaceGrantsResponses, ReplaceGroupData, ReplaceGroupErrors, ReplaceGroupMembersData, ReplaceGroupMembersErrors, ReplaceGroupMembersResponses, ReplaceGroupResponses, ReplaceOidcSettingsData, ReplaceOidcSettingsErrors, ReplaceOidcSettingsResponses, ReplaceRepositoryCapacityData, ReplaceRepositoryCapacityErrors, ReplaceRepositoryCapacityResponses, ReplaceRetentionPolicyData, ReplaceRetentionPolicyErrors, ReplaceRetentionPolicyResponses, RestoreRepositoryArtifactData, RestoreRepositoryArtifactResponses, RetryRepositoryLifecycleJobData, RetryRepositoryLifecycleJobErrors, RetryRepositoryLifecycleJobResponses, RevokeApiKeyData, RevokeApiKeyErrors, RevokeApiKeyResponses, RunRepositoryLifecycleJobNowData, RunRepositoryLifecycleJobNowErrors, RunRepositoryLifecycleJobNowResponses, RunScheduledTaskData, RunScheduledTaskErrors, RunScheduledTaskResponses, SearchArtifactsData, SearchArtifactsErrors, SearchArtifactsResponses, SearchRepositoryArtifactsData, SearchRepositoryArtifactsErrors, SearchRepositoryArtifactsResponses, TestEgressProxyData, TestEgressProxyErrors, TestEgressProxyResponses, TestOidcSettingsData, TestOidcSettingsErrors, TestOidcSettingsResponses, TombstoneRepositoryArtifactData, TombstoneRepositoryArtifactResponses, UpdateRepositoryData, UpdateRepositoryErrors, UpdateRepositoryResponses, UpdateScheduledTaskData, UpdateScheduledTaskErrors, UpdateScheduledTaskResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadPublishObjectData, UploadPublishObjectErrors, UploadPublishObjectResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -352,6 +352,84 @@ export const listLifecycleJobs = <ThrowOnError extends boolean = false>(options?
             type: 'http'
         }],
     url: '/lifecycle-jobs',
+    ...options
+});
+
+export const listScheduledTasks = <ThrowOnError extends boolean = false>(options?: Options<ListScheduledTasksData, ThrowOnError>): RequestResult<ListScheduledTasksResponses, ListScheduledTasksErrors, ThrowOnError> => (options?.client ?? client).get<ListScheduledTasksResponses, ListScheduledTasksErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks',
+    ...options
+});
+
+export const createScheduledTask = <ThrowOnError extends boolean = false>(options: Options<CreateScheduledTaskData, ThrowOnError>): RequestResult<CreateScheduledTaskResponses, CreateScheduledTaskErrors, ThrowOnError> => (options.client ?? client).post<CreateScheduledTaskResponses, CreateScheduledTaskErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteScheduledTask = <ThrowOnError extends boolean = false>(options: Options<DeleteScheduledTaskData, ThrowOnError>): RequestResult<DeleteScheduledTaskResponses, DeleteScheduledTaskErrors, ThrowOnError> => (options.client ?? client).delete<DeleteScheduledTaskResponses, DeleteScheduledTaskErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks/{taskId}',
+    ...options
+});
+
+export const getScheduledTask = <ThrowOnError extends boolean = false>(options: Options<GetScheduledTaskData, ThrowOnError>): RequestResult<GetScheduledTaskResponses, GetScheduledTaskErrors, ThrowOnError> => (options.client ?? client).get<GetScheduledTaskResponses, GetScheduledTaskErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks/{taskId}',
+    ...options
+});
+
+export const updateScheduledTask = <ThrowOnError extends boolean = false>(options: Options<UpdateScheduledTaskData, ThrowOnError>): RequestResult<UpdateScheduledTaskResponses, UpdateScheduledTaskErrors, ThrowOnError> => (options.client ?? client).put<UpdateScheduledTaskResponses, UpdateScheduledTaskErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks/{taskId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const runScheduledTask = <ThrowOnError extends boolean = false>(options: Options<RunScheduledTaskData, ThrowOnError>): RequestResult<RunScheduledTaskResponses, RunScheduledTaskErrors, ThrowOnError> => (options.client ?? client).post<RunScheduledTaskResponses, RunScheduledTaskErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks/{taskId}/run',
+    ...options
+});
+
+export const listScheduledTaskRuns = <ThrowOnError extends boolean = false>(options: Options<ListScheduledTaskRunsData, ThrowOnError>): RequestResult<ListScheduledTaskRunsResponses, ListScheduledTaskRunsErrors, ThrowOnError> => (options.client ?? client).get<ListScheduledTaskRunsResponses, ListScheduledTaskRunsErrors, ThrowOnError>({
+    security: [{
+            key: 'bearerAuth',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/scheduled-tasks/{taskId}/runs',
     ...options
 });
 

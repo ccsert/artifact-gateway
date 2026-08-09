@@ -1,0 +1,105 @@
+---
+scheduled_tasks:
+  get:
+    operationId: listScheduledTasks
+    responses:
+      '200':
+        description: Scheduled task catalog
+        content:
+          application/json:
+            schema:
+              type: array
+              items: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+  post:
+    operationId: createScheduledTask
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/CreateScheduledTask"}
+    responses:
+      '201':
+        description: Scheduled task created
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+scheduled_tasks_taskId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
+  get:
+    operationId: getScheduledTask
+    responses:
+      '200':
+        description: Scheduled task
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+  put:
+    operationId: updateScheduledTask
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/UpdateScheduledTask"}
+    responses:
+      '200':
+        description: Scheduled task updated
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}
+  delete:
+    operationId: deleteScheduledTask
+    responses:
+      '204': {description: Scheduled task deleted}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+
+scheduled_tasks_taskId_run:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
+  post:
+    operationId: runScheduledTask
+    responses:
+      '202':
+        description: Scheduled task dispatched
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ScheduledTaskRun"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+scheduled_tasks_taskId_runs:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
+  get:
+    operationId: listScheduledTaskRuns
+    parameters:
+    - name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+    responses:
+      '200':
+        description: Scheduled task dispatch history
+        content:
+          application/json:
+            schema:
+              type: array
+              items: {"$ref": "../components/schemas.yaml#/ScheduledTaskRun"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
