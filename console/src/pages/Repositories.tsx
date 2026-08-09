@@ -58,7 +58,9 @@ function CreateRepositoryDialog({
 
   const needsHosts =
     type === "proxy" &&
-    (selectedFormat === "raw" || selectedFormat === "conan");
+    (selectedFormat === "raw" ||
+      selectedFormat === "conan" ||
+      selectedFormat === "npm");
 
   const submit = async () => {
     setBusy(true);
@@ -98,6 +100,7 @@ function CreateRepositoryDialog({
     maven: "https://repo1.maven.org/maven2",
     raw: "https://raw.githubusercontent.com",
     conan: "https://center.conan.io/v2",
+    npm: "https://registry.npmjs.org",
   };
 
   return (
@@ -214,13 +217,17 @@ function CreateRepositoryDialog({
                   `Allowed hosts${needsHosts ? " (required)" : " (optional)"}`,
                 )}
                 hint={text(
-                  "逗号分隔的主机名；raw/conan 代理必填",
-                  "Comma-separated hostnames; required for Raw and Conan proxies",
+                  "逗号分隔的主机名；raw、conan 和 npm 代理必填。npmjs.org 通常还需允许 registry.npmjs.org",
+                  "Comma-separated hostnames; required for Raw, Conan, and npm proxies. npmjs.org normally requires registry.npmjs.org",
                 )}
               >
                 <Input
                   className="font-mono text-xs"
-                  placeholder="repo1.maven.org"
+                  placeholder={
+                    selectedFormat === "npm"
+                      ? "registry.npmjs.org"
+                      : "repo1.maven.org"
+                  }
                   value={allowedHosts}
                   onChange={(e) => setAllowedHosts(e.target.value)}
                 />

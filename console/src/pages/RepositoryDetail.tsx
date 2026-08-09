@@ -961,6 +961,7 @@ function ArtifactsTab({
 
   const format = repo.format;
   const proxyMaven = format === "maven" && repo.type === "proxy";
+  const proxyNpm = format === "npm" && repo.type === "proxy";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
 
   const load = useCallback(
@@ -1530,10 +1531,15 @@ function ArtifactsTab({
                       "通过 Maven 客户端拉取依赖后会显示代理缓存",
                       "The proxy cache appears after a Maven client retrieves dependencies.",
                     )
-                  : text(
-                      `通过 ${format} 客户端推送制品后会显示在这里`,
-                      "Push artifacts with the matching client to display them here.",
-                    )
+                  : proxyNpm
+                    ? text(
+                        "通过 npm install 拉取包后会显示上游元数据与缓存状态",
+                        "Upstream metadata and cache status appear after npm install retrieves a package.",
+                      )
+                    : text(
+                        `通过 ${format} 客户端推送制品后会显示在这里`,
+                        "Push artifacts with the matching client to display them here.",
+                      )
             }
           />
         </>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert } from "antd";
+import { Alert, Tag } from "antd";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -7,6 +7,7 @@ import {
   UsageSnippetBlock,
 } from "./PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
+import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { npmUsage } from "../lib/usage";
 
@@ -25,6 +26,9 @@ interface NpmVersionManifest {
     digest?: string;
     publisher?: string;
     size?: number;
+    source?: "hosted" | "proxy";
+    cacheStatus?: "metadata" | "cached";
+    cachedAt?: string;
   };
 }
 
@@ -51,6 +55,7 @@ export function NpmPackageDetail({
   onVersionChange?: (version: string) => void;
 }) {
   const { locale, text } = usePreferences();
+  const { token } = useAuth();
   const [packument, setPackument] = useState<NpmPackument | null>(null);
   const [selectedVersion, setSelectedVersion] = useState("");
   const [loading, setLoading] = useState(true);
@@ -63,6 +68,10 @@ export function NpmPackageDetail({
     setError("");
     void fetch(
       `/npm/${encodeURIComponent(repoName)}/${encodeURIComponent(packageName)}`,
+      {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      },
     )
       .then(async (response) => {
         if (!response.ok)
@@ -91,7 +100,7 @@ export function NpmPackageDetail({
     return () => {
       cancelled = true;
     };
-  }, [packageName, repoName, text]);
+  }, [packageName, repoName, text, token]);
 
   useEffect(() => {
     if (!packument) return;
@@ -133,6 +142,7 @@ export function NpmPackageDetail({
   const dependencyCount = Object.keys(manifest?.dependencies ?? {}).length;
   const snippets = npmUsage(repoName, packageName, selectedVersion);
   const artifactMetadata = manifest?._artifactGateway;
+  const metadataOnly = artifactMetadata?.cacheStatus === "metadata";
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
@@ -171,6 +181,18 @@ export function NpmPackageDetail({
               latest
             </span>
           ) : null}
+          {artifactMetadata?.source === "proxy" ? (
+            <Tag color="blue" variant="filled">
+              Proxy
+            </Tag>
+          ) : null}
+          {artifactMetadata?.cacheStatus ? (
+            <Tag color={metadataOnly ? "default" : "green"} variant="filled">
+              {metadataOnly
+                ? text("仅元数据", "Metadata only")
+                : text("已缓存", "Cached")}
+            </Tag>
+          ) : null}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
           <MetadataItem
@@ -188,7 +210,11 @@ export function NpmPackageDetail({
           />
           <MetadataItem
             label={text("包大小", "Package size")}
-            value={formatBytes(artifactMetadata?.size ?? size)}
+            value={
+              metadataOnly
+                ? text("下载后统计", "Available after download")
+                : formatBytes(artifactMetadata?.size ?? size)
+            }
           />
           <MetadataItem
             label={text("依赖 / 许可证", "Dependencies / license")}
@@ -198,7 +224,11 @@ export function NpmPackageDetail({
         <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-3 text-xs">
           <MetadataItem
             label="SHA-256 digest"
-            value={artifactMetadata?.digest ?? text("未记录", "Not recorded")}
+            value={
+              metadataOnly
+                ? text("下载后计算", "Computed after download")
+                : (artifactMetadata?.digest ?? text("未记录", "Not recorded"))
+            }
             mono
           />
           <MetadataItem
@@ -212,6 +242,19 @@ export function NpmPackageDetail({
             mono
           />
         </div>
+        {artifactMetadata?.source === "proxy" ? (
+          <p className="mt-3 text-xs text-zinc-500">
+            {metadataOnly
+              ? text(
+                  "该版本已从上游发现；首次安装会校验完整性并缓存 tarball。",
+                  "This version was discovered upstream. The first install verifies and caches its tarball.",
+                )
+              : text(
+                  `制品已缓存${artifactMetadata.cachedAt ? ` · ${formatDate(artifactMetadata.cachedAt, locale)}` : ""}`,
+                  `Artifact cached${artifactMetadata.cachedAt ? ` · ${formatDate(artifactMetadata.cachedAt, locale)}` : ""}`,
+                )}
+          </p>
+        ) : null}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {snippets.map((snippet) => (
             <UsageSnippetBlock
