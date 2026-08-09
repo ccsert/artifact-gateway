@@ -150,6 +150,7 @@ const (
 	repositoryAuthorizationFormatConan
 	repositoryAuthorizationFormatNPM
 	repositoryAuthorizationFormatPyPI
+	repositoryAuthorizationFormatGo
 	repositoryAuthorizationFormatCount
 )
 
@@ -161,7 +162,7 @@ const (
 	repositoryGrantDenialReasonCount
 )
 
-var repositoryAuthorizationFormats = [...]string{"management", "maven", "oci", "raw", "conan", "npm", "pypi"}
+var repositoryAuthorizationFormats = [...]string{"management", "maven", "oci", "raw", "conan", "npm", "pypi", "go"}
 var repositoryGrantDenialReasons = [...]string{"scope_not_granted", "grant_lookup_failed"}
 
 const maxRepositoryMetrics = 1000

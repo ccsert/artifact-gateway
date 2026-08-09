@@ -237,6 +237,16 @@ type NativePyPIStore interface {
 	MarkPyPIObjectCollected(context.Context, string) error
 }
 
+type NativeGoStore interface {
+	SyncGoProxyVersions(context.Context, string, string, []GoModuleVersion) error
+	PutGoModuleVersion(context.Context, GoModuleVersion) (GoModuleVersion, error)
+	ListGoModuleVersions(context.Context, string, string) ([]GoModuleVersion, error)
+	GetGoModuleVersion(context.Context, string, string, string) (GoModuleVersion, error)
+	CacheGoModuleAsset(context.Context, GoModuleAsset) (GoModuleAsset, error)
+	GetGoModuleAsset(context.Context, string, string, string, string) (GoModuleAsset, error)
+	LockGoObject(context.Context, string) (func(), error)
+}
+
 type Store interface {
 	CreateGroup(context.Context, Group) (Group, error)
 	GetGroup(context.Context, string) (Group, error)

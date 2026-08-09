@@ -2320,7 +2320,8 @@
           "maven",
           "conan",
           "npm",
-          "pypi"
+          "pypi",
+          "go"
         ]
       },
       "FormatProfile": {

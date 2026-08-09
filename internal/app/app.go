@@ -26,6 +26,7 @@ type Dependencies struct {
 	NativeConanObjectStore OCIObjectStore
 	NativeNPMObjectStore   OCIObjectStore
 	NativePyPIObjectStore  OCIObjectStore
+	NativeGoObjectStore    OCIObjectStore
 	NPMMetadataTTL         time.Duration
 	NPMNegativeTTL         time.Duration
 	NPMBreakerTTL          time.Duration

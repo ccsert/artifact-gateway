@@ -14,6 +14,7 @@ const (
 	FormatMaven Format = "maven"
 	FormatNPM   Format = "npm"
 	FormatPyPI  Format = "pypi"
+	FormatGo    Format = "go"
 	// FormatConan is a managed authorization target with native Hosted, Proxy,
 	// and Group protocol routes.
 	FormatConan Format = "conan"
@@ -301,6 +302,34 @@ type PyPIObject struct {
 	Digest       string
 	Size         int64
 	DeletedAt    time.Time
+}
+
+// GoModuleVersion is one immutable module version known by a Go Proxy
+// repository. Asset bytes are stored independently so list and @latest
+// metadata remain useful before a client downloads the complete module.
+type GoModuleVersion struct {
+	RepositoryID string
+	Module       string
+	Version      string
+	PublishedAt  time.Time
+	Publisher    string
+	CachedAt     time.Time
+	CreatedAt    time.Time
+}
+
+// GoModuleAsset is one protocol representation for a module version. Kind is
+// one of info, mod, or zip.
+type GoModuleAsset struct {
+	RepositoryID string
+	Module       string
+	Version      string
+	Kind         string
+	Digest       string
+	ObjectKey    string
+	Size         int64
+	SourceURL    string
+	CachedAt     time.Time
+	CreatedAt    time.Time
 }
 
 type NPMPackageSummary struct {

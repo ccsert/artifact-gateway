@@ -1086,6 +1086,20 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				})
 				lastCoordinate = project.Project
 			}
+		case repository.FormatGo:
+			projected, err := h.searchGroupMemberArtifacts(r, repo, query, pageSize+1, after)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search Go modules failed")
+				return
+			}
+			hasMore = len(projected) > pageSize
+			if hasMore {
+				projected = projected[:pageSize]
+			}
+			items = append(items, projected...)
+			if len(items) > 0 {
+				lastCoordinate = items[len(items)-1].Coordinate
+			}
 		}
 		var next *string
 		if hasMore {
@@ -3184,6 +3198,8 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return npmprotocol.ValidPackagePrefix(query)
 	case repository.FormatPyPI:
 		return validPyPIProjectSearchPrefix(query)
+	case repository.FormatGo:
+		return validGoModuleSearchPrefix(query)
 	default:
 		return false
 	}
@@ -3452,7 +3468,7 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 		}
 		// Raw, Conan, and npm proxies resolve upstream assets by host, so they must
 		// declare which hosts they may egress to.
-		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM || request.Format == repository.FormatPyPI) && len(request.AllowedHosts) == 0 {
+		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM || request.Format == repository.FormatPyPI || request.Format == repository.FormatGo) && len(request.AllowedHosts) == 0 {
 			return false
 		}
 		return true
@@ -3470,7 +3486,7 @@ func validProxyUpdate(format repository.Format, endpoint string, allowedHosts []
 	if !validProxyEndpoint(endpoint) {
 		return false
 	}
-	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM || format == repository.FormatPyPI) && len(allowedHosts) == 0 {
+	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM || format == repository.FormatPyPI || format == repository.FormatGo) && len(allowedHosts) == 0 {
 		return false
 	}
 	return true

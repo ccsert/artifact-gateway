@@ -99,6 +99,7 @@ type GatewayStore interface {
 	repository.NativeConanStore
 	repository.NativeNPMStore
 	repository.NativePyPIStore
+	repository.NativeGoStore
 	repository.APIKeyStore
 	repository.UserStore
 	repository.RuntimeNodeStore
@@ -170,6 +171,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := ociClient.(PyPIClient); ok {
 		pypiClient = client
 	}
+	goClient := GoClient(UpstreamClient{})
+	if client, ok := ociClient.(GoClient); ok {
+		goClient = client
+	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: ociClient, Authenticator: authenticator, Cache: cache}
 	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci)
 	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache)
@@ -214,6 +219,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativePyPIObjects = NewMemoryOCIObjectStore()
 	}
 	nativePyPI := newNativePyPIHandler(store, nativePyPIObjects, authenticator).withMetrics(metrics).withProxy(pypiClient)
+	nativeGoObjects := dependencies.NativeGoObjectStore
+	if nativeGoObjects == nil {
+		nativeGoObjects = NewMemoryOCIObjectStore()
+	}
+	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	var searchProjection repository.ArtifactSearchStore
@@ -284,6 +294,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		pypi:       &v2GroupPyPIHandler{native: &nativePyPI},
 		next:       nativePyPI}
 	mux.Handle("/pypi/", pypiGroupRouter)
+	goGroupRouter := v2GroupRouter{format: repository.FormatGo, groups: store, repos: store, audit: store, auth: authenticator,
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		goModules:  &v2GroupGoHandler{native: &nativeGo},
+		next:       nativeGo}
+	mux.Handle("/go/", goGroupRouter)
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},

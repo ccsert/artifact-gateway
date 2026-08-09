@@ -4,8 +4,8 @@ import "testing"
 
 func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 	profiles := SupportedFormatProfiles()
-	if len(profiles) != 6 {
-		t.Fatalf("profiles=%d want=6", len(profiles))
+	if len(profiles) != 7 {
+		t.Fatalf("profiles=%d want=7", len(profiles))
 	}
 	seen := make(map[Format]bool, len(profiles))
 	for _, profile := range profiles {
@@ -13,11 +13,20 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Fatalf("duplicate format profile %q", profile.Format)
 		}
 		seen[profile.Format] = true
-		if !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) {
-			t.Errorf("format %q repository types=%v", profile.Format, profile.RepositoryTypes)
-		}
 		if !profile.AnonymousRead {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
+		}
+		if profile.Format == FormatGo {
+			if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || !profile.GroupSupported {
+				t.Errorf("go must expose only Proxy and Group: %#v", profile)
+			}
+			if len(profile.HostedOperations) != 0 || !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, RepositoryOperationRead) || !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, RepositoryOperationBrowse) {
+				t.Errorf("go advertises unsupported capabilities: %#v", profile)
+			}
+			continue
+		}
+		if !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) {
+			t.Errorf("format %q repository types=%v", profile.Format, profile.RepositoryTypes)
 		}
 		if profile.Format == FormatNPM {
 			if !profile.GroupSupported || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
@@ -64,7 +73,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			}
 		}
 	}
-	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI} {
+	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI, FormatGo} {
 		if !seen[format] || !IsSupportedFormat(format) {
 			t.Errorf("format %q is missing", format)
 		}
@@ -101,5 +110,8 @@ func TestWorkerFormatsExcludeProtocolOnlyFormats(t *testing.T) {
 		if !found[format] {
 			t.Fatalf("%s lifecycle workers are missing", format)
 		}
+	}
+	if found[FormatGo] {
+		t.Fatal("Go Proxy has no lifecycle worker capability")
 	}
 }

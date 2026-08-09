@@ -119,6 +119,28 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 				ContentType: "application/octet-stream",
 			})
 		}
+	case FormatGo:
+		for _, version := range s.goVersions {
+			if version.RepositoryID != repositoryID {
+				continue
+			}
+			createdAt := version.CreatedAt
+			item := ArtifactSearchItem{Coordinate: version.Module, Version: version.Version, CreatedAt: &createdAt, Publisher: version.Publisher}
+			for _, kind := range []string{"zip", "mod", "info"} {
+				asset, ok := s.goAssets[goAssetKey(repositoryID, version.Module, version.Version, kind)]
+				if !ok {
+					continue
+				}
+				size := asset.Size
+				item.Digest, item.Size = asset.Digest, &size
+				item.ContentType = "text/plain"
+				if kind == "zip" {
+					item.ContentType = "application/zip"
+				}
+				break
+			}
+			items = append(items, item)
+		}
 	}
 	return items
 }
