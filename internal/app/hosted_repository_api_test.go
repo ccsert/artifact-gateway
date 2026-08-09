@@ -2394,6 +2394,61 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	}
 }
 
+func TestRepositoryEffectiveAccessSupportsAdministratorSimulation(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "simulation-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{
+		Principal: "build-agent", Scopes: []string{"repositories:read"}, ResourcePrefix: "releases/",
+	}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=build-agent&resource=releases%2Fapp.bin", nil)
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"simulated":true`) || !strings.Contains(response.Body.String(), `"resource":"releases/app.bin"`) || !strings.Contains(response.Body.String(), `"read":{"allowed":true,"reason":"scope_granted","source":"repository_grants"}`) {
+		t.Fatalf("simulated grant = %d %s", response.Code, response.Body.String())
+	}
+
+	wrongResource := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=build-agent&resource=snapshots%2Fapp.bin", nil)
+	authorize(wrongResource, "admin-secret")
+	wrongResourceResponse := httptest.NewRecorder()
+	handler.ServeHTTP(wrongResourceResponse, wrongResource)
+	if wrongResourceResponse.Code != http.StatusOK || !strings.Contains(wrongResourceResponse.Body.String(), `"read":{"allowed":false`) {
+		t.Fatalf("wrong resource = %d %s", wrongResourceResponse.Code, wrongResourceResponse.Body.String())
+	}
+
+	globalRole := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=release-bot&role=writer", nil)
+	authorize(globalRole, "admin-secret")
+	globalRoleResponse := httptest.NewRecorder()
+	handler.ServeHTTP(globalRoleResponse, globalRole)
+	if globalRoleResponse.Code != http.StatusOK || !strings.Contains(globalRoleResponse.Body.String(), `"read":{"allowed":true,"reason":"role_writer","source":"role"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"write":{"allowed":true,"reason":"role_writer","source":"role"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"admin":{"allowed":false`) {
+		t.Fatalf("simulated role = %d %s", globalRoleResponse.Code, globalRoleResponse.Body.String())
+	}
+
+	forbidden := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=build-agent", nil)
+	authorize(forbidden, authenticator.IssueToken("reader"))
+	forbiddenResponse := httptest.NewRecorder()
+	handler.ServeHTTP(forbiddenResponse, forbidden)
+	if forbiddenResponse.Code != http.StatusForbidden {
+		t.Fatalf("non-admin simulation = %d %s", forbiddenResponse.Code, forbiddenResponse.Body.String())
+	}
+
+	invalid := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?role=reader", nil)
+	authorize(invalid, "admin-secret")
+	invalidResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidResponse, invalid)
+	if invalidResponse.Code != http.StatusBadRequest {
+		t.Fatalf("role without actor = %d %s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+}
+
 func TestCurrentIdentityReportsSafeCredentialMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())

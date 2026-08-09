@@ -859,6 +859,14 @@ export type EffectiveAccessPermissions = {
 export type RepositoryEffectiveAccess = {
   actor: string;
   identity: CurrentIdentity;
+  /**
+   * Concrete canonical resource evaluated for prefix-scoped grants; empty means repository-wide access.
+   */
+  resource: string;
+  /**
+   * True when an administrator supplied an actor instead of evaluating the authenticated caller.
+   */
+  simulated: boolean;
   repository: {
     id: string;
     name: string;
@@ -2706,7 +2714,11 @@ export type GetRepositoryEffectiveAccessData = {
   path: {
     repositoryId: string;
   };
-  query?: never;
+  query?: {
+    actor?: string;
+    role?: "reader" | "writer" | "admin";
+    resource?: string;
+  };
   url: "/repositories/{repositoryId}/effective-access";
 };
 
@@ -2714,7 +2726,15 @@ export type GetRepositoryEffectiveAccessErrors = {
   /**
    * Problem response
    */
+  400: Problem;
+  /**
+   * Problem response
+   */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
   /**
    * Problem response
    */

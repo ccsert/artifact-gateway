@@ -938,12 +938,50 @@
       ],
       "get": {
         "operationId": "getRepositoryEffectiveAccess",
-        "summary": "Explain the authenticated caller's access, including denied decisions",
+        "summary": "Explain effective repository access, including denied decisions",
+        "description": "Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.",
+        "parameters": [
+          {
+            "name": "actor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "reader",
+                "writer",
+                "admin"
+              ]
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/RepositoryEffectiveAccess"
           },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
@@ -4329,6 +4367,8 @@
           "actor",
           "identity",
           "repository",
+          "resource",
+          "simulated",
           "anonymousRead",
           "permissions"
         ],
@@ -4338,6 +4378,14 @@
           },
           "identity": {
             "$ref": "#/components/schemas/CurrentIdentity"
+          },
+          "resource": {
+            "type": "string",
+            "description": "Concrete canonical resource evaluated for prefix-scoped grants; empty means repository-wide access."
+          },
+          "simulated": {
+            "type": "boolean",
+            "description": "True when an administrator supplied an actor instead of evaluating the authenticated caller."
           },
           "repository": {
             "type": "object",

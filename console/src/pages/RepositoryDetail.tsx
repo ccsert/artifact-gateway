@@ -21,6 +21,7 @@ import type { ColumnsType } from "antd/es/table";
 import {
   DeleteOutlined,
   DownloadOutlined,
+  EditOutlined,
   InfoCircleOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
@@ -92,6 +93,7 @@ import {
 } from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
 import { IdentitySummary } from "../components/IdentitySummary";
+import { AccessDecisionSummary } from "../components/AccessDecisionSummary";
 import { Modal, useDisclosure } from "../components/Modal";
 import { OciImageDetail } from "../components/OciImageDetail";
 import { MavenPublishWizard } from "../components/MavenPublishWizard";
@@ -148,6 +150,10 @@ const TABS: {
   { key: "tombstones", label: "墓碑", labelEn: "Tombstones" },
   { key: "settings", label: "设置", labelEn: "Settings" },
 ];
+
+function repositoryTabFromQuery(value: string | null): Tab {
+  return TABS.find((tab) => tab.key === value)?.key ?? "artifacts";
+}
 
 /* ---------------- Artifacts ---------------- */
 
@@ -1538,60 +1544,11 @@ function grantLevelLabel(level: GrantLevel, text: Localize): string {
   return text("读取", "Read");
 }
 
-function accessSourceLabel(source: string, text: Localize): string {
-  switch (source) {
-    case "administrator":
-      return text("管理员身份", "Administrator identity");
-    case "role":
-      return text("全局角色", "Global role");
-    case "repository_grants":
-      return text("仓库授权", "Repository grant");
-    case "legacy_static":
-      return text("旧版静态策略", "Legacy static policy");
-    case "anonymous_policy":
-      return text("匿名访问策略", "Anonymous access policy");
-    default:
-      return source || text("未说明", "Not specified");
-  }
-}
-
-function accessReasonLabel(reason: string, text: Localize): string {
-  const labels: Record<string, string> = {
-    administrator: text("管理员直接放行", "Allowed by administrator identity"),
-    role_admin: text("全局 admin 角色", "Global admin role"),
-    role_writer: text("全局 writer 角色", "Global writer role"),
-    role_reader: text("全局 reader 角色", "Global reader role"),
-    scope_granted: text(
-      "匹配主体、权限和资源范围",
-      "Matching subject, permission, and resource scope",
-    ),
-    scope_not_granted: text(
-      "没有匹配的仓库授权",
-      "No matching repository grant",
-    ),
-    grant_lookup_failed: text(
-      "读取仓库授权失败",
-      "Failed to load repository grants",
-    ),
-    read_pattern_granted: text("匹配旧版读取规则", "Matched legacy read rule"),
-    write_pattern_granted: text(
-      "匹配旧版写入规则",
-      "Matched legacy write rule",
-    ),
-    global_anonymous_access_disabled: text(
-      "全局匿名读取未启用",
-      "Global anonymous reads are disabled",
-    ),
-    repository_anonymous_read_disabled: text(
-      "仓库未允许匿名读取",
-      "Anonymous reads are disabled for this repository",
-    ),
-    repository_anonymous_read_enabled: text(
-      "全局和仓库均允许匿名读取",
-      "Anonymous reads are enabled globally and for this repository",
-    ),
-  };
-  return labels[reason] ?? reason.replaceAll("_", " ");
+function grantCapabilitiesLabel(level: GrantLevel, text: Localize): string {
+  if (level === "admin")
+    return text("读取 + 写入 + 管理", "Read + write + admin");
+  if (level === "write") return text("读取 + 写入", "Read + write");
+  return text("读取", "Read");
 }
 
 function grantLevel(scopes: Grant["scopes"]): GrantLevel {
@@ -1815,7 +1772,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <Button type="primary" onClick={openEditor}>
+        <Button type="primary" icon={<EditOutlined />} onClick={openEditor}>
           {text("编辑授权", "Edit grants")}
         </Button>
       </div>
@@ -1835,7 +1792,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
           dataSource={grants}
           columns={grantColumns}
           pagination={false}
-          scroll={{ x: 760 }}
+          scroll={{ x: 760, y: 380 }}
         />
       )}
       <Modal
@@ -1854,297 +1811,236 @@ function GrantsTab({ repo }: { repo: Repository }) {
       >
         <div className="space-y-3">
           {saveError !== null && <ErrorBanner error={saveError} />}
-          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 text-xs leading-5 text-zinc-400">
-            <div className="font-medium text-cyan-200">
-              {text("先记住这三个概念", "Three concepts to keep in mind")}
-            </div>
-            <div className="mt-1 grid gap-1.5 sm:grid-cols-3">
-              <div>
-                <span className="font-medium text-zinc-300">
-                  {text("主体", "Principal")}
-                </span>
-                {text(
-                  "：谁在访问，例如用户或 CI 的 API Key。",
-                  ": who is making the request, such as a user or CI API key.",
-                )}
-              </div>
-              <div>
-                <span className="font-medium text-zinc-300">
-                  {text("权限", "Permission")}
-                </span>
-                {text(
-                  "：允许读取、写入，还是管理仓库。",
-                  ": whether the principal can read, write, or manage the repository.",
-                )}
-              </div>
-              <div>
-                <span className="font-medium text-zinc-300">
-                  {text("范围", "Scope")}
-                </span>
-                {text(
-                  "：限制到仓库的一部分；留空就是整个仓库。",
-                  ": narrows access to part of the repository; blank means the whole repository.",
-                )}
-              </div>
-            </div>
-            <div className="mt-2 border-t border-cyan-500/10 pt-2 text-zinc-500">
-              {text(
-                "用户/API Key 的全局角色会先生效；仓库规则只能追加权限，不能撤销全局角色。",
-                "Global user/API key roles take effect first. Repository grants can add permissions but cannot revoke a global role.",
-              )}
-            </div>
-          </div>
+          <Alert
+            type="info"
+            showIcon
+            title={text(
+              "仓库规则只会追加权限，不能撤销用户或 API Key 已有的全局角色。",
+              "Repository rules add permissions; they cannot revoke an existing global user or API key role.",
+            )}
+          />
           {principalChoicesError !== null && (
-            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-              {text(
+            <Alert
+              type="warning"
+              showIcon
+              title={text(
                 "用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。",
                 "Users and API keys are temporarily unavailable. You can still choose OIDC/custom actor and enter its identifier.",
               )}
-            </div>
+            />
           )}
-          <div className="min-w-[1020px]">
-            <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-center gap-3 px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-              <span>{text("主体类型", "Principal type")}</span>
+          <div>
+            <div className="grid grid-cols-[minmax(340px,1.45fr)_185px_minmax(260px,1.15fr)_190px_40px] items-center gap-3 px-2 pb-2 text-[11px] font-medium text-zinc-500">
               <span>{text("主体", "Principal")}</span>
               <span>{text("权限级别", "Permission")}</span>
               <span>{text("资源范围", "Resource scope")}</span>
-              <span className="text-right">{text("操作", "Actions")}</span>
+              <span>{text("本规则授予", "Granted by this rule")}</span>
+              <span />
             </div>
-            <div className="space-y-2">
+            <div className="border-b border-zinc-800/70">
               {draft.map((g, i) => {
                 const kind = principalEditorKind(g.principal);
+                const selectedChoice = principalChoices.find(
+                  (choice) => choice.value === g.principal,
+                );
+                const level = grantLevel(g.scopes);
                 return (
                   <div
                     key={i}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3"
+                    className="grid grid-cols-[minmax(340px,1.45fr)_185px_minmax(260px,1.15fr)_190px_40px] items-start gap-3 border-t border-zinc-800/70 px-2 py-3"
                   >
-                    <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-start gap-3">
-                      <div className="min-w-0">
-                        <Select
-                          className="w-full"
-                          value={kind}
-                          options={[
-                            {
-                              value: "",
-                              label: text(
-                                "选择主体类型",
-                                "Select principal type",
-                              ),
-                            },
-                            {
-                              value: "user",
-                              label: text("用户账号", "User account"),
-                            },
-                            {
-                              value: "api-key",
-                              label: text(
-                                "API Key（CI / 自动化）",
-                                "API key (CI / automation)",
-                              ),
-                            },
-                            {
-                              value: "custom",
-                              label: text(
-                                "OIDC / 自定义 actor",
-                                "OIDC / custom actor",
-                              ),
-                            },
-                          ]}
-                          onChange={(nextKind: PrincipalKind | "") => {
-                            const first =
-                              nextKind === "user"
-                                ? (principalChoices.find(
-                                    (choice) =>
-                                      choice.value.startsWith("user:") &&
-                                      !choice.disabled,
-                                  )?.value ?? "")
-                                : nextKind === "api-key"
-                                  ? (principalChoices.find(
-                                      (choice) =>
-                                        choice.value.startsWith("api-key:") &&
-                                        !choice.disabled,
-                                    )?.value ?? "")
-                                  : "";
-                            setDraft((d) =>
-                              d.map((x, j) =>
-                                j === i
-                                  ? {
-                                      ...x,
-                                      principal:
-                                        nextKind === "custom"
-                                          ? principalEditorKind(x.principal) ===
-                                            "custom"
-                                            ? x.principal
-                                            : CUSTOM_PRINCIPAL
-                                          : first,
-                                    }
-                                  : x,
-                              ),
-                            );
-                          }}
-                        />
-                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          {text(
-                            "选择规则主体的来源",
-                            "Choose where the rule principal comes from",
-                          )}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        {kind === "user" || kind === "api-key" ? (
-                          <Select
-                            className="w-full font-mono"
-                            showSearch={{ optionFilterProp: "label" }}
-                            value={g.principal || undefined}
-                            placeholder={text(
-                              "请选择主体",
-                              "Select a principal",
-                            )}
-                            options={[
-                              {
-                                value: "",
-                                label: text("请选择主体", "Select a principal"),
-                              },
-                              ...principalChoices
-                                .filter((choice) =>
-                                  choice.value.startsWith(`${kind}:`),
-                                )
-                                .map((choice) => ({
-                                  value: choice.value,
-                                  label: `${choice.label.replace(/^(用户|User|API Key) · /, "")} · ${choice.detail}`,
-                                  disabled: choice.disabled,
-                                })),
-                            ]}
-                            onChange={(value) =>
-                              setDraft((d) =>
-                                d.map((x, j) =>
-                                  j === i ? { ...x, principal: value } : x,
-                                ),
-                              )
-                            }
-                          />
-                        ) : kind === "custom" ? (
-                          <Input
-                            className="font-mono"
-                            placeholder={text(
-                              "例如 oidc:github:acme/release 或 ci-bot",
-                              "For example: oidc:github:acme/release or ci-bot",
-                            )}
-                            value={
-                              g.principal === CUSTOM_PRINCIPAL
-                                ? ""
-                                : g.principal
-                            }
-                            onChange={(e) =>
-                              setDraft((d) =>
-                                d.map((x, j) =>
-                                  j === i
-                                    ? { ...x, principal: e.target.value }
-                                    : x,
-                                ),
-                              )
-                            }
-                          />
-                        ) : (
-                          <div className="flex h-10 items-center rounded-md border border-dashed border-zinc-800 px-3 text-xs text-zinc-600">
-                            {text(
-                              "先选择主体类型",
-                              "Select a principal type first",
-                            )}
-                          </div>
+                    <div className="min-w-0">
+                      <Select
+                        className="w-full"
+                        showSearch={{ optionFilterProp: "label" }}
+                        value={
+                          kind === "custom"
+                            ? CUSTOM_PRINCIPAL
+                            : g.principal || undefined
+                        }
+                        placeholder={text(
+                          "选择用户、API Key 或外部身份",
+                          "Select a user, API key, or external identity",
                         )}
-                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          {kind === "custom"
-                            ? text(
-                                "必须与认证系统传入的 actor 完全一致。",
-                                "Must exactly match the actor supplied by the authentication system.",
+                        options={[
+                          {
+                            label: text("用户", "Users"),
+                            options: principalChoices
+                              .filter((choice) =>
+                                choice.value.startsWith("user:"),
                               )
-                            : text(
-                                "从已有身份中选择授权对象。",
-                                "Choose an existing identity to authorize.",
-                              )}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <Select
-                          className="w-full"
-                          value={grantLevel(g.scopes)}
-                          options={[
-                            {
-                              value: "read",
-                              label: text(
-                                "读取 · 浏览 / 拉取",
-                                "Read · browse / pull",
-                              ),
-                            },
-                            {
-                              value: "write",
-                              label: text(
-                                "写入 · 发布 / 编辑",
-                                "Write · publish / edit",
-                              ),
-                            },
-                            {
-                              value: "admin",
-                              label: text(
-                                "管理员 · 授权 / 删除",
-                                "Admin · grant / delete",
-                              ),
-                            },
-                          ]}
-                          onChange={(value: GrantLevel) =>
-                            setDraft((d) =>
-                              d.map((x, j) =>
-                                j === i
-                                  ? { ...x, scopes: scopesForLevel(value) }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          {text(
-                            "权限会叠加全局角色",
-                            "Permission is combined with global roles",
-                          )}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
+                              .map((choice) => ({
+                                value: choice.value,
+                                label: `${choice.label} · ${choice.detail}`,
+                                disabled: choice.disabled,
+                              })),
+                          },
+                          {
+                            label: "API Keys",
+                            options: principalChoices
+                              .filter((choice) =>
+                                choice.value.startsWith("api-key:"),
+                              )
+                              .map((choice) => ({
+                                value: choice.value,
+                                label: `${choice.label} · ${choice.detail}`,
+                                disabled: choice.disabled,
+                              })),
+                          },
+                          {
+                            label: text("外部身份", "External identities"),
+                            options: [
+                              {
+                                value: CUSTOM_PRINCIPAL,
+                                label: text(
+                                  "OIDC / 自定义 actor",
+                                  "OIDC / custom actor",
+                                ),
+                              },
+                            ],
+                          },
+                        ]}
+                        onChange={(value) =>
+                          setDraft((d) =>
+                            d.map((x, j) =>
+                              j === i
+                                ? {
+                                    ...x,
+                                    principal:
+                                      value === CUSTOM_PRINCIPAL
+                                        ? principalEditorKind(x.principal) ===
+                                          "custom"
+                                          ? x.principal
+                                          : CUSTOM_PRINCIPAL
+                                        : value,
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                      />
+                      {kind === "custom" && (
                         <Input
-                          className="font-mono"
+                          className="mt-2 font-mono"
                           placeholder={text(
-                            "留空表示整个仓库",
-                            "Leave blank for the entire repository",
+                            "完整 actor，例如 oidc:gitlab:team/release",
+                            "Complete actor, for example oidc:gitlab:team/release",
                           )}
-                          value={g.resourcePrefix ?? ""}
-                          onChange={(e) =>
+                          value={
+                            g.principal === CUSTOM_PRINCIPAL ? "" : g.principal
+                          }
+                          onChange={(event) =>
                             setDraft((d) =>
                               d.map((x, j) =>
                                 j === i
-                                  ? { ...x, resourcePrefix: e.target.value }
+                                  ? { ...x, principal: event.target.value }
                                   : x,
                               ),
                             )
                           }
                         />
-                        <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          {resourcePrefixHint(repo.format, text)}
-                        </div>
+                      )}
+                      <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
+                        {kind === "custom"
+                          ? text(
+                              "必须与认证完成后产生的 actor 完全一致",
+                              "Must exactly match the authenticated actor",
+                            )
+                          : selectedChoice?.detail}
                       </div>
+                    </div>
+                    <div className="min-w-0">
+                      <Select
+                        className="w-full"
+                        value={level}
+                        options={[
+                          {
+                            value: "read",
+                            label: text(
+                              "读取 · 浏览 / 拉取",
+                              "Read · browse / pull",
+                            ),
+                          },
+                          {
+                            value: "write",
+                            label: text(
+                              "写入 · 发布 / 编辑",
+                              "Write · publish / edit",
+                            ),
+                          },
+                          {
+                            value: "admin",
+                            label: text(
+                              "管理 · 授权 / 删除",
+                              "Admin · grant / delete",
+                            ),
+                          },
+                        ]}
+                        onChange={(value: GrantLevel) =>
+                          setDraft((d) =>
+                            d.map((x, j) =>
+                              j === i
+                                ? { ...x, scopes: scopesForLevel(value) }
+                                : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <Input
+                        className="font-mono"
+                        placeholder={text(
+                          "留空表示整个仓库",
+                          "Leave blank for the entire repository",
+                        )}
+                        value={g.resourcePrefix ?? ""}
+                        onChange={(event) =>
+                          setDraft((d) =>
+                            d.map((x, j) =>
+                              j === i
+                                ? { ...x, resourcePrefix: event.target.value }
+                                : x,
+                            ),
+                          )
+                        }
+                      />
+                      <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
+                        {resourcePrefixHint(repo.format, text)}
+                      </div>
+                    </div>
+                    <div className="flex min-h-10 items-center">
+                      <Badge
+                        tone={
+                          level === "admin"
+                            ? "red"
+                            : level === "write"
+                              ? "blue"
+                              : "green"
+                        }
+                      >
+                        {grantCapabilitiesLabel(level, text)}
+                      </Badge>
+                    </div>
+                    <Tooltip title={text("移除规则", "Remove rule")}>
                       <Button
                         type="text"
                         danger
+                        aria-label={text("移除规则", "Remove rule")}
                         icon={<DeleteOutlined />}
                         onClick={() =>
                           setDraft((d) => d.filter((_, j) => j !== i))
                         }
-                      >
-                        {text("移除", "Remove")}
-                      </Button>
-                    </div>
+                      />
+                    </Tooltip>
                   </div>
                 );
               })}
+              {draft.length === 0 && (
+                <div className="border-t border-zinc-800/70 px-3 py-8 text-center text-xs text-zinc-600">
+                  {text("尚未添加授权规则", "No access grants added")}
+                </div>
+              )}
             </div>
           </div>
           <Button
@@ -4027,48 +3923,8 @@ function EffectiveAccessPanel({
           children: (
             <div className="border-t border-zinc-800/70 pt-3 text-xs">
               <IdentitySummary identity={effectiveAccess.identity} />
-              <div className="mt-4 grid grid-cols-4 gap-4 border-t border-zinc-800/70 pt-3">
-                {[
-                  {
-                    label: text("匿名读取", "Anonymous reads"),
-                    decision: effectiveAccess.anonymousRead,
-                  },
-                  {
-                    label: text("读取", "Read"),
-                    decision: effectiveAccess.permissions.read,
-                  },
-                  {
-                    label: text("写入", "Write"),
-                    decision: effectiveAccess.permissions.write,
-                  },
-                  {
-                    label: text("管理员", "Admin"),
-                    decision: effectiveAccess.permissions.admin,
-                  },
-                ].map(({ label, decision }) => (
-                  <div key={label}>
-                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                      {label}
-                    </div>
-                    <div
-                      className={
-                        decision.allowed
-                          ? "mt-1 text-emerald-300"
-                          : "mt-1 text-zinc-500"
-                      }
-                    >
-                      {decision.allowed
-                        ? text("允许", "Allowed")
-                        : text("拒绝", "Denied")}
-                    </div>
-                    <div
-                      className="mt-0.5 truncate text-[10px] text-zinc-600"
-                      title={`${accessSourceLabel(decision.source, text)} · ${accessReasonLabel(decision.reason, text)}`}
-                    >
-                      {accessSourceLabel(decision.source, text)}
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-4">
+                <AccessDecisionSummary access={effectiveAccess} />
               </div>
               <div className="mt-3 text-[10px] text-zinc-600">
                 {text(
@@ -4517,7 +4373,8 @@ function RepositorySettingsTab({
 export function RepositoryDetailPage() {
   const { text } = usePreferences();
   const { repositoryId = "" } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
   const artifactTarget = searchParams.get("artifact")?.trim() ?? "";
   const parsedBuildTarget = Number(searchParams.get("build") ?? "");
   const buildTarget =
@@ -4530,7 +4387,25 @@ export function RepositoryDetailPage() {
   const [effectiveAccess, setEffectiveAccess] =
     useState<RepositoryEffectiveAccess | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [tab, setTab] = useState<Tab>("artifacts");
+  const [tab, setTab] = useState<Tab>(() =>
+    repositoryTabFromQuery(requestedTab),
+  );
+
+  const selectTab = useCallback(
+    (nextTab: Tab) => {
+      setTab(nextTab);
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (nextTab === "artifacts") next.delete("tab");
+          else next.set("tab", nextTab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -4557,10 +4432,20 @@ export function RepositoryDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    if (repo?.type === "proxy" && tab === "publish") {
-      setTab("artifacts");
-    }
-  }, [repo?.type, tab]);
+    setTab(repositoryTabFromQuery(requestedTab));
+  }, [requestedTab]);
+
+  useEffect(() => {
+    if (!repo) return;
+    const available = TABS.some(
+      (item) =>
+        item.key === tab &&
+        (!item.formats || item.formats.includes(repo.format)) &&
+        (!item.hostedOnly || repo.type === "hosted") &&
+        !(item.key === "publish" && repo.type === "proxy"),
+    );
+    if (!available) selectTab("artifacts");
+  }, [repo, selectTab, tab]);
 
   if (error !== null) {
     return (
@@ -4584,13 +4469,13 @@ export function RepositoryDetailPage() {
       <RepositorySummary
         repo={repo}
         capacity={capacity}
-        onOpenCapacity={() => setTab("capacity")}
+        onOpenCapacity={() => selectTab("capacity")}
       />
       <Tabs
         className="mb-3"
         size="small"
         activeKey={tab}
-        onChange={(key) => setTab(key as Tab)}
+        onChange={(key) => selectTab(key as Tab)}
         items={TABS.filter(
           (t) =>
             (!t.formats || t.formats.includes(repo.format)) &&
@@ -4612,7 +4497,7 @@ export function RepositoryDetailPage() {
           repo.type !== "proxy" && (
             <MavenPublishWizard
               repositoryId={repo.id}
-              onPublished={() => setTab("artifacts")}
+              onPublished={() => selectTab("artifacts")}
             />
           )}
         {tab === "grants" && (

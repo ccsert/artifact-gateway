@@ -626,7 +626,9 @@ export const getRepositoryCapabilities = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Explain the authenticated caller's access, including denied decisions
+ * Explain effective repository access, including denied decisions
+ *
+ * Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.
  */
 export const getRepositoryEffectiveAccess = <ThrowOnError extends boolean = false>(options: Options<GetRepositoryEffectiveAccessData, ThrowOnError>): RequestResult<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError> => (options.client ?? client).get<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError>({
     security: [{

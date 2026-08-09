@@ -1060,6 +1060,27 @@ func (e ListProxyCacheEntriesParamsAssetFilter) Valid() bool {
 	}
 }
 
+// Defines values for GetRepositoryEffectiveAccessParamsRole.
+const (
+	GetRepositoryEffectiveAccessParamsRoleAdmin  GetRepositoryEffectiveAccessParamsRole = "admin"
+	GetRepositoryEffectiveAccessParamsRoleReader GetRepositoryEffectiveAccessParamsRole = "reader"
+	GetRepositoryEffectiveAccessParamsRoleWriter GetRepositoryEffectiveAccessParamsRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the GetRepositoryEffectiveAccessParamsRole enum.
+func (e GetRepositoryEffectiveAccessParamsRole) Valid() bool {
+	switch e {
+	case GetRepositoryEffectiveAccessParamsRoleAdmin:
+		return true
+	case GetRepositoryEffectiveAccessParamsRoleReader:
+		return true
+	case GetRepositoryEffectiveAccessParamsRoleWriter:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIKey defines model for APIKey.
 type APIKey struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -1943,6 +1964,12 @@ type RepositoryEffectiveAccess struct {
 		State  RepositoryEffectiveAccessRepositoryState `json:"state"`
 		Type   RepositoryEffectiveAccessRepositoryType  `json:"type"`
 	} `json:"repository"`
+
+	// Resource Concrete canonical resource evaluated for prefix-scoped grants; empty means repository-wide access.
+	Resource string `json:"resource"`
+
+	// Simulated True when an administrator supplied an actor instead of evaluating the authenticated caller.
+	Simulated bool `json:"simulated"`
 }
 
 // RepositoryEffectiveAccessRepositoryState defines model for RepositoryEffectiveAccess.Repository.State.
@@ -2409,6 +2436,16 @@ type ListConanReferencesParams struct {
 	PageToken *PageToken            `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// GetRepositoryEffectiveAccessParams defines parameters for GetRepositoryEffectiveAccess.
+type GetRepositoryEffectiveAccessParams struct {
+	Actor    *string                                 `form:"actor,omitempty" json:"actor,omitempty"`
+	Role     *GetRepositoryEffectiveAccessParamsRole `form:"role,omitempty" json:"role,omitempty"`
+	Resource *string                                 `form:"resource,omitempty" json:"resource,omitempty"`
+}
+
+// GetRepositoryEffectiveAccessParamsRole defines parameters for GetRepositoryEffectiveAccess.
+type GetRepositoryEffectiveAccessParamsRole string
+
 // ReplaceGrantsParams defines parameters for ReplaceGrants.
 type ReplaceGrantsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -2731,9 +2768,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanReferencesParams)
-	// GetRepositoryEffectiveAccess Explain the authenticated caller's access, including denied decisions
+	// GetRepositoryEffectiveAccess Explain effective repository access, including denied decisions
 	// (GET /repositories/{repositoryId}/effective-access)
-	GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+	GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetRepositoryEffectiveAccessParams)
 
 	// (POST /repositories/{repositoryId}/egress-proxy:test)
 	TestEgressProxy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -4916,8 +4953,50 @@ func (siw *ServerInterfaceWrapper) GetRepositoryEffectiveAccess(w http.ResponseW
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRepositoryEffectiveAccessParams
+
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor", r.URL.Query(), &params.Actor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "role", r.URL.Query(), &params.Role, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "role"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resource" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resource", r.URL.Query(), &params.Resource, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resource"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRepositoryEffectiveAccess(w, r, repositoryId)
+		siw.Handler.GetRepositoryEffectiveAccess(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8563,6 +8642,7 @@ func (response ListConanReferences404ApplicationProblemPlusJSONResponse) VisitLi
 
 type GetRepositoryEffectiveAccessRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       GetRepositoryEffectiveAccessParams
 }
 
 type GetRepositoryEffectiveAccessResponseObject interface {
@@ -8585,9 +8665,23 @@ func (response GetRepositoryEffectiveAccess200JSONResponse) VisitGetRepositoryEf
 	return err
 }
 
-type GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse struct {
+type GetRepositoryEffectiveAccess400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response GetRepositoryEffectiveAccess400ApplicationProblemPlusJSONResponse) VisitGetRepositoryEffectiveAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse Problem
 
 func (response GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse) VisitGetRepositoryEffectiveAccessResponse(w http.ResponseWriter) error {
 
@@ -8597,6 +8691,20 @@ func (response GetRepositoryEffectiveAccess401ApplicationProblemPlusJSONResponse
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryEffectiveAccess403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryEffectiveAccess403ApplicationProblemPlusJSONResponse) VisitGetRepositoryEffectiveAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10285,7 +10393,7 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/conan/references)
 	ListConanReferences(ctx context.Context, request ListConanReferencesRequestObject) (ListConanReferencesResponseObject, error)
-	// GetRepositoryEffectiveAccess Explain the authenticated caller's access, including denied decisions
+	// GetRepositoryEffectiveAccess Explain effective repository access, including denied decisions
 	// (GET /repositories/{repositoryId}/effective-access)
 	GetRepositoryEffectiveAccess(ctx context.Context, request GetRepositoryEffectiveAccessRequestObject) (GetRepositoryEffectiveAccessResponseObject, error)
 
@@ -11792,10 +11900,11 @@ func (sh *strictHandler) ListConanReferences(w http.ResponseWriter, r *http.Requ
 }
 
 // GetRepositoryEffectiveAccess operation middleware
-func (sh *strictHandler) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+func (sh *strictHandler) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetRepositoryEffectiveAccessParams) {
 	var request GetRepositoryEffectiveAccessRequestObject
 
 	request.RepositoryId = repositoryId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRepositoryEffectiveAccess(ctx, request.(GetRepositoryEffectiveAccessRequestObject))

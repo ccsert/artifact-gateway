@@ -693,10 +693,16 @@ CurrentIdentity:
     oidc: {"$ref": "#/OIDCIdentityDetails"}
 RepositoryEffectiveAccess:
   type: object
-  required: [actor, identity, repository, anonymousRead, permissions]
+  required: [actor, identity, repository, resource, simulated, anonymousRead, permissions]
   properties:
     actor: {type: string}
     identity: {"$ref": "#/CurrentIdentity"}
+    resource:
+      type: string
+      description: Concrete canonical resource evaluated for prefix-scoped grants; empty means repository-wide access.
+    simulated:
+      type: boolean
+      description: True when an administrator supplied an actor instead of evaluating the authenticated caller.
     repository:
       type: object
       required: [id, name, format, type, state]

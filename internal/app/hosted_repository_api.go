@@ -803,10 +803,35 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.Response
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetRepositoryEffectiveAccessParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
+	}
+	simulated := false
+	if params.Actor == nil && params.Role != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role requires an actor to simulate")
+		return
+	}
+	if params.Actor != nil {
+		actor := strings.TrimSpace(*params.Actor)
+		if actor == "" {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "actor must not be empty")
+			return
+		}
+		if !principal.Admin {
+			writeHostedProblem(w, http.StatusForbidden, "access_denied", "administrator permission is required to simulate another principal")
+			return
+		}
+		role := Role("")
+		if params.Role != nil {
+			role = Role(*params.Role)
+		}
+		principal = Principal{
+			Actor: actor, Role: role, Admin: role == RoleAdmin,
+			AuthenticationKind: simulatedAuthenticationKind(actor),
+		}
+		simulated = true
 	}
 	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID.String())
 	if errors.Is(err, repository.ErrNotFound) {
@@ -817,7 +842,22 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
 		return
 	}
-	writeNativeMavenJSON(w, http.StatusOK, h.repositoryEffectiveAccess(r.Context(), principal, repo))
+	resource := ""
+	if params.Resource != nil {
+		resource = strings.TrimSpace(*params.Resource)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, h.repositoryEffectiveAccess(r.Context(), principal, repo, resource, simulated))
+}
+
+func simulatedAuthenticationKind(actor string) authorization.AuthenticationKind {
+	switch {
+	case strings.HasPrefix(actor, "user:"):
+		return authorization.AuthenticationLocalSession
+	case strings.HasPrefix(actor, "api-key:"):
+		return authorization.AuthenticationAPIKey
+	default:
+		return authorization.AuthenticationOIDC
+	}
 }
 
 func currentIdentityResponse(principal Principal) adminopenapi.CurrentIdentity {
@@ -846,14 +886,14 @@ func currentIdentityResponse(principal Principal) adminopenapi.CurrentIdentity {
 	return response
 }
 
-func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository) adminopenapi.RepositoryEffectiveAccess {
+func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string, simulated bool) adminopenapi.RepositoryEffectiveAccess {
 	decision := func(operation RepositoryOperation) adminopenapi.EffectiveAccessDecision {
-		return effectiveAccessDecision(h.authorizer.Authorize(ctx, principal, repo, operation))
+		return effectiveAccessDecision(h.authorizer.AuthorizeResource(ctx, principal, repo, operation, resource))
 	}
 	anonymousReason := anonymousRepositoryReason(ctx, h.store, repo)
 	response := adminopenapi.RepositoryEffectiveAccess{
-		Actor:    principal.Actor,
-		Identity: currentIdentityResponse(principal),
+		Actor: principal.Actor, Identity: currentIdentityResponse(principal),
+		Resource: resource, Simulated: simulated,
 		AnonymousRead: adminopenapi.EffectiveAccessDecision{
 			Allowed: anonymousReason == "repository_anonymous_read_enabled",
 			Source:  "anonymous_policy",
