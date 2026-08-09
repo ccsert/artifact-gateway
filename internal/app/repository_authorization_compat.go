@@ -11,6 +11,8 @@ type OIDCConfig = authorization.OIDCConfig
 type OIDCRoleMapping = authorization.OIDCRoleMapping
 type OIDCIdentity = authorization.OIDCIdentity
 type OIDCValidator = authorization.OIDCValidator
+type OIDCClient = authorization.OIDCClient
+type OIDCClientConfig = authorization.OIDCClientConfig
 type RepositoryOperation = authorization.RepositoryOperation
 type AuthorizationDecision = authorization.AuthorizationDecision
 type RepositoryAuthorizer = authorization.RepositoryAuthorizer
@@ -25,4 +27,5 @@ const (
 )
 
 var NewOIDCValidator = authorization.NewOIDCValidator
+var NewOIDCClient = authorization.NewOIDCClient
 var ManagedGroupMemberDecision = authorization.ManagedGroupMemberDecision

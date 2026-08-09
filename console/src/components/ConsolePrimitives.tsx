@@ -1,6 +1,7 @@
 import { CopyOutlined } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import { useState, type ReactNode } from "react";
+import { usePreferences } from "../lib/preferences";
 
 export interface MetricItem {
   label: string;
@@ -17,6 +18,7 @@ const metricTone: Record<NonNullable<MetricItem["tone"]>, string> = {
 };
 
 export function MetricStrip({ items }: { items: MetricItem[] }) {
+  const { text } = usePreferences();
   return (
     <div
       className="ag-metric-strip"
@@ -24,7 +26,7 @@ export function MetricStrip({ items }: { items: MetricItem[] }) {
         gridTemplateColumns: `repeat(${Math.min(Math.max(items.length, 1), 5)}, minmax(0, 1fr))`,
       }}
       role="group"
-      aria-label="页面摘要"
+      aria-label={text("页面摘要", "Page summary")}
     >
       {items.map((item) => (
         <div key={item.label} className="min-w-0 px-5 py-3.5">
@@ -96,18 +98,20 @@ export function CopyableValue({
   label?: string;
   className?: string;
 }) {
+  const { text } = usePreferences();
   const [copied, setCopied] = useState(false);
+  const copyLabel = copied ? text("已复制", "Copied") : text("复制", "Copy");
   return (
     <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
       <Tooltip title={value}>
         <span className="min-w-0 truncate font-mono">{label ?? value}</span>
       </Tooltip>
-      <Tooltip title={copied ? "已复制" : "复制"}>
+      <Tooltip title={copyLabel}>
         <Button
           type="text"
           size="small"
           className="shrink-0"
-          aria-label={copied ? "已复制" : "复制"}
+          aria-label={copyLabel}
           icon={<CopyOutlined />}
           onClick={async (event) => {
             event.stopPropagation();

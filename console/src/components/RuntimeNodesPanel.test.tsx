@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { listRuntimeNodes } from "../client";
 import type { RuntimeNode } from "../client";
 import { RuntimeNodesPanel } from "./RuntimeNodesPanel";
+import { PreferencesProvider } from "../lib/preferences";
+
+const renderPanel = () =>
+  render(
+    <PreferencesProvider>
+      <RuntimeNodesPanel />
+    </PreferencesProvider>,
+  );
 
 vi.mock("../client", () => ({
   listRuntimeNodes: vi.fn(),
@@ -44,14 +52,14 @@ describe("RuntimeNodesPanel", () => {
       data: { items: [runtimeNode("online")], health: healthy },
     } as never);
 
-    render(<RuntimeNodesPanel />);
+    renderPanel();
 
     expect(await screen.findByText("worker-01")).toBeInTheDocument();
-    expect(screen.getByText("online")).toBeInTheDocument();
+    expect(screen.getByText("在线")).toBeInTheDocument();
     expect(screen.getByText("oci")).toBeInTheDocument();
     expect(screen.getByText("reclaim")).toBeInTheDocument();
     expect(screen.getByText("1 个实例")).toBeInTheDocument();
-    expect(screen.getByText("healthy")).toBeInTheDocument();
+    expect(screen.getByText("健康")).toBeInTheDocument();
   });
 
   it("keeps polling while no lifecycle task is active", async () => {
@@ -78,17 +86,17 @@ describe("RuntimeNodesPanel", () => {
         },
       } as never);
 
-    render(<RuntimeNodesPanel />);
+    renderPanel();
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByText("online")).toBeInTheDocument();
+    expect(screen.getByText("在线")).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(15_000);
     });
     expect(mockListRuntimeNodes).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("stale")).toBeInTheDocument();
+    expect(screen.getByText("陈旧")).toBeInTheDocument();
     expect(screen.getByText("集群运行能力需要关注")).toBeInTheDocument();
   });
 
@@ -100,7 +108,7 @@ describe("RuntimeNodesPanel", () => {
       } as never)
       .mockResolvedValueOnce({ data: { items: [], health: healthy } } as never);
 
-    render(<RuntimeNodesPanel />);
+    renderPanel();
     expect(await screen.findByText("node request failed")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /重试/ }));
@@ -124,7 +132,7 @@ describe("RuntimeNodesPanel", () => {
       },
     } as never);
 
-    render(<RuntimeNodesPanel />);
+    renderPanel();
 
     expect(await screen.findByText("worker-01")).toBeInTheDocument();
     expect(screen.getByText("无格式 Worker")).toBeInTheDocument();

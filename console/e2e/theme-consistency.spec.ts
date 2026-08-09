@@ -1,6 +1,127 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 
+test("theme and language preferences persist on the sign-in surface", async ({
+  page,
+}) => {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "切换到亮色模式" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect
+    .poll(() =>
+      page
+        .locator("body")
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .toBe("rgb(246, 247, 249)");
+
+  const loginSurfaces = await page
+    .locator(".ag-login-frame")
+    .evaluate((frame) => {
+      const brandPanel = frame.querySelector<HTMLElement>(
+        ".ag-login-brand-panel",
+      );
+      const brandDescription = brandPanel?.querySelector<HTMLElement>(
+        ".ag-login-brand-copy p",
+      );
+      const formPanel = frame.querySelector<HTMLElement>(".ag-login-panel");
+      const heading = formPanel?.querySelector<HTMLElement>("h2");
+      return {
+        brandBackground: brandPanel
+          ? getComputedStyle(brandPanel).backgroundColor
+          : null,
+        brandDescription: brandDescription
+          ? getComputedStyle(brandDescription).color
+          : null,
+        formBackground: formPanel
+          ? getComputedStyle(formPanel).backgroundColor
+          : null,
+        heading: heading ? getComputedStyle(heading).color : null,
+      };
+    });
+  expect(loginSurfaces).toEqual({
+    brandBackground: "rgb(17, 24, 29)",
+    brandDescription: "rgb(161, 161, 170)",
+    formBackground: "rgb(255, 255, 255)",
+    heading: "rgb(24, 24, 27)",
+  });
+
+  await page.getByRole("button", { name: "语言" }).click();
+  await page.getByRole("menuitem", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+  await expect(
+    page.locator(".ag-login-panel").getByText("Console Sign In", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Username & Password", { exact: true }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+  await expect(
+    page.getByRole("button", { name: "Switch to dark mode" }),
+  ).toBeVisible();
+});
+
+test("OIDC, password, and token sign-in modes share a stable layout", async ({
+  page,
+}) => {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/auth/oidc/config", (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        issuer: "https://identity.example.test/realms/artifact-gateway",
+      },
+    }),
+  );
+
+  await page.goto("/login");
+  const frame = page.locator(".ag-login-frame");
+  const oidcMode = page.getByRole("radio", { name: /企业登录/ });
+  await expect(oidcMode).toBeChecked();
+  await expect(page.getByText("由组织身份提供方统一认证")).toBeVisible();
+  const oidcHeight = await frame.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().height),
+  );
+
+  await page
+    .locator(".ag-login-modes label")
+    .filter({ hasText: "访问令牌" })
+    .click();
+  await expect(page.getByPlaceholder("粘贴 Bearer Token…")).toBeVisible();
+  const tokenHeight = await frame.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().height),
+  );
+
+  await page
+    .locator(".ag-login-modes label")
+    .filter({ hasText: "账号密码" })
+    .click();
+  await expect(page.getByPlaceholder("alice")).toBeVisible();
+  const passwordHeight = await frame.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().height),
+  );
+
+  expect([oidcHeight, tokenHeight, passwordHeight]).toEqual([
+    oidcHeight,
+    oidcHeight,
+    oidcHeight,
+  ]);
+});
+
 test("public browse surfaces stay aligned with the dark console palette", async ({
   page,
 }) => {
@@ -101,6 +222,9 @@ test("management tables keep action columns opaque and cards separated", async (
 
   await page.goto("/repositories");
   await expect(page.getByRole("heading", { name: "仓库" })).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "操作", exact: true }),
+  ).toBeVisible();
   const actionCell = page.locator(".ant-table-cell-fix-end").first();
   await expect(actionCell).toBeVisible();
   const actionSurface = await actionCell.evaluate((element) => {

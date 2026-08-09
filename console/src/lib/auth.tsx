@@ -15,6 +15,7 @@ const ROLE_KEY = "ag.console.role";
 interface AuthContextValue {
   token: string;
   role: string;
+  authenticated: boolean;
   identity: CurrentIdentity | null;
   identityLoading: boolean;
   setToken: (token: string, role?: string) => void;
@@ -27,6 +28,7 @@ function applyToken(token: string) {
   client.setConfig({
     baseUrl: "/api/v2",
     auth: () => (token ? token : undefined),
+    credentials: "include",
   });
 }
 
@@ -39,8 +41,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<string>(
     () => localStorage.getItem(ROLE_KEY) ?? "",
   );
+  const [authenticated, setAuthenticated] = useState(Boolean(token));
   const [identity, setIdentity] = useState<CurrentIdentity | null>(null);
-  const [identityLoading, setIdentityLoading] = useState(Boolean(token));
+  const [identityLoading, setIdentityLoading] = useState(true);
 
   useEffect(() => {
     applyToken(token);
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const trimmed = next.trim();
     localStorage.setItem(TOKEN_KEY, trimmed);
     setTokenState(trimmed);
+    setAuthenticated(Boolean(trimmed));
     if (nextRole) localStorage.setItem(ROLE_KEY, nextRole);
     else localStorage.removeItem(ROLE_KEY);
     setRole(nextRole);
@@ -61,30 +65,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(ROLE_KEY);
     setTokenState("");
     setRole("");
+    setAuthenticated(false);
     setIdentity(null);
     setIdentityLoading(false);
+    void fetch("/auth/logout", { method: "POST", credentials: "include" });
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setIdentity(null);
-      setIdentityLoading(false);
-      return;
-    }
     let cancelled = false;
     setIdentityLoading(true);
-    void fetch("/api/v2/identity", {
-      headers: { Authorization: `Bearer ${token}` },
+    void fetch("/auth/session", {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then(async (response) => {
         if (cancelled) return;
-        if (response.status === 401) {
-          clearToken();
+        if (!response.ok) return;
+        const session = (await response.json()) as {
+          authenticated?: boolean;
+          identity?: CurrentIdentity;
+        };
+        if (!session.authenticated || !session.identity) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(ROLE_KEY);
+          setTokenState("");
+          setRole("");
+          setAuthenticated(false);
+          setIdentity(null);
           return;
         }
-        if (!response.ok) return;
-        const current = (await response.json()) as CurrentIdentity;
+        const current = session.identity;
         if (cancelled) return;
+        setAuthenticated(true);
         setIdentity(current);
         const resolvedRole = current.role ?? "";
         setRole(resolvedRole);
@@ -100,13 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [token, clearToken]);
+  }, [token]);
 
   return (
     <AuthContext.Provider
       value={{
         token,
         role,
+        authenticated,
         identity,
         identityLoading,
         setToken,

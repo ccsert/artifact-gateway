@@ -35,6 +35,7 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 type OperationRow = {
   id: string;
@@ -54,19 +55,20 @@ type OperationRow = {
   lastError?: string;
 };
 
-const KIND_LABELS: Record<string, string> = {
-  retention: "制品保留",
-  promotion: "制品晋级",
-  replication: "仓库复制",
-  reclaim: "对象回收",
-  "audit-retention": "审计保留",
+const KIND_LABELS: Record<string, [string, string]> = {
+  retention: ["制品保留", "Artifact retention"],
+  promotion: ["制品晋级", "Artifact promotion"],
+  replication: ["仓库复制", "Repository replication"],
+  reclaim: ["对象回收", "Object reclamation"],
+  "audit-retention": ["审计保留", "Audit retention"],
 };
 
-function kindLabel(kind: string): string {
-  return KIND_LABELS[kind] ?? kind;
-}
-
 export function OperationsPage() {
+  const { locale, text } = usePreferences();
+  const kindLabel = (kind: string) => {
+    const labels = KIND_LABELS[kind];
+    return labels ? text(labels[0], labels[1]) : kind;
+  };
   const [repositories, setRepositories] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -117,7 +119,9 @@ export function OperationsPage() {
           maxAttempts: isHistoricalJob ? undefined : job.maxAttempts,
           progressCurrent: job.progressCurrent,
           progressTotal: job.progressTotal,
-          progressMessage: isHistoricalJob ? "历史任务" : job.progressMessage,
+          progressMessage: isHistoricalJob
+            ? text("历史任务", "Historical job")
+            : job.progressMessage,
           lastError: job.lastError,
         };
       });
@@ -142,7 +146,7 @@ export function OperationsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [text]);
 
   useEffect(() => {
     void load();
@@ -213,7 +217,7 @@ export function OperationsPage() {
 
   const columns: ColumnsType<OperationRow> = [
     {
-      title: "类型",
+      title: text("类型", "Type"),
       key: "kind",
       width: 140,
       render: (_, row) => (
@@ -224,23 +228,25 @@ export function OperationsPage() {
       ),
     },
     {
-      title: "仓库",
+      title: text("仓库", "Repository"),
       dataIndex: "repository",
       key: "repository",
       width: 150,
       render: (value: string | undefined) => (
-        <span className="text-xs text-zinc-400">{value ?? "全局"}</span>
+        <span className="text-xs text-zinc-400">
+          {value ?? text("全局", "Global")}
+        </span>
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 120,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: "进度",
+      title: text("进度", "Progress"),
       key: "progress",
       width: 220,
       render: (_, row) =>
@@ -271,12 +277,12 @@ export function OperationsPage() {
           </div>
         ) : (
           <span className="text-xs text-zinc-600">
-            {row.progressMessage ?? "未报告"}
+            {row.progressMessage ?? text("未报告", "Not reported")}
           </span>
         ),
     },
     {
-      title: "尝试",
+      title: text("尝试", "Attempts"),
       key: "attempts",
       width: 100,
       render: (_, row) => (
@@ -288,37 +294,37 @@ export function OperationsPage() {
       ),
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 170,
       render: (value: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "下次执行 / 完成时间",
+      title: text("下次执行 / 完成时间", "Next run / completed"),
       key: "schedule",
       width: 200,
       render: (_, row) => (
         <div className="whitespace-nowrap text-xs text-zinc-500">
           <div>
             {row.nextAttemptAt
-              ? formatDate(row.nextAttemptAt)
-              : formatDate(row.completedAt)}
+              ? formatDate(row.nextAttemptAt, locale)
+              : formatDate(row.completedAt, locale)}
           </div>
           {row.startedAt && (
             <div className="mt-1 text-[11px] text-zinc-600">
-              开始 {formatDate(row.startedAt)}
+              {text("开始", "Started")} {formatDate(row.startedAt, locale)}
             </div>
           )}
         </div>
       ),
     },
     {
-      title: "任务 ID / 失败原因",
+      title: text("任务 ID / 失败原因", "Job ID / failure reason"),
       key: "details",
       width: 280,
       render: (_, row) => (
@@ -335,7 +341,7 @@ export function OperationsPage() {
       ),
     },
     {
-      title: "操作",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 120,
@@ -343,9 +349,17 @@ export function OperationsPage() {
         row.repositoryId ? (
           <Space size="small">
             {(row.state === "pending" || row.state === "retrying") && (
-              <Tooltip title="立即加入执行队列">
+              <Tooltip
+                title={text(
+                  "立即加入执行队列",
+                  "Queue for immediate execution",
+                )}
+              >
                 <Button
-                  aria-label="立即加入执行队列"
+                  aria-label={text(
+                    "立即加入执行队列",
+                    "Queue for immediate execution",
+                  )}
                   size="small"
                   icon={<PlayCircleOutlined />}
                   loading={actingJob === row.id}
@@ -354,9 +368,9 @@ export function OperationsPage() {
               </Tooltip>
             )}
             {(row.state === "failed" || row.state === "cancelled") && (
-              <Tooltip title="重新执行任务">
+              <Tooltip title={text("重新执行任务", "Retry job")}>
                 <Button
-                  aria-label="重新执行任务"
+                  aria-label={text("重新执行任务", "Retry job")}
                   size="small"
                   icon={<RedoOutlined />}
                   loading={actingJob === row.id}
@@ -366,15 +380,18 @@ export function OperationsPage() {
             )}
             {(row.state === "pending" || row.state === "retrying") && (
               <Popconfirm
-                title="取消此任务？"
-                description="取消后仍可从任务中心重新执行。"
-                okText="取消任务"
-                cancelText="返回"
+                title={text("取消此任务？", "Cancel this job?")}
+                description={text(
+                  "取消后仍可从任务中心重新执行。",
+                  "You can retry it later from Operations.",
+                )}
+                okText={text("取消任务", "Cancel job")}
+                cancelText={text("返回", "Back")}
                 onConfirm={() => controlJob(row, "cancel")}
               >
-                <Tooltip title="取消任务">
+                <Tooltip title={text("取消任务", "Cancel job")}>
                   <Button
-                    aria-label="取消任务"
+                    aria-label={text("取消任务", "Cancel job")}
                     danger
                     size="small"
                     icon={<CloseOutlined />}
@@ -393,41 +410,46 @@ export function OperationsPage() {
   return (
     <div>
       <PageHeader
-        title="任务中心"
-        description="跨仓库查看晋级、复制、保留和对象回收任务的当前状态。"
+        title={text("任务中心", "Operations")}
+        description={text(
+          "跨仓库查看晋级、复制、保留和对象回收任务的当前状态。",
+          "Track promotion, replication, retention, and reclamation jobs across repositories.",
+        )}
         actions={
           <Button
             icon={<ReloadOutlined />}
             onClick={() => void load()}
             loading={loading}
           >
-            刷新任务
+            {text("刷新任务", "Refresh jobs")}
           </Button>
         }
       />
       <MetricStrip
         items={[
           {
-            label: "任务总数",
+            label: text("任务总数", "Jobs"),
             value: rows?.length ?? "—",
-            hint: "当前保留窗口",
+            hint: text("当前保留窗口", "Current retention window"),
           },
           {
-            label: "运行中",
+            label: text("运行中", "Running"),
             value: running,
-            hint: "正在处理",
+            hint: text("正在处理", "In progress"),
             tone: running ? "success" : "default",
           },
           {
-            label: "待处理",
+            label: text("待处理", "Pending"),
             value: pending,
-            hint: "等待 worker",
+            hint: text("等待 worker", "Waiting for a worker"),
             tone: pending ? "warning" : "default",
           },
           {
-            label: "失败",
+            label: text("失败", "Failed"),
             value: failed,
-            hint: failed ? "需要检查失败原因" : "当前没有失败任务",
+            hint: failed
+              ? text("需要检查失败原因", "Review failure details")
+              : text("当前没有失败任务", "No failed jobs"),
             tone: failed ? "danger" : "success",
           },
         ]}
@@ -448,18 +470,18 @@ export function OperationsPage() {
                 setRepositoryFilter("all");
               }}
             >
-              清除筛选
+              {text("清除筛选", "Clear filters")}
             </Button>
           ) : undefined
         }
       >
-        <FilterField label="状态" className="min-w-[160px]">
+        <FilterField label={text("状态", "Status")} className="min-w-[160px]">
           <Select
             className="w-full"
             value={stateFilter}
             onChange={setStateFilter}
             options={[
-              { value: "all", label: "全部状态" },
+              { value: "all", label: text("全部状态", "All statuses") },
               { value: "pending", label: "pending" },
               { value: "running", label: "running" },
               { value: "retrying", label: "retrying" },
@@ -469,13 +491,16 @@ export function OperationsPage() {
             ]}
           />
         </FilterField>
-        <FilterField label="任务类型" className="min-w-[180px]">
+        <FilterField
+          label={text("任务类型", "Job type")}
+          className="min-w-[180px]"
+        >
           <Select
             className="w-full"
             value={kindFilter}
             onChange={setKindFilter}
             options={[
-              { value: "all", label: "全部类型" },
+              { value: "all", label: text("全部类型", "All types") },
               ...kindOptions.map((kind) => ({
                 value: kind,
                 label: kindLabel(kind),
@@ -483,14 +508,17 @@ export function OperationsPage() {
             ]}
           />
         </FilterField>
-        <FilterField label="仓库" className="min-w-[220px]">
+        <FilterField
+          label={text("仓库", "Repository")}
+          className="min-w-[220px]"
+        >
           <Select
             className="w-full"
             value={repositoryFilter}
             onChange={setRepositoryFilter}
             showSearch={{ optionFilterProp: "label" }}
             options={[
-              { value: "all", label: "全部仓库" },
+              { value: "all", label: text("全部仓库", "All repositories") },
               ...repositories.map((repo) => ({
                 value: repo.id,
                 label: repo.name,
@@ -502,12 +530,15 @@ export function OperationsPage() {
       {error ? (
         <ErrorBanner error={error} onRetry={load} />
       ) : !rows ? (
-        <Loading label="加载任务状态…" />
+        <Loading label={text("加载任务状态…", "Loading job status…")} />
       ) : visibleRows.length === 0 ? (
         <Card>
           <EmptyState
-            title="没有匹配的任务"
-            hint="调整筛选条件，或等待任务产生后再刷新。"
+            title={text("没有匹配的任务", "No matching jobs")}
+            hint={text(
+              "调整筛选条件，或等待任务产生后再刷新。",
+              "Adjust the filters or refresh after new jobs are created.",
+            )}
           />
         </Card>
       ) : (

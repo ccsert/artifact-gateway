@@ -42,6 +42,49 @@
     0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 16px -8px rgba(0, 0, 0, 0.4);
   --ag-shadow-pop:
     0 8px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --ag-sider: rgba(12, 13, 16, 0.96);
+  --ag-topbar: rgba(8, 9, 11, 0.9);
+  --ag-table-header: rgba(9, 10, 12, 0.4);
+  --ag-table-row-border: rgba(63, 63, 70, 0.25);
+  --ag-table-hover: rgba(39, 39, 42, 0.32);
+  --ag-scrollbar: #3f3f46;
+  --ag-scrollbar-hover: #52525b;
+  --ag-selection-bg: rgba(6, 182, 212, 0.3);
+  --ag-selection-text: #cffafe;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  --ag-bg: #f6f7f9;
+  --ag-bg-grad-a: #f6f7f9;
+  --ag-bg-grad-b: #f6f7f9;
+  --ag-surface: rgba(255, 255, 255, 0.9);
+  --ag-surface-solid: #ffffff;
+  --ag-surface-hover: #f4f4f5;
+  --ag-overlay: #ffffff;
+  --ag-border: #d4d4d8;
+  --ag-border-subtle: #e4e4e7;
+  --ag-brand: #0891b2;
+  --ag-brand-soft: rgba(8, 145, 178, 0.1);
+  --ag-brand-glow: rgba(8, 145, 178, 0.25);
+  --ag-text: #27272a;
+  --ag-text-strong: #18181b;
+  --ag-text-dim: #52525b;
+  --ag-text-mute: #71717a;
+  --ag-text-faint: #a1a1aa;
+  --ag-shadow-card: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --ag-shadow-pop:
+    0 16px 40px -12px rgba(24, 24, 27, 0.18), 0 2px 8px rgba(24, 24, 27, 0.08);
+  --ag-sider: rgba(255, 255, 255, 0.96);
+  --ag-topbar: rgba(255, 255, 255, 0.9);
+  --ag-table-header: #fafafa;
+  --ag-table-row-border: #eeeeef;
+  --ag-table-hover: #f4f4f5;
+  --ag-scrollbar: #d4d4d8;
+  --ag-scrollbar-hover: #a1a1aa;
+  --ag-selection-bg: rgba(8, 145, 178, 0.2);
+  --ag-selection-text: #164e63;
 }
 
 html {
@@ -49,42 +92,259 @@ html {
 }
 
 body {
-  @apply text-zinc-200 antialiased;
-  background:
-    radial-gradient(
-      1200px 500px at 15% -10%,
-      rgba(6, 182, 212, 0.05),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 420px at 90% -5%,
-      rgba(99, 102, 241, 0.045),
-      transparent 55%
-    ),
-    linear-gradient(180deg, var(--ag-bg-grad-a), var(--ag-bg-grad-b) 40%);
+  @apply antialiased;
+  color: var(--ag-text);
+  background: var(--ag-bg);
   background-attachment: fixed;
   font-feature-settings: "cv11", "ss01";
   text-rendering: optimizeLegibility;
 }
 
+/* Existing utility classes use the dark zinc scale. These semantic remaps
+ * keep legacy page content readable while pages move toward design tokens. */
+html[data-theme="light"] .text-zinc-50,
+html[data-theme="light"] .text-zinc-100,
+html[data-theme="light"] .text-zinc-200 {
+  color: var(--ag-text-strong) !important;
+}
+html[data-theme="light"] .text-zinc-300,
+html[data-theme="light"] .text-zinc-400 {
+  color: var(--ag-text-dim) !important;
+}
+html[data-theme="light"] .text-zinc-500,
+html[data-theme="light"] .text-zinc-600 {
+  color: var(--ag-text-mute) !important;
+}
+html[data-theme="light"] .ag-login-brand-panel .text-zinc-200 {
+  color: #e4e4e7 !important;
+}
+html[data-theme="light"] .ag-login-brand-panel .text-zinc-400 {
+  color: #a1a1aa !important;
+}
+html[data-theme="light"] .ag-login-brand-panel .text-zinc-500 {
+  color: #71717a !important;
+}
+html[data-theme="light"] .text-cyan-100,
+html[data-theme="light"] .text-cyan-200,
+html[data-theme="light"] .text-cyan-300,
+html[data-theme="light"] .text-cyan-400,
+html[data-theme="light"] .text-cyan-500 {
+  color: #0e7490 !important;
+}
+html[data-theme="light"] .text-emerald-300,
+html[data-theme="light"] .text-emerald-400 {
+  color: #047857 !important;
+}
+html[data-theme="light"] .text-amber-200,
+html[data-theme="light"] .text-amber-300 {
+  color: #a16207 !important;
+}
+html[data-theme="light"] .text-rose-300,
+html[data-theme="light"] .text-rose-400,
+html[data-theme="light"] .text-red-400 {
+  color: #be123c !important;
+}
+html[data-theme="light"] .text-sky-300 {
+  color: #0369a1 !important;
+}
+html[data-theme="light"] .text-violet-300 {
+  color: #6d28d9 !important;
+}
+html[data-theme="light"] .border-zinc-600\/40,
+html[data-theme="light"] .border-zinc-700,
+html[data-theme="light"] .border-zinc-800,
+html[data-theme="light"] .border-zinc-800\/60,
+html[data-theme="light"] .border-zinc-800\/70,
+html[data-theme="light"] .border-zinc-800\/80,
+html[data-theme="light"] .border-zinc-800\/90 {
+  border-color: var(--ag-border-subtle) !important;
+}
+html[data-theme="light"] .bg-zinc-700\/20,
+html[data-theme="light"] .bg-zinc-800,
+html[data-theme="light"] .bg-zinc-900,
+html[data-theme="light"] .bg-zinc-900\/20,
+html[data-theme="light"] .bg-zinc-900\/40,
+html[data-theme="light"] .bg-zinc-900\/60,
+html[data-theme="light"] .bg-zinc-950,
+html[data-theme="light"] .bg-zinc-950\/20,
+html[data-theme="light"] .bg-zinc-950\/30,
+html[data-theme="light"] .bg-zinc-950\/40,
+html[data-theme="light"] .bg-zinc-950\/50,
+html[data-theme="light"] .bg-zinc-950\/60,
+html[data-theme="light"] .bg-zinc-950\/70 {
+  background-color: var(--ag-surface-solid) !important;
+}
+
+.ag-app-fallback,
+.ag-login-shell {
+  color: var(--ag-text);
+  background: var(--ag-bg);
+}
+
+/* ========== 登录工作台 ========== */
+
+.ag-login-shell {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  overflow: hidden;
+  padding: 48px;
+}
+
+.ag-login-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 24px;
+  right: 28px;
+  padding: 3px;
+  border: 1px solid var(--ag-border-subtle);
+  border-radius: var(--ag-radius-sm);
+  background: var(--ag-surface);
+  box-shadow: var(--ag-shadow-card);
+  backdrop-filter: blur(12px);
+}
+
+.ag-login-frame {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.86fr) minmax(460px, 1.14fr);
+  width: min(980px, 100%);
+  min-height: 590px;
+  overflow: hidden;
+  border: 1px solid var(--ag-border-subtle);
+  border-radius: var(--ag-radius-sm);
+  background: var(--ag-surface-solid);
+  box-shadow: var(--ag-shadow-pop);
+}
+
+.ag-login-brand-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 42px;
+  color: #e4e4e7;
+  background: #11181d;
+  border-right: 1px solid rgba(161, 161, 170, 0.18);
+}
+
+.ag-login-brand-panel::after {
+  position: absolute;
+  right: 42px;
+  bottom: 42px;
+  width: 64px;
+  height: 2px;
+  background: #06b6d4;
+  content: "";
+}
+
+.ag-login-brand-lockup,
+.ag-login-security-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ag-login-brand-copy {
+  margin-block: auto;
+  padding-block: 64px;
+}
+
+.ag-login-security-note {
+  padding-top: 18px;
+  border-top: 1px solid rgba(161, 161, 170, 0.18);
+}
+
+.ag-login-security-note > .anticon {
+  color: #22d3ee;
+  font-size: 18px;
+}
+
+.ag-login-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 52px 56px 34px;
+  background: var(--ag-surface-solid);
+}
+
+.ag-login-modes .ant-segmented-item-label {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ag-login-mode-body {
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+}
+
+.ag-login-form,
+.ag-login-sso {
+  width: 100%;
+}
+
+.ag-login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.ag-login-mode-icon {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(6, 182, 212, 0.24);
+  border-radius: 50%;
+  color: var(--ag-brand);
+  background: var(--ag-brand-soft);
+  font-size: 23px;
+}
+
+.ag-login-public {
+  display: flex;
+  justify-content: center;
+  padding-top: 18px;
+  border-top: 1px solid var(--ag-border-subtle);
+  font-size: 13px;
+}
+
+.ag-login-public a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ag-text-dim);
+  font-weight: 500;
+}
+
+.ag-login-public a:hover {
+  color: var(--ag-brand);
+}
+
 ::selection {
-  @apply bg-cyan-500/30 text-cyan-100;
+  color: var(--ag-selection-text);
+  background: var(--ag-selection-bg);
 }
 
 /* slim scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(63 63 70) transparent;
+  scrollbar-color: var(--ag-scrollbar) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-zinc-700;
+  border-radius: 9999px;
+  background: var(--ag-scrollbar);
 }
 *::-webkit-scrollbar-thumb:hover {
-  @apply bg-zinc-600;
+  background: var(--ag-scrollbar-hover);
 }
 *::-webkit-scrollbar-track {
   background: transparent;
@@ -160,7 +420,7 @@ button:not(:disabled):active,
   transition: background 180ms var(--ease-out-expo);
 }
 .ag-metric-strip > *:hover {
-  background: rgba(39, 39, 42, 0.35);
+  background: var(--ag-table-hover);
 }
 
 /* ========== 过滤栏 ========== */
@@ -185,7 +445,7 @@ button:not(:disabled):active,
 }
 
 .ag-console-table .ant-table-thead > tr > th {
-  background: rgba(9, 10, 12, 0.4);
+  background: var(--ag-table-header);
   color: var(--ag-text-mute);
   border-bottom-color: var(--ag-border-subtle);
   font-size: 11px;
@@ -196,14 +456,14 @@ button:not(:disabled):active,
 
 .ag-console-table .ant-table-tbody > tr > td {
   background: transparent;
-  border-bottom-color: rgba(63, 63, 70, 0.25);
+  border-bottom-color: var(--ag-table-row-border);
 }
 
 .ag-console-table .ant-table-tbody > tr.ant-table-row {
   transition: background 140ms var(--ease-out-expo);
 }
 .ag-console-table .ant-table-tbody > tr.ant-table-row:hover > td {
-  background: rgba(39, 39, 42, 0.32);
+  background: var(--ag-table-hover);
 }
 
 /* Fixed columns are rendered outside the scrolling table surface. */
@@ -228,9 +488,30 @@ button:not(:disabled):active,
 /* ========== 侧边导航 ========== */
 
 .ag-sider {
-  background: rgba(12, 13, 16, 0.72);
+  background: var(--ag-sider);
   backdrop-filter: blur(14px);
   border-right: 1px solid var(--ag-border-subtle);
+}
+
+.ag-sider-footer {
+  min-height: 48px;
+}
+
+.ag-sider-toggle.ant-btn {
+  align-items: center;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  min-width: 32px;
+  padding: 0;
+  width: 32px;
+}
+
+.ag-sider-toggle.ant-btn .ant-btn-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 1;
 }
 
 .ag-brand-mark {
@@ -275,7 +556,7 @@ button:not(:disabled):active,
 /* ========== 顶栏 ========== */
 
 .ag-topbar {
-  background: rgba(8, 9, 11, 0.72);
+  background: var(--ag-topbar);
   backdrop-filter: blur(14px) saturate(1.3);
   border-bottom: 1px solid var(--ag-border-subtle);
 }
@@ -365,6 +646,19 @@ button:not(:disabled):active,
 /* ========== 响应式 ========== */
 
 @media (max-width: 900px) {
+  .ag-login-shell {
+    padding: 32px;
+  }
+
+  .ag-login-frame {
+    grid-template-columns: 1fr;
+    width: min(560px, 100%);
+  }
+
+  .ag-login-brand-panel {
+    display: none;
+  }
+
   .ag-metric-strip {
     grid-template-columns: 1fr;
   }

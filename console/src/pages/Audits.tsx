@@ -23,8 +23,9 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
-const AUDIT_CSV_COLUMNS = [
+const AUDIT_CSV_COLUMNS_ZH = [
   "时间",
   "操作",
   "结果",
@@ -42,6 +43,27 @@ const AUDIT_CSV_COLUMNS = [
   "缓存",
   "授权来源",
   "授权原因",
+  "Request ID",
+  "Trace ID",
+];
+const AUDIT_CSV_COLUMNS_EN = [
+  "Time",
+  "Operation",
+  "Outcome",
+  "Repository",
+  "Group",
+  "Format",
+  "Status",
+  "Traffic",
+  "Actor",
+  "Resource",
+  "Representation",
+  "Member",
+  "Member type",
+  "Upstream host",
+  "Cache",
+  "Authorization source",
+  "Authorization reason",
   "Request ID",
   "Trace ID",
 ];
@@ -106,6 +128,7 @@ function AuditSelect({
 }
 
 export function AuditsPage() {
+  const { locale, text } = usePreferences();
   const [records, setRecords] = useState<AuditRecord[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [repository, setRepository] = useState("");
@@ -239,17 +262,17 @@ export function AuditsPage() {
   };
   const columns: ColumnsType<AuditTableRow> = [
     {
-      title: "时间",
+      title: text("时间", "Time"),
       key: "occurredAt",
       width: 180,
       render: (_, row) => (
         <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
-          {formatDate(row.record.occurredAt)}
+          {formatDate(row.record.occurredAt, locale)}
         </span>
       ),
     },
     {
-      title: "操作",
+      title: text("操作", "Operation"),
       key: "operation",
       width: 190,
       render: (_, row) => (
@@ -264,13 +287,13 @@ export function AuditsPage() {
       ),
     },
     {
-      title: "结果",
+      title: text("结果", "Outcome"),
       key: "outcome",
       width: 170,
       render: (_, row) => <StateBadge state={row.record.outcome} />,
     },
     {
-      title: "仓库/分组",
+      title: text("仓库/分组", "Repository / group"),
       key: "repository",
       width: 180,
       render: (_, row) => (
@@ -280,14 +303,14 @@ export function AuditsPage() {
       ),
     },
     {
-      title: "格式",
+      title: text("格式", "Format"),
       key: "format",
       width: 110,
       render: (_, row) =>
         row.record.format ? <FormatBadge format={row.record.format} /> : "—",
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       key: "status",
       width: 90,
       render: (_, row) => (
@@ -297,7 +320,7 @@ export function AuditsPage() {
       ),
     },
     {
-      title: "流量",
+      title: text("流量", "Traffic"),
       key: "bytes",
       width: 110,
       render: (_, row) => (
@@ -325,14 +348,20 @@ export function AuditsPage() {
     <div className="grid grid-cols-3 gap-x-8 gap-y-2 px-2 py-1 text-xs">
       {(
         [
-          ["资源", record.resource],
-          ["表示", record.representation],
-          ["成员", record.memberName],
-          ["成员类型", record.memberType],
-          ["上游主机", record.upstreamHost],
-          ["缓存", record.cacheDisposition],
-          ["授权来源", record.authorizationSource],
-          ["授权原因", record.authorizationReason],
+          [text("资源", "Resource"), record.resource],
+          [text("表示", "Representation"), record.representation],
+          [text("成员", "Member"), record.memberName],
+          [text("成员类型", "Member type"), record.memberType],
+          [text("上游主机", "Upstream host"), record.upstreamHost],
+          [text("缓存", "Cache"), record.cacheDisposition],
+          [
+            text("授权来源", "Authorization source"),
+            record.authorizationSource,
+          ],
+          [
+            text("授权原因", "Authorization reason"),
+            record.authorizationReason,
+          ],
           ["Request ID", record.requestId],
           ["Trace ID", record.traceId],
         ] as const
@@ -350,26 +379,31 @@ export function AuditsPage() {
   return (
     <div>
       <PageHeader
-        title="审计日志"
-        description="网关访问与授权决策记录（最新在前）"
+        title={text("审计日志", "Audit log")}
+        description={text(
+          "网关访问与授权决策记录（最新在前）",
+          "Gateway access and authorization decisions, newest first",
+        )}
       />
       <MetricStrip
         items={[
           {
-            label: "当前记录",
+            label: text("当前记录", "Current records"),
             value: records ? filtered.length : "—",
-            hint: `当前页最多 ${limit} 条`,
+            hint: text(`当前页最多 ${limit} 条`, `Up to ${limit} on this page`),
           },
           {
-            label: "失败请求",
+            label: text("失败请求", "Failed requests"),
             value: failedCount,
-            hint: failedCount ? "建议优先检查失败原因" : "当前窗口未发现失败",
+            hint: failedCount
+              ? text("建议优先检查失败原因", "Review failure details first")
+              : text("当前窗口未发现失败", "No failures in this window"),
             tone: failedCount ? "danger" : "success",
           },
           {
-            label: "拒绝访问",
+            label: text("拒绝访问", "Denied access"),
             value: deniedCount,
-            hint: `${actorCount} 个操作主体`,
+            hint: text(`${actorCount} 个操作主体`, `${actorCount} actors`),
             tone: deniedCount ? "warning" : "default",
           },
         ]}
@@ -383,10 +417,10 @@ export function AuditsPage() {
                 disabled={!hasFilters}
                 onClick={clearFilters}
               >
-                清除
+                {text("清除", "Clear")}
               </Button>
               <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-                刷新
+                {text("刷新", "Refresh")}
               </Button>
               <Button
                 icon={<DownloadOutlined />}
@@ -415,48 +449,53 @@ export function AuditsPage() {
                   ]);
                   downloadCsv(
                     `audits-${new Date().toISOString().slice(0, 19)}.csv`,
-                    toCsv(AUDIT_CSV_COLUMNS, rows),
+                    toCsv(
+                      locale === "en-US"
+                        ? AUDIT_CSV_COLUMNS_EN
+                        : AUDIT_CSV_COLUMNS_ZH,
+                      rows,
+                    ),
                   );
                 }}
               >
-                导出当前页 CSV
+                {text("导出当前页 CSV", "Export current page CSV")}
               </Button>
             </Space>
           }
         >
           <AuditSelect
-            label="仓库"
+            label={text("仓库", "Repository")}
             value={repository}
-            placeholder="全部仓库"
+            placeholder={text("全部仓库", "All repositories")}
             options={repoOptions.map((value) => ({ value, label: value }))}
             onChange={setRepository}
           />
           <AuditSelect
-            label="结果"
+            label={text("结果", "Outcome")}
             value={outcome}
-            placeholder="全部结果"
+            placeholder={text("全部结果", "All outcomes")}
             options={outcomeOptions}
             onChange={setOutcome}
           />
-          <FilterField label="加载窗口">
+          <FilterField label={text("加载窗口", "Load window")}>
             <Select
               className="min-w-[150px]"
               value={String(limit)}
               options={[50, 100, 200].map((value) => ({
                 value: String(value),
-                label: `最近 ${value} 条`,
+                label: text(`最近 ${value} 条`, `Latest ${value}`),
               }))}
               onChange={(value) => setLimit(Number(value))}
             />
           </FilterField>
-          <FilterField label="起始时间">
+          <FilterField label={text("起始时间", "From")}>
             <Input
               type="datetime-local"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
             />
           </FilterField>
-          <FilterField label="结束时间">
+          <FilterField label={text("结束时间", "To")}>
             <Input
               type="datetime-local"
               value={to}
@@ -472,32 +511,35 @@ export function AuditsPage() {
               key: "advanced",
               label: (
                 <span className="text-xs text-zinc-400">
-                  高级筛选{" "}
+                  {text("高级筛选", "Advanced filters")}{" "}
                   <span className="ml-2 text-zinc-600">
-                    操作、访问主体、分组、格式
+                    {text(
+                      "操作、访问主体、分组、格式",
+                      "Operation, actor, group, and format",
+                    )}
                   </span>
                 </span>
               ),
               children: (
                 <FilterBar>
                   <AuditSelect
-                    label="操作类型"
+                    label={text("操作类型", "Operation")}
                     value={operation}
-                    placeholder="全部操作类型"
+                    placeholder={text("全部操作类型", "All operations")}
                     options={operationOptions}
                     onChange={setOperation}
                   />
                   <AuditSelect
-                    label="访问主体"
+                    label={text("访问主体", "Actor")}
                     value={actor}
-                    placeholder="全部访问主体"
+                    placeholder={text("全部访问主体", "All actors")}
                     options={actorOptions}
                     onChange={setActor}
                   />
                   <AuditSelect
-                    label="所属分组"
+                    label={text("所属分组", "Group")}
                     value={group}
-                    placeholder="全部分组"
+                    placeholder={text("全部分组", "All groups")}
                     options={groupOptions.map((value) => ({
                       value,
                       label: value,
@@ -505,9 +547,9 @@ export function AuditsPage() {
                     onChange={setGroup}
                   />
                   <AuditSelect
-                    label="制品格式"
+                    label={text("制品格式", "Artifact format")}
                     value={format}
-                    placeholder="全部格式"
+                    placeholder={text("全部格式", "All formats")}
                     options={formatOptions}
                     onChange={setFormat}
                   />
@@ -521,8 +563,11 @@ export function AuditsPage() {
         isNotFound(error) ? (
           <Card className="mt-4">
             <EmptyState
-              title="审计功能未启用"
-              hint="当前后端构建尚未挂载审计端点（返回 404）"
+              title={text("审计功能未启用", "Audit log is unavailable")}
+              hint={text(
+                "当前后端构建尚未挂载审计端点（返回 404）",
+                "The current backend does not expose the audit endpoint (404)",
+              )}
             />
           </Card>
         ) : (
@@ -535,8 +580,11 @@ export function AuditsPage() {
       ) : filtered.length === 0 ? (
         <Card className="mt-4">
           <EmptyState
-            title="没有匹配的审计记录"
-            hint="尝试清除筛选或扩大加载窗口"
+            title={text("没有匹配的审计记录", "No matching audit records")}
+            hint={text(
+              "尝试清除筛选或扩大加载窗口",
+              "Clear filters or expand the load window",
+            )}
           />
         </Card>
       ) : (
@@ -565,7 +613,10 @@ export function AuditsPage() {
           />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
             <span>
-              第 {currentPage} 页 · 当前页 {pageRecords.length} 条
+              {text(
+                `第 ${currentPage} 页 · 当前页 ${pageRecords.length} 条`,
+                `Page ${currentPage} · ${pageRecords.length} records`,
+              )}
             </span>
             <Space size="small">
               <Button
@@ -575,7 +626,7 @@ export function AuditsPage() {
                   void load(pageTokens[previousPage - 1] ?? "", previousPage);
                 }}
               >
-                上一页
+                {text("上一页", "Previous")}
               </Button>
               <Button
                 disabled={!nextPageToken || !records}
@@ -583,7 +634,7 @@ export function AuditsPage() {
                   nextPageToken && void load(nextPageToken, currentPage + 1)
                 }
               >
-                下一页
+                {text("下一页", "Next")}
               </Button>
             </Space>
           </div>

@@ -27,6 +27,7 @@ import { Card, Field } from "./Layout";
 import { ErrorBanner } from "./Feedback";
 import { StateBadge, Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
+import { usePreferences } from "../lib/preferences";
 
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -54,6 +55,7 @@ export function MavenPublishWizard({
   onPublished?: () => void;
 }) {
   const { token } = useAuth();
+  const { locale, text } = usePreferences();
   const [step, setStep] = useState<Step>("declare");
   const [coordinate, setCoordinate] = useState("");
   const [pomObject, setPomObject] = useState("");
@@ -130,8 +132,9 @@ export function MavenPublishWizard({
           `/api/v2/publish-sessions/${session.id}/objects/${encodeURIComponent(f.name)}`,
           {
             method: "PUT",
+            credentials: "include",
             headers: {
-              Authorization: `Bearer ${token}`,
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
               "Content-Type": "application/octet-stream",
             },
             body: f.file,
@@ -195,7 +198,7 @@ export function MavenPublishWizard({
   const currentStep = step === "declare" ? 0 : step === "upload" ? 1 : 2;
   const stagedColumns: ColumnsType<StagedFile> = [
     {
-      title: "文件名",
+      title: text("文件名", "File name"),
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
@@ -214,7 +217,7 @@ export function MavenPublishWizard({
       ),
     },
     {
-      title: "大小",
+      title: text("大小", "Size"),
       dataIndex: "size",
       key: "size",
       width: 110,
@@ -223,7 +226,7 @@ export function MavenPublishWizard({
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       width: 90,
       render: (_, file) => (
@@ -234,14 +237,14 @@ export function MavenPublishWizard({
           icon={<DeleteOutlined />}
           onClick={() => removeFile(file.name)}
         >
-          移除
+          {text("移除", "Remove")}
         </Button>
       ),
     },
   ];
   const uploadColumns: ColumnsType<StagedFile> = [
     {
-      title: "文件名",
+      title: text("文件名", "File name"),
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
@@ -249,7 +252,7 @@ export function MavenPublishWizard({
       ),
     },
     {
-      title: "大小",
+      title: text("大小", "Size"),
       dataIndex: "size",
       key: "size",
       width: 120,
@@ -258,15 +261,15 @@ export function MavenPublishWizard({
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "uploaded",
       key: "uploaded",
       width: 120,
       render: (value: boolean) =>
         value ? (
-          <Badge tone="green">已上传</Badge>
+          <Badge tone="green">{text("已上传", "Uploaded")}</Badge>
         ) : (
-          <Badge tone="zinc">待上传</Badge>
+          <Badge tone="zinc">{text("待上传", "Pending")}</Badge>
         ),
     },
   ];
@@ -281,9 +284,9 @@ export function MavenPublishWizard({
         size="small"
         variant="outlined"
         items={[
-          { title: "声明坐标与对象" },
-          { title: "上传文件" },
-          { title: "完成" },
+          { title: text("声明坐标与对象", "Declare coordinate and objects") },
+          { title: text("上传文件", "Upload files") },
+          { title: text("完成", "Complete") },
         ]}
       />
 
@@ -291,8 +294,11 @@ export function MavenPublishWizard({
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field
-              label="Maven 坐标"
-              hint="group:artifact:version，如 com.acme:widget:1.0.0"
+              label={text("Maven 坐标", "Maven coordinate")}
+              hint={text(
+                "group:artifact:version，如 com.acme:widget:1.0.0",
+                "group:artifact:version, for example com.acme:widget:1.0.0",
+              )}
             >
               <Input
                 className="font-mono text-xs"
@@ -301,11 +307,20 @@ export function MavenPublishWizard({
                 onChange={(e) => setCoordinate(e.target.value)}
               />
             </Field>
-            <Field label="POM 对象名" hint="staged 文件中作为 POM 的那个">
+            <Field
+              label={text("POM 对象名", "POM object name")}
+              hint={text(
+                "staged 文件中作为 POM 的那个",
+                "The staged file used as the POM",
+              )}
+            >
               <Select
                 showSearch
                 className="w-full font-mono text-xs"
-                placeholder="请先选择 POM 文件"
+                placeholder={text(
+                  "请先选择 POM 文件",
+                  "Select a POM file first",
+                )}
                 value={pomObject}
                 onChange={setPomObject}
                 options={staged
@@ -315,12 +330,17 @@ export function MavenPublishWizard({
             </Field>
           </div>
           <Field
-            label="发布文件"
-            hint="选择 POM、JAR、源码包等；浏览器会自动计算 sha256"
+            label={text("发布文件", "Release files")}
+            hint={text(
+              "选择 POM、JAR、源码包等；浏览器会自动计算 sha256",
+              "Select the POM, JAR, source archive, and other files; SHA-256 is calculated in the browser",
+            )}
             group
           >
             <Upload multiple showUploadList={false} beforeUpload={beforeUpload}>
-              <Button icon={<UploadOutlined />}>选择发布文件</Button>
+              <Button icon={<UploadOutlined />}>
+                {text("选择发布文件", "Choose release files")}
+              </Button>
             </Upload>
           </Field>
           {staged.length > 0 && (
@@ -342,7 +362,7 @@ export function MavenPublishWizard({
             loading={busy}
             disabled={!coordinate.trim() || !pomObject || staged.length === 0}
           >
-            创建发布会话
+            {text("创建发布会话", "Create publish session")}
           </Button>
         </div>
       )}
@@ -351,13 +371,16 @@ export function MavenPublishWizard({
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 px-4 py-3 text-xs text-zinc-400">
             <span>
-              会话{" "}
+              {text("会话", "Session")}{" "}
               <code className="font-mono text-zinc-300">
                 {session.id.slice(0, 8)}…
               </code>
             </span>
             <StateBadge state={session.state} />
-            <span>过期时间：{formatDate(session.expiresAt)}</span>
+            <span>
+              {text("过期时间：", "Expires: ")}
+              {formatDate(session.expiresAt, locale)}
+            </span>
           </div>
           <Card>
             <Table<StagedFile>
@@ -377,7 +400,9 @@ export function MavenPublishWizard({
               loading={uploading}
               disabled={allUploaded}
             >
-              {allUploaded ? "全部已上传" : "上传全部文件"}
+              {allUploaded
+                ? text("全部已上传", "All files uploaded")
+                : text("上传全部文件", "Upload all files")}
             </Button>
             <Button
               type="primary"
@@ -386,18 +411,21 @@ export function MavenPublishWizard({
               loading={busy}
               disabled={!allUploaded}
             >
-              提交发布
+              {text("提交发布", "Commit release")}
             </Button>
             <Popconfirm
-              title="确认放弃当前发布？"
-              description="本地选择和会话信息将被清空，已上传的临时对象由服务端过期回收。"
-              okText="放弃发布"
-              cancelText="继续编辑"
+              title={text("确认放弃当前发布？", "Discard this release?")}
+              description={text(
+                "本地选择和会话信息将被清空，已上传的临时对象由服务端过期回收。",
+                "Local selections and session details will be cleared. Uploaded temporary objects expire on the server.",
+              )}
+              okText={text("放弃发布", "Discard release")}
+              cancelText={text("继续编辑", "Continue editing")}
               okButtonProps={{ danger: true }}
               onConfirm={reset}
             >
               <Button type="text" danger className="ml-auto">
-                放弃并重新开始
+                {text("放弃并重新开始", "Discard and start over")}
               </Button>
             </Popconfirm>
           </div>
@@ -407,11 +435,11 @@ export function MavenPublishWizard({
       {step === "done" && (
         <Result
           status="success"
-          title="发布成功"
+          title={text("发布成功", "Release published")}
           subTitle={<span className="font-mono text-xs">{coordinate}</span>}
           extra={
             <Button type="primary" onClick={reset}>
-              再发布一个
+              {text("再发布一个", "Publish another")}
             </Button>
           }
         />

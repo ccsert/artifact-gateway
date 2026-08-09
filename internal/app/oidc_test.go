@@ -190,6 +190,10 @@ func signedOIDCToken(t *testing.T, key *rsa.PrivateKey, keyID, issuer, audience,
 }
 
 func signedOIDCTokenWithRoles(t *testing.T, key *rsa.PrivateKey, keyID, issuer, audience, subject string, expires time.Time, roles []string) string {
+	return signedOIDCTokenWithClaims(t, key, keyID, issuer, audience, subject, expires, roles, "")
+}
+
+func signedOIDCTokenWithClaims(t *testing.T, key *rsa.PrivateKey, keyID, issuer, audience, subject string, expires time.Time, roles []string, nonce string) string {
 	t.Helper()
 	header, err := json.Marshal(map[string]string{"alg": "RS256", "kid": keyID})
 	if err != nil {
@@ -198,6 +202,9 @@ func signedOIDCTokenWithRoles(t *testing.T, key *rsa.PrivateKey, keyID, issuer, 
 	claims := map[string]any{"iss": issuer, "aud": audience, "sub": subject, "exp": expires.Unix()}
 	if roles != nil {
 		claims["realm_access"] = map[string]any{"roles": roles}
+	}
+	if nonce != "" {
+		claims["nonce"] = nonce
 	}
 	claimBytes, err := json.Marshal(claims)
 	if err != nil {

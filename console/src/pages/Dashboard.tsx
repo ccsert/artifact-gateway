@@ -22,6 +22,7 @@ import {
   type DashboardSample,
 } from "../lib/history";
 import { MetricStrip } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 const FORMAT_COLORS: Record<string, string> = {
   oci: "#22d3ee",
@@ -32,6 +33,7 @@ const FORMAT_COLORS: Record<string, string> = {
 const FORMAT_ORDER = ["oci", "maven", "conan", "raw"] as const;
 
 export function DashboardPage() {
+  const { locale, text } = usePreferences();
   const navigate = useNavigate();
   const [repos, setRepos] = useState<Repository[] | null>(null);
   const [groups, setGroups] = useState<Group[] | null>(null);
@@ -109,7 +111,7 @@ export function DashboardPage() {
   if (error)
     return (
       <div>
-        <PageHeader title="总览" />
+        <PageHeader title={text("总览", "Overview")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
     );
@@ -121,7 +123,7 @@ export function DashboardPage() {
   const healthTone = inactive > 0 ? "text-amber-300" : "text-emerald-300";
   const repositoryColumns: ColumnsType<Repository> = [
     {
-      title: "名称",
+      title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
       render: (value: string, repository) => (
@@ -134,14 +136,14 @@ export function DashboardPage() {
       ),
     },
     {
-      title: "格式",
+      title: text("格式", "Format"),
       dataIndex: "format",
       key: "format",
       width: 100,
       render: (value: Repository["format"]) => <FormatBadge format={value} />,
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 120,
@@ -161,18 +163,18 @@ export function DashboardPage() {
   ];
   const auditColumns: ColumnsType<AuditRecord> = [
     {
-      title: "时间",
+      title: text("时间", "Time"),
       dataIndex: "occurredAt",
       key: "occurredAt",
       width: 180,
       render: (value: string) => (
         <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "操作",
+      title: text("操作", "Operation"),
       dataIndex: "operation",
       key: "operation",
       width: 140,
@@ -181,7 +183,7 @@ export function DashboardPage() {
       ),
     },
     {
-      title: "结果",
+      title: text("结果", "Outcome"),
       dataIndex: "outcome",
       key: "outcome",
       width: 120,
@@ -205,15 +207,18 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title="总览"
-        description="Artifact Gateway 运行状态一览"
+        title={text("总览", "Overview")}
+        description={text(
+          "Artifact Gateway 运行状态一览",
+          "Artifact Gateway runtime at a glance",
+        )}
         actions={
           <Button
             type="primary"
             icon={<DatabaseOutlined />}
             onClick={() => navigate("/repositories")}
           >
-            管理仓库
+            {text("管理仓库", "Manage repositories")}
           </Button>
         }
       />
@@ -226,11 +231,18 @@ export function DashboardPage() {
           </span>
           <div>
             <div className="text-sm font-semibold text-zinc-100">
-              {inactive > 0 ? "平台需要关注" : "平台运行正常"}
+              {inactive > 0
+                ? text("平台需要关注", "Platform needs attention")
+                : text("平台运行正常", "Platform is healthy")}
             </div>
             <div className="mt-0.5 text-xs text-zinc-500">
-              {active} 个活跃仓库
-              {inactive > 0 ? `，${inactive} 个需要关注` : "，暂无待处理异常"}
+              {text(`${active} 个活跃仓库`, `${active} active repositories`)}
+              {inactive > 0
+                ? text(
+                    `，${inactive} 个需要关注`,
+                    `, ${inactive} need attention`,
+                  )
+                : text("，暂无待处理异常", ", no pending issues")}
             </div>
           </div>
         </div>
@@ -239,48 +251,64 @@ export function DashboardPage() {
             <span className="mr-1.5 text-zinc-300">API</span>v2
           </span>
           <span>
-            <span className="mr-1.5 text-zinc-300">采样</span>
-            {formatDate(new Date().toISOString())}
+            <span className="mr-1.5 text-zinc-300">
+              {text("采样", "Sampled")}
+            </span>
+            {formatDate(new Date().toISOString(), locale)}
           </span>
         </div>
       </div>
       <MetricStrip
         items={[
-          { label: "仓库总数", value: repos.length, hint: `${active} 个活跃` },
           {
-            label: "分组",
-            value: groups.length,
-            hint: `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
+            label: text("仓库总数", "Repositories"),
+            value: repos.length,
+            hint: text(`${active} 个活跃`, `${active} active`),
           },
           {
-            label: "格式分布",
+            label: text("分组", "Groups"),
+            value: groups.length,
+            hint: text(
+              `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
+              `${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} member references`,
+            ),
+          },
+          {
+            label: text("格式分布", "Format distribution"),
             value: FORMAT_ORDER.map(
               (format) => `${format} ${formatCount(format)}`,
             ).join(" · "),
             hint: "OCI · Maven · Conan · Raw",
           },
           {
-            label: "存储占用",
+            label: text("存储占用", "Storage used"),
             value: totalBytes !== null ? formatBytes(totalBytes) : "—",
             hint:
               totalObjects !== null
-                ? `${formatNumber(totalObjects)} 个对象`
-                : "容量未启用",
+                ? text(
+                    `${formatNumber(totalObjects, locale)} 个对象`,
+                    `${formatNumber(totalObjects, locale)} objects`,
+                  )
+                : text("容量未启用", "Capacity unavailable"),
           },
-          { label: "最近审计", value: audits.length, hint: "最新记录条数" },
+          {
+            label: text("最近审计", "Recent audits"),
+            value: audits.length,
+            hint: text("最新记录条数", "Latest records"),
+          },
         ]}
       />
 
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-2">
           <CardHeader
-            title="存储占用（按格式）"
+            title={text("存储占用（按格式）", "Storage by format")}
             extra={
               <Link
                 to="/repositories"
                 className="text-xs text-cyan-400 hover:text-cyan-300"
               >
-                查看仓库 →
+                {text("查看仓库 →", "View repositories →")}
               </Link>
             }
           />
@@ -294,11 +322,14 @@ export function DashboardPage() {
                 }))}
                 format={(n) => formatBytes(n)}
                 centerLabel={formatBytes(totalBytes)}
-                centerSub="合计"
+                centerSub={text("合计", "Total")}
               />
             ) : (
               <div className="py-8 text-center text-sm text-zinc-600">
-                容量统计未启用或暂无数据
+                {text(
+                  "容量统计未启用或暂无数据",
+                  "Capacity metrics are unavailable or empty",
+                )}
               </div>
             )}
           </div>
@@ -306,11 +337,12 @@ export function DashboardPage() {
 
         <Card className="xl:col-span-3">
           <CardHeader
-            title="近期趋势"
+            title={text("近期趋势", "Recent trend")}
             extra={
               history.length > 0 ? (
                 <span className="text-[11px] text-zinc-600">
-                  自 {formatDate(new Date(history[0].t).toISOString())}
+                  {text("自", "Since")}{" "}
+                  {formatDate(new Date(history[0].t).toISOString(), locale)}
                 </span>
               ) : undefined
             }
@@ -318,7 +350,7 @@ export function DashboardPage() {
           <div className="grid grid-cols-1 gap-6 px-5 py-6 sm:grid-cols-2">
             <div>
               <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                仓库数
+                {text("仓库数", "Repositories")}
               </div>
               <Sparkline
                 data={history.map((s) => s.repos)}
@@ -328,7 +360,7 @@ export function DashboardPage() {
             </div>
             <div>
               <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                存储占用
+                {text("存储占用", "Storage used")}
               </div>
               <Sparkline
                 data={history
@@ -336,13 +368,15 @@ export function DashboardPage() {
                   .filter((b): b is number => b !== null)}
                 color="#fbbf24"
                 format={(n) => formatBytes(n)}
-                label="容量未启用"
+                label={text("容量未启用", "Capacity unavailable")}
               />
             </div>
           </div>
           <p className="border-t border-zinc-800/60 px-5 py-3 text-[11px] text-zinc-600">
-            基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端
-            metrics 端点。
+            {text(
+              "基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。",
+              "Browser-local samples only reflect recent changes recorded on this device. Full time series require a backend metrics endpoint.",
+            )}
           </p>
         </Card>
       </div>
@@ -350,13 +384,13 @@ export function DashboardPage() {
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader
-            title="仓库"
+            title={text("仓库", "Repositories")}
             extra={
               <Link
                 to="/repositories"
                 className="text-xs text-cyan-400 hover:text-cyan-300"
               >
-                查看全部 →
+                {text("查看全部 →", "View all →")}
               </Link>
             }
           />
@@ -367,20 +401,20 @@ export function DashboardPage() {
             dataSource={repos.slice(0, 6)}
             columns={repositoryColumns}
             pagination={false}
-            locale={{ emptyText: "暂无仓库" }}
+            locale={{ emptyText: text("暂无仓库", "No repositories") }}
             scroll={{ x: 520 }}
           />
         </Card>
 
         <Card>
           <CardHeader
-            title="最近审计事件"
+            title={text("最近审计事件", "Recent audit events")}
             extra={
               <Link
                 to="/audits"
                 className="text-xs text-cyan-400 hover:text-cyan-300"
               >
-                查看全部 →
+                {text("查看全部 →", "View all →")}
               </Link>
             }
           />
@@ -395,7 +429,7 @@ export function DashboardPage() {
             dataSource={audits}
             columns={auditColumns}
             pagination={false}
-            locale={{ emptyText: "暂无审计记录" }}
+            locale={{ emptyText: text("暂无审计记录", "No audit records") }}
             scroll={{ x: 520 }}
           />
         </Card>

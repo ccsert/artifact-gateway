@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { usePreferences } from "../lib/preferences";
 
 const toneClasses: Record<string, string> = {
   green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
@@ -59,8 +60,36 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {
+  const { text } = usePreferences();
   const value = state ?? "unknown";
-  return <Badge tone={stateTone[value] ?? "zinc"}>{value}</Badge>;
+  const labels: Record<string, [string, string]> = {
+    active: ["运行中", "Active"],
+    deleting: ["删除中", "Deleting"],
+    deleted: ["已删除", "Deleted"],
+    pending: ["待处理", "Pending"],
+    retrying: ["重试中", "Retrying"],
+    running: ["运行中", "Running"],
+    completed: ["已完成", "Completed"],
+    failed: ["失败", "Failed"],
+    cancelled: ["已取消", "Cancelled"],
+    expired: ["已过期", "Expired"],
+    revoked: ["已吊销", "Revoked"],
+    enabled: ["已启用", "Enabled"],
+    disabled: ["已停用", "Disabled"],
+    online: ["在线", "Online"],
+    offline: ["离线", "Offline"],
+    stale: ["陈旧", "Stale"],
+    healthy: ["健康", "Healthy"],
+    degraded: ["降级", "Degraded"],
+    critical: ["严重", "Critical"],
+    denied: ["拒绝", "Denied"],
+  };
+  const label = labels[value];
+  return (
+    <Badge tone={stateTone[value] ?? "zinc"}>
+      {label ? text(label[0], label[1]) : value}
+    </Badge>
+  );
 }
 
 const formatTone: Record<string, keyof typeof toneClasses> = {

@@ -10,6 +10,7 @@ import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { UsageSnippetBlock } from "./PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../lib/usage";
+import { usePreferences } from "../lib/preferences";
 
 interface OciDescriptor {
   mediaType: string;
@@ -51,7 +52,8 @@ const MANIFEST_ACCEPT =
 
 async function ociRegistryToken(token: string): Promise<string> {
   const response = await fetch("/auth/token", {
-    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (!response.ok) {
     throw new Error(
@@ -148,6 +150,7 @@ export function OciImageDetail({
   onDeleted?: () => void;
 }) {
   const { token } = useAuth();
+  const { locale, text } = usePreferences();
   const [manifests, setManifests] = useState<OciManifestSummary[] | null>(null);
   const [selectedReference, setSelectedReference] = useState<string | null>(
     null,
@@ -232,7 +235,8 @@ export function OciImageDetail({
     if (selectedReference) void loadManifest(selectedReference);
   }, [selectedReference, loadManifest]);
 
-  if (loading) return <Loading label="加载镜像详情…" />;
+  if (loading)
+    return <Loading label={text("加载镜像详情…", "Loading image details…")} />;
   if (!manifests)
     return (
       <ErrorBanner error={error ?? new Error("读取 OCI Manifest 列表失败")} />
@@ -240,7 +244,7 @@ export function OciImageDetail({
   if (manifests.length === 0)
     return (
       <p className="py-6 text-center text-sm text-zinc-500">
-        该镜像没有可见 Manifest
+        {text("该镜像没有可见 Manifest", "This image has no visible manifests")}
       </p>
     );
 
@@ -308,7 +312,7 @@ export function OciImageDetail({
           className="shrink-0 text-xs text-zinc-500"
           htmlFor="oci-version-select"
         >
-          版本
+          {text("版本", "Version")}
         </label>
         <Select
           id="oci-version-select"
@@ -323,23 +327,32 @@ export function OciImageDetail({
           value={selectedReference ?? undefined}
           options={versions}
           onChange={setSelectedReference}
-          placeholder="搜索标签或 Digest"
+          placeholder={text("搜索标签或 Digest", "Search tags or digests")}
           listHeight={280}
         />
         {selectedVersion && (
           <Popconfirm
             title={
               selectedVersion.kind === "tag"
-                ? "解绑当前镜像标签？"
-                : "删除无标签 Manifest？"
+                ? text("解绑当前镜像标签？", "Unlink this image tag?")
+                : text(
+                    "删除无标签 Manifest？",
+                    "Delete this untagged manifest?",
+                  )
             }
             description={
               selectedVersion.kind === "tag"
-                ? "只移除该标签；没有其他标签时，Manifest 会保留为可按 Digest 管理的版本。"
-                : "Manifest 将进入墓碑，可在墓碑页恢复。"
+                ? text(
+                    "只移除该标签；没有其他标签时，Manifest 会保留为可按 Digest 管理的版本。",
+                    "Only the tag is removed. The manifest remains manageable by digest when no other tags exist.",
+                  )
+                : text(
+                    "Manifest 将进入墓碑，可在墓碑页恢复。",
+                    "The manifest moves to tombstones and can be restored there.",
+                  )
             }
-            okText="删除"
-            cancelText="取消"
+            okText={text("删除", "Delete")}
+            cancelText={text("取消", "Cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={() => void deleteReference()}
           >
@@ -349,7 +362,9 @@ export function OciImageDetail({
               icon={<DeleteOutlined />}
               loading={deleting}
             >
-              {selectedVersion.kind === "tag" ? "解绑标签" : "删除 Manifest"}
+              {selectedVersion.kind === "tag"
+                ? text("解绑标签", "Unlink tag")
+                : text("删除 Manifest", "Delete manifest")}
             </Button>
           </Popconfirm>
         )}
@@ -373,9 +388,14 @@ export function OciImageDetail({
       {selectedVersion && (
         <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/30 p-3">
           <div className="mb-2">
-            <div className="text-xs font-medium text-zinc-300">使用方式</div>
+            <div className="text-xs font-medium text-zinc-300">
+              {text("使用方式", "Usage")}
+            </div>
             <div className="mt-1 text-[11px] text-zinc-500">
-              使用当前选中的标签或 Digest 访问镜像。
+              {text(
+                "使用当前选中的标签或 Digest 访问镜像。",
+                "Use the selected tag or digest to pull this image.",
+              )}
             </div>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
@@ -394,21 +414,23 @@ export function OciImageDetail({
       )}
 
       {manifestLoading ? (
-        <Loading label="加载清单…" />
+        <Loading label={text("加载清单…", "Loading manifest…")} />
       ) : !manifest ? null : (
         <>
           {/* 概要 */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                镜像大小
+                {text("镜像大小", "Image size")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
-                {hasImageDescriptors ? formatBytes(totalSize) : "无层数据"}
+                {hasImageDescriptors
+                  ? formatBytes(totalSize)
+                  : text("无层数据", "No layer data")}
               </div>
               {!hasImageDescriptors && (
                 <div className="mt-1 text-[10px] leading-4 text-zinc-600">
-                  仅包含 Manifest 元数据
+                  {text("仅包含 Manifest 元数据", "Manifest metadata only")}
                 </div>
               )}
               <div className="mt-1 text-[10px] leading-4 text-zinc-600">
@@ -417,7 +439,7 @@ export function OciImageDetail({
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                层数
+                {text("层数", "Layers")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
                 {manifest.layers?.length ?? 0}
@@ -425,7 +447,7 @@ export function OciImageDetail({
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                架构 / 系统
+                {text("架构 / 系统", "Architecture / OS")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
                 {config?.architecture ?? "—"} / {config?.os ?? "—"}
@@ -433,10 +455,10 @@ export function OciImageDetail({
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                创建时间
+                {text("创建时间", "Created")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
-                {config?.created ? formatDate(config.created) : "—"}
+                {config?.created ? formatDate(config.created, locale) : "—"}
               </div>
             </div>
           </div>
@@ -445,7 +467,7 @@ export function OciImageDetail({
           {config?.config && (
             <div className="rounded-lg border border-zinc-800 px-3 py-2.5 text-xs">
               <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
-                启动配置
+                {text("启动配置", "Runtime configuration")}
               </div>
               <div className="space-y-1 font-mono">
                 {config.config.Entrypoint && (
@@ -479,7 +501,7 @@ export function OciImageDetail({
           {/* 层列表 */}
           <div>
             <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
-              文件层 ({manifest.layers?.length ?? 0})
+              {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
               {manifest.mediaType && (
                 <Badge tone="zinc">{manifest.mediaType.split(".").pop()}</Badge>
               )}
@@ -518,7 +540,7 @@ export function OciImageDetail({
                     ),
                   },
                   {
-                    title: "类型",
+                    title: text("类型", "Type"),
                     dataIndex: "mediaType",
                     key: "mediaType",
                     width: 160,
@@ -534,7 +556,7 @@ export function OciImageDetail({
                     },
                   },
                   {
-                    title: "大小",
+                    title: text("大小", "Size"),
                     dataIndex: "size",
                     key: "size",
                     width: 120,

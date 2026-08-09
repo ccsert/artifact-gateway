@@ -1,9 +1,11 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
+import { usePreferences } from "../lib/preferences";
 
 function RouteFallback() {
+  const { t } = usePreferences();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#090a0c] text-sm text-zinc-500">
-      正在加载…
+    <div className="ag-app-fallback flex min-h-screen items-center justify-center text-sm text-zinc-500">
+      {t("common.loading")}
     </div>
   );
 }

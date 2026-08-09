@@ -1,0 +1,69 @@
+{
+  "realm": "artifact-gateway",
+  "enabled": true,
+  "displayName": "Artifact Gateway OIDC Test",
+  "roles": {
+    "realm": [
+      { "name": "artifact-reader" },
+      { "name": "artifact-writer" },
+      { "name": "artifact-admin" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "artifact-gateway-console",
+      "name": "Artifact Gateway Console",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://127.0.0.1:4173/auth/oidc/callback"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:4173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles in ID token",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "gateway-admin",
+      "enabled": true,
+      "firstName": "Gateway",
+      "lastName": "Administrator",
+      "email": "gateway-admin@example.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "gateway-oidc-test-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "artifact-admin"
+      ]
+    }
+  ]
+}

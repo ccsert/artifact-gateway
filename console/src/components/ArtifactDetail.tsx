@@ -5,15 +5,20 @@ import { usageFor } from "../lib/usage";
 import type { UsageSnippet } from "../lib/usage";
 import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
+import { usePreferences } from "../lib/preferences";
 
 function CopyButton({ text }: { text: string }) {
+  const { text: localizedText } = usePreferences();
   const [copied, setCopied] = useState(false);
+  const label = copied
+    ? localizedText("已复制", "Copied")
+    : localizedText("复制", "Copy");
   return (
-    <Tooltip title={copied ? "已复制" : "复制"}>
+    <Tooltip title={label}>
       <Button
         type="text"
         size="small"
-        aria-label={copied ? "已复制" : "复制"}
+        aria-label={label}
         icon={copied ? <CheckOutlined /> : <CopyOutlined />}
         onClick={async () => {
           try {
@@ -70,6 +75,7 @@ export function ArtifactDetailView({
   tag?: string;
   versions?: React.ReactNode;
 }) {
+  const { locale, text } = usePreferences();
   const snippets = usageFor(format, repoName, meta.coordinate, tag);
 
   return (
@@ -79,7 +85,7 @@ export function ArtifactDetailView({
         {meta.publisher && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              发布者
+              {text("发布者", "Publisher")}
             </div>
             <div
               className="mt-0.5 truncate font-mono text-xs text-zinc-100"
@@ -92,7 +98,7 @@ export function ArtifactDetailView({
         {meta.size !== undefined && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              大小
+              {text("大小", "Size")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
               {formatBytes(meta.size)}
@@ -102,17 +108,17 @@ export function ArtifactDetailView({
         {meta.createdAt && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              发布时间
+              {text("发布时间", "Published")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
-              {formatDate(meta.createdAt)}
+              {formatDate(meta.createdAt, locale)}
             </div>
           </div>
         )}
         {meta.state && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              状态
+              {text("状态", "State")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
               {meta.state}
@@ -123,7 +129,7 @@ export function ArtifactDetailView({
       {meta.digest && (
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            摘要 (digest)
+            {text("摘要 (digest)", "Digest")}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <code
@@ -145,7 +151,7 @@ export function ArtifactDetailView({
           items={[
             {
               key: "usage",
-              label: "使用方法",
+              label: text("使用方法", "Usage"),
               children: (
                 <div className="space-y-2">
                   {snippets.map((s) => (
@@ -202,6 +208,7 @@ export function VersionList({
   current?: string;
   onSelect?: (label: string) => void;
 }) {
+  const { text } = usePreferences();
   const sorted = [...items].sort((x, y) => compareVersions(x.label, y.label));
 
   if (items.length === 0) return null;
@@ -226,7 +233,7 @@ export function VersionList({
             ? current
             : undefined
         }
-        placeholder="搜索并选择版本"
+        placeholder={text("搜索并选择版本", "Search and select a version")}
         options={sorted.map((item) => ({
           value: item.label,
           label: item.label,
@@ -247,7 +254,7 @@ export function VersionList({
           );
         }}
         onChange={(value) => onSelect?.(value)}
-        notFoundContent="没有匹配版本"
+        notFoundContent={text("没有匹配版本", "No matching versions")}
         listHeight={280}
       />
     </div>

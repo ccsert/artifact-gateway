@@ -168,6 +168,28 @@ func TestLoadConfiguresOIDCWithHTTPSIssuerAndDiscoveryDefault(t *testing.T) {
 	}
 }
 
+func TestLoadAllowsLoopbackHTTPForLocalOIDCTestProvider(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_OIDC_ISSUER", "http://127.0.0.1:18081/realms/artifact-gateway")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway-api")
+	t.Setenv("GATEWAY_OIDC_JWKS_URL", "http://127.0.0.1:18081/realms/artifact-gateway/protocol/openid-connect/certs")
+	t.Setenv("GATEWAY_OIDC_CLIENT_ID", "artifact-gateway-console")
+	t.Setenv("GATEWAY_OIDC_REDIRECT_URL", "http://127.0.0.1:4173/auth/oidc/callback")
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadRejectsNonLoopbackHTTPOIDCIssuer(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_OIDC_ISSUER", "http://keycloak.example.test/realms/artifact-gateway")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway-api")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted a non-loopback HTTP OIDC issuer")
+	}
+}
+
 func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
 	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
@@ -180,6 +202,38 @@ func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
 	t.Setenv("GATEWAY_OIDC_AUDIENCE", "")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want error")
+	}
+}
+
+func TestLoadConfiguresOIDCBrowserLogin(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway")
+	t.Setenv("GATEWAY_OIDC_CLIENT_ID", "artifact-gateway-console")
+	t.Setenv("GATEWAY_OIDC_CLIENT_SECRET", "client-secret")
+	t.Setenv("GATEWAY_OIDC_REDIRECT_URL", "https://gateway.example.test/auth/oidc/callback")
+	t.Setenv("GATEWAY_OIDC_SCOPES", "openid profile,groups profile")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OIDCClientID != "artifact-gateway-console" || cfg.OIDCClientSecret != "client-secret" || cfg.OIDCRedirectURL != "https://gateway.example.test/auth/oidc/callback" {
+		t.Fatalf("OIDC browser config = %#v", cfg)
+	}
+	if got := strings.Join(cfg.OIDCScopes, ","); got != "openid,profile,groups" {
+		t.Fatalf("OIDC scopes = %q", got)
+	}
+}
+
+func TestLoadRejectsInsecureOIDCBrowserRedirect(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test")
+	t.Setenv("GATEWAY_OIDC_AUDIENCE", "artifact-gateway")
+	t.Setenv("GATEWAY_OIDC_CLIENT_ID", "artifact-gateway-console")
+	t.Setenv("GATEWAY_OIDC_REDIRECT_URL", "http://gateway.example.test/auth/oidc/callback")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted a non-local HTTP OIDC redirect")
 	}
 }
 

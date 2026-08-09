@@ -102,6 +102,7 @@ import {
 } from "../components/ArtifactRowDetail";
 import { RawUploadDialog } from "../components/RawUploadDialog";
 import { useAuth } from "../lib/auth";
+import { usePreferences } from "../lib/preferences";
 import { downloadCsv } from "../lib/csv";
 import { mavenGA, mavenUsage, mavenVersion } from "../lib/usage";
 import {
@@ -122,26 +123,30 @@ type Tab =
   | "tombstones"
   | "settings";
 
+type Localize = (chinese: string, english: string) => string;
+
 const TABS: {
   key: Tab;
   label: string;
+  labelEn: string;
   formats?: string[];
   hostedOnly?: boolean;
 }[] = [
-  { key: "artifacts", label: "制品" },
-  { key: "publish", label: "发布", formats: ["maven"] },
-  { key: "grants", label: "访问授权" },
+  { key: "artifacts", label: "制品", labelEn: "Artifacts" },
+  { key: "publish", label: "发布", labelEn: "Publish", formats: ["maven"] },
+  { key: "grants", label: "访问授权", labelEn: "Access grants" },
   {
     key: "retention",
     label: "保留策略",
+    labelEn: "Retention",
     formats: ["maven", "oci", "conan", "raw"],
     hostedOnly: true,
   },
-  { key: "capacity", label: "容量" },
-  { key: "distribute", label: "晋升 / 复制" },
-  { key: "jobs", label: "生命周期任务" },
-  { key: "tombstones", label: "墓碑" },
-  { key: "settings", label: "设置" },
+  { key: "capacity", label: "容量", labelEn: "Capacity" },
+  { key: "distribute", label: "晋升 / 复制", labelEn: "Promote / replicate" },
+  { key: "jobs", label: "生命周期任务", labelEn: "Lifecycle jobs" },
+  { key: "tombstones", label: "墓碑", labelEn: "Tombstones" },
+  { key: "settings", label: "设置", labelEn: "Settings" },
 ];
 
 /* ---------------- Artifacts ---------------- */
@@ -200,6 +205,7 @@ const PROXY_MAVEN_PAGE_SIZE = 50;
 type ProxyMavenAssetFilter = "primary" | "all" | "jar" | "pom";
 
 function CopyButton({ text }: { text: string }) {
+  const { text: localize } = usePreferences();
   const [copied, setCopied] = useState(false);
   return (
     <Button
@@ -216,7 +222,7 @@ function CopyButton({ text }: { text: string }) {
       }}
       className="shrink-0"
     >
-      {copied ? "已复制" : "复制"}
+      {copied ? localize("已复制", "Copied") : localize("复制", "Copy")}
     </Button>
   );
 }
@@ -270,6 +276,7 @@ function ProxyMavenUsage({
   token: string;
   onWarmed: () => void;
 }) {
+  const { text } = usePreferences();
   const base = window.location.origin;
   const [warmInput, setWarmInput] = useState(
     "org.springframework.boot:spring-boot:3.4.4:pom",
@@ -330,14 +337,19 @@ function ProxyMavenUsage({
       const { data, error } = await getProxyHealth({
         path: { repositoryId: repoId },
       });
-      if (error || !data) throw new Error("读取上游状态失败");
+      if (error || !data)
+        throw new Error(
+          text("读取上游状态失败", "Failed to load upstream status"),
+        );
       setHealth(data);
     } catch (error) {
       setHealthError(
-        error instanceof Error ? error.message : "读取上游状态失败",
+        error instanceof Error
+          ? error.message
+          : text("读取上游状态失败", "Failed to load upstream status"),
       );
     }
-  }, [repoId]);
+  }, [repoId, text]);
 
   useEffect(() => {
     void loadHealth();
@@ -347,7 +359,10 @@ function ProxyMavenUsage({
     const path = mavenWarmPath(warmInput);
     if (!path) {
       setWarmError(
-        "请输入 Maven GAV（groupId:artifactId:version[:extension[:classifier]]）或仓库路径。",
+        text(
+          "请输入 Maven GAV（groupId:artifactId:version[:extension[:classifier]]）或仓库路径。",
+          "Enter a Maven GAV (groupId:artifactId:version[:extension[:classifier]]) or a repository path.",
+        ),
       );
       return;
     }
@@ -356,13 +371,18 @@ function ProxyMavenUsage({
     setWarmResult(null);
     try {
       const response = await fetch(`/maven/${repoName}/${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const body = await response.arrayBuffer();
       setWarmResult({ status: response.status, bytes: body.byteLength });
       if (response.ok) onWarmed();
     } catch (error) {
-      setWarmError(error instanceof Error ? error.message : "预热请求失败");
+      setWarmError(
+        error instanceof Error
+          ? error.message
+          : text("预热请求失败", "Cache warm-up request failed"),
+      );
     } finally {
       setWarming(false);
     }
@@ -371,7 +391,12 @@ function ProxyMavenUsage({
   const refresh = async () => {
     const value = warmInput.trim();
     if (!value) {
-      setRefreshError("请输入 Maven GAV 或缓存路径。");
+      setRefreshError(
+        text(
+          "请输入 Maven GAV 或缓存路径。",
+          "Enter a Maven GAV or cache path.",
+        ),
+      );
       return;
     }
     setRefreshing(true);
@@ -385,12 +410,17 @@ function ProxyMavenUsage({
         path: { repositoryId: repoId },
         body,
       });
-      if (error || !result) throw new Error("刷新缓存失败");
+      if (error || !result)
+        throw new Error(text("刷新缓存失败", "Failed to refresh cache"));
       setRefreshResult(result);
       onWarmed();
       void loadHealth();
     } catch (error) {
-      setRefreshError(error instanceof Error ? error.message : "刷新缓存失败");
+      setRefreshError(
+        error instanceof Error
+          ? error.message
+          : text("刷新缓存失败", "Failed to refresh cache"),
+      );
     } finally {
       setRefreshing(false);
     }
@@ -399,7 +429,9 @@ function ProxyMavenUsage({
   const invalidate = async () => {
     const value = invalidateInput.trim();
     if (invalidateScope !== "repository" && !value) {
-      setInvalidateError("请输入失效目标。");
+      setInvalidateError(
+        text("请输入失效目标。", "Enter an invalidation target."),
+      );
       return;
     }
     setInvalidating(true);
@@ -415,12 +447,15 @@ function ProxyMavenUsage({
         path: { repositoryId: repoId },
         body,
       });
-      if (error || !result) throw new Error("失效缓存失败");
+      if (error || !result)
+        throw new Error(text("失效缓存失败", "Failed to invalidate cache"));
       setInvalidateResult(result.invalidated);
       onWarmed();
     } catch (error) {
       setInvalidateError(
-        error instanceof Error ? error.message : "失效缓存失败",
+        error instanceof Error
+          ? error.message
+          : text("失效缓存失败", "Failed to invalidate cache"),
       );
     } finally {
       setInvalidating(false);
@@ -430,7 +465,12 @@ function ProxyMavenUsage({
   const clearNegative = async () => {
     const path = invalidateInput.trim() ? mavenWarmPath(invalidateInput) : null;
     if (invalidateInput.trim() && !path) {
-      setNegativeError("请输入 Maven GAV 或缓存路径。");
+      setNegativeError(
+        text(
+          "请输入 Maven GAV 或缓存路径。",
+          "Enter a Maven GAV or cache path.",
+        ),
+      );
       return;
     }
     setClearingNegative(true);
@@ -441,12 +481,17 @@ function ProxyMavenUsage({
         path: { repositoryId: repoId },
         body: { ...(path ? { path } : {}), prefix: invalidatePrefix },
       });
-      if (error || !result) throw new Error("清理负缓存失败");
+      if (error || !result)
+        throw new Error(
+          text("清理负缓存失败", "Failed to clear negative cache"),
+        );
       setNegativeResult(result.cleared);
       onWarmed();
     } catch (error) {
       setNegativeError(
-        error instanceof Error ? error.message : "清理负缓存失败",
+        error instanceof Error
+          ? error.message
+          : text("清理负缓存失败", "Failed to clear negative cache"),
       );
     } finally {
       setClearingNegative(false);
@@ -458,27 +503,27 @@ function ProxyMavenUsage({
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            上游
+            {text("上游", "Upstream")}
           </div>
           <div
             className="mt-1 truncate font-mono text-xs text-zinc-200"
             title={health?.endpoint}
           >
-            {health?.endpoint ?? "检查中…"}
+            {health?.endpoint ?? text("检查中…", "Checking…")}
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            健康
+            {text("健康", "Health")}
           </div>
           <div
             className={`mt-1 text-xs font-semibold ${health?.reachable ? "text-emerald-300" : "text-rose-300"}`}
           >
             {health
               ? health.reachable
-                ? `可达${health.status ? ` · ${health.status}` : ""}`
-                : health.error || "不可达"
-              : "检查中…"}
+                ? `${text("可达", "Reachable")}${health.status ? ` · ${health.status}` : ""}`
+                : health.error || text("不可达", "Unreachable")
+              : text("检查中…", "Checking…")}
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
@@ -493,10 +538,12 @@ function ProxyMavenUsage({
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            缓存
+            {text("缓存", "Cache")}
           </div>
           <div className="mt-1 text-xs font-semibold text-zinc-100">
-            {health?.cacheEnabled ? "enabled" : "disabled"}
+            {health?.cacheEnabled
+              ? text("已启用", "Enabled")
+              : text("已停用", "Disabled")}
           </div>
         </div>
       </div>
@@ -505,25 +552,32 @@ function ProxyMavenUsage({
       )}
       <details className="group">
         <summary className="cursor-pointer text-sm font-medium text-zinc-100 hover:text-cyan-300">
-          使用方法{" "}
+          {text("使用方法", "Usage")}{" "}
           <span className="text-xs text-zinc-600 group-open:hidden">
-            （展开）
+            {text("（展开）", "(expand)")}
           </span>
         </summary>
         <div className="mt-2 space-y-2">
           <div className="text-xs text-zinc-500">
-            Maven Proxy Repository 需要 Basic 认证：用户名任意且非空，密码使用
-            resolver token。
+            {text(
+              "Maven 代理仓库需要 Basic 认证：用户名任意且非空，密码使用 resolver token。",
+              "The Maven proxy requires Basic authentication: use any non-empty username and the resolver token as the password.",
+            )}
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
             <SnippetBlock label="settings.xml" code={settings} />
             <SnippetBlock label="Docker Maven" code={docker} />
-            <SnippetBlock label="直接下载" code={direct} />
+            <SnippetBlock
+              label={text("直接下载", "Direct download")}
+              code={direct}
+            />
           </div>
         </div>
       </details>
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3">
-        <div className="mb-2 text-sm font-medium text-zinc-200">预热缓存</div>
+        <div className="mb-2 text-sm font-medium text-zinc-200">
+          {text("预热缓存", "Warm cache")}
+        </div>
         <div className="flex flex-wrap gap-2">
           <Input
             className="min-w-80 flex-1 font-mono"
@@ -532,16 +586,18 @@ function ProxyMavenUsage({
             onChange={(e) => setWarmInput(e.target.value)}
           />
           <Button onClick={warm} loading={warming} disabled={!warmInput.trim()}>
-            预热
+            {text("预热", "Warm")}
           </Button>
           <Button
             onClick={refresh}
             loading={refreshing}
             disabled={!warmInput.trim()}
           >
-            强制刷新
+            {text("强制刷新", "Force refresh")}
           </Button>
-          <Button onClick={() => void loadHealth()}>检查上游</Button>
+          <Button onClick={() => void loadHealth()}>
+            {text("检查上游", "Check upstream")}
+          </Button>
         </div>
         {warmError && (
           <div className="mt-2 text-xs text-rose-300">{warmError}</div>
@@ -560,7 +616,7 @@ function ProxyMavenUsage({
           <div
             className={`mt-2 text-xs ${refreshResult.refreshed ? "text-emerald-300" : "text-rose-300"}`}
           >
-            刷新 HTTP {refreshResult.status}
+            {text("刷新", "Refresh")} HTTP {refreshResult.status}
             {refreshResult.size !== undefined
               ? ` · ${formatBytes(refreshResult.size)}`
               : ""}
@@ -568,16 +624,18 @@ function ProxyMavenUsage({
         )}
       </div>
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3">
-        <div className="mb-2 text-sm font-medium text-zinc-200">失效缓存</div>
+        <div className="mb-2 text-sm font-medium text-zinc-200">
+          {text("失效缓存", "Invalidate cache")}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
             className="w-28"
             value={invalidateScope}
             options={[
-              { value: "path", label: "路径" },
-              { value: "version", label: "版本" },
-              { value: "component", label: "组件" },
-              { value: "repository", label: "全部" },
+              { value: "path", label: text("路径", "Path") },
+              { value: "version", label: text("版本", "Version") },
+              { value: "component", label: text("组件", "Component") },
+              { value: "repository", label: text("全部", "Repository") },
             ]}
             onChange={(value: typeof invalidateScope) =>
               setInvalidateScope(value)
@@ -601,7 +659,7 @@ function ProxyMavenUsage({
               checked={invalidatePrefix}
               onChange={(e) => setInvalidatePrefix(e.target.checked)}
             >
-              按前缀
+              {text("按前缀", "By prefix")}
             </Checkbox>
           )}
           <Button
@@ -611,22 +669,27 @@ function ProxyMavenUsage({
               invalidateScope !== "repository" && !invalidateInput.trim()
             }
           >
-            失效
+            {text("失效", "Invalidate")}
           </Button>
           <Button onClick={clearNegative} loading={clearingNegative}>
-            清理负缓存
+            {text("清理负缓存", "Clear negative cache")}
           </Button>
         </div>
         <div className="mt-1 text-[11px] text-zinc-600">
-          版本、组件和全部会按对应 Maven
-          缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。
+          {text(
+            "版本、组件和全部会按对应 Maven 缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。",
+            "Version, component, and repository invalidations use their Maven cache prefixes. Only cache indexes are removed; byte objects are reclaimed later by the orphan collector.",
+          )}
         </div>
         {invalidateError && (
           <div className="mt-2 text-xs text-rose-300">{invalidateError}</div>
         )}
         {invalidateResult !== null && (
           <div className="mt-2 text-xs text-emerald-300">
-            已失效 {invalidateResult} 个缓存条目。
+            {text(
+              `已失效 ${invalidateResult} 个缓存条目。`,
+              `${invalidateResult} cache entries invalidated.`,
+            )}
           </div>
         )}
         {negativeError && (
@@ -634,7 +697,10 @@ function ProxyMavenUsage({
         )}
         {negativeResult !== null && (
           <div className="mt-2 text-xs text-emerald-300">
-            已清理 {negativeResult} 个负缓存条目。
+            {text(
+              `已清理 ${negativeResult} 个负-cache 条目。`,
+              `${negativeResult} negative-cache entries cleared.`,
+            )}
           </div>
         )}
       </div>
@@ -677,6 +743,7 @@ function ProxyMavenCacheDetail({
   repoName: string;
   meta: ArtifactRow;
 }) {
+  const { text } = usePreferences();
   const parsed = meta.files?.[0]
     ? parseMavenCachePath(meta.files[0].path)
     : null;
@@ -719,7 +786,7 @@ function ProxyMavenCacheDetail({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            主文件大小
+            {text("主文件大小", "Primary size")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-zinc-100">
             {formatBytes(meta.size)}
@@ -727,7 +794,7 @@ function ProxyMavenCacheDetail({
         </div>
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-            文件数
+            {text("文件数", "Files")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-zinc-100">
             {meta.fileCount ?? meta.files?.length ?? 0}
@@ -736,7 +803,7 @@ function ProxyMavenCacheDetail({
         {meta.publisher && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              成员
+              {text("成员", "Member")}
             </div>
             <div
               className="mt-0.5 truncate font-mono text-xs text-zinc-100"
@@ -755,14 +822,15 @@ function ProxyMavenCacheDetail({
             <div className="pl-4 text-zinc-400">└─ {parsed.artifactId}</div>
             <div className="pl-8 text-cyan-300">└─ {parsed.version}</div>
             <div className="pl-12 text-zinc-500">
-              主文件：{meta.primaryFiles?.join(", ") || "—"}
+              {text("主文件：", "Primary files: ")}
+              {meta.primaryFiles?.join(", ") || "—"}
             </div>
           </div>
           <details className="group">
             <summary className="cursor-pointer text-sm font-medium text-zinc-200 hover:text-cyan-300">
-              Maven 坐标用法{" "}
+              {text("Maven 坐标用法", "Maven coordinate usage")}{" "}
               <span className="text-xs text-zinc-600 group-open:hidden">
-                （展开）
+                {text("（展开）", "(expand)")}
               </span>
             </summary>
             <div className="mt-2 grid gap-2 lg:grid-cols-3">
@@ -780,14 +848,17 @@ function ProxyMavenCacheDetail({
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/60">
         <div className="border-b border-zinc-800 px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-500">
-          文件明细
+          {text("文件明细", "File details")}
         </div>
         <div className="divide-y divide-zinc-800/70">
           {primary.map(renderFile)}
           {sidecars.length > 0 && (
             <details className="group">
               <summary className="cursor-pointer px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">
-                校验 / 签名文件（{sidecars.length}）
+                {text(
+                  `校验 / 签名文件（${sidecars.length}）`,
+                  `Checksums / signatures (${sidecars.length})`,
+                )}
               </summary>
               <div className="divide-y divide-zinc-800/70 border-t border-zinc-800/70">
                 {sidecars.map(renderFile)}
@@ -812,6 +883,7 @@ function ArtifactsTab({
   buildTarget?: number;
 }) {
   const { token } = useAuth();
+  const { text } = usePreferences();
   const [q, setQ] = useState(artifactTarget);
   const [rows, setRows] = useState<ArtifactRow[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -864,7 +936,9 @@ function ArtifactsTab({
                 },
               });
             if (requestError || !pageData)
-              throw new Error("读取 Proxy 缓存失败");
+              throw new Error(
+                text("读取 Proxy 缓存失败", "Failed to load proxy cache"),
+              );
             setProxyTotal(pageData.totalEstimate);
             items = pageData.items.map((item) => {
               const primary =
@@ -1011,6 +1085,7 @@ function ArtifactsTab({
       proxyAssetFilter,
       artifactTarget,
       buildTarget,
+      text,
     ],
   );
 
@@ -1020,17 +1095,17 @@ function ArtifactsTab({
   }, [load, artifactTarget]);
 
   const searchPlaceholder: Record<string, string> = {
-    oci: "按镜像名前缀过滤…",
-    maven: "搜索 GAV 坐标…",
-    conan: "按引用名过滤…",
-    raw: "搜索路径…",
+    oci: text("按镜像名前缀过滤…", "Filter by image name prefix…"),
+    maven: text("搜索 GAV 坐标…", "Search GAV coordinates…"),
+    conan: text("按引用名过滤…", "Filter by reference…"),
+    raw: text("搜索路径…", "Search paths…"),
   };
 
   const columns: ColumnsType<ArtifactRow> =
     format === "oci" || format === "conan"
       ? [
           {
-            title: "名称",
+            title: text("名称", "Name"),
             dataIndex: "coordinate",
             key: "coordinate",
             ellipsis: true,
@@ -1047,7 +1122,7 @@ function ArtifactsTab({
       : proxyMaven
         ? [
             {
-              title: "Maven 坐标",
+              title: text("Maven 坐标", "Maven coordinate"),
               dataIndex: "coordinate",
               key: "coordinate",
               ellipsis: true,
@@ -1061,17 +1136,20 @@ function ArtifactsTab({
               ),
             },
             {
-              title: "文件",
+              title: text("文件", "Files"),
               key: "fileCount",
               width: 120,
               render: (_, record) => (
                 <Badge tone="zinc">
-                  {record.fileCount ?? record.files?.length ?? 0} 个文件
+                  {text(
+                    `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
+                    `${record.fileCount ?? record.files?.length ?? 0} files`,
+                  )}
                 </Badge>
               ),
             },
             {
-              title: "主文件大小",
+              title: text("主文件大小", "Primary size"),
               key: "size",
               width: 140,
               render: (_, record) => (
@@ -1081,7 +1159,7 @@ function ArtifactsTab({
               ),
             },
             {
-              title: "类型",
+              title: text("类型", "Type"),
               dataIndex: "contentType",
               key: "contentType",
               width: 180,
@@ -1094,7 +1172,7 @@ function ArtifactsTab({
         : format === "maven"
           ? [
               {
-                title: "制品",
+                title: text("制品", "Artifact"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -1108,15 +1186,20 @@ function ArtifactsTab({
                 ),
               },
               {
-                title: "版本",
+                title: text("版本", "Versions"),
                 key: "versionCount",
                 width: 120,
                 render: (_, record) => (
-                  <Badge tone="zinc">{record.versionCount ?? 1} 个版本</Badge>
+                  <Badge tone="zinc">
+                    {text(
+                      `${record.versionCount ?? 1} 个版本`,
+                      `${record.versionCount ?? 1} versions`,
+                    )}
+                  </Badge>
                 ),
               },
               {
-                title: "最新版本",
+                title: text("最新版本", "Latest version"),
                 dataIndex: "latestVersion",
                 key: "latestVersion",
                 width: 160,
@@ -1127,7 +1210,7 @@ function ArtifactsTab({
                 ),
               },
               {
-                title: "更新时间",
+                title: text("更新时间", "Updated"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -1140,7 +1223,7 @@ function ArtifactsTab({
             ]
           : [
               {
-                title: "坐标",
+                title: text("坐标", "Coordinate"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -1154,7 +1237,7 @@ function ArtifactsTab({
                 ),
               },
               {
-                title: "摘要",
+                title: text("摘要", "Digest"),
                 dataIndex: "digest",
                 key: "digest",
                 width: 180,
@@ -1169,7 +1252,7 @@ function ArtifactsTab({
                 ),
               },
               {
-                title: "大小",
+                title: text("大小", "Size"),
                 dataIndex: "size",
                 key: "size",
                 width: 120,
@@ -1180,7 +1263,7 @@ function ArtifactsTab({
                 ),
               },
               {
-                title: "最后更新时间",
+                title: text("最后更新时间", "Last updated"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -1255,7 +1338,7 @@ function ArtifactsTab({
         <Input.Search
           allowClear
           className="w-80"
-          placeholder={searchPlaceholder[format] ?? "搜索…"}
+          placeholder={searchPlaceholder[format] ?? text("搜索…", "Search…")}
           value={q}
           onChange={(e) => {
             const value = e.target.value;
@@ -1270,7 +1353,7 @@ function ArtifactsTab({
             setExpandedImage(null);
             void load(value);
           }}
-          enterButton="搜索"
+          enterButton={text("搜索", "Search")}
         />
         {canUploadRaw && (
           <RawUploadDialog repo={repo} onUploaded={() => load(q)} />
@@ -1281,10 +1364,10 @@ function ArtifactsTab({
               className="w-28"
               value={proxyAssetFilter}
               options={[
-                { value: "primary", label: "主资产" },
-                { value: "all", label: "全部文件" },
-                { value: "jar", label: "仅 JAR" },
-                { value: "pom", label: "仅 POM" },
+                { value: "primary", label: text("主资产", "Primary assets") },
+                { value: "all", label: text("全部文件", "All files") },
+                { value: "jar", label: text("仅 JAR", "JAR only") },
+                { value: "pom", label: text("仅 POM", "POM only") },
               ]}
               onChange={(value: ProxyMavenAssetFilter) => {
                 setProxyAssetFilter(value);
@@ -1292,8 +1375,10 @@ function ArtifactsTab({
               }}
             />
             <span className="text-xs text-zinc-500">
-              {formatNumber(proxyTotal)} 个 Maven 版本，当前显示{" "}
-              {formatNumber(rows.length)} 个
+              {text(
+                `${formatNumber(proxyTotal)} 个 Maven 版本，当前显示 ${formatNumber(rows.length)} 个`,
+                `${formatNumber(proxyTotal)} Maven versions, showing ${formatNumber(rows.length)}`,
+              )}
             </span>
           </>
         )}
@@ -1307,13 +1392,13 @@ function ArtifactsTab({
               void load("");
             }}
           >
-            返回完整列表
+            {text("返回完整列表", "Return to full list")}
           </Button>
         )}
       </div>
       {error !== null ? (
         isNotFound(error) ? (
-          <NotEnabled feature="制品浏览" />
+          <NotEnabled feature={text("制品浏览", "Artifact browser")} />
         ) : (
           <ErrorBanner error={error} onRetry={() => load(q)} />
         )
@@ -1330,13 +1415,23 @@ function ArtifactsTab({
             />
           )}
           <EmptyState
-            title={q ? "没有匹配的制品" : "暂无制品"}
+            title={
+              q
+                ? text("没有匹配的制品", "No matching artifacts")
+                : text("暂无制品", "No artifacts")
+            }
             hint={
               q
-                ? "换个关键词试试"
+                ? text("换个关键词试试", "Try a different search term")
                 : proxyMaven
-                  ? "通过 Maven 客户端拉取依赖后会显示代理缓存"
-                  : `通过 ${format} 客户端推送制品后会显示在这里`
+                  ? text(
+                      "通过 Maven 客户端拉取依赖后会显示代理缓存",
+                      "The proxy cache appears after a Maven client retrieves dependencies.",
+                    )
+                  : text(
+                      `通过 ${format} 客户端推送制品后会显示在这里`,
+                      "Push artifacts with the matching client to display them here.",
+                    )
             }
           />
         </>
@@ -1372,8 +1467,10 @@ function ArtifactsTab({
           <Pagination hasMore={!!nextToken} onMore={() => load(q, nextToken)} />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-zinc-800/60 px-4 py-2 text-center text-xs text-zinc-500">
-              第 {formatNumber(proxyPage)} 页，每页{" "}
-              {formatNumber(PROXY_MAVEN_PAGE_SIZE)} 个 Maven 版本
+              {text(
+                `第 ${formatNumber(proxyPage)} 页，每页 ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} 个 Maven 版本`,
+                `Page ${formatNumber(proxyPage)} with ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} Maven versions per page`,
+              )}
             </div>
           )}
         </>
@@ -1407,56 +1504,92 @@ function principalEditorKind(principal: string): PrincipalKind | "" {
   return principal ? principalKind(principal) : "";
 }
 
-function resourcePrefixHint(format: Repository["format"]): string {
+function resourcePrefixHint(
+  format: Repository["format"],
+  text: Localize,
+): string {
   switch (format) {
     case "maven":
-      return "例如 org/example（Maven group 前缀）";
+      return text(
+        "例如 org/example（Maven group 前缀）",
+        "For example: org/example (Maven group prefix)",
+      );
     case "oci":
-      return "例如 team/backend（镜像名称前缀）";
+      return text(
+        "例如 team/backend（镜像名称前缀）",
+        "For example: team/backend (image name prefix)",
+      );
     case "conan":
-      return "例如 pkg/1.0/user/stable（reference 前缀）";
+      return text(
+        "例如 pkg/1.0/user/stable（reference 前缀）",
+        "For example: pkg/1.0/user/stable (reference prefix)",
+      );
     case "raw":
-      return "例如 releases/2026（路径前缀）";
+      return text(
+        "例如 releases/2026（路径前缀）",
+        "For example: releases/2026 (path prefix)",
+      );
   }
 }
 
-function grantLevelLabel(level: GrantLevel): string {
-  if (level === "admin") return "管理员";
-  if (level === "write") return "写入";
-  return "读取";
+function grantLevelLabel(level: GrantLevel, text: Localize): string {
+  if (level === "admin") return text("管理员", "Administrator");
+  if (level === "write") return text("写入", "Write");
+  return text("读取", "Read");
 }
 
-function accessSourceLabel(source: string): string {
+function accessSourceLabel(source: string, text: Localize): string {
   switch (source) {
     case "administrator":
-      return "管理员身份";
+      return text("管理员身份", "Administrator identity");
     case "role":
-      return "全局角色";
+      return text("全局角色", "Global role");
     case "repository_grants":
-      return "仓库授权";
+      return text("仓库授权", "Repository grant");
     case "legacy_static":
-      return "旧版静态策略";
+      return text("旧版静态策略", "Legacy static policy");
     case "anonymous_policy":
-      return "匿名访问策略";
+      return text("匿名访问策略", "Anonymous access policy");
     default:
-      return source || "未说明";
+      return source || text("未说明", "Not specified");
   }
 }
 
-function accessReasonLabel(reason: string): string {
+function accessReasonLabel(reason: string, text: Localize): string {
   const labels: Record<string, string> = {
-    administrator: "管理员直接放行",
-    role_admin: "全局 admin 角色",
-    role_writer: "全局 writer 角色",
-    role_reader: "全局 reader 角色",
-    scope_granted: "匹配主体、权限和资源范围",
-    scope_not_granted: "没有匹配的仓库授权",
-    grant_lookup_failed: "读取仓库授权失败",
-    read_pattern_granted: "匹配旧版读取规则",
-    write_pattern_granted: "匹配旧版写入规则",
-    global_anonymous_access_disabled: "全局匿名读取未启用",
-    repository_anonymous_read_disabled: "仓库未允许匿名读取",
-    repository_anonymous_read_enabled: "全局和仓库均允许匿名读取",
+    administrator: text("管理员直接放行", "Allowed by administrator identity"),
+    role_admin: text("全局 admin 角色", "Global admin role"),
+    role_writer: text("全局 writer 角色", "Global writer role"),
+    role_reader: text("全局 reader 角色", "Global reader role"),
+    scope_granted: text(
+      "匹配主体、权限和资源范围",
+      "Matching subject, permission, and resource scope",
+    ),
+    scope_not_granted: text(
+      "没有匹配的仓库授权",
+      "No matching repository grant",
+    ),
+    grant_lookup_failed: text(
+      "读取仓库授权失败",
+      "Failed to load repository grants",
+    ),
+    read_pattern_granted: text("匹配旧版读取规则", "Matched legacy read rule"),
+    write_pattern_granted: text(
+      "匹配旧版写入规则",
+      "Matched legacy write rule",
+    ),
+    global_anonymous_access_disabled: text(
+      "全局匿名读取未启用",
+      "Global anonymous reads are disabled",
+    ),
+    repository_anonymous_read_disabled: text(
+      "仓库未允许匿名读取",
+      "Anonymous reads are disabled for this repository",
+    ),
+    repository_anonymous_read_enabled: text(
+      "全局和仓库均允许匿名读取",
+      "Anonymous reads are enabled globally and for this repository",
+    ),
   };
   return labels[reason] ?? reason.replaceAll("_", " ");
 }
@@ -1471,24 +1604,29 @@ function scopesForLevel(level: GrantLevel): Grant["scopes"] {
   return [`repositories:${level}`] as Grant["scopes"];
 }
 
-function principalOptions(users: User[], apiKeys: ApiKey[]): PrincipalOption[] {
+function principalOptions(
+  users: User[],
+  apiKeys: ApiKey[],
+  text: Localize,
+): PrincipalOption[] {
   return [
     ...users.map((user) => ({
       value: `user:${user.name}`,
-      label: `用户 · ${user.name}`,
-      detail: `全局角色 ${user.role}${user.state === "disabled" ? " · 已停用" : ""}`,
+      label: `${text("用户", "User")} · ${user.name}`,
+      detail: `${text("全局角色", "Global role")} ${user.role}${user.state === "disabled" ? ` · ${text("已停用", "Disabled")}` : ""}`,
       disabled: user.state === "disabled",
     })),
     ...apiKeys.map((key) => ({
       value: `api-key:${key.id}`,
       label: `API Key · ${key.name}`,
-      detail: `全局角色 ${key.roles.join(", ")}${key.revokedAt ? " · 已撤销" : ""}`,
+      detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}${key.revokedAt ? ` · ${text("已撤销", "Revoked")}` : ""}`,
       disabled: Boolean(key.revokedAt),
     })),
   ];
 }
 
 function GrantsTab({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   const [grants, setGrants] = useState<Grant[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [principalChoices, setPrincipalChoices] = useState<PrincipalOption[]>(
@@ -1532,20 +1670,26 @@ function GrantsTab({ repo }: { repo: Repository }) {
       if (cancelled) return;
       if (usersResult.error || apiKeysResult.error) {
         setPrincipalChoicesError(
-          new Error("无法加载用户或 API Key 列表，可继续使用自定义身份。"),
+          new Error(
+            text(
+              "无法加载用户或 API Key 列表，可继续使用自定义身份。",
+              "Could not load users or API keys. You can still enter a custom identity.",
+            ),
+          ),
         );
       }
       setPrincipalChoices(
         principalOptions(
           usersResult.data?.items ?? [],
           apiKeysResult.data?.items ?? [],
+          text,
         ),
       );
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [text]);
 
   const openEditor = () => {
     setDraft(
@@ -1563,7 +1707,12 @@ function GrantsTab({ repo }: { repo: Repository }) {
       )
     ) {
       setSaveError(
-        new Error("请为每条授权规则选择或填写授权主体；不需要的空行请先移除。"),
+        new Error(
+          text(
+            "请为每条授权规则选择或填写授权主体；不需要的空行请先移除。",
+            "Select or enter a principal for every grant. Remove unused blank rows first.",
+          ),
+        ),
       );
       return;
     }
@@ -1579,7 +1728,12 @@ function GrantsTab({ repo }: { repo: Repository }) {
       const key = `${grant.principal}\x00${grant.resourcePrefix ?? ""}`;
       if (duplicate.has(key)) {
         setSaveError(
-          new Error("存在重复的授权主体与资源范围，请合并或删除重复规则。"),
+          new Error(
+            text(
+              "存在重复的授权主体与资源范围，请合并或删除重复规则。",
+              "Duplicate principal and resource scope. Merge or remove the duplicate grant.",
+            ),
+          ),
         );
         return;
       }
@@ -1603,7 +1757,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
 
   if (error !== null)
     return isNotFound(error) ? (
-      <NotEnabled feature="访问授权" />
+      <NotEnabled feature={text("访问授权", "Access grants")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -1611,7 +1765,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
 
   const grantColumns: ColumnsType<Grant> = [
     {
-      title: "授权主体",
+      title: text("授权主体", "Principal"),
       dataIndex: "principal",
       key: "principal",
       width: 320,
@@ -1628,7 +1782,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "权限级别",
+      title: text("权限级别", "Permission"),
       key: "level",
       width: 150,
       render: (_, grant) => (
@@ -1641,18 +1795,18 @@ function GrantsTab({ repo }: { repo: Repository }) {
                 : "green"
           }
         >
-          {grantLevelLabel(grantLevel(grant.scopes))}
+          {grantLevelLabel(grantLevel(grant.scopes), text)}
         </Badge>
       ),
     },
     {
-      title: "资源范围",
+      title: text("资源范围", "Resource scope"),
       dataIndex: "resourcePrefix",
       key: "resourcePrefix",
       width: 260,
       render: (value?: string) => (
         <span className="font-mono text-xs text-zinc-500">
-          {value || "整个仓库"}
+          {value || text("整个仓库", "Entire repository")}
         </span>
       ),
     },
@@ -1662,13 +1816,16 @@ function GrantsTab({ repo }: { repo: Repository }) {
     <div>
       <div className="mb-4 flex justify-end">
         <Button type="primary" onClick={openEditor}>
-          编辑授权
+          {text("编辑授权", "Edit grants")}
         </Button>
       </div>
       {grants.length === 0 ? (
         <EmptyState
-          title="暂无授权规则"
-          hint="在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。"
+          title={text("暂无授权规则", "No access grants")}
+          hint={text(
+            "在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。",
+            "Choose a user or API key in Edit grants, or enter an OIDC subject/custom actor.",
+          )}
         />
       ) : (
         <Table<Grant>
@@ -1683,14 +1840,14 @@ function GrantsTab({ repo }: { repo: Repository }) {
       )}
       <Modal
         open={editor.open}
-        title="编辑访问授权"
+        title={text("编辑访问授权", "Edit access grants")}
         onClose={editor.hide}
         wide
         footer={
           <Space>
-            <Button onClick={editor.hide}>取消</Button>
+            <Button onClick={editor.hide}>{text("取消", "Cancel")}</Button>
             <Button type="primary" onClick={save} loading={saving}>
-              保存
+              {text("保存", "Save")}
             </Button>
           </Space>
         }
@@ -1698,39 +1855,60 @@ function GrantsTab({ repo }: { repo: Repository }) {
         <div className="space-y-3">
           {saveError !== null && <ErrorBanner error={saveError} />}
           <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 text-xs leading-5 text-zinc-400">
-            <div className="font-medium text-cyan-200">先记住这三个概念</div>
+            <div className="font-medium text-cyan-200">
+              {text("先记住这三个概念", "Three concepts to keep in mind")}
+            </div>
             <div className="mt-1 grid gap-1.5 sm:grid-cols-3">
               <div>
-                <span className="font-medium text-zinc-300">主体</span>
-                ：谁在访问，例如用户或 CI 的 API Key。
+                <span className="font-medium text-zinc-300">
+                  {text("主体", "Principal")}
+                </span>
+                {text(
+                  "：谁在访问，例如用户或 CI 的 API Key。",
+                  ": who is making the request, such as a user or CI API key.",
+                )}
               </div>
               <div>
-                <span className="font-medium text-zinc-300">权限</span>
-                ：允许读取、写入，还是管理仓库。
+                <span className="font-medium text-zinc-300">
+                  {text("权限", "Permission")}
+                </span>
+                {text(
+                  "：允许读取、写入，还是管理仓库。",
+                  ": whether the principal can read, write, or manage the repository.",
+                )}
               </div>
               <div>
-                <span className="font-medium text-zinc-300">范围</span>
-                ：限制到仓库的一部分；留空就是整个仓库。
+                <span className="font-medium text-zinc-300">
+                  {text("范围", "Scope")}
+                </span>
+                {text(
+                  "：限制到仓库的一部分；留空就是整个仓库。",
+                  ": narrows access to part of the repository; blank means the whole repository.",
+                )}
               </div>
             </div>
             <div className="mt-2 border-t border-cyan-500/10 pt-2 text-zinc-500">
-              用户/API Key
-              的全局角色会先生效；仓库规则只能追加权限，不能撤销全局角色。
+              {text(
+                "用户/API Key 的全局角色会先生效；仓库规则只能追加权限，不能撤销全局角色。",
+                "Global user/API key roles take effect first. Repository grants can add permissions but cannot revoke a global role.",
+              )}
             </div>
           </div>
           {principalChoicesError !== null && (
             <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-              用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义
-              actor”并填写主体标识。
+              {text(
+                "用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。",
+                "Users and API keys are temporarily unavailable. You can still choose OIDC/custom actor and enter its identifier.",
+              )}
             </div>
           )}
           <div className="min-w-[1020px]">
             <div className="grid grid-cols-[172px_minmax(280px,1.35fr)_188px_minmax(260px,1.2fr)_72px] items-center gap-3 px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-              <span>主体类型</span>
-              <span>主体</span>
-              <span>权限级别</span>
-              <span>资源范围</span>
-              <span className="text-right">操作</span>
+              <span>{text("主体类型", "Principal type")}</span>
+              <span>{text("主体", "Principal")}</span>
+              <span>{text("权限级别", "Permission")}</span>
+              <span>{text("资源范围", "Resource scope")}</span>
+              <span className="text-right">{text("操作", "Actions")}</span>
             </div>
             <div className="space-y-2">
               {draft.map((g, i) => {
@@ -1746,13 +1924,31 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           className="w-full"
                           value={kind}
                           options={[
-                            { value: "", label: "选择主体类型" },
-                            { value: "user", label: "用户账号" },
+                            {
+                              value: "",
+                              label: text(
+                                "选择主体类型",
+                                "Select principal type",
+                              ),
+                            },
+                            {
+                              value: "user",
+                              label: text("用户账号", "User account"),
+                            },
                             {
                               value: "api-key",
-                              label: "API Key（CI / 自动化）",
+                              label: text(
+                                "API Key（CI / 自动化）",
+                                "API key (CI / automation)",
+                              ),
                             },
-                            { value: "custom", label: "OIDC / 自定义 actor" },
+                            {
+                              value: "custom",
+                              label: text(
+                                "OIDC / 自定义 actor",
+                                "OIDC / custom actor",
+                              ),
+                            },
                           ]}
                           onChange={(nextKind: PrincipalKind | "") => {
                             const first =
@@ -1788,7 +1984,10 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           }}
                         />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          选择规则主体的来源
+                          {text(
+                            "选择规则主体的来源",
+                            "Choose where the rule principal comes from",
+                          )}
                         </div>
                       </div>
                       <div className="min-w-0">
@@ -1797,16 +1996,22 @@ function GrantsTab({ repo }: { repo: Repository }) {
                             className="w-full font-mono"
                             showSearch={{ optionFilterProp: "label" }}
                             value={g.principal || undefined}
-                            placeholder="请选择主体"
+                            placeholder={text(
+                              "请选择主体",
+                              "Select a principal",
+                            )}
                             options={[
-                              { value: "", label: "请选择主体" },
+                              {
+                                value: "",
+                                label: text("请选择主体", "Select a principal"),
+                              },
                               ...principalChoices
                                 .filter((choice) =>
                                   choice.value.startsWith(`${kind}:`),
                                 )
                                 .map((choice) => ({
                                   value: choice.value,
-                                  label: `${choice.label.replace(/^(用户|API Key) · /, "")} · ${choice.detail}`,
+                                  label: `${choice.label.replace(/^(用户|User|API Key) · /, "")} · ${choice.detail}`,
                                   disabled: choice.disabled,
                                 })),
                             ]}
@@ -1821,7 +2026,10 @@ function GrantsTab({ repo }: { repo: Repository }) {
                         ) : kind === "custom" ? (
                           <Input
                             className="font-mono"
-                            placeholder="例如 oidc:github:acme/release 或 ci-bot"
+                            placeholder={text(
+                              "例如 oidc:github:acme/release 或 ci-bot",
+                              "For example: oidc:github:acme/release or ci-bot",
+                            )}
                             value={
                               g.principal === CUSTOM_PRINCIPAL
                                 ? ""
@@ -1839,13 +2047,22 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           />
                         ) : (
                           <div className="flex h-10 items-center rounded-md border border-dashed border-zinc-800 px-3 text-xs text-zinc-600">
-                            先选择主体类型
+                            {text(
+                              "先选择主体类型",
+                              "Select a principal type first",
+                            )}
                           </div>
                         )}
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
                           {kind === "custom"
-                            ? "必须与认证系统传入的 actor 完全一致。"
-                            : "从已有身份中选择授权对象。"}
+                            ? text(
+                                "必须与认证系统传入的 actor 完全一致。",
+                                "Must exactly match the actor supplied by the authentication system.",
+                              )
+                            : text(
+                                "从已有身份中选择授权对象。",
+                                "Choose an existing identity to authorize.",
+                              )}
                         </div>
                       </div>
                       <div className="min-w-0">
@@ -1853,9 +2070,27 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           className="w-full"
                           value={grantLevel(g.scopes)}
                           options={[
-                            { value: "read", label: "读取 · 浏览 / 拉取" },
-                            { value: "write", label: "写入 · 发布 / 编辑" },
-                            { value: "admin", label: "管理员 · 授权 / 删除" },
+                            {
+                              value: "read",
+                              label: text(
+                                "读取 · 浏览 / 拉取",
+                                "Read · browse / pull",
+                              ),
+                            },
+                            {
+                              value: "write",
+                              label: text(
+                                "写入 · 发布 / 编辑",
+                                "Write · publish / edit",
+                              ),
+                            },
+                            {
+                              value: "admin",
+                              label: text(
+                                "管理员 · 授权 / 删除",
+                                "Admin · grant / delete",
+                              ),
+                            },
                           ]}
                           onChange={(value: GrantLevel) =>
                             setDraft((d) =>
@@ -1868,13 +2103,19 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           }
                         />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          权限会叠加全局角色
+                          {text(
+                            "权限会叠加全局角色",
+                            "Permission is combined with global roles",
+                          )}
                         </div>
                       </div>
                       <div className="min-w-0">
                         <Input
                           className="font-mono"
-                          placeholder="留空表示整个仓库"
+                          placeholder={text(
+                            "留空表示整个仓库",
+                            "Leave blank for the entire repository",
+                          )}
                           value={g.resourcePrefix ?? ""}
                           onChange={(e) =>
                             setDraft((d) =>
@@ -1887,7 +2128,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           }
                         />
                         <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                          {resourcePrefixHint(repo.format)}
+                          {resourcePrefixHint(repo.format, text)}
                         </div>
                       </div>
                       <Button
@@ -1898,7 +2139,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
                           setDraft((d) => d.filter((_, j) => j !== i))
                         }
                       >
-                        移除
+                        {text("移除", "Remove")}
                       </Button>
                     </div>
                   </div>
@@ -1917,7 +2158,7 @@ function GrantsTab({ repo }: { repo: Repository }) {
               ])
             }
           >
-            添加授权规则
+            {text("添加授权规则", "Add access grant")}
           </Button>
         </div>
       </Modal>
@@ -1929,74 +2170,167 @@ function GrantsTab({ repo }: { repo: Repository }) {
 
 const RETENTION_DRY_RUN_PAGE_SIZE = 100;
 
-function retentionFormatCopy(format: Repository["format"]) {
+function retentionFormatCopy(format: Repository["format"], text: Localize) {
   switch (format) {
     case "oci":
       return {
-        ageLabel: "镜像版本保留天数",
-        ageHint: "Manifest 创建超过此天数后，才会进入清理候选。",
-        minimumLabel: "每个镜像最少保留版本",
-        minimumHint: "按镜像名称分组，始终保护最新的这些 manifest。",
-        maximumLabel: "每个镜像最多保留版本",
-        maximumHint: "0 表示不限制；超过上限的旧 manifest 会进入候选。",
-        matchLabel: "只清理匹配镜像",
-        matchHint: "可匹配镜像名、name@digest 或 name:tag；留空表示全部。",
-        protectLabel: "保护镜像版本",
-        protectHint: "可用镜像名保护全部版本，或用 digest、tag 精确保护。",
-        matchPlaceholder: "如 ^team/backend(@|:)",
-        protectPlaceholder: "如 ^team/backend:stable$",
-        candidateName: "镜像版本",
+        ageLabel: text("镜像版本保留天数", "Image version retention days"),
+        ageHint: text(
+          "Manifest 创建超过此天数后，才会进入清理候选。",
+          "A manifest becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个镜像最少保留版本",
+          "Minimum versions per image",
+        ),
+        minimumHint: text(
+          "按镜像名称分组，始终保护最新的这些 manifest。",
+          "Group by image name and always protect these newest manifests.",
+        ),
+        maximumLabel: text(
+          "每个镜像最多保留版本",
+          "Maximum versions per image",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的旧 manifest 会进入候选。",
+          "Use 0 for no limit. Older manifests beyond the limit become eligible.",
+        ),
+        matchLabel: text("只清理匹配镜像", "Only clean matching images"),
+        matchHint: text(
+          "可匹配镜像名、name@digest 或 name:tag；留空表示全部。",
+          "Matches image name, name@digest, or name:tag. Leave empty for all images.",
+        ),
+        protectLabel: text("保护镜像版本", "Protect image versions"),
+        protectHint: text(
+          "可用镜像名保护全部版本，或用 digest、tag 精确保护。",
+          "Use an image name to protect all versions, or a digest/tag for an exact version.",
+        ),
+        matchPlaceholder: text(
+          "如 ^team/backend(@|:)",
+          "e.g. ^team/backend(@|:)",
+        ),
+        protectPlaceholder: text(
+          "如 ^team/backend:stable$",
+          "e.g. ^team/backend:stable$",
+        ),
+        candidateName: text("镜像版本", "image versions"),
       };
     case "conan":
       return {
-        ageLabel: "Recipe revision 保留天数",
-        ageHint: "Recipe revision 创建超过此天数后，才会进入清理候选。",
-        minimumLabel: "每个 reference 最少保留版本",
-        minimumHint:
+        ageLabel: text(
+          "Recipe revision 保留天数",
+          "Recipe revision retention days",
+        ),
+        ageHint: text(
+          "Recipe revision 创建超过此天数后，才会进入清理候选。",
+          "A recipe revision becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个 reference 最少保留版本",
+          "Minimum versions per reference",
+        ),
+        minimumHint: text(
           "按完整 Conan reference 分组，保护最新的 recipe revisions。",
-        maximumLabel: "每个 reference 最多保留版本",
-        maximumHint:
+          "Group by full Conan reference and protect the newest recipe revisions.",
+        ),
+        maximumLabel: text(
+          "每个 reference 最多保留版本",
+          "Maximum versions per reference",
+        ),
+        maximumHint: text(
           "0 表示不限制；清理 recipe revision 时会同时隐藏其二进制包。",
-        matchLabel: "只清理匹配 reference",
-        matchHint: "可匹配完整 reference 或 reference#recipe-revision。",
-        protectLabel: "保护 Conan 版本",
-        protectHint:
+          "Use 0 for no limit. Cleaning a recipe revision also hides its binary packages.",
+        ),
+        matchLabel: text(
+          "只清理匹配 reference",
+          "Only clean matching references",
+        ),
+        matchHint: text(
+          "可匹配完整 reference 或 reference#recipe-revision。",
+          "Matches a full reference or reference#recipe-revision.",
+        ),
+        protectLabel: text("保护 Conan 版本", "Protect Conan versions"),
+        protectHint: text(
           "匹配 reference 可保护全部 revisions，精确坐标只保护一个版本。",
-        matchPlaceholder: "如 ^openssl/3\\.",
-        protectPlaceholder: "如 @release/stable(#|$)",
+          "A matching reference protects all revisions; an exact coordinate protects one version.",
+        ),
+        matchPlaceholder: text("如 ^openssl/3\\.", "e.g. ^openssl/3\\."),
+        protectPlaceholder: text(
+          "如 @release/stable(#|$)",
+          "e.g. @release/stable(#|$)",
+        ),
         candidateName: "Recipe revision",
       };
     case "raw":
       return {
-        ageLabel: "资产未更新保留天数",
-        ageHint: "路径资产超过此天数未更新后，才会进入清理候选。",
+        ageLabel: text("资产未更新保留天数", "Asset inactivity retention days"),
+        ageHint: text(
+          "路径资产超过此天数未更新后，才会进入清理候选。",
+          "A path asset becomes eligible after it has not been updated for this many days.",
+        ),
         minimumLabel: "",
         minimumHint: "",
         maximumLabel: "",
         maximumHint: "",
-        matchLabel: "只清理匹配路径",
-        matchHint: "可选 RE2 路径正则；留空表示匹配仓库内全部资产。",
-        protectLabel: "保护路径",
-        protectHint: "匹配任一正则的路径永不进入清理候选。",
-        matchPlaceholder: "如 ^releases/nightly/",
-        protectPlaceholder: "如 ^releases/stable/",
-        candidateName: "路径资产",
+        matchLabel: text("只清理匹配路径", "Only clean matching paths"),
+        matchHint: text(
+          "可选 RE2 路径正则；留空表示匹配仓库内全部资产。",
+          "Optional RE2 path regex. Leave empty to match every repository asset.",
+        ),
+        protectLabel: text("保护路径", "Protect paths"),
+        protectHint: text(
+          "匹配任一正则的路径永不进入清理候选。",
+          "Paths matching any regex never become eligible.",
+        ),
+        matchPlaceholder: text(
+          "如 ^releases/nightly/",
+          "e.g. ^releases/nightly/",
+        ),
+        protectPlaceholder: text(
+          "如 ^releases/stable/",
+          "e.g. ^releases/stable/",
+        ),
+        candidateName: text("路径资产", "path assets"),
       };
     default:
       return {
-        ageLabel: "发布版本保留天数",
-        ageHint: "发布版本创建超过此天数后，才会进入清理候选。",
-        minimumLabel: "每个模块最少保留版本",
-        minimumHint: "按 groupId:artifactId 分组，始终保护最新的这些版本。",
-        maximumLabel: "每个模块最多保留版本",
-        maximumHint: "0 表示不限制；超过上限的旧版本会进入候选。",
-        matchLabel: "只清理匹配坐标",
-        matchHint: "可选 RE2 正则；留空表示匹配全部 Maven 坐标。",
-        protectLabel: "保护 Maven 坐标",
-        protectHint: "匹配任一正则的坐标永不进入清理候选。",
-        matchPlaceholder: "如 ^com\\.example:",
-        protectPlaceholder: "如 ^com\\.example:platform:",
-        candidateName: "制品版本",
+        ageLabel: text("发布版本保留天数", "Release version retention days"),
+        ageHint: text(
+          "发布版本创建超过此天数后，才会进入清理候选。",
+          "A release version becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个模块最少保留版本",
+          "Minimum versions per module",
+        ),
+        minimumHint: text(
+          "按 groupId:artifactId 分组，始终保护最新的这些版本。",
+          "Group by groupId:artifactId and always protect the newest versions.",
+        ),
+        maximumLabel: text(
+          "每个模块最多保留版本",
+          "Maximum versions per module",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的旧版本会进入候选。",
+          "Use 0 for no limit. Older versions beyond the limit become eligible.",
+        ),
+        matchLabel: text("只清理匹配坐标", "Only clean matching coordinates"),
+        matchHint: text(
+          "可选 RE2 正则；留空表示匹配全部 Maven 坐标。",
+          "Optional RE2 regex. Leave empty to match all Maven coordinates.",
+        ),
+        protectLabel: text("保护 Maven 坐标", "Protect Maven coordinates"),
+        protectHint: text(
+          "匹配任一正则的坐标永不进入清理候选。",
+          "Coordinates matching any regex never become eligible.",
+        ),
+        matchPlaceholder: text("如 ^com\\.example:", "e.g. ^com\\.example:"),
+        protectPlaceholder: text(
+          "如 ^com\\.example:platform:",
+          "e.g. ^com\\.example:platform:",
+        ),
+        candidateName: text("制品版本", "artifact versions"),
       };
   }
 }
@@ -2004,15 +2338,19 @@ function retentionFormatCopy(format: Repository["format"]) {
 function retentionCandidateTypeLabel(
   versionType: RetentionDryRun["candidates"][number]["versionType"],
   format: Repository["format"],
+  text: Localize,
 ) {
-  if (versionType === "snapshot") return "快照构建";
-  if (versionType === "release") return "发布版本";
-  if (versionType === "asset") return "路径资产";
-  return format === "oci" ? "Manifest 版本" : "Recipe revision";
+  if (versionType === "snapshot") return text("快照构建", "Snapshot build");
+  if (versionType === "release") return text("发布版本", "Release version");
+  if (versionType === "asset") return text("路径资产", "Path asset");
+  return format === "oci"
+    ? text("Manifest 版本", "Manifest version")
+    : "Recipe revision";
 }
 
 function RetentionTab({ repo }: { repo: Repository }) {
   const { token } = useAuth();
+  const { text } = usePreferences();
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [enabled, setEnabled] = useState(false);
@@ -2032,7 +2370,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
   const [notice, setNotice] = useState("");
   const isMaven = repo.format === "maven";
   const isRaw = repo.format === "raw";
-  const copy = retentionFormatCopy(repo.format);
+  const copy = retentionFormatCopy(repo.format, text);
 
   const load = useCallback(async () => {
     setError(null);
@@ -2062,7 +2400,14 @@ function RetentionTab({ repo }: { repo: Repository }) {
   const save = async () => {
     if (!policy) return;
     if (!isRaw && maximumVersions > 0 && maximumVersions < minimumVersions) {
-      setSaveError(new Error("最多保留版本数必须为 0，或不小于最少保留版本数"));
+      setSaveError(
+        new Error(
+          text(
+            "最多保留版本数必须为 0，或不小于最少保留版本数",
+            "Maximum versions must be 0 or greater than or equal to minimum versions.",
+          ),
+        ),
+      );
       return;
     }
     setSaving(true);
@@ -2091,7 +2436,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
       setSaveError(err);
       return;
     }
-    setNotice("策略已保存");
+    setNotice(text("策略已保存", "Policy saved"));
     setDryRun(null);
     void load();
   };
@@ -2127,7 +2472,14 @@ function RetentionTab({ repo }: { repo: Repository }) {
       const code = (err as { code?: string } | undefined)?.code;
       if (code === "invalid_page_token") {
         setDryRun(null);
-        setSaveError(new Error("试运行结果已过期或策略已变化，请重新试运行"));
+        setSaveError(
+          new Error(
+            text(
+              "试运行结果已过期或策略已变化，请重新试运行",
+              "The dry-run result expired or the policy changed. Run it again.",
+            ),
+          ),
+        );
       } else {
         setSaveError(err);
       }
@@ -2160,14 +2512,24 @@ function RetentionTab({ repo }: { repo: Repository }) {
       if (code === "version_conflict") {
         setDryRun(null);
         setSaveError(
-          new Error("保留策略已变化，当前预览不再有效，请重新试运行"),
+          new Error(
+            text(
+              "保留策略已变化，当前预览不再有效，请重新试运行",
+              "The retention policy changed, so this preview is no longer valid. Run it again.",
+            ),
+          ),
         );
       } else {
         setSaveError(err);
       }
       return;
     }
-    setNotice("保留执行任务已提交，请在「生命周期任务」标签页查看进度");
+    setNotice(
+      text(
+        "保留执行任务已提交，请在「生命周期任务」标签页查看进度",
+        "The retention task was submitted. Track it on the Lifecycle jobs tab.",
+      ),
+    );
     setDryRun(null);
   };
 
@@ -2179,14 +2541,18 @@ function RetentionTab({ repo }: { repo: Repository }) {
         `/api/v2/repositories/${repo.id}/retention:dry-run?output=csv`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         },
       );
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as {
           message?: string;
         } | null;
-        throw new Error(problem?.message ?? "导出试运行结果失败");
+        throw new Error(
+          problem?.message ??
+            text("导出试运行结果失败", "Failed to export dry-run results"),
+        );
       }
       downloadCsv(`${repo.name}-retention.csv`, await response.text());
     } catch (nextError) {
@@ -2198,7 +2564,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
 
   if (error !== null)
     return isNotFound(error) ? (
-      <NotEnabled feature="保留策略" />
+      <NotEnabled feature={text("保留策略", "Retention policy")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -2208,12 +2574,16 @@ function RetentionTab({ repo }: { repo: Repository }) {
     repo.type !== "hosted" ||
     !["maven", "oci", "conan", "raw"].includes(repo.format)
   ) {
-    return <NotEnabled feature="Hosted 仓库保留策略" />;
+    return (
+      <NotEnabled
+        feature={text("Hosted 仓库保留策略", "Hosted repository retention")}
+      />
+    );
   }
 
   const dryRunColumns: ColumnsType<RetentionDryRun["candidates"][number]> = [
     {
-      title: "清理单位",
+      title: text("清理单位", "Cleanup unit"),
       dataIndex: "coordinate",
       key: "coordinate",
       width: 360,
@@ -2227,7 +2597,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "摘要",
+      title: text("摘要", "Digest"),
       dataIndex: "digest",
       key: "digest",
       width: 180,
@@ -2238,17 +2608,21 @@ function RetentionTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "类型",
+      title: text("类型", "Type"),
       key: "versionType",
       width: 140,
       render: (_, candidate) => (
         <span className="text-xs text-zinc-400">
-          {retentionCandidateTypeLabel(candidate.versionType, candidate.format)}
+          {retentionCandidateTypeLabel(
+            candidate.versionType,
+            candidate.format,
+            text,
+          )}
         </span>
       ),
     },
     {
-      title: "原因",
+      title: text("原因", "Reason"),
       key: "reasons",
       width: 280,
       render: (_, candidate) => (
@@ -2256,17 +2630,25 @@ function RetentionTab({ repo }: { repo: Repository }) {
           {candidate.reasons
             .map((reason) =>
               reason === "maximum_versions"
-                ? "超过版本上限"
+                ? text("超过版本上限", "Exceeded version limit")
                 : candidate.versionType === "asset"
-                  ? `已 ${candidate.ageDays} 天未更新`
-                  : `已保留 ${candidate.ageDays} 天`,
+                  ? text(
+                      `已 ${candidate.ageDays} 天未更新`,
+                      `Not updated for ${candidate.ageDays} days`,
+                    )
+                  : text(
+                      `已保留 ${candidate.ageDays} 天`,
+                      `Retained for ${candidate.ageDays} days`,
+                    ),
             )
             .join("、")}
         </span>
       ),
     },
     {
-      title: isRaw ? "最后更新时间" : "创建时间",
+      title: isRaw
+        ? text("最后更新时间", "Last updated")
+        : text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
@@ -2286,21 +2668,29 @@ function RetentionTab({ repo }: { repo: Repository }) {
         <Alert
           type="info"
           showIcon
-          title="Raw 按路径资产清理"
-          description="Raw 没有版本分组，因此不应用最少或最多版本数；期限按资产最后更新时间计算。"
+          title={text("Raw 按路径资产清理", "Raw cleanup by path asset")}
+          description={text(
+            "Raw 没有版本分组，因此不应用最少或最多版本数；期限按资产最后更新时间计算。",
+            "Raw assets are not version-grouped, so minimum and maximum versions do not apply. Age is calculated from the last update.",
+          )}
         />
       )}
       <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
         <div>
-          <div className="text-sm font-medium text-zinc-200">自动清理</div>
+          <div className="text-sm font-medium text-zinc-200">
+            {text("自动清理", "Automatic cleanup")}
+          </div>
           <div className="mt-1 text-xs text-zinc-500">
-            关闭时不会创建定时或手动清理任务，已有墓碑不受影响。
+            {text(
+              "关闭时不会创建定时或手动清理任务，已有墓碑不受影响。",
+              "When disabled, no scheduled or manual cleanup task is created. Existing tombstones are unaffected.",
+            )}
           </div>
         </div>
         <Switch
           checked={enabled}
-          checkedChildren="已启用"
-          unCheckedChildren="已停用"
+          checkedChildren={text("已启用", "Enabled")}
+          unCheckedChildren={text("已停用", "Disabled")}
           onChange={setEnabled}
         />
       </div>
@@ -2317,13 +2707,16 @@ function RetentionTab({ repo }: { repo: Repository }) {
               value={keepDays}
               onChange={(value) => setKeepDays(value ?? 0)}
             />
-            <Space.Addon>天</Space.Addon>
+            <Space.Addon>{text("天", "days")}</Space.Addon>
           </Space.Compact>
         </Field>
         {isMaven && (
           <Field
-            label="快照版本保留天数"
-            hint="Maven SNAPSHOT 可使用独立于发布版本的保留期限。"
+            label={text("快照版本保留天数", "Snapshot retention days")}
+            hint={text(
+              "Maven SNAPSHOT 可使用独立于发布版本的保留期限。",
+              "Maven SNAPSHOT versions can use a retention period separate from releases.",
+            )}
           >
             <Space.Compact block>
               <InputNumber
@@ -2334,7 +2727,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
                 value={snapshotKeepDays}
                 onChange={(value) => setSnapshotKeepDays(value ?? 0)}
               />
-              <Space.Addon>天</Space.Addon>
+              <Space.Addon>{text("天", "days")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
@@ -2349,7 +2742,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
                 value={minimumVersions}
                 onChange={(value) => setMinimumVersions(value ?? 0)}
               />
-              <Space.Addon>个</Space.Addon>
+              <Space.Addon>{text("个", "items")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
@@ -2364,7 +2757,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
                 value={maximumVersions}
                 onChange={(value) => setMaximumVersions(value ?? 0)}
               />
-              <Space.Addon>个</Space.Addon>
+              <Space.Addon>{text("个", "items")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
@@ -2395,22 +2788,28 @@ function RetentionTab({ repo }: { repo: Repository }) {
       </div>
       <Space>
         <Button type="primary" onClick={save} loading={saving}>
-          保存策略
+          {text("保存策略", "Save policy")}
         </Button>
         <Button onClick={runDryRun} loading={dryRunning} disabled={!enabled}>
-          试运行
+          {text("试运行", "Dry run")}
         </Button>
         {dryRun && dryRun.candidates.length > 0 && (
           <Popconfirm
-            title="确认执行保留清理？"
-            description={`将清理全部 ${dryRun.totalCandidates} 个候选${copy.candidateName}；执行前会再次校验策略版本。`}
-            okText="执行清理"
-            cancelText="取消"
+            title={text("确认执行保留清理？", "Run retention cleanup?")}
+            description={text(
+              `将清理全部 ${dryRun.totalCandidates} 个候选${copy.candidateName}；执行前会再次校验策略版本。`,
+              `This will clean all ${dryRun.totalCandidates} candidate ${copy.candidateName}. The policy version is checked again before execution.`,
+            )}
+            okText={text("执行清理", "Run cleanup")}
+            cancelText={text("取消", "Cancel")}
             okButtonProps={{ danger: true, loading: executing }}
             onConfirm={execute}
           >
             <Button danger loading={executing} disabled={!enabled}>
-              执行清理（{dryRun.totalCandidates} 个）
+              {text(
+                `执行清理（${dryRun.totalCandidates} 个）`,
+                `Run cleanup (${dryRun.totalCandidates})`,
+              )}
             </Button>
           </Popconfirm>
         )}
@@ -2418,17 +2817,25 @@ function RetentionTab({ repo }: { repo: Repository }) {
       {dryRun && (
         <Card>
           <CardHeader
-            title={`试运行结果：已加载 ${dryRun.candidates.length} / 共 ${dryRun.totalCandidates} 个候选${copy.candidateName}（策略版本 ${dryRun.policyVersion}）`}
+            title={text(
+              `试运行结果：已加载 ${dryRun.candidates.length} / 共 ${dryRun.totalCandidates} 个候选${copy.candidateName}（策略版本 ${dryRun.policyVersion}）`,
+              `Dry-run results: loaded ${dryRun.candidates.length} of ${dryRun.totalCandidates} candidate ${copy.candidateName} (policy version ${dryRun.policyVersion})`,
+            )}
             extra={
               dryRun.totalCandidates > 0 ? (
-                <Tooltip title="导出完整候选集，不受当前分页影响">
+                <Tooltip
+                  title={text(
+                    "导出完整候选集，不受当前分页影响",
+                    "Export the complete candidate set, independent of the current page",
+                  )}
+                >
                   <Button
                     size="small"
                     icon={<DownloadOutlined />}
                     loading={exporting}
                     onClick={() => void exportDryRun()}
                   >
-                    导出 CSV
+                    {text("导出 CSV", "Export CSV")}
                   </Button>
                 </Tooltip>
               ) : undefined
@@ -2436,33 +2843,50 @@ function RetentionTab({ repo }: { repo: Repository }) {
           />
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-zinc-800/80 px-4 py-3 text-xs text-zinc-400">
             <span>
-              按期限{" "}
+              {text("按期限", "By age")}{" "}
               <strong className="font-medium text-zinc-200">
                 {dryRun.summary.reasonCounts.age}
               </strong>
             </span>
             <span>
-              超过版本上限{" "}
+              {text("超过版本上限", "Exceeded version limit")}{" "}
               <strong className="font-medium text-zinc-200">
                 {dryRun.summary.reasonCounts.maximumVersions}
               </strong>
             </span>
             <span>
-              类型：
+              {text("类型：", "Types: ")}
               {[
-                ["发布", dryRun.summary.versionTypeCounts.release],
-                ["快照", dryRun.summary.versionTypeCounts.snapshot],
-                ["版本", dryRun.summary.versionTypeCounts.version],
-                ["资产", dryRun.summary.versionTypeCounts.asset],
+                [
+                  text("发布", "Release"),
+                  dryRun.summary.versionTypeCounts.release,
+                ],
+                [
+                  text("快照", "Snapshot"),
+                  dryRun.summary.versionTypeCounts.snapshot,
+                ],
+                [
+                  text("版本", "Version"),
+                  dryRun.summary.versionTypeCounts.version,
+                ],
+                [text("资产", "Asset"), dryRun.summary.versionTypeCounts.asset],
               ]
                 .filter(([, count]) => Number(count) > 0)
                 .map(([label, count]) => `${label} ${count}`)
-                .join("、") || "无"}
+                .join(", ") || text("无", "None")}
             </span>
-            <span>最早候选 {formatDate(dryRun.summary.oldestCandidateAt)}</span>
+            <span>
+              {text("最早候选", "Oldest candidate")}{" "}
+              {formatDate(dryRun.summary.oldestCandidateAt)}
+            </span>
           </div>
           {dryRun.candidates.length === 0 ? (
-            <EmptyState title={`没有需要清理的${copy.candidateName}`} />
+            <EmptyState
+              title={text(
+                `没有需要清理的${copy.candidateName}`,
+                `No ${copy.candidateName} to clean`,
+              )}
+            />
           ) : (
             <Table<RetentionDryRun["candidates"][number]>
               className="ag-console-table"
@@ -2479,7 +2903,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
           {dryRun.nextPageToken && (
             <div className="flex justify-center border-t border-zinc-800 px-4 py-3">
               <Button onClick={loadMoreDryRun} loading={dryRunLoadingMore}>
-                加载更多候选
+                {text("加载更多候选", "Load more candidates")}
               </Button>
             </div>
           )}
@@ -2492,6 +2916,7 @@ function RetentionTab({ repo }: { repo: Repository }) {
 /* ---------------- Capacity ---------------- */
 
 function CapacityTab({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   type CapacityDetail = RepositoryCapacity & {
     primaryBytes?: number;
     sidecarBytes?: number;
@@ -2538,13 +2963,13 @@ function CapacityTab({ repo }: { repo: Repository }) {
       setSaveError(err);
       return;
     }
-    setNotice("配额已更新");
+    setNotice(text("配额已更新", "Quota updated"));
     void load();
   };
 
   if (error !== null)
     return isNotFound(error) ? (
-      <NotEnabled feature="容量管理" />
+      <NotEnabled feature={text("容量管理", "Capacity management")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -2560,15 +2985,23 @@ function CapacityTab({ repo }: { repo: Repository }) {
     <div className="space-y-6">
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-400">
         {proxy
-          ? "Proxy Repository 的容量来自 read-through cache：已缓存的上游响应会计入缓存用量；它不是 Hosted 发布制品。"
-          : "Hosted Repository 的容量来自已发布或可恢复的 Artifact/Asset 引用，并受发布配额约束。"}
+          ? text(
+              "Proxy 仓库的容量来自 read-through cache：已缓存的上游响应会计入缓存用量；它不是 Hosted 发布制品。",
+              "A proxy repository's capacity comes from its read-through cache. Cached upstream responses count toward cache usage; they are not hosted published artifacts.",
+            )
+          : text(
+              "Hosted 仓库的容量来自已发布或可恢复的制品/资产引用，并受发布配额约束。",
+              "A hosted repository's capacity comes from published or recoverable artifact/asset references and is constrained by its publishing quota.",
+            )}
       </div>
       {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && <Alert type="success" showIcon title={notice} />}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-zinc-800 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-zinc-500">
-            {proxy ? "缓存用量" : "已用空间"}
+            {proxy
+              ? text("缓存用量", "Cache usage")
+              : text("已用空间", "Used space")}
           </div>
           <div className="mt-1 text-xl font-semibold text-zinc-100">
             {formatBytes(capacity.usedBytes)}
@@ -2576,7 +3009,9 @@ function CapacityTab({ repo }: { repo: Repository }) {
         </div>
         <div className="rounded-lg border border-zinc-800 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-zinc-500">
-            {proxy ? "缓存对象" : "对象数量"}
+            {proxy
+              ? text("缓存对象", "Cached objects")
+              : text("对象数量", "Object count")}
           </div>
           <div className="mt-1 text-xl font-semibold text-zinc-100">
             {formatNumber(capacity.objectCount)}
@@ -2584,12 +3019,12 @@ function CapacityTab({ repo }: { repo: Repository }) {
         </div>
         <div className="rounded-lg border border-zinc-800 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-zinc-500">
-            配额
+            {text("配额", "Quota")}
           </div>
           <div className="mt-1 text-xl font-semibold text-zinc-100">
             {capacity.quotaBytes > 0
               ? formatBytes(capacity.quotaBytes)
-              : "无限制"}
+              : text("无限制", "Unlimited")}
           </div>
         </div>
       </div>
@@ -2597,7 +3032,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-lg border border-zinc-800 px-4 py-3">
             <div className="text-xs uppercase tracking-wider text-zinc-500">
-              主资产缓存
+              {text("主资产缓存", "Primary asset cache")}
             </div>
             <div className="mt-1 text-lg font-semibold text-zinc-100">
               {formatBytes(capacity.primaryBytes)}
@@ -2605,7 +3040,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
           </div>
           <div className="rounded-lg border border-zinc-800 px-4 py-3">
             <div className="text-xs uppercase tracking-wider text-zinc-500">
-              校验/签名缓存
+              {text("校验/签名缓存", "Checksum/signature cache")}
             </div>
             <div className="mt-1 text-lg font-semibold text-zinc-100">
               {formatBytes(capacity.sidecarBytes)}
@@ -2613,14 +3048,16 @@ function CapacityTab({ repo }: { repo: Repository }) {
           </div>
           <div className="rounded-lg border border-zinc-800 px-4 py-3">
             <div className="text-xs uppercase tracking-wider text-zinc-500">
-              可回收缓存
+              {text("可回收缓存", "Reclaimable cache")}
             </div>
             <div className="mt-1 text-lg font-semibold text-zinc-100">
               {formatBytes(capacity.reclaimableBytes)}
             </div>
             <div className="mt-1 text-xs text-zinc-500">
-              过期 {formatNumber(capacity.expiredObjectCount)} 项 · negative{" "}
-              {formatNumber(capacity.negativeCount)} 项
+              {text(
+                `过期 ${formatNumber(capacity.expiredObjectCount)} 项 · negative ${formatNumber(capacity.negativeCount)} 项`,
+                `Expired ${formatNumber(capacity.expiredObjectCount)} · negative ${formatNumber(capacity.negativeCount)}`,
+              )}
             </div>
           </div>
         </div>
@@ -2628,7 +3065,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
       {capacity.quotaBytes > 0 && (
         <div>
           <div className="mb-1.5 flex justify-between text-xs text-zinc-500">
-            <span>使用率</span>
+            <span>{text("使用率", "Utilization")}</span>
             <span>{pct.toFixed(1)}%</span>
           </div>
           <Progress
@@ -2640,7 +3077,12 @@ function CapacityTab({ repo }: { repo: Repository }) {
         </div>
       )}
       <div className="flex max-w-lg items-end gap-2">
-        <Field label="配额 (GiB，0 表示无限制)">
+        <Field
+          label={text(
+            "配额 (GiB，0 表示无限制)",
+            "Quota (GiB, 0 for unlimited)",
+          )}
+        >
           <Space.Compact block>
             <InputNumber
               min={0}
@@ -2653,7 +3095,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
           </Space.Compact>
         </Field>
         <Button type="primary" onClick={save} loading={saving}>
-          更新配额
+          {text("更新配额", "Update quota")}
         </Button>
       </div>
     </div>
@@ -2663,6 +3105,7 @@ function CapacityTab({ repo }: { repo: Repository }) {
 /* ---------------- Distribute (Promotion / Replication) ---------------- */
 
 function DistributeTab({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   const [repos, setRepos] = useState<Repository[]>([]);
   const [targetId, setTargetId] = useState("");
   const [coordinate, setCoordinate] = useState("");
@@ -2706,7 +3149,12 @@ function DistributeTab({ repo }: { repo: Repository }) {
       setActionError(err);
       return;
     }
-    setNotice("已取消复制计划，工作进程不再重试。");
+    setNotice(
+      text(
+        "已取消复制计划，工作进程不再重试。",
+        "Replication plan canceled. Workers will not retry it.",
+      ),
+    );
     void load();
   };
 
@@ -2739,8 +3187,14 @@ function DistributeTab({ repo }: { repo: Repository }) {
     }
     setNotice(
       kind === "promote"
-        ? "晋升任务已提交，请在「生命周期任务」查看进度"
-        : "复制计划已创建，下方查看进度",
+        ? text(
+            "晋升任务已提交，请在「生命周期任务」查看进度",
+            "Promotion task submitted. Track it on the Lifecycle jobs tab.",
+          )
+        : text(
+            "复制计划已创建，下方查看进度",
+            "Replication plan created. Track its progress below.",
+          ),
     );
     setCoordinate("");
     setDigest("");
@@ -2776,7 +3230,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "目标仓库",
+      title: text("目标仓库", "Target repository"),
       dataIndex: "targetRepositoryId",
       key: "targetRepositoryId",
       width: 220,
@@ -2785,14 +3239,14 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
@@ -2803,7 +3257,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "完成时间",
+      title: text("完成时间", "Completed"),
       dataIndex: "completedAt",
       key: "completedAt",
       width: 180,
@@ -2814,26 +3268,29 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 180,
       render: (_, plan) => (
         <Space size="small">
           <Button size="small" onClick={() => showDetail(plan.id)}>
-            进度
+            {text("进度", "Progress")}
           </Button>
           {(plan.state === "pending" || plan.state === "failed") && (
             <Popconfirm
-              title="确认取消复制计划？"
-              description="取消后工作进程将不再重试，已复制的字节不会自动删除。"
-              okText="确认取消"
-              cancelText="返回"
+              title={text("确认取消复制计划？", "Cancel replication plan?")}
+              description={text(
+                "取消后工作进程将不再重试，已复制的字节不会自动删除。",
+                "Workers will not retry after cancellation. Bytes already copied are not deleted automatically.",
+              )}
+              okText={text("确认取消", "Cancel plan")}
+              cancelText={text("返回", "Back")}
               okButtonProps={{ danger: true }}
               onConfirm={() => cancelPlan(plan.id)}
             >
               <Button size="small" danger>
-                取消
+                {text("取消", "Cancel")}
               </Button>
             </Popconfirm>
           )}
@@ -2845,7 +3302,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
     ReplicationPlanDetail["checkpoints"][number]
   > = [
     {
-      title: "对象",
+      title: text("对象", "Object"),
       dataIndex: "objectKey",
       key: "objectKey",
       width: 280,
@@ -2859,7 +3316,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "摘要",
+      title: text("摘要", "Digest"),
       dataIndex: "digest",
       key: "digest",
       width: 180,
@@ -2870,7 +3327,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "大小",
+      title: text("大小", "Size"),
       dataIndex: "size",
       key: "size",
       width: 120,
@@ -2879,7 +3336,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "进度",
+      title: text("进度", "Progress"),
       key: "progress",
       width: 110,
       render: (_, checkpoint) => (
@@ -2891,14 +3348,14 @@ function DistributeTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: "重试",
+      title: text("重试", "Attempts"),
       dataIndex: "attempts",
       key: "attempts",
       width: 90,
@@ -2916,28 +3373,34 @@ function DistributeTab({ repo }: { repo: Repository }) {
       {/* 发起表单 */}
       <div className="rounded-lg border border-zinc-800 p-4">
         <div className="mb-3 text-sm font-medium text-zinc-200">
-          发起晋升 / 复制
+          {text("发起晋升 / 复制", "Start promotion / replication")}
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <Field label="目标仓库">
+          <Field label={text("目标仓库", "Target repository")}>
             <Select
               className="w-full"
               showSearch={{ optionFilterProp: "label" }}
               value={targetId || undefined}
-              placeholder="选择同格式仓库…"
+              placeholder={text(
+                "选择同格式仓库…",
+                "Select a repository with the same format…",
+              )}
               options={targets.map((r) => ({ value: r.id, label: r.name }))}
               onChange={setTargetId}
             />
           </Field>
-          <Field label="坐标 coordinate">
+          <Field label={text("坐标 coordinate", "Coordinate")}>
             <Input
               className="font-mono"
-              placeholder="如 nginx:alpine 或 GAV"
+              placeholder={text(
+                "如 nginx:alpine 或 GAV",
+                "For example: nginx:alpine or GAV",
+              )}
               value={coordinate}
               onChange={(e) => setCoordinate(e.target.value)}
             />
           </Field>
-          <Field label="摘要 digest">
+          <Field label={text("摘要 digest", "Digest")}>
             <Input
               className="font-mono"
               placeholder="sha256:…"
@@ -2957,7 +3420,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
                 !digest.trim()
               }
             >
-              晋升
+              {text("晋升", "Promote")}
             </Button>
             <Button
               loading={busy === "replicate"}
@@ -2969,24 +3432,30 @@ function DistributeTab({ repo }: { repo: Repository }) {
                 !digest.trim()
               }
             >
-              复制
+              {text("复制", "Replicate")}
             </Button>
           </div>
         </div>
         <p className="mt-2 text-xs text-zinc-600">
-          晋升：在目标仓库创建同一制品的可见副本（审计追踪）；复制：异步、带断点地拷贝制品字节到目标仓库。
+          {text(
+            "晋升：在目标仓库创建同一制品的可见副本（审计追踪）；复制：异步、带断点地拷贝制品字节到目标仓库。",
+            "Promotion creates a visible copy of the artifact in the target repository with an audit trail. Replication copies artifact bytes asynchronously with checkpoints.",
+          )}
         </p>
       </div>
 
       {/* 复制计划列表 */}
       <div>
         <div className="mb-2 text-sm font-medium text-zinc-200">
-          复制计划（{plans?.length ?? 0}）
+          {text(
+            `复制计划（${plans?.length ?? 0}）`,
+            `Replication plans (${plans?.length ?? 0})`,
+          )}
         </div>
         {!plans ? (
           <Loading />
         ) : plans.length === 0 ? (
-          <EmptyState title="暂无复制计划" />
+          <EmptyState title={text("暂无复制计划", "No replication plans")} />
         ) : (
           <Table<ReplicationPlan>
             className="ag-console-table"
@@ -3003,7 +3472,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
       {/* 复制进度详情 */}
       <Modal
         open={!!detail}
-        title="复制进度详情"
+        title={text("复制进度详情", "Replication progress")}
         onClose={() => setDetail(null)}
         wide
       >
@@ -3011,18 +3480,24 @@ function DistributeTab({ repo }: { repo: Repository }) {
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
               <span>
-                状态：
+                {text("状态：", "Status: ")}
                 <StateBadge state={detail.state} />
               </span>
-              <span>目标：{repoName(detail.targetRepositoryId)}</span>
-              <span>创建：{formatDate(detail.createdAt)}</span>
+              <span>
+                {text("目标：", "Target: ")}
+                {repoName(detail.targetRepositoryId)}
+              </span>
+              <span>
+                {text("创建：", "Created: ")}
+                {formatDate(detail.createdAt)}
+              </span>
               {detail.lastError && (
                 <span className="text-rose-400">{detail.lastError}</span>
               )}
             </div>
             {detail.checkpoints.length === 0 ? (
               <p className="py-4 text-center text-sm text-zinc-500">
-                暂无检查点
+                {text("暂无检查点", "No checkpoints")}
               </p>
             ) : (
               <Table<ReplicationPlanDetail["checkpoints"][number]>
@@ -3047,6 +3522,7 @@ function DistributeTab({ repo }: { repo: Repository }) {
 /* ---------------- Jobs ---------------- */
 
 function JobsTab({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   const [jobs, setJobs] = useState<LifecycleJob[] | null>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -3070,7 +3546,7 @@ function JobsTab({ repo }: { repo: Repository }) {
 
   if (error !== null)
     return isNotFound(error) ? (
-      <NotEnabled feature="生命周期任务" />
+      <NotEnabled feature={text("生命周期任务", "Lifecycle jobs")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -3079,8 +3555,11 @@ function JobsTab({ repo }: { repo: Repository }) {
   if (jobs.length === 0)
     return (
       <EmptyState
-        title="暂无生命周期任务"
-        hint="保留清理、晋升、复制任务会显示在这里"
+        title={text("暂无生命周期任务", "No lifecycle jobs")}
+        hint={text(
+          "保留清理、晋升、复制任务会显示在这里",
+          "Retention cleanup, promotion, and replication tasks appear here.",
+        )}
       />
     );
 
@@ -3097,21 +3576,21 @@ function JobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "类型",
+      title: text("类型", "Kind"),
       dataIndex: "kind",
       key: "kind",
       width: 150,
       render: (value: string) => <Badge tone="blue">{value}</Badge>,
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
@@ -3122,7 +3601,7 @@ function JobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "完成时间",
+      title: text("完成时间", "Completed"),
       dataIndex: "completedAt",
       key: "completedAt",
       width: 180,
@@ -3133,7 +3612,7 @@ function JobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "错误",
+      title: text("错误", "Error"),
       dataIndex: "lastError",
       key: "lastError",
       width: 300,
@@ -3164,6 +3643,7 @@ function JobsTab({ repo }: { repo: Repository }) {
 /* ---------------- Tombstones ---------------- */
 
 function TombstonesTab({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   const [items, setItems] = useState<ArtifactTombstone[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
@@ -3212,13 +3692,13 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       setRestoreError(err);
       return;
     }
-    setRestoreNotice(`已恢复 ${coordinate}`);
+    setRestoreNotice(text(`已恢复 ${coordinate}`, `Restored ${coordinate}`));
     void load();
   };
 
   if (error !== null)
     return isNotFound(error) ? (
-      <NotEnabled feature="墓碑管理" />
+      <NotEnabled feature={text("墓碑管理", "Tombstone management")} />
     ) : (
       <ErrorBanner error={error} onRetry={() => load()} />
     );
@@ -3226,7 +3706,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
 
   const tombstoneColumns: ColumnsType<ArtifactTombstone> = [
     {
-      title: "坐标",
+      title: text("坐标", "Coordinate"),
       dataIndex: "coordinate",
       key: "coordinate",
       width: 360,
@@ -3240,7 +3720,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "摘要",
+      title: text("摘要", "Digest"),
       dataIndex: "digest",
       key: "digest",
       width: 180,
@@ -3251,7 +3731,7 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "删除时间",
+      title: text("删除时间", "Deleted"),
       dataIndex: "tombstonedAt",
       key: "tombstonedAt",
       width: 190,
@@ -3262,20 +3742,23 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 100,
       render: (_, item) => (
         <Popconfirm
-          title="确认恢复此制品？"
-          description="恢复后制品会重新出现在仓库浏览与协议读取中。"
-          okText="恢复"
-          cancelText="取消"
+          title={text("确认恢复此制品？", "Restore this artifact?")}
+          description={text(
+            "恢复后制品会重新出现在仓库浏览与协议读取中。",
+            "After restoration, the artifact is available again in repository browsing and protocol reads.",
+          )}
+          okText={text("恢复", "Restore")}
+          cancelText={text("取消", "Cancel")}
           onConfirm={() => restore(item.coordinate)}
         >
           <Button size="small" loading={restoring === item.coordinate}>
-            恢复
+            {text("恢复", "Restore")}
           </Button>
         </Popconfirm>
       ),
@@ -3292,8 +3775,11 @@ function TombstonesTab({ repo }: { repo: Repository }) {
       {restoreNotice && <Alert type="success" showIcon title={restoreNotice} />}
       {items.length === 0 ? (
         <EmptyState
-          title="暂无墓碑"
-          hint="被删除的制品会保留墓碑记录，可在此恢复"
+          title={text("暂无墓碑", "No tombstones")}
+          hint={text(
+            "被删除的制品会保留墓碑记录，可在此恢复",
+            "Deleted artifacts retain tombstone records and can be restored here.",
+          )}
         />
       ) : (
         <>
@@ -3318,37 +3804,89 @@ function TombstonesTab({ repo }: { repo: Repository }) {
 /* ---------------- Detail page ---------------- */
 
 function NotEnabled({ feature }: { feature: string }) {
+  const { text } = usePreferences();
   return (
     <EmptyState
-      title={`${feature}功能未启用`}
-      hint="当前后端构建尚未挂载此管理端点（返回 404）"
+      title={text(`${feature}功能未启用`, `${feature} is unavailable`)}
+      hint={text(
+        "当前后端构建尚未挂载此管理端点（返回 404）",
+        "The current backend does not expose this endpoint (404)",
+      )}
     />
   );
 }
 
 function RepositoryConceptHelp({ repo }: { repo: Repository }) {
+  const { text } = usePreferences();
   const typeLabel =
     repo.type === "proxy" ? "Proxy Repository" : "Hosted Repository";
   const concepts = [
-    ["Repository", "一个格式命名空间，承载访问策略、制品或上游配置。"],
+    [
+      "Repository",
+      text(
+        "一个格式命名空间，承载访问策略、制品或上游配置。",
+        "A format namespace containing access policy, artifacts, and upstream configuration.",
+      ),
+    ],
     [
       typeLabel,
       repo.type === "proxy"
-        ? "按需从上游拉取并缓存响应，不提供发布入口。"
-        : "保存已校验并发布的制品，可执行删除、恢复和保留。",
+        ? text(
+            "按需从上游拉取并缓存响应，不提供发布入口。",
+            "Fetches and caches upstream responses on demand; publishing is disabled.",
+          )
+        : text(
+            "保存已校验并发布的制品，可执行删除、恢复和保留。",
+            "Stores verified published artifacts and supports deletion, restore, and retention.",
+          ),
     ],
-    ["Artifact", "用户可见的逻辑制品身份，例如 Maven 坐标或 OCI 镜像。"],
-    ["Asset", "制品下的不可变文件或 Blob，例如 JAR、POM 或镜像层。"],
+    [
+      "Artifact",
+      text(
+        "用户可见的逻辑制品身份，例如 Maven 坐标或 OCI 镜像。",
+        "A user-visible logical identity such as a Maven coordinate or OCI image.",
+      ),
+    ],
+    [
+      "Asset",
+      text(
+        "制品下的不可变文件或 Blob，例如 JAR、POM 或镜像层。",
+        "An immutable file or blob under an artifact, such as a JAR, POM, or image layer.",
+      ),
+    ],
     ...(repo.type === "proxy"
-      ? [["Cache Entry", "上游响应的缓存索引与字节，不等同于 Hosted 制品。"]]
+      ? [
+          [
+            "Cache Entry",
+            text(
+              "上游响应的缓存索引与字节，不等同于 Hosted 制品。",
+              "An index and bytes for an upstream response; it is not a hosted artifact.",
+            ),
+          ],
+        ]
       : []),
     ...(repo.type === "hosted"
       ? [
-          ["Publication", "将完整且通过校验的 staged 内容转为可见制品。"],
-          ["Tombstone", "删除后的可恢复记录；字节会在确认无引用后回收。"],
+          [
+            "Publication",
+            text(
+              "将完整且通过校验的 staged 内容转为可见制品。",
+              "Turns complete, validated staged content into a visible artifact.",
+            ),
+          ],
+          [
+            "Tombstone",
+            text(
+              "删除后的可恢复记录；字节会在确认无引用后回收。",
+              "A restorable deletion record; bytes are reclaimed after references are gone.",
+            ),
+          ],
           [
             "Retention Policy",
-            "按格式规则选择过期版本或路径，生成可审阅的回收任务。",
+            text(
+              "按格式规则选择过期版本或路径，生成可审阅的回收任务。",
+              "Selects expired versions or paths by format rules and creates a reviewable reclamation job.",
+            ),
           ],
         ]
       : []),
@@ -3357,7 +3895,7 @@ function RepositoryConceptHelp({ repo }: { repo: Repository }) {
   return (
     <Popover
       placement="bottomRight"
-      title="概念说明"
+      title={text("概念说明", "Concepts")}
       content={
         <div className="grid max-w-[34rem] grid-cols-2 gap-x-5 gap-y-3 text-xs">
           {concepts.map(([term, description]) => (
@@ -3371,12 +3909,12 @@ function RepositoryConceptHelp({ repo }: { repo: Repository }) {
         </div>
       }
     >
-      <Tooltip title="查看概念说明">
+      <Tooltip title={text("查看概念说明", "View concepts")}>
         <Button
           type="text"
           size="small"
           icon={<InfoCircleOutlined />}
-          aria-label="查看概念说明"
+          aria-label={text("查看概念说明", "View concepts")}
         />
       </Tooltip>
     </Popover>
@@ -3392,13 +3930,14 @@ function RepositorySummary({
   capacity: RepositoryCapacity | null;
   onOpenCapacity: () => void;
 }) {
+  const { text } = usePreferences();
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
 
   return (
     <div
       className="mb-3 border-b border-zinc-800/70 pb-3"
       role="group"
-      aria-label="仓库摘要"
+      aria-label={text("仓库摘要", "Repository summary")}
     >
       <div className="flex min-w-0 items-start justify-between gap-6">
         <div className="min-w-0">
@@ -3412,7 +3951,11 @@ function RepositorySummary({
           <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
             <span>{repo.type ?? "hosted"}</span>
             <span aria-hidden="true">·</span>
-            <span>{repo.anonymousRead ? "允许匿名读取" : "私有读取"}</span>
+            <span>
+              {repo.anonymousRead
+                ? text("允许匿名读取", "Anonymous reads")
+                : text("私有读取", "Private reads")}
+            </span>
             <span aria-hidden="true">·</span>
             <span className="font-mono">ID {repo.id}</span>
             <span aria-hidden="true">·</span>
@@ -3421,7 +3964,9 @@ function RepositorySummary({
         </div>
         <div className="flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
           <RepositoryConceptHelp repo={repo} />
-          <span className="text-xs text-zinc-500">协议入口</span>
+          <span className="text-xs text-zinc-500">
+            {text("协议入口", "Protocol endpoint")}
+          </span>
           <code
             className="max-w-[32rem] truncate font-mono text-xs text-zinc-300"
             title={protocolPath}
@@ -3437,7 +3982,7 @@ function RepositorySummary({
             to={`/browse?repository=${encodeURIComponent(repo.id)}`}
             className="font-medium text-cyan-300 hover:text-cyan-200"
           >
-            打开公开浏览
+            {text("打开公开浏览", "Open public browser")}
           </Link>
         )}
         <Button
@@ -3447,8 +3992,11 @@ function RepositorySummary({
           onClick={onOpenCapacity}
         >
           {capacity
-            ? `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`
-            : "查看容量"}
+            ? text(
+                `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`,
+                `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} objects`,
+              )
+            : text("查看容量", "View capacity")}
         </Button>
       </div>
     </div>
@@ -3460,6 +4008,7 @@ function EffectiveAccessPanel({
 }: {
   effectiveAccess: RepositoryEffectiveAccess;
 }) {
+  const { text } = usePreferences();
   return (
     <Collapse
       ghost
@@ -3469,7 +4018,7 @@ function EffectiveAccessPanel({
           key: "effective-access",
           label: (
             <span className="text-xs text-zinc-400">
-              当前访问判定
+              {text("当前访问判定", "Effective access")}
               <span className="ml-2 font-mono text-zinc-600">
                 {effectiveAccess.actor}
               </span>
@@ -3481,19 +4030,19 @@ function EffectiveAccessPanel({
               <div className="mt-4 grid grid-cols-4 gap-4 border-t border-zinc-800/70 pt-3">
                 {[
                   {
-                    label: "匿名读取",
+                    label: text("匿名读取", "Anonymous reads"),
                     decision: effectiveAccess.anonymousRead,
                   },
                   {
-                    label: "读取",
+                    label: text("读取", "Read"),
                     decision: effectiveAccess.permissions.read,
                   },
                   {
-                    label: "写入",
+                    label: text("写入", "Write"),
                     decision: effectiveAccess.permissions.write,
                   },
                   {
-                    label: "管理员",
+                    label: text("管理员", "Admin"),
                     decision: effectiveAccess.permissions.admin,
                   },
                 ].map(({ label, decision }) => (
@@ -3508,19 +4057,24 @@ function EffectiveAccessPanel({
                           : "mt-1 text-zinc-500"
                       }
                     >
-                      {decision.allowed ? "允许" : "拒绝"}
+                      {decision.allowed
+                        ? text("允许", "Allowed")
+                        : text("拒绝", "Denied")}
                     </div>
                     <div
                       className="mt-0.5 truncate text-[10px] text-zinc-600"
-                      title={`${accessSourceLabel(decision.source)} · ${accessReasonLabel(decision.reason)}`}
+                      title={`${accessSourceLabel(decision.source, text)} · ${accessReasonLabel(decision.reason, text)}`}
                     >
-                      {accessSourceLabel(decision.source)}
+                      {accessSourceLabel(decision.source, text)}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="mt-3 text-[10px] text-zinc-600">
-                判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。
+                {text(
+                  "判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。",
+                  "Decision order: administrator identity → global role → repository grant → legacy static policy.",
+                )}
               </div>
             </div>
           ),
@@ -3539,6 +4093,7 @@ function RepositorySettingsTab({
   capabilities: RepositoryCapabilities | null;
   onUpdated: () => void;
 }) {
+  const { text } = usePreferences();
   const [endpoint, setEndpoint] = useState(repo.endpoint ?? "");
   const [hosts, setHosts] = useState((repo.allowedHosts ?? []).join(", "));
   const [anonymousRead, setAnonymousRead] = useState(repo.anonymousRead);
@@ -3638,7 +4193,7 @@ function RepositorySettingsTab({
       setError(err);
       return;
     }
-    setNotice("仓库设置已保存");
+    setNotice(text("仓库设置已保存", "Repository settings saved"));
     onUpdated();
   };
 
@@ -3660,17 +4215,22 @@ function RepositorySettingsTab({
     <div className="mx-auto max-w-5xl">
       <div className="mb-5 flex items-start justify-between gap-6 border-b border-zinc-800/70 pb-4">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">仓库设置</h2>
+          <h2 className="text-sm font-semibold text-zinc-100">
+            {text("仓库设置", "Repository settings")}
+          </h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
-            管理读取方式与代理仓库的上游连接。仓库名称、格式和类型创建后不可修改。
+            {text(
+              "管理读取方式与代理仓库的上游连接。仓库名称、格式和类型创建后不可修改。",
+              "Manage read access and upstream connectivity for proxy repositories. Repository name, format, and type cannot be changed after creation.",
+            )}
           </p>
         </div>
         <Space>
           <Button onClick={resetForm} disabled={saving}>
-            重置
+            {text("重置", "Reset")}
           </Button>
           <Button type="primary" onClick={submit} loading={saving}>
-            保存更改
+            {text("保存更改", "Save changes")}
           </Button>
         </Space>
       </div>
@@ -3681,10 +4241,13 @@ function RepositorySettingsTab({
         <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
           <div>
             <div className="text-sm font-medium text-zinc-200">
-              允许匿名读取
+              {text("允许匿名读取", "Allow anonymous reads")}
             </div>
             <div className="mt-1 text-xs leading-5 text-zinc-500">
-              开启后协议层 GET/HEAD 可在无需凭据时读取该 Repository。
+              {text(
+                "开启后协议层 GET/HEAD 可在无需凭据时读取该仓库。",
+                "When enabled, protocol GET/HEAD requests can read this repository without credentials.",
+              )}
             </div>
           </div>
           <Switch checked={anonymousRead} onChange={setAnonymousRead} />
@@ -3692,8 +4255,11 @@ function RepositorySettingsTab({
         {repo.type === "proxy" && (
           <Space orientation="vertical" size="middle" className="w-full">
             <Field
-              label="上游地址"
-              hint="https 基础地址，修改后立即生效（按请求读取）。"
+              label={text("上游地址", "Upstream URL")}
+              hint={text(
+                "HTTPS 基础地址，修改后立即生效（按请求读取）。",
+                "HTTPS base URL. Changes take effect immediately on the next request.",
+              )}
             >
               <Input
                 placeholder="https://upstream.example"
@@ -3702,11 +4268,17 @@ function RepositorySettingsTab({
               />
             </Field>
             <Field
-              label="允许主机"
+              label={text("允许主机", "Allowed hosts")}
               hint={
                 requiresHosts
-                  ? "逗号分隔，raw / conan 代理必填。"
-                  : "逗号分隔；oci / maven 代理可留空。"
+                  ? text(
+                      "逗号分隔，raw / conan 代理必填。",
+                      "Comma-separated. Required for raw and Conan proxies.",
+                    )
+                  : text(
+                      "逗号分隔；OCI / Maven 代理可留空。",
+                      "Comma-separated. Optional for OCI and Maven proxies.",
+                    )
               }
             >
               <Input
@@ -3716,9 +4288,14 @@ function RepositorySettingsTab({
               />
             </Field>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-              <div className="text-sm font-medium text-zinc-200">出口代理</div>
+              <div className="text-sm font-medium text-zinc-200">
+                {text("出口代理", "Egress proxy")}
+              </div>
               <div className="mt-1 text-xs leading-5 text-zinc-500">
-                配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。
+                {text(
+                  "配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。",
+                  "Configure the egress proxy used when this proxy repository reaches its upstream, for private or restricted networks.",
+                )}
               </div>
               <Radio.Group
                 className="mt-3 flex flex-col gap-2"
@@ -3729,21 +4306,36 @@ function RepositorySettingsTab({
                 }}
               >
                 <Radio value="direct">
-                  <span className="text-sm text-zinc-200">直连</span>
+                  <span className="text-sm text-zinc-200">
+                    {text("直连", "Direct")}
+                  </span>
                   <span className="ml-2 text-xs text-zinc-500">
-                    不经过任何代理，保留私网地址防护
+                    {text(
+                      "不经过任何代理，保留私网地址防护",
+                      "Do not use a proxy; retain private-address protection",
+                    )}
                   </span>
                 </Radio>
                 <Radio value="environment">
-                  <span className="text-sm text-zinc-200">跟随环境变量</span>
+                  <span className="text-sm text-zinc-200">
+                    {text("跟随环境变量", "Use environment variables")}
+                  </span>
                   <span className="ml-2 text-xs text-zinc-500">
-                    沿用进程级 HTTP(S)_PROXY 与 NO_PROXY
+                    {text(
+                      "沿用进程级 HTTP(S)_PROXY 与 NO_PROXY",
+                      "Use process-level HTTP(S)_PROXY and NO_PROXY",
+                    )}
                   </span>
                 </Radio>
                 <Radio value="custom">
-                  <span className="text-sm text-zinc-200">自定义代理</span>
+                  <span className="text-sm text-zinc-200">
+                    {text("自定义代理", "Custom proxy")}
+                  </span>
                   <span className="ml-2 text-xs text-zinc-500">
-                    为此仓库单独指定 HTTP 或 SOCKS5 代理
+                    {text(
+                      "为此仓库单独指定 HTTP 或 SOCKS5 代理",
+                      "Set an HTTP or SOCKS5 proxy specifically for this repository",
+                    )}
                   </span>
                 </Radio>
               </Radio.Group>
@@ -3754,7 +4346,7 @@ function RepositorySettingsTab({
                   className="mt-3 w-full border-t border-zinc-800/60 pt-3"
                 >
                   <div className="flex flex-wrap gap-3">
-                    <Field label="协议">
+                    <Field label={text("协议", "Protocol")}>
                       <Select
                         className="w-40"
                         value={egressProtocol}
@@ -3765,7 +4357,7 @@ function RepositorySettingsTab({
                         ]}
                       />
                     </Field>
-                    <Field label="代理主机">
+                    <Field label={text("代理主机", "Proxy host")}>
                       <Input
                         className="w-64"
                         placeholder="proxy.corp.example"
@@ -3773,7 +4365,7 @@ function RepositorySettingsTab({
                         onChange={(e) => setEgressHost(e.target.value)}
                       />
                     </Field>
-                    <Field label="端口">
+                    <Field label={text("端口", "Port")}>
                       <InputNumber
                         className="w-28"
                         min={1}
@@ -3788,11 +4380,13 @@ function RepositorySettingsTab({
                     <div className="flex items-center justify-between gap-6">
                       <div>
                         <div className="text-xs font-medium text-zinc-400">
-                          远程 DNS（socks5h）
+                          {text("远程 DNS（socks5h）", "Remote DNS (socks5h)")}
                         </div>
                         <div className="mt-1 text-xs leading-5 text-zinc-600">
-                          开启后由代理服务器解析上游域名，适用于本地 DNS
-                          不可达上游的网络。
+                          {text(
+                            "开启后由代理服务器解析上游域名，适用于本地 DNS 不可达上游的网络。",
+                            "When enabled, the proxy resolves the upstream hostname. Use this when the local DNS cannot reach the upstream network.",
+                          )}
                         </div>
                       </div>
                       <Switch
@@ -3802,7 +4396,12 @@ function RepositorySettingsTab({
                     </div>
                   )}
                   <div className="flex flex-wrap gap-3">
-                    <Field label="代理认证用户名（可选）">
+                    <Field
+                      label={text(
+                        "代理认证用户名（可选）",
+                        "Proxy username (optional)",
+                      )}
+                    >
                       <Input
                         className="w-64"
                         placeholder="gateway"
@@ -3811,15 +4410,24 @@ function RepositorySettingsTab({
                       />
                     </Field>
                     <Field
-                      label="代理认证密码（可选）"
-                      hint="AES-256-GCM 加密落库，留空则保留已存凭据。"
+                      label={text(
+                        "代理认证密码（可选）",
+                        "Proxy password (optional)",
+                      )}
+                      hint={text(
+                        "AES-256-GCM 加密落库，留空则保留已存凭据。",
+                        "Stored encrypted with AES-256-GCM. Leave blank to keep the current credential.",
+                      )}
                     >
                       <Input.Password
                         className="w-64"
                         placeholder={
                           repo.egressProxy?.credentialsConfigured
-                            ? "已配置，输入以替换"
-                            : "未配置"
+                            ? text(
+                                "已配置，输入以替换",
+                                "Configured; enter a value to replace it",
+                              )
+                            : text("未配置", "Not configured")
                         }
                         value={egressPassword}
                         onChange={(e) => setEgressPassword(e.target.value)}
@@ -3834,13 +4442,19 @@ function RepositorySettingsTab({
                       }
                     >
                       <span className="text-xs text-zinc-400">
-                        清除已存储的代理凭据
+                        {text(
+                          "清除已存储的代理凭据",
+                          "Clear stored proxy credentials",
+                        )}
                       </span>
                     </Checkbox>
                   )}
                   <Field
-                    label="绕过列表（noProxy）"
-                    hint="逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。"
+                    label={text("绕过列表（noProxy）", "Bypass list (noProxy)")}
+                    hint={text(
+                      "逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。",
+                      "Comma-separated hostname suffixes or CIDRs. Matching upstreams bypass the proxy.",
+                    )}
                   >
                     <Input
                       placeholder="*.internal.example, 10.0.0.0/8"
@@ -3852,25 +4466,30 @@ function RepositorySettingsTab({
               )}
               <div className="mt-3 flex items-center gap-3 border-t border-zinc-800/60 pt-3">
                 <Button onClick={runEgressTest} loading={egressTesting}>
-                  测试连接
+                  {text("测试连接", "Test connection")}
                 </Button>
                 <span className="text-xs text-zinc-600">
-                  测试使用已保存的配置
+                  {text(
+                    "测试使用已保存的配置",
+                    "The test uses the saved configuration",
+                  )}
                 </span>
                 {egressTestResult &&
                   (egressTestResult.reachable ? (
                     <span className="text-xs text-emerald-400">
-                      代理可达
+                      {text("代理可达", "Proxy reachable")}
                       {egressTestResult.upstreamStatus
-                        ? ` · 上游返回 ${egressTestResult.upstreamStatus}`
+                        ? ` · ${text(`上游返回 ${egressTestResult.upstreamStatus}`, `upstream returned ${egressTestResult.upstreamStatus}`)}`
                         : ""}
                       {egressTestResult.latencyMs !== undefined
-                        ? ` · 延迟 ${egressTestResult.latencyMs} ms`
+                        ? ` · ${text(`延迟 ${egressTestResult.latencyMs} ms`, `latency ${egressTestResult.latencyMs} ms`)}`
                         : ""}
                     </span>
                   ) : (
                     <span className="text-xs text-red-400">
-                      连接失败：{egressTestResult.error ?? "未知错误"}
+                      {text("连接失败：", "Connection failed: ")}
+                      {egressTestResult.error ??
+                        text("未知错误", "Unknown error")}
                     </span>
                   ))}
               </div>
@@ -3879,7 +4498,9 @@ function RepositorySettingsTab({
         )}
         {capabilities && (
           <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-4 text-[11px] text-zinc-500">
-            <span className="mr-1">支持的操作</span>
+            <span className="mr-1">
+              {text("支持的操作", "Supported operations")}
+            </span>
             {capabilities.operations.map((operation) => (
               <Badge key={operation} tone="zinc">
                 {operation}
@@ -3894,6 +4515,7 @@ function RepositorySettingsTab({
 }
 
 export function RepositoryDetailPage() {
+  const { text } = usePreferences();
   const { repositoryId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const artifactTarget = searchParams.get("artifact")?.trim() ?? "";
@@ -3943,7 +4565,7 @@ export function RepositoryDetailPage() {
   if (error !== null) {
     return (
       <div>
-        <PageHeader title="仓库详情" />
+        <PageHeader title={text("仓库详情", "Repository details")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
     );
@@ -3954,7 +4576,7 @@ export function RepositoryDetailPage() {
     <div>
       <div className="mb-1 text-xs text-zinc-500">
         <Link to="/repositories" className="hover:text-cyan-300">
-          仓库
+          {text("仓库", "Repositories")}
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-zinc-400">{repo.name}</span>
@@ -3974,7 +4596,7 @@ export function RepositoryDetailPage() {
             (!t.formats || t.formats.includes(repo.format)) &&
             (!t.hostedOnly || repo.type === "hosted") &&
             !(t.key === "publish" && repo.type === "proxy"),
-        ).map((t) => ({ key: t.key, label: t.label }))}
+        ).map((t) => ({ key: t.key, label: text(t.label, t.labelEn) }))}
       />
       <Card bodyClassName="p-4">
         {tab === "artifacts" && (

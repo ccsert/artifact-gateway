@@ -23,8 +23,10 @@ import { Loading, ErrorBanner } from "../components/Feedback";
 import { StateBadge } from "../components/Badge";
 import { formatDate, formatNumber } from "../lib/format";
 import { MetricStrip } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 export function AuditRetentionPage() {
+  const { locale, text } = usePreferences();
   const [policy, setPolicy] = useState<AuditRetentionPolicy | null>(null);
   const [jobs, setJobs] = useState<AuditCleanupJob[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -71,7 +73,7 @@ export function AuditRetentionPage() {
       setSaveError(err);
       return;
     }
-    setNotice("策略已保存");
+    setNotice(text("策略已保存", "Policy saved"));
     void load();
   };
 
@@ -87,14 +89,14 @@ export function AuditRetentionPage() {
       setSaveError(err);
       return;
     }
-    setNotice("清理任务已提交");
+    setNotice(text("清理任务已提交", "Cleanup job submitted"));
     setTimeout(() => void load(), 1000);
   };
 
   if (error !== null) {
     return (
       <div>
-        <PageHeader title="审计保留策略" />
+        <PageHeader title={text("审计保留策略", "Audit retention policy")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
     );
@@ -116,34 +118,36 @@ export function AuditRetentionPage() {
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: "截止时间",
+      title: text("截止时间", "Cutoff"),
       dataIndex: "cutoffAt",
       key: "cutoffAt",
       width: 180,
       render: (value: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-400">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "已删除",
+      title: text("已删除", "Deleted"),
       dataIndex: "deleted",
       key: "deleted",
       width: 110,
       render: (value: number) => (
-        <span className="text-xs text-zinc-300">{formatNumber(value)}</span>
+        <span className="text-xs text-zinc-300">
+          {formatNumber(value, locale)}
+        </span>
       ),
     },
     {
-      title: "批次大小",
+      title: text("批次大小", "Batch size"),
       dataIndex: "batchSize",
       key: "batchSize",
       width: 110,
@@ -152,18 +156,18 @@ export function AuditRetentionPage() {
       ),
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
       render: (value: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "错误",
+      title: text("错误", "Error"),
       dataIndex: "lastError",
       key: "lastError",
       width: 320,
@@ -181,8 +185,11 @@ export function AuditRetentionPage() {
   return (
     <div>
       <PageHeader
-        title="审计保留策略"
-        description="全局审计日志的自动清理规则"
+        title={text("审计保留策略", "Audit retention policy")}
+        description={text(
+          "全局审计日志的自动清理规则",
+          "Automatic cleanup rules for global audit records",
+        )}
       />
       {saveError !== null && (
         <div className="mb-4">
@@ -195,20 +202,33 @@ export function AuditRetentionPage() {
       <MetricStrip
         items={[
           {
-            label: "自动清理",
-            value: enabled ? "已启用" : "未启用",
-            hint: enabled ? `保留 ${keepDays} 天` : "仅保留策略，不会自动删除",
+            label: text("自动清理", "Automatic cleanup"),
+            value: enabled
+              ? text("已启用", "Enabled")
+              : text("未启用", "Disabled"),
+            hint: enabled
+              ? text(`保留 ${keepDays} 天`, `Keep for ${keepDays} days`)
+              : text(
+                  "仅保留策略，不会自动删除",
+                  "Policy is retained; records are not deleted automatically",
+                ),
             tone: enabled ? "success" : "default",
           },
           {
-            label: "保留周期",
-            value: `${keepDays} 天`,
-            hint: "超过截止时间的审计记录可被清理",
+            label: text("保留周期", "Retention period"),
+            value: text(`${keepDays} 天`, `${keepDays} days`),
+            hint: text(
+              "超过截止时间的审计记录可被清理",
+              "Records older than the cutoff can be removed",
+            ),
           },
           {
-            label: "最近任务",
+            label: text("最近任务", "Recent jobs"),
             value: jobs.length,
-            hint: "含已完成与失败的历史任务",
+            hint: text(
+              "含已完成与失败的历史任务",
+              "Includes completed and failed history",
+            ),
           },
         ]}
       />
@@ -216,15 +236,23 @@ export function AuditRetentionPage() {
         <div className="grid max-w-5xl gap-8 p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">
             <div className="mb-4">
-              <h2 className="text-sm font-semibold text-zinc-200">策略设置</h2>
+              <h2 className="text-sm font-semibold text-zinc-200">
+                {text("策略设置", "Policy settings")}
+              </h2>
               <p className="mt-1 text-xs text-zinc-500">
-                控制审计日志的自动保留周期，保存后由后台任务异步处理。
+                {text(
+                  "控制审计日志的自动保留周期，保存后由后台任务异步处理。",
+                  "Control the automatic audit retention window. Changes are processed asynchronously.",
+                )}
               </p>
             </div>
             <Form layout="vertical">
               <Form.Item
-                label="启用自动清理"
-                extra="关闭后不会自动删除记录，但已保存的保留周期仍会保留。"
+                label={text("启用自动清理", "Enable automatic cleanup")}
+                extra={text(
+                  "关闭后不会自动删除记录，但已保存的保留周期仍会保留。",
+                  "Disabling stops automatic deletion while retaining the saved period.",
+                )}
               >
                 <Switch
                   checked={enabled}
@@ -232,12 +260,15 @@ export function AuditRetentionPage() {
                     setEnabled(checked);
                     if (checked && keepDays < 1) setKeepDays(90);
                   }}
-                  aria-label="切换自动清理"
+                  aria-label={text("切换自动清理", "Toggle automatic cleanup")}
                 />
               </Form.Item>
               <Form.Item
-                label="保留天数"
-                extra="超过该天数的审计记录将被清理。"
+                label={text("保留天数", "Retention days")}
+                extra={text(
+                  "超过该天数的审计记录将被清理。",
+                  "Audit records older than this are eligible for cleanup.",
+                )}
               >
                 <InputNumber
                   min={enabled ? 1 : 0}
@@ -254,19 +285,25 @@ export function AuditRetentionPage() {
                   loading={saving}
                   disabled={!policyDirty}
                 >
-                  保存策略
+                  {text("保存策略", "Save policy")}
                 </Button>
                 <Popconfirm
                   disabled={!canExecute}
-                  title="确认立即执行审计清理？"
-                  description="将提交异步删除任务，并按当前保留天数处理符合条件的记录。"
-                  okText="执行清理"
-                  cancelText="取消"
+                  title={text(
+                    "确认立即执行审计清理？",
+                    "Run audit cleanup now?",
+                  )}
+                  description={text(
+                    "将提交异步删除任务，并按当前保留天数处理符合条件的记录。",
+                    "Submit an asynchronous deletion job for records outside the saved retention window.",
+                  )}
+                  okText={text("执行清理", "Run cleanup")}
+                  cancelText={text("取消", "Cancel")}
                   okButtonProps={{ danger: true, loading: executing }}
                   onConfirm={execute}
                 >
                   <Button danger loading={executing} disabled={!canExecute}>
-                    立即执行清理
+                    {text("立即执行清理", "Run cleanup now")}
                   </Button>
                 </Popconfirm>
               </Space>
@@ -276,13 +313,22 @@ export function AuditRetentionPage() {
             className="h-fit"
             type="warning"
             showIcon
-            title="清理说明"
+            title={text("清理说明", "Cleanup notes")}
             description={
               policyDirty
-                ? "请先保存当前策略；立即执行只会使用已经保存并启用的策略。"
+                ? text(
+                    "请先保存当前策略；立即执行只会使用已经保存并启用的策略。",
+                    "Save the current policy first; manual cleanup uses only the saved enabled policy.",
+                  )
                 : policy.enabled
-                  ? "立即执行会提交异步删除任务；保存策略不会立即删除记录。"
-                  : "启用自动清理并保存策略后，才能提交清理任务。"
+                  ? text(
+                      "立即执行会提交异步删除任务；保存策略不会立即删除记录。",
+                      "Run cleanup submits an asynchronous deletion job; saving does not delete records immediately.",
+                    )
+                  : text(
+                      "启用自动清理并保存策略后，才能提交清理任务。",
+                      "Enable and save automatic cleanup before submitting a cleanup job.",
+                    )
             }
           />
         </div>
@@ -290,20 +336,23 @@ export function AuditRetentionPage() {
 
       <Card>
         <CardHeader
-          title={`清理任务（${jobs.length}）`}
+          title={text(
+            `清理任务（${jobs.length}）`,
+            `Cleanup jobs (${jobs.length})`,
+          )}
           extra={
             <Button
               size="small"
               icon={<ReloadOutlined />}
               onClick={() => void load()}
             >
-              刷新
+              {text("刷新", "Refresh")}
             </Button>
           }
         />
         {jobs.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-zinc-500">
-            暂无清理任务
+            {text("暂无清理任务", "No cleanup jobs")}
           </p>
         ) : (
           <Table<AuditCleanupJob>

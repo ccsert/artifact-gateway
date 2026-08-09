@@ -18,6 +18,7 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 type Role = "admin" | "writer" | "reader";
 
@@ -28,6 +29,7 @@ const ROLE_TONE: Record<Role, "red" | "blue" | "green"> = {
 };
 
 function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -63,16 +65,16 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
           dialog.show();
         }}
       >
-        新建用户
+        {text("新建用户", "New user")}
       </Button>
       <Modal
         open={dialog.open}
-        title="新建用户"
+        title={text("新建用户", "New user")}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -80,14 +82,14 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
               loading={busy}
               disabled={!name.trim() || password.length < 8}
             >
-              创建
+              {text("创建", "Create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error ? <ErrorBanner error={error} /> : null}
-          <Field label="用户名">
+          <Field label={text("用户名", "Username")}>
             <Input
               placeholder="alice"
               value={name}
@@ -95,8 +97,11 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
             />
           </Field>
           <Field
-            label="密码"
-            hint="至少 8 个字符；创建后无法查看，请妥善保存。"
+            label={text("密码", "Password")}
+            hint={text(
+              "至少 8 个字符；创建后无法查看，请妥善保存。",
+              "At least 8 characters. It cannot be viewed after creation.",
+            )}
           >
             <Input.Password
               placeholder="••••••••"
@@ -105,17 +110,29 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
             />
           </Field>
           <Field
-            label="角色"
-            hint="reader 只读；writer 读写；admin 全部（含用户与密钥管理）。"
+            label={text("角色", "Role")}
+            hint={text(
+              "reader 只读；writer 读写；admin 全部（含用户与密钥管理）。",
+              "Reader is read-only, writer can read and write, and admin can also manage users and keys.",
+            )}
           >
             <Select<Role>
               className="w-full"
               value={role}
               onChange={setRole}
               options={[
-                { value: "reader", label: "reader · 只读" },
-                { value: "writer", label: "writer · 读写" },
-                { value: "admin", label: "admin · 管理员" },
+                {
+                  value: "reader",
+                  label: text("reader · 只读", "reader · read-only"),
+                },
+                {
+                  value: "writer",
+                  label: text("writer · 读写", "writer · read/write"),
+                },
+                {
+                  value: "admin",
+                  label: text("admin · 管理员", "admin · administrator"),
+                },
               ]}
             />
           </Field>
@@ -126,6 +143,7 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 export function UsersPage() {
+  const { locale, text } = usePreferences();
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [toDelete, setToDelete] = useState<User | null>(null);
@@ -206,7 +224,7 @@ export function UsersPage() {
   ).length;
   const columns: ColumnsType<User> = [
     {
-      title: "用户名",
+      title: text("用户名", "Username"),
       dataIndex: "name",
       key: "name",
       width: 190,
@@ -215,7 +233,7 @@ export function UsersPage() {
       ),
     },
     {
-      title: "角色",
+      title: text("角色", "Role"),
       dataIndex: "role",
       key: "role",
       width: 260,
@@ -239,7 +257,7 @@ export function UsersPage() {
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 210,
@@ -247,14 +265,28 @@ export function UsersPage() {
         <div className="flex items-center gap-2">
           <StateBadge state={state} />
           <Popconfirm
-            title={state === "active" ? "确认禁用该用户？" : "确认启用该用户？"}
+            title={
+              state === "active"
+                ? text("确认禁用该用户？", "Disable this user?")
+                : text("确认启用该用户？", "Enable this user?")
+            }
             description={
               state === "active"
-                ? "禁用后，该用户将无法登录或调用 API。"
-                : "启用后，该用户可以按当前角色重新访问系统。"
+                ? text(
+                    "禁用后，该用户将无法登录或调用 API。",
+                    "The user will no longer be able to sign in or call APIs.",
+                  )
+                : text(
+                    "启用后，该用户可以按当前角色重新访问系统。",
+                    "The user regains access with the current role.",
+                  )
             }
-            okText={state === "active" ? "禁用" : "启用"}
-            cancelText="取消"
+            okText={
+              state === "active"
+                ? text("禁用", "Disable")
+                : text("启用", "Enable")
+            }
+            cancelText={text("取消", "Cancel")}
             okButtonProps={{
               danger: state === "active",
               loading: busyId === user.id,
@@ -267,8 +299,8 @@ export function UsersPage() {
               loading={busyId === user.id}
               aria-label={
                 state === "active"
-                  ? `禁用用户 ${user.name}`
-                  : `启用用户 ${user.name}`
+                  ? text(`禁用用户 ${user.name}`, `Disable user ${user.name}`)
+                  : text(`启用用户 ${user.name}`, `Enable user ${user.name}`)
               }
               onChange={() => undefined}
             />
@@ -277,18 +309,18 @@ export function UsersPage() {
       ),
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
       render: (createdAt: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(createdAt)}
+          {formatDate(createdAt, locale)}
         </span>
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       width: 82,
       align: "right",
@@ -298,7 +330,7 @@ export function UsersPage() {
           size="small"
           danger
           icon={<DeleteOutlined />}
-          aria-label={`删除用户 ${user.name}`}
+          aria-label={text(`删除用户 ${user.name}`, `Delete user ${user.name}`)}
           onClick={() => setToDelete(user)}
         />
       ),
@@ -308,8 +340,11 @@ export function UsersPage() {
   return (
     <div>
       <PageHeader
-        title="用户"
-        description="本地用户账户（用户名 + 密码 + 角色）。禁用或删除后立即失效。"
+        title={text("用户", "Users")}
+        description={text(
+          "本地用户账户（用户名 + 密码 + 角色）。禁用或删除后立即失效。",
+          "Local username, password, and role accounts. Disable or delete to revoke access immediately.",
+        )}
         actions={<CreateUserDialog onCreated={load} />}
       />
       {error ? (
@@ -319,8 +354,11 @@ export function UsersPage() {
       ) : users.length === 0 ? (
         <Card>
           <EmptyState
-            title="暂无用户"
-            hint="创建用户后即可用用户名密码登录控制台"
+            title={text("暂无用户", "No users")}
+            hint={text(
+              "创建用户后即可用用户名密码登录控制台",
+              "Create a user to enable username and password sign-in",
+            )}
           />
         </Card>
       ) : (
@@ -328,20 +366,25 @@ export function UsersPage() {
           <MetricStrip
             items={[
               {
-                label: "用户总数",
+                label: text("用户总数", "Users"),
                 value: users.length,
-                hint: `${activeUsers} 个有效账户`,
+                hint: text(
+                  `${activeUsers} 个有效账户`,
+                  `${activeUsers} active accounts`,
+                ),
               },
               {
-                label: "管理员",
+                label: text("管理员", "Administrators"),
                 value: adminUsers,
-                hint: adminUsers ? "具备全局治理权限" : "暂无管理员账户",
+                hint: adminUsers
+                  ? text("具备全局治理权限", "Have global governance access")
+                  : text("暂无管理员账户", "No administrator accounts"),
                 tone: adminUsers ? "warning" : "default",
               },
               {
-                label: "已禁用",
+                label: text("已禁用", "Disabled"),
                 value: users.length - activeUsers,
-                hint: "无法登录或调用 API",
+                hint: text("无法登录或调用 API", "Cannot sign in or call APIs"),
                 tone: users.length - activeUsers ? "danger" : "success",
               },
             ]}
@@ -358,27 +401,33 @@ export function UsersPage() {
                       setRoleFilter("all");
                     }}
                   >
-                    清除筛选
+                    {text("清除筛选", "Clear filters")}
                   </Button>
                 ) : undefined
               }
             >
-              <FilterField label="搜索" className="min-w-[260px]">
+              <FilterField
+                label={text("搜索", "Search")}
+                className="min-w-[260px]"
+              >
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder="搜索用户名…"
+                  placeholder={text("搜索用户名…", "Search usernames…")}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </FilterField>
-              <FilterField label="角色" className="min-w-[150px]">
+              <FilterField
+                label={text("角色", "Role")}
+                className="min-w-[150px]"
+              >
                 <Select<Role | "all">
                   className="w-full"
                   value={roleFilter}
                   onChange={setRoleFilter}
                   options={[
-                    { value: "all", label: "全部角色" },
+                    { value: "all", label: text("全部角色", "All roles") },
                     { value: "reader", label: "reader" },
                     { value: "writer", label: "writer" },
                     { value: "admin", label: "admin" },
@@ -387,7 +436,13 @@ export function UsersPage() {
               </FilterField>
             </FilterBar>
             {visibleUsers.length === 0 ? (
-              <EmptyState title="没有匹配的用户" hint="调整筛选条件后重试" />
+              <EmptyState
+                title={text("没有匹配的用户", "No matching users")}
+                hint={text(
+                  "调整筛选条件后重试",
+                  "Adjust the filters and try again",
+                )}
+              />
             ) : (
               <Table<User>
                 className="ag-console-table"
@@ -404,15 +459,18 @@ export function UsersPage() {
       )}
       <ConfirmDialog
         open={!!toDelete}
-        title="删除用户"
+        title={text("删除用户", "Delete user")}
         message={
           <>
-            确定删除用户{" "}
+            {text("确定删除用户", "Delete user")}{" "}
             <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
-            吗？该账户的会话将立即失效。
+            {text(
+              "吗？该账户的会话将立即失效。",
+              "? The account's sessions become invalid immediately.",
+            )}
           </>
         }
-        confirmLabel="删除"
+        confirmLabel={text("删除", "Delete")}
         danger
         busy={deleting}
         onConfirm={confirmDelete}

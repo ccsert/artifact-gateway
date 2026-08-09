@@ -6,6 +6,7 @@ import { Modal, useDisclosure } from "./Modal";
 import { Field } from "./Layout";
 import { ErrorBanner } from "./Feedback";
 import type { Repository } from "../client";
+import { usePreferences } from "../lib/preferences";
 
 // Uploads a single object to a Raw Hosted repository via the native
 // /raw/<repository>/<path> PUT route. The server computes the sha256 digest,
@@ -18,6 +19,7 @@ export function RawUploadDialog({
   onUploaded: () => void;
 }) {
   const { token } = useAuth();
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [file, setFile] = useState<File | null>(null);
   const [path, setPath] = useState("");
@@ -36,7 +38,14 @@ export function RawUploadDialog({
       .split("/")
       .map((s) => encodeURIComponent(s));
     if (segments.length === 0 || segments.some((s) => s === "")) {
-      setError(new Error("目标路径不能为空或包含空段"));
+      setError(
+        new Error(
+          text(
+            "目标路径不能为空或包含空段",
+            "The target path cannot be empty or contain empty segments",
+          ),
+        ),
+      );
       return;
     }
     setBusy(true);
@@ -46,17 +55,20 @@ export function RawUploadDialog({
         `/raw/${encodeURIComponent(repo.name)}/${segments.join("/")}`,
         {
           method: "PUT",
+          credentials: "include",
           headers: {
-            Authorization: `Bearer ${token}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
             "Content-Type": file.type || "application/octet-stream",
           },
           body: file,
         },
       );
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
+        const detail = await res.text().catch(() => "");
         throw new Error(
-          `上传失败 (${res.status})${text ? `：${text.slice(0, 200)}` : ""}`,
+          `${text("上传失败", "Upload failed")} (${res.status})${
+            detail ? `: ${detail.slice(0, 200)}` : ""
+          }`,
         );
       }
       dialog.hide();
@@ -79,16 +91,16 @@ export function RawUploadDialog({
           dialog.show();
         }}
       >
-        上传
+        {text("上传", "Upload")}
       </Button>
       <Modal
         open={dialog.open}
-        title={`上传到 ${repo.name}`}
+        title={`${text("上传到", "Upload to")} ${repo.name}`}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -96,14 +108,14 @@ export function RawUploadDialog({
               loading={busy}
               disabled={!file}
             >
-              上传
+              {text("上传", "Upload")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error ? <ErrorBanner error={error} /> : null}
-          <Field label="文件" group>
+          <Field label={text("文件", "File")} group>
             <Space>
               <Upload
                 maxCount={1}
@@ -113,19 +125,24 @@ export function RawUploadDialog({
                   return Upload.LIST_IGNORE;
                 }}
               >
-                <Button icon={<UploadOutlined />}>选择文件</Button>
+                <Button icon={<UploadOutlined />}>
+                  {text("选择文件", "Choose file")}
+                </Button>
               </Upload>
               <span
                 className="max-w-72 truncate text-xs text-zinc-400"
                 title={file?.name}
               >
-                {file?.name ?? "尚未选择文件"}
+                {file?.name ?? text("尚未选择文件", "No file selected")}
               </span>
             </Space>
           </Field>
           <Field
-            label="目标路径"
-            hint="相对于仓库根；留空则用文件名。不要以 / 开头。"
+            label={text("目标路径", "Target path")}
+            hint={text(
+              "相对于仓库根；留空则用文件名。不要以 / 开头。",
+              "Relative to the repository root. Leave empty to use the file name. Do not start with /.",
+            )}
           >
             <Input
               className="font-mono"
@@ -135,7 +152,10 @@ export function RawUploadDialog({
             />
           </Field>
           <p className="text-xs text-zinc-500">
-            服务端会校验 sha256；同名路径会被覆盖。
+            {text(
+              "服务端会校验 sha256；同名路径会被覆盖。",
+              "The server validates SHA-256. An existing path with the same name will be overwritten.",
+            )}
           </p>
         </div>
       </Modal>

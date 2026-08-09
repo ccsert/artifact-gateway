@@ -1,6 +1,7 @@
 import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
 import { Button, Select, Tooltip } from "antd";
 import type { UsageSnippet } from "../lib/usage";
+import { usePreferences } from "../lib/preferences";
 
 export type VersionSelectOption = { value: string; label: string };
 
@@ -53,17 +54,24 @@ export function UsageSnippetBlock({
   onCopy: () => void;
   compact?: boolean;
 }) {
+  const { text } = usePreferences();
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-zinc-400">
           {snippet.label}
         </span>
-        <Tooltip title={copied ? "已复制" : "复制使用方式"}>
+        <Tooltip
+          title={
+            copied
+              ? text("已复制", "Copied")
+              : text("复制使用方式", "Copy usage")
+          }
+        >
           <Button
             type="text"
             size="small"
-            aria-label={`复制${snippet.label}`}
+            aria-label={`${text("复制", "Copy")} ${snippet.label}`}
             onClick={onCopy}
             icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           />

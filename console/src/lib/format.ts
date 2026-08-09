@@ -7,11 +7,11 @@ export function formatBytes(bytes: number | undefined): string {
   return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[exp]}`;
 }
 
-export function formatDate(iso: string | undefined): string {
+export function formatDate(iso: string | undefined, locale?: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -28,7 +28,7 @@ export function shortDigest(digest: string | undefined): string {
   return `${digest.slice(0, 19)}…`;
 }
 
-export function formatNumber(n: number | undefined): string {
+export function formatNumber(n: number | undefined, locale?: string): string {
   if (n === undefined || n === null) return "—";
-  return n.toLocaleString();
+  return n.toLocaleString(locale);
 }

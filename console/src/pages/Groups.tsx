@@ -41,6 +41,7 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 const FORMATS: Format[] = ["oci", "maven", "conan", "raw"];
 
@@ -51,6 +52,7 @@ function CreateGroupDialog({
   repos: Repository[];
   onCreated: () => void;
 }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [format, setFormat] = useState<Format>("oci");
@@ -96,16 +98,16 @@ function CreateGroupDialog({
           dialog.show();
         }}
       >
-        新建分组
+        {text("新建分组", "New group")}
       </Button>
       <Modal
         open={dialog.open}
-        title="新建分组"
+        title={text("新建分组", "New group")}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -113,21 +115,21 @@ function CreateGroupDialog({
               loading={busy}
               disabled={!name.trim()}
             >
-              创建
+              {text("创建", "Create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label="分组名称">
+          <Field label={text("分组名称", "Group name")}>
             <Input
               className="font-mono"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label="格式" group>
+          <Field label={text("格式", "Format")} group>
             <Segmented<Format>
               block
               className="font-mono"
@@ -140,13 +142,19 @@ function CreateGroupDialog({
             />
           </Field>
           <Field
-            label="成员仓库"
-            hint="分组按成员顺序（自上而下）解析制品"
+            label={text("成员仓库", "Member repositories")}
+            hint={text(
+              "分组按成员顺序（自上而下）解析制品",
+              "Artifacts resolve in member order, from top to bottom",
+            )}
             group
           >
             {candidates.length === 0 ? (
               <div className="rounded-lg border border-zinc-800 px-2 py-3 text-center text-xs text-zinc-600">
-                该格式下暂无活跃仓库
+                {text(
+                  "该格式下暂无活跃仓库",
+                  "No active repositories for this format",
+                )}
               </div>
             ) : (
               <MemberOrderPicker
@@ -159,17 +167,22 @@ function CreateGroupDialog({
           <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
             <div>
               <div className="text-sm font-medium text-zinc-200">
-                允许匿名读取
+                {text("允许匿名读取", "Allow anonymous reads")}
               </div>
               <div className="mt-0.5 text-xs text-zinc-500">
-                Group 和成员 Repository
-                都允许匿名读取时，匿名请求才会解析该成员。
+                {text(
+                  "Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。",
+                  "Anonymous requests resolve a member only when both the group and member repository allow anonymous reads.",
+                )}
               </div>
             </div>
             <Switch
               checked={anonymousRead}
               onChange={setAnonymousRead}
-              aria-label="允许分组匿名读取"
+              aria-label={text(
+                "允许分组匿名读取",
+                "Allow anonymous group reads",
+              )}
             />
           </div>
         </div>
@@ -179,6 +192,7 @@ function CreateGroupDialog({
 }
 
 function CapacityDialog({ group }: { group: Group }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [capacity, setCapacity] = useState<
     Awaited<ReturnType<typeof getGroupCapacity>>["data"] | null
@@ -189,14 +203,17 @@ function CapacityDialog({ group }: { group: Group }) {
     setCapacity(null);
     const result = await getGroupCapacity({ path: { groupId: group.id } });
     if (result.error || !result.data)
-      setError(result.error ?? new Error("加载分组容量失败"));
+      setError(
+        result.error ??
+          new Error(text("加载分组容量失败", "Failed to load group capacity")),
+      );
     else setCapacity(result.data);
   };
   const formatBytes = (value: number) =>
     value < 1024 ? `${value} B` : `${(value / 1024 / 1024).toFixed(1)} MB`;
   const columns: ColumnsType<GroupCapacityMember> = [
     {
-      title: "位置",
+      title: text("位置", "Position"),
       dataIndex: "position",
       key: "position",
       width: 70,
@@ -205,7 +222,7 @@ function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: "成员",
+      title: text("成员", "Member"),
       dataIndex: "repositoryId",
       key: "repositoryId",
       width: 180,
@@ -216,7 +233,7 @@ function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: "类型",
+      title: text("类型", "Type"),
       dataIndex: "type",
       key: "type",
       width: 110,
@@ -225,7 +242,7 @@ function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: "已用",
+      title: text("已用", "Used"),
       dataIndex: "usedBytes",
       key: "usedBytes",
       width: 120,
@@ -234,20 +251,20 @@ function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: "对象",
+      title: text("对象", "Objects"),
       dataIndex: "objectCount",
       key: "objectCount",
       width: 90,
       render: (value: number) => <span className="text-zinc-300">{value}</span>,
     },
     {
-      title: "配额",
+      title: text("配额", "Quota"),
       dataIndex: "quotaBytes",
       key: "quotaBytes",
       width: 120,
       render: (value: number | undefined) => (
         <span className="text-zinc-500">
-          {value ? formatBytes(value) : "无限制"}
+          {value ? formatBytes(value) : text("无限制", "Unlimited")}
         </span>
       ),
     },
@@ -263,12 +280,12 @@ function CapacityDialog({ group }: { group: Group }) {
           void load();
         }}
       >
-        容量
+        {text("容量", "Capacity")}
       </Button>
       <Modal
         open={dialog.open}
         onClose={dialog.hide}
-        title={`容量贡献 · ${group.name}`}
+        title={text(`容量贡献 · ${group.name}`, `Capacity · ${group.name}`)}
       >
         {error !== null && <ErrorBanner error={error} />}
         {!capacity ? (
@@ -295,6 +312,7 @@ function RenameGroupDialog({
   group: Group;
   onSaved: () => void;
 }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState(group.name);
   const [anonymousRead, setAnonymousRead] = useState(group.anonymousRead);
@@ -330,16 +348,16 @@ function RenameGroupDialog({
           dialog.show();
         }}
       >
-        设置
+        {text("设置", "Settings")}
       </Button>
       <Modal
         open={dialog.open}
-        title={`设置分组：${group.name}`}
+        title={text(`设置分组：${group.name}`, `Group settings: ${group.name}`)}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -347,14 +365,14 @@ function RenameGroupDialog({
               loading={busy}
               disabled={!name.trim()}
             >
-              保存
+              {text("保存", "Save")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label="分组名称">
+          <Field label={text("分组名称", "Group name")}>
             <Input
               className="font-mono"
               value={name}
@@ -364,16 +382,22 @@ function RenameGroupDialog({
           <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
             <div>
               <div className="text-sm font-medium text-zinc-200">
-                允许匿名读取
+                {text("允许匿名读取", "Allow anonymous reads")}
               </div>
               <div className="mt-0.5 text-xs text-zinc-500">
-                仍需成员 Repository 自身允许匿名读取。
+                {text(
+                  "仍需成员 Repository 自身允许匿名读取。",
+                  "Each member repository must also allow anonymous reads.",
+                )}
               </div>
             </div>
             <Switch
               checked={anonymousRead}
               onChange={setAnonymousRead}
-              aria-label="允许分组匿名读取"
+              aria-label={text(
+                "允许分组匿名读取",
+                "Allow anonymous group reads",
+              )}
             />
           </div>
         </div>
@@ -391,6 +415,7 @@ function MembersDialog({
   repos: Repository[];
   onSaved: () => void;
 }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [version, setVersion] = useState(group.version);
@@ -439,19 +464,19 @@ function MembersDialog({
   return (
     <>
       <Button size="small" icon={<EditOutlined />} onClick={open}>
-        编辑成员
+        {text("编辑成员", "Edit members")}
       </Button>
       <Modal
         open={dialog.open}
-        title={`编辑成员：${group.name}`}
+        title={text(`编辑成员：${group.name}`, `Edit members: ${group.name}`)}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button type="primary" onClick={save} loading={busy}>
-              保存
+              {text("保存", "Save")}
             </Button>
           </Space>
         }
@@ -459,7 +484,10 @@ function MembersDialog({
         <div className="space-y-3">
           {error !== null && <ErrorBanner error={error} />}
           <p className="text-xs text-zinc-500">
-            调整成员及其优先级顺序（position 自上而下）。
+            {text(
+              "调整成员及其优先级顺序（position 自上而下）。",
+              "Arrange members by priority (position from top to bottom).",
+            )}
           </p>
           <MemberOrderPicker
             candidates={candidates}
@@ -473,6 +501,7 @@ function MembersDialog({
 }
 
 export function GroupsPage() {
+  const { text } = usePreferences();
   const [groups, setGroups] = useState<Group[]>([]);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -551,7 +580,7 @@ export function GroupsPage() {
   const publicGroups = groups.filter((group) => group.anonymousRead).length;
   const columns: ColumnsType<Group> = [
     {
-      title: "名称",
+      title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
       width: 180,
@@ -560,14 +589,14 @@ export function GroupsPage() {
       ),
     },
     {
-      title: "格式",
+      title: text("格式", "Format"),
       dataIndex: "format",
       key: "format",
       width: 100,
       render: (format: Group["format"]) => <FormatBadge format={format} />,
     },
     {
-      title: "访问",
+      title: text("访问", "Access"),
       dataIndex: "anonymousRead",
       key: "anonymousRead",
       width: 140,
@@ -578,7 +607,7 @@ export function GroupsPage() {
       ),
     },
     {
-      title: "成员（按优先级）",
+      title: text("成员（按优先级）", "Members (priority order)"),
       key: "members",
       width: 440,
       render: (_value, group) => (
@@ -600,13 +629,15 @@ export function GroupsPage() {
               );
             })}
           {(group.members ?? []).length === 0 && (
-            <span className="text-xs text-zinc-600">无成员</span>
+            <span className="text-xs text-zinc-600">
+              {text("无成员", "No members")}
+            </span>
           )}
         </div>
       ),
     },
     {
-      title: "版本",
+      title: text("版本", "Version"),
       dataIndex: "version",
       key: "version",
       width: 90,
@@ -615,7 +646,7 @@ export function GroupsPage() {
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       width: 280,
       align: "right",
@@ -629,7 +660,10 @@ export function GroupsPage() {
             size="small"
             danger
             icon={<DeleteOutlined />}
-            aria-label={`删除分组 ${group.name}`}
+            aria-label={text(
+              `删除分组 ${group.name}`,
+              `Delete group ${group.name}`,
+            )}
             onClick={() => setToDelete(group)}
           />
         </div>
@@ -640,16 +674,22 @@ export function GroupsPage() {
   return (
     <div>
       <PageHeader
-        title="分组"
-        description="将多个同格式仓库聚合为统一入口"
+        title={text("分组", "Groups")}
+        description={text(
+          "将多个同格式仓库聚合为统一入口",
+          "Aggregate repositories of the same format behind one entry point",
+        )}
         actions={<CreateGroupDialog repos={repos} onCreated={load} />}
       />
       {error !== null ? (
         isNotFound(error) ? (
           <Card>
             <EmptyState
-              title="分组功能未启用"
-              hint="当前后端构建尚未挂载分组管理端点（返回 404）"
+              title={text("分组功能未启用", "Groups are unavailable")}
+              hint={text(
+                "当前后端构建尚未挂载分组管理端点（返回 404）",
+                "The current backend does not expose the groups endpoint (404)",
+              )}
             />
           </Card>
         ) : (
@@ -659,29 +699,41 @@ export function GroupsPage() {
         <Loading />
       ) : groups.length === 0 ? (
         <Card>
-          <EmptyState title="暂无分组" hint="创建分组以聚合多个仓库" />
+          <EmptyState
+            title={text("暂无分组", "No groups")}
+            hint={text(
+              "创建分组以聚合多个仓库",
+              "Create a group to aggregate repositories",
+            )}
+          />
         </Card>
       ) : (
         <>
           <MetricStrip
             items={[
               {
-                label: "分组总数",
+                label: text("分组总数", "Groups"),
                 value: groups.length,
-                hint: `${memberCount} 个成员引用`,
+                hint: text(
+                  `${memberCount} 个成员引用`,
+                  `${memberCount} member references`,
+                ),
               },
               {
-                label: "匿名可读",
+                label: text("匿名可读", "Anonymous readable"),
                 value: publicGroups,
                 hint: publicGroups
-                  ? "仍需成员仓库允许匿名读取"
-                  : "全部为私有入口",
+                  ? text(
+                      "仍需成员仓库允许匿名读取",
+                      "Member repositories must allow anonymous reads",
+                    )
+                  : text("全部为私有入口", "All entry points are private"),
                 tone: publicGroups ? "success" : "default",
               },
               {
-                label: "覆盖格式",
+                label: text("覆盖格式", "Formats"),
                 value: new Set(groups.map((group) => group.format)).size,
-                hint: "按同格式仓库解析",
+                hint: text("按同格式仓库解析", "Resolved by matching format"),
               },
             ]}
           />
@@ -697,27 +749,33 @@ export function GroupsPage() {
                       setFormatFilter("all");
                     }}
                   >
-                    清除筛选
+                    {text("清除筛选", "Clear filters")}
                   </Button>
                 ) : undefined
               }
             >
-              <FilterField label="搜索" className="min-w-[260px]">
+              <FilterField
+                label={text("搜索", "Search")}
+                className="min-w-[260px]"
+              >
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder="搜索分组名称…"
+                  placeholder={text("搜索分组名称…", "Search group names…")}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </FilterField>
-              <FilterField label="格式" className="min-w-[150px]">
+              <FilterField
+                label={text("格式", "Format")}
+                className="min-w-[150px]"
+              >
                 <Select<Format | "all">
                   className="w-full"
                   value={formatFilter}
                   onChange={setFormatFilter}
                   options={[
-                    { value: "all", label: "全部格式" },
+                    { value: "all", label: text("全部格式", "All formats") },
                     ...FORMATS.map((format) => ({
                       value: format,
                       label: format,
@@ -727,7 +785,13 @@ export function GroupsPage() {
               </FilterField>
             </FilterBar>
             {visibleGroups.length === 0 ? (
-              <EmptyState title="没有匹配的分组" hint="调整筛选条件后重试" />
+              <EmptyState
+                title={text("没有匹配的分组", "No matching groups")}
+                hint={text(
+                  "调整筛选条件后重试",
+                  "Adjust the filters and try again",
+                )}
+              />
             ) : (
               <Table<Group>
                 className="ag-console-table"
@@ -749,15 +813,18 @@ export function GroupsPage() {
       )}
       <ConfirmDialog
         open={!!toDelete}
-        title="删除分组"
+        title={text("删除分组", "Delete group")}
         message={
           <>
-            确定删除分组{" "}
+            {text("确定删除分组", "Delete group")}{" "}
             <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
-            吗？成员仓库本身不会被删除。
+            {text(
+              "吗？成员仓库本身不会被删除。",
+              "? Member repositories are not deleted.",
+            )}
           </>
         }
-        confirmLabel="删除"
+        confirmLabel={text("删除", "Delete")}
         danger
         busy={deleting}
         onConfirm={confirmDelete}

@@ -15,6 +15,7 @@ import type { ArtifactMeta } from "./ArtifactDetail";
 import { useAuth } from "../lib/auth";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import { formatDate } from "../lib/format";
+import { usePreferences } from "../lib/preferences";
 
 // Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
@@ -29,6 +30,7 @@ export function MavenArtifactDetail({
   meta: ArtifactMeta;
   onDeleted?: () => void;
 }) {
+  const { locale, text } = usePreferences();
   const [versions, setVersions] = useState<
     {
       label: string;
@@ -78,7 +80,7 @@ export function MavenArtifactDetail({
           const hint = [
             x.coordinate,
             build > 0 ? `build ${build}` : "",
-            formatDate(x.createdAt),
+            formatDate(x.createdAt, locale),
           ]
             .filter(Boolean)
             .join(" · ");
@@ -110,7 +112,7 @@ export function MavenArtifactDetail({
     return () => {
       cancelled = true;
     };
-  }, [repoId, ga, meta.buildNumber, meta.coordinate]);
+  }, [locale, repoId, ga, meta.buildNumber, meta.coordinate]);
 
   // 当前选中的版本（用 label 标识，SNAPSHOT 多构建 label 唯一）；coordinate 用于使用方法
   const selectedMeta = versions.find((v) => v.label === selected);
@@ -153,7 +155,11 @@ export function MavenArtifactDetail({
       if (deleted.error) throw new Error("删除 Maven artifact 失败");
       onDeleted?.();
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "删除失败");
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : text("删除失败", "Delete failed"),
+      );
     } finally {
       setDeleting(false);
     }
@@ -169,7 +175,9 @@ export function MavenArtifactDetail({
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
             <div className="min-w-0">
-              <div className="text-xs font-medium text-zinc-200">当前版本</div>
+              <div className="text-xs font-medium text-zinc-200">
+                {text("当前版本", "Current version")}
+              </div>
               <div
                 className="mt-0.5 truncate font-mono text-xs text-zinc-500"
                 title={effectiveMeta.coordinate}
@@ -181,10 +189,16 @@ export function MavenArtifactDetail({
               )}
             </div>
             <Popconfirm
-              title="删除当前 Maven 版本？"
-              description="删除后该版本及其可恢复引用将不可见。"
-              okText="删除"
-              cancelText="取消"
+              title={text(
+                "删除当前 Maven 版本？",
+                "Delete this Maven version?",
+              )}
+              description={text(
+                "删除后该版本及其可恢复引用将不可见。",
+                "This version and its recoverable references will no longer be visible.",
+              )}
+              okText={text("删除", "Delete")}
+              cancelText={text("取消", "Cancel")}
               okButtonProps={{ danger: true }}
               onConfirm={() => void deleteCurrent()}
             >
@@ -194,18 +208,18 @@ export function MavenArtifactDetail({
                 icon={<DeleteOutlined />}
                 loading={deleting}
               >
-                删除当前版本
+                {text("删除当前版本", "Delete current version")}
               </Button>
             </Popconfirm>
           </div>
           <VersionList
-            title={`发布版本（${ga ?? ""}）`}
+            title={`${text("发布版本", "Release versions")} (${ga ?? ""})`}
             items={releases}
             current={currentVersion}
             onSelect={setSelected}
           />
           <VersionList
-            title="快照构建"
+            title={text("快照构建", "Snapshot builds")}
             items={snapshots}
             current={currentVersion}
             onSelect={setSelected}
@@ -232,6 +246,7 @@ export function ConanArtifactDetail({
   canDelete: boolean;
   onDeleted?: () => void;
 }) {
+  const { locale, text } = usePreferences();
   const [recipeRevisions, setRecipeRevisions] = useState<
     { revision: string; digest: string; createdAt: string }[]
   >([]);
@@ -270,7 +285,13 @@ export function ConanArtifactDetail({
     });
     if (requestError || !data) {
       setError(
-        requestErrorMessage("读取 Conan recipe revisions 失败", requestError),
+        requestErrorMessage(
+          text(
+            "读取 Conan recipe revisions 失败",
+            "Failed to load Conan recipe revisions",
+          ),
+          requestError,
+        ),
       );
       return;
     }
@@ -300,7 +321,15 @@ export function ConanArtifactDetail({
       });
       if (cancelled) return;
       if (idsError || !ids) {
-        setError(requestErrorMessage("读取 Conan package IDs 失败", idsError));
+        setError(
+          requestErrorMessage(
+            text(
+              "读取 Conan package IDs 失败",
+              "Failed to load Conan package IDs",
+            ),
+            idsError,
+          ),
+        );
         return;
       }
       const pages = await Promise.all(
@@ -315,7 +344,10 @@ export function ConanArtifactDetail({
       if (pages.some((page) => page.error)) {
         setError(
           requestErrorMessage(
-            "读取 Conan package revisions 失败",
+            text(
+              "读取 Conan package revisions 失败",
+              "Failed to load Conan package revisions",
+            ),
             pages.find((page) => page.error)?.error,
           ),
         );
@@ -330,7 +362,7 @@ export function ConanArtifactDetail({
     return () => {
       cancelled = true;
     };
-  }, [repoId, reference, managed, selectedRecipe]);
+  }, [repoId, reference, managed, selectedRecipe, text]);
 
   const deletePackage = async (item: {
     recipeRevision: string;
@@ -351,7 +383,13 @@ export function ConanArtifactDetail({
     });
     if (requestError)
       setError(
-        requestErrorMessage("删除 Conan package revision 失败", requestError),
+        requestErrorMessage(
+          text(
+            "删除 Conan package revision 失败",
+            "Failed to delete Conan package revision",
+          ),
+          requestError,
+        ),
       );
     else {
       setPackageRevisions((items) =>
@@ -377,10 +415,10 @@ export function ConanArtifactDetail({
           <div className="space-y-4">
             {error && <Alert type="error" showIcon title={error} />}
             <VersionList
-              title="Recipe revisions"
+              title={text("Recipe revisions", "Recipe revisions")}
               items={recipeRevisions.map((item) => ({
                 label: item.revision,
-                hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt)}`,
+                hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt, locale)}`,
               }))}
               current={selectedRecipe}
               onSelect={setSelectedRecipe}
@@ -388,7 +426,7 @@ export function ConanArtifactDetail({
             {packageRevisions.length > 0 && (
               <div className="overflow-hidden rounded-lg border border-zinc-800">
                 <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200">
-                  Package revisions
+                  {text("Package revisions", "Package revisions")}
                 </div>
                 {packageRevisions.map((item) => {
                   const deletingItem =
@@ -405,15 +443,21 @@ export function ConanArtifactDetail({
                         </div>
                         <div className="mt-0.5 text-[11px] text-zinc-500">
                           {item.digest.slice(0, 18)} ·{" "}
-                          {formatDate(item.createdAt)}
+                          {formatDate(item.createdAt, locale)}
                         </div>
                       </div>
                       {canDelete && (
                         <Popconfirm
-                          title="删除 package revision？"
-                          description="删除后该二进制包 revision 将不可见。"
-                          okText="删除"
-                          cancelText="取消"
+                          title={text(
+                            "删除 package revision？",
+                            "Delete this package revision?",
+                          )}
+                          description={text(
+                            "删除后该二进制包 revision 将不可见。",
+                            "This binary package revision will no longer be visible.",
+                          )}
+                          okText={text("删除", "Delete")}
+                          cancelText={text("取消", "Cancel")}
                           okButtonProps={{ danger: true }}
                           onConfirm={() => void deletePackage(item)}
                         >
@@ -423,7 +467,7 @@ export function ConanArtifactDetail({
                             icon={<DeleteOutlined />}
                             loading={deletingItem}
                           >
-                            删除
+                            {text("删除", "Delete")}
                           </Button>
                         </Popconfirm>
                       )}
@@ -449,6 +493,7 @@ export function RawArtifactDetail({
   meta: ArtifactMeta;
   onDeleted?: () => void;
 }) {
+  const { text } = usePreferences();
   const { token } = useAuth();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -460,7 +505,8 @@ export function RawArtifactDetail({
         `/raw/${encodeURIComponent(repoName)}/${meta.coordinate.split("/").map(encodeURIComponent).join("/")}`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         },
       );
       if (!response.ok && response.status !== 204)
@@ -470,7 +516,9 @@ export function RawArtifactDetail({
       onDeleted?.();
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "删除 Raw 文件失败",
+        error instanceof Error
+          ? error.message
+          : text("删除 Raw 文件失败", "Failed to delete Raw file"),
       );
     } finally {
       setDeleting(false);
@@ -481,16 +529,21 @@ export function RawArtifactDetail({
       <ArtifactDetailView format="raw" repoName={repoName} meta={meta} />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
         <div>
-          <div className="text-xs font-medium text-zinc-200">Raw 文件</div>
+          <div className="text-xs font-medium text-zinc-200">
+            {text("Raw 文件", "Raw file")}
+          </div>
           {deleteError && (
             <div className="mt-1 text-xs text-rose-300">{deleteError}</div>
           )}
         </div>
         <Popconfirm
-          title="删除 Raw 文件？"
-          description="删除后该路径将不可见。"
-          okText="删除"
-          cancelText="取消"
+          title={text("删除 Raw 文件？", "Delete this Raw file?")}
+          description={text(
+            "删除后该路径将不可见。",
+            "This path will no longer be visible.",
+          )}
+          okText={text("删除", "Delete")}
+          cancelText={text("取消", "Cancel")}
           okButtonProps={{ danger: true }}
           onConfirm={() => void deleteCurrent()}
         >
@@ -500,7 +553,7 @@ export function RawArtifactDetail({
             icon={<DeleteOutlined />}
             loading={deleting}
           >
-            删除文件
+            {text("删除文件", "Delete file")}
           </Button>
         </Popconfirm>
       </div>

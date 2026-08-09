@@ -71,6 +71,19 @@ func NewOIDCValidator(config OIDCConfig) *OIDCValidator {
 }
 
 func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentity, bool) {
+	return v.validate(ctx, token, "")
+}
+
+// ValidateNonce validates a browser OIDC ID token and binds it to the nonce
+// issued for the corresponding Authorization Code flow.
+func (v *OIDCValidator) ValidateNonce(ctx context.Context, token, expectedNonce string) (OIDCIdentity, bool) {
+	if expectedNonce == "" {
+		return OIDCIdentity{}, false
+	}
+	return v.validate(ctx, token, expectedNonce)
+}
+
+func (v *OIDCValidator) validate(ctx context.Context, token, expectedNonce string) (OIDCIdentity, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return OIDCIdentity{}, false
@@ -84,11 +97,17 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 		Subject     string          `json:"sub"`
 		Audience    json.RawMessage `json:"aud"`
 		Expires     int64           `json:"exp"`
+		Nonce       string          `json:"nonce"`
+		Roles       []string        `json:"roles"`
+		Groups      []string        `json:"groups"`
 		RealmAccess struct {
 			Roles []string `json:"roles"`
 		} `json:"realm_access"`
+		ResourceAccess map[string]struct {
+			Roles []string `json:"roles"`
+		} `json:"resource_access"`
 	}
-	if !decodeJWTPart(parts[0], &header) || !decodeJWTPart(parts[1], &claims) || header.Algorithm != "RS256" || header.KeyID == "" || claims.Subject == "" || claims.Issuer != v.config.Issuer || claims.Expires == 0 || !time.Now().UTC().Before(time.Unix(claims.Expires, 0)) || !audienceContains(claims.Audience, v.config.Audience) {
+	if !decodeJWTPart(parts[0], &header) || !decodeJWTPart(parts[1], &claims) || header.Algorithm != "RS256" || header.KeyID == "" || claims.Subject == "" || claims.Issuer != v.config.Issuer || claims.Expires == 0 || !time.Now().UTC().Before(time.Unix(claims.Expires, 0)) || !audienceContains(claims.Audience, v.config.Audience) || expectedNonce != "" && claims.Nonce != expectedNonce {
 		return OIDCIdentity{}, false
 	}
 	key, ok := v.key(ctx, header.KeyID)
@@ -112,7 +131,13 @@ func (v *OIDCValidator) Validate(ctx context.Context, token string) (OIDCIdentit
 			break
 		}
 	}
-	identity.RoleMappings = matchedOIDCRoleMappings(claims.RealmAccess.Roles, v.config.Roles)
+	roles := append([]string(nil), claims.RealmAccess.Roles...)
+	roles = append(roles, claims.Roles...)
+	roles = append(roles, claims.Groups...)
+	for _, resource := range claims.ResourceAccess {
+		roles = append(roles, resource.Roles...)
+	}
+	identity.RoleMappings = matchedOIDCRoleMappings(roles, v.config.Roles)
 	if containsMappedGatewayRole(identity.RoleMappings, RoleAdmin) {
 		identity.Admin = true
 		identity.Role = RoleAdmin

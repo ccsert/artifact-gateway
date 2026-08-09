@@ -80,6 +80,9 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	if principal, ok := a.principalToken(token); ok {
 		return principal, true
 	}
+	if principal, ok := a.webSessionPrincipal(token); ok {
+		return principal, true
+	}
 	if actor, ok := a.tokenActor(token); ok {
 		principal, active := a.principalForTokenActor(actor)
 		return principal, active
@@ -230,6 +233,73 @@ func (a Authenticator) IssueUserSession(userID string) string {
 	mac := hmac.New(sha256.New, []byte(a.AdminToken))
 	_, _ = mac.Write([]byte(payload))
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// IssueWebSession mints the HttpOnly browser session used after a successful
+// OIDC Authorization Code exchange. It contains the already validated bounded
+// identity, never provider access or refresh tokens.
+func (a Authenticator) IssueWebSession(principal Principal) string {
+	expiresAt := time.Now().UTC().Add(12 * time.Hour).Unix()
+	claims, _ := json.Marshal(struct {
+		Actor            string                 `json:"a"`
+		Role             Role                   `json:"r,omitempty"`
+		Admin            bool                   `json:"d,omitempty"`
+		Authentication   AuthenticationKind     `json:"k"`
+		OIDCAdminSubject bool                   `json:"s,omitempty"`
+		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m,omitempty"`
+	}{
+		Actor: principal.Actor, Role: principal.Role, Admin: principal.Admin,
+		Authentication: principal.AuthenticationKind, OIDCAdminSubject: principal.OIDCAdminSubject,
+		OIDCRoleMappings: principal.OIDCRoleMappings,
+	})
+	payload := "ws." + base64.RawURLEncoding.EncodeToString(claims) + "." + strconv.FormatInt(expiresAt, 10)
+	mac := hmac.New(sha256.New, []byte(a.AdminToken))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 4 || parts[0] != "ws" || a.AdminToken == "" {
+		return Principal{}, false
+	}
+	expiresAt, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().UTC().Unix() >= expiresAt {
+		return Principal{}, false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[3])
+	if err != nil {
+		return Principal{}, false
+	}
+	mac := hmac.New(sha256.New, []byte(a.AdminToken))
+	_, _ = mac.Write([]byte(strings.Join(parts[:3], ".")))
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return Principal{}, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return Principal{}, false
+	}
+	var claims struct {
+		Actor            string                 `json:"a"`
+		Role             Role                   `json:"r"`
+		Admin            bool                   `json:"d"`
+		Authentication   AuthenticationKind     `json:"k"`
+		OIDCAdminSubject bool                   `json:"s"`
+		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m"`
+	}
+	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
+		return Principal{}, false
+	}
+	return Principal{
+		Actor:              claims.Actor,
+		Admin:              claims.Admin,
+		Role:               claims.Role,
+		RepositoryPatterns: a.RepositoryReaders[claims.Actor],
+		AuthenticationKind: claims.Authentication,
+		OIDCAdminSubject:   claims.OIDCAdminSubject,
+		OIDCRoleMappings:   claims.OIDCRoleMappings,
+	}, true
 }
 
 func (a Authenticator) userSessionActor(token string) (string, bool) {

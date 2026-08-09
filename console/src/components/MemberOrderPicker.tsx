@@ -6,6 +6,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import type { Repository } from "../client";
+import { usePreferences } from "../lib/preferences";
 
 // 成员排序选择器：左侧候选仓库（点击添加），右侧已选成员（上下移动调序、移除）。
 // 比"按点击顺序编号"更直观——顺序就是列表顺序，可直接调整。
@@ -29,6 +30,7 @@ export function MemberOrderPicker({
   memberIds: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const { text } = usePreferences();
   const repoOf = (id: string) => candidates.find((r) => r.id === id);
   const repoName = (id: string) => repoOf(id)?.name ?? id.slice(0, 8) + "…";
   const available = candidates.filter((r) => !memberIds.includes(r.id));
@@ -49,12 +51,15 @@ export function MemberOrderPicker({
       {/* 候选 */}
       <div>
         <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
-          可添加（{available.length}）
+          {text(
+            `可添加（${available.length}）`,
+            `Available (${available.length})`,
+          )}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 p-1.5">
           {available.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-zinc-600">
-              全部已加入
+              {text("全部已加入", "All added")}
             </div>
           )}
           {available.map((r) => (
@@ -78,12 +83,15 @@ export function MemberOrderPicker({
       {/* 已选（有序） */}
       <div>
         <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
-          成员顺序（{memberIds.length}，自上而下解析）
+          {text(
+            `成员顺序（${memberIds.length}，自上而下解析）`,
+            `Member order (${memberIds.length}, top to bottom)`,
+          )}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 p-1.5">
           {memberIds.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-zinc-600">
-              从左侧点击添加成员
+              {text("从左侧点击添加成员", "Add members from the left")}
             </div>
           )}
           {memberIds.map((id, i) => (
@@ -101,32 +109,32 @@ export function MemberOrderPicker({
               >
                 {repoName(id)}
               </span>
-              <Tooltip title="上移">
+              <Tooltip title={text("上移", "Move up")}>
                 <Button
                   type="text"
                   size="small"
-                  aria-label="上移"
+                  aria-label={text("上移", "Move up")}
                   icon={<ArrowUpOutlined />}
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
                 />
               </Tooltip>
-              <Tooltip title="下移">
+              <Tooltip title={text("下移", "Move down")}>
                 <Button
                   type="text"
                   size="small"
-                  aria-label="下移"
+                  aria-label={text("下移", "Move down")}
                   icon={<ArrowDownOutlined />}
                   onClick={() => move(i, 1)}
                   disabled={i === memberIds.length - 1}
                 />
               </Tooltip>
-              <Tooltip title="移除">
+              <Tooltip title={text("移除", "Remove")}>
                 <Button
                   type="text"
                   size="small"
                   danger
-                  aria-label="移除"
+                  aria-label={text("移除", "Remove")}
                   icon={<CloseOutlined />}
                   onClick={() => remove(id)}
                 />

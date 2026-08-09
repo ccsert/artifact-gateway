@@ -247,5 +247,20 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, authenticator))
-	return tracedHTTPHandler(mux)
+	oidcLoginValidator := dependencies.OIDCLoginValidator
+	if oidcLoginValidator == nil {
+		// Keep embedded handlers compatible. The runtime supplies a dedicated
+		// validator because the browser client and API may use different audiences.
+		oidcLoginValidator = authenticator.OIDC
+	}
+	oidcLogin := oidcLoginHandler{
+		client: dependencies.OIDCClient, validator: oidcLoginValidator,
+		authenticator: authenticator,
+	}
+	mux.HandleFunc("GET /auth/oidc/config", oidcLogin.config)
+	mux.HandleFunc("GET /auth/oidc/login", oidcLogin.start)
+	mux.HandleFunc("GET /auth/oidc/callback", oidcLogin.callback)
+	mux.HandleFunc("GET /auth/session", oidcLogin.session)
+	mux.HandleFunc("POST /auth/logout", oidcLogin.logout)
+	return sessionCookieAuthentication(tracedHTTPHandler(mux))
 }

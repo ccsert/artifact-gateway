@@ -57,6 +57,24 @@ func main() {
 	dependencies.NativeMavenObjectStore = objectStore
 	dependencies.NativeOCIObjectStore = objectStore
 	dependencies.NativeConanObjectStore = objectStore
+	dependencies.OIDCClient = app.NewOIDCClient(app.OIDCClientConfig{
+		Issuer:       cfg.OIDCIssuer,
+		ClientID:     cfg.OIDCClientID,
+		ClientSecret: cfg.OIDCClientSecret,
+		RedirectURL:  cfg.OIDCRedirectURL,
+		Scopes:       cfg.OIDCScopes,
+	})
+	if dependencies.OIDCClient != nil {
+		// Browser ID tokens are issued to the OAuth client, independently of
+		// the audience accepted for API Bearer tokens.
+		dependencies.OIDCLoginValidator = app.NewOIDCValidator(app.OIDCConfig{
+			Issuer:        cfg.OIDCIssuer,
+			Audience:      cfg.OIDCClientID,
+			JWKSURL:       cfg.OIDCJWKSURL,
+			AdminSubjects: cfg.OIDCAdminSubjects,
+			Roles:         cfg.OIDCRoles,
+		})
+	}
 	databasePool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL connection pool", "error", err)

@@ -21,6 +21,11 @@ export async function authenticateWithIdentity(
       json: identity,
     }),
   );
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({
+      json: { authenticated: true, identity },
+    }),
+  );
 }
 
 export function authenticateAsAdmin(page: Page) {

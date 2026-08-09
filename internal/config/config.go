@@ -76,6 +76,10 @@ type Config struct {
 	OIDCIssuer               string
 	OIDCAudience             string
 	OIDCJWKSURL              string
+	OIDCClientID             string
+	OIDCClientSecret         string
+	OIDCRedirectURL          string
+	OIDCScopes               []string
 	OIDCAdminSubjects        []string
 	OIDCRoles                authorization.OIDCRoleMapping
 	OTLPHTTPEndpoint         string
@@ -118,6 +122,10 @@ func Load() (Config, error) {
 		OIDCIssuer:               strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
 		OIDCAudience:             strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
 		OIDCJWKSURL:              strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
+		OIDCClientID:             strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_ID")),
+		OIDCClientSecret:         strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_SECRET")),
+		OIDCRedirectURL:          strings.TrimSpace(os.Getenv("GATEWAY_OIDC_REDIRECT_URL")),
+		OIDCScopes:               oidcScopes(os.Getenv("GATEWAY_OIDC_SCOPES")),
 		OIDCAdminSubjects:        splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
 		OIDCRoles: authorization.OIDCRoleMapping{
 			Reader: splitCSV(os.Getenv("GATEWAY_OIDC_READER_ROLES")),
@@ -144,14 +152,30 @@ func Load() (Config, error) {
 		if cfg.OIDCAudience == "" {
 			return Config{}, fmt.Errorf("GATEWAY_OIDC_AUDIENCE is required when GATEWAY_OIDC_ISSUER is set")
 		}
-		if parsed, err := url.ParseRequestURI(cfg.OIDCIssuer); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-			return Config{}, fmt.Errorf("GATEWAY_OIDC_ISSUER must be an HTTPS URL")
+		if parsed, err := url.ParseRequestURI(cfg.OIDCIssuer); err != nil || parsed.Host == "" || !secureOrLoopbackHTTP(parsed) {
+			return Config{}, fmt.Errorf("GATEWAY_OIDC_ISSUER must use HTTPS outside localhost")
 		}
 		if cfg.OIDCJWKSURL != "" {
-			if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-				return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must be an HTTPS URL")
+			if parsed, err := url.ParseRequestURI(cfg.OIDCJWKSURL); err != nil || parsed.Host == "" || !secureOrLoopbackHTTP(parsed) {
+				return Config{}, fmt.Errorf("GATEWAY_OIDC_JWKS_URL must use HTTPS outside localhost")
 			}
 		}
+		if cfg.OIDCClientID != "" {
+			if cfg.OIDCRedirectURL == "" {
+				return Config{}, fmt.Errorf("GATEWAY_OIDC_REDIRECT_URL is required when GATEWAY_OIDC_CLIENT_ID is set")
+			}
+			parsed, err := url.ParseRequestURI(cfg.OIDCRedirectURL)
+			if err != nil || parsed.Host == "" || parsed.Scheme != "https" && parsed.Scheme != "http" {
+				return Config{}, fmt.Errorf("GATEWAY_OIDC_REDIRECT_URL must be an HTTP or HTTPS URL")
+			}
+			if parsed.Scheme == "http" && parsed.Hostname() != "localhost" && parsed.Hostname() != "127.0.0.1" && parsed.Hostname() != "::1" {
+				return Config{}, fmt.Errorf("GATEWAY_OIDC_REDIRECT_URL must use HTTPS outside localhost")
+			}
+		} else if cfg.OIDCClientSecret != "" || cfg.OIDCRedirectURL != "" {
+			return Config{}, fmt.Errorf("GATEWAY_OIDC_CLIENT_ID is required when OIDC browser login is configured")
+		}
+	} else if cfg.OIDCClientID != "" || cfg.OIDCClientSecret != "" || cfg.OIDCRedirectURL != "" {
+		return Config{}, fmt.Errorf("GATEWAY_OIDC_ISSUER is required for OIDC browser login")
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_OTEL_SAMPLING_RATIO")); raw != "" {
 		ratio, err := strconv.ParseFloat(raw, 64)
@@ -253,6 +277,39 @@ func Load() (Config, error) {
 		cfg.RuntimeNodePruneInterval = interval
 	}
 	return cfg, nil
+}
+
+func secureOrLoopbackHTTP(parsed *url.URL) bool {
+	if parsed.Scheme == "https" {
+		return true
+	}
+	if parsed.Scheme != "http" {
+		return false
+	}
+	switch parsed.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func oidcScopes(raw string) []string {
+	values := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
+	seen := map[string]bool{"openid": true}
+	scopes := []string{"openid"}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		scopes = append(scopes, value)
+	}
+	if len(scopes) == 1 {
+		scopes = append(scopes, "profile", "email")
+	}
+	return scopes
 }
 
 func (c Config) HasRole(role NodeRole) bool {

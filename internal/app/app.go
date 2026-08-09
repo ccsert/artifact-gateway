@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/jackc/pgx/v5"
 )
@@ -23,6 +24,8 @@ type Dependencies struct {
 	NativeMavenObjectStore OCIObjectStore
 	NativeOCIObjectStore   OCIObjectStore
 	NativeConanObjectStore OCIObjectStore
+	OIDCClient             *authorization.OIDCClient
+	OIDCLoginValidator     *authorization.OIDCValidator
 }
 
 func NewDependencies(cfg config.Config) Dependencies {

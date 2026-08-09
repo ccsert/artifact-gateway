@@ -17,6 +17,7 @@ import {
 } from "../components/ArtifactRowDetail";
 import { OciImageDetail } from "../components/OciImageDetail";
 import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -93,6 +94,7 @@ function mavenVersionLabel(hit: GlobalArtifactSearchHit): string {
 }
 
 export function SearchPage() {
+  const { locale, text } = usePreferences();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = (params.get("q") ?? "").trim();
@@ -126,7 +128,10 @@ export function SearchPage() {
       (response) => {
         if (cancelled) return;
         if (response.error || !response.data)
-          setError(response.error ?? new Error("搜索制品失败"));
+          setError(
+            response.error ??
+              new Error(text("搜索制品失败", "Artifact search failed")),
+          );
         else {
           setHits(response.data.items);
           setSearchedRepos(response.data.searchedRepositories);
@@ -138,7 +143,7 @@ export function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [q]);
+  }, [q, text]);
 
   const rows = useMemo(() => buildRows(hits), [hits]);
   const loadMore = async () => {
@@ -150,7 +155,12 @@ export function SearchPage() {
     });
     setLoadingMore(false);
     if (response.error || !response.data) {
-      setError(response.error ?? new Error("加载更多搜索结果失败"));
+      setError(
+        response.error ??
+          new Error(
+            text("加载更多搜索结果失败", "Failed to load more results"),
+          ),
+      );
       return;
     }
     setHits((current) => [...current, ...response.data.items]);
@@ -180,7 +190,7 @@ export function SearchPage() {
 
   const columns: ColumnsType<SearchTableRow> = [
     {
-      title: "制品 / 坐标",
+      title: text("制品 / 坐标", "Artifact / coordinate"),
       key: "coordinate",
       width: 420,
       render: (_, tableRow) => {
@@ -199,13 +209,17 @@ export function SearchPage() {
                 />
               </div>
             )}
-            <span className="sr-only">{expanded ? "已展开" : "已收起"}</span>
+            <span className="sr-only">
+              {expanded
+                ? text("已展开", "Expanded")
+                : text("已收起", "Collapsed")}
+            </span>
           </div>
         );
       },
     },
     {
-      title: "仓库",
+      title: text("仓库", "Repository"),
       key: "repository",
       width: 200,
       render: (_, tableRow) => (
@@ -219,35 +233,38 @@ export function SearchPage() {
       ),
     },
     {
-      title: "格式",
+      title: text("格式", "Format"),
       key: "format",
       width: 110,
       render: (_, tableRow) => <FormatBadge format={tableRow.row.format} />,
     },
     {
-      title: "版本 / 大小",
+      title: text("版本 / 大小", "Versions / size"),
       key: "versionOrSize",
       width: 150,
       render: (_, tableRow) => (
         <span className="text-xs text-zinc-400">
           {isMavenGroup(tableRow.row)
-            ? `${tableRow.row.hits.length} 个版本`
+            ? text(
+                `${tableRow.row.hits.length} 个版本`,
+                `${tableRow.row.hits.length} versions`,
+              )
             : formatBytes(tableRow.row.size)}
         </span>
       ),
     },
     {
-      title: "更新时间",
+      title: text("更新时间", "Updated"),
       key: "createdAt",
       width: 180,
       render: (_, tableRow) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(tableRow.representative.createdAt)}
+          {formatDate(tableRow.representative.createdAt, locale)}
         </span>
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 100,
@@ -255,11 +272,17 @@ export function SearchPage() {
         const expanded = expandedRow === tableRow.key;
         return (
           <Space size={2}>
-            <Tooltip title={expanded ? "收起详情" : "展开详情"}>
+            <Tooltip
+              title={
+                expanded
+                  ? text("收起详情", "Collapse details")
+                  : text("展开详情", "Expand details")
+              }
+            >
               <Button
                 type="text"
                 size="small"
-                aria-label={`${expanded ? "收起" : "展开"} ${tableRow.row.coordinate}`}
+                aria-label={`${expanded ? text("收起", "Collapse") : text("展开", "Expand")} ${tableRow.row.coordinate}`}
                 icon={expanded ? <UpOutlined /> : <DownOutlined />}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -267,12 +290,17 @@ export function SearchPage() {
                 }}
               />
             </Tooltip>
-            <Tooltip title="在仓库中精确定位">
+            <Tooltip
+              title={text("在仓库中精确定位", "Open exact repository location")}
+            >
               <Button
                 type="text"
                 size="small"
                 icon={<LinkOutlined />}
-                aria-label={`在仓库中打开 ${tableRow.row.coordinate}`}
+                aria-label={text(
+                  `在仓库中打开 ${tableRow.row.coordinate}`,
+                  `Open ${tableRow.row.coordinate} in repository`,
+                )}
                 onClick={(event) => {
                   event.stopPropagation();
                   openHit(tableRow.representative);
@@ -299,10 +327,13 @@ export function SearchPage() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-zinc-200">
-                版本与构建
+                {text("版本与构建", "Versions and builds")}
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                选择版本查看 POM、digest 和发布信息
+                {text(
+                  "选择版本查看 POM、digest 和发布信息",
+                  "Select a version to view its POM, digest, and publication details",
+                )}
               </div>
             </div>
             <Button
@@ -310,7 +341,7 @@ export function SearchPage() {
               icon={<LinkOutlined />}
               onClick={() => openHit(tableRow.representative)}
             >
-              打开最新版本
+              {text("打开最新版本", "Open latest version")}
             </Button>
           </div>
           <div className="max-h-64 overflow-y-auto rounded-md border border-zinc-800/80">
@@ -331,13 +362,18 @@ export function SearchPage() {
                       {mavenVersionLabel(versionHit)}
                     </div>
                     <div className="mt-0.5 text-[11px] text-zinc-500">
-                      {formatDate(versionHit.createdAt)} ·{" "}
+                      {formatDate(versionHit.createdAt, locale)} ·{" "}
                       {formatBytes(versionHit.size)} ·{" "}
-                      {versionHit.publisher ?? "发布者未记录"}
+                      {versionHit.publisher ??
+                        text("发布者未记录", "Publisher not recorded")}
                     </div>
                   </button>
                   <Space size={2}>
-                    <Tooltip title={versionHit.digest ?? "暂无 digest"}>
+                    <Tooltip
+                      title={
+                        versionHit.digest ?? text("暂无 digest", "No digest")
+                      }
+                    >
                       <span>
                         {versionHit.digest ? (
                           <CopyableValue
@@ -346,7 +382,7 @@ export function SearchPage() {
                           />
                         ) : (
                           <span className="text-xs text-zinc-600">
-                            无 digest
+                            {text("无 digest", "No digest")}
                           </span>
                         )}
                       </span>
@@ -355,7 +391,10 @@ export function SearchPage() {
                       type="text"
                       size="small"
                       icon={<LinkOutlined />}
-                      aria-label={`打开 ${versionHit.coordinate}`}
+                      aria-label={text(
+                        `打开 ${versionHit.coordinate}`,
+                        `Open ${versionHit.coordinate}`,
+                      )}
                       onClick={() => openHit(versionHit)}
                     />
                   </Space>
@@ -370,15 +409,19 @@ export function SearchPage() {
             items={[
               {
                 key: "publisher",
-                label: "发布者",
-                children: hit.publisher ?? "未记录",
+                label: text("发布者", "Publisher"),
+                children: hit.publisher ?? text("未记录", "Not recorded"),
               },
               {
                 key: "createdAt",
-                label: "发布时间",
-                children: formatDate(hit.createdAt),
+                label: text("发布时间", "Published"),
+                children: formatDate(hit.createdAt, locale),
               },
-              { key: "size", label: "大小", children: formatBytes(hit.size) },
+              {
+                key: "size",
+                label: text("大小", "Size"),
+                children: formatBytes(hit.size),
+              },
               {
                 key: "digest",
                 label: "Digest",
@@ -388,7 +431,7 @@ export function SearchPage() {
                     label={hit.digest.slice(0, 22)}
                   />
                 ) : (
-                  "未记录"
+                  text("未记录", "Not recorded")
                 ),
               },
             ]}
@@ -411,7 +454,7 @@ export function SearchPage() {
               icon={<LinkOutlined />}
               onClick={() => openHit(hit)}
             >
-              在仓库中打开此版本
+              {text("在仓库中打开此版本", "Open this version in repository")}
             </Button>
           </div>
         </div>
@@ -424,21 +467,25 @@ export function SearchPage() {
           column={4}
           className="mb-4"
           items={[
-            { key: "repository", label: "仓库", children: row.repositoryName },
+            {
+              key: "repository",
+              label: text("仓库", "Repository"),
+              children: row.repositoryName,
+            },
             {
               key: "publisher",
-              label: "发布者",
-              children: row.publisher ?? "未记录",
+              label: text("发布者", "Publisher"),
+              children: row.publisher ?? text("未记录", "Not recorded"),
             },
             {
               key: "contentType",
-              label: "内容类型",
-              children: row.contentType ?? "未记录",
+              label: text("内容类型", "Content type"),
+              children: row.contentType ?? text("未记录", "Not recorded"),
             },
             {
               key: "createdAt",
-              label: "发布时间",
-              children: formatDate(row.createdAt),
+              label: text("发布时间", "Published"),
+              children: formatDate(row.createdAt, locale),
             },
           ]}
         />
@@ -483,7 +530,7 @@ export function SearchPage() {
             icon={<LinkOutlined />}
             onClick={() => openHit(row)}
           >
-            在仓库中打开
+            {text("在仓库中打开", "Open in repository")}
           </Button>
         </div>
       </div>
@@ -493,20 +540,31 @@ export function SearchPage() {
   return (
     <div>
       <PageHeader
-        title="全局搜索"
+        title={text("全局搜索", "Global search")}
         description={
-          q ? `在所有仓库中搜索 “${q}”` : "跨仓库搜索制品坐标、路径与引用"
+          q
+            ? text(
+                `在所有仓库中搜索 “${q}”`,
+                `Searching all repositories for “${q}”`,
+              )
+            : text(
+                "跨仓库搜索制品坐标、路径与引用",
+                "Search artifact coordinates, paths, and references across repositories",
+              )
         }
       />
       <Input.Search
         allowClear
         enterButton={
           <Button type="primary" disabled={!query.trim()}>
-            搜索
+            {text("搜索", "Search")}
           </Button>
         }
         className="mb-5 max-w-3xl"
-        placeholder="输入制品坐标、路径或镜像名前缀…"
+        placeholder={text(
+          "输入制品坐标、路径或镜像名前缀…",
+          "Enter an artifact coordinate, path, or image prefix…",
+        )}
         value={query}
         loading={loading}
         onChange={(event) => setQuery(event.target.value)}
@@ -517,40 +575,64 @@ export function SearchPage() {
       />
       {!q ? (
         <EmptyState
-          title="输入关键词开始搜索"
-          hint="支持 Maven 坐标、OCI 镜像、Conan 引用和 Raw 路径"
+          title={text("输入关键词开始搜索", "Enter a keyword to search")}
+          hint={text(
+            "支持 Maven 坐标、OCI 镜像、Conan 引用和 Raw 路径",
+            "Supports Maven coordinates, OCI images, Conan references, and Raw paths",
+          )}
         />
       ) : error && hits.length === 0 ? (
         <ErrorBanner error={error} />
       ) : loading ? (
         <Loading
           label={
-            searchedRepos ? `正在搜索 ${searchedRepos} 个仓库…` : "加载中…"
+            searchedRepos
+              ? text(
+                  `正在搜索 ${searchedRepos} 个仓库…`,
+                  `Searching ${searchedRepos} repositories…`,
+                )
+              : text("加载中…", "Loading…")
           }
         />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="没有匹配的制品"
-          hint={`已在 ${searchedRepos} 个仓库中搜索 “${q}”，未找到结果`}
+          title={text("没有匹配的制品", "No matching artifacts")}
+          hint={text(
+            `已在 ${searchedRepos} 个仓库中搜索 “${q}”，未找到结果`,
+            `No results for “${q}” across ${searchedRepos} repositories`,
+          )}
         />
       ) : (
         <>
           <MetricStrip
             items={[
               {
-                label: "结果条目",
+                label: text("结果条目", "Results"),
                 value: rows.length,
-                hint: `${hits.length} 个版本或文件`,
+                hint: text(
+                  `${hits.length} 个版本或文件`,
+                  `${hits.length} versions or files`,
+                ),
               },
               {
-                label: "检索仓库",
+                label: text("检索仓库", "Repositories searched"),
                 value: searchedRepos,
-                hint: "仅包含当前身份可读仓库",
+                hint: text(
+                  "仅包含当前身份可读仓库",
+                  "Only repositories readable by the current identity",
+                ),
               },
               {
-                label: "分页状态",
-                value: nextPageToken ? "还有更多" : "已完成",
-                hint: nextPageToken ? "继续加载不会丢失结果" : "已到达末尾",
+                label: text("分页状态", "Pagination"),
+                value: nextPageToken
+                  ? text("还有更多", "More available")
+                  : text("已完成", "Complete"),
+                hint: nextPageToken
+                  ? text(
+                      "继续加载不会丢失结果",
+                      "Loading more preserves current results",
+                    )
+                  : text("已到达末尾", "End of results"),
               },
             ]}
           />
@@ -589,7 +671,7 @@ export function SearchPage() {
           {nextPageToken && (
             <div className="mt-4 flex justify-center">
               <Button loading={loadingMore} onClick={() => void loadMore()}>
-                加载更多
+                {text("加载更多", "Load more")}
               </Button>
             </div>
           )}

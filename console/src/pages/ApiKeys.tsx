@@ -15,12 +15,14 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 function CreateKeyDialog({
   onCreated,
 }: {
   onCreated: (key: CreatedApiKey) => void;
 }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [role, setRole] = useState<"reader" | "writer" | "admin">("reader");
@@ -62,16 +64,16 @@ function CreateKeyDialog({
           dialog.show();
         }}
       >
-        新建密钥
+        {text("新建密钥", "New key")}
       </Button>
       <Modal
         open={dialog.open}
-        title="新建 API 密钥"
+        title={text("新建 API 密钥", "New API key")}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -79,14 +81,20 @@ function CreateKeyDialog({
               loading={busy}
               disabled={!name.trim()}
             >
-              创建
+              {text("创建", "Create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label="密钥名称" hint="用于标识用途，例如 ci-deploy">
+          <Field
+            label={text("密钥名称", "Key name")}
+            hint={text(
+              "用于标识用途，例如 ci-deploy",
+              "Describe its purpose, for example ci-deploy",
+            )}
+          >
             <Input
               className="font-mono"
               placeholder="my-key"
@@ -95,8 +103,11 @@ function CreateKeyDialog({
             />
           </Field>
           <Field
-            label="角色"
-            hint="按最小权限选择。角色在全仓库范围内生效，优先于逐仓库授权。"
+            label={text("角色", "Role")}
+            hint={text(
+              "按最小权限选择。角色在全仓库范围内生效，优先于逐仓库授权。",
+              "Choose the least privilege. This global role applies across repositories before repository grants.",
+            )}
           >
             <Select<typeof role>
               className="w-full"
@@ -105,31 +116,55 @@ function CreateKeyDialog({
               options={[
                 {
                   value: "reader",
-                  label: "reader · 只读（浏览 / 搜索 / 拉取）",
+                  label: text(
+                    "reader · 只读（浏览 / 搜索 / 拉取）",
+                    "reader · browse / search / pull",
+                  ),
                 },
                 {
                   value: "writer",
-                  label: "writer · 读写（可发布 / 编辑，不可管理用户与密钥）",
+                  label: text(
+                    "writer · 读写（可发布 / 编辑，不可管理用户与密钥）",
+                    "writer · publish / edit, no user or key management",
+                  ),
                 },
-                { value: "admin", label: "admin · 管理员（全部权限）" },
+                {
+                  value: "admin",
+                  label: text(
+                    "admin · 管理员（全部权限）",
+                    "admin · all permissions",
+                  ),
+                },
               ]}
             />
           </Field>
-          <Field label="有效期" hint="到期后密钥会自动拒绝认证，无需手动吊销。">
+          <Field
+            label={text("有效期", "Validity")}
+            hint={text(
+              "到期后密钥会自动拒绝认证，无需手动吊销。",
+              "Authentication is rejected automatically after expiry.",
+            )}
+          >
             <Select<typeof validDays>
               className="w-full"
               value={validDays}
               onChange={setValidDays}
               options={[
-                { value: 30, label: "30 天" },
-                { value: 90, label: "90 天（推荐）" },
-                { value: 180, label: "180 天" },
-                { value: 365, label: "365 天" },
+                { value: 30, label: text("30 天", "30 days") },
+                {
+                  value: 90,
+                  label: text("90 天（推荐）", "90 days (recommended)"),
+                },
+                { value: 180, label: text("180 天", "180 days") },
+                { value: 365, label: text("365 天", "365 days") },
               ]}
             />
           </Field>
           <p className="text-xs text-zinc-500">
-            创建后只会显示一次明文 Token，请立即保存。
+            {text(
+              "创建后只会显示一次明文 Token，请立即保存。",
+              "The plaintext token is shown once. Save it immediately.",
+            )}
           </p>
         </div>
       </Modal>
@@ -144,21 +179,38 @@ function TokenReveal({
   tokenKey: CreatedApiKey;
   onDone: () => void;
 }) {
+  const { text } = usePreferences();
   return (
-    <Modal open onClose={onDone} title="密钥已创建：请立即保存 Token">
+    <Modal
+      open
+      onClose={onDone}
+      title={text(
+        "密钥已创建：请立即保存 Token",
+        "API key created: save the token now",
+      )}
+    >
       <div className="space-y-3">
         <Alert
           type="warning"
           showIcon
-          title="这是唯一一次显示明文 Token"
-          description="关闭弹窗后将无法再次查看，请立即复制并保存到安全位置。"
+          title={text(
+            "这是唯一一次显示明文 Token",
+            "This is the only plaintext token display",
+          )}
+          description={text(
+            "关闭弹窗后将无法再次查看，请立即复制并保存到安全位置。",
+            "It cannot be viewed again after closing. Store it securely now.",
+          )}
         />
         <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
           <Typography.Text
             className="block break-all font-mono text-xs"
             copyable={{
               text: tokenKey.token,
-              tooltips: ["复制 Token", "已复制"],
+              tooltips: [
+                text("复制 Token", "Copy token"),
+                text("已复制", "Copied"),
+              ],
             }}
           >
             {tokenKey.token}
@@ -166,7 +218,7 @@ function TokenReveal({
         </div>
         <div className="flex justify-end">
           <Button type="primary" onClick={onDone}>
-            我已保存
+            {text("我已保存", "I saved it")}
           </Button>
         </div>
       </div>
@@ -175,6 +227,7 @@ function TokenReveal({
 }
 
 export function ApiKeysPage() {
+  const { locale, text } = usePreferences();
   const [keys, setKeys] = useState<ApiKey[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [reveal, setReveal] = useState<CreatedApiKey | null>(null);
@@ -229,7 +282,7 @@ export function ApiKeysPage() {
   const adminKeys = activeKeys.filter((key) => key.roles.includes("admin"));
   const columns: ColumnsType<ApiKey> = [
     {
-      title: "名称",
+      title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
       width: 210,
@@ -238,7 +291,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: "角色",
+      title: text("角色", "Roles"),
       dataIndex: "roles",
       key: "roles",
       width: 210,
@@ -258,41 +311,41 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       key: "state",
       width: 130,
       render: (_value, key) => <StateBadge state={keyState(key)} />,
     },
     {
-      title: "创建时间",
+      title: text("创建时间", "Created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 170,
       render: (value: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "到期时间",
+      title: text("到期时间", "Expires"),
       dataIndex: "expiresAt",
       key: "expiresAt",
       width: 170,
       render: (value: string | undefined) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
     {
-      title: "最后使用",
+      title: text("最后使用", "Last used"),
       dataIndex: "lastUsedAt",
       key: "lastUsedAt",
       width: 170,
       render: (value: string | undefined) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value)}
+          {formatDate(value, locale)}
         </span>
       ),
     },
@@ -310,7 +363,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       width: 82,
       align: "right",
@@ -321,7 +374,7 @@ export function ApiKeysPage() {
             size="small"
             danger
             icon={<StopOutlined />}
-            aria-label={`吊销密钥 ${key.name}`}
+            aria-label={text(`吊销密钥 ${key.name}`, `Revoke key ${key.name}`)}
             onClick={() => setToRevoke(key)}
           />
         ) : null,
@@ -331,8 +384,11 @@ export function ApiKeysPage() {
   return (
     <div>
       <PageHeader
-        title="API 密钥"
-        description="管理可调用管理 API 的访问密钥（reader / writer / admin）"
+        title={text("API 密钥", "API keys")}
+        description={text(
+          "管理可调用管理 API 的访问密钥（reader / writer / admin）",
+          "Manage reader, writer, and admin credentials for management APIs",
+        )}
         actions={<CreateKeyDialog onCreated={setReveal} />}
       />
       {error !== null ? (
@@ -342,8 +398,11 @@ export function ApiKeysPage() {
       ) : keys.length === 0 ? (
         <Card>
           <EmptyState
-            title="暂无 API 密钥"
-            hint="创建密钥以通过脚本/CI 调用管理 API"
+            title={text("暂无 API 密钥", "No API keys")}
+            hint={text(
+              "创建密钥以通过脚本/CI 调用管理 API",
+              "Create a key for scripts and CI to call management APIs",
+            )}
           />
         </Card>
       ) : (
@@ -351,23 +410,23 @@ export function ApiKeysPage() {
           <MetricStrip
             items={[
               {
-                label: "有效密钥",
+                label: text("有效密钥", "Active keys"),
                 value: activeKeys.length,
-                hint: "可调用管理 API",
+                hint: text("可调用管理 API", "Can call management APIs"),
                 tone: "success",
               },
               {
-                label: "管理员密钥",
+                label: text("管理员密钥", "Admin keys"),
                 value: adminKeys.length,
                 hint: adminKeys.length
-                  ? "建议定期轮换与审阅"
-                  : "暂无高权限密钥",
+                  ? text("建议定期轮换与审阅", "Rotate and review regularly")
+                  : text("暂无高权限密钥", "No elevated keys"),
                 tone: adminKeys.length ? "danger" : "default",
               },
               {
-                label: "已吊销 / 过期",
+                label: text("已吊销 / 过期", "Revoked / expired"),
                 value: keys.length - activeKeys.length,
-                hint: "保留历史审计记录",
+                hint: text("保留历史审计记录", "Retained for audit history"),
               },
             ]}
           />
@@ -383,36 +442,51 @@ export function ApiKeysPage() {
                       setStateFilter("active");
                     }}
                   >
-                    清除筛选
+                    {text("清除筛选", "Clear filters")}
                   </Button>
                 ) : undefined
               }
             >
-              <FilterField label="搜索" className="min-w-[280px]">
+              <FilterField
+                label={text("搜索", "Search")}
+                className="min-w-[280px]"
+              >
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder="搜索名称或角色…"
+                  placeholder={text(
+                    "搜索名称或角色…",
+                    "Search names or roles…",
+                  )}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </FilterField>
-              <FilterField label="状态" className="min-w-[160px]">
+              <FilterField
+                label={text("状态", "Status")}
+                className="min-w-[160px]"
+              >
                 <Select<typeof stateFilter>
                   className="w-full"
                   value={stateFilter}
                   onChange={setStateFilter}
                   options={[
-                    { value: "all", label: "全部状态" },
-                    { value: "active", label: "有效" },
-                    { value: "expired", label: "已过期" },
-                    { value: "revoked", label: "已吊销" },
+                    { value: "all", label: text("全部状态", "All statuses") },
+                    { value: "active", label: text("有效", "Active") },
+                    { value: "expired", label: text("已过期", "Expired") },
+                    { value: "revoked", label: text("已吊销", "Revoked") },
                   ]}
                 />
               </FilterField>
             </FilterBar>
             {visibleKeys.length === 0 ? (
-              <EmptyState title="没有匹配的密钥" hint="调整筛选条件后重试" />
+              <EmptyState
+                title={text("没有匹配的密钥", "No matching keys")}
+                hint={text(
+                  "调整筛选条件后重试",
+                  "Adjust the filters and try again",
+                )}
+              />
             ) : (
               <Table<ApiKey>
                 className="ag-console-table"
@@ -438,15 +512,18 @@ export function ApiKeysPage() {
       )}
       <ConfirmDialog
         open={!!toRevoke}
-        title="吊销 API 密钥"
+        title={text("吊销 API 密钥", "Revoke API key")}
         message={
           <>
-            确定吊销密钥{" "}
+            {text("确定吊销密钥", "Revoke key")}{" "}
             <span className="font-mono text-zinc-100">{toRevoke?.name}</span>{" "}
-            吗？ 吊销后该 Token 立即失效。
+            {text(
+              "吗？ 吊销后该 Token 立即失效。",
+              "? Its token becomes invalid immediately.",
+            )}
           </>
         }
-        confirmLabel="吊销"
+        confirmLabel={text("吊销", "Revoke")}
         danger
         busy={revoking}
         onConfirm={confirmRevoke}

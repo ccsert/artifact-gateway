@@ -27,71 +27,79 @@ import {
 import { useAuth } from "../lib/auth";
 import { Modal, useDisclosure } from "../components/Modal";
 import { Field } from "../components/Layout";
+import { Loading } from "../components/Feedback";
+import { PreferenceControls } from "../components/PreferenceControls";
+import { usePreferences } from "../lib/preferences";
 
 const navItems = [
   {
     to: "/",
-    label: "总览",
+    label: "nav.dashboard",
     exact: true,
     icon: <DashboardOutlined />,
-    group: "运行",
+    group: "runtime",
     admin: true,
   },
   {
     to: "/repositories",
-    label: "仓库",
+    label: "nav.repositories",
     icon: <InboxOutlined />,
-    group: "运行",
+    group: "runtime",
     admin: true,
   },
-  { to: "/search", label: "制品搜索", icon: <SearchOutlined />, group: "运行" },
+  {
+    to: "/search",
+    label: "nav.search",
+    icon: <SearchOutlined />,
+    group: "runtime",
+  },
   {
     to: "/operations",
-    label: "任务中心",
+    label: "nav.operations",
     icon: <SyncOutlined />,
-    group: "运行",
+    group: "runtime",
     admin: true,
   },
   {
     to: "/groups",
-    label: "分组",
+    label: "nav.groups",
     icon: <TeamOutlined />,
-    group: "治理",
+    group: "governance",
     admin: true,
   },
   {
     to: "/access",
-    label: "访问控制",
+    label: "nav.access",
     icon: <SafetyCertificateOutlined />,
-    group: "治理",
+    group: "governance",
     admin: true,
   },
   {
     to: "/audits",
-    label: "审计日志",
+    label: "nav.audits",
     icon: <FileSearchOutlined />,
-    group: "治理",
+    group: "governance",
     admin: true,
   },
   {
     to: "/audit-retention",
-    label: "审计保留",
+    label: "nav.auditRetention",
     icon: <ClockCircleOutlined />,
-    group: "治理",
+    group: "governance",
     admin: true,
   },
   {
     to: "/keys",
-    label: "API 密钥",
+    label: "nav.apiKeys",
     icon: <KeyOutlined />,
-    group: "管理",
+    group: "management",
     admin: true,
   },
   {
     to: "/users",
-    label: "用户",
+    label: "nav.users",
     icon: <UserOutlined />,
-    group: "管理",
+    group: "management",
     admin: true,
   },
 ] as const;
@@ -100,6 +108,7 @@ const SIDER_EXPANDED = 224;
 const SIDER_COLLAPSED = 68;
 
 function GlobalSearchBox() {
+  const { t } = usePreferences();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [value, setValue] = useState(params.get("q") ?? "");
@@ -117,7 +126,7 @@ function GlobalSearchBox() {
     <Input.Search
       allowClear
       className="w-full max-w-md"
-      placeholder="跨仓库搜索制品…"
+      placeholder={t("header.search")}
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onSearch={search}
@@ -127,6 +136,7 @@ function GlobalSearchBox() {
 
 function TokenDialog() {
   const { token, setToken, clearToken } = useAuth();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [draft, setDraft] = useState("");
 
@@ -141,11 +151,11 @@ function TokenDialog() {
           dialog.show();
         }}
       >
-        {token ? "已配置 Token" : "设置 Token"}
+        {token ? t("auth.tokenConfigured") : t("auth.setToken")}
       </Button>
       <Modal
         open={dialog.open}
-        title="API 访问令牌"
+        title={t("auth.tokenDialog")}
         onClose={dialog.hide}
         footer={
           <div className="flex items-center justify-between gap-4">
@@ -158,12 +168,12 @@ function TokenDialog() {
                     dialog.hide();
                   }}
                 >
-                  清除令牌
+                  {t("auth.clearToken")}
                 </Button>
               )}
             </div>
             <Space>
-              <Button onClick={dialog.hide}>取消</Button>
+              <Button onClick={dialog.hide}>{t("common.cancel")}</Button>
               <Button
                 type="primary"
                 disabled={!draft.trim()}
@@ -172,20 +182,17 @@ function TokenDialog() {
                   window.location.reload();
                 }}
               >
-                保存
+                {t("auth.saveToken")}
               </Button>
             </Space>
           </div>
         }
       >
-        <Field
-          label="Bearer Token"
-          hint="管理 API 使用 Bearer 认证，令牌仅保存在浏览器 localStorage。"
-        >
+        <Field label="Bearer Token" hint={t("auth.tokenDialogHint")}>
           <Input.TextArea
             className="font-mono text-xs"
             autoSize={{ minRows: 4, maxRows: 8 }}
-            placeholder="粘贴 Token…"
+            placeholder={t("auth.tokenPlaceholder")}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
           />
@@ -196,7 +203,8 @@ function TokenDialog() {
 }
 
 export function AppLayout() {
-  const { token, identity, clearToken } = useAuth();
+  const { authenticated, identity, identityLoading, clearToken } = useAuth();
+  const { colorMode, t } = usePreferences();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -218,7 +226,15 @@ export function AppLayout() {
     });
   };
 
-  if (!token) {
+  if (identityLoading) {
+    return (
+      <div className="ag-app-fallback flex min-h-screen items-center justify-center">
+        <Loading label={t("common.loading")} />
+      </div>
+    );
+  }
+
+  if (!authenticated) {
     if (location.pathname === "/" || location.pathname === "/search") {
       return <Navigate to={`/browse${location.search}`} replace />;
     }
@@ -250,21 +266,25 @@ export function AppLayout() {
       : location.pathname.startsWith(item.to),
   );
   const menuItems: MenuProps["items"] = (
-    ["运行", "治理", "管理"] as const
+    [
+      { key: "runtime", label: "nav.runtime" },
+      { key: "governance", label: "nav.governance" },
+      { key: "management", label: "nav.management" },
+    ] as const
   ).flatMap((group) => {
     const children = visibleNavItems
-      .filter((item) => item.group === group)
+      .filter((item) => item.group === group.key)
       .map((item) => ({
         key: item.to,
         icon: item.icon,
-        label: <Link to={item.to}>{item.label}</Link>,
+        label: <Link to={item.to}>{t(item.label)}</Link>,
       }));
     return children.length > 0
       ? [
           {
-            key: `group-${group}`,
+            key: `group-${group.key}`,
             type: "group" as const,
-            label: collapsed ? "" : group,
+            label: collapsed ? "" : t(group.label),
             children,
           },
         ]
@@ -302,13 +322,13 @@ export function AppLayout() {
         <Menu
           className={`ag-nav flex-1 border-0 bg-transparent ${collapsed ? "px-2" : "px-3"}`}
           mode="inline"
-          theme="dark"
+          theme={colorMode}
           inlineCollapsed={collapsed}
           selectedKeys={selectedItem ? [selectedItem.to] : []}
           items={menuItems}
         />
         <div
-          className={`flex border-t border-zinc-800/60 py-2 ${
+          className={`ag-sider-footer flex border-t border-zinc-800/60 py-2 ${
             collapsed
               ? "justify-center px-0"
               : "items-center justify-between px-4"
@@ -320,13 +340,15 @@ export function AppLayout() {
             </span>
           )}
           <Tooltip
-            title={collapsed ? "展开导航" : "收起导航"}
+            title={collapsed ? t("nav.expand") : t("nav.collapse")}
             placement="right"
           >
             <Button
+              className="ag-sider-toggle"
               type="text"
               size="small"
-              aria-label={collapsed ? "展开导航" : "收起导航"}
+              shape="circle"
+              aria-label={collapsed ? t("nav.expand") : t("nav.collapse")}
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={toggleCollapsed}
             />
@@ -343,9 +365,10 @@ export function AppLayout() {
         <header className="ag-topbar sticky top-0 z-20 flex h-14 items-center gap-3 px-6">
           <GlobalSearchBox />
           <Space className="ml-auto">
+            <PreferenceControls compact />
             <TokenDialog />
             <Button icon={<LoginOutlined />} onClick={clearToken}>
-              退出
+              {t("auth.logout")}
             </Button>
           </Space>
         </header>

@@ -23,6 +23,8 @@ import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usageFor, type UsageSnippet } from "../lib/usage";
+import { PreferenceControls } from "../components/PreferenceControls";
+import { usePreferences } from "../lib/preferences";
 import {
   artifactBrowseParams,
   artifactBrowsePath,
@@ -213,13 +215,14 @@ interface PublicArtifactTableRow {
 function repositoryUsage(
   format: PublicRepository["format"],
   repoName: string,
+  text: (chinese: string, english: string) => string,
 ): UsageSnippet[] {
   const origin = window.location.origin;
   const host = window.location.host;
   if (format === "maven") {
     const url = `${origin}/maven/${repoName}`;
     return [
-      { label: "Maven 仓库 URL", code: url },
+      { label: text("Maven 仓库 URL", "Maven repository URL"), code: url },
       {
         label: "settings.xml",
         code: `<repository>\n  <id>${repoName}</id>\n  <url>${url}</url>\n</repository>`,
@@ -229,17 +232,23 @@ function repositoryUsage(
   }
   if (format === "oci") {
     return [
-      { label: "OCI Registry 地址", code: `${host}/${repoName}` },
       {
-        label: "Docker Registry 配置",
-        code: `docker login ${host}\n# 镜像前缀：${host}/${repoName}/`,
+        label: text("OCI Registry 地址", "OCI registry address"),
+        code: `${host}/${repoName}`,
+      },
+      {
+        label: text("Docker Registry 配置", "Docker registry setup"),
+        code: text(
+          `docker login ${host}\n# 镜像前缀：${host}/${repoName}/`,
+          `docker login ${host}\n# Image prefix: ${host}/${repoName}/`,
+        ),
       },
     ];
   }
   if (format === "conan") {
     return [
       {
-        label: "Conan remote 地址",
+        label: text("Conan remote 地址", "Conan remote address"),
         code: `conan remote add ${repoName} ${origin}/conan/v2/${repoName}`,
       },
     ];
@@ -288,6 +297,7 @@ function MavenGroupTable({
   onCopyPageLink,
   onCopyUsage,
 }: MavenGroupTableProps) {
+  const { locale, text } = usePreferences();
   const tableRows: MavenTableRow[] = groups.map((group) => {
     const latest = group.versions[0];
     const urlVersion = group.versions.find(
@@ -337,7 +347,7 @@ function MavenGroupTable({
 
   const columns: ColumnsType<MavenTableRow> = [
     {
-      title: "制品",
+      title: text("制品", "Artifact"),
       dataIndex: "key",
       key: "key",
       render: (value: string) => (
@@ -345,7 +355,7 @@ function MavenGroupTable({
       ),
     },
     {
-      title: "最新版本",
+      title: text("最新版本", "Latest version"),
       key: "latest",
       width: 180,
       render: (_, row) => (
@@ -355,7 +365,7 @@ function MavenGroupTable({
       ),
     },
     {
-      title: "版本数",
+      title: text("版本数", "Versions"),
       key: "versionCount",
       width: 100,
       render: (_, row) => (
@@ -365,7 +375,7 @@ function MavenGroupTable({
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 130,
@@ -381,7 +391,9 @@ function MavenGroupTable({
                 : onExpand(row.key, mavenVersionKey(row.latest, 0))
             }
           >
-            {row.expanded ? "收起" : "选择版本"}
+            {row.expanded
+              ? text("收起", "Collapse")
+              : text("选择版本", "Select version")}
           </Button>
         </div>
       ),
@@ -397,7 +409,7 @@ function MavenGroupTable({
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
           <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
-            选择版本{" "}
+            {text("选择版本", "Select version")}{" "}
             <span className="font-normal text-zinc-600">
               ({row.group.versions.length})
             </span>
@@ -411,10 +423,13 @@ function MavenGroupTable({
               }`,
             }))}
             onChange={(value) => onSelectVersion(row.group, value)}
-            placeholder="搜索并选择 Maven 版本"
+            placeholder={text("搜索并选择 Maven 版本", "Search Maven versions")}
           />
           <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-            在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。
+            {text(
+              "在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。",
+              "Search by version or SNAPSHOT build number without expanding the full list.",
+            )}
           </p>
         </div>
         <div className="min-w-0">
@@ -433,18 +448,20 @@ function MavenGroupTable({
               icon={<LinkOutlined />}
               href={href}
             >
-              打开版本页
+              {text("打开版本页", "Open version")}
             </Button>
             <Button
               type="link"
               size="small"
               onClick={() => onCopyPageLink(href)}
             >
-              {copiedCoordinate === href ? "链接已复制" : "复制链接"}
+              {copiedCoordinate === href
+                ? text("链接已复制", "Link copied")
+                : text("复制链接", "Copy link")}
             </Button>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-600">
-            <span>{formatDate(row.selectedVersion.createdAt)}</span>
+            <span>{formatDate(row.selectedVersion.createdAt, locale)}</span>
             <span
               className="max-w-[min(70vw,560px)] truncate font-mono text-zinc-500"
               title={row.selectedVersion.digest}
@@ -455,25 +472,29 @@ function MavenGroupTable({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
             <MetadataItem
-              label="发布时间"
-              value={formatDate(row.selectedVersion.createdAt)}
+              label={text("发布时间", "Published")}
+              value={formatDate(row.selectedVersion.createdAt, locale)}
             />
             <MetadataItem
-              label="发布者"
-              value={row.selectedVersion.publisher ?? "未记录"}
+              label={text("发布者", "Publisher")}
+              value={
+                row.selectedVersion.publisher ?? text("未记录", "Not recorded")
+              }
               mono
             />
             <MetadataItem
-              label="校验摘要"
-              value={row.selectedVersion.digest ?? "未记录"}
+              label={text("校验摘要", "Digest")}
+              value={
+                row.selectedVersion.digest ?? text("未记录", "Not recorded")
+              }
               mono
             />
             <MetadataItem
-              label="构建类型"
+              label={text("构建类型", "Build type")}
               value={
                 row.selectedVersion.buildNumber
                   ? `SNAPSHOT #${row.selectedVersion.buildNumber}`
-                  : "Release"
+                  : text("发布版本", "Release")
               }
             />
           </div>
@@ -581,6 +602,7 @@ function ConanGroupTable({
   onCopyPageLink,
   onCopyUsage,
 }: ConanGroupTableProps) {
+  const { locale, text } = usePreferences();
   const tableRows: ConanTableRow[] = groups.map((group) => {
     const latest = group.versions[0];
     const urlReference = group.versions.some(
@@ -658,7 +680,7 @@ function ConanGroupTable({
 
   const columns: ColumnsType<ConanTableRow> = [
     {
-      title: "Conan 包",
+      title: text("Conan 包", "Conan package"),
       dataIndex: "key",
       key: "key",
       width: 260,
@@ -667,7 +689,7 @@ function ConanGroupTable({
       ),
     },
     {
-      title: "最新版本",
+      title: text("最新版本", "Latest version"),
       key: "latest",
       width: 160,
       render: (_, row) => (
@@ -677,7 +699,7 @@ function ConanGroupTable({
       ),
     },
     {
-      title: "版本数",
+      title: text("版本数", "Versions"),
       key: "versionCount",
       width: 100,
       render: (_, row) => (
@@ -687,7 +709,7 @@ function ConanGroupTable({
       ),
     },
     {
-      title: "当前 revision",
+      title: text("当前 revision", "Current revision"),
       key: "revision",
       width: 240,
       render: (_, row) => (
@@ -696,12 +718,14 @@ function ConanGroupTable({
           title={row.selectedRevisionItem?.revision}
         >
           {row.selectedRevisionItem?.revision ??
-            (row.expanded ? "读取中…" : "展开后加载")}
+            (row.expanded
+              ? text("读取中…", "Loading…")
+              : text("展开后加载", "Load when expanded"))}
         </span>
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 270,
@@ -713,7 +737,9 @@ function ConanGroupTable({
             icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
             onClick={() => toggleRow(row)}
           >
-            {row.expanded ? "收起" : "选择版本"}
+            {row.expanded
+              ? text("收起", "Collapse")
+              : text("选择版本", "Select version")}
           </Button>
           <Button
             type="link"
@@ -721,17 +747,21 @@ function ConanGroupTable({
             icon={<LinkOutlined />}
             href={row.versionHref}
           >
-            {row.selectedRevisionValue ? "打开版本" : "打开"}
+            {row.selectedRevisionValue
+              ? text("打开版本", "Open version")
+              : text("打开", "Open")}
           </Button>
           <Tooltip
             title={
-              copiedCoordinate === row.key ? "已复制" : "复制 Conan 包标识"
+              copiedCoordinate === row.key
+                ? text("已复制", "Copied")
+                : text("复制 Conan 包标识", "Copy Conan package identifier")
             }
           >
             <Button
               type="text"
               size="small"
-              aria-label={`复制 ${row.key}`}
+              aria-label={`${text("复制", "Copy")} ${row.key}`}
               icon={
                 copiedCoordinate === row.key ? (
                   <CheckOutlined />
@@ -752,7 +782,7 @@ function ConanGroupTable({
       <div>
         <div className="flex items-center justify-between gap-3">
           <label className="text-[11px] font-medium text-zinc-500">
-            选择包版本{" "}
+            {text("选择包版本", "Select package version")}{" "}
             <span className="font-normal text-zinc-600">
               ({row.group.versions.length})
             </span>
@@ -774,11 +804,16 @@ function ConanGroupTable({
             onLoadRevisions(reference);
             onOpenArtifact(reference);
           }}
-          placeholder="搜索并选择 Conan 包版本"
+          placeholder={text(
+            "搜索并选择 Conan 包版本",
+            "Search Conan package versions",
+          )}
         />
         <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-          同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe
-          revision。
+          {text(
+            "同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。",
+            "Versions are grouped under the same name@user/channel; select one to inspect its recipe revision.",
+          )}
         </p>
       </div>
       <div className="min-w-0">
@@ -793,7 +828,10 @@ function ConanGroupTable({
         <div className="mt-1.5 flex gap-2">
           <Input
             className="min-w-0 flex-1 font-mono text-xs"
-            placeholder="输入 revision 或 digest"
+            placeholder={text(
+              "输入 revision 或 digest",
+              "Enter revision or digest",
+            )}
             value={versionFilter}
             onChange={(event) => onFilterChange(event.target.value)}
             onPressEnter={() =>
@@ -806,7 +844,7 @@ function ConanGroupTable({
               onLoadRevisions(row.selectedReference, versionFilter)
             }
           >
-            搜索
+            {text("搜索", "Search")}
           </Button>
         </div>
         {row.page?.error && (
@@ -822,10 +860,13 @@ function ConanGroupTable({
           loading={row.page?.loading === true}
           notFoundContent={
             row.page?.loading && row.visibleRevisions.length === 0
-              ? "正在读取 revision…"
-              : "没有匹配 revision"
+              ? text("正在读取 revision…", "Loading revisions…")
+              : text("没有匹配 revision", "No matching revisions")
           }
-          placeholder="搜索并选择 recipe revision"
+          placeholder={text(
+            "搜索并选择 recipe revision",
+            "Search recipe revisions",
+          )}
           onChange={(revision) => {
             onSelectRevision(row.selectedReference, revision);
             onOpenArtifact(row.selectedReference, revision);
@@ -846,8 +887,11 @@ function ConanGroupTable({
             className="mt-2"
           >
             {row.page.loading
-              ? "加载中…"
-              : `再加载 ${VERSION_PAGE_SIZE} 个 revision`}
+              ? text("加载中…", "Loading…")
+              : text(
+                  `再加载 ${VERSION_PAGE_SIZE} 个 revision`,
+                  `Load ${VERSION_PAGE_SIZE} more revisions`,
+                )}
           </Button>
         )}
         {row.selectedRevisionItem ? (
@@ -865,7 +909,7 @@ function ConanGroupTable({
                 icon={<LinkOutlined />}
                 href={row.versionHref}
               >
-                打开版本页
+                {text("打开版本页", "Open version")}
               </Button>
               <Button
                 type="link"
@@ -873,8 +917,8 @@ function ConanGroupTable({
                 onClick={() => onCopyPageLink(row.versionHref)}
               >
                 {copiedCoordinate === row.versionHref
-                  ? "链接已复制"
-                  : "复制链接"}
+                  ? text("链接已复制", "Link copied")
+                  : text("复制链接", "Copy link")}
               </Button>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
@@ -889,17 +933,20 @@ function ConanGroupTable({
                 mono
               />
               <MetadataItem
-                label="发布时间"
-                value={formatDate(row.selectedRevisionItem.createdAt)}
+                label={text("发布时间", "Published")}
+                value={formatDate(row.selectedRevisionItem.createdAt, locale)}
               />
               <MetadataItem
-                label="发布者"
-                value={row.latest.publisher ?? "未记录"}
+                label={text("发布者", "Publisher")}
+                value={row.latest.publisher ?? text("未记录", "Not recorded")}
                 mono
               />
               <MetadataItem
-                label="校验摘要"
-                value={row.selectedRevisionItem.digest ?? "未记录"}
+                label={text("校验摘要", "Digest")}
+                value={
+                  row.selectedRevisionItem.digest ??
+                  text("未记录", "Not recorded")
+                }
                 mono
               />
             </div>
@@ -916,7 +963,10 @@ function ConanGroupTable({
           </>
         ) : (
           <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
-            选择一个 recipe revision 查看详情与使用方式。
+            {text(
+              "选择一个 recipe revision 查看详情与使用方式。",
+              "Select a recipe revision to view details and usage.",
+            )}
           </div>
         )}
       </div>
@@ -944,6 +994,7 @@ function ConanGroupTable({
 }
 
 export function PublicBrowsePage() {
+  const { locale, t, text } = usePreferences();
   const [params, setParams] = useSearchParams();
   const repositoryId = params.get("repository") ?? "";
   const query = params.get("q") ?? "";
@@ -1286,7 +1337,7 @@ export function PublicBrowsePage() {
   };
 
   const globalUsage = selectedRepository
-    ? repositoryUsage(selectedRepository.format, selectedRepository.name)
+    ? repositoryUsage(selectedRepository.format, selectedRepository.name, text)
     : [];
   const groupedItems =
     selectedRepository?.format === "maven"
@@ -1381,12 +1432,12 @@ export function PublicBrowsePage() {
 
   const usageLabel =
     selectedRepository?.format === "oci"
-      ? "注册 OCI 镜像源"
+      ? text("注册 OCI 镜像源", "Register an OCI registry")
       : selectedRepository?.format === "maven"
-        ? "注册 Maven 仓库源"
+        ? text("注册 Maven 仓库源", "Register a Maven repository")
         : selectedRepository?.format === "conan"
-          ? "注册 Conan remote"
-          : "注册 Raw 源地址";
+          ? text("注册 Conan remote", "Register a Conan remote")
+          : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -1497,7 +1548,10 @@ export function PublicBrowsePage() {
 
   const artifactColumns: ColumnsType<PublicArtifactTableRow> = [
     {
-      title: selectedRepository?.format === "oci" ? "镜像" : "制品坐标",
+      title:
+        selectedRepository?.format === "oci"
+          ? text("镜像", "Image")
+          : text("制品坐标", "Artifact coordinate"),
       key: "coordinate",
       width: 320,
       render: (_, row) => (
@@ -1512,29 +1566,32 @@ export function PublicBrowsePage() {
     ...(selectedRepository?.format === "oci"
       ? [
           {
-            title: "已加载版本",
+            title: text("已加载版本", "Loaded versions"),
             key: "loadedVersions",
             width: 130,
             render: (_: unknown, row: PublicArtifactTableRow) => (
               <span className="whitespace-nowrap text-xs text-zinc-500">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? "读取中…"
+                  ? text("读取中…", "Loading…")
                   : !row.protocolVersionsLoaded
-                    ? "展开后加载"
+                    ? text("展开后加载", "Load when expanded")
                     : row.protocolVersions.length > 0
-                      ? `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""} 个`
+                      ? text(
+                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""} 个`,
+                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""}`,
+                        )
                       : "—"}
               </span>
             ),
           },
           {
-            title: "当前版本",
+            title: text("当前版本", "Selected version"),
             key: "selectedVersion",
             width: 190,
             render: (_: unknown, row: PublicArtifactTableRow) => (
               <span className="block max-w-[180px] truncate font-mono text-xs text-zinc-500">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? "读取中…"
+                  ? text("读取中…", "Loading…")
                   : !row.protocolVersionsLoaded
                     ? "—"
                     : (row.selectedProtocolVersionItem?.label ?? "—")}
@@ -1542,7 +1599,7 @@ export function PublicBrowsePage() {
             ),
           },
           {
-            title: "镜像摘要",
+            title: text("镜像摘要", "Image digest"),
             key: "digest",
             width: 160,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -1558,7 +1615,7 @@ export function PublicBrowsePage() {
         ]
       : [
           {
-            title: "摘要",
+            title: text("摘要", "Digest"),
             key: "digest",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -1568,7 +1625,7 @@ export function PublicBrowsePage() {
             ),
           },
           {
-            title: "大小",
+            title: text("大小", "Size"),
             key: "size",
             width: 120,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -1578,18 +1635,18 @@ export function PublicBrowsePage() {
             ),
           },
           {
-            title: "创建时间",
+            title: text("创建时间", "Created"),
             key: "createdAt",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
               <span className="whitespace-nowrap text-xs text-zinc-500">
-                {formatDate(row.item.createdAt)}
+                {formatDate(row.item.createdAt, locale)}
               </span>
             ),
           },
         ]),
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 230,
@@ -1601,7 +1658,11 @@ export function PublicBrowsePage() {
             icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
             onClick={() => toggleArtifactRow(row)}
           >
-            {row.expanded ? "收起" : row.isOci ? "选择版本" : "使用方式"}
+            {row.expanded
+              ? text("收起", "Collapse")
+              : row.isOci
+                ? text("选择版本", "Select version")
+                : text("使用方式", "Usage")}
           </Button>
           <Button
             type="link"
@@ -1613,19 +1674,24 @@ export function PublicBrowsePage() {
                 : artifactHref(row.item.coordinate)
             }
           >
-            {row.isOci && row.selectedProtocolVersionItem ? "打开版本" : "打开"}
+            {row.isOci && row.selectedProtocolVersionItem
+              ? text("打开版本", "Open version")
+              : text("打开", "Open")}
           </Button>
           <Tooltip
             title={
               copiedCoordinate === row.item.coordinate
-                ? "已复制"
-                : "复制制品坐标"
+                ? text("已复制", "Copied")
+                : text("复制制品坐标", "Copy coordinate")
             }
           >
             <Button
               type="text"
               size="small"
-              aria-label={`复制 ${row.item.coordinate}`}
+              aria-label={text(
+                `复制 ${row.item.coordinate}`,
+                `Copy ${row.item.coordinate}`,
+              )}
               onClick={() => void copyCoordinate(row.item.coordinate)}
               icon={
                 copiedCoordinate === row.item.coordinate ? (
@@ -1647,18 +1713,22 @@ export function PublicBrowsePage() {
         <div className="px-2 py-1">
           <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-zinc-800/80 pb-4 text-xs sm:grid-cols-4">
             <MetadataItem
-              label="仓库"
+              label={text("仓库", "Repository")}
               value={selectedRepository?.name ?? "—"}
               mono
             />
-            <MetadataItem label="制品坐标" value={row.item.coordinate} mono />
             <MetadataItem
-              label="发布时间"
-              value={formatDate(row.item.createdAt)}
+              label={text("制品坐标", "Artifact coordinate")}
+              value={row.item.coordinate}
+              mono
             />
             <MetadataItem
-              label="发布者"
-              value={row.item.publisher ?? "未记录"}
+              label={text("发布时间", "Published")}
+              value={formatDate(row.item.createdAt, locale)}
+            />
+            <MetadataItem
+              label={text("发布者", "Publisher")}
+              value={row.item.publisher ?? text("未记录", "Not recorded")}
               mono
             />
           </div>
@@ -1680,10 +1750,10 @@ export function PublicBrowsePage() {
         <div>
           <div className="flex items-center justify-between gap-3">
             <span className="block text-[11px] font-medium text-zinc-500">
-              选择镜像版本
+              {text("选择镜像版本", "Select image version")}
             </span>
             <span className="text-[11px] text-zinc-600">
-              已加载 {row.protocolVersions.length}
+              {text("已加载", "Loaded")} {row.protocolVersions.length}
             </span>
           </div>
           {row.protocolVersionsError && (
@@ -1695,7 +1765,7 @@ export function PublicBrowsePage() {
                 icon={<ReloadOutlined />}
                 onClick={() => void loadOciTags(row.item.coordinate)}
               >
-                重试
+                {text("重试", "Retry")}
               </Button>
             </div>
           )}
@@ -1709,10 +1779,10 @@ export function PublicBrowsePage() {
             loading={row.protocolVersionsLoading}
             notFoundContent={
               row.protocolVersionsLoading && row.protocolVersions.length === 0
-                ? "正在读取版本…"
-                : "没有匹配版本"
+                ? text("正在读取版本…", "Loading versions…")
+                : text("没有匹配版本", "No matching versions")
             }
-            placeholder="搜索并选择镜像版本"
+            placeholder={text("搜索并选择镜像版本", "Search image versions")}
             onChange={(value) => {
               setSelectedProtocolVersions((current) => ({
                 ...current,
@@ -1733,13 +1803,18 @@ export function PublicBrowsePage() {
               className="mt-2"
             >
               {row.protocolVersionsLoading
-                ? "加载中…"
-                : `再加载 ${VERSION_PAGE_SIZE} 个版本`}
+                ? text("加载中…", "Loading…")
+                : text(
+                    `再加载 ${VERSION_PAGE_SIZE} 个版本`,
+                    `Load ${VERSION_PAGE_SIZE} more versions`,
+                  )}
             </Button>
           )}
           <p className="mt-2 text-[11px] leading-5 text-zinc-600">
-            每次最多读取 {VERSION_PAGE_SIZE}{" "}
-            个版本；选择后可查看详情与使用方式。
+            {text(
+              `每次最多读取 ${VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。`,
+              `Up to ${VERSION_PAGE_SIZE} versions are loaded at a time; select one to view details and usage.`,
+            )}
           </p>
         </div>
         <div className="min-w-0">
@@ -1758,7 +1833,7 @@ export function PublicBrowsePage() {
                   icon={<LinkOutlined />}
                   href={row.selectedProtocolHref}
                 >
-                  打开版本页
+                  {text("打开版本页", "Open version")}
                 </Button>
                 <Button
                   type="link"
@@ -1766,51 +1841,58 @@ export function PublicBrowsePage() {
                   onClick={() => void copyPageLink(row.selectedProtocolHref)}
                 >
                   {copiedCoordinate === row.selectedProtocolHref
-                    ? "链接已复制"
-                    : "复制链接"}
+                    ? text("链接已复制", "Link copied")
+                    : text("复制链接", "Copy link")}
                 </Button>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
-                <MetadataItem label="镜像" value={row.item.coordinate} mono />
                 <MetadataItem
-                  label="版本"
+                  label={text("镜像", "Image")}
+                  value={row.item.coordinate}
+                  mono
+                />
+                <MetadataItem
+                  label={text("版本", "Version")}
                   value={row.selectedProtocolVersionItem.value}
                   mono
                 />
                 <MetadataItem
-                  label="发布时间"
+                  label={text("发布时间", "Published")}
                   value={
                     row.ociDetail?.loading
-                      ? "读取中…"
+                      ? text("读取中…", "Loading…")
                       : formatDate(
                           row.ociDetail?.createdAt ?? row.item.createdAt,
+                          locale,
                         )
                   }
                 />
                 <MetadataItem
-                  label="发布者"
+                  label={text("发布者", "Publisher")}
                   value={
-                    row.ociDetail?.publisher ?? row.item.publisher ?? "未记录"
+                    row.ociDetail?.publisher ??
+                    row.item.publisher ??
+                    text("未记录", "Not recorded")
                   }
                   mono
                 />
                 <MetadataItem
-                  label="校验摘要"
+                  label={text("校验摘要", "Digest")}
                   value={
                     row.ociDetail?.loading
-                      ? "读取中…"
+                      ? text("读取中…", "Loading…")
                       : (row.ociDetail?.digest ??
                         row.selectedProtocolVersionItem.digest ??
                         row.item.digest ??
-                        "未记录")
+                        text("未记录", "Not recorded"))
                   }
                   mono
                 />
                 <MetadataItem
-                  label="镜像大小"
+                  label={text("镜像大小", "Image size")}
                   value={
                     row.ociDetail?.loading
-                      ? "读取中…"
+                      ? text("读取中…", "Loading…")
                       : formatBytes(row.ociDetail?.size ?? row.item.size)
                   }
                 />
@@ -1827,7 +1909,7 @@ export function PublicBrowsePage() {
                       void loadOciManifest(row.item.coordinate, row.selectedTag)
                     }
                   >
-                    重试
+                    {text("重试", "Retry")}
                   </Button>
                 </div>
               )}
@@ -1844,7 +1926,10 @@ export function PublicBrowsePage() {
             </>
           ) : (
             <div className="rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
-              版本加载完成后，可在左侧搜索并选择一个版本。
+              {text(
+                "版本加载完成后，可在左侧搜索并选择一个版本。",
+                "Once versions load, search and select one on the left.",
+              )}
             </div>
           )}
         </div>
@@ -1853,30 +1938,37 @@ export function PublicBrowsePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#090a0c] px-4 py-8 text-zinc-200 sm:px-6 sm:py-12">
+    <main className="ag-login-shell min-h-screen px-4 py-8 text-zinc-200 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-zinc-100">
               Artifact Gateway
             </div>
-            <div className="mt-1 text-sm text-zinc-500">公开制品浏览</div>
+            <div className="mt-1 text-sm text-zinc-500">
+              {t("public.browseTitle")}
+            </div>
           </div>
-          <Link
-            to="/login"
-            className="text-sm text-zinc-400 hover:text-cyan-300"
-          >
-            管理登录
-          </Link>
+          <div className="flex items-center gap-3">
+            <PreferenceControls compact />
+            <Link
+              to="/login"
+              className="text-sm text-zinc-400 hover:text-cyan-300"
+            >
+              {t("public.managementLogin")}
+            </Link>
+          </div>
         </div>
         <Card bodyClassName="p-5 sm:p-6">
-          <h1 className="text-xl font-semibold text-zinc-50">公开制品</h1>
+          <h1 className="text-xl font-semibold text-zinc-50">
+            {t("public.catalogTitle")}
+          </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。
+            {t("public.description")}
           </p>
           {selectedRepository && (
             <div className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
-              <span>正在浏览</span>
+              <span>{text("正在浏览", "Browsing")}</span>
               <span className="font-medium text-zinc-100">
                 {selectedRepository.name}
               </span>
@@ -1888,7 +1980,7 @@ export function PublicBrowsePage() {
                 className="ml-auto"
                 onClick={() => setParams({})}
               >
-                返回公开仓库
+                {text("返回公开仓库", "Back to public repositories")}
               </Button>
             </div>
           )}
@@ -1896,7 +1988,10 @@ export function PublicBrowsePage() {
             <form onSubmit={submit} className="mt-5 flex items-center gap-2">
               <Input
                 className="min-w-0 flex-1 font-mono text-xs"
-                placeholder="坐标、路径或名称前缀（可选）"
+                placeholder={text(
+                  "坐标、路径或名称前缀（可选）",
+                  "Coordinate, path, or name prefix (optional)",
+                )}
                 value={queryDraft}
                 onChange={(event) => setQueryDraft(event.target.value)}
               />
@@ -1905,7 +2000,7 @@ export function PublicBrowsePage() {
                 htmlType="submit"
                 className="shrink-0 whitespace-nowrap"
               >
-                搜索
+                {text("搜索", "Search")}
               </Button>
             </form>
           )}
@@ -1921,35 +2016,55 @@ export function PublicBrowsePage() {
             {catalogError ? (
               <ErrorBanner error={catalogError} />
             ) : !repositories ? (
-              <Loading label="正在读取公开仓库…" />
+              <Loading
+                label={text(
+                  "正在读取公开仓库…",
+                  "Loading public repositories…",
+                )}
+              />
             ) : anonymousEnabled === false ? (
               <EmptyState
-                title="全局匿名读取未启用"
-                hint="请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。"
+                title={text(
+                  "全局匿名读取未启用",
+                  "Global anonymous reads are disabled",
+                )}
+                hint={text(
+                  "请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。",
+                  "An administrator must enable global anonymous reads before repository settings take effect.",
+                )}
                 action={
                   <Link
                     to="/access"
                     className="text-sm text-cyan-300 hover:text-cyan-200"
                   >
-                    前往访问控制
+                    {text("前往访问控制", "Open access control")}
                   </Link>
                 }
               />
             ) : repositoryId && !selectedRepository ? (
               <EmptyState
-                title="公开仓库不存在或不可见"
-                hint="返回公开仓库目录，选择一个已启用匿名读取的仓库。"
+                title={text(
+                  "公开仓库不存在或不可见",
+                  "Public repository not found or visible",
+                )}
+                hint={text(
+                  "返回公开仓库目录，选择一个已启用匿名读取的仓库。",
+                  "Return to the catalog and choose a repository with anonymous reads enabled.",
+                )}
                 action={
                   <Button type="primary" onClick={() => setParams({})}>
-                    返回目录
+                    {text("返回目录", "Back to catalog")}
                   </Button>
                 }
               />
             ) : !repositoryId ? (
               repositories.length === 0 ? (
                 <EmptyState
-                  title="暂无公开仓库"
-                  hint="管理员需先启用全局匿名访问，并在仓库上允许匿名读取。"
+                  title={text("暂无公开仓库", "No public repositories")}
+                  hint={text(
+                    "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。",
+                    "An administrator must enable global anonymous access and allow reads on a repository.",
+                  )}
                 />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1979,7 +2094,7 @@ export function PublicBrowsePage() {
                           </Badge>
                         </div>
                         <div className="mt-4 text-xs text-cyan-300">
-                          浏览制品
+                          {text("浏览制品", "Browse artifacts")}
                         </div>
                       </Card>
                     </Link>
@@ -1989,30 +2104,43 @@ export function PublicBrowsePage() {
             ) : error ? (
               <ErrorBanner error={error} />
             ) : !items ? (
-              <Loading label="正在读取公开制品…" />
+              <Loading
+                label={text("正在读取公开制品…", "Loading public artifacts…")}
+              />
             ) : items.length === 0 ? (
               <EmptyState
-                title="没有匹配的公开制品"
-                hint="确认仓库已启用匿名读取，或调整查询条件。"
+                title={text(
+                  "没有匹配的公开制品",
+                  "No matching public artifacts",
+                )}
+                hint={text(
+                  "确认仓库已启用匿名读取，或调整查询条件。",
+                  "Confirm anonymous reads are enabled or adjust the query.",
+                )}
               />
             ) : (
               <Card>
                 <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 py-3">
                   <div className="text-xs text-zinc-500">
-                    找到{" "}
+                    {text("找到", "Found")}{" "}
                     <span className="font-medium text-zinc-300">
                       {groupedItems?.length ??
                         groupedConanItems?.length ??
                         items.length}
                     </span>{" "}
-                    个制品
+                    {text("个制品", "artifacts")}
                     {(groupedItems || groupedConanItems) && (
                       <span className="ml-1 text-zinc-600">
-                        （{items.length} 个版本）
+                        {text(
+                          `（${items.length} 个版本）`,
+                          ` (${items.length} versions)`,
+                        )}
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-600">匿名只读</div>
+                  <div className="text-[11px] text-zinc-600">
+                    {text("匿名只读", "Anonymous read-only")}
+                  </div>
                 </div>
                 {groupedItems && selectedRepository ? (
                   <MavenGroupTable
@@ -2122,7 +2250,7 @@ export function PublicBrowsePage() {
                     {usageLabel}
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    适用于仓库{" "}
+                    {text("适用于仓库", "For repository")}{" "}
                     <span className="font-mono text-zinc-300">
                       {selectedRepository.name}
                     </span>
@@ -2139,7 +2267,10 @@ export function PublicBrowsePage() {
                     />
                   ))}
                   <div className="border-t border-zinc-800/80 pt-3 text-[11px] leading-5 text-zinc-600">
-                    匿名浏览无需 Token；推送、私有仓库和管理操作仍需登录。
+                    {text(
+                      "匿名浏览无需 Token；推送、私有仓库和管理操作仍需登录。",
+                      "Anonymous browsing needs no token. Publishing, private repositories, and management still require sign-in.",
+                    )}
                   </div>
                 </div>
               </Card>

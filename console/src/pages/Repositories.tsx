@@ -26,10 +26,12 @@ import {
   FilterField,
   MetricStrip,
 } from "../components/ConsolePrimitives";
+import { usePreferences } from "../lib/preferences";
 
 const FORMATS: Format[] = ["oci", "maven", "conan", "raw"];
 
 function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
+  const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [format, setFormat] = useState<Format>("oci");
@@ -92,16 +94,16 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
           dialog.show();
         }}
       >
-        新建仓库
+        {text("新建仓库", "New repository")}
       </Button>
       <Modal
         open={dialog.open}
-        title="新建仓库"
+        title={text("新建仓库", "New repository")}
         onClose={dialog.hide}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              取消
+              {text("取消", "Cancel")}
             </Button>
             <Button
               type="primary"
@@ -114,32 +116,35 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
                   (!endpoint.trim() || (needsHosts && !allowedHosts.trim())))
               }
             >
-              创建
+              {text("创建", "Create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label="类型" group>
+          <Field label={text("类型", "Type")} group>
             <Segmented<"hosted" | "proxy">
               block
               value={type}
               onChange={setType}
               options={[
-                { value: "hosted", label: "托管 (hosted)" },
-                { value: "proxy", label: "代理 (proxy)" },
+                { value: "hosted", label: text("托管 (hosted)", "Hosted") },
+                { value: "proxy", label: text("代理 (proxy)", "Proxy") },
               ]}
             />
             <span className="mt-1 block text-xs text-zinc-600">
               {type === "hosted"
-                ? "自己托管制品，可推送"
-                : "从上游仓库拉取并缓存"}
+                ? text("自己托管制品，可推送", "Host and publish artifacts")
+                : text("从上游仓库拉取并缓存", "Fetch and cache from upstream")}
             </span>
           </Field>
           <Field
-            label="仓库名称"
-            hint="小写字母、数字与连字符，例如 team-images"
+            label={text("仓库名称", "Repository name")}
+            hint={text(
+              "小写字母、数字与连字符，例如 team-images",
+              "Lowercase letters, numbers, and hyphens, for example team-images",
+            )}
           >
             <Input
               className="font-mono"
@@ -148,7 +153,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label="格式" group>
+          <Field label={text("格式", "Format")} group>
             <Segmented<Format>
               block
               className="font-mono"
@@ -159,7 +164,10 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
           </Field>
           {type === "proxy" && (
             <>
-              <Field label="上游地址 endpoint" hint="代理拉取的外部仓库地址">
+              <Field
+                label={text("上游地址 endpoint", "Upstream endpoint")}
+                hint={text("代理拉取的外部仓库地址", "External proxy source")}
+              >
                 <Input
                   className="font-mono text-xs"
                   placeholder={endpointPlaceholder[format]}
@@ -168,8 +176,14 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
                 />
               </Field>
               <Field
-                label={`允许主机 allowedHosts${needsHosts ? "（必填）" : "（可选）"}`}
-                hint="逗号分隔的主机名；raw/conan 代理必填"
+                label={text(
+                  `允许主机 allowedHosts${needsHosts ? "（必填）" : "（可选）"}`,
+                  `Allowed hosts${needsHosts ? " (required)" : " (optional)"}`,
+                )}
+                hint={text(
+                  "逗号分隔的主机名；raw/conan 代理必填",
+                  "Comma-separated hostnames; required for Raw and Conan proxies",
+                )}
               >
                 <Input
                   className="font-mono text-xs"
@@ -187,6 +201,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 export function RepositoriesPage() {
+  const { locale, text } = usePreferences();
   const [items, setItems] = useState<Repository[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
@@ -300,7 +315,7 @@ export function RepositoriesPage() {
   );
   const columns: ColumnsType<Repository> = [
     {
-      title: "名称",
+      title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
       fixed: "left",
@@ -315,7 +330,7 @@ export function RepositoriesPage() {
       ),
     },
     {
-      title: "类型",
+      title: text("类型", "Type"),
       dataIndex: "type",
       key: "type",
       width: 105,
@@ -326,21 +341,21 @@ export function RepositoriesPage() {
       ),
     },
     {
-      title: "格式",
+      title: text("格式", "Format"),
       dataIndex: "format",
       key: "format",
       width: 105,
       render: (format: Repository["format"]) => <FormatBadge format={format} />,
     },
     {
-      title: "状态",
+      title: text("状态", "Status"),
       dataIndex: "state",
       key: "state",
       width: 120,
       render: (state: Repository["state"]) => <StateBadge state={state} />,
     },
     {
-      title: "容量",
+      title: text("容量", "Capacity"),
       key: "capacity",
       width: 140,
       render: (_value, repository) => {
@@ -362,7 +377,7 @@ export function RepositoriesPage() {
       },
     },
     {
-      title: "配置",
+      title: text("配置", "Configuration"),
       key: "configuration",
       width: 230,
       ellipsis: true,
@@ -395,7 +410,7 @@ export function RepositoriesPage() {
       ),
     },
     {
-      title: "",
+      title: text("操作", "Actions"),
       key: "actions",
       fixed: "right",
       width: 82,
@@ -407,11 +422,14 @@ export function RepositoriesPage() {
             size="small"
             danger
             icon={<DeleteOutlined />}
-            aria-label={`删除 ${repository.name}`}
+            aria-label={text(
+              `删除 ${repository.name}`,
+              `Delete ${repository.name}`,
+            )}
             onClick={() => setToDelete(repository)}
           />
         ) : repository.state === "deleting" ? (
-          <Badge tone="amber">删除中</Badge>
+          <Badge tone="amber">{text("删除中", "Deleting")}</Badge>
         ) : (
           <span className="text-xs text-zinc-600">—</span>
         ),
@@ -421,27 +439,49 @@ export function RepositoriesPage() {
   return (
     <div>
       <PageHeader
-        title="仓库"
-        description="Hosted 与 Proxy Repository 的统一视图"
+        title={text("仓库", "Repositories")}
+        description={text(
+          "Hosted 与 Proxy Repository 的统一视图",
+          "A unified view of hosted and proxy repositories",
+        )}
         actions={<CreateRepositoryDialog onCreated={load} />}
       />
       <MetricStrip
         items={[
           {
-            label: "仓库总数",
+            label: text("仓库总数", "Repositories"),
             value: operationalCount,
             hint:
               deletedCount > 0
-                ? `${deletedCount} 个已归档`
-                : `${activeCount} 个活跃`,
+                ? text(`${deletedCount} 个已归档`, `${deletedCount} archived`)
+                : text(`${activeCount} 个活跃`, `${activeCount} active`),
           },
-          { label: "代理仓库", value: proxyCount, hint: "上游缓存与镜像" },
           {
-            label: "当前占用",
+            label: text("代理仓库", "Proxy repositories"),
+            value: proxyCount,
+            hint: text("上游缓存与镜像", "Upstream caches and mirrors"),
+          },
+          {
+            label: text("当前占用", "Storage used"),
             value: totalUsedBytes ? formatBytes(totalUsedBytes) : "—",
             hint: Object.keys(capacities).length
-              ? `${formatNumber(Object.values(capacities).reduce((sum, value) => sum + value.objectCount, 0))} 个对象`
-              : "容量未启用",
+              ? text(
+                  `${formatNumber(
+                    Object.values(capacities).reduce(
+                      (sum, value) => sum + value.objectCount,
+                      0,
+                    ),
+                    locale,
+                  )} 个对象`,
+                  `${formatNumber(
+                    Object.values(capacities).reduce(
+                      (sum, value) => sum + value.objectCount,
+                      0,
+                    ),
+                    locale,
+                  )} objects`,
+                )
+              : text("容量未启用", "Capacity unavailable"),
           },
         ]}
       />
@@ -458,42 +498,48 @@ export function RepositoriesPage() {
                 setStateFilter("operational");
               }}
             >
-              清除筛选
+              {text("清除筛选", "Clear filters")}
             </Button>
           ) : undefined
         }
       >
-        <FilterField label="搜索" className="min-w-[280px]">
+        <FilterField label={text("搜索", "Search")} className="min-w-[280px]">
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="名称、格式或仓库类型…"
+            placeholder={text(
+              "名称、格式或仓库类型…",
+              "Name, format, or repository type…",
+            )}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </FilterField>
-        <FilterField label="格式" className="min-w-[150px]">
+        <FilterField label={text("格式", "Format")} className="min-w-[150px]">
           <Select<Format | "all">
             className="w-full"
             value={formatFilter}
             onChange={setFormatFilter}
             options={[
-              { value: "all", label: "全部格式" },
+              { value: "all", label: text("全部格式", "All formats") },
               ...FORMATS.map((format) => ({ value: format, label: format })),
             ]}
           />
         </FilterField>
-        <FilterField label="状态" className="min-w-[150px]">
+        <FilterField label={text("状态", "Status")} className="min-w-[150px]">
           <Select<RepositoryStateFilter>
             className="w-full"
             value={stateFilter}
             onChange={setStateFilter}
             options={[
-              { value: "operational", label: "运行中与删除中" },
-              { value: "all", label: "全部状态" },
-              { value: "active", label: "运行中" },
-              { value: "deleting", label: "删除中" },
-              { value: "deleted", label: "已删除" },
+              {
+                value: "operational",
+                label: text("运行中与删除中", "Active and deleting"),
+              },
+              { value: "all", label: text("全部状态", "All statuses") },
+              { value: "active", label: text("运行中", "Active") },
+              { value: "deleting", label: text("删除中", "Deleting") },
+              { value: "deleted", label: text("已删除", "Deleted") },
             ]}
           />
         </FilterField>
@@ -505,13 +551,26 @@ export function RepositoriesPage() {
       ) : visible.length === 0 ? (
         <Card>
           <EmptyState
-            title={items.length === 0 ? "暂无仓库" : "暂无符合条件的仓库"}
+            title={
+              items.length === 0
+                ? text("暂无仓库", "No repositories")
+                : text("暂无符合条件的仓库", "No matching repositories")
+            }
             hint={
               items.length === 0
-                ? "点击右上角「新建仓库」创建第一个仓库"
+                ? text(
+                    "点击右上角「新建仓库」创建第一个仓库",
+                    "Use New repository to create the first repository",
+                  )
                 : deletedCount > 0 && stateFilter === "operational"
-                  ? "已删除仓库已归档，可在状态筛选中查看"
-                  : "调整筛选条件后重试"
+                  ? text(
+                      "已删除仓库已归档，可在状态筛选中查看",
+                      "Deleted repositories are archived and available through the status filter",
+                    )
+                  : text(
+                      "调整筛选条件后重试",
+                      "Adjust the filters and try again",
+                    )
             }
           />
         </Card>
@@ -519,8 +578,11 @@ export function RepositoriesPage() {
         <Card>
           {visible.length === 0 ? (
             <EmptyState
-              title="没有匹配的仓库"
-              hint="调整筛选条件，或继续加载更多仓库"
+              title={text("没有匹配的仓库", "No matching repositories")}
+              hint={text(
+                "调整筛选条件，或继续加载更多仓库",
+                "Adjust the filters or load more repositories",
+              )}
             />
           ) : (
             <Table<Repository>
@@ -542,16 +604,18 @@ export function RepositoriesPage() {
       )}
       <ConfirmDialog
         open={!!toDelete}
-        title="删除仓库"
+        title={text("删除仓库", "Delete repository")}
         message={
           <>
-            确定要删除仓库{" "}
+            {text("确定要删除仓库", "Delete repository")}{" "}
             <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
-            吗？仓库会立即停止读写并进入 deleting
-            状态，后台通常在一分钟内完成处理并标记为已删除。此操作不可撤销，审计元数据会保留。
+            {text(
+              "吗？仓库会立即停止读写并进入 deleting 状态，后台通常在一分钟内完成处理并标记为已删除。此操作不可撤销，审计元数据会保留。",
+              "? Reads and writes stop immediately while the repository enters the deleting state. Background cleanup normally completes within one minute. This cannot be undone; audit metadata is retained.",
+            )}
           </>
         }
-        confirmLabel="删除"
+        confirmLabel={text("删除", "Delete")}
         danger
         busy={deleting}
         onConfirm={confirmDelete}

@@ -106,6 +106,7 @@ func configurationResult(cfg config.Config) Result {
 		Summary: "required configuration loaded",
 		Details: map[string]any{
 			"oidc_enabled":                   cfg.OIDCIssuer != "",
+			"oidc_browser_login_enabled":     cfg.OIDCClientID != "",
 			"oci_proxy_allowed_host_count":   len(cfg.OCIProxyAllowedHosts),
 			"maven_proxy_allowed_host_count": len(cfg.MavenProxyAllowedHosts),
 			"raw_proxy_allowed_host_count":   len(cfg.RawProxyAllowedHosts),

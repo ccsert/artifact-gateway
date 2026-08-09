@@ -2,16 +2,18 @@ import type { ReactNode } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Empty, Spin } from "antd";
 import type { Problem } from "../client";
+import { usePreferences } from "../lib/preferences";
 
 export function Spinner({ className = "" }: { className?: string }) {
   return <Spin className={className} size="small" />;
 }
 
-export function Loading({ label = "加载中…" }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { text } = usePreferences();
   return (
     <div className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-zinc-400">
       <Spinner />
-      <span className="text-sm">{label}</span>
+      <span className="text-sm">{label ?? text("加载中…", "Loading…")}</span>
     </div>
   );
 }
@@ -32,16 +34,22 @@ export function ErrorBanner({
   error: unknown;
   onRetry?: () => void;
 }) {
+  const { text } = usePreferences();
   const problem = error as Problem | undefined;
   const message =
     problem?.message ??
-    (error instanceof Error ? error.message : "请求失败，请检查网络或 Token");
+    (error instanceof Error
+      ? error.message
+      : text(
+          "请求失败，请检查网络或 Token",
+          "Request failed. Check the network or token.",
+        ));
   return (
     <Alert
       className="ag-feedback-enter"
       type="error"
       showIcon
-      title="请求出错"
+      title={text("请求出错", "Request failed")}
       description={
         <span>
           {message}
@@ -65,7 +73,7 @@ export function ErrorBanner({
             icon={<ReloadOutlined />}
             onClick={onRetry}
           >
-            重试
+            {text("重试", "Retry")}
           </Button>
         ) : undefined
       }

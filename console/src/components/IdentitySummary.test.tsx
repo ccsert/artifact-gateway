@@ -1,12 +1,16 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { IdentitySummary } from "./IdentitySummary";
+import { PreferencesProvider } from "../lib/preferences";
+
+const renderWithPreferences = (ui: React.ReactNode) =>
+  render(<PreferencesProvider>{ui}</PreferencesProvider>);
 
 afterEach(cleanup);
 
 describe("IdentitySummary", () => {
   it("explains an OIDC role mapping without exposing unrelated claims", () => {
-    render(
+    renderWithPreferences(
       <IdentitySummary
         identity={{
           actor: "ci-user",
@@ -32,7 +36,7 @@ describe("IdentitySummary", () => {
   });
 
   it("makes the absence of a global role explicit", () => {
-    render(
+    renderWithPreferences(
       <IdentitySummary
         identity={{
           actor: "resolver",

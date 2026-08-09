@@ -32,6 +32,18 @@ test("a scoped token signs in through identity without repository discovery", as
       },
     }),
   );
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({
+      json: {
+        authenticated: true,
+        identity: {
+          actor: "gateway-resolver",
+          kind: "static_resolver",
+          administrator: false,
+        },
+      },
+    }),
+  );
   await page.route("**/api/v2/repositories?**", (route) => {
     repositoryDiscoveryRequests += 1;
     return route.fulfill({ status: 403, json: { code: "access_denied" } });

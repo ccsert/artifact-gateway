@@ -6,6 +6,7 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "./PublicBrowsePrimitives";
+import { PreferencesProvider } from "../lib/preferences";
 
 afterEach(async () => {
   cleanup();
@@ -49,21 +50,21 @@ describe("SearchableVersionSelect", () => {
     const onCopy = vi.fn();
 
     render(
-      <>
+      <PreferencesProvider>
         <MetadataItem label="摘要" value="sha256:abc" mono />
         <UsageSnippetBlock
           snippet={{ label: "Maven URL", code: "https://gateway.test/maven" }}
           copied={false}
           onCopy={onCopy}
         />
-      </>,
+      </PreferencesProvider>,
     );
 
     expect(screen.getByText("sha256:abc")).toHaveAttribute(
       "title",
       "sha256:abc",
     );
-    await user.click(screen.getByRole("button", { name: "复制Maven URL" }));
+    await user.click(screen.getByRole("button", { name: "复制 Maven URL" }));
     expect(onCopy).toHaveBeenCalledTimes(1);
   });
 });
