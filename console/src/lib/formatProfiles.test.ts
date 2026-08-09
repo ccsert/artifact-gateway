@@ -32,6 +32,14 @@ const profiles: FormatProfile[] = [
     hostedOperations: ["read", "publish"],
     proxyOperations: [],
   },
+  {
+    format: "npm",
+    repositoryTypes: ["hosted", "proxy"],
+    groupSupported: true,
+    anonymousRead: true,
+    hostedOperations: ["read", "publish", "browse"],
+    proxyOperations: ["read", "browse"],
+  },
 ];
 
 afterEach(() => {
@@ -56,10 +64,14 @@ describe("format profiles", () => {
   });
 
   it("filters repository and group formats by declared support", () => {
-    expect(repositoryFormats(profiles, "hosted")).toEqual(["oci", "raw"]);
-    expect(repositoryFormats(profiles, "proxy")).toEqual(["oci"]);
+    expect(repositoryFormats(profiles, "hosted")).toEqual([
+      "oci",
+      "raw",
+      "npm",
+    ]);
+    expect(repositoryFormats(profiles, "proxy")).toEqual(["oci", "npm"]);
     expect(repositoryTypes(profiles)).toEqual(["hosted", "proxy"]);
-    expect(groupFormats(profiles)).toEqual(["oci"]);
+    expect(groupFormats(profiles)).toEqual(["oci", "npm"]);
   });
 
   it("retries after a failed request", async () => {

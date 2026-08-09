@@ -14,6 +14,10 @@ function gatewayBase(): string {
   return window.location.origin;
 }
 
+export function npmRegistryURL(repoName: string): string {
+  return `${gatewayBase()}/npm/${repoName}/`;
+}
+
 // Maven GAV 坐标 → 各用法
 export interface MavenUsageOptions {
   buildNumber?: number;
@@ -139,7 +143,7 @@ export function npmUsage(
   packageName: string,
   version: string,
 ): UsageSnippet[] {
-  const registry = `${gatewayBase()}/npm/${repoName}/`;
+  const registry = npmRegistryURL(repoName);
   const scope = packageName.startsWith("@")
     ? packageName.slice(0, packageName.indexOf("/"))
     : "";

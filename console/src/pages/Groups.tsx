@@ -41,9 +41,11 @@ import {
   FilterBar,
   FilterField,
   MetricStrip,
+  CopyableValue,
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
+import { npmRegistryURL } from "../lib/usage";
 
 function CreateGroupDialog({
   repos,
@@ -612,9 +614,18 @@ export function GroupsPage() {
       title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
-      width: 180,
-      render: (name: string) => (
-        <span className="font-medium text-zinc-100">{name}</span>
+      width: 240,
+      render: (name: string, group) => (
+        <div className="min-w-0">
+          <div className="font-medium text-zinc-100">{name}</div>
+          {group.format === "npm" && (
+            <CopyableValue
+              value={npmRegistryURL(name)}
+              label={`/npm/${name}/`}
+              className="mt-1 max-w-full text-[11px] text-zinc-500"
+            />
+          )}
+        </div>
       ),
     },
     {

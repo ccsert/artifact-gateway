@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { npmUsage, usageFor } from "./usage";
+import { npmRegistryURL, npmUsage, usageFor } from "./usage";
 
 describe("npm usage", () => {
   it("builds exact install and scoped registry snippets", () => {
@@ -20,5 +20,8 @@ describe("npm usage", () => {
     expect(
       usageFor("npm", "npm-releases", "widget", "1.4.0")[0].code,
     ).toContain("widget@1.4.0");
+    expect(npmRegistryURL("all-packages")).toBe(
+      `${window.location.origin}/npm/all-packages/`,
+    );
   });
 });
