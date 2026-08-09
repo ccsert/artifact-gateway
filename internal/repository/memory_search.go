@@ -95,6 +95,18 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 				Size: &size, ContentType: asset.ContentType,
 			})
 		}
+	case FormatNPM:
+		for _, version := range s.npmVersions {
+			if version.RepositoryID != repositoryID {
+				continue
+			}
+			createdAt, size := version.CreatedAt, version.Size
+			items = append(items, ArtifactSearchItem{
+				Coordinate: version.PackageName, Version: version.Version, Digest: version.Digest,
+				CreatedAt: &createdAt, Size: &size, Publisher: version.Publisher,
+				ContentType: "application/octet-stream",
+			})
+		}
 	}
 	return items
 }

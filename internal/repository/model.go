@@ -12,6 +12,7 @@ const (
 	FormatRaw   Format = "raw"
 	FormatOCI   Format = "oci"
 	FormatMaven Format = "maven"
+	FormatNPM   Format = "npm"
 	// FormatConan is a managed authorization target with native Hosted, Proxy,
 	// and Group protocol routes.
 	FormatConan Format = "conan"
@@ -211,6 +212,44 @@ type RawUpload struct {
 	ID, RepositoryID, Path, ObjectKey, State string
 	Offset                                   int64
 	ExpiresAt                                time.Time
+}
+
+// NPMPackage is the registry packument identity projected from immutable
+// versions and mutable distribution tags.
+type NPMPackage struct {
+	RepositoryID string
+	Name         string
+	DistTags     map[string]string
+	Versions     []NPMVersion
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// NPMVersion is one immutable package publication. Manifest retains the
+// protocol-native version document; dist URLs and integrity fields are
+// overwritten from trusted server metadata when the packument is served.
+type NPMVersion struct {
+	RepositoryID string
+	PackageName  string
+	Version      string
+	Digest       string
+	Integrity    string
+	Shasum       string
+	TarballName  string
+	ObjectKey    string
+	Size         int64
+	Manifest     []byte
+	Publisher    string
+	CreatedAt    time.Time
+}
+
+type NPMPackageSummary struct {
+	RepositoryID string
+	Name         string
+	Latest       NPMVersion
+	VersionCount int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type OCIUpload struct {

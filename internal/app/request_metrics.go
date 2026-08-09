@@ -21,13 +21,14 @@ const (
 	requestClassMaven
 	requestClassRaw
 	requestClassConan
+	requestClassNPM
 	requestClassHealth
 	requestClassMetrics
 	requestClassOther
 	requestClassCount
 )
 
-var requestClassNames = [...]string{"management", "oci", "maven", "raw", "conan", "health", "metrics", "other"}
+var requestClassNames = [...]string{"management", "oci", "maven", "raw", "conan", "npm", "health", "metrics", "other"}
 var requestStatusNames = [...]string{"1xx", "2xx", "3xx", "4xx", "5xx", "other"}
 var requestDurationBuckets = [...]time.Duration{5 * time.Millisecond, 10 * time.Millisecond, 25 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2500 * time.Millisecond, 5 * time.Second, 10 * time.Second}
 
@@ -106,6 +107,8 @@ func classifyRequest(path string) requestClass {
 		return requestClassRaw
 	case strings.HasPrefix(path, "/conan/"):
 		return requestClassConan
+	case strings.HasPrefix(path, "/npm/"):
+		return requestClassNPM
 	default:
 		return requestClassOther
 	}

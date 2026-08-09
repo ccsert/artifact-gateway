@@ -1,7 +1,7 @@
 # Full Artifact Repository V1 Release Readiness
 
-This document is the release gate for Artifact Gateway's OCI, Maven, Raw, and
-Conan Hosted lifecycle and distribution paths.
+This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
+Conan, and npm Hosted lifecycle and distribution paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -12,6 +12,7 @@ make test
 make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
+make native-npm-e2e
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
@@ -37,7 +38,8 @@ storage credentials, or unredacted upstream URLs in that record.
 ## Release Checklist
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
-      `make native-raw-e2e`, `make native-maven-e2e`, and `make conan-e2e`
+      `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
+      and `make conan-e2e`
       pass.
 - [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
       promotion and checkpointed replication of OCI, Maven, Raw, and Conan
@@ -47,6 +49,8 @@ storage credentials, or unredacted upstream URLs in that record.
       files; it does not run the backup/restore rehearsal.
 - [ ] OCI publish/pull semantics pass through the native OCI fixture. Maven
       publish and resolution pass through the native Maven fixture.
+      npm scoped/unscoped publication, immutable versions, dist-tags, anonymous
+      installation, and audit pass through the native npm fixture.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2

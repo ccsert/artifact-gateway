@@ -34,6 +34,7 @@ type ArtifactSearchQuery struct {
 
 type ArtifactSearchItem struct {
 	Coordinate  string
+	Version     string
 	Digest      string
 	CreatedAt   *time.Time
 	Size        *int64
@@ -61,7 +62,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		WITH ranked AS (
-			SELECT coordinate,digest,created_at,size,publisher,build_number,content_type,
+			SELECT coordinate,digest,created_at,size,publisher,build_number,content_type,COALESCE(version,'') AS version,
 			       row_number() OVER (PARTITION BY coordinate ORDER BY created_at DESC NULLS LAST,digest DESC) AS coordinate_rank,
 			       row_number() OVER (PARTITION BY coordinate,digest ORDER BY created_at DESC NULLS LAST) AS digest_rank
 			FROM artifact_search_projection
@@ -69,7 +70,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 			  AND (($3='coordinate' AND ($4='' OR coordinate LIKE $4 || '%' ESCAPE '\'))
 			       OR ($3='digest' AND digest=$4))
 		)
-		SELECT coordinate,COALESCE(digest,''),created_at,size,COALESCE(publisher,''),build_number,COALESCE(content_type,'')
+		SELECT coordinate,COALESCE(digest,''),created_at,size,COALESCE(publisher,''),build_number,COALESCE(content_type,''),version
 		FROM ranked
 		WHERE (($3='coordinate' AND ($2='maven' OR coordinate_rank=1))
 		       OR ($3='digest' AND ($2='maven' OR digest_rank=1)))
@@ -87,7 +88,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		var item ArtifactSearchItem
 		var createdAt sql.NullTime
 		var size sql.NullInt64
-		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType); err != nil {
+		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType, &item.Version); err != nil {
 			return nil, err
 		}
 		if createdAt.Valid {

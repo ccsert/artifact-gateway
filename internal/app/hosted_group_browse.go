@@ -133,7 +133,12 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 				value := int32(item.BuildNumber)
 				buildNumber = &value
 			}
-			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher)})
+			var version *string
+			if item.Version != "" {
+				value := item.Version
+				version = &value
+			}
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Version: version, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher)})
 		}
 		return items, nil
 	}
@@ -176,6 +181,16 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			digest, contentType, size := asset.Digest, asset.ContentType, asset.Size
 			updatedAt := asset.UpdatedAt
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &digest, ContentType: &contentType, Size: &size, CreatedAt: &updatedAt})
+		}
+	case repository.FormatNPM:
+		packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		if err != nil {
+			return nil, err
+		}
+		for _, pkg := range packages {
+			digest, version, size, updatedAt := pkg.Latest.Digest, pkg.Latest.Version, pkg.Latest.Size, pkg.UpdatedAt
+			versionCount := int32(pkg.VersionCount)
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: pkg.Name, Version: &version, VersionCount: &versionCount, Digest: &digest, Size: &size, CreatedAt: &updatedAt, Publisher: optionalPublisher(pkg.Latest.Publisher)})
 		}
 	}
 	return items, nil

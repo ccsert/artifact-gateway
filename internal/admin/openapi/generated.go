@@ -341,6 +341,7 @@ func (e EgressProxyTestResultEgressMode) Valid() bool {
 const (
 	FormatConan Format = "conan"
 	FormatMaven Format = "maven"
+	FormatNpm   Format = "npm"
 	FormatOci   Format = "oci"
 	FormatRaw   Format = "raw"
 )
@@ -351,6 +352,8 @@ func (e Format) Valid() bool {
 	case FormatConan:
 		return true
 	case FormatMaven:
+		return true
+	case FormatNpm:
 		return true
 	case FormatOci:
 		return true
@@ -1183,6 +1186,12 @@ type ArtifactSummary struct {
 	// Publisher Publisher actor when the format records it.
 	Publisher *string `json:"publisher,omitempty"`
 	Size      *int64  `json:"size,omitempty"`
+
+	// Version Exact package version when the format exposes one independently from the coordinate.
+	Version *string `json:"version,omitempty"`
+
+	// VersionCount Number of versions represented by a package-level browse result.
+	VersionCount *int32 `json:"versionCount,omitempty"`
 }
 
 // ArtifactSummaryPage defines model for ArtifactSummaryPage.
@@ -1546,6 +1555,12 @@ type GlobalArtifactSearchHit struct {
 	RepositoryId   openapi_types.UUID `json:"repositoryId"`
 	RepositoryName string             `json:"repositoryName"`
 	Size           *int64             `json:"size,omitempty"`
+
+	// Version Exact package version when the format exposes one independently from the coordinate.
+	Version *string `json:"version,omitempty"`
+
+	// VersionCount Number of versions represented by a package-level browse result.
+	VersionCount *int32 `json:"versionCount,omitempty"`
 }
 
 // GlobalArtifactSearchHitMatchKind Whether this result matched a coordinate prefix or an exact digest.

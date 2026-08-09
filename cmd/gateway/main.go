@@ -57,6 +57,7 @@ func main() {
 	dependencies.NativeMavenObjectStore = objectStore
 	dependencies.NativeOCIObjectStore = objectStore
 	dependencies.NativeConanObjectStore = objectStore
+	dependencies.NativeNPMObjectStore = objectStore
 	databasePool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL connection pool", "error", err)

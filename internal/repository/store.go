@@ -201,6 +201,13 @@ type NativeRawStore interface {
 	MarkRawObjectCollected(context.Context, string) error
 }
 
+type NativeNPMStore interface {
+	PublishNPMVersion(context.Context, NPMVersion, map[string]string) (NPMVersion, error)
+	GetNPMPackage(context.Context, string, string) (NPMPackage, error)
+	GetNPMVersionByTarball(context.Context, string, string, string) (NPMVersion, error)
+	SearchNPMPackages(context.Context, string, string, int, string) ([]NPMPackageSummary, error)
+}
+
 type Store interface {
 	CreateGroup(context.Context, Group) (Group, error)
 	GetGroup(context.Context, string) (Group, error)

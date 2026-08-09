@@ -97,6 +97,7 @@ type GatewayStore interface {
 	repository.NativeOCIStore
 	repository.NativeRawStore
 	repository.NativeConanStore
+	repository.NativeNPMStore
 	repository.APIKeyStore
 	repository.UserStore
 	repository.RuntimeNodeStore
@@ -187,6 +188,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeConanObjects = NewMemoryOCIObjectStore()
 	}
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
+	nativeNPMObjects := dependencies.NativeNPMObjectStore
+	if nativeNPMObjects == nil {
+		nativeNPMObjects = NewMemoryOCIObjectStore()
+	}
+	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	var searchProjection repository.ArtifactSearchStore
@@ -243,6 +249,11 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 		})}
 	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter})
+	mux.Handle("/npm/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !nativeNPM.ServeHTTP(w, r) {
+			http.NotFound(w, r)
+		}
+	}))
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},

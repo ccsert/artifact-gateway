@@ -32,6 +32,16 @@ var supportedFormatProfiles = []FormatProfile{
 	formatProfile(FormatMaven),
 	formatProfile(FormatConan),
 	formatProfile(FormatRaw),
+	{
+		Format:          FormatNPM,
+		RepositoryTypes: []RepositoryType{RepositoryTypeHosted},
+		AnonymousRead:   true,
+		HostedOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationPublish,
+			RepositoryOperationBrowse,
+		},
+	},
 }
 
 func formatProfile(format Format) FormatProfile {
@@ -75,6 +85,29 @@ func SupportedFormats() []Format {
 		formats = append(formats, profile.Format)
 	}
 	return formats
+}
+
+// WorkerFormats returns formats with at least one declared asynchronous
+// lifecycle operation. Protocol-only formats must not be scheduled by generic
+// background workers until those capabilities are implemented.
+func WorkerFormats() []Format {
+	formats := make([]Format, 0, len(supportedFormatProfiles))
+	for _, profile := range supportedFormatProfiles {
+		if hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
+			formats = append(formats, profile.Format)
+		}
+	}
+	return formats
+}
+
+func hasBackgroundOperation(operations []RepositoryOperation) bool {
+	for _, operation := range operations {
+		switch operation {
+		case RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate:
+			return true
+		}
+	}
+	return false
 }
 
 func FormatProfileFor(format Format) (FormatProfile, bool) {

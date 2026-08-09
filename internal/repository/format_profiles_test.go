@@ -4,8 +4,8 @@ import "testing"
 
 func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 	profiles := SupportedFormatProfiles()
-	if len(profiles) != 4 {
-		t.Fatalf("profiles=%d want=4", len(profiles))
+	if len(profiles) != 5 {
+		t.Fatalf("profiles=%d want=5", len(profiles))
 	}
 	seen := make(map[Format]bool, len(profiles))
 	for _, profile := range profiles {
@@ -13,11 +13,30 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Fatalf("duplicate format profile %q", profile.Format)
 		}
 		seen[profile.Format] = true
-		if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
+		if !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) {
 			t.Errorf("format %q repository types=%v", profile.Format, profile.RepositoryTypes)
 		}
-		if !profile.GroupSupported || !profile.AnonymousRead {
+		if !profile.AnonymousRead {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
+		}
+		if profile.Format == FormatNPM {
+			if profile.GroupSupported || FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
+				t.Errorf("npm must remain hosted-only without group support: %#v", profile)
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse} {
+				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
+					t.Errorf("npm missing hosted operation %q", operation)
+				}
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate} {
+				if FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
+					t.Errorf("npm advertises unimplemented operation %q", operation)
+				}
+			}
+			continue
+		}
+		if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) || !profile.GroupSupported {
+			t.Errorf("format %q repository types=%v group=%t", profile.Format, profile.RepositoryTypes, profile.GroupSupported)
 		}
 		for _, operation := range []RepositoryOperation{
 			RepositoryOperationRead,
@@ -40,7 +59,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			}
 		}
 	}
-	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw} {
+	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM} {
 		if !seen[format] || !IsSupportedFormat(format) {
 			t.Errorf("format %q is missing", format)
 		}
@@ -63,7 +82,15 @@ func TestSupportedFormatProfilesReturnDefensiveCopies(t *testing.T) {
 }
 
 func TestUnknownFormatHasNoCapabilities(t *testing.T) {
-	if IsSupportedFormat("npm") || FormatSupportsRepositoryType("npm", RepositoryTypeHosted) || FormatSupportsOperation("npm", RepositoryTypeHosted, RepositoryOperationRead) {
+	if IsSupportedFormat("pypi") || FormatSupportsRepositoryType("pypi", RepositoryTypeHosted) || FormatSupportsOperation("pypi", RepositoryTypeHosted, RepositoryOperationRead) {
 		t.Fatal("unknown format was admitted")
+	}
+}
+
+func TestWorkerFormatsExcludeProtocolOnlyFormats(t *testing.T) {
+	for _, format := range WorkerFormats() {
+		if format == FormatNPM {
+			t.Fatal("npm has no background lifecycle capability yet")
+		}
 	}
 }

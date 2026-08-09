@@ -93,6 +93,18 @@ func TestPostgresRepositoryCapacityAcrossHostedFormats(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertCapacity(conan, 7, 1)
+
+	npm := create(repository.FormatNPM)
+	if _, err = store.PublishNPMVersion(ctx, repository.NPMVersion{
+		RepositoryID: npm.ID, PackageName: "widget", Version: "1.0.0",
+		Digest:    "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		Integrity: "sha512-Y2FwYWNpdHk=", Shasum: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		TarballName: "widget-1.0.0.tgz", ObjectKey: "native/npm/capacity-" + uuid.NewString(),
+		Size: 8, Manifest: []byte(`{"name":"widget","version":"1.0.0"}`), Publisher: "capacity",
+	}, map[string]string{"latest": "1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	assertCapacity(npm, 8, 1)
 }
 
 func TestPostgresRepositoryCapacityRejectsVisibleWritesAcrossFormats(t *testing.T) {
@@ -121,6 +133,17 @@ func TestPostgresRepositoryCapacityRejectsVisibleWritesAcrossFormats(t *testing.
 	raw := create(repository.FormatRaw)
 	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: raw.ID, Path: "widget", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ObjectKey: "native/raw/quota-" + uuid.NewString(), Size: 2}); !repository.IsQuotaExceeded(err) {
 		t.Fatalf("raw quota err=%v", err)
+	}
+
+	npm := create(repository.FormatNPM)
+	if _, err = store.PublishNPMVersion(ctx, repository.NPMVersion{
+		RepositoryID: npm.ID, PackageName: "quota-widget", Version: "1.0.0",
+		Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Integrity: "sha512-cXVvdGE=", Shasum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		TarballName: "quota-widget-1.0.0.tgz", ObjectKey: "native/npm/quota-" + uuid.NewString(),
+		Size: 2, Manifest: []byte(`{"name":"quota-widget","version":"1.0.0"}`), Publisher: "quota",
+	}, map[string]string{"latest": "1.0.0"}); !repository.IsQuotaExceeded(err) {
+		t.Fatalf("npm quota err=%v", err)
 	}
 
 	maven := create(repository.FormatMaven)

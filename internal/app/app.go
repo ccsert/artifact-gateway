@@ -24,6 +24,7 @@ type Dependencies struct {
 	NativeMavenObjectStore OCIObjectStore
 	NativeOCIObjectStore   OCIObjectStore
 	NativeConanObjectStore OCIObjectStore
+	NativeNPMObjectStore   OCIObjectStore
 	OIDCClient             *authorization.OIDCClient
 	OIDCLoginValidator     *authorization.OIDCValidator
 	OIDCRuntime            *OIDCRuntime

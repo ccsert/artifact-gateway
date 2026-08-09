@@ -4,7 +4,7 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
-export type Format = "raw" | "oci" | "maven" | "conan";
+export type Format = "raw" | "oci" | "maven" | "conan" | "npm";
 
 export type FormatProfile = {
   format: Format;
@@ -387,6 +387,14 @@ export type Artifact = {
 
 export type ArtifactSummary = {
   coordinate: string;
+  /**
+   * Exact package version when the format exposes one independently from the coordinate.
+   */
+  version?: string;
+  /**
+   * Number of versions represented by a package-level browse result.
+   */
+  versionCount?: number;
   digest?: string;
   size?: number;
   contentType?: string;

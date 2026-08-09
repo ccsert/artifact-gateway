@@ -73,6 +73,7 @@ external package service:
 make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
+make native-npm-e2e
 make conan-e2e
 ```
 

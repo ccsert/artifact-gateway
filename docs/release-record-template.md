@@ -27,6 +27,7 @@ tokens, or unredacted upstream URLs.
 | make native-oci-e2e | | | | |
 | make native-raw-e2e | | | | |
 | make native-maven-e2e | | | | |
+| make native-npm-e2e | | | | |
 | make conan-e2e | | | | |
 | make readiness-e2e | | | | |
 | make resolver-rotation-e2e | | | | |

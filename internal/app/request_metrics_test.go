@@ -60,6 +60,12 @@ func TestHTTPMetricsExposeInFlightRequest(t *testing.T) {
 	<-done
 }
 
+func TestClassifyNPMRequest(t *testing.T) {
+	if class := classifyRequest("/npm/releases/@scope/widget"); class != requestClassNPM {
+		t.Fatalf("class=%v", class)
+	}
+}
+
 func TestRuntimeAndDatabasePoolMetrics(t *testing.T) {
 	pool, err := database.OpenPostgres("postgres://gateway:secret@localhost:5432/gateway?sslmode=disable", database.PoolConfig{MaxOpenConns: 7, MaxIdleConns: 2, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute})
 	if err != nil {

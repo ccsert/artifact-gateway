@@ -106,7 +106,7 @@ const (
 )
 
 var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication"}
-var backgroundOperationFormats = repository.SupportedFormats()
+var backgroundOperationFormats = repository.WorkerFormats()
 var backgroundOperationOutcomes = [...]string{"started", "completed", "failed", "retried"}
 
 type backgroundOperationQueueState uint8
@@ -134,6 +134,7 @@ const (
 	repositoryAuthorizationFormatOCI
 	repositoryAuthorizationFormatRaw
 	repositoryAuthorizationFormatConan
+	repositoryAuthorizationFormatNPM
 	repositoryAuthorizationFormatCount
 )
 
@@ -145,7 +146,7 @@ const (
 	repositoryGrantDenialReasonCount
 )
 
-var repositoryAuthorizationFormats = [...]string{"management", "maven", "oci", "raw", "conan"}
+var repositoryAuthorizationFormats = [...]string{"management", "maven", "oci", "raw", "conan", "npm"}
 var repositoryGrantDenialReasons = [...]string{"scope_not_granted", "grant_lookup_failed"}
 
 const maxRepositoryMetrics = 1000

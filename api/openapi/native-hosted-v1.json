@@ -2477,7 +2477,8 @@
           "raw",
           "oci",
           "maven",
-          "conan"
+          "conan",
+          "npm"
         ]
       },
       "FormatProfile": {
@@ -3640,6 +3641,16 @@
         "properties": {
           "coordinate": {
             "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Exact package version when the format exposes one independently from the coordinate."
+          },
+          "versionCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Number of versions represented by a package-level browse result."
           },
           "digest": {
             "type": "string",

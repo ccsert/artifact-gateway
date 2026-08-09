@@ -22,6 +22,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
+	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -1046,6 +1047,25 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				updatedAt := a.UpdatedAt
 				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Path, Digest: &d, ContentType: &ct, Size: &size, CreatedAt: &updatedAt})
 				lastCoordinate = a.Path
+			}
+		case repository.FormatNPM:
+			packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search npm packages failed")
+				return
+			}
+			hasMore = len(packages) > pageSize
+			if hasMore {
+				packages = packages[:pageSize]
+			}
+			for _, pkg := range packages {
+				digest, version, createdAt, size := pkg.Latest.Digest, pkg.Latest.Version, pkg.UpdatedAt, pkg.Latest.Size
+				versionCount := int32(pkg.VersionCount)
+				items = append(items, adminopenapi.ArtifactSummary{
+					Coordinate: pkg.Name, Digest: &digest, Version: &version, VersionCount: &versionCount,
+					CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(pkg.Latest.Publisher),
+				})
+				lastCoordinate = pkg.Name
 			}
 		}
 		var next *string
@@ -3019,6 +3039,8 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return validConanReferencePrefix(query)
 	case repository.FormatRaw:
 		return validRawAssetPrefix(query)
+	case repository.FormatNPM:
+		return npmprotocol.ValidPackagePrefix(query)
 	default:
 		return false
 	}

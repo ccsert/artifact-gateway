@@ -44,8 +44,17 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 		t.Fatalf("profiles=%d want=%d", len(result.Items), len(repository.SupportedFormats()))
 	}
 	for _, item := range result.Items {
-		if !item.GroupSupported || !item.AnonymousRead || len(item.RepositoryTypes) != 2 {
+		if !item.AnonymousRead {
 			t.Errorf("incomplete profile: %#v", item)
+		}
+		if item.Format == adminopenapi.FormatNpm {
+			if item.GroupSupported || len(item.RepositoryTypes) != 1 || len(item.ProxyOperations) != 0 {
+				t.Errorf("npm must remain hosted-only: %#v", item)
+			}
+			continue
+		}
+		if !item.GroupSupported || len(item.RepositoryTypes) != 2 {
+			t.Errorf("incomplete lifecycle profile: %#v", item)
 		}
 		operations := make(map[adminopenapi.RepositoryOperation]bool, len(item.HostedOperations))
 		for _, operation := range item.HostedOperations {
@@ -65,7 +74,7 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 }
 
 func TestBackgroundOperationMetricFormatsTrackProfiles(t *testing.T) {
-	formats := repository.SupportedFormats()
+	formats := repository.WorkerFormats()
 	if len(backgroundOperationFormats) != len(formats) || len(formats) != int(backgroundOperationFormatCount) {
 		t.Fatalf("metric formats=%v profiles=%v count=%d", backgroundOperationFormats, formats, backgroundOperationFormatCount)
 	}

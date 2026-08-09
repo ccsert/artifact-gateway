@@ -35,7 +35,7 @@ var supportedNodeRoles = map[NodeRole]struct{}{
 
 var supportedWorkerFormats = func() map[string]struct{} {
 	formats := make(map[string]struct{})
-	for _, format := range repository.SupportedFormats() {
+	for _, format := range repository.WorkerFormats() {
 		formats[string(format)] = struct{}{}
 	}
 	return formats

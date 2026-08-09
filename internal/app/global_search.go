@@ -170,6 +170,7 @@ func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopen
 		MatchKind:  adminopenapi.GlobalArtifactSearchHitMatchKind(mode),
 		Coordinate: summary.Coordinate, Digest: summary.Digest, Size: summary.Size, ContentType: summary.ContentType,
 		CreatedAt: summary.CreatedAt, BuildNumber: summary.BuildNumber, Publisher: summary.Publisher,
+		Version: summary.Version, VersionCount: summary.VersionCount,
 	}
 }
 
