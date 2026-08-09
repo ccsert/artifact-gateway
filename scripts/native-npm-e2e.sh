@@ -16,7 +16,8 @@ proxy_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0
 upstream_url="http://127.0.0.1:${upstream_port}"
 proxy_url="http://127.0.0.1:${proxy_port}"
 registry_url="${upstream_url}/npm/packages/"
-proxy_registry_url="${proxy_url}/npm/packages/"
+group_registry_url="${proxy_url}/npm/all-packages/"
+private_registry_url="${proxy_url}/npm/private/"
 workdir=$(mktemp -d)
 upstream_pid=""
 proxy_pid=""
@@ -93,13 +94,23 @@ until curl --silent --show-error --fail "$proxy_url/livez" >/dev/null; do
   sleep 0.1
 done
 
+npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${proxy_port}/npm/private/:_authToken" fixture-secret
+private_package="$workdir/private-package"
+mkdir "$private_package"
+(
+  cd "$private_package"
+  npm init -y >/dev/null
+  npm pkg set name='ag-npm-private-fixture' version='3.0.0' description='Artifact Gateway Group hosted fixture' license='MIT'
+  npm_config_userconfig="$auth_config" npm publish --registry="$private_registry_url" --tag=latest
+)
+
 install_dir="$workdir/install"
 mkdir "$install_dir"
 (
   cd "$install_dir"
   npm init -y >/dev/null
-  npm_config_cache="$workdir/npm-cache-online" npm_config_userconfig="$anonymous_config" npm install 'ag-npm-fixture@1.0.0' '@artifact-gateway/npm-fixture@2.0.0' --registry="$proxy_registry_url" --ignore-scripts
-  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+  npm_config_cache="$workdir/npm-cache-online" npm_config_userconfig="$anonymous_config" npm install 'ag-npm-private-fixture@3.0.0' 'ag-npm-fixture@1.0.0' '@artifact-gateway/npm-fixture@2.0.0' --registry="$group_registry_url" --ignore-scripts
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-private-fixture":"3.0.0","ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
 kill "$upstream_pid"
@@ -110,8 +121,8 @@ mkdir "$offline_install"
 (
   cd "$offline_install"
   npm init -y >/dev/null
-  npm_config_cache="$workdir/npm-cache-offline" npm_config_userconfig="$anonymous_config" npm install 'ag-npm-fixture@1.0.0' '@artifact-gateway/npm-fixture@2.0.0' --registry="$proxy_registry_url" --ignore-scripts
-  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+  npm_config_cache="$workdir/npm-cache-offline" npm_config_userconfig="$anonymous_config" npm install 'ag-npm-private-fixture@3.0.0' 'ag-npm-fixture@1.0.0' '@artifact-gateway/npm-fixture@2.0.0' --registry="$group_registry_url" --ignore-scripts
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-private-fixture":"3.0.0","ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
-printf 'Native npm Hosted publish and Proxy online/offline install E2E passed through %s\n' "$proxy_url"
+printf 'Native npm Hosted, Proxy, and Group online/offline install E2E passed through %s\n' "$proxy_url"

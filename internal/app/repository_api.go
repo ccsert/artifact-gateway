@@ -260,11 +260,15 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 		})}
 	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter})
-	mux.Handle("/npm/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !nativeNPM.ServeHTTP(w, r) {
-			http.NotFound(w, r)
-		}
-	}))
+	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		npm:        &v2GroupNPMHandler{native: &nativeNPM},
+		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !nativeNPM.ServeHTTP(w, r) {
+				http.NotFound(w, r)
+			}
+		})}
+	mux.Handle("/npm/", npmGroupRouter)
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},

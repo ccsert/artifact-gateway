@@ -33,11 +33,41 @@ func (r v2GroupResolver) authorizeMembers(ctx context.Context, principal Princip
 	return filtered, denied || err != nil
 }
 
+// authorizeRepositoryMembers applies the complete managed-or-legacy policy to
+// every V2 member repository. npm Groups use this because one packument can
+// aggregate metadata from every member; an unmanaged default grant set must
+// still honor the configured static repository patterns.
+func (r v2GroupResolver) authorizeRepositoryMembers(ctx context.Context, principal Principal, groupName string, format repository.Format, resource string, members []repository.Member) ([]repository.Member, bool) {
+	if isAnonymous(principal) {
+		return members, false
+	}
+	eligible := make([]repository.Member, 0, len(members))
+	denied := false
+	for _, member := range members {
+		repo, err := r.repos.GetHostedRepository(ctx, member.RepositoryID)
+		decision := AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}
+		if err == nil && repo.Format == format && repo.State == repository.RepositoryActive {
+			decision = r.authorizer.AuthorizeResource(ctx, principal, repo, RepositoryRead, resource)
+		}
+		if decision.Allowed {
+			eligible = append(eligible, member)
+			continue
+		}
+		denied = true
+		_ = r.auditGroupAuthorizationDenied(ctx, groupName, format, resource, member.Name, principal.Actor, decision)
+	}
+	return eligible, denied
+}
+
 func (r v2GroupResolver) auditAuthorizationDenied(ctx context.Context, format repository.Format, resource, member, actor string, decision AuthorizationDecision) error {
+	return r.auditGroupAuthorizationDenied(ctx, "", format, resource, member, actor, decision)
+}
+
+func (r v2GroupResolver) auditGroupAuthorizationDenied(ctx context.Context, groupName string, format repository.Format, resource, member, actor string, decision AuthorizationDecision) error {
 	if r.audit == nil {
 		return nil
 	}
-	return r.audit.RecordAudit(ctx, repository.AuditRecord{Actor: actor, MemberName: member, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(format), Resource: resource, Operation: "get", Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+	return r.audit.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: groupName, Actor: actor, MemberName: member, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(format), Resource: resource, Operation: "get", Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 }
 
 // v2GroupName extracts the first path segment after the format's protocol
@@ -51,6 +81,8 @@ func v2GroupName(format repository.Format, path string) string {
 		prefix = "/raw/"
 	case repository.FormatMaven:
 		prefix = "/maven/"
+	case repository.FormatNPM:
+		prefix = "/npm/"
 	case repository.FormatConan:
 		rest := strings.TrimPrefix(path, "/conan/v2/")
 		if rest == path || rest == "" {
@@ -159,6 +191,7 @@ type v2GroupRouter struct {
 	maven      *v2GroupMavenHandler
 	raw        *v2GroupRawHandler
 	conan      *v2GroupConanHandler
+	npm        *v2GroupNPMHandler
 	next       http.Handler
 }
 
@@ -167,6 +200,17 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if name == "" {
 		r.next.ServeHTTP(w, req)
 		return
+	}
+	if r.format == repository.FormatNPM {
+		repo, lookupErr := r.repos.GetHostedRepositoryByName(req.Context(), name)
+		if lookupErr == nil && repo.Format == repository.FormatNPM {
+			r.next.ServeHTTP(w, req)
+			return
+		}
+		if lookupErr != nil && !errors.Is(lookupErr, repository.ErrNotFound) {
+			http.Error(w, "repository lookup failed", http.StatusServiceUnavailable)
+			return
+		}
 	}
 	resolver := v2GroupResolver{groups: r.groups, repos: r.repos, audit: r.audit, authorizer: r.authorizer}
 	group, err := resolver.resolveHostedGroup(req.Context(), name, r.format)
@@ -197,6 +241,11 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case repository.FormatConan:
 		if r.conan != nil {
 			r.conan.serve(w, req, resolver, group)
+			return
+		}
+	case repository.FormatNPM:
+		if r.npm != nil {
+			r.npm.serve(w, req, resolver, group)
 			return
 		}
 	}

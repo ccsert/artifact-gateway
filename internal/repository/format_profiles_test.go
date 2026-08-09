@@ -20,8 +20,8 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
 		if profile.Format == FormatNPM {
-			if profile.GroupSupported || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
-				t.Errorf("npm must support Hosted and Proxy without Group: %#v", profile)
+			if !profile.GroupSupported || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
+				t.Errorf("npm must support Hosted, Proxy, and Group: %#v", profile)
 			}
 			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {

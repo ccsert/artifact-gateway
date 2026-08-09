@@ -1,6 +1,6 @@
 # Artifact Gateway
 
-Artifact Gateway serves native OCI, Raw, Maven, and Conan 2 Hosted repositories
+Artifact Gateway serves native OCI, Raw, Maven, Conan 2, and npm Hosted repositories
 using PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
 verified bytes. Legacy Groups remain available for allowlisted external Proxy
 reads, while V2 Groups resolve managed Hosted and Proxy members.
@@ -10,7 +10,7 @@ reads, while V2 Groups resolve managed Hosted and Proxy members.
 > public release. Do not infer production support commitments from the current
 > package version.
 
-Artifact Gateway is intended to be a complete repository manager for the four
+Artifact Gateway is intended to be a complete repository manager for the five
 admitted formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
 promotion, and replication. It is not a transparent rewrite proxy, a generic
@@ -135,6 +135,11 @@ repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
 Conan 2 uses `/conan/v2/<repository>/...`; npm uses
 `/npm/<repository>/<package>`.
+
+npm Groups expose Hosted and Proxy members through the same
+`/npm/<group>/` Registry URL. Their packuments merge versions and distribution
+tags by member priority, with Hosted members taking precedence over Proxy
+members when a version exists in more than one repository.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,

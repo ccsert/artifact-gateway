@@ -51,8 +51,9 @@ storage credentials, or unredacted upstream URLs in that record.
       publish and resolution pass through the native Maven fixture.
       npm scoped/unscoped publication, immutable versions, dist-tags, anonymous
       installation, and audit pass through the native npm fixture. The same
-      real npm CLI then installs through npm Proxy, shuts down its upstream,
-      clears the client cache, and installs again from Gateway cache.
+      real npm CLI then installs Hosted and Proxy packages through one npm
+      Group Registry, shuts down the Proxy upstream, clears the client cache,
+      and installs both sources again through the Group from Gateway storage.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2

@@ -976,6 +976,25 @@ func TestCreateHostedGroupAcceptsConanFormat(t *testing.T) {
 	}
 }
 
+func TestCreateHostedGroupAcceptsNPMFormat(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-group-member", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(fmt.Sprintf(`{"name":"npm-group","format":"npm","members":[{"repositoryId":"%s","position":0}]}`, repo.ID)))
+	authorize(request, "admin-secret")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "create-npm-group")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"format":"npm"`) {
+		t.Fatalf("create npm group=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 	store := repository.NewMemoryStore()
 	store.Audits = []repository.AuditRecord{{

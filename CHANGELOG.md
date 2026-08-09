@@ -18,6 +18,9 @@ a dated version heading without rewriting their meaning.
 - Per-repository outbound proxy configuration and connectivity checks.
 - npm Proxy repositories with verified read-through metadata and tarball
   caching, stale-if-error reads, negative caching, and offline installs.
+- npm Group registries that merge Hosted and Proxy package versions with
+  Hosted-first conflict resolution, anonymous/grant filtering, and Group-local
+  tarball URLs.
 
 ### Changed
 

@@ -35,6 +35,7 @@ var supportedFormatProfiles = []FormatProfile{
 	{
 		Format:          FormatNPM,
 		RepositoryTypes: []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:  true,
 		AnonymousRead:   true,
 		HostedOperations: []RepositoryOperation{
 			RepositoryOperationRead,

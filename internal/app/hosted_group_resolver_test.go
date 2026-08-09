@@ -3,8 +3,12 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +25,445 @@ type conanGatewayClient struct{ *conanFixtureClient }
 
 func (conanGatewayClient) Fetch(context.Context, string, repository.Member, string, string, string, http.Header) (*http.Response, error) {
 	return nil, errors.New("OCI fetch is not used by Conan group tests")
+}
+
+func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-hosted", Name: "npm-hosted", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostedTarball := npmFixtureTarball(t, "widget", "1.0.0")
+	hostedSHA256 := sha256.Sum256(hostedTarball)
+	hostedSHA512 := sha512.Sum512(hostedTarball)
+	hostedSHA1 := sha1.Sum(hostedTarball)
+	hostedDigest := "sha256:" + hex.EncodeToString(hostedSHA256[:])
+	hostedObjectKey := "native/npm/sha256/" + hex.EncodeToString(hostedSHA256[:])
+	if err = objects.Put(context.Background(), hostedObjectKey, hostedTarball); err != nil {
+		t.Fatal(err)
+	}
+	hostedManifest := json.RawMessage(`{"name":"widget","version":"1.0.0","description":"hosted version"}`)
+	if _, err = store.PublishNPMVersion(context.Background(), repository.NPMVersion{
+		RepositoryID: hosted.ID, PackageName: "widget", Version: "1.0.0",
+		Digest: hostedDigest, Integrity: "sha512-" + base64.StdEncoding.EncodeToString(hostedSHA512[:]),
+		Shasum: hex.EncodeToString(hostedSHA1[:]), TarballName: "widget-1.0.0.tgz",
+		ObjectKey: hostedObjectKey, Size: int64(len(hostedTarball)), Manifest: hostedManifest, Publisher: "internal-build",
+	}, map[string]string{"latest": "1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+
+	proxyTarball := npmFixtureTarball(t, "widget", "2.0.0")
+	proxySHA512 := sha512.Sum512(proxyTarball)
+	proxySHA1 := sha1.Sum(proxyTarball)
+	var metadataRequests, tarballRequests int
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/widget":
+			metadataRequests++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": "widget", "dist-tags": map[string]string{"latest": "2.0.0"},
+				"versions": map[string]any{
+					"1.0.0": map[string]any{
+						"name": "widget", "version": "1.0.0", "description": "lower-priority proxy conflict",
+						"dist": map[string]string{
+							"tarball": upstream.URL + "/widget-1.0.0.tgz", "integrity": "sha512-" + base64.StdEncoding.EncodeToString(hostedSHA512[:]), "shasum": hex.EncodeToString(hostedSHA1[:]),
+						},
+					},
+					"2.0.0": map[string]any{
+						"name": "widget", "version": "2.0.0", "description": "proxy version",
+						"dist": map[string]string{
+							"tarball": upstream.URL + "/widget-2.0.0.tgz", "integrity": "sha512-" + base64.StdEncoding.EncodeToString(proxySHA512[:]), "shasum": hex.EncodeToString(proxySHA1[:]),
+						},
+					},
+				},
+			})
+		case "/widget-2.0.0.tgz":
+			tarballRequests++
+			_, _ = w.Write(proxyTarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-proxy", Name: "npm-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 0},
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+
+	metadataRequest := httptest.NewRequest(http.MethodGet, "/npm/npm-group/widget", nil)
+	authorize(metadataRequest, "resolver-secret")
+	metadata := httptest.NewRecorder()
+	handler.ServeHTTP(metadata, metadataRequest)
+	if metadata.Code != http.StatusOK {
+		t.Fatalf("metadata=%d body=%s", metadata.Code, metadata.Body.String())
+	}
+	var packument struct {
+		DistTags map[string]string `json:"dist-tags"`
+		Versions map[string]struct {
+			Description string `json:"description"`
+			Dist        struct {
+				Tarball string `json:"tarball"`
+			} `json:"dist"`
+		} `json:"versions"`
+	}
+	if err = json.NewDecoder(metadata.Body).Decode(&packument); err != nil {
+		t.Fatal(err)
+	}
+	if len(packument.Versions) != 2 || packument.DistTags["latest"] != "1.0.0" {
+		t.Fatalf("packument=%#v", packument)
+	}
+	if packument.Versions["1.0.0"].Description != "hosted version" {
+		t.Fatalf("hosted conflict did not win: %#v", packument.Versions["1.0.0"])
+	}
+	tarballPaths := make(map[string]string)
+	for version, expectedBody := range map[string][]byte{"1.0.0": hostedTarball, "2.0.0": proxyTarball} {
+		tarballURL := packument.Versions[version].Dist.Tarball
+		if !strings.Contains(tarballURL, "/npm/npm-group/widget/-/") {
+			t.Fatalf("version %s tarball URL=%q", version, tarballURL)
+		}
+		path := strings.TrimPrefix(tarballURL, "http://example.com")
+		tarballPaths[version] = path
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		authorize(request, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), expectedBody) {
+			t.Fatalf("version %s download=%d bytes=%d", version, response.Code, response.Body.Len())
+		}
+	}
+	hitRequest := httptest.NewRequest(http.MethodGet, tarballPaths["2.0.0"], nil)
+	authorize(hitRequest, "resolver-secret")
+	hitResponse := httptest.NewRecorder()
+	handler.ServeHTTP(hitResponse, hitRequest)
+	if hitResponse.Code != http.StatusOK || !bytes.Equal(hitResponse.Body.Bytes(), proxyTarball) {
+		t.Fatalf("proxy cache hit=%d bytes=%d", hitResponse.Code, hitResponse.Body.Len())
+	}
+	conditionalRequest := httptest.NewRequest(http.MethodGet, tarballPaths["1.0.0"], nil)
+	conditionalRequest.Header.Set("If-None-Match", `"sha256-`+strings.TrimPrefix(hostedDigest, "sha256:")+`"`)
+	authorize(conditionalRequest, "resolver-secret")
+	conditionalResponse := httptest.NewRecorder()
+	handler.ServeHTTP(conditionalResponse, conditionalRequest)
+	if conditionalResponse.Code != http.StatusNotModified || conditionalResponse.Body.Len() != 0 {
+		t.Fatalf("hosted conditional=%d bytes=%d", conditionalResponse.Code, conditionalResponse.Body.Len())
+	}
+	if metadataRequests != 1 || tarballRequests != 1 {
+		t.Fatalf("upstream metadata=%d tarball=%d", metadataRequests, tarballRequests)
+	}
+	auditedDownloads := make(map[string]int)
+	downloadCount := 0
+	for _, audit := range store.Audits {
+		if !strings.HasPrefix(audit.Resource, "widget@") || audit.Outcome != repository.AuditResolved {
+			continue
+		}
+		downloadCount++
+		if audit.GroupName != "npm-group" || audit.Repository != "npm-group" || audit.MemberName == "" {
+			t.Fatalf("tarball audit escaped group ownership: %#v", audit)
+		}
+		key := audit.MemberName + ":" + audit.CacheDisposition + ":" + utoa(uint64(audit.Status))
+		auditedDownloads[key]++
+	}
+	if downloadCount != 4 || auditedDownloads[hosted.Name+":bypass:200"] != 1 || auditedDownloads[proxy.Name+":miss:200"] != 1 || auditedDownloads[proxy.Name+":hit:200"] != 1 || auditedDownloads[hosted.Name+":bypass:304"] != 1 {
+		t.Fatalf("group tarball audits=%#v count=%d all=%#v", auditedDownloads, downloadCount, store.Audits)
+	}
+}
+
+func TestV2GroupNPMAnonymousReadExcludesPrivateMembers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	public, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-public", Name: "npm-public", Format: repository.FormatNPM, AnonymousRead: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-private", Name: "npm-private", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range []struct {
+		repo    repository.HostedRepository
+		version string
+	}{{public, "1.0.0"}, {private, "9.0.0"}} {
+		publishNPMGroupTestVersion(t, store, fixture.repo, "widget", fixture.version)
+	}
+	group := createV2Group(t, store, "npm-public-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: public.ID, Position: 0},
+		repository.GroupMember{RepositoryID: private.ID, Position: 1},
+	)
+	group.AnonymousRead = true
+	if _, err = store.ReplaceHostedGroup(context.Background(), group, group.Version); err != nil {
+		t.Fatal(err)
+	}
+	enableAnonymousAccess(t, store)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/npm/npm-public-group/widget", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("anonymous packument=%d body=%s", response.Code, response.Body.String())
+	}
+	var packument struct {
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&packument); err != nil {
+		t.Fatal(err)
+	}
+	if len(packument.Versions) != 1 || packument.Versions["1.0.0"] == nil || packument.Versions["9.0.0"] != nil {
+		t.Fatalf("anonymous member filtering leaked versions: %#v", packument.Versions)
+	}
+}
+
+func TestV2GroupNPMFiltersMembersByManagedGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	denied, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-denied", Name: "npm-denied", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-allowed", Name: "npm-allowed", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, denied, "widget", "9.0.0")
+	publishNPMGroupTestVersion(t, store, allowed, "widget", "1.0.0")
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), denied.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), allowed.ID, []repository.RepositoryGrant{{
+		Principal: "build-agent", Scopes: []string{"repositories:read"},
+	}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-authorized-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: denied.ID, Position: 0},
+		repository.GroupMember{RepositoryID: allowed.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-authorized-group/widget", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("authorized packument=%d body=%s", response.Code, response.Body.String())
+	}
+	var packument struct {
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&packument); err != nil {
+		t.Fatal(err)
+	}
+	if len(packument.Versions) != 1 || packument.Versions["1.0.0"] == nil || packument.Versions["9.0.0"] != nil {
+		t.Fatalf("managed grant filtering leaked versions: %#v", packument.Versions)
+	}
+	for _, audit := range store.Audits {
+		if audit.GroupName == "npm-authorized-group" && audit.Repository == "npm-authorized-group" && audit.MemberName == denied.Name && audit.Outcome == repository.AuditAccessDenied && audit.AuthorizationSource == "repository_grants" && audit.AuthorizationReason == "scope_not_granted" {
+			return
+		}
+	}
+	t.Fatalf("missing managed denial audit: %#v", store.Audits)
+}
+
+func TestV2GroupNPMFiltersDefaultGrantMembersByStaticPolicy(t *testing.T) {
+	store := repository.NewMemoryStore()
+	denied, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-static-denied", Name: "npm-static-denied", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-static-allowed", Name: "npm-static-allowed", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, denied, "widget", "9.0.0")
+	publishNPMGroupTestVersion(t, store, allowed, "widget", "1.0.0")
+	createV2Group(t, store, "npm-static-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: denied.ID, Position: 0},
+		repository.GroupMember{RepositoryID: allowed.ID, Position: 1},
+	)
+	authenticator := testAuthenticator()
+	authenticator.RepositoryReaders = map[string][]string{"build-agent": {allowed.Name}}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-static-group/widget", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("static-policy packument=%d body=%s", response.Code, response.Body.String())
+	}
+	var packument struct {
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&packument); err != nil {
+		t.Fatal(err)
+	}
+	if len(packument.Versions) != 1 || packument.Versions["1.0.0"] == nil || packument.Versions["9.0.0"] != nil {
+		t.Fatalf("static repository policy leaked versions: %#v", packument.Versions)
+	}
+	for _, audit := range store.Audits {
+		if audit.GroupName == "npm-static-group" && audit.Repository == "npm-static-group" && audit.MemberName == denied.Name && audit.Outcome == repository.AuditAccessDenied && audit.AuthorizationSource == "legacy_static" && audit.AuthorizationReason == "scope_not_granted" {
+			return
+		}
+	}
+	t.Fatalf("missing static-policy denial audit: %#v", store.Audits)
+}
+
+func TestV2GroupNPMAllMembersDeniedAuditsGroup(t *testing.T) {
+	store := repository.NewMemoryStore()
+	denied, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-all-denied", Name: "npm-all-denied", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), denied.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-denied-group", repository.FormatNPM, repository.GroupMember{RepositoryID: denied.ID})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-denied-group/widget", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("all members denied=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, audit := range store.Audits {
+		if audit.GroupName == "npm-denied-group" && audit.Repository == "npm-denied-group" && audit.MemberName == denied.Name && audit.Outcome == repository.AuditAccessDenied {
+			return
+		}
+	}
+	t.Fatalf("missing group denial audit: %#v", store.Audits)
+}
+
+func TestV2GroupNPMProxyMetadataFailureAuditsMemberAndGroup(t *testing.T) {
+	store := repository.NewMemoryStore()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusInternalServerError)
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-failing-proxy", Name: "npm-failing-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-failing-group", repository.FormatNPM, repository.GroupMember{RepositoryID: proxy.ID})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-failing-group/widget", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("proxy metadata failure=%d body=%s", response.Code, response.Body.String())
+	}
+	memberAudit, terminalAudit := false, false
+	for _, audit := range store.Audits {
+		if audit.GroupName != "npm-failing-group" || audit.Repository != "npm-failing-group" || audit.Outcome != repository.AuditUpstreamError || audit.Status != http.StatusBadGateway {
+			continue
+		}
+		memberAudit = memberAudit || audit.MemberName == proxy.Name
+		terminalAudit = terminalAudit || audit.MemberName == ""
+	}
+	if !memberAudit || !terminalAudit {
+		t.Fatalf("missing group failure audits: %#v", store.Audits)
+	}
+}
+
+func TestV2GroupNPMHostedTarballStorageFailureAuditsGroup(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-missing-object", Name: "npm-missing-object", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
+	createV2Group(t, store, "npm-storage-group", repository.FormatNPM, repository.GroupMember{RepositoryID: repo.ID})
+	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-storage-group/widget/-/widget-1.0.0.tgz", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("hosted tarball storage failure=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, audit := range store.Audits {
+		if audit.GroupName == "npm-storage-group" && audit.Repository == "npm-storage-group" && audit.MemberName == repo.Name && audit.Outcome == repository.AuditStorageError && audit.Status == http.StatusInternalServerError {
+			return
+		}
+	}
+	t.Fatalf("missing group storage audit: %#v", store.Audits)
+}
+
+func TestV2GroupNPMRepositoryNameTakesPrecedence(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-shared-repository", Name: "npm-shared", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-shadowed-member", Name: "npm-shadowed-member", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
+	publishNPMGroupTestVersion(t, store, member, "widget", "9.0.0")
+	createV2Group(t, store, repo.Name, repository.FormatNPM, repository.GroupMember{RepositoryID: member.ID, Position: 0})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-shared/widget", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("repository precedence=%d body=%s", response.Code, response.Body.String())
+	}
+	var packument struct {
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&packument); err != nil {
+		t.Fatal(err)
+	}
+	if len(packument.Versions) != 1 || packument.Versions["1.0.0"] == nil || packument.Versions["9.0.0"] != nil {
+		t.Fatalf("group shadowed repository: %#v", packument.Versions)
+	}
+}
+
+func publishNPMGroupTestVersion(t *testing.T, store *repository.MemoryStore, repo repository.HostedRepository, packageName, version string) {
+	t.Helper()
+	manifest := json.RawMessage(`{"name":"` + packageName + `","version":"` + version + `"}`)
+	if _, err := store.PublishNPMVersion(context.Background(), repository.NPMVersion{
+		RepositoryID: repo.ID, PackageName: packageName, Version: version,
+		Digest: "sha256:" + strings.Repeat("a", 64), Integrity: "sha512-" + base64.StdEncoding.EncodeToString(make([]byte, sha512.Size)),
+		Shasum: strings.Repeat("b", 40), TarballName: packageName + "-" + version + ".tgz",
+		ObjectKey: "native/npm/" + repo.ID, Manifest: manifest, Publisher: repo.Name,
+	}, map[string]string{"latest": version}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // createV2Group wires a V2 HostedGroup with the given members in the store.

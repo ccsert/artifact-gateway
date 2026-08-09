@@ -17,7 +17,7 @@ import (
 func main() {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	repo := repository.HostedRepository{
+	packages := repository.HostedRepository{
 		ID: uuid.NewString(), Name: "packages", Format: repository.FormatNPM,
 		Type: repository.RepositoryTypeHosted, AnonymousRead: true,
 	}
@@ -26,12 +26,27 @@ func main() {
 		if err != nil || parsed.Hostname() == "" {
 			log.Fatal("NPM_PROXY_ENDPOINT must be an absolute URL")
 		}
-		repo.Type = repository.RepositoryTypeProxy
-		repo.Endpoint = endpoint
-		repo.AllowedHosts = []string{parsed.Hostname()}
+		packages.Type = repository.RepositoryTypeProxy
+		packages.Endpoint = endpoint
+		packages.AllowedHosts = []string{parsed.Hostname()}
 	}
-	if _, err := store.CreateHostedRepository(ctx, repo); err != nil {
+	if _, err := store.CreateHostedRepository(ctx, packages); err != nil {
 		log.Fatal(err)
+	}
+	if packages.Type == repository.RepositoryTypeProxy {
+		private := repository.HostedRepository{
+			ID: uuid.NewString(), Name: "private", Format: repository.FormatNPM,
+			Type: repository.RepositoryTypeHosted, AnonymousRead: true,
+		}
+		if _, err := store.CreateHostedRepository(ctx, private); err != nil {
+			log.Fatal(err)
+		}
+		if _, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{
+			ID: uuid.NewString(), Name: "all-packages", Format: repository.FormatNPM, AnonymousRead: true,
+			Members: []repository.GroupMember{{RepositoryID: private.ID, Position: 0}, {RepositoryID: packages.ID, Position: 1}},
+		}, "native-npm-fixture", "all-packages", "all-packages"); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if _, err := store.ReplaceAnonymousAccessPolicy(ctx, repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		log.Fatal(err)
@@ -46,6 +61,6 @@ func main() {
 		app.TestAdapter{},
 		app.Authenticator{ResolverToken: "fixture-secret", ResolverActor: "npm-fixture"},
 	)
-	log.Printf("Native npm %s fixture listening on %s", repo.Type, address)
+	log.Printf("Native npm %s fixture listening on %s", packages.Type, address)
 	log.Fatal(http.ListenAndServe(address, handler))
 }

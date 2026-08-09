@@ -49,6 +49,32 @@ type failMavenTombstoneStore struct {
 	repository.LifecycleJobStore
 }
 
+func TestPostgresNPMGroupConstraint(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	suffix := strings.ToLower(uuid.NewString())
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-group-member-" + suffix, Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, replayed, err := store.CreateHostedGroupIdempotently(context.Background(), repository.HostedGroup{
+		ID: uuid.NewString(), Name: "npm-group-" + suffix, Format: repository.FormatNPM,
+		Members: []repository.GroupMember{{RepositoryID: repo.ID, Position: 0}},
+	}, "integration", "npm-group-"+suffix, "npm-group")
+	if err != nil || replayed || group.Format != repository.FormatNPM || len(group.Members) != 1 || group.Members[0].RepositoryID != repo.ID {
+		t.Fatalf("create npm group=%#v replayed=%t err=%v", group, replayed, err)
+	}
+}
+
 func (s failMavenTombstoneStore) DeleteClaimedMavenObjectIntent(context.Context, string, string) error {
 	return errors.New("tombstone write interrupted")
 }
