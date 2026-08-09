@@ -12,7 +12,8 @@
 - `pg_trgm` GIN 索引支持坐标、镜像名、Conan reference 和 Raw 路径的模糊搜索。
 - `text_pattern_ops` B-tree 索引支持四种格式的字面前缀分页；应用层会转义 `%`、`_` 和反斜杠，避免 LIKE 改变搜索语义。
 - BRIN 索引覆盖审计、生命周期、复制检查点和制品创建时间线，控制追加型表的索引体积。
-- `artifact_search_projection` 统一暴露 Maven、OCI、Conan、Raw 的可搜索元数据，应用层仍负责仓库可见性和授权。
+- `artifact_search_projection` 统一暴露 Maven、OCI、Conan、Raw 的可搜索元数据，应用层仍负责仓库可见性和授权；坐标前缀查询按制品折叠版本，SHA-256 查询保留历史可见版本。
+- 四种格式均有 repository + digest 复合索引；全局管理搜索会自动识别 `sha256:<64 hex>` 或裸 64 位十六进制并执行精确检索，分页游标同时绑定匹配模式和制品位置。
 
 ## 观测查询
 

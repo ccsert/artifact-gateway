@@ -95,3 +95,82 @@ func TestGlobalArtifactSearchRequiresAuthenticationAndNonEmptyQuery(t *testing.T
 		t.Fatalf("empty query status=%d body=%s", empty.Code, empty.Body.String())
 	}
 }
+
+func TestGlobalArtifactSearchFindsExactDigestWithOrWithoutAlgorithmPrefix(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "00000000-0000-0000-0000-000000000010", Name: "checksums", Format: repository.FormatRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digestHex := strings.Repeat("a", 64)
+	digest := "sha256:" + digestHex
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{
+		RepositoryID: repo.ID, Path: "releases/example.tar.gz", Digest: digest,
+		ObjectKey: "raw/example", Size: 42, ContentType: "application/gzip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{
+		RepositoryID: repo.ID, Path: "releases/other.tar.gz", Digest: "sha256:" + strings.Repeat("b", 64),
+		ObjectKey: "raw/other", Size: 21, ContentType: "application/gzip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{
+		Principal: "search-user", Scopes: []string{"repositories:read"},
+	}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	search := func(query string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/artifact-search?q="+url.QueryEscape(query), nil)
+		authorize(request, authenticator.IssueToken("search-user"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	for _, query := range []string{digest, strings.ToUpper(digestHex)} {
+		response := search(query)
+		var page struct {
+			Items []struct {
+				Coordinate string `json:"coordinate"`
+				Digest     string `json:"digest"`
+				MatchKind  string `json:"matchKind"`
+			} `json:"items"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil {
+			t.Fatalf("query=%q status=%d body=%s", query, response.Code, response.Body.String())
+		}
+		if len(page.Items) != 1 || page.Items[0].Coordinate != "releases/example.tar.gz" || page.Items[0].Digest != digest || page.Items[0].MatchKind != "digest" {
+			t.Fatalf("query=%q page=%#v", query, page)
+		}
+	}
+
+	coordinateResponse := search("releases/")
+	if coordinateResponse.Code != http.StatusOK || !strings.Contains(coordinateResponse.Body.String(), `"matchKind":"coordinate"`) {
+		t.Fatalf("coordinate status=%d body=%s", coordinateResponse.Code, coordinateResponse.Body.String())
+	}
+}
+
+func TestParseGlobalArtifactSearchQueryRecognizesOnlyCompleteSHA256Digests(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	for _, input := range []string{digest, "sha256:" + digest, "SHA256:" + strings.ToUpper(digest)} {
+		query := parseGlobalArtifactSearchQuery(input)
+		if query.Mode != repository.ArtifactSearchByDigest || query.Value != "sha256:"+digest {
+			t.Fatalf("input=%q query=%#v", input, query)
+		}
+	}
+	for _, input := range []string{"sha256:short", strings.Repeat("z", 64), "org.example:demo"} {
+		query := parseGlobalArtifactSearchQuery(input)
+		if query.Mode != repository.ArtifactSearchByCoordinate || query.Value != input {
+			t.Fatalf("input=%q query=%#v", input, query)
+		}
+	}
+}

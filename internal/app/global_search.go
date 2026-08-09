@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"sort"
@@ -14,9 +15,9 @@ import (
 )
 
 type globalArtifactSearchCursor struct {
-	Endpoint, Query, Format, RepositoryID, Coordinate string
-	BuildNumber                                       int
-	ExpiresAt                                         int64
+	Endpoint, Query, Mode, Format, RepositoryID, Coordinate, Digest string
+	BuildNumber                                                     int
+	ExpiresAt                                                       int64
 }
 
 func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r *http.Request, params adminopenapi.SearchArtifactsParams) {
@@ -29,6 +30,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must contain between 1 and 255 characters")
 		return
 	}
+	searchQuery := parseGlobalArtifactSearchQuery(query)
 	format := repository.Format("")
 	if params.Format != nil {
 		format = repository.Format(*params.Format)
@@ -49,13 +51,13 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	if params.PageToken != nil {
 		pageToken = string(*params.PageToken)
 	}
-	cursor, err := h.decodeGlobalArtifactSearchCursor(pageToken, query, format)
+	cursor, err := h.decodeGlobalArtifactSearchCursor(pageToken, searchQuery, format)
 	if err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 		return
 	}
 
-	repositories, err := h.readableSearchRepositories(r.Context(), principal, format, query)
+	repositories, err := h.readableSearchRepositories(r.Context(), principal, format, searchQuery)
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list searchable repositories failed")
 		return
@@ -81,10 +83,10 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 		repo := repositories[index]
 		after := artifactSearchPosition{}
 		if repo.ID == cursor.RepositoryID {
-			after = artifactSearchPosition{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}
+			after = artifactSearchPosition{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber, Digest: cursor.Digest}
 		}
 		remaining := pageSize - len(items)
-		summaries, searchErr := h.searchGroupMemberArtifacts(r, repo, query, remaining+1, after)
+		summaries, searchErr := h.searchGroupMemberArtifactsByQuery(r, repo, searchQuery, remaining+1, after)
 		if searchErr != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
 			return
@@ -94,7 +96,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 			summaries = summaries[:remaining]
 		}
 		for _, summary := range summaries {
-			items = append(items, globalArtifactSearchHit(repo, summary))
+			items = append(items, globalArtifactSearchHit(repo, summary, searchQuery.Mode))
 		}
 		if len(items) == pageSize {
 			last := items[len(items)-1]
@@ -102,13 +104,17 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 			if last.BuildNumber != nil {
 				buildNumber = int(*last.BuildNumber)
 			}
-			hasLaterResults, searchErr := h.hasSearchResultsAfter(r, repositories, index+1, query)
+			hasLaterResults, searchErr := h.hasSearchResultsAfter(r, repositories, index+1, searchQuery)
 			if searchErr != nil {
 				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
 				return
 			}
 			if hasMoreInRepository || hasLaterResults {
-				token := h.encodeGlobalArtifactSearchCursor(query, format, repo.ID, last.Coordinate, buildNumber)
+				lastDigest := ""
+				if last.Digest != nil {
+					lastDigest = *last.Digest
+				}
+				token := h.encodeGlobalArtifactSearchCursor(searchQuery, format, repo.ID, last.Coordinate, buildNumber, lastDigest)
 				next = &token
 			}
 		}
@@ -116,7 +122,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.GlobalArtifactSearchPage{Items: items, NextPageToken: next, SearchedRepositories: len(repositories)})
 }
 
-func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Context, principal Principal, format repository.Format, query string) ([]repository.HostedRepository, error) {
+func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Context, principal Principal, format repository.Format, query repository.ArtifactSearchQuery) ([]repository.HostedRepository, error) {
 	repositories := make([]repository.HostedRepository, 0)
 	after := ""
 	for {
@@ -125,7 +131,7 @@ func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Co
 			return nil, err
 		}
 		for _, repo := range page {
-			if repo.State != repository.RepositoryActive || format != "" && repo.Format != format || !validArtifactSearchQuery(repo.Format, query) {
+			if repo.State != repository.RepositoryActive || format != "" && repo.Format != format || query.Mode == repository.ArtifactSearchByCoordinate && !validArtifactSearchQuery(repo.Format, query.Value) {
 				continue
 			}
 			if h.authorizer.Authorize(ctx, principal, repo, RepositoryRead).Allowed {
@@ -145,9 +151,9 @@ func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Co
 	}
 }
 
-func (h generatedRepositoryAPIAdapter) hasSearchResultsAfter(r *http.Request, repositories []repository.HostedRepository, start int, query string) (bool, error) {
+func (h generatedRepositoryAPIAdapter) hasSearchResultsAfter(r *http.Request, repositories []repository.HostedRepository, start int, query repository.ArtifactSearchQuery) (bool, error) {
 	for index := start; index < len(repositories); index++ {
-		items, err := h.searchGroupMemberArtifacts(r, repositories[index], query, 1, artifactSearchPosition{})
+		items, err := h.searchGroupMemberArtifactsByQuery(r, repositories[index], query, 1, artifactSearchPosition{})
 		if err != nil {
 			return false, err
 		}
@@ -158,28 +164,43 @@ func (h generatedRepositoryAPIAdapter) hasSearchResultsAfter(r *http.Request, re
 	return false, nil
 }
 
-func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopenapi.ArtifactSummary) adminopenapi.GlobalArtifactSearchHit {
+func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopenapi.ArtifactSummary, mode repository.ArtifactSearchMode) adminopenapi.GlobalArtifactSearchHit {
 	return adminopenapi.GlobalArtifactSearchHit{
 		RepositoryId: uuid.MustParse(repo.ID), RepositoryName: repo.Name, Format: adminopenapi.Format(repo.Format),
+		MatchKind:  adminopenapi.GlobalArtifactSearchHitMatchKind(mode),
 		Coordinate: summary.Coordinate, Digest: summary.Digest, Size: summary.Size, ContentType: summary.ContentType,
 		CreatedAt: summary.CreatedAt, BuildNumber: summary.BuildNumber, Publisher: summary.Publisher,
 	}
 }
 
-func (h hostedRepositoryAPIHandler) encodeGlobalArtifactSearchCursor(query string, format repository.Format, repositoryID, coordinate string, buildNumber int) string {
+func (h hostedRepositoryAPIHandler) encodeGlobalArtifactSearchCursor(query repository.ArtifactSearchQuery, format repository.Format, repositoryID, coordinate string, buildNumber int, digest string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, globalArtifactSearchCursor{
-		Endpoint: "global-artifact-search", Query: query, Format: string(format), RepositoryID: repositoryID,
-		Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
+		Endpoint: "global-artifact-search", Query: query.Value, Mode: string(query.Mode), Format: string(format), RepositoryID: repositoryID,
+		Coordinate: coordinate, BuildNumber: buildNumber, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
 	})
 }
 
-func (h hostedRepositoryAPIHandler) decodeGlobalArtifactSearchCursor(token, query string, format repository.Format) (globalArtifactSearchCursor, error) {
+func (h hostedRepositoryAPIHandler) decodeGlobalArtifactSearchCursor(token string, query repository.ArtifactSearchQuery, format repository.Format) (globalArtifactSearchCursor, error) {
 	if token == "" {
 		return globalArtifactSearchCursor{}, nil
 	}
 	var cursor globalArtifactSearchCursor
-	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "global-artifact-search" || cursor.Query != query || cursor.Format != string(format) || cursor.RepositoryID == "" || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "global-artifact-search" || cursor.Query != query.Value || cursor.Mode != string(query.Mode) || cursor.Format != string(format) || cursor.RepositoryID == "" || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return globalArtifactSearchCursor{}, errors.New("invalid cursor")
 	}
 	return cursor, nil
+}
+
+func parseGlobalArtifactSearchQuery(value string) repository.ArtifactSearchQuery {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	hexDigest := normalized
+	if strings.HasPrefix(hexDigest, "sha256:") {
+		hexDigest = strings.TrimPrefix(hexDigest, "sha256:")
+	}
+	if len(hexDigest) == 64 {
+		if _, err := hex.DecodeString(hexDigest); err == nil {
+			return repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByDigest, Value: "sha256:" + hexDigest}
+		}
+	}
+	return repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: strings.TrimSpace(value)}
 }

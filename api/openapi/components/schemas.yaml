@@ -1227,6 +1227,7 @@ GlobalArtifactSearchHit:
     - repositoryId
     - repositoryName
     - format
+    - matchKind
     properties:
       repositoryId:
         type: string
@@ -1235,6 +1236,12 @@ GlobalArtifactSearchHit:
         type: string
       format:
         "$ref": "#/Format"
+      matchKind:
+        type: string
+        enum:
+        - coordinate
+        - digest
+        description: Whether this result matched a coordinate prefix or an exact digest.
 GlobalArtifactSearchPage:
   type: object
   required:

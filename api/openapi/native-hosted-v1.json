@@ -25,6 +25,7 @@
             "name": "q",
             "in": "query",
             "required": true,
+            "description": "Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -3589,7 +3590,8 @@
             "required": [
               "repositoryId",
               "repositoryName",
-              "format"
+              "format",
+              "matchKind"
             ],
             "properties": {
               "repositoryId": {
@@ -3601,6 +3603,14 @@
               },
               "format": {
                 "$ref": "#/components/schemas/Format"
+              },
+              "matchKind": {
+                "type": "string",
+                "enum": [
+                  "coordinate",
+                  "digest"
+                ],
+                "description": "Whether this result matched a coordinate prefix or an exact digest."
               }
             }
           }

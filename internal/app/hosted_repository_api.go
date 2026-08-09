@@ -100,6 +100,7 @@ type artifactSearchPageCursor struct {
 type artifactSearchPosition struct {
 	Coordinate  string
 	BuildNumber int
+	Digest      string
 }
 
 type retentionDryRunPageCursor struct {

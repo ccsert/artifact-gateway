@@ -882,11 +882,13 @@ function ArtifactsTab({
   canWrite,
   artifactTarget = "",
   buildTarget,
+  referenceTarget,
 }: {
   repo: Repository;
   canWrite: boolean;
   artifactTarget?: string;
   buildTarget?: number;
+  referenceTarget?: string;
 }) {
   const { token } = useAuth();
   const { text } = usePreferences();
@@ -1288,6 +1290,7 @@ function ArtifactsTab({
           repositoryId={repo.id}
           repository={repo.name}
           image={r.coordinate}
+          initialReference={referenceTarget}
           onDeleted={() => void load(q)}
         />
       );
@@ -4376,6 +4379,7 @@ export function RepositoryDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const artifactTarget = searchParams.get("artifact")?.trim() ?? "";
+  const referenceTarget = searchParams.get("reference")?.trim() || undefined;
   const parsedBuildTarget = Number(searchParams.get("build") ?? "");
   const buildTarget =
     Number.isInteger(parsedBuildTarget) && parsedBuildTarget > 0
@@ -4490,6 +4494,7 @@ export function RepositoryDetailPage() {
             canWrite={effectiveAccess?.permissions.write.allowed === true}
             artifactTarget={artifactTarget}
             buildTarget={buildTarget}
+            referenceTarget={referenceTarget}
           />
         )}
         {tab === "publish" &&

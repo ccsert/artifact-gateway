@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -104,9 +105,13 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 }
 
 func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Request, repo repository.HostedRepository, query string, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
+	return h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query}, limit, after)
+}
+
+func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
 	if h.searchProjection != nil {
-		projected, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, query, limit, repository.ArtifactSearchPosition{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
+		projected, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, query, limit, repository.ArtifactSearchPosition{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber, Digest: after.Digest})
 		if err != nil {
 			return nil, err
 		}
@@ -132,9 +137,12 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 		}
 		return items, nil
 	}
+	if query.Mode != repository.ArtifactSearchByCoordinate {
+		return nil, errors.New("digest search requires the artifact search projection")
+	}
 	switch repo.Format {
 	case repository.FormatOCI:
-		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, limit, after.Coordinate)
+		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +150,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
 		}
 	case repository.FormatMaven:
-		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
+		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query.Value, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +160,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: artifact.Coordinate, Digest: &digest, CreatedAt: &createdAt, BuildNumber: &buildNumber, Publisher: optionalPublisher(artifact.Publisher)})
 		}
 	case repository.FormatConan:
-		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, limit, after.Coordinate)
+		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +168,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
 	case repository.FormatRaw:
-		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, limit, after.Coordinate)
+		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
 		if err != nil {
 			return nil, err
 		}

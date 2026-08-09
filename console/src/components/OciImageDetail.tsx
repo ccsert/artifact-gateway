@@ -142,11 +142,13 @@ export function OciImageDetail({
   repositoryId,
   repository,
   image,
+  initialReference,
   onDeleted,
 }: {
   repositoryId: string;
   repository: string;
   image: string;
+  initialReference?: string;
   onDeleted?: () => void;
 }) {
   const { token } = useAuth();
@@ -177,11 +179,16 @@ export function OciImageDetail({
     try {
       const nextManifests = await fetchOciManifests(repositoryId, image);
       const nextVersions = ociVersionOptions(nextManifests);
+      const initialVersion = nextVersions.find(
+        (version) =>
+          version.value === initialReference ||
+          version.digest === initialReference,
+      );
       setManifests(nextManifests);
       setSelectedReference((current) =>
         current && nextVersions.some((version) => version.value === current)
           ? current
-          : (nextVersions[0]?.value ?? null),
+          : (initialVersion?.value ?? nextVersions[0]?.value ?? null),
       );
       return nextManifests;
     } catch (requestError) {
@@ -190,11 +197,23 @@ export function OciImageDetail({
     } finally {
       setLoading(false);
     }
-  }, [image, repositoryId]);
+  }, [image, initialReference, repositoryId]);
 
   useEffect(() => {
     void loadVersions();
   }, [loadVersions]);
+
+  // A deep link may change while the expanded row stays mounted. Apply the
+  // requested digest/tag without resetting later manual version selections.
+  useEffect(() => {
+    if (!initialReference || !manifests) return;
+    const target = ociVersionOptions(manifests).find(
+      (version) =>
+        version.value === initialReference ||
+        version.digest === initialReference,
+    );
+    if (target) setSelectedReference(target.value);
+  }, [initialReference, manifests]);
 
   // 加载选中标签的 manifest + config
   const loadManifest = useCallback(

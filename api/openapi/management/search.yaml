@@ -7,6 +7,7 @@ artifact_search:
     - name: q
       in: query
       required: true
+      description: Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
       schema:
         type: string
         minLength: 1

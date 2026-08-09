@@ -267,7 +267,9 @@ referenced commits.
 - **Global cross-repository artifact search (P1).** A header search bar and a
   `/search` results page use the server-side `/api/v2/artifact-search` cursor
   endpoint, enforce per-repository read permissions, and preserve exact deep
-  links including Maven SNAPSHOT build numbers.
+  links including Maven SNAPSHOT build numbers. The search now also recognizes
+  full or bare SHA-256 values, returns a `matchKind`, and can locate historical
+  visible OCI/Conan versions rather than only the latest coordinate projection.
 - **Audit CSV export (P3).** The audits page exports the currently filtered
   records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
 - **Audit cursor paging (P1).** The audit Console uses a signed, filter-scoped
@@ -349,9 +351,10 @@ backend API additions listed below.
 A suggested sequence for closing the gaps, scoped so each item is
 independently deliverable.
 
-1. **P1 Rich global search and artifact intelligence.** Add checksum/digest/tag
-   indexes and surface signatures, SBOM, provenance, license, and vulnerability
-   metadata through the shared artifact detail experience.
+1. **P1 Rich global search and artifact intelligence.** Checksum/digest indexes
+   and exact global digest search are delivered; the remaining work is to
+   surface signatures, SBOM, provenance, license, and vulnerability metadata
+   through the shared artifact detail experience.
 2. **P1 Privilege/content-selector management.** Add reusable role templates
    and selector composition beyond the current repository grant prefixes,
    retaining effective-access simulation as the preview and diagnostics tool.

@@ -670,6 +670,10 @@ export type GlobalArtifactSearchHit = ArtifactSummary & {
   repositoryId: string;
   repositoryName: string;
   format: Format;
+  /**
+   * Whether this result matched a coordinate prefix or an exact digest.
+   */
+  matchKind: "coordinate" | "digest";
 };
 
 export type GlobalArtifactSearchPage = {
@@ -1135,6 +1139,9 @@ export type SearchArtifactsData = {
   body?: never;
   path?: never;
   query: {
+    /**
+     * Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
+     */
     q: string;
     format?: Format;
     pageSize?: number;

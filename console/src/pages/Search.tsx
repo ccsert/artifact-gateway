@@ -7,7 +7,7 @@ import { searchArtifacts } from "../client";
 import type { GlobalArtifactSearchHit } from "../client";
 import { PageHeader } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
-import { FormatBadge } from "../components/Badge";
+import { Badge, FormatBadge } from "../components/Badge";
 import { formatBytes, formatDate } from "../lib/format";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import {
@@ -42,10 +42,11 @@ function isMavenGroup(row: SearchRow): row is MavenGroup {
   return row.format === "maven" && "hits" in row;
 }
 
-function artifactTarget(hit: GlobalArtifactSearchHit): string {
+export function artifactTarget(hit: GlobalArtifactSearchHit): string {
   const params = new URLSearchParams({ artifact: hit.coordinate });
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
+  if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
   return `/repositories/${hit.repositoryId}?${params.toString()}`;
 }
 
@@ -198,9 +199,22 @@ export function SearchPage() {
         const row = tableRow.row;
         return (
           <div>
-            <span className="truncate font-mono text-xs text-zinc-200">
-              {row.coordinate}
-            </span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono text-xs text-zinc-200">
+                {row.coordinate}
+              </span>
+              <Badge
+                tone={
+                  tableRow.representative.matchKind === "digest"
+                    ? "cyan"
+                    : "zinc"
+                }
+              >
+                {tableRow.representative.matchKind === "digest"
+                  ? text("SHA-256 匹配", "SHA-256 match")
+                  : text("坐标匹配", "Coordinate match")}
+              </Badge>
+            </div>
             {!isMavenGroup(row) && row.digest && (
               <div className="mt-1">
                 <CopyableValue
@@ -423,19 +437,27 @@ export function SearchPage() {
                 children: formatBytes(hit.size),
               },
               {
-                key: "digest",
-                label: "Digest",
-                children: hit.digest ? (
-                  <CopyableValue
-                    value={hit.digest}
-                    label={hit.digest.slice(0, 22)}
-                  />
-                ) : (
-                  text("未记录", "Not recorded")
-                ),
+                key: "matchKind",
+                label: text("匹配依据", "Matched by"),
+                children:
+                  hit.matchKind === "digest"
+                    ? text("SHA-256 摘要", "SHA-256 digest")
+                    : text("制品坐标", "Artifact coordinate"),
               },
             ]}
           />
+          {hit.digest && (
+            <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+              <div className="mb-1 text-[11px] font-medium text-zinc-500">
+                SHA-256 Digest
+              </div>
+              <CopyableValue
+                value={hit.digest}
+                label={hit.digest}
+                className="w-full text-xs text-zinc-300"
+              />
+            </div>
+          )}
           <MavenArtifactDetail
             repoId={hit.repositoryId}
             repoName={hit.repositoryName}
@@ -489,11 +511,29 @@ export function SearchPage() {
             },
           ]}
         />
+        {row.digest && (
+          <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+            <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-zinc-500">
+              <span>SHA-256 Digest</span>
+              <Badge tone={row.matchKind === "digest" ? "cyan" : "zinc"}>
+                {row.matchKind === "digest"
+                  ? text("精确匹配", "Exact match")
+                  : text("校验信息", "Checksum")}
+              </Badge>
+            </div>
+            <CopyableValue
+              value={row.digest}
+              label={row.digest}
+              className="w-full text-xs text-zinc-300"
+            />
+          </div>
+        )}
         {row.format === "oci" && (
           <OciImageDetail
             repositoryId={row.repositoryId}
             repository={row.repositoryName}
             image={row.coordinate}
+            initialReference={row.digest}
           />
         )}
         {row.format === "conan" && (
@@ -548,8 +588,8 @@ export function SearchPage() {
                 `Searching all repositories for “${q}”`,
               )
             : text(
-                "跨仓库搜索制品坐标、路径与引用",
-                "Search artifact coordinates, paths, and references across repositories",
+                "跨仓库搜索制品坐标、路径、引用与 SHA-256",
+                "Search artifact coordinates, paths, references, and SHA-256 digests across repositories",
               )
         }
       />
@@ -562,8 +602,8 @@ export function SearchPage() {
         }
         className="mb-5 max-w-3xl"
         placeholder={text(
-          "输入制品坐标、路径或镜像名前缀…",
-          "Enter an artifact coordinate, path, or image prefix…",
+          "输入坐标、路径、镜像名前缀或 SHA-256…",
+          "Enter a coordinate, path, image prefix, or SHA-256 digest…",
         )}
         value={query}
         loading={loading}
@@ -577,8 +617,8 @@ export function SearchPage() {
         <EmptyState
           title={text("输入关键词开始搜索", "Enter a keyword to search")}
           hint={text(
-            "支持 Maven 坐标、OCI 镜像、Conan 引用和 Raw 路径",
-            "Supports Maven coordinates, OCI images, Conan references, and Raw paths",
+            "支持 Maven 坐标、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
+            "Supports Maven coordinates, OCI images, Conan references, Raw paths, and full SHA-256 digests",
           )}
         />
       ) : error && hits.length === 0 ? (
@@ -621,6 +661,20 @@ export function SearchPage() {
                   "仅包含当前身份可读仓库",
                   "Only repositories readable by the current identity",
                 ),
+              },
+              {
+                label: text("匹配方式", "Match mode"),
+                value:
+                  hits[0]?.matchKind === "digest"
+                    ? text("SHA-256 精确", "Exact SHA-256")
+                    : text("坐标前缀", "Coordinate prefix"),
+                hint:
+                  hits[0]?.matchKind === "digest"
+                    ? text(
+                        "包含历史可见版本",
+                        "Includes older visible versions",
+                      )
+                    : text("按格式校验输入", "Input is validated by format"),
               },
               {
                 label: text("分页状态", "Pagination"),

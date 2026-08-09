@@ -361,6 +361,24 @@ func (e Format) Valid() bool {
 	}
 }
 
+// Defines values for GlobalArtifactSearchHitMatchKind.
+const (
+	Coordinate GlobalArtifactSearchHitMatchKind = "coordinate"
+	Digest     GlobalArtifactSearchHitMatchKind = "digest"
+)
+
+// Valid indicates whether the value is a known member of the GlobalArtifactSearchHitMatchKind enum.
+func (e GlobalArtifactSearchHitMatchKind) Valid() bool {
+	switch e {
+	case Coordinate:
+		return true
+	case Digest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GrantScopes.
 const (
 	GrantScopesRepositoriesAdmin GrantScopes = "repositories:admin"
@@ -1478,12 +1496,18 @@ type GlobalArtifactSearchHit struct {
 	Digest      *string    `json:"digest,omitempty"`
 	Format      Format     `json:"format"`
 
+	// MatchKind Whether this result matched a coordinate prefix or an exact digest.
+	MatchKind GlobalArtifactSearchHitMatchKind `json:"matchKind"`
+
 	// Publisher Publisher actor when the format records it.
 	Publisher      *string            `json:"publisher,omitempty"`
 	RepositoryId   openapi_types.UUID `json:"repositoryId"`
 	RepositoryName string             `json:"repositoryName"`
 	Size           *int64             `json:"size,omitempty"`
 }
+
+// GlobalArtifactSearchHitMatchKind Whether this result matched a coordinate prefix or an exact digest.
+type GlobalArtifactSearchHitMatchKind string
 
 // GlobalArtifactSearchPage defines model for GlobalArtifactSearchPage.
 type GlobalArtifactSearchPage struct {
@@ -2262,6 +2286,7 @@ type ReplaceAnonymousAccessPolicyParams struct {
 
 // SearchArtifactsParams defines parameters for SearchArtifacts.
 type SearchArtifactsParams struct {
+	// Q Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
 	Q         string     `form:"q" json:"q"`
 	Format    *Format    `form:"format,omitempty" json:"format,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`

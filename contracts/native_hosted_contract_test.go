@@ -199,6 +199,21 @@ func TestGlobalArtifactSearchContract(t *testing.T) {
 	for _, status := range []string{"200", "400", "401"} {
 		requireResponse(t, search, status)
 	}
+	hit := spec.Components.Schemas["GlobalArtifactSearchHit"].Value
+	if len(hit.AllOf) != 2 || hit.AllOf[1].Value == nil {
+		t.Fatal("GlobalArtifactSearchHit must extend ArtifactSummary with search metadata")
+	}
+	metadata := hit.AllOf[1].Value
+	if !contains(metadata.Required, "matchKind") || metadata.Properties["matchKind"] == nil {
+		t.Fatal("GlobalArtifactSearchHit must require matchKind")
+	}
+	matchKind := metadata.Properties["matchKind"].Value
+	if matchKind == nil {
+		t.Fatal("matchKind schema is unresolved")
+	}
+	if len(matchKind.Enum) != 2 || matchKind.Enum[0] != "coordinate" || matchKind.Enum[1] != "digest" {
+		t.Fatalf("matchKind enum=%v", matchKind.Enum)
+	}
 }
 
 func TestMavenCoordinateCommitContract(t *testing.T) {
