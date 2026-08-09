@@ -14,6 +14,7 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -30,6 +31,7 @@ import { EmptyState, ErrorBanner, Loading } from "../components/Feedback";
 import { StateBadge } from "../components/Badge";
 import { formatDate } from "../lib/format";
 import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
+import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
 import {
   FilterBar,
   FilterField,
@@ -412,149 +414,178 @@ export function OperationsPage() {
       <PageHeader
         title={text("任务中心", "Operations")}
         description={text(
-          "跨仓库查看晋级、复制、保留和对象回收任务的当前状态。",
-          "Track promotion, replication, retention, and reclamation jobs across repositories.",
+          "配置周期性维护计划，并跨仓库查看后台任务的执行状态。",
+          "Schedule recurring maintenance and track background jobs across repositories.",
         )}
-        actions={
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => void load()}
-            loading={loading}
-          >
-            {text("刷新任务", "Refresh jobs")}
-          </Button>
-        }
       />
-      <MetricStrip
+      <Tabs
+        defaultActiveKey="schedules"
         items={[
           {
-            label: text("任务总数", "Jobs"),
-            value: rows?.length ?? "—",
-            hint: text("当前保留窗口", "Current retention window"),
+            key: "schedules",
+            label: text("计划任务", "Scheduled tasks"),
+            children: <ScheduledTasksPanel />,
           },
           {
-            label: text("运行中", "Running"),
-            value: running,
-            hint: text("正在处理", "In progress"),
-            tone: running ? "success" : "default",
-          },
-          {
-            label: text("待处理", "Pending"),
-            value: pending,
-            hint: text("等待 worker", "Waiting for a worker"),
-            tone: pending ? "warning" : "default",
-          },
-          {
-            label: text("失败", "Failed"),
-            value: failed,
-            hint: failed
-              ? text("需要检查失败原因", "Review failure details")
-              : text("当前没有失败任务", "No failed jobs"),
-            tone: failed ? "danger" : "success",
+            key: "jobs",
+            label: text("执行记录", "Job history"),
+            children: (
+              <>
+                <MetricStrip
+                  items={[
+                    {
+                      label: text("任务总数", "Jobs"),
+                      value: rows?.length ?? "—",
+                      hint: text("当前保留窗口", "Current retention window"),
+                    },
+                    {
+                      label: text("运行中", "Running"),
+                      value: running,
+                      hint: text("正在处理", "In progress"),
+                      tone: running ? "success" : "default",
+                    },
+                    {
+                      label: text("待处理", "Pending"),
+                      value: pending,
+                      hint: text("等待 worker", "Waiting for a worker"),
+                      tone: pending ? "warning" : "default",
+                    },
+                    {
+                      label: text("失败", "Failed"),
+                      value: failed,
+                      hint: failed
+                        ? text("需要检查失败原因", "Review failure details")
+                        : text("当前没有失败任务", "No failed jobs"),
+                      tone: failed ? "danger" : "success",
+                    },
+                  ]}
+                />
+                <RuntimeNodesPanel />
+                <FilterBar
+                  className="mt-4 mb-4"
+                  actions={
+                    <Space>
+                      {(stateFilter !== "all" ||
+                        kindFilter !== "all" ||
+                        repositoryFilter !== "all") && (
+                        <Button
+                          type="text"
+                          icon={<ClearOutlined />}
+                          onClick={() => {
+                            setStateFilter("all");
+                            setKindFilter("all");
+                            setRepositoryFilter("all");
+                          }}
+                        >
+                          {text("清除筛选", "Clear filters")}
+                        </Button>
+                      )}
+                      <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => void load()}
+                        loading={loading}
+                      >
+                        {text("刷新", "Refresh")}
+                      </Button>
+                    </Space>
+                  }
+                >
+                  <FilterField
+                    label={text("状态", "Status")}
+                    className="min-w-[160px]"
+                  >
+                    <Select
+                      className="w-full"
+                      value={stateFilter}
+                      onChange={setStateFilter}
+                      options={[
+                        {
+                          value: "all",
+                          label: text("全部状态", "All statuses"),
+                        },
+                        { value: "pending", label: "pending" },
+                        { value: "running", label: "running" },
+                        { value: "retrying", label: "retrying" },
+                        { value: "completed", label: "completed" },
+                        { value: "failed", label: "failed" },
+                        { value: "cancelled", label: "cancelled" },
+                      ]}
+                    />
+                  </FilterField>
+                  <FilterField
+                    label={text("任务类型", "Job type")}
+                    className="min-w-[180px]"
+                  >
+                    <Select
+                      className="w-full"
+                      value={kindFilter}
+                      onChange={setKindFilter}
+                      options={[
+                        { value: "all", label: text("全部类型", "All types") },
+                        ...kindOptions.map((kind) => ({
+                          value: kind,
+                          label: kindLabel(kind),
+                        })),
+                      ]}
+                    />
+                  </FilterField>
+                  <FilterField
+                    label={text("仓库", "Repository")}
+                    className="min-w-[220px]"
+                  >
+                    <Select
+                      className="w-full"
+                      value={repositoryFilter}
+                      onChange={setRepositoryFilter}
+                      showSearch={{ optionFilterProp: "label" }}
+                      options={[
+                        {
+                          value: "all",
+                          label: text("全部仓库", "All repositories"),
+                        },
+                        ...repositories.map((repo) => ({
+                          value: repo.id,
+                          label: repo.name,
+                        })),
+                      ]}
+                    />
+                  </FilterField>
+                </FilterBar>
+                {error ? (
+                  <ErrorBanner error={error} onRetry={load} />
+                ) : !rows ? (
+                  <Loading
+                    label={text("加载任务状态…", "Loading job status…")}
+                  />
+                ) : visibleRows.length === 0 ? (
+                  <Card>
+                    <EmptyState
+                      title={text("没有匹配的任务", "No matching jobs")}
+                      hint={text(
+                        "调整筛选条件，或等待任务产生后再刷新。",
+                        "Adjust the filters or refresh after new jobs are created.",
+                      )}
+                    />
+                  </Card>
+                ) : (
+                  <Card>
+                    <Table<OperationRow>
+                      className="ag-console-table"
+                      rowKey={(row) => `${row.kind}-${row.id}`}
+                      size="middle"
+                      dataSource={visibleRows}
+                      columns={columns}
+                      pagination={false}
+                      virtual
+                      scroll={{ x: 1520, y: 520 }}
+                    />
+                  </Card>
+                )}
+              </>
+            ),
           },
         ]}
       />
-      <RuntimeNodesPanel />
-      <FilterBar
-        className="mt-4 mb-4"
-        actions={
-          stateFilter !== "all" ||
-          kindFilter !== "all" ||
-          repositoryFilter !== "all" ? (
-            <Button
-              type="text"
-              icon={<ClearOutlined />}
-              onClick={() => {
-                setStateFilter("all");
-                setKindFilter("all");
-                setRepositoryFilter("all");
-              }}
-            >
-              {text("清除筛选", "Clear filters")}
-            </Button>
-          ) : undefined
-        }
-      >
-        <FilterField label={text("状态", "Status")} className="min-w-[160px]">
-          <Select
-            className="w-full"
-            value={stateFilter}
-            onChange={setStateFilter}
-            options={[
-              { value: "all", label: text("全部状态", "All statuses") },
-              { value: "pending", label: "pending" },
-              { value: "running", label: "running" },
-              { value: "retrying", label: "retrying" },
-              { value: "completed", label: "completed" },
-              { value: "failed", label: "failed" },
-              { value: "cancelled", label: "cancelled" },
-            ]}
-          />
-        </FilterField>
-        <FilterField
-          label={text("任务类型", "Job type")}
-          className="min-w-[180px]"
-        >
-          <Select
-            className="w-full"
-            value={kindFilter}
-            onChange={setKindFilter}
-            options={[
-              { value: "all", label: text("全部类型", "All types") },
-              ...kindOptions.map((kind) => ({
-                value: kind,
-                label: kindLabel(kind),
-              })),
-            ]}
-          />
-        </FilterField>
-        <FilterField
-          label={text("仓库", "Repository")}
-          className="min-w-[220px]"
-        >
-          <Select
-            className="w-full"
-            value={repositoryFilter}
-            onChange={setRepositoryFilter}
-            showSearch={{ optionFilterProp: "label" }}
-            options={[
-              { value: "all", label: text("全部仓库", "All repositories") },
-              ...repositories.map((repo) => ({
-                value: repo.id,
-                label: repo.name,
-              })),
-            ]}
-          />
-        </FilterField>
-      </FilterBar>
-      {error ? (
-        <ErrorBanner error={error} onRetry={load} />
-      ) : !rows ? (
-        <Loading label={text("加载任务状态…", "Loading job status…")} />
-      ) : visibleRows.length === 0 ? (
-        <Card>
-          <EmptyState
-            title={text("没有匹配的任务", "No matching jobs")}
-            hint={text(
-              "调整筛选条件，或等待任务产生后再刷新。",
-              "Adjust the filters or refresh after new jobs are created.",
-            )}
-          />
-        </Card>
-      ) : (
-        <Card>
-          <Table<OperationRow>
-            className="ag-console-table"
-            rowKey={(row) => `${row.kind}-${row.id}`}
-            size="middle"
-            dataSource={visibleRows}
-            columns={columns}
-            pagination={false}
-            virtual
-            scroll={{ x: 1520, y: 520 }}
-          />
-        </Card>
-      )}
     </div>
   );
 }

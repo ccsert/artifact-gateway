@@ -57,6 +57,7 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   healthy: "green",
   degraded: "amber",
   critical: "red",
+  submitted: "green",
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {
@@ -83,6 +84,7 @@ export function StateBadge({ state }: { state: string | undefined }) {
     degraded: ["降级", "Degraded"],
     critical: ["严重", "Critical"],
     denied: ["拒绝", "Denied"],
+    submitted: ["已投递", "Submitted"],
   };
   const label = labels[value];
   return (
