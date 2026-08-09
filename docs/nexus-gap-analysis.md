@@ -219,7 +219,7 @@ and run immediately through lifecycle controls. Checkpoint progress is fenced
 by leases. Promotion and retention are represented as lifecycle jobs.
 Repository and audit retention can also be dispatched by the fixed-interval
 task scheduler; promotion/replication schedules and arbitrary Nexus task types
-are not exposed.
+are not exposed, while cron scheduling remains a future capability.
 
 ### Notifications And Feedback
 

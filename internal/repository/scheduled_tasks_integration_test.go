@@ -64,6 +64,16 @@ func TestPostgresScheduledTaskClaimIsSingleConsumer(t *testing.T) {
 	if got, want := claimed[0].Task.NextRunAt, now.Add(15*time.Minute); !got.Equal(want) {
 		t.Fatalf("next run = %v, want %v", got, want)
 	}
+	if claimed[0].Run.State != ScheduledTaskFailed || claimed[0].Run.LastError != "dispatch interrupted before submission" {
+		t.Fatalf("claim placeholder = %#v", claimed[0].Run)
+	}
+	remaining, err := first.ClaimDueScheduledTasks(ctx, now, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("interrupted claim was reissued before next interval: %#v", remaining)
+	}
 	run := claimed[0].Run
 	run.State, run.TargetKind, run.TargetID, run.CompletedAt = ScheduledTaskSubmitted, "audit-cleanup", uuid.NewString(), now
 	if err = first.UpdateScheduledTaskRun(ctx, run); err != nil {
