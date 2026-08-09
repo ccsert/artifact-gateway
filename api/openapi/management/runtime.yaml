@@ -8,3 +8,12 @@ runtime_nodes:
         "$ref": "../components/responses.yaml#/RuntimeNodeList"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
+diagnostics:
+  get:
+    operationId: getDiagnostics
+    summary: Get sanitized runtime and dependency diagnostics
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/Diagnostics"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"

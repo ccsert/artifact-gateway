@@ -5,6 +5,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 const (
@@ -106,7 +107,11 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeNodes(w http.ResponseWriter, r
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list runtime nodes failed")
 		return
 	}
-	now := time.Now().UTC()
+	items := runtimeNodeResponses(nodes, time.Now().UTC())
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.RuntimeNodeList{Items: items, Health: runtimeNodeHealth(items)})
+}
+
+func runtimeNodeResponses(nodes []repository.RuntimeNode, now time.Time) []adminopenapi.RuntimeNode {
 	items := make([]adminopenapi.RuntimeNode, 0, len(nodes))
 	for _, node := range nodes {
 		formats := make([]adminopenapi.Format, 0, len(node.WorkerFormats))
@@ -133,5 +138,5 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeNodes(w http.ResponseWriter, r
 		}
 		items = append(items, item)
 	}
-	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.RuntimeNodeList{Items: items, Health: runtimeNodeHealth(items)})
+	return items
 }

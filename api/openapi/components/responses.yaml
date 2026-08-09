@@ -17,6 +17,12 @@ RuntimeNodeList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RuntimeNodeList"
+Diagnostics:
+  description: Sanitized runtime and dependency diagnostics for administrators
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/Diagnostics"
 APIKey:
   description: Revocable API key metadata
   content:

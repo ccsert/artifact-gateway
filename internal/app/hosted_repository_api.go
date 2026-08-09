@@ -244,6 +244,8 @@ type generatedRepositoryAPIAdapter struct {
 	searchProjection  repository.ArtifactSearchStore
 	runtimeNodes      repository.RuntimeNodeStore
 	scheduledTasks    repository.ScheduledTaskStore
+	queueStats        repository.BackgroundOperationQueueStore
+	diagnostics       Dependencies
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}

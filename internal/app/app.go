@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,7 +21,12 @@ type Checker interface {
 }
 
 type Dependencies struct {
-	checkers []Checker
+	checkers       []Checker
+	BuildVersion   string
+	BuildRevision  string
+	BuildModified  bool
+	BuildGoVersion string
+	Runtime        DiagnosticRuntime
 	// NativeMavenObjectStore is supplied by the runtime after S3 is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore OCIObjectStore
@@ -36,13 +44,60 @@ type Dependencies struct {
 	OIDCRuntime            *OIDCRuntime
 }
 
+type DiagnosticRuntime struct {
+	InstanceID    string
+	Roles         []string
+	WorkerFormats []repository.Format
+	WorkerKinds   []string
+}
+
 func NewDependencies(cfg config.Config) Dependencies {
+	version, revision, modified := buildIdentity()
+	roles := make([]string, 0, len(cfg.NodeRoles))
+	for _, role := range cfg.NodeRoles {
+		roles = append(roles, string(role))
+	}
+	formats := make([]repository.Format, 0, len(cfg.WorkerFormats))
+	for _, format := range cfg.WorkerFormats {
+		formats = append(formats, repository.Format(format))
+	}
 	return Dependencies{
 		checkers: []Checker{
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
 		},
+		BuildVersion:   version,
+		BuildRevision:  revision,
+		BuildModified:  modified,
+		BuildGoVersion: runtime.Version(),
+		Runtime: DiagnosticRuntime{
+			InstanceID: cfg.InstanceID, Roles: roles,
+			WorkerFormats: formats,
+			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
+		},
 	}
+}
+
+func buildIdentity() (version, revision string, modified bool) {
+	version, revision = "dev", "unknown"
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version, revision, false
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			if setting.Value != "" {
+				revision = setting.Value
+			}
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	return version, revision, modified
 }
 
 func (d Dependencies) WithDatabasePool(db *sql.DB) Dependencies {

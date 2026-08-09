@@ -295,6 +295,72 @@ func (e DeletionState) Valid() bool {
 	}
 }
 
+// Defines values for DiagnosticDependencyStatus.
+const (
+	NotConfigured DiagnosticDependencyStatus = "not_configured"
+	Reachable     DiagnosticDependencyStatus = "reachable"
+	Unreachable   DiagnosticDependencyStatus = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticDependencyStatus enum.
+func (e DiagnosticDependencyStatus) Valid() bool {
+	switch e {
+	case NotConfigured:
+		return true
+	case Reachable:
+		return true
+	case Unreachable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticQueueStatKind.
+const (
+	DiagnosticQueueStatKindLifecycle   DiagnosticQueueStatKind = "lifecycle"
+	DiagnosticQueueStatKindPromotion   DiagnosticQueueStatKind = "promotion"
+	DiagnosticQueueStatKindReplication DiagnosticQueueStatKind = "replication"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticQueueStatKind enum.
+func (e DiagnosticQueueStatKind) Valid() bool {
+	switch e {
+	case DiagnosticQueueStatKindLifecycle:
+		return true
+	case DiagnosticQueueStatKindPromotion:
+		return true
+	case DiagnosticQueueStatKindReplication:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticQueueStatState.
+const (
+	DiagnosticQueueStatStateFailed   DiagnosticQueueStatState = "failed"
+	DiagnosticQueueStatStatePending  DiagnosticQueueStatState = "pending"
+	DiagnosticQueueStatStateRetrying DiagnosticQueueStatState = "retrying"
+	DiagnosticQueueStatStateRunning  DiagnosticQueueStatState = "running"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticQueueStatState enum.
+func (e DiagnosticQueueStatState) Valid() bool {
+	switch e {
+	case DiagnosticQueueStatStateFailed:
+		return true
+	case DiagnosticQueueStatStatePending:
+		return true
+	case DiagnosticQueueStatStateRetrying:
+		return true
+	case DiagnosticQueueStatStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EgressProxyMode.
 const (
 	EgressProxyModeCustom      EgressProxyMode = "custom"
@@ -1062,16 +1128,16 @@ func (e ScheduledTaskRunState) Valid() bool {
 
 // Defines values for ScheduledTaskRunTargetKind.
 const (
-	AuditCleanup ScheduledTaskRunTargetKind = "audit-cleanup"
-	Lifecycle    ScheduledTaskRunTargetKind = "lifecycle"
+	ScheduledTaskRunTargetKindAuditCleanup ScheduledTaskRunTargetKind = "audit-cleanup"
+	ScheduledTaskRunTargetKindLifecycle    ScheduledTaskRunTargetKind = "lifecycle"
 )
 
 // Valid indicates whether the value is a known member of the ScheduledTaskRunTargetKind enum.
 func (e ScheduledTaskRunTargetKind) Valid() bool {
 	switch e {
-	case AuditCleanup:
+	case ScheduledTaskRunTargetKindAuditCleanup:
 		return true
-	case Lifecycle:
+	case ScheduledTaskRunTargetKindLifecycle:
 		return true
 	default:
 		return false
@@ -1576,6 +1642,57 @@ type Deletion struct {
 
 // DeletionState defines model for Deletion.State.
 type DeletionState string
+
+// DiagnosticBuild defines model for DiagnosticBuild.
+type DiagnosticBuild struct {
+	GoVersion string `json:"goVersion"`
+	Modified  *bool  `json:"modified,omitempty"`
+	Revision  string `json:"revision"`
+	Version   string `json:"version"`
+}
+
+// DiagnosticDependency defines model for DiagnosticDependency.
+type DiagnosticDependency struct {
+	Detail *string                    `json:"detail,omitempty"`
+	Name   string                     `json:"name"`
+	Status DiagnosticDependencyStatus `json:"status"`
+}
+
+// DiagnosticDependencyStatus defines model for DiagnosticDependency.Status.
+type DiagnosticDependencyStatus string
+
+// DiagnosticQueueStat defines model for DiagnosticQueueStat.
+type DiagnosticQueueStat struct {
+	Count           int                      `json:"count"`
+	Format          Format                   `json:"format"`
+	Kind            DiagnosticQueueStatKind  `json:"kind"`
+	OldestCreatedAt *time.Time               `json:"oldestCreatedAt,omitempty"`
+	State           DiagnosticQueueStatState `json:"state"`
+}
+
+// DiagnosticQueueStatKind defines model for DiagnosticQueueStat.Kind.
+type DiagnosticQueueStatKind string
+
+// DiagnosticQueueStatState defines model for DiagnosticQueueStat.State.
+type DiagnosticQueueStatState string
+
+// DiagnosticRuntime defines model for DiagnosticRuntime.
+type DiagnosticRuntime struct {
+	InstanceId    string   `json:"instanceId"`
+	Roles         []string `json:"roles"`
+	WorkerFormats []Format `json:"workerFormats"`
+	WorkerKinds   []string `json:"workerKinds"`
+}
+
+// Diagnostics defines model for Diagnostics.
+type Diagnostics struct {
+	Build        DiagnosticBuild        `json:"build"`
+	Dependencies []DiagnosticDependency `json:"dependencies"`
+	GeneratedAt  time.Time              `json:"generatedAt"`
+	Nodes        RuntimeNodeHealth      `json:"nodes"`
+	Queues       []DiagnosticQueueStat  `json:"queues"`
+	Runtime      DiagnosticRuntime      `json:"runtime"`
+}
 
 // EffectiveAccessDecision defines model for EffectiveAccessDecision.
 type EffectiveAccessDecision struct {
@@ -2953,6 +3070,9 @@ type ServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(w http.ResponseWriter, r *http.Request)
+	// GetDiagnostics Get sanitized runtime and dependency diagnostics
+	// (GET /diagnostics)
+	GetDiagnostics(w http.ResponseWriter, r *http.Request)
 	// ListFormatProfiles List supported artifact formats and management capabilities
 	// (GET /formats)
 	ListFormatProfiles(w http.ResponseWriter, r *http.Request)
@@ -3817,6 +3937,20 @@ func (siw *ServerInterfaceWrapper) TestOIDCSettings(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestOIDCSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDiagnostics operation middleware
+func (siw *ServerInterfaceWrapper) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDiagnostics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6913,6 +7047,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authentication/oidc", wrapper.GetOIDCSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authentication/oidc", wrapper.ReplaceOIDCSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authentication/oidc:test", wrapper.TestOIDCSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/formats", wrapper.ListFormatProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
@@ -7027,6 +7162,8 @@ type CreatedAPIKeyJSONResponse CreatedAPIKey
 type CurrentIdentityJSONResponse CurrentIdentity
 
 type DeletionJSONResponse Deletion
+
+type DiagnosticsJSONResponse Diagnostics
 
 type EgressProxyTestJSONResponse EgressProxyTestResult
 
@@ -7789,6 +7926,43 @@ func (response TestOIDCSettings503ApplicationProblemPlusJSONResponse) VisitTestO
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnosticsRequestObject struct {
+}
+
+type GetDiagnosticsResponseObject interface {
+	VisitGetDiagnosticsResponse(w http.ResponseWriter) error
+}
+
+type GetDiagnostics200JSONResponse struct{ DiagnosticsJSONResponse }
+
+func (response GetDiagnostics200JSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnostics401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics401ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11342,6 +11516,9 @@ type StrictServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(ctx context.Context, request TestOIDCSettingsRequestObject) (TestOIDCSettingsResponseObject, error)
+	// GetDiagnostics Get sanitized runtime and dependency diagnostics
+	// (GET /diagnostics)
+	GetDiagnostics(ctx context.Context, request GetDiagnosticsRequestObject) (GetDiagnosticsResponseObject, error)
 	// ListFormatProfiles List supported artifact formats and management capabilities
 	// (GET /formats)
 	ListFormatProfiles(ctx context.Context, request ListFormatProfilesRequestObject) (ListFormatProfilesResponseObject, error)
@@ -12005,6 +12182,30 @@ func (sh *strictHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestOIDCSettingsResponseObject); ok {
 		if err := validResponse.VisitTestOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDiagnostics operation middleware
+func (sh *strictHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
+	var request GetDiagnosticsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDiagnostics(ctx, request.(GetDiagnosticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDiagnostics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDiagnosticsResponseObject); ok {
+		if err := validResponse.VisitGetDiagnosticsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

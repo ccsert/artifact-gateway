@@ -217,6 +217,20 @@
         }
       }
     },
+    "/diagnostics": {
+      "get": {
+        "operationId": "getDiagnostics",
+        "summary": "Get sanitized runtime and dependency diagnostics",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Diagnostics"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api-keys": {
       "get": {
         "operationId": "listApiKeys",
@@ -5181,6 +5195,160 @@
           }
         }
       },
+      "DiagnosticBuild": {
+        "type": "object",
+        "required": [
+          "version",
+          "goVersion",
+          "revision"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "goVersion": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "modified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DiagnosticRuntime": {
+        "type": "object",
+        "required": [
+          "instanceId",
+          "roles",
+          "workerFormats",
+          "workerKinds"
+        ],
+        "properties": {
+          "instanceId": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workerFormats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Format"
+            }
+          },
+          "workerKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DiagnosticDependency": {
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "reachable",
+              "unreachable",
+              "not_configured"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "DiagnosticQueueStat": {
+        "type": "object",
+        "required": [
+          "kind",
+          "format",
+          "state",
+          "count"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "lifecycle",
+              "promotion",
+              "replication"
+            ]
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "retrying",
+              "running",
+              "failed"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "oldestCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Diagnostics": {
+        "type": "object",
+        "required": [
+          "generatedAt",
+          "build",
+          "runtime",
+          "dependencies",
+          "queues",
+          "nodes"
+        ],
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "build": {
+            "$ref": "#/components/schemas/DiagnosticBuild"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/DiagnosticRuntime"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticDependency"
+            }
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticQueueStat"
+            }
+          },
+          "nodes": {
+            "$ref": "#/components/schemas/RuntimeNodeHealth"
+          }
+        }
+      },
       "AuditPage": {
         "type": "object",
         "required": [
@@ -6591,6 +6759,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RuntimeNodeList"
+            }
+          }
+        }
+      },
+      "Diagnostics": {
+        "description": "Sanitized runtime and dependency diagnostics for administrators",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Diagnostics"
             }
           }
         }
