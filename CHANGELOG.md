@@ -21,6 +21,11 @@ a dated version heading without rewriting their meaning.
 - npm Group registries that merge Hosted and Proxy package versions with
   Hosted-first conflict resolution, anonymous/grant filtering, and Group-local
   tarball URLs.
+- PyPI Hosted, Proxy, and Group repositories with native `pip` upload and
+  install flows, normalized project browsing, anonymous/grant filtering, and
+  read-through package caching.
+- npm and PyPI artifact lifecycle operations covering retention, tombstones,
+  restore, object collection, promotion, and replication.
 
 ### Changed
 
