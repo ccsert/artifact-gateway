@@ -194,10 +194,7 @@ func (h hostedRepositoryAPIHandler) decodeGlobalArtifactSearchCursor(token strin
 
 func parseGlobalArtifactSearchQuery(value string) repository.ArtifactSearchQuery {
 	normalized := strings.ToLower(strings.TrimSpace(value))
-	hexDigest := normalized
-	if strings.HasPrefix(hexDigest, "sha256:") {
-		hexDigest = strings.TrimPrefix(hexDigest, "sha256:")
-	}
+	hexDigest := strings.TrimPrefix(normalized, "sha256:")
 	if len(hexDigest) == 64 {
 		if _, err := hex.DecodeString(hexDigest); err == nil {
 			return repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByDigest, Value: "sha256:" + hexDigest}

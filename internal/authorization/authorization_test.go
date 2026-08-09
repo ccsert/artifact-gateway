@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,5 +285,151 @@ func TestAuthenticatorRestoresStaticAdminForIssuedProtocolToken(t *testing.T) {
 	principal, ok := authenticator.Authenticate("Bearer " + protocolToken)
 	if !ok || principal.Actor != "gateway-admin" || !principal.Admin || principal.Role != RoleAdmin || principal.AuthenticationKind != AuthenticationStaticAdmin {
 		t.Fatalf("protocol principal = %#v, ok=%v", principal, ok)
+	}
+}
+
+func TestPasswordHashRoundTripRejectsInvalidCredentials(t *testing.T) {
+	if _, err := HashPassword(""); err == nil {
+		t.Fatal("empty password was hashed")
+	}
+	hash, err := HashPassword("correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash == "correct horse battery staple" || !VerifyPassword(hash, "correct horse battery staple") {
+		t.Fatal("password hash did not verify")
+	}
+	for _, candidate := range []struct{ hash, password string }{
+		{hash, "wrong"},
+		{"malformed", "correct horse battery staple"},
+		{"", "correct horse battery staple"},
+		{hash, ""},
+	} {
+		if VerifyPassword(candidate.hash, candidate.password) {
+			t.Fatalf("invalid credential verified: hash=%q password=%q", candidate.hash, candidate.password)
+		}
+	}
+}
+
+func TestAuthenticatorWebSessionPreservesBoundedOIDCIdentity(t *testing.T) {
+	authenticator := Authenticator{
+		AdminToken: "admin-secret",
+		RepositoryReaders: map[string][]string{
+			"oidc:user-1": {"team/*"},
+		},
+	}
+	expected := Principal{
+		Actor:              "oidc:user-1",
+		Admin:              true,
+		Role:               RoleAdmin,
+		AuthenticationKind: AuthenticationOIDC,
+		OIDCAdminSubject:   true,
+		OIDCRoleMappings: []OIDCRoleMappingMatch{
+			{ExternalRole: "platform-admin", GatewayRole: RoleAdmin},
+		},
+	}
+	token := authenticator.IssueWebSession(expected)
+	principal, ok := authenticator.Authenticate("Bearer " + token)
+	if !ok || principal.Actor != expected.Actor || !principal.Admin || principal.Role != RoleAdmin || principal.AuthenticationKind != AuthenticationOIDC || !principal.OIDCAdminSubject || len(principal.OIDCRoleMappings) != 1 || len(principal.RepositoryPatterns) != 1 {
+		t.Fatalf("web session principal=%#v ok=%t", principal, ok)
+	}
+
+	parts := strings.Split(token, ".")
+	parts[3] = base64.RawURLEncoding.EncodeToString([]byte("invalid signature"))
+	if _, ok = authenticator.Authenticate("Bearer " + strings.Join(parts, ".")); ok {
+		t.Fatal("tampered web session authenticated")
+	}
+	invalidMetadata := expected
+	invalidMetadata.AuthenticationKind = AuthenticationStaticResolver
+	if _, ok = authenticator.Authenticate("Bearer " + authenticator.IssueWebSession(invalidMetadata)); ok {
+		t.Fatal("non-OIDC web session retained OIDC metadata")
+	}
+}
+
+func TestAuthenticatorMavenPoliciesKeepReadAndWriteSeparate(t *testing.T) {
+	authenticator := Authenticator{
+		RepositoryReaders: map[string][]string{"ci": {"team/*"}},
+		RepositoryWriters: map[string][]string{"ci": {"releases", "snapshots/*"}},
+	}
+	principal := authenticator.PrincipalForActor("ci")
+	if !authenticator.CanReadMavenRepository(principal, "team") {
+		t.Fatal("group-shaped Maven read pattern was denied")
+	}
+	if !authenticator.CanWriteMavenRepository(principal, "releases") || !authenticator.CanWriteMavenRepository(principal, "snapshots/app") {
+		t.Fatal("configured Maven writer pattern was denied")
+	}
+	if authenticator.CanWriteMavenRepository(principal, "team/app") {
+		t.Fatal("read pattern unexpectedly granted Maven publication")
+	}
+	if !(Principal{Role: RoleWriter}).CanReadRepository("anything", true) {
+		t.Fatal("global writer role could not read")
+	}
+}
+
+func TestRepositoryAuthorizerMatchesScopesAndResourcePrefixes(t *testing.T) {
+	target := repository.HostedRepository{ID: "repo-id", Name: "releases", Format: repository.FormatRaw, State: repository.RepositoryActive}
+	authorizer := RepositoryAuthorizer{Grants: grantStoreStub{set: repository.RepositoryGrantSet{
+		Version: "2",
+		Grants: []repository.RepositoryGrant{
+			{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "public/"},
+			{Principal: "publisher", Scopes: []string{"repositories:write"}},
+			{Principal: "owner", Scopes: []string{"repositories:admin"}},
+		},
+	}}}
+
+	for _, tc := range []struct {
+		actor    string
+		op       RepositoryOperation
+		resource string
+		allowed  bool
+	}{
+		{"reader", RepositoryRead, "public/app.zip", true},
+		{"reader", RepositoryRead, "private/app.zip", false},
+		{"reader", RepositoryWrite, "public/app.zip", false},
+		{"publisher", RepositoryRead, "", true},
+		{"publisher", RepositoryWrite, "", true},
+		{"owner", RepositoryAdmin, "", true},
+	} {
+		decision, managed := authorizer.ManagedResourceDecision(context.Background(), Principal{Actor: tc.actor}, target, tc.op, tc.resource)
+		if !managed || decision.Allowed != tc.allowed {
+			t.Errorf("actor=%s operation=%s resource=%s decision=%#v managed=%t", tc.actor, tc.op, tc.resource, decision, managed)
+		}
+	}
+
+	fallback := RepositoryAuthorizer{
+		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+			return AuthorizationDecision{Allowed: true, Source: "test_fallback", Reason: "allowed"}
+		},
+	}
+	if decision := fallback.Authorize(context.Background(), Principal{Actor: "legacy"}, target, RepositoryRead); !decision.Allowed || decision.Source != "test_fallback" {
+		t.Fatalf("legacy fallback decision=%#v", decision)
+	}
+}
+
+func TestManagedGroupMemberDecisionValidatesRepositoryBinding(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "group-member", Name: "group-member", Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "widget"}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authorizer := RepositoryAuthorizer{Grants: store}
+	decision, managed := ManagedGroupMemberDecision(ctx, store, authorizer, Principal{Actor: "reader"}, repository.Member{RepositoryID: target.ID}, repository.FormatPyPI, "widget/1.0.0")
+	if !managed || !decision.Allowed {
+		t.Fatalf("bound member decision=%#v managed=%t", decision, managed)
+	}
+	if _, managed = ManagedGroupMemberDecision(ctx, store, authorizer, Principal{Actor: "reader"}, repository.Member{}, repository.FormatPyPI, "widget"); managed {
+		t.Fatal("unbound member unexpectedly used managed authorization")
+	}
+	decision, managed = ManagedGroupMemberDecision(ctx, nil, authorizer, Principal{Actor: "reader"}, repository.Member{RepositoryID: target.ID}, repository.FormatPyPI, "widget")
+	if !managed || decision.Reason != "grant_lookup_failed" {
+		t.Fatalf("missing repository store decision=%#v managed=%t", decision, managed)
+	}
+	decision, managed = ManagedGroupMemberDecision(ctx, store, authorizer, Principal{Actor: "reader"}, repository.Member{RepositoryID: target.ID}, repository.FormatNPM, "widget")
+	if !managed || decision.Reason != "grant_lookup_failed" {
+		t.Fatalf("format mismatch decision=%#v managed=%t", decision, managed)
 	}
 }

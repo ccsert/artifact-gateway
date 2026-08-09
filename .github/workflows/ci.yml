@@ -42,6 +42,8 @@ jobs:
         run: make native-maven-e2e
       - name: Run Native npm E2E
         run: make native-npm-e2e
+      - name: Run Native PyPI E2E
+        run: make native-pypi-e2e
       - name: Run Conan E2E
         run: make conan-e2e
       - name: Run integration tests
