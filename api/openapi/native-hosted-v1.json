@@ -924,6 +924,24 @@
             "$ref": "#/components/responses/ArtifactTombstoneList"
           }
         }
+      },
+      "post": {
+        "operationId": "tombstoneRepositoryArtifact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreArtifact"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Artifact tombstoned"
+          }
+        }
       }
     },
     "/repositories/{repositoryId}/capabilities": {
@@ -2478,7 +2496,8 @@
           "oci",
           "maven",
           "conan",
-          "npm"
+          "npm",
+          "pypi"
         ]
       },
       "FormatProfile": {

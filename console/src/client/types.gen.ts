@@ -4,7 +4,7 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
-export type Format = "raw" | "oci" | "maven" | "conan" | "npm";
+export type Format = "raw" | "oci" | "maven" | "conan" | "npm" | "pypi";
 
 export type FormatProfile = {
   format: Format;
@@ -2743,6 +2743,25 @@ export type ListRepositoryTombstonesResponses = {
 
 export type ListRepositoryTombstonesResponse =
   ListRepositoryTombstonesResponses[keyof ListRepositoryTombstonesResponses];
+
+export type TombstoneRepositoryArtifactData = {
+  body: RestoreArtifact;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/tombstones";
+};
+
+export type TombstoneRepositoryArtifactResponses = {
+  /**
+   * Artifact tombstoned
+   */
+  204: void;
+};
+
+export type TombstoneRepositoryArtifactResponse =
+  TombstoneRepositoryArtifactResponses[keyof TombstoneRepositoryArtifactResponses];
 
 export type GetRepositoryCapabilitiesData = {
   body?: never;

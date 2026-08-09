@@ -1,7 +1,7 @@
 # Full Artifact Repository V1 Release Readiness
 
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
-Conan, and npm Hosted/Proxy lifecycle and distribution paths.
+Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -13,6 +13,7 @@ make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
 make native-npm-e2e
+make native-pypi-e2e
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
@@ -38,7 +39,8 @@ storage credentials, or unredacted upstream URLs in that record.
 ## Release Checklist
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
-      `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
+	  `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
+	  `make native-pypi-e2e`,
       and `make conan-e2e`
       pass.
 - [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
@@ -53,7 +55,10 @@ storage credentials, or unredacted upstream URLs in that record.
       installation, and audit pass through the native npm fixture. The same
       real npm CLI then installs Hosted and Proxy packages through one npm
       Group Registry, shuts down the Proxy upstream, clears the client cache,
-      and installs both sources again through the Group from Gateway storage.
+	  and installs both sources again through the Group from Gateway storage.
+	  PyPI uses real twine and pip clients to publish Hosted content, install
+	  Proxy content through a Group, stop the upstream, and reinstall from the
+	  verified local cache.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2

@@ -60,7 +60,8 @@ function CreateRepositoryDialog({
     type === "proxy" &&
     (selectedFormat === "raw" ||
       selectedFormat === "conan" ||
-      selectedFormat === "npm");
+      selectedFormat === "npm" ||
+      selectedFormat === "pypi");
 
   const submit = async () => {
     setBusy(true);
@@ -101,6 +102,7 @@ function CreateRepositoryDialog({
     raw: "https://raw.githubusercontent.com",
     conan: "https://center.conan.io/v2",
     npm: "https://registry.npmjs.org",
+    pypi: "https://pypi.org",
   };
 
   return (
@@ -217,8 +219,8 @@ function CreateRepositoryDialog({
                   `Allowed hosts${needsHosts ? " (required)" : " (optional)"}`,
                 )}
                 hint={text(
-                  "逗号分隔的主机名；raw、conan 和 npm 代理必填。npmjs.org 通常还需允许 registry.npmjs.org",
-                  "Comma-separated hostnames; required for Raw, Conan, and npm proxies. npmjs.org normally requires registry.npmjs.org",
+                  "逗号分隔的主机名；Raw、Conan、npm 和 PyPI 代理必填。PyPI 通常还需允许 files.pythonhosted.org",
+                  "Comma-separated hostnames; required for Raw, Conan, npm, and PyPI proxies. PyPI normally also requires files.pythonhosted.org",
                 )}
               >
                 <Input
@@ -226,7 +228,9 @@ function CreateRepositoryDialog({
                   placeholder={
                     selectedFormat === "npm"
                       ? "registry.npmjs.org"
-                      : "repo1.maven.org"
+                      : selectedFormat === "pypi"
+                        ? "files.pythonhosted.org"
+                        : "repo1.maven.org"
                   }
                   value={allowedHosts}
                   onChange={(e) => setAllowedHosts(e.target.value)}

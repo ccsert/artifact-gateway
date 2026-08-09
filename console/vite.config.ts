@@ -45,6 +45,7 @@ export default defineConfig(({ mode }) => {
         "/maven": gateway,
         "/conan": gateway,
         "/npm": gateway,
+        "/pypi": gateway,
       },
     },
   };

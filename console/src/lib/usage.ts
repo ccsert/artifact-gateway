@@ -18,6 +18,10 @@ export function npmRegistryURL(repoName: string): string {
   return `${gatewayBase()}/npm/${repoName}/`;
 }
 
+export function pypiIndexURL(repoName: string): string {
+  return `${gatewayBase()}/pypi/${repoName}/simple/`;
+}
+
 // Maven GAV 坐标 → 各用法
 export interface MavenUsageOptions {
   buildNumber?: number;
@@ -159,6 +163,24 @@ export function npmUsage(
   ];
 }
 
+export function pypiUsage(
+  repoName: string,
+  project: string,
+  version: string,
+): UsageSnippet[] {
+  const index = pypiIndexURL(repoName);
+  return [
+    {
+      label: "pip install",
+      code: `pip install ${project}==${version} --index-url ${index}`,
+    },
+    {
+      label: "requirements.txt",
+      code: `--index-url ${index}\n${project}==${version}`,
+    },
+  ];
+}
+
 export function usageFor(
   format: Format | string,
   repoName: string,
@@ -177,6 +199,8 @@ export function usageFor(
       return rawUsage(repoName, coordinate);
     case "npm":
       return npmUsage(repoName, coordinate, tag ?? "latest");
+    case "pypi":
+      return pypiUsage(repoName, coordinate, tag ?? "latest");
     default:
       return [];
   }

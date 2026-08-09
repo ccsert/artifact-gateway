@@ -343,6 +343,7 @@ const (
 	FormatMaven Format = "maven"
 	FormatNpm   Format = "npm"
 	FormatOci   Format = "oci"
+	FormatPypi  Format = "pypi"
 	FormatRaw   Format = "raw"
 )
 
@@ -356,6 +357,8 @@ func (e Format) Valid() bool {
 	case FormatNpm:
 		return true
 	case FormatOci:
+		return true
+	case FormatPypi:
 		return true
 	case FormatRaw:
 		return true
@@ -2659,6 +2662,9 @@ type RestoreRepositoryArtifactJSONRequestBody = RestoreArtifact
 // ReplaceRetentionPolicyJSONRequestBody defines body for ReplaceRetentionPolicy for application/json ContentType.
 type ReplaceRetentionPolicyJSONRequestBody = RetentionPolicy
 
+// TombstoneRepositoryArtifactJSONRequestBody defines body for TombstoneRepositoryArtifact for application/json ContentType.
+type TombstoneRepositoryArtifactJSONRequestBody = RestoreArtifact
+
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUser
 
@@ -2925,6 +2931,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams)
+
+	// (POST /repositories/{repositoryId}/tombstones)
+	TombstoneRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repository-capacities)
 	ListRepositoryCapacities(w http.ResponseWriter, r *http.Request)
@@ -6145,6 +6154,32 @@ func (siw *ServerInterfaceWrapper) ListRepositoryTombstones(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// TombstoneRepositoryArtifact operation middleware
+func (siw *ServerInterfaceWrapper) TombstoneRepositoryArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TombstoneRepositoryArtifact(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryCapacities operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryCapacities(w http.ResponseWriter, r *http.Request) {
 
@@ -6515,6 +6550,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:dry-run", wrapper.DryRunRepositoryRetention)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:execute", wrapper.ExecuteRepositoryRetention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.TombstoneRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/nodes", wrapper.ListRuntimeNodes)
@@ -9999,6 +10035,23 @@ func (response ListRepositoryTombstones200JSONResponse) VisitListRepositoryTombs
 	return err
 }
 
+type TombstoneRepositoryArtifactRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *TombstoneRepositoryArtifactJSONRequestBody
+}
+
+type TombstoneRepositoryArtifactResponseObject interface {
+	VisitTombstoneRepositoryArtifactResponse(w http.ResponseWriter) error
+}
+
+type TombstoneRepositoryArtifact204Response struct {
+}
+
+func (response TombstoneRepositoryArtifact204Response) VisitTombstoneRepositoryArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
 type ListRepositoryCapacitiesRequestObject struct {
 }
 
@@ -10607,6 +10660,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(ctx context.Context, request ListRepositoryTombstonesRequestObject) (ListRepositoryTombstonesResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/tombstones)
+	TombstoneRepositoryArtifact(ctx context.Context, request TombstoneRepositoryArtifactRequestObject) (TombstoneRepositoryArtifactResponseObject, error)
 
 	// (GET /repository-capacities)
 	ListRepositoryCapacities(ctx context.Context, request ListRepositoryCapacitiesRequestObject) (ListRepositoryCapacitiesResponseObject, error)
@@ -12741,6 +12797,39 @@ func (sh *strictHandler) ListRepositoryTombstones(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryTombstonesResponseObject); ok {
 		if err := validResponse.VisitListRepositoryTombstonesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TombstoneRepositoryArtifact operation middleware
+func (sh *strictHandler) TombstoneRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request TombstoneRepositoryArtifactRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body TombstoneRepositoryArtifactJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TombstoneRepositoryArtifact(ctx, request.(TombstoneRepositoryArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TombstoneRepositoryArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TombstoneRepositoryArtifactResponseObject); ok {
+		if err := validResponse.VisitTombstoneRepositoryArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

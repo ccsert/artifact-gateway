@@ -86,6 +86,10 @@ function resourcePlaceholder(format: Repository["format"] | undefined) {
       return "pkg/1.0/user/stable";
     case "raw":
       return "releases/2026/app.tar.gz";
+    case "npm":
+      return "@scope/package";
+    case "pypi":
+      return "gateway-widget";
     default:
       return "";
   }

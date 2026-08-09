@@ -98,6 +98,7 @@ const formatTone: Record<string, keyof typeof toneClasses> = {
   conan: "violet",
   raw: "blue",
   npm: "green",
+  pypi: "cyan",
 };
 
 export function FormatBadge({ format }: { format: string | undefined }) {

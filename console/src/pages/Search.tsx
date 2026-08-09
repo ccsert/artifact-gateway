@@ -17,6 +17,7 @@ import {
 } from "../components/ArtifactRowDetail";
 import { OciImageDetail } from "../components/OciImageDetail";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
+import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
@@ -48,13 +49,14 @@ export function artifactTarget(hit: GlobalArtifactSearchHit): string {
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
   if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
-  if (hit.format === "npm" && hit.version) params.set("version", hit.version);
+  if ((hit.format === "npm" || hit.format === "pypi") && hit.version)
+    params.set("version", hit.version);
   return `/repositories/${hit.repositoryId}?${params.toString()}`;
 }
 
 export function artifactVersionSizeLabel(hit: GlobalArtifactSearchHit): string {
   const size = formatBytes(hit.size);
-  return hit.format === "npm" && hit.version
+  return (hit.format === "npm" || hit.format === "pypi") && hit.version
     ? `${hit.version} · ${size}`
     : size;
 }
@@ -582,6 +584,15 @@ export function SearchPage() {
             publisher={row.publisher}
           />
         )}
+        {row.format === "pypi" && (
+          <PyPIProjectDetail
+            repoName={row.repositoryName}
+            project={row.coordinate}
+            initialVersion={row.version}
+            size={row.size}
+            publisher={row.publisher}
+          />
+        )}
         <div className="mt-4 flex justify-end">
           <Button
             type="primary"
@@ -635,8 +646,8 @@ export function SearchPage() {
         <EmptyState
           title={text("输入关键词开始搜索", "Enter a keyword to search")}
           hint={text(
-            "支持 Maven 坐标、npm 包名、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
-            "Supports Maven coordinates, npm packages, OCI images, Conan references, Raw paths, and full SHA-256 digests",
+            "支持 Maven 坐标、npm 包名、PyPI 项目、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
+            "Supports Maven coordinates, npm packages, PyPI projects, OCI images, Conan references, Raw paths, and full SHA-256 digests",
           )}
         />
       ) : error && hits.length === 0 ? (

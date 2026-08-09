@@ -12,3 +12,14 @@ repositories_repositoryId_tombstones:
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
       '200': {"$ref": "../components/responses.yaml#/ArtifactTombstoneList"}
+  post:
+    operationId: tombstoneRepositoryArtifact
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/RestoreArtifact"
+    responses:
+      '204':
+        description: Artifact tombstoned

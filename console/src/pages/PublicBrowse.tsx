@@ -43,11 +43,12 @@ import {
   UsageSnippetBlock,
 } from "../components/PublicBrowsePrimitives";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
+import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 
 interface PublicRepository {
   id: string;
   name: string;
-  format: "oci" | "maven" | "conan" | "raw" | "npm";
+  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi";
   type?: string;
 }
 
@@ -259,6 +260,16 @@ function repositoryUsage(
     return [
       { label: text("npm Registry 地址", "npm registry URL"), code: registry },
       { label: ".npmrc", code: `registry=${registry}` },
+    ];
+  }
+  if (format === "pypi") {
+    const index = `${origin}/pypi/${repoName}/simple/`;
+    return [
+      { label: text("PyPI Simple API", "PyPI Simple API"), code: index },
+      {
+        label: "pip",
+        code: `pip config set global.index-url ${index}`,
+      },
     ];
   }
   return [{ label: "Raw 仓库地址", code: `${origin}/raw/${repoName}/` }];
@@ -1452,7 +1463,9 @@ export function PublicBrowsePage() {
           ? text("注册 Conan remote", "Register a Conan remote")
           : selectedRepository?.format === "npm"
             ? text("注册 npm 仓库源", "Register an npm registry")
-            : text("注册 Raw 源地址", "Register a Raw source");
+            : selectedRepository?.format === "pypi"
+              ? text("注册 PyPI 仓库源", "Register a PyPI repository")
+              : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -1691,7 +1704,8 @@ export function PublicBrowsePage() {
                     undefined,
                     undefined,
                     undefined,
-                    selectedRepository?.format === "npm"
+                    selectedRepository?.format === "npm" ||
+                      selectedRepository?.format === "pypi"
                       ? (row.item.version ?? versionParam)
                       : undefined,
                   )
@@ -1736,6 +1750,30 @@ export function PublicBrowsePage() {
         <NpmPackageDetail
           repoName={selectedRepository.name}
           packageName={row.item.coordinate}
+          initialVersion={
+            artifactParam === row.item.coordinate
+              ? versionParam || row.item.version
+              : row.item.version
+          }
+          size={row.item.size}
+          publisher={row.item.publisher}
+          onVersionChange={(version) =>
+            openArtifact(
+              row.item.coordinate,
+              undefined,
+              undefined,
+              undefined,
+              version,
+            )
+          }
+        />
+      );
+    }
+    if (selectedRepository?.format === "pypi") {
+      return (
+        <PyPIProjectDetail
+          repoName={selectedRepository.name}
+          project={row.item.coordinate}
           initialVersion={
             artifactParam === row.item.coordinate
               ? versionParam || row.item.version

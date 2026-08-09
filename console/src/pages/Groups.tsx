@@ -45,7 +45,7 @@ import {
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
-import { npmRegistryURL } from "../lib/usage";
+import { npmRegistryURL, pypiIndexURL } from "../lib/usage";
 
 function CreateGroupDialog({
   repos,
@@ -622,6 +622,13 @@ export function GroupsPage() {
             <CopyableValue
               value={npmRegistryURL(name)}
               label={`/npm/${name}/`}
+              className="mt-1 max-w-full text-[11px] text-zinc-500"
+            />
+          )}
+          {group.format === "pypi" && (
+            <CopyableValue
+              value={pypiIndexURL(name)}
+              label={`/pypi/${name}/simple/`}
               className="mt-1 max-w-full text-[11px] text-zinc-500"
             />
           )}

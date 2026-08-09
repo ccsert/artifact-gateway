@@ -1,6 +1,6 @@
 # Artifact Gateway
 
-Artifact Gateway serves native OCI, Raw, Maven, Conan 2, and npm Hosted repositories
+Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, and PyPI Hosted repositories
 using PostgreSQL for lifecycle metadata and MinIO-compatible object storage for
 verified bytes. Legacy Groups remain available for allowlisted external Proxy
 reads, while V2 Groups resolve managed Hosted and Proxy members.
@@ -10,7 +10,7 @@ reads, while V2 Groups resolve managed Hosted and Proxy members.
 > public release. Do not infer production support commitments from the current
 > package version.
 
-Artifact Gateway is intended to be a complete repository manager for the five
+Artifact Gateway is intended to be a complete repository manager for the six
 admitted formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
 promotion, and replication. It is not a transparent rewrite proxy, a generic
@@ -74,6 +74,7 @@ make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
 make native-npm-e2e
+make native-pypi-e2e
 make conan-e2e
 ```
 
@@ -130,16 +131,25 @@ docker compose ps gateway
 ## Native Hosted repositories
 
 Administrators create repositories through `POST /api/v2/repositories` with an
-idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, or `npm`. OCI
+idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`, or
+`pypi`. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
 Conan 2 uses `/conan/v2/<repository>/...`; npm uses
-`/npm/<repository>/<package>`.
+`/npm/<repository>/<package>`; PyPI exposes twine uploads at
+`/pypi/<repository>/legacy/` and the pip Simple API at
+`/pypi/<repository>/simple/`.
+Twine authenticates with any non-empty username and the configured resolver
+token as its Basic-auth password. Anonymous-enabled repositories expose the
+Simple API without credentials.
 
 npm Groups expose Hosted and Proxy members through the same
 `/npm/<group>/` Registry URL. Their packuments merge versions and distribution
 tags by member priority, with Hosted members taking precedence over Proxy
 members when a version exists in more than one repository.
+PyPI Groups expose the same Simple API, merge Hosted and Proxy distribution
+files with Hosted-first conflict resolution, and keep cached Proxy files
+installable while the upstream is unavailable.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,

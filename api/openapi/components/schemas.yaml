@@ -7,6 +7,7 @@ Format:
   - maven
   - conan
   - npm
+  - pypi
 RepositoryOperation:
   type: string
   enum:
