@@ -2,6 +2,7 @@
 .gitea-fixture/
 .DS_Store
 .agent_context/
+.workbuddy/
 .multica/
 *.log
 .release-validation.env
