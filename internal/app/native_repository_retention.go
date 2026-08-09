@@ -118,7 +118,7 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 	}
 	var firstErr error
 	remaining := limit
-	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatRaw} {
+	for _, format := range repository.SupportedFormats() {
 		if !m.handlesFormat(format) {
 			continue
 		}
@@ -502,12 +502,7 @@ func (m NativeRepositoryRetention) StartWorker(ctx context.Context, interval tim
 }
 
 func supportsRepositoryRetention(format repository.Format) bool {
-	switch format {
-	case repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatRaw:
-		return true
-	default:
-		return false
-	}
+	return repository.FormatSupportsOperation(format, repository.RepositoryTypeHosted, repository.RepositoryOperationRetain)
 }
 
 func compileRepositoryRetentionPatterns(patterns []string) ([]*regexp.Regexp, error) {

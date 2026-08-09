@@ -65,7 +65,9 @@ record the results before approving a deployment.
 - No generic upload abstraction replaces protocol-native publication flows.
 - No physical deletion bypasses a Tombstone, grace period, and reference check.
 - No new package ecosystem is admitted before its lifecycle and protocol
-  contract has an owner, migration plan, and black-box client test plan.
+  contract has an owner, migration plan, and black-box client test plan. The
+  executable admission checklist is maintained in
+  [Artifact Format Extension Guide](format-extension-guide.md).
 - No compatibility break is introduced in `/api/v1`, `/api/v2`, or existing
   protocol response semantics; incompatible management behavior uses a new
   versioned surface.

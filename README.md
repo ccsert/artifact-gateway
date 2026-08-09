@@ -89,6 +89,10 @@ make console-build
 make console-e2e
 ```
 
+New package ecosystems follow the capability admission gate in
+[`docs/format-extension-guide.md`](docs/format-extension-guide.md); adding only
+an enum, route placeholder, or Console option is not considered format support.
+
 The high-level runtime and ownership boundaries are documented in
 [`ARCHITECTURE.md`](ARCHITECTURE.md). Engineering changes follow
 [`CONTRIBUTING.md`](CONTRIBUTING.md); security-sensitive findings follow

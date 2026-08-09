@@ -6,6 +6,61 @@ Format:
   - oci
   - maven
   - conan
+RepositoryOperation:
+  type: string
+  enum:
+  - read
+  - publish
+  - browse
+  - delete
+  - restore
+  - retain
+  - reclaim
+  - promote
+  - replicate
+FormatProfile:
+  type: object
+  required:
+  - format
+  - repositoryTypes
+  - groupSupported
+  - anonymousRead
+  - hostedOperations
+  - proxyOperations
+  properties:
+    format:
+      "$ref": "#/Format"
+    repositoryTypes:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        enum:
+        - hosted
+        - proxy
+    groupSupported:
+      type: boolean
+    anonymousRead:
+      type: boolean
+    hostedOperations:
+      type: array
+      uniqueItems: true
+      items:
+        "$ref": "#/RepositoryOperation"
+    proxyOperations:
+      type: array
+      uniqueItems: true
+      items:
+        "$ref": "#/RepositoryOperation"
+FormatProfileList:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/FormatProfile"
 RuntimeNode:
   type: object
   required:
@@ -1036,15 +1091,7 @@ RepositoryCapabilities:
       type: array
       uniqueItems: true
       items:
-        type: string
-        enum:
-        - read
-        - publish
-        - browse
-        - delete
-        - restore
-        - retain
-        - reclaim
+        "$ref": "#/RepositoryOperation"
 GroupCapacity:
   type: object
   required: [groupId, format, members]

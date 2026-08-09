@@ -6,6 +6,30 @@ export type ClientOptions = {
 
 export type Format = "raw" | "oci" | "maven" | "conan";
 
+export type FormatProfile = {
+  format: Format;
+  repositoryTypes: Array<"hosted" | "proxy">;
+  groupSupported: boolean;
+  anonymousRead: boolean;
+  hostedOperations: Array<RepositoryOperation>;
+  proxyOperations: Array<RepositoryOperation>;
+};
+
+export type FormatProfileList = {
+  items: Array<FormatProfile>;
+};
+
+export type RepositoryOperation =
+  | "read"
+  | "publish"
+  | "browse"
+  | "delete"
+  | "restore"
+  | "retain"
+  | "reclaim"
+  | "promote"
+  | "replicate";
+
 export type OciTagList = {
   name: string;
   tags: Array<string>;
@@ -250,9 +274,7 @@ export type ArtifactTombstonePage = {
 export type RepositoryCapabilities = {
   format: Format;
   type: "hosted" | "proxy";
-  operations: Array<
-    "read" | "publish" | "browse" | "delete" | "restore" | "retain" | "reclaim"
-  >;
+  operations: Array<RepositoryOperation>;
 };
 
 export type ApiKey = {
@@ -1107,6 +1129,33 @@ export type LifecycleJobId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type ListFormatProfilesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/formats";
+};
+
+export type ListFormatProfilesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListFormatProfilesError =
+  ListFormatProfilesErrors[keyof ListFormatProfilesErrors];
+
+export type ListFormatProfilesResponses = {
+  /**
+   * Supported artifact formats and management capabilities
+   */
+  200: FormatProfileList;
+};
+
+export type ListFormatProfilesResponse =
+  ListFormatProfilesResponses[keyof ListFormatProfilesResponses];
 
 export type GetCurrentIdentityData = {
   body?: never;

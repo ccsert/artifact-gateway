@@ -7,7 +7,7 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Segmented, Select, Space, Switch, Table } from "antd";
+import { Button, Input, Select, Space, Switch, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   listGroups,
@@ -22,6 +22,7 @@ import {
 import type {
   Group,
   Format,
+  FormatProfile,
   Member,
   Repository,
   GroupCapacityMember,
@@ -42,14 +43,15 @@ import {
   MetricStrip,
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
-
-const FORMATS: Format[] = ["oci", "maven", "conan", "raw"];
+import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
 
 function CreateGroupDialog({
   repos,
+  profiles,
   onCreated,
 }: {
   repos: Repository[];
+  profiles: FormatProfile[];
   onCreated: () => void;
 }) {
   const { text } = usePreferences();
@@ -61,8 +63,13 @@ function CreateGroupDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
+  const formats = groupFormats(profiles);
+  const selectedFormat = formats.includes(format)
+    ? format
+    : (formats[0] ?? format);
+
   const candidates = repos.filter(
-    (r) => r.format === format && r.state === "active",
+    (r) => r.format === selectedFormat && r.state === "active",
   );
 
   const submit = async () => {
@@ -73,7 +80,12 @@ function CreateGroupDialog({
       position,
     }));
     const { error: err } = await createGroup({
-      body: { name: name.trim(), format, anonymousRead, members },
+      body: {
+        name: name.trim(),
+        format: selectedFormat,
+        anonymousRead,
+        members,
+      },
       headers: { "Idempotency-Key": crypto.randomUUID() },
     });
     setBusy(false);
@@ -93,6 +105,7 @@ function CreateGroupDialog({
       <Button
         type="primary"
         icon={<PlusOutlined />}
+        disabled={formats.length === 0}
         onClick={() => {
           setError(null);
           dialog.show();
@@ -113,7 +126,12 @@ function CreateGroupDialog({
               type="primary"
               onClick={submit}
               loading={busy}
-              disabled={!name.trim()}
+              disabled={
+                busy ||
+                formats.length === 0 ||
+                !name.trim() ||
+                memberIds.length === 0
+              }
             >
               {text("创建", "Create")}
             </Button>
@@ -130,11 +148,14 @@ function CreateGroupDialog({
             />
           </Field>
           <Field label={text("格式", "Format")} group>
-            <Segmented<Format>
-              block
-              className="font-mono"
-              value={format}
-              options={FORMATS}
+            <Select<Format>
+              className="w-full font-mono"
+              showSearch={{ optionFilterProp: "label" }}
+              value={selectedFormat}
+              options={formats.map((candidate) => ({
+                value: candidate,
+                label: candidate,
+              }))}
               onChange={(nextFormat) => {
                 setFormat(nextFormat);
                 setMemberIds([]);
@@ -504,6 +525,7 @@ export function GroupsPage() {
   const { text } = usePreferences();
   const [groups, setGroups] = useState<Group[]>([]);
   const [repos, setRepos] = useState<Repository[]>([]);
+  const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -520,18 +542,25 @@ export function GroupsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [g, r] = await Promise.all([
-      listGroups({ query: { pageSize: 100 } }),
-      listRepositories({ query: { pageSize: 200 } }),
-    ]);
-    setLoading(false);
-    if (g.error) {
-      setError(g.error);
-      return;
+    try {
+      const [g, r, profiles] = await Promise.all([
+        listGroups({ query: { pageSize: 100 } }),
+        listRepositories({ query: { pageSize: 200 } }),
+        loadFormatProfiles(),
+      ]);
+      if (g.error) {
+        setError(g.error);
+        return;
+      }
+      setGroups(g.data?.items ?? []);
+      setNextToken(g.data?.nextPageToken);
+      setRepos(r.data?.items ?? []);
+      setFormatProfiles(profiles);
+    } catch (loadError) {
+      setError(loadError);
+    } finally {
+      setLoading(false);
     }
-    setGroups(g.data?.items ?? []);
-    setNextToken(g.data?.nextPageToken);
-    setRepos(r.data?.items ?? []);
   }, []);
 
   useEffect(() => {
@@ -679,7 +708,13 @@ export function GroupsPage() {
           "将多个同格式仓库聚合为统一入口",
           "Aggregate repositories of the same format behind one entry point",
         )}
-        actions={<CreateGroupDialog repos={repos} onCreated={load} />}
+        actions={
+          <CreateGroupDialog
+            repos={repos}
+            profiles={formatProfiles}
+            onCreated={load}
+          />
+        }
       />
       {error !== null ? (
         isNotFound(error) ? (
@@ -776,7 +811,7 @@ export function GroupsPage() {
                   onChange={setFormatFilter}
                   options={[
                     { value: "all", label: text("全部格式", "All formats") },
-                    ...FORMATS.map((format) => ({
+                    ...groupFormats(formatProfiles).map((format) => ({
                       value: format,
                       label: format,
                     })),

@@ -12,6 +12,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 // NodeRole controls which parts of the Gateway runtime are enabled. The
@@ -32,9 +33,13 @@ var supportedNodeRoles = map[NodeRole]struct{}{
 	NodeRoleWorker:     {},
 }
 
-var supportedWorkerFormats = map[string]struct{}{
-	"maven": {}, "oci": {}, "raw": {}, "conan": {},
-}
+var supportedWorkerFormats = func() map[string]struct{} {
+	formats := make(map[string]struct{})
+	for _, format := range repository.SupportedFormats() {
+		formats[string(format)] = struct{}{}
+	}
+	return formats
+}()
 
 var supportedWorkerKinds = map[string]struct{}{
 	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},

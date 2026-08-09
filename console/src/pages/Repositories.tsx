@@ -14,7 +14,7 @@ import {
   deleteRepository,
   listRepositoryCapacities,
 } from "../client";
-import type { Repository, Format } from "../client";
+import type { Repository, Format, FormatProfile } from "../client";
 import { PageHeader, Card, Pagination, Field } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
@@ -27,10 +27,19 @@ import {
   MetricStrip,
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
+import {
+  loadFormatProfiles,
+  repositoryFormats,
+  repositoryTypes,
+} from "../lib/formatProfiles";
 
-const FORMATS: Format[] = ["oci", "maven", "conan", "raw"];
-
-function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
+function CreateRepositoryDialog({
+  profiles,
+  onCreated,
+}: {
+  profiles: FormatProfile[];
+  onCreated: () => void;
+}) {
   const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
@@ -41,8 +50,15 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
+  const formats = repositoryFormats(profiles, type);
+  const selectedFormat = formats.includes(format)
+    ? format
+    : (formats[0] ?? format);
+  const availableRepositoryTypes = repositoryTypes(profiles);
+
   const needsHosts =
-    type === "proxy" && (format === "raw" || format === "conan");
+    type === "proxy" &&
+    (selectedFormat === "raw" || selectedFormat === "conan");
 
   const submit = async () => {
     setBusy(true);
@@ -54,7 +70,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
     const { data, error: err } = await createRepository({
       body: {
         name: name.trim(),
-        format,
+        format: selectedFormat,
         type,
         ...(type === "proxy"
           ? { endpoint: endpoint.trim(), allowedHosts: hosts }
@@ -89,6 +105,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
       <Button
         type="primary"
         icon={<PlusOutlined />}
+        disabled={profiles.length === 0}
         onClick={() => {
           setError(null);
           dialog.show();
@@ -111,6 +128,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
               loading={busy}
               disabled={
                 busy ||
+                profiles.length === 0 ||
                 !name.trim() ||
                 (type === "proxy" &&
                   (!endpoint.trim() || (needsHosts && !allowedHosts.trim())))
@@ -127,11 +145,20 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
             <Segmented<"hosted" | "proxy">
               block
               value={type}
-              onChange={setType}
-              options={[
-                { value: "hosted", label: text("托管 (hosted)", "Hosted") },
-                { value: "proxy", label: text("代理 (proxy)", "Proxy") },
-              ]}
+              onChange={(nextType) => {
+                setType(nextType);
+                const nextFormats = repositoryFormats(profiles, nextType);
+                if (!nextFormats.includes(format) && nextFormats[0]) {
+                  setFormat(nextFormats[0]);
+                }
+              }}
+              options={availableRepositoryTypes.map((repositoryType) => ({
+                value: repositoryType,
+                label:
+                  repositoryType === "hosted"
+                    ? text("托管 (hosted)", "Hosted")
+                    : text("代理 (proxy)", "Proxy"),
+              }))}
             />
             <span className="mt-1 block text-xs text-zinc-600">
               {type === "hosted"
@@ -154,12 +181,15 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
             />
           </Field>
           <Field label={text("格式", "Format")} group>
-            <Segmented<Format>
-              block
-              className="font-mono"
-              value={format}
+            <Select<Format>
+              className="w-full font-mono"
+              showSearch={{ optionFilterProp: "label" }}
+              value={selectedFormat}
               onChange={setFormat}
-              options={FORMATS}
+              options={formats.map((candidate) => ({
+                value: candidate,
+                label: candidate,
+              }))}
             />
           </Field>
           {type === "proxy" && (
@@ -170,7 +200,10 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
               >
                 <Input
                   className="font-mono text-xs"
-                  placeholder={endpointPlaceholder[format]}
+                  placeholder={
+                    endpointPlaceholder[selectedFormat] ??
+                    "https://registry.example.com"
+                  }
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
                 />
@@ -203,6 +236,7 @@ function CreateRepositoryDialog({ onCreated }: { onCreated: () => void }) {
 export function RepositoriesPage() {
   const { locale, text } = usePreferences();
   const [items, setItems] = useState<Repository[]>([]);
+  const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -224,27 +258,34 @@ export function RepositoriesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [repositoryResult, capacityResult] = await Promise.all([
-      listRepositories({ query: { pageSize: 100 } }),
-      listRepositoryCapacities(),
-    ]);
-    const { data, error: err } = repositoryResult;
-    setLoading(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const [repositoryResult, capacityResult, profiles] = await Promise.all([
+        listRepositories({ query: { pageSize: 100 } }),
+        listRepositoryCapacities(),
+        loadFormatProfiles(),
+      ]);
+      const { data, error: err } = repositoryResult;
+      if (err) {
+        setError(err);
+        return;
+      }
+      const nextItems = data?.items ?? [];
+      setItems(nextItems);
+      setNextToken(data?.nextPageToken);
+      setFormatProfiles(profiles);
+      setCapacities(
+        Object.fromEntries(
+          (capacityResult.data ?? []).map((capacity) => [
+            capacity.repositoryId,
+            capacity,
+          ]),
+        ),
+      );
+    } catch (loadError) {
+      setError(loadError);
+    } finally {
+      setLoading(false);
     }
-    const nextItems = data?.items ?? [];
-    setItems(nextItems);
-    setNextToken(data?.nextPageToken);
-    setCapacities(
-      Object.fromEntries(
-        (capacityResult.data ?? []).map((capacity) => [
-          capacity.repositoryId,
-          capacity,
-        ]),
-      ),
-    );
   }, []);
 
   useEffect(() => {
@@ -444,7 +485,9 @@ export function RepositoriesPage() {
           "Hosted 与 Proxy Repository 的统一视图",
           "A unified view of hosted and proxy repositories",
         )}
-        actions={<CreateRepositoryDialog onCreated={load} />}
+        actions={
+          <CreateRepositoryDialog profiles={formatProfiles} onCreated={load} />
+        }
       />
       <MetricStrip
         items={[
@@ -522,7 +565,10 @@ export function RepositoriesPage() {
             onChange={setFormatFilter}
             options={[
               { value: "all", label: text("全部格式", "All formats") },
-              ...FORMATS.map((format) => ({ value: format, label: format })),
+              ...repositoryFormats(formatProfiles).map((format) => ({
+                value: format,
+                label: format,
+              })),
             ]}
           />
         </FilterField>

@@ -5,6 +5,12 @@ Problem:
     application/problem+json:
       schema:
         "$ref": "../components/schemas.yaml#/Problem"
+FormatProfileList:
+  description: Supported artifact formats and management capabilities
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/FormatProfileList"
 RuntimeNodeList:
   description: Gateway runtime node inventory and capabilities
   content:

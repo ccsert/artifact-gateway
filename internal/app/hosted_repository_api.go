@@ -804,6 +804,18 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.Response
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) ListFormatProfiles(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	profiles := repository.SupportedFormatProfiles()
+	items := make([]adminopenapi.FormatProfile, 0, len(profiles))
+	for _, profile := range profiles {
+		items = append(items, formatProfileResponse(profile))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.FormatProfileList{Items: items})
+}
+
 func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetRepositoryEffectiveAccessParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
@@ -1050,18 +1062,39 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 }
 
 func repositoryCapabilities(format repository.Format, repoType repository.RepositoryType) adminopenapi.RepositoryCapabilities {
+	profile, _ := repository.FormatProfileFor(format)
+	operations := profile.HostedOperations
 	if repoType == repository.RepositoryTypeProxy {
-		operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
-		return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeProxy, Operations: operations}
+		operations = profile.ProxyOperations
 	}
-	operations := []adminopenapi.RepositoryCapabilitiesOperations{adminopenapi.RepositoryCapabilitiesOperationsRead, adminopenapi.RepositoryCapabilitiesOperationsPublish, adminopenapi.RepositoryCapabilitiesOperationsBrowse, adminopenapi.RepositoryCapabilitiesOperationsDelete, adminopenapi.RepositoryCapabilitiesOperationsReclaim}
-	switch format {
-	case repository.FormatMaven:
-		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRetain, adminopenapi.RepositoryCapabilitiesOperationsRestore)
-	case repository.FormatConan, repository.FormatOCI, repository.FormatRaw:
-		operations = append(operations, adminopenapi.RepositoryCapabilitiesOperationsRestore)
+	responseOperations := make([]adminopenapi.RepositoryOperation, 0, len(operations))
+	for _, operation := range operations {
+		responseOperations = append(responseOperations, adminopenapi.RepositoryOperation(operation))
 	}
-	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesTypeHosted, Operations: operations}
+	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesType(repoType), Operations: responseOperations}
+}
+
+func formatProfileResponse(profile repository.FormatProfile) adminopenapi.FormatProfile {
+	repositoryTypes := make([]adminopenapi.FormatProfileRepositoryTypes, 0, len(profile.RepositoryTypes))
+	for _, repositoryType := range profile.RepositoryTypes {
+		repositoryTypes = append(repositoryTypes, adminopenapi.FormatProfileRepositoryTypes(repositoryType))
+	}
+	hostedOperations := make([]adminopenapi.RepositoryOperation, 0, len(profile.HostedOperations))
+	for _, operation := range profile.HostedOperations {
+		hostedOperations = append(hostedOperations, adminopenapi.RepositoryOperation(operation))
+	}
+	proxyOperations := make([]adminopenapi.RepositoryOperation, 0, len(profile.ProxyOperations))
+	for _, operation := range profile.ProxyOperations {
+		proxyOperations = append(proxyOperations, adminopenapi.RepositoryOperation(operation))
+	}
+	return adminopenapi.FormatProfile{
+		Format:           adminopenapi.Format(profile.Format),
+		RepositoryTypes:  repositoryTypes,
+		GroupSupported:   profile.GroupSupported,
+		AnonymousRead:    profile.AnonymousRead,
+		HostedOperations: hostedOperations,
+		ProxyOperations:  proxyOperations,
+	}
 }
 
 func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
@@ -1592,7 +1625,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (source.Format != repository.FormatRaw && source.Format != repository.FormatOCI && source.Format != repository.FormatMaven && source.Format != repository.FormatConan) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Maven, OCI, Raw, or Conan replication requires a visible coordinate and sha256 digest")
 			return
 		}
@@ -1830,7 +1863,7 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
-		if repo.Format != repository.FormatConan && repo.Format != repository.FormatMaven && repo.Format != repository.FormatOCI && repo.Format != repository.FormatRaw {
+		if !repository.FormatSupportsOperation(repo.Format, repo.Type, repository.RepositoryOperationRestore) {
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "restore is not supported for this repository format")
 			return
 		}
@@ -2235,7 +2268,8 @@ func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter,
 	writeNativeMavenJSON(w, 200, group)
 }
 func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
-	if !hostedRepositoryName.MatchString(group.Name) || (group.Format != repository.FormatOCI && group.Format != repository.FormatMaven && group.Format != repository.FormatRaw && group.Format != repository.FormatConan) || len(group.Members) == 0 {
+	profile, supported := repository.FormatProfileFor(group.Format)
+	if !hostedRepositoryName.MatchString(group.Name) || !supported || !profile.GroupSupported || len(group.Members) == 0 {
 		return false
 	}
 	seen := map[string]bool{}
@@ -3203,14 +3237,18 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 }
 
 func validHostedRepository(request createHostedRepositoryRequest) bool {
-	if !hostedRepositoryName.MatchString(request.Name) || (request.Format != repository.FormatRaw && request.Format != repository.FormatOCI && request.Format != repository.FormatMaven && request.Format != repository.FormatConan) {
+	if !hostedRepositoryName.MatchString(request.Name) {
 		return false
 	}
 	repoType := request.Type
 	if repoType == "" {
 		repoType = string(repository.RepositoryTypeHosted)
 	}
-	switch repository.RepositoryType(repoType) {
+	repositoryType := repository.RepositoryType(repoType)
+	if !repository.FormatSupportsRepositoryType(request.Format, repositoryType) {
+		return false
+	}
+	switch repositoryType {
 	case repository.RepositoryTypeHosted:
 		// Hosted repositories serve local content only; an upstream endpoint or
 		// egress allow-list would be meaningless and likely a client mistake.

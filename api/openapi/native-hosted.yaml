@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/formats":
+    "$ref": "./management/formats.yaml#/formats"
   "/artifact-search":
     "$ref": "./management/search.yaml#/artifact_search"
   "/audits":
@@ -111,6 +113,12 @@ components:
   schemas:
     Format:
       "$ref": "./components/schemas.yaml#/Format"
+    FormatProfile:
+      "$ref": "./components/schemas.yaml#/FormatProfile"
+    FormatProfileList:
+      "$ref": "./components/schemas.yaml#/FormatProfileList"
+    RepositoryOperation:
+      "$ref": "./components/schemas.yaml#/RepositoryOperation"
     OCITagList:
       "$ref": "./components/schemas.yaml#/OCITagList"
     RawDirectoryEntry:
@@ -207,6 +215,8 @@ components:
   responses:
     Problem:
       "$ref": "./components/responses.yaml#/Problem"
+    FormatProfileList:
+      "$ref": "./components/responses.yaml#/FormatProfileList"
     BinaryObject:
       "$ref": "./components/responses.yaml#/BinaryObject"
     OCIManifest:

@@ -16,6 +16,20 @@
     }
   ],
   "paths": {
+    "/formats": {
+      "get": {
+        "operationId": "listFormatProfiles",
+        "summary": "List supported artifact formats and management capabilities",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/FormatProfileList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/artifact-search": {
       "get": {
         "operationId": "searchArtifacts",
@@ -2466,6 +2480,81 @@
           "conan"
         ]
       },
+      "FormatProfile": {
+        "type": "object",
+        "required": [
+          "format",
+          "repositoryTypes",
+          "groupSupported",
+          "anonymousRead",
+          "hostedOperations",
+          "proxyOperations"
+        ],
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "repositoryTypes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "hosted",
+                "proxy"
+              ]
+            }
+          },
+          "groupSupported": {
+            "type": "boolean"
+          },
+          "anonymousRead": {
+            "type": "boolean"
+          },
+          "hostedOperations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/RepositoryOperation"
+            }
+          },
+          "proxyOperations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/RepositoryOperation"
+            }
+          }
+        }
+      },
+      "FormatProfileList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormatProfile"
+            }
+          }
+        }
+      },
+      "RepositoryOperation": {
+        "type": "string",
+        "enum": [
+          "read",
+          "publish",
+          "browse",
+          "delete",
+          "restore",
+          "retain",
+          "reclaim",
+          "promote",
+          "replicate"
+        ]
+      },
       "OCITagList": {
         "type": "object",
         "required": [
@@ -4236,16 +4325,7 @@
             "type": "array",
             "uniqueItems": true,
             "items": {
-              "type": "string",
-              "enum": [
-                "read",
-                "publish",
-                "browse",
-                "delete",
-                "restore",
-                "retain",
-                "reclaim"
-              ]
+              "$ref": "#/components/schemas/RepositoryOperation"
             }
           }
         }
@@ -4783,6 +4863,16 @@
           "application/problem+json": {
             "schema": {
               "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "FormatProfileList": {
+        "description": "Supported artifact formats and management capabilities",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/FormatProfileList"
             }
           }
         }

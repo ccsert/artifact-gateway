@@ -88,10 +88,10 @@ const (
 type backgroundOperationFormat uint8
 
 const (
-	backgroundOperationRaw backgroundOperationFormat = iota
-	backgroundOperationOCI
+	backgroundOperationOCI backgroundOperationFormat = iota
 	backgroundOperationMaven
 	backgroundOperationConan
+	backgroundOperationRaw
 	backgroundOperationFormatCount
 )
 
@@ -106,7 +106,7 @@ const (
 )
 
 var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication"}
-var backgroundOperationFormats = [...]repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven, repository.FormatConan}
+var backgroundOperationFormats = repository.SupportedFormats()
 var backgroundOperationOutcomes = [...]string{"started", "completed", "failed", "retried"}
 
 type backgroundOperationQueueState uint8

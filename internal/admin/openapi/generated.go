@@ -361,6 +361,24 @@ func (e Format) Valid() bool {
 	}
 }
 
+// Defines values for FormatProfileRepositoryTypes.
+const (
+	FormatProfileRepositoryTypesHosted FormatProfileRepositoryTypes = "hosted"
+	FormatProfileRepositoryTypesProxy  FormatProfileRepositoryTypes = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the FormatProfileRepositoryTypes enum.
+func (e FormatProfileRepositoryTypes) Valid() bool {
+	switch e {
+	case FormatProfileRepositoryTypesHosted:
+		return true
+	case FormatProfileRepositoryTypesProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GlobalArtifactSearchHitMatchKind.
 const (
 	Coordinate GlobalArtifactSearchHitMatchKind = "coordinate"
@@ -742,39 +760,6 @@ func (e RepositoryType) Valid() bool {
 	}
 }
 
-// Defines values for RepositoryCapabilitiesOperations.
-const (
-	RepositoryCapabilitiesOperationsBrowse  RepositoryCapabilitiesOperations = "browse"
-	RepositoryCapabilitiesOperationsDelete  RepositoryCapabilitiesOperations = "delete"
-	RepositoryCapabilitiesOperationsPublish RepositoryCapabilitiesOperations = "publish"
-	RepositoryCapabilitiesOperationsRead    RepositoryCapabilitiesOperations = "read"
-	RepositoryCapabilitiesOperationsReclaim RepositoryCapabilitiesOperations = "reclaim"
-	RepositoryCapabilitiesOperationsRestore RepositoryCapabilitiesOperations = "restore"
-	RepositoryCapabilitiesOperationsRetain  RepositoryCapabilitiesOperations = "retain"
-)
-
-// Valid indicates whether the value is a known member of the RepositoryCapabilitiesOperations enum.
-func (e RepositoryCapabilitiesOperations) Valid() bool {
-	switch e {
-	case RepositoryCapabilitiesOperationsBrowse:
-		return true
-	case RepositoryCapabilitiesOperationsDelete:
-		return true
-	case RepositoryCapabilitiesOperationsPublish:
-		return true
-	case RepositoryCapabilitiesOperationsRead:
-		return true
-	case RepositoryCapabilitiesOperationsReclaim:
-		return true
-	case RepositoryCapabilitiesOperationsRestore:
-		return true
-	case RepositoryCapabilitiesOperationsRetain:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RepositoryCapabilitiesType.
 const (
 	RepositoryCapabilitiesTypeHosted RepositoryCapabilitiesType = "hosted"
@@ -847,6 +832,45 @@ func (e RepositoryGrantRecordScopes) Valid() bool {
 	case RepositoryGrantRecordScopesRepositoriesRead:
 		return true
 	case RepositoryGrantRecordScopesRepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryOperation.
+const (
+	RepositoryOperationBrowse    RepositoryOperation = "browse"
+	RepositoryOperationDelete    RepositoryOperation = "delete"
+	RepositoryOperationPromote   RepositoryOperation = "promote"
+	RepositoryOperationPublish   RepositoryOperation = "publish"
+	RepositoryOperationRead      RepositoryOperation = "read"
+	RepositoryOperationReclaim   RepositoryOperation = "reclaim"
+	RepositoryOperationReplicate RepositoryOperation = "replicate"
+	RepositoryOperationRestore   RepositoryOperation = "restore"
+	RepositoryOperationRetain    RepositoryOperation = "retain"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryOperation enum.
+func (e RepositoryOperation) Valid() bool {
+	switch e {
+	case RepositoryOperationBrowse:
+		return true
+	case RepositoryOperationDelete:
+		return true
+	case RepositoryOperationPromote:
+		return true
+	case RepositoryOperationPublish:
+		return true
+	case RepositoryOperationRead:
+		return true
+	case RepositoryOperationReclaim:
+		return true
+	case RepositoryOperationReplicate:
+		return true
+	case RepositoryOperationRestore:
+		return true
+	case RepositoryOperationRetain:
 		return true
 	default:
 		return false
@@ -1486,6 +1510,24 @@ type EgressProxyTestResultEgressMode string
 // Format defines model for Format.
 type Format string
 
+// FormatProfile defines model for FormatProfile.
+type FormatProfile struct {
+	AnonymousRead    bool                           `json:"anonymousRead"`
+	Format           Format                         `json:"format"`
+	GroupSupported   bool                           `json:"groupSupported"`
+	HostedOperations []RepositoryOperation          `json:"hostedOperations"`
+	ProxyOperations  []RepositoryOperation          `json:"proxyOperations"`
+	RepositoryTypes  []FormatProfileRepositoryTypes `json:"repositoryTypes"`
+}
+
+// FormatProfileRepositoryTypes defines model for FormatProfile.RepositoryTypes.
+type FormatProfileRepositoryTypes string
+
+// FormatProfileList defines model for FormatProfileList.
+type FormatProfileList struct {
+	Items []FormatProfile `json:"items"`
+}
+
 // GlobalArtifactSearchHit defines model for GlobalArtifactSearchHit.
 type GlobalArtifactSearchHit struct {
 	// BuildNumber Snapshot build number; zero for release coordinates.
@@ -1931,13 +1973,10 @@ type RepositoryType string
 
 // RepositoryCapabilities defines model for RepositoryCapabilities.
 type RepositoryCapabilities struct {
-	Format     Format                             `json:"format"`
-	Operations []RepositoryCapabilitiesOperations `json:"operations"`
-	Type       RepositoryCapabilitiesType         `json:"type"`
+	Format     Format                     `json:"format"`
+	Operations []RepositoryOperation      `json:"operations"`
+	Type       RepositoryCapabilitiesType `json:"type"`
 }
-
-// RepositoryCapabilitiesOperations defines model for RepositoryCapabilities.Operations.
-type RepositoryCapabilitiesOperations string
 
 // RepositoryCapabilitiesType defines model for RepositoryCapabilities.Type.
 type RepositoryCapabilitiesType string
@@ -2027,6 +2066,9 @@ type RepositoryLifecycleJob struct {
 
 // RepositoryLifecycleJobList defines model for RepositoryLifecycleJobList.
 type RepositoryLifecycleJobList = []RepositoryLifecycleJob
+
+// RepositoryOperation defines model for RepositoryOperation.
+type RepositoryOperation string
 
 // RepositoryPage defines model for RepositoryPage.
 type RepositoryPage struct {
@@ -2691,6 +2733,9 @@ type ServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(w http.ResponseWriter, r *http.Request)
+	// ListFormatProfiles List supported artifact formats and management capabilities
+	// (GET /formats)
+	ListFormatProfiles(w http.ResponseWriter, r *http.Request)
 
 	// (GET /groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, params ListGroupsParams)
@@ -3528,6 +3573,20 @@ func (siw *ServerInterfaceWrapper) TestOIDCSettings(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestOIDCSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFormatProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListFormatProfiles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFormatProfiles(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6382,6 +6441,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authentication/oidc", wrapper.GetOIDCSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authentication/oidc", wrapper.ReplaceOIDCSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authentication/oidc:test", wrapper.TestOIDCSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/formats", wrapper.ListFormatProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/groups/{groupId}", wrapper.DeleteGroup)
@@ -6489,6 +6549,8 @@ type CurrentIdentityJSONResponse CurrentIdentity
 type DeletionJSONResponse Deletion
 
 type EgressProxyTestJSONResponse EgressProxyTestResult
+
+type FormatProfileListJSONResponse FormatProfileList
 
 type GrantListResponseHeaders struct {
 	ETag string
@@ -7247,6 +7309,43 @@ func (response TestOIDCSettings503ApplicationProblemPlusJSONResponse) VisitTestO
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFormatProfilesRequestObject struct {
+}
+
+type ListFormatProfilesResponseObject interface {
+	VisitListFormatProfilesResponse(w http.ResponseWriter) error
+}
+
+type ListFormatProfiles200JSONResponse struct{ FormatProfileListJSONResponse }
+
+func (response ListFormatProfiles200JSONResponse) VisitListFormatProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFormatProfiles401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListFormatProfiles401ApplicationProblemPlusJSONResponse) VisitListFormatProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10316,6 +10415,9 @@ type StrictServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(ctx context.Context, request TestOIDCSettingsRequestObject) (TestOIDCSettingsResponseObject, error)
+	// ListFormatProfiles List supported artifact formats and management capabilities
+	// (GET /formats)
+	ListFormatProfiles(ctx context.Context, request ListFormatProfilesRequestObject) (ListFormatProfilesResponseObject, error)
 
 	// (GET /groups)
 	ListGroups(ctx context.Context, request ListGroupsRequestObject) (ListGroupsResponseObject, error)
@@ -10952,6 +11054,30 @@ func (sh *strictHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestOIDCSettingsResponseObject); ok {
 		if err := validResponse.VisitTestOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFormatProfiles operation middleware
+func (sh *strictHandler) ListFormatProfiles(w http.ResponseWriter, r *http.Request) {
+	var request ListFormatProfilesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFormatProfiles(ctx, request.(ListFormatProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFormatProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFormatProfilesResponseObject); ok {
+		if err := validResponse.VisitListFormatProfilesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

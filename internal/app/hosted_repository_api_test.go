@@ -471,7 +471,7 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	authorize(request, authenticator.IssueToken("reader"))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"format":"conan"`) || !strings.Contains(response.Body.String(), `"restore"`) || strings.Contains(response.Body.String(), `"retain"`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"format":"conan"`) || !strings.Contains(response.Body.String(), `"restore"`) || !strings.Contains(response.Body.String(), `"retain"`) || !strings.Contains(response.Body.String(), `"promote"`) || !strings.Contains(response.Body.String(), `"replicate"`) {
 		t.Fatalf("Conan capabilities=%d %s", response.Code, response.Body.String())
 	}
 	adminRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+maven.ID+"/capabilities", nil)
@@ -492,7 +492,7 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	authorize(rawRequest, "admin-secret")
 	rawResponse := httptest.NewRecorder()
 	handler.ServeHTTP(rawResponse, rawRequest)
-	if rawResponse.Code != http.StatusOK || !strings.Contains(rawResponse.Body.String(), `"restore"`) || strings.Contains(rawResponse.Body.String(), `"retain"`) {
+	if rawResponse.Code != http.StatusOK || !strings.Contains(rawResponse.Body.String(), `"restore"`) || !strings.Contains(rawResponse.Body.String(), `"retain"`) || !strings.Contains(rawResponse.Body.String(), `"promote"`) || !strings.Contains(rawResponse.Body.String(), `"replicate"`) {
 		t.Fatalf("Raw capabilities=%d %s", rawResponse.Code, rawResponse.Body.String())
 	}
 }

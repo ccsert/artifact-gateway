@@ -1,0 +1,10 @@
+---
+formats:
+  get:
+    operationId: listFormatProfiles
+    summary: List supported artifact formats and management capabilities
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/FormatProfileList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
@@ -148,6 +149,37 @@ func TestNativeHostedOpenAPIContract(t *testing.T) {
 	for _, parameter := range []string{"group", "repository", "limit"} {
 		if !hasParameter(audits.Parameters, parameter, "query") {
 			t.Errorf("audit list missing query parameter %s", parameter)
+		}
+	}
+}
+
+func TestFormatProfileContractMatchesRepositoryProfiles(t *testing.T) {
+	spec := loadNativeHostedSpec(t)
+	formats := operation(t, spec, "/formats", "GET")
+	if formats.OperationID != "listFormatProfiles" {
+		t.Fatalf("operationId=%q", formats.OperationID)
+	}
+	for _, status := range []string{"200", "401"} {
+		requireResponse(t, formats, status)
+	}
+	for _, schema := range []string{"FormatProfile", "FormatProfileList", "RepositoryOperation"} {
+		if spec.Components.Schemas[schema] == nil {
+			t.Fatalf("missing schema %s", schema)
+		}
+	}
+
+	formatSchema := spec.Components.Schemas["Format"].Value
+	wantFormats := make(map[string]bool)
+	for _, format := range repository.SupportedFormats() {
+		wantFormats[string(format)] = true
+	}
+	if len(formatSchema.Enum) != len(wantFormats) {
+		t.Fatalf("OpenAPI formats=%v profiles=%v", formatSchema.Enum, wantFormats)
+	}
+	for _, value := range formatSchema.Enum {
+		format, ok := value.(string)
+		if !ok || !wantFormats[format] {
+			t.Fatalf("OpenAPI format %v is not in repository profiles", value)
 		}
 	}
 }
