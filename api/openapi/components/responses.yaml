@@ -179,6 +179,18 @@ RepositoryGrantRecordList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RepositoryGrantRecordList"
+AuthorizationTemplate:
+  description: Reusable repository grant template
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/AuthorizationTemplate"
+AuthorizationTemplateList:
+  description: Reusable repository grant templates
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/AuthorizationTemplateList"
 RetentionPolicy:
   description: Retention policy
   content:

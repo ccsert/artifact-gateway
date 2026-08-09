@@ -36,6 +36,89 @@ repository_grants:
         "$ref": "../components/responses.yaml#/RepositoryGrantRecordList"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
+authorization_templates:
+  get:
+    operationId: listAuthorizationTemplates
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationTemplateList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createAuthorizationTemplate
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/AuthorizationTemplateWritable"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/AuthorizationTemplate"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+authorization_templates_templateId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/AuthorizationTemplateId"
+  get:
+    operationId: getAuthorizationTemplate
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationTemplate"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: updateAuthorizationTemplate
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/AuthorizationTemplateWritable"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationTemplate"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteAuthorizationTemplate
+    responses:
+      '204':
+        description: Authorization template deleted
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+authorization_templates_templateId_apply:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/AuthorizationTemplateId"
+  post:
+    operationId: applyAuthorizationTemplate
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/ApplyAuthorizationTemplate"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/GrantList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

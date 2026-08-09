@@ -44,6 +44,7 @@ import {
   MetricStrip,
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
+import { AuthorizationTemplatesPanel } from "../components/AuthorizationTemplatesPanel";
 
 interface GrantRow {
   repositoryId: string;
@@ -851,6 +852,7 @@ export function AccessControlPage() {
           </div>
         )}
       </Card>
+      <AuthorizationTemplatesPanel repositories={repositories} />
       <Collapse
         ghost
         className="my-4"

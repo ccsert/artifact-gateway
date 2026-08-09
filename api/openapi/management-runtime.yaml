@@ -47,6 +47,12 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories"
   "/repository-grants":
     "$ref": "./management/repositories.yaml#/repository_grants"
+  "/authorization-templates":
+    "$ref": "./management/repositories.yaml#/authorization_templates"
+  "/authorization-templates/{templateId}":
+    "$ref": "./management/repositories.yaml#/authorization_templates_templateId"
+  "/authorization-templates/{templateId}/apply":
+    "$ref": "./management/repositories.yaml#/authorization_templates_templateId_apply"
   "/repository-capacities":
     "$ref": "./management/capacity.yaml#/repository_capacities"
   "/lifecycle-jobs":

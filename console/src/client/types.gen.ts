@@ -871,6 +871,33 @@ export type RepositoryGrantRecord = {
 
 export type RepositoryGrantRecordList = Array<RepositoryGrantRecord>;
 
+export type AuthorizationTemplateGrant = {
+  principal: string;
+  scopes: Array<
+    "repositories:read" | "repositories:write" | "repositories:admin"
+  >;
+  resourcePrefix?: string;
+};
+
+export type AuthorizationTemplateWritable = {
+  name: string;
+  description?: string;
+  grants: Array<AuthorizationTemplateGrant>;
+};
+
+export type AuthorizationTemplate = AuthorizationTemplateWritable & {
+  id: string;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AuthorizationTemplateList = Array<AuthorizationTemplate>;
+
+export type ApplyAuthorizationTemplate = {
+  repositoryId: string;
+};
+
 export type RepositoryCapacityList = Array<RepositoryCapacity>;
 
 export type RepositoryLifecycleJob = {
@@ -1214,6 +1241,8 @@ export type ConanReferencePrefix = string;
 export type IdempotencyKey = string;
 
 export type IfMatch = string;
+
+export type AuthorizationTemplateId = string;
 
 export type ScheduledTaskId = string;
 
@@ -2072,6 +2101,206 @@ export type ListRepositoryGrantsResponses = {
 
 export type ListRepositoryGrantsResponse =
   ListRepositoryGrantsResponses[keyof ListRepositoryGrantsResponses];
+
+export type ListAuthorizationTemplatesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/authorization-templates";
+};
+
+export type ListAuthorizationTemplatesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListAuthorizationTemplatesError =
+  ListAuthorizationTemplatesErrors[keyof ListAuthorizationTemplatesErrors];
+
+export type ListAuthorizationTemplatesResponses = {
+  /**
+   * Reusable repository grant templates
+   */
+  200: AuthorizationTemplateList;
+};
+
+export type ListAuthorizationTemplatesResponse =
+  ListAuthorizationTemplatesResponses[keyof ListAuthorizationTemplatesResponses];
+
+export type CreateAuthorizationTemplateData = {
+  body: AuthorizationTemplateWritable;
+  path?: never;
+  query?: never;
+  url: "/authorization-templates";
+};
+
+export type CreateAuthorizationTemplateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateAuthorizationTemplateError =
+  CreateAuthorizationTemplateErrors[keyof CreateAuthorizationTemplateErrors];
+
+export type CreateAuthorizationTemplateResponses = {
+  /**
+   * Reusable repository grant template
+   */
+  201: AuthorizationTemplate;
+};
+
+export type CreateAuthorizationTemplateResponse =
+  CreateAuthorizationTemplateResponses[keyof CreateAuthorizationTemplateResponses];
+
+export type DeleteAuthorizationTemplateData = {
+  body?: never;
+  path: {
+    templateId: string;
+  };
+  query?: never;
+  url: "/authorization-templates/{templateId}";
+};
+
+export type DeleteAuthorizationTemplateErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type DeleteAuthorizationTemplateError =
+  DeleteAuthorizationTemplateErrors[keyof DeleteAuthorizationTemplateErrors];
+
+export type DeleteAuthorizationTemplateResponses = {
+  /**
+   * Authorization template deleted
+   */
+  204: void;
+};
+
+export type DeleteAuthorizationTemplateResponse =
+  DeleteAuthorizationTemplateResponses[keyof DeleteAuthorizationTemplateResponses];
+
+export type GetAuthorizationTemplateData = {
+  body?: never;
+  path: {
+    templateId: string;
+  };
+  query?: never;
+  url: "/authorization-templates/{templateId}";
+};
+
+export type GetAuthorizationTemplateErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetAuthorizationTemplateError =
+  GetAuthorizationTemplateErrors[keyof GetAuthorizationTemplateErrors];
+
+export type GetAuthorizationTemplateResponses = {
+  /**
+   * Reusable repository grant template
+   */
+  200: AuthorizationTemplate;
+};
+
+export type GetAuthorizationTemplateResponse =
+  GetAuthorizationTemplateResponses[keyof GetAuthorizationTemplateResponses];
+
+export type UpdateAuthorizationTemplateData = {
+  body: AuthorizationTemplateWritable;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    templateId: string;
+  };
+  query?: never;
+  url: "/authorization-templates/{templateId}";
+};
+
+export type UpdateAuthorizationTemplateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type UpdateAuthorizationTemplateError =
+  UpdateAuthorizationTemplateErrors[keyof UpdateAuthorizationTemplateErrors];
+
+export type UpdateAuthorizationTemplateResponses = {
+  /**
+   * Reusable repository grant template
+   */
+  200: AuthorizationTemplate;
+};
+
+export type UpdateAuthorizationTemplateResponse =
+  UpdateAuthorizationTemplateResponses[keyof UpdateAuthorizationTemplateResponses];
+
+export type ApplyAuthorizationTemplateData = {
+  body: ApplyAuthorizationTemplate;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    templateId: string;
+  };
+  query?: never;
+  url: "/authorization-templates/{templateId}/apply";
+};
+
+export type ApplyAuthorizationTemplateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ApplyAuthorizationTemplateError =
+  ApplyAuthorizationTemplateErrors[keyof ApplyAuthorizationTemplateErrors];
+
+export type ApplyAuthorizationTemplateResponses = {
+  /**
+   * Grants
+   */
+  200: GrantList;
+};
+
+export type ApplyAuthorizationTemplateResponse =
+  ApplyAuthorizationTemplateResponses[keyof ApplyAuthorizationTemplateResponses];
 
 export type ListRepositoryCapacitiesData = {
   body?: never;

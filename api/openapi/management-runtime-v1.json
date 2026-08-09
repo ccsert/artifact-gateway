@@ -704,6 +704,146 @@
         }
       }
     },
+    "/authorization-templates": {
+      "get": {
+        "operationId": "listAuthorizationTemplates",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationTemplateList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAuthorizationTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationTemplateWritable"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/AuthorizationTemplate"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/authorization-templates/{templateId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AuthorizationTemplateId"
+        }
+      ],
+      "get": {
+        "operationId": "getAuthorizationTemplate",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationTemplate"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateAuthorizationTemplate",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationTemplateWritable"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationTemplate"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAuthorizationTemplate",
+        "responses": {
+          "204": {
+            "description": "Authorization template deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/authorization-templates/{templateId}/apply": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AuthorizationTemplateId"
+        }
+      ],
+      "post": {
+        "operationId": "applyAuthorizationTemplate",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyAuthorizationTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GrantList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repository-capacities": {
       "get": {
         "operationId": "listRepositoryCapacities",
@@ -5479,6 +5619,116 @@
           "$ref": "#/components/schemas/RepositoryGrantRecord"
         }
       },
+      "AuthorizationTemplateGrant": {
+        "type": "object",
+        "required": [
+          "principal",
+          "scopes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "repositories:read",
+                "repositories:write",
+                "repositories:admin"
+              ]
+            }
+          },
+          "resourcePrefix": {
+            "type": "string",
+            "maxLength": 255
+          }
+        }
+      },
+      "AuthorizationTemplateWritable": {
+        "type": "object",
+        "required": [
+          "name",
+          "grants"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "grants": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/AuthorizationTemplateGrant"
+            }
+          }
+        }
+      },
+      "AuthorizationTemplate": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AuthorizationTemplateWritable"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "version",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "AuthorizationTemplateList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AuthorizationTemplate"
+        }
+      },
+      "ApplyAuthorizationTemplate": {
+        "type": "object",
+        "required": [
+          "repositoryId"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "RepositoryCapacityList": {
         "type": "array",
         "items": {
@@ -6185,6 +6435,15 @@
           "type": "string"
         }
       },
+      "AuthorizationTemplateId": {
+        "name": "templateId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "ScheduledTaskId": {
         "name": "taskId",
         "in": "path",
@@ -6809,6 +7068,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RepositoryGrantRecordList"
+            }
+          }
+        }
+      },
+      "AuthorizationTemplateList": {
+        "description": "Reusable repository grant templates",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthorizationTemplateList"
+            }
+          }
+        }
+      },
+      "AuthorizationTemplate": {
+        "description": "Reusable repository grant template",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthorizationTemplate"
             }
           }
         }

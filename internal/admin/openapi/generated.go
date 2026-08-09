@@ -109,6 +109,27 @@ func (e AuthenticationKind) Valid() bool {
 	}
 }
 
+// Defines values for AuthorizationTemplateGrantScopes.
+const (
+	AuthorizationTemplateGrantScopesRepositoriesAdmin AuthorizationTemplateGrantScopes = "repositories:admin"
+	AuthorizationTemplateGrantScopesRepositoriesRead  AuthorizationTemplateGrantScopes = "repositories:read"
+	AuthorizationTemplateGrantScopesRepositoriesWrite AuthorizationTemplateGrantScopes = "repositories:write"
+)
+
+// Valid indicates whether the value is a known member of the AuthorizationTemplateGrantScopes enum.
+func (e AuthorizationTemplateGrantScopes) Valid() bool {
+	switch e {
+	case AuthorizationTemplateGrantScopesRepositoriesAdmin:
+		return true
+	case AuthorizationTemplateGrantScopesRepositoriesRead:
+		return true
+	case AuthorizationTemplateGrantScopesRepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConanPackageRevisionState.
 const (
 	ConanPackageRevisionStateDeleted ConanPackageRevisionState = "deleted"
@@ -1336,6 +1357,11 @@ type AnonymousAccessPolicy struct {
 	Version string `json:"version"`
 }
 
+// ApplyAuthorizationTemplate defines model for ApplyAuthorizationTemplate.
+type ApplyAuthorizationTemplate struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+}
+
 // Artifact defines model for Artifact.
 type Artifact struct {
 	Coordinate string             `json:"coordinate"`
@@ -1455,6 +1481,37 @@ type AuditRetentionPolicy struct {
 
 // AuthenticationKind defines model for AuthenticationKind.
 type AuthenticationKind string
+
+// AuthorizationTemplate defines model for AuthorizationTemplate.
+type AuthorizationTemplate struct {
+	CreatedAt   time.Time                    `json:"createdAt"`
+	Description *string                      `json:"description,omitempty"`
+	Grants      []AuthorizationTemplateGrant `json:"grants"`
+	Id          openapi_types.UUID           `json:"id"`
+	Name        string                       `json:"name"`
+	UpdatedAt   time.Time                    `json:"updatedAt"`
+	Version     string                       `json:"version"`
+}
+
+// AuthorizationTemplateGrant defines model for AuthorizationTemplateGrant.
+type AuthorizationTemplateGrant struct {
+	Principal      string                             `json:"principal"`
+	ResourcePrefix *string                            `json:"resourcePrefix,omitempty"`
+	Scopes         []AuthorizationTemplateGrantScopes `json:"scopes"`
+}
+
+// AuthorizationTemplateGrantScopes defines model for AuthorizationTemplateGrant.Scopes.
+type AuthorizationTemplateGrantScopes string
+
+// AuthorizationTemplateList defines model for AuthorizationTemplateList.
+type AuthorizationTemplateList = []AuthorizationTemplate
+
+// AuthorizationTemplateWritable defines model for AuthorizationTemplateWritable.
+type AuthorizationTemplateWritable struct {
+	Description *string                      `json:"description,omitempty"`
+	Grants      []AuthorizationTemplateGrant `json:"grants"`
+	Name        string                       `json:"name"`
+}
 
 // ConanPackageIdList defines model for ConanPackageIdList.
 type ConanPackageIdList struct {
@@ -2558,6 +2615,9 @@ type UserList struct {
 	Items []User `json:"items"`
 }
 
+// AuthorizationTemplateId defines model for AuthorizationTemplateId.
+type AuthorizationTemplateId = openapi_types.UUID
+
 // ConanReferencePrefix defines model for ConanReferencePrefix.
 type ConanReferencePrefix = string
 
@@ -2710,6 +2770,16 @@ type ListAuditPageParams struct {
 
 // ReplaceOIDCSettingsParams defines parameters for ReplaceOIDCSettings.
 type ReplaceOIDCSettingsParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// UpdateAuthorizationTemplateParams defines parameters for UpdateAuthorizationTemplate.
+type UpdateAuthorizationTemplateParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ApplyAuthorizationTemplateParams defines parameters for ApplyAuthorizationTemplate.
+type ApplyAuthorizationTemplateParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
@@ -2927,6 +2997,15 @@ type ReplaceAuditRetentionPolicyJSONRequestBody = AuditRetentionPolicy
 // ReplaceOIDCSettingsJSONRequestBody defines body for ReplaceOIDCSettings for application/json ContentType.
 type ReplaceOIDCSettingsJSONRequestBody = OIDCSettingsUpdate
 
+// CreateAuthorizationTemplateJSONRequestBody defines body for CreateAuthorizationTemplate for application/json ContentType.
+type CreateAuthorizationTemplateJSONRequestBody = AuthorizationTemplateWritable
+
+// UpdateAuthorizationTemplateJSONRequestBody defines body for UpdateAuthorizationTemplate for application/json ContentType.
+type UpdateAuthorizationTemplateJSONRequestBody = AuthorizationTemplateWritable
+
+// ApplyAuthorizationTemplateJSONRequestBody defines body for ApplyAuthorizationTemplate for application/json ContentType.
+type ApplyAuthorizationTemplateJSONRequestBody = ApplyAuthorizationTemplate
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -3070,6 +3149,24 @@ type ServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(w http.ResponseWriter, r *http.Request)
+
+	// (GET /authorization-templates)
+	ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request)
+
+	// (POST /authorization-templates)
+	CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /authorization-templates/{templateId})
+	DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId)
+
+	// (GET /authorization-templates/{templateId})
+	GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId)
+
+	// (PUT /authorization-templates/{templateId})
+	UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params UpdateAuthorizationTemplateParams)
+
+	// (POST /authorization-templates/{templateId}/apply)
+	ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params ApplyAuthorizationTemplateParams)
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(w http.ResponseWriter, r *http.Request)
@@ -3937,6 +4034,194 @@ func (siw *ServerInterfaceWrapper) TestOIDCSettings(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestOIDCSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuthorizationTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuthorizationTemplates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAuthorizationTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAuthorizationTemplate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAuthorizationTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId AuthorizationTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", r.PathValue("templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAuthorizationTemplate(w, r, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuthorizationTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId AuthorizationTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", r.PathValue("templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthorizationTemplate(w, r, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAuthorizationTemplate operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId AuthorizationTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", r.PathValue("templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAuthorizationTemplateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAuthorizationTemplate(w, r, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyAuthorizationTemplate operation middleware
+func (siw *ServerInterfaceWrapper) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId AuthorizationTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", r.PathValue("templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyAuthorizationTemplateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyAuthorizationTemplate(w, r, templateId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7047,6 +7332,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authentication/oidc", wrapper.GetOIDCSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authentication/oidc", wrapper.ReplaceOIDCSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authentication/oidc:test", wrapper.TestOIDCSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-templates", wrapper.ListAuthorizationTemplates)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-templates", wrapper.CreateAuthorizationTemplate)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.DeleteAuthorizationTemplate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.GetAuthorizationTemplate)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.UpdateAuthorizationTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-templates/{templateId}/apply", wrapper.ApplyAuthorizationTemplate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/formats", wrapper.ListFormatProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
@@ -7148,6 +7439,10 @@ type AuditCleanupJobListJSONResponse []AuditCleanupJob
 type AuditListJSONResponse AuditList
 
 type AuditRetentionPolicyJSONResponse AuditRetentionPolicy
+
+type AuthorizationTemplateJSONResponse AuthorizationTemplate
+
+type AuthorizationTemplateListJSONResponse AuthorizationTemplateList
 
 type ConanPackageIdListJSONResponse ConanPackageIdList
 
@@ -7926,6 +8221,324 @@ func (response TestOIDCSettings503ApplicationProblemPlusJSONResponse) VisitTestO
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuthorizationTemplatesRequestObject struct {
+}
+
+type ListAuthorizationTemplatesResponseObject interface {
+	VisitListAuthorizationTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListAuthorizationTemplates200JSONResponse struct {
+	AuthorizationTemplateListJSONResponse
+}
+
+func (response ListAuthorizationTemplates200JSONResponse) VisitListAuthorizationTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuthorizationTemplates401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAuthorizationTemplates401ApplicationProblemPlusJSONResponse) VisitListAuthorizationTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationTemplateRequestObject struct {
+	Body *CreateAuthorizationTemplateJSONRequestBody
+}
+
+type CreateAuthorizationTemplateResponseObject interface {
+	VisitCreateAuthorizationTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateAuthorizationTemplate201JSONResponse struct {
+	AuthorizationTemplateJSONResponse
+}
+
+func (response CreateAuthorizationTemplate201JSONResponse) VisitCreateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationTemplate400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAuthorizationTemplate400ApplicationProblemPlusJSONResponse) VisitCreateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationTemplate409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAuthorizationTemplate409ApplicationProblemPlusJSONResponse) VisitCreateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAuthorizationTemplateRequestObject struct {
+	TemplateId AuthorizationTemplateId `json:"templateId"`
+}
+
+type DeleteAuthorizationTemplateResponseObject interface {
+	VisitDeleteAuthorizationTemplateResponse(w http.ResponseWriter) error
+}
+
+type DeleteAuthorizationTemplate204Response struct {
+}
+
+func (response DeleteAuthorizationTemplate204Response) VisitDeleteAuthorizationTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAuthorizationTemplate404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAuthorizationTemplate404ApplicationProblemPlusJSONResponse) VisitDeleteAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthorizationTemplateRequestObject struct {
+	TemplateId AuthorizationTemplateId `json:"templateId"`
+}
+
+type GetAuthorizationTemplateResponseObject interface {
+	VisitGetAuthorizationTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetAuthorizationTemplate200JSONResponse struct {
+	AuthorizationTemplateJSONResponse
+}
+
+func (response GetAuthorizationTemplate200JSONResponse) VisitGetAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthorizationTemplate404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAuthorizationTemplate404ApplicationProblemPlusJSONResponse) VisitGetAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationTemplateRequestObject struct {
+	TemplateId AuthorizationTemplateId `json:"templateId"`
+	Params     UpdateAuthorizationTemplateParams
+	Body       *UpdateAuthorizationTemplateJSONRequestBody
+}
+
+type UpdateAuthorizationTemplateResponseObject interface {
+	VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error
+}
+
+type UpdateAuthorizationTemplate200JSONResponse struct {
+	AuthorizationTemplateJSONResponse
+}
+
+func (response UpdateAuthorizationTemplate200JSONResponse) VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationTemplate400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAuthorizationTemplate400ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationTemplate404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationTemplate404ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationTemplate409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationTemplate409ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationTemplate412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationTemplate412ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAuthorizationTemplateRequestObject struct {
+	TemplateId AuthorizationTemplateId `json:"templateId"`
+	Params     ApplyAuthorizationTemplateParams
+	Body       *ApplyAuthorizationTemplateJSONRequestBody
+}
+
+type ApplyAuthorizationTemplateResponseObject interface {
+	VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error
+}
+
+type ApplyAuthorizationTemplate200JSONResponse struct{ GrantListJSONResponse }
+
+func (response ApplyAuthorizationTemplate200JSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAuthorizationTemplate400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyAuthorizationTemplate400ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAuthorizationTemplate404ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAuthorizationTemplate404ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAuthorizationTemplate412ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAuthorizationTemplate412ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11516,6 +12129,24 @@ type StrictServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(ctx context.Context, request TestOIDCSettingsRequestObject) (TestOIDCSettingsResponseObject, error)
+
+	// (GET /authorization-templates)
+	ListAuthorizationTemplates(ctx context.Context, request ListAuthorizationTemplatesRequestObject) (ListAuthorizationTemplatesResponseObject, error)
+
+	// (POST /authorization-templates)
+	CreateAuthorizationTemplate(ctx context.Context, request CreateAuthorizationTemplateRequestObject) (CreateAuthorizationTemplateResponseObject, error)
+
+	// (DELETE /authorization-templates/{templateId})
+	DeleteAuthorizationTemplate(ctx context.Context, request DeleteAuthorizationTemplateRequestObject) (DeleteAuthorizationTemplateResponseObject, error)
+
+	// (GET /authorization-templates/{templateId})
+	GetAuthorizationTemplate(ctx context.Context, request GetAuthorizationTemplateRequestObject) (GetAuthorizationTemplateResponseObject, error)
+
+	// (PUT /authorization-templates/{templateId})
+	UpdateAuthorizationTemplate(ctx context.Context, request UpdateAuthorizationTemplateRequestObject) (UpdateAuthorizationTemplateResponseObject, error)
+
+	// (POST /authorization-templates/{templateId}/apply)
+	ApplyAuthorizationTemplate(ctx context.Context, request ApplyAuthorizationTemplateRequestObject) (ApplyAuthorizationTemplateResponseObject, error)
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(ctx context.Context, request GetDiagnosticsRequestObject) (GetDiagnosticsResponseObject, error)
@@ -12182,6 +12813,181 @@ func (sh *strictHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestOIDCSettingsResponseObject); ok {
 		if err := validResponse.VisitTestOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAuthorizationTemplates operation middleware
+func (sh *strictHandler) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {
+	var request ListAuthorizationTemplatesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuthorizationTemplates(ctx, request.(ListAuthorizationTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuthorizationTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuthorizationTemplatesResponseObject); ok {
+		if err := validResponse.VisitListAuthorizationTemplatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAuthorizationTemplate operation middleware
+func (sh *strictHandler) CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+	var request CreateAuthorizationTemplateRequestObject
+
+	var body CreateAuthorizationTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAuthorizationTemplate(ctx, request.(CreateAuthorizationTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAuthorizationTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAuthorizationTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAuthorizationTemplate operation middleware
+func (sh *strictHandler) DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId) {
+	var request DeleteAuthorizationTemplateRequestObject
+
+	request.TemplateId = templateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAuthorizationTemplate(ctx, request.(DeleteAuthorizationTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAuthorizationTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAuthorizationTemplateResponseObject); ok {
+		if err := validResponse.VisitDeleteAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuthorizationTemplate operation middleware
+func (sh *strictHandler) GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId) {
+	var request GetAuthorizationTemplateRequestObject
+
+	request.TemplateId = templateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuthorizationTemplate(ctx, request.(GetAuthorizationTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuthorizationTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuthorizationTemplateResponseObject); ok {
+		if err := validResponse.VisitGetAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAuthorizationTemplate operation middleware
+func (sh *strictHandler) UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params UpdateAuthorizationTemplateParams) {
+	var request UpdateAuthorizationTemplateRequestObject
+
+	request.TemplateId = templateId
+	request.Params = params
+
+	var body UpdateAuthorizationTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAuthorizationTemplate(ctx, request.(UpdateAuthorizationTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAuthorizationTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAuthorizationTemplateResponseObject); ok {
+		if err := validResponse.VisitUpdateAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyAuthorizationTemplate operation middleware
+func (sh *strictHandler) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params ApplyAuthorizationTemplateParams) {
+	var request ApplyAuthorizationTemplateRequestObject
+
+	request.TemplateId = templateId
+	request.Params = params
+
+	var body ApplyAuthorizationTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyAuthorizationTemplate(ctx, request.(ApplyAuthorizationTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyAuthorizationTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyAuthorizationTemplateResponseObject); ok {
+		if err := validResponse.VisitApplyAuthorizationTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

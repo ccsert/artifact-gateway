@@ -223,6 +223,7 @@ type generatedRepositoryAPIAdapter struct {
 	sessions          nativeMavenHandler
 	groups            repository.HostedGroupStore
 	grants            repository.RepositoryGrantStore
+	templates         repository.AuthorizationTemplateStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
 	capacities        repository.RepositoryCapacityStore
 	tombstones        repository.ArtifactTombstoneStore
@@ -1197,6 +1198,251 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryGrants(w http.ResponseWrite
 		items = append(items, item)
 	}
 	writeNativeMavenJSON(w, http.StatusOK, items)
+}
+
+func authorizationTemplateResponse(template repository.AuthorizationTemplate) adminopenapi.AuthorizationTemplate {
+	grants := make([]adminopenapi.AuthorizationTemplateGrant, 0, len(template.Grants))
+	for _, grant := range template.Grants {
+		item := adminopenapi.AuthorizationTemplateGrant{Principal: grant.Principal}
+		for _, scope := range grant.Scopes {
+			item.Scopes = append(item.Scopes, adminopenapi.AuthorizationTemplateGrantScopes(scope))
+		}
+		if grant.ResourcePrefix != "" {
+			prefix := grant.ResourcePrefix
+			item.ResourcePrefix = &prefix
+		}
+		grants = append(grants, item)
+	}
+	description := template.Description
+	return adminopenapi.AuthorizationTemplate{
+		Id: templateID(template.ID), Name: template.Name, Description: &description,
+		Grants: grants, Version: template.Version, CreatedAt: template.CreatedAt, UpdatedAt: template.UpdatedAt,
+	}
+}
+
+func templateID(id string) uuid.UUID {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil
+	}
+	return parsed
+}
+
+func authorizationTemplateGrants(body *adminopenapi.AuthorizationTemplateWritable) []repository.RepositoryGrant {
+	if body == nil {
+		return nil
+	}
+	grants := make([]repository.RepositoryGrant, 0, len(body.Grants))
+	for _, grant := range body.Grants {
+		prefix := ""
+		if grant.ResourcePrefix != nil {
+			prefix = *grant.ResourcePrefix
+		}
+		scopes := make([]string, 0, len(grant.Scopes))
+		for _, scope := range grant.Scopes {
+			scopes = append(scopes, string(scope))
+		}
+		grants = append(grants, repository.RepositoryGrant{Principal: grant.Principal, Scopes: scopes, ResourcePrefix: prefix})
+	}
+	return grants
+}
+
+func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool {
+	if len(grants) > 500 {
+		return false
+	}
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
+	keys := map[string]bool{}
+	for _, grant := range grants {
+		if strings.TrimSpace(grant.Principal) == "" || len(grant.Principal) > 512 || strings.ContainsAny(grant.Principal, "\x00\r\n") || len(grant.Scopes) == 0 || len(grant.ResourcePrefix) > 255 || strings.ContainsAny(grant.ResourcePrefix, "\x00\r\n") {
+			return false
+		}
+		key := grant.Principal + "\x00" + grant.ResourcePrefix
+		if keys[key] {
+			return false
+		}
+		keys[key] = true
+		seen := map[string]bool{}
+		for _, scope := range grant.Scopes {
+			if !validScopes[scope] || seen[scope] {
+				return false
+			}
+			seen[scope] = true
+		}
+	}
+	return true
+}
+
+func (h generatedRepositoryAPIAdapter) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	items, err := h.templates.ListAuthorizationTemplates(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list authorization templates failed")
+		return
+	}
+	response := make(adminopenapi.AuthorizationTemplateList, 0, len(items))
+	for _, item := range items {
+		response = append(response, authorizationTemplateResponse(item))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
+func (h generatedRepositoryAPIAdapter) CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var body adminopenapi.AuthorizationTemplateWritable
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid authorization template body")
+		return
+	}
+	grants := authorizationTemplateGrants(&body)
+	if strings.TrimSpace(body.Name) == "" || len(strings.TrimSpace(body.Name)) > 128 || (body.Description != nil && len(*body.Description) > 1000) || !validAuthorizationTemplateGrants(grants) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "template name and grants must be valid")
+		return
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+	template, err := h.templates.CreateAuthorizationTemplate(r.Context(), repository.AuthorizationTemplate{Name: body.Name, Description: description, Grants: grants})
+	if errors.Is(err, repository.ErrTemplateNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "name_exists", "authorization template name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create authorization template failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, authorizationTemplateResponse(template))
+}
+
+func (h generatedRepositoryAPIAdapter) GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	template, err := h.templates.GetAuthorizationTemplate(r.Context(), templateID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get authorization template failed")
+		return
+	}
+	w.Header().Set("ETag", template.Version)
+	writeNativeMavenJSON(w, http.StatusOK, authorizationTemplateResponse(template))
+}
+
+func (h generatedRepositoryAPIAdapter) UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.UpdateAuthorizationTemplateParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var body adminopenapi.AuthorizationTemplateWritable
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid authorization template body")
+		return
+	}
+	grants := authorizationTemplateGrants(&body)
+	if strings.TrimSpace(body.Name) == "" || len(strings.TrimSpace(body.Name)) > 128 || (body.Description != nil && len(*body.Description) > 1000) || !validAuthorizationTemplateGrants(grants) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "template name and grants must be valid")
+		return
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+	template, err := h.templates.UpdateAuthorizationTemplate(r.Context(), repository.AuthorizationTemplate{ID: templateID.String(), Name: body.Name, Description: description, Grants: grants}, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current template version")
+		return
+	}
+	if errors.Is(err, repository.ErrTemplateNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "name_exists", "authorization template name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update authorization template failed")
+		return
+	}
+	w.Header().Set("ETag", template.Version)
+	writeNativeMavenJSON(w, http.StatusOK, authorizationTemplateResponse(template))
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	err := h.templates.DeleteAuthorizationTemplate(r.Context(), templateID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete authorization template failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.ApplyAuthorizationTemplateParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var body adminopenapi.ApplyAuthorizationTemplate
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || body.RepositoryId == uuid.Nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repositoryId is required")
+		return
+	}
+	repo, err := h.hostedRepositoryAPIHandler.store.GetHostedRepository(r.Context(), body.RepositoryId.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return
+	}
+	template, err := h.templates.GetAuthorizationTemplate(r.Context(), templateID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get authorization template failed")
+		return
+	}
+	if !validRepositoryGrants(template.Grants, repo.Format) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "template grants are not valid for the target repository format")
+		return
+	}
+	set, err := h.templates.ApplyAuthorizationTemplate(r.Context(), templateID.String(), body.RepositoryId.String(), string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository or authorization template not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current repository grant version")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "apply authorization template failed")
+		return
+	}
+	w.Header().Set("ETag", set.Version)
+	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {

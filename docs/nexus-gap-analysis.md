@@ -68,10 +68,13 @@ global role, repository, and resource through the same authorization chain
 used by protocol requests, then explains the source and reason for every
 decision.
 
-The remaining gaps are reusable role/privilege templates, richer selectors
-than a canonical prefix, external directory protocols such as LDAP/SAML, and
-server-side session inventory/revocation. Anonymous access remains an explicit
-global-and-repository policy rather than a managed anonymous role.
+Authorization templates now provide reusable named grant sets with canonical
+resource prefixes, versioned edits, administrator-only management, and an
+optimistic-concurrency-protected apply operation. Remaining gaps are richer
+selector composition beyond a canonical prefix, external directory protocols
+such as LDAP/SAML, and server-side session inventory/revocation. Anonymous
+access remains an explicit global-and-repository policy rather than a managed
+anonymous role.
 
 ### Distribution And Integration
 
@@ -321,8 +324,8 @@ referenced commits.
   reference, and deep-links each row to the repository's Grants tab. An
   administrator can evaluate a current or simulated principal against a
   concrete resource and inspect the source/reason for every permission
-  decision. Reusable privilege/content-selector templates remain future work.
-  (`f5f2f9c9`)
+  decision. The page also manages reusable authorization templates and applies
+  them to selected repositories with `If-Match` protection. (`f5f2f9c9`)
 - **Local user management (P0).** A `users` table with bcrypt password hashing,
   a UserStore (Postgres + Memory), admin-only `/api/v2/users` CRUD (the hash is
   never returned), `POST /auth/login` that mints a stateless 12-hour session
@@ -365,9 +368,10 @@ independently deliverable.
    and exact global digest search are delivered; the remaining work is to
    surface signatures, SBOM, provenance, license, and vulnerability metadata
    through the shared artifact detail experience.
-2. **P1 Privilege/content-selector management.** Add reusable role templates
-   and selector composition beyond the current repository grant prefixes,
-   retaining effective-access simulation as the preview and diagnostics tool.
+2. **P1 Privilege/content-selector management.** Extend the delivered reusable
+   grant templates with selector composition beyond the current repository
+   grant prefixes, retaining effective-access simulation as the preview and
+   diagnostics tool.
 3. **P1 System diagnostics and support bundle.** Sanitized build, runtime-node,
    dependency, queue, and runtime-role evidence is delivered; add downloadable
    logs and bounded database evidence without exposing credentials.

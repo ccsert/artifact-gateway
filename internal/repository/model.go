@@ -189,6 +189,18 @@ type RepositoryGrantRecord struct {
 	Grant          RepositoryGrant
 }
 
+// AuthorizationTemplate is a reusable, repository-scoped set of grant rules.
+// The rules are validated against the target repository format when applied.
+type AuthorizationTemplate struct {
+	ID          string
+	Name        string
+	Description string
+	Grants      []RepositoryGrant
+	Version     string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type RepositoryRetentionPolicy struct {
 	Version            string   `json:"version"`
 	Enabled            bool     `json:"enabled"`

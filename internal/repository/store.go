@@ -15,6 +15,7 @@ var (
 	ErrQuotaExceeded       = errors.New("repository capacity quota exceeded")
 	ErrUpstreamChanged     = errors.New("upstream immutable artifact metadata changed")
 	ErrInvalidRuntimeNode  = errors.New("runtime node identity is invalid")
+	ErrTemplateNameExists  = errors.New("authorization template name already exists")
 )
 
 type HostedRepositoryStore interface {
@@ -54,6 +55,15 @@ type RepositoryGrantStore interface {
 
 type RepositoryGrantRecordStore interface {
 	ListRepositoryGrantRecords(context.Context) ([]RepositoryGrantRecord, error)
+}
+
+type AuthorizationTemplateStore interface {
+	CreateAuthorizationTemplate(context.Context, AuthorizationTemplate) (AuthorizationTemplate, error)
+	ListAuthorizationTemplates(context.Context) ([]AuthorizationTemplate, error)
+	GetAuthorizationTemplate(context.Context, string) (AuthorizationTemplate, error)
+	UpdateAuthorizationTemplate(context.Context, AuthorizationTemplate, string) (AuthorizationTemplate, error)
+	DeleteAuthorizationTemplate(context.Context, string) error
+	ApplyAuthorizationTemplate(context.Context, string, string, string) (RepositoryGrantSet, error)
 }
 
 type RepositoryRetentionPolicyStore interface {
