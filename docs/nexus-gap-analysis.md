@@ -197,10 +197,12 @@ selector design remains a deliberate gap.
 ### System Settings And Operations Pages
 
 The following Nexus operator pages are absent: Blob Stores, Routing Rules,
-Email/SMTP, HTTP/SSL, Capabilities, System Information, and Support Bundle
-generation. The Operations page now exposes scheduled retention tasks and
-background job history, but Artifact Gateway still has no system-info, version,
-or feature-flag screen.
+Email/SMTP, HTTP/SSL, Capabilities, and configurable feature flags. The
+Operations page exposes scheduled retention tasks, background job history, and
+an administrator-only diagnostics view with sanitized build identity,
+dependency reachability, runtime-node health, and repository queue evidence.
+The diagnostics JSON can be copied into a support record without exposing
+credentials; downloadable log/database bundles remain future work.
 
 ### Artifact-Level Operations
 
@@ -366,8 +368,9 @@ independently deliverable.
 2. **P1 Privilege/content-selector management.** Add reusable role templates
    and selector composition beyond the current repository grant prefixes,
    retaining effective-access simulation as the preview and diagnostics tool.
-3. **P1 System diagnostics and support bundle.** Expose sanitized build,
-   runtime-node, dependency, queue, and configuration evidence for operators.
+3. **P1 System diagnostics and support bundle.** Sanitized build, runtime-node,
+   dependency, queue, and runtime-role evidence is delivered; add downloadable
+   logs and bounded database evidence without exposing credentials.
 4. **P2 Server-side dashboard trends.** Add time-series metrics, throughput,
    cache-hit rate, and storage-growth visualization.
 5. **P2 Broaden scheduled task types, blob store management, and system settings pages.**

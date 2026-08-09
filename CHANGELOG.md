@@ -10,6 +10,9 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- Administrator-only sanitized system diagnostics covering build identity,
+  runtime roles, dependency reachability, node health, and repository job
+  queues, with a bilingual Console view and copyable support JSON.
 - Role-based `api`, `scheduler`, and `worker` deployments with format- and
   job-specific worker filters.
 - PostgreSQL-backed runtime node heartbeats and an administrator inventory of
