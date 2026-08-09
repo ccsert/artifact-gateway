@@ -30,15 +30,13 @@ export function PreferenceControls({ compact = false }: { compact?: boolean }) {
           onClick: ({ key }) => setLocale(key as AppLocale),
         }}
       >
-        <Tooltip title={t("common.language")}>
-          <Button
-            type="text"
-            aria-label={t("common.language")}
-            icon={<GlobalOutlined />}
-          >
-            {locale === "zh-CN" ? "中" : "EN"}
-          </Button>
-        </Tooltip>
+        <Button
+          type="text"
+          aria-label={t("common.language")}
+          icon={<GlobalOutlined />}
+        >
+          {locale === "zh-CN" ? "中" : "EN"}
+        </Button>
       </Dropdown>
     </Space>
   );

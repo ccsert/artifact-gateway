@@ -31,8 +31,8 @@ the Console described in `console/src/app/router.tsx`.
 
 | Area | Nexus | Artifact Gateway | Severity |
 | --- | --- | --- | --- |
-| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Local users, reader/writer/admin roles, repository grants, OIDC role mapping; LDAP/SAML/content selectors remain out of scope | Medium |
-| Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Login page supports local credentials and bearer tokens; OIDC JWT validation and role mapping are available; auth-code SSO is not | Medium |
+| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Local users, API keys, global reader/writer/admin roles, repository grants with resource prefixes, effective-access explanation, and OIDC role mapping; reusable privilege templates and LDAP/SAML remain future work | Medium |
+| Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Local credentials, bearer tokens, and database-configured OIDC authorization-code SSO with encrypted client secrets; session inventory, back-channel logout, and IdP-initiated logout remain future work | Low |
 | Global artifact search | Cross-repo component, checksum, class-name, tag search | Server-side cross-repository coordinate/path search with permission filtering and deep links; checksum/class-name/saved queries remain future work | Medium |
 | Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
 | Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
@@ -40,7 +40,7 @@ the Console described in `console/src/app/router.tsx`.
 | Task scheduler | User-created scheduled and manual tasks | Lifecycle-driven jobs only; no general scheduler or UI | Medium |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | None | Medium |
-| Dashboard visualization | Trends, throughput, top-N charts | Instantaneous stat cards only; no charts | Low |
+| Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls and lifecycle Jobs view; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
 | API key governance | Scoped roles, expiry, last-used | Reader/writer/admin roles, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
@@ -54,21 +54,24 @@ Privileges scoped to a repository, format, path, or content selector, with
 external identity through LDAP, SAML, Crowd, OIDC, and Active Directory plus
 external role mapping.
 
-Artifact Gateway authenticates through static resolver/admin tokens for
-break-glass or a single OIDC configuration that validates only
-`GATEWAY_OIDC_ISSUER` and `GATEWAY_OIDC_AUDIENCE`. Authorization is a
-`GATEWAY_REPOSITORY_READERS` string of `actor=repository-pattern` pairs. There
-is no user table, no role model, no privilege hierarchy, and no content
-selector. The management Grant resource (`console/src/pages/RepositoryDetail.tsx`
-Grants tab) accepts a free-text principal string and a coarse
-read/write/admin scope with an optional resource prefix.
+Artifact Gateway supports break-glass static tokens, local users, API keys,
+and a runtime PostgreSQL-backed OIDC configuration. The OIDC authorization-code
+flow uses HttpOnly sessions, encrypted client secrets, discovery/JWKS
+validation, and reader/writer/admin role mapping. Local users and API keys have
+bounded global roles, expiry/revocation where applicable, and last-used
+tracking.
 
-- No user entity or lifecycle.
-- No roles beyond a single implicit admin.
-- No content-selector or path-regex level authorization.
-- No LDAP, SAML, Crowd, or Active Directory integration; only OIDC.
-- Anonymous access is a boolean switch on a Group and each member, not a
-  managed anonymous role.
+Repository grants add read/write/admin permissions for users, API keys, or
+external actors and may be narrowed by a canonical resource prefix. The
+administrator-only effective-access endpoint evaluates a concrete actor,
+global role, repository, and resource through the same authorization chain
+used by protocol requests, then explains the source and reason for every
+decision.
+
+The remaining gaps are reusable role/privilege templates, richer selectors
+than a canonical prefix, external directory protocols such as LDAP/SAML, and
+server-side session inventory/revocation. Anonymous access remains an explicit
+global-and-repository policy rather than a managed anonymous role.
 
 ### Distribution And Integration
 
@@ -127,35 +130,35 @@ operator-facing surface is thinner:
 
 ## Console And UI Experience Gaps
 
-The Console is a dark-themed React 19 single-page app with eight routes
-(`console/src/app/router.tsx:12`). Its information architecture is a flat
-sidebar of seven links plus a tabbed repository detail page
-(`console/src/app/Layout.tsx:7`). The gaps against Nexus are substantial.
+The Console is a desktop-focused React 19 and Ant Design 6 single-page app with
+grouped, collapsible navigation, global artifact search, public browsing, and
+format-aware repository detail tabs. It supports Chinese/English and
+light/dark themes. The remaining gaps are concentrated in richer artifact
+intelligence and operator tooling rather than basic navigation.
 
 ### Authentication Entry
 
-The Console has a standalone `/login` route for local credentials and bearer
-tokens, an auth guard, logout, and token switching. OIDC JWT validation and
-role mapping are available on the backend; an interactive auth-code redirect
-is still a deployment-specific follow-up. Browser bearer-token persistence
-remains localStorage-based and should be fronted by an HTTPS reverse proxy in
-production.
+The Console `/login` route supports local credentials, bearer tokens, and a
+dynamically configured OIDC authorization-code flow. OIDC settings, encrypted
+client-secret replacement, discovery testing, callback handling, role mapping,
+and logout are administered without restarting the Gateway. Manually entered
+bearer tokens remain localStorage-based; production deployments should use
+HTTPS and prefer the HttpOnly OIDC session path.
 
 ### Navigation And Information Architecture
 
-The sidebar is a fixed `w-56` column with seven `NavLink` entries
-(`console/src/app/Layout.tsx:145`). There is no global search bar, no command
-palette, no user menu, and no collapsible section grouping. Nexus pairs a
-global component search bar with a Browse and Settings split.
+The sidebar groups Runtime, Governance, and Management destinations and can be
+collapsed with its state persisted locally. The application header provides
+permission-filtered global artifact search, theme and language controls, and
+credential actions. A command palette and a richer identity/session menu are
+still absent.
 
 ### Dashboard Visualization
 
-The dashboard (`console/src/pages/Dashboard.tsx:10`) renders five instantaneous
-`StatCard` tiles (repository count, group count, format distribution, total
-storage bytes and object count, recent audit count) plus two summary tables.
-There are no time-series charts, no throughput or request-rate panels, no
-storage-growth history, no top-artifacts-by-size, and no chart library in the
-stack.
+The dashboard combines current repository/storage/audit summaries with a
+capacity-by-format donut and lightweight repository/storage sparklines. The
+sparklines use throttled browser samples, so server-side time-series storage,
+request throughput, cache hit rate, and top-artifact analytics remain gaps.
 
 ### Search And Browse
 
@@ -227,11 +230,12 @@ audit table into memory. Saved searches and filter presets remain future work.
 Audit-log retention is configurable and executable
 (`console/src/pages/AuditRetention.tsx:14`), which is a point of parity.
 
-### Internationalization And Responsive Design
+### Internationalization And Desktop Scope
 
-UI strings are hard-coded Chinese with `lang="zh-CN"` and no i18n framework or
-language toggle. The layout uses a fixed sidebar and `ml-56` content margin
-with no mobile drawer, so it is not usable on small screens.
+The Console provides Chinese/English copy, Ant Design locale switching,
+localized dates and numbers, and light/dark themes. The product intentionally
+targets desktop operator workflows; mobile navigation and compact data-table
+reflow are not release requirements.
 
 ## Where Artifact Gateway Holds Its Own
 
@@ -295,15 +299,18 @@ referenced commits.
   for a non-Maven format. (`7317e072`)
 - **Login page (P0).** A standalone `/login` route supports local credentials
   and bearer verification, an auth guard redirects unauthenticated visits with
-  a return path, and the header provides logout and credential switching. OIDC
-  JWT validation and reader/writer/admin role mapping are configured by
-  environment; interactive auth-code SSO remains a deployment-specific gap.
+  a return path, and the header provides logout and credential switching. The
+  OIDC authorization-code flow, runtime PostgreSQL configuration, encrypted
+  client secret, discovery test, HttpOnly session, and reader/writer/admin role
+  mapping can be administered from the Console. (`da12dbc5`, `773a54cf`)
 - **Access-control overview (P0/P3).** A central `/access` page aggregates every
   repository's managed grant set into one filterable view (principal, repository,
   scope, resource prefix), pairs it with a reader/writer/admin role-capability
-  reference, and deep-links each row to the repository's Grants tab. OIDC role
-  mapping is now implemented; a full privilege/content-selector designer
-  remains future work.
+  reference, and deep-links each row to the repository's Grants tab. An
+  administrator can evaluate a current or simulated principal against a
+  concrete resource and inspect the source/reason for every permission
+  decision. Reusable privilege/content-selector templates remain future work.
+  (`f5f2f9c9`)
 - **Local user management (P0).** A `users` table with bcrypt password hashing,
   a UserStore (Postgres + Memory), admin-only `/api/v2/users` CRUD (the hash is
   never returned), `POST /auth/login` that mints a stateless 12-hour session
@@ -342,19 +349,18 @@ backend API additions listed below.
 A suggested sequence for closing the gaps, scoped so each item is
 independently deliverable.
 
-1. **P0 Interactive OIDC SSO.** Add an auth-code redirect/session adapter for
-   deployments that require browser-managed IdP sessions; JWT validation and
-   environment-driven role mapping are already available.
-2. **P1 Privilege/content-selector management.** Add path-aware privilege
-   composition beyond the current repository grant prefixes.
-3. **P1 Rich global search.** Add checksum/class-name/tag indexes, saved queries,
-   and a deeper Group resolution view.
-4. **P1 Artifact operations.** Add download/metadata actions for every format
-   and promotion status history.
-5. **P2 Dashboard charts and trends.** Add time-series metrics, throughput,
-   and storage-growth visualization.
-6. **P2 Task scheduler, blob store management, and system settings pages.**
-7. **P3 Notifications and ecosystem breadth.** Add webhooks/email and additional
+1. **P1 Rich global search and artifact intelligence.** Add checksum/digest/tag
+   indexes and surface signatures, SBOM, provenance, license, and vulnerability
+   metadata through the shared artifact detail experience.
+2. **P1 Privilege/content-selector management.** Add reusable role templates
+   and selector composition beyond the current repository grant prefixes,
+   retaining effective-access simulation as the preview and diagnostics tool.
+3. **P1 System diagnostics and support bundle.** Expose sanitized build,
+   runtime-node, dependency, queue, and configuration evidence for operators.
+4. **P2 Server-side dashboard trends.** Add time-series metrics, throughput,
+   cache-hit rate, and storage-growth visualization.
+5. **P2 Task scheduler, blob store management, and system settings pages.**
+6. **P3 Notifications and ecosystem breadth.** Add webhooks/email and additional
    package formats; tombstone hard-purge remains intentionally out of scope.
 
 This backlog is advisory. The authoritative delivery objective and completion
