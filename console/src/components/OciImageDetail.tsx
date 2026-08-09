@@ -11,6 +11,7 @@ import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { UsageSnippetBlock } from "./PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../lib/usage";
 import { usePreferences } from "../lib/preferences";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 interface OciDescriptor {
   mediaType: string;
@@ -403,6 +404,7 @@ export function OciImageDetail({
           )}
         </div>
       )}
+      {selectedVersion && <ArtifactIntelligencePanel repositoryId={repositoryId} format="oci" coordinate={image} digest={selectedVersion.digest} />}
 
       {selectedVersion && (
         <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/30 p-3">

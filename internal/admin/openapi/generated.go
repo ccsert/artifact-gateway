@@ -58,6 +58,30 @@ func (e ArtifactState) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactVulnerabilitySummaryStatus.
+const (
+	ArtifactVulnerabilitySummaryStatusAffected   ArtifactVulnerabilitySummaryStatus = "affected"
+	ArtifactVulnerabilitySummaryStatusClean      ArtifactVulnerabilitySummaryStatus = "clean"
+	ArtifactVulnerabilitySummaryStatusError      ArtifactVulnerabilitySummaryStatus = "error"
+	ArtifactVulnerabilitySummaryStatusNotScanned ArtifactVulnerabilitySummaryStatus = "not_scanned"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactVulnerabilitySummaryStatus enum.
+func (e ArtifactVulnerabilitySummaryStatus) Valid() bool {
+	switch e {
+	case ArtifactVulnerabilitySummaryStatusAffected:
+		return true
+	case ArtifactVulnerabilitySummaryStatusClean:
+		return true
+	case ArtifactVulnerabilitySummaryStatusError:
+		return true
+	case ArtifactVulnerabilitySummaryStatusNotScanned:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditCleanupJobState.
 const (
 	AuditCleanupJobStateCompleted AuditCleanupJobState = "completed"
@@ -1077,16 +1101,16 @@ func (e RuntimeNodeHealthStatus) Valid() bool {
 
 // Defines values for RuntimeNodeHealthIssueSeverity.
 const (
-	Error   RuntimeNodeHealthIssueSeverity = "error"
-	Warning RuntimeNodeHealthIssueSeverity = "warning"
+	RuntimeNodeHealthIssueSeverityError   RuntimeNodeHealthIssueSeverity = "error"
+	RuntimeNodeHealthIssueSeverityWarning RuntimeNodeHealthIssueSeverity = "warning"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeNodeHealthIssueSeverity enum.
 func (e RuntimeNodeHealthIssueSeverity) Valid() bool {
 	switch e {
-	case Error:
+	case RuntimeNodeHealthIssueSeverityError:
 		return true
-	case Warning:
+	case RuntimeNodeHealthIssueSeverityWarning:
 		return true
 	default:
 		return false
@@ -1374,10 +1398,72 @@ type Artifact struct {
 // ArtifactState defines model for Artifact.State.
 type ArtifactState string
 
+// ArtifactIntelligence defines model for ArtifactIntelligence.
+type ArtifactIntelligence struct {
+	Coordinate    string                        `json:"coordinate"`
+	CreatedAt     time.Time                     `json:"createdAt"`
+	Digest        string                        `json:"digest"`
+	Format        Format                        `json:"format"`
+	Licenses      []ArtifactLicense             `json:"licenses"`
+	Provenance    *ArtifactProvenance           `json:"provenance,omitempty"`
+	RepositoryId  openapi_types.UUID            `json:"repositoryId"`
+	Sboms         []ArtifactSBOM                `json:"sboms"`
+	Signatures    []ArtifactSignature           `json:"signatures"`
+	UpdatedAt     time.Time                     `json:"updatedAt"`
+	UpdatedBy     string                        `json:"updatedBy"`
+	Version       string                        `json:"version"`
+	Vulnerability *ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
+}
+
+// ArtifactIntelligenceWritable defines model for ArtifactIntelligenceWritable.
+type ArtifactIntelligenceWritable struct {
+	Licenses      []ArtifactLicense             `json:"licenses"`
+	Provenance    *ArtifactProvenance           `json:"provenance,omitempty"`
+	Sboms         []ArtifactSBOM                `json:"sboms"`
+	Signatures    []ArtifactSignature           `json:"signatures"`
+	Vulnerability *ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
+}
+
+// ArtifactLicense defines model for ArtifactLicense.
+type ArtifactLicense struct {
+	Name   string  `json:"name"`
+	Source *string `json:"source,omitempty"`
+	SpdxId string  `json:"spdxId"`
+}
+
 // ArtifactPage defines model for ArtifactPage.
 type ArtifactPage struct {
 	Items         []Artifact `json:"items"`
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
+}
+
+// ArtifactProvenance defines model for ArtifactProvenance.
+type ArtifactProvenance struct {
+	BuildId          string     `json:"buildId"`
+	BuildType        string     `json:"buildType"`
+	Builder          string     `json:"builder"`
+	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
+	SourceCommit     string     `json:"sourceCommit"`
+	SourceRepository string     `json:"sourceRepository"`
+	StartedAt        *time.Time `json:"startedAt,omitempty"`
+}
+
+// ArtifactSBOM defines model for ArtifactSBOM.
+type ArtifactSBOM struct {
+	Digest    string  `json:"digest"`
+	MediaType string  `json:"mediaType"`
+	Size      *int64  `json:"size,omitempty"`
+	Url       *string `json:"url,omitempty"`
+}
+
+// ArtifactSignature defines model for ArtifactSignature.
+type ArtifactSignature struct {
+	Algorithm  string     `json:"algorithm"`
+	Identity   string     `json:"identity"`
+	KeyId      string     `json:"keyId"`
+	Signature  string     `json:"signature"`
+	Verified   bool       `json:"verified"`
+	VerifiedAt *time.Time `json:"verifiedAt,omitempty"`
 }
 
 // ArtifactSummary defines model for ArtifactSummary.
@@ -1418,6 +1504,21 @@ type ArtifactTombstonePage struct {
 	Items         []ArtifactTombstone `json:"items"`
 	NextPageToken *string             `json:"nextPageToken,omitempty"`
 }
+
+// ArtifactVulnerabilitySummary defines model for ArtifactVulnerabilitySummary.
+type ArtifactVulnerabilitySummary struct {
+	Critical  int                                `json:"critical"`
+	High      int                                `json:"high"`
+	Low       int                                `json:"low"`
+	Medium    int                                `json:"medium"`
+	ScannedAt *time.Time                         `json:"scannedAt,omitempty"`
+	Scanner   string                             `json:"scanner"`
+	Status    ArtifactVulnerabilitySummaryStatus `json:"status"`
+	Unknown   int                                `json:"unknown"`
+}
+
+// ArtifactVulnerabilitySummaryStatus defines model for ArtifactVulnerabilitySummary.Status.
+type ArtifactVulnerabilitySummaryStatus string
 
 // AuditCleanupJob defines model for AuditCleanupJob.
 type AuditCleanupJob struct {
@@ -2825,6 +2926,19 @@ type UpdateRepositoryParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// GetArtifactIntelligenceParams defines parameters for GetArtifactIntelligence.
+type GetArtifactIntelligenceParams struct {
+	Coordinate string `form:"coordinate" json:"coordinate"`
+	Digest     string `form:"digest" json:"digest"`
+}
+
+// ReplaceArtifactIntelligenceParams defines parameters for ReplaceArtifactIntelligence.
+type ReplaceArtifactIntelligenceParams struct {
+	Coordinate string           `form:"coordinate" json:"coordinate"`
+	Digest     string           `form:"digest" json:"digest"`
+	IfMatch    *OptionalIfMatch `json:"If-Match,omitempty"`
+}
+
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
 type SearchRepositoryArtifactsParams struct {
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
@@ -3020,6 +3134,9 @@ type CreateRepositoryJSONRequestBody = CreateRepository
 
 // UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
 type UpdateRepositoryJSONRequestBody = UpdateRepository
+
+// ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
+type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
 
 // InvalidateProxyCacheJSONRequestBody defines body for InvalidateProxyCache for application/json ContentType.
 type InvalidateProxyCacheJSONRequestBody = ProxyCacheInvalidateRequest
@@ -3227,6 +3344,12 @@ type ServerInterface interface {
 
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams)
+
+	// (GET /repositories/{repositoryId}/artifact-intelligence)
+	GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetArtifactIntelligenceParams)
+
+	// (PUT /repositories/{repositoryId}/artifact-intelligence)
+	ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactIntelligenceParams)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
@@ -4884,6 +5007,137 @@ func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRepository(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactIntelligence operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactIntelligence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactIntelligenceParams
+
+	// ------------- Required query parameter "coordinate" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "coordinate", r.URL.Query(), &params.Coordinate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "coordinate"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "coordinate", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "digest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "digest", r.URL.Query(), &params.Digest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digest", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactIntelligence(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceArtifactIntelligence operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceArtifactIntelligenceParams
+
+	// ------------- Required query parameter "coordinate" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "coordinate", r.URL.Query(), &params.Coordinate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "coordinate"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "coordinate", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "digest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "digest", r.URL.Query(), &params.Digest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digest", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch OptionalIfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceArtifactIntelligence(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7358,6 +7612,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
@@ -7425,6 +7681,15 @@ type APIKeyListJSONResponse APIKeyList
 type AnonymousAccessPolicyJSONResponse AnonymousAccessPolicy
 
 type ArtifactJSONResponse Artifact
+
+type ArtifactIntelligenceResponseHeaders struct {
+	ETag string
+}
+type ArtifactIntelligenceJSONResponse struct {
+	Body ArtifactIntelligence
+
+	Headers ArtifactIntelligenceResponseHeaders
+}
 
 type ArtifactListJSONResponse ArtifactPage
 
@@ -9295,6 +9560,161 @@ func (response UpdateRepository404ApplicationProblemPlusJSONResponse) VisitUpdat
 type UpdateRepository412ApplicationProblemPlusJSONResponse Problem
 
 func (response UpdateRepository412ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactIntelligenceRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       GetArtifactIntelligenceParams
+}
+
+type GetArtifactIntelligenceResponseObject interface {
+	VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactIntelligence200JSONResponse struct {
+	ArtifactIntelligenceJSONResponse
+}
+
+func (response GetArtifactIntelligence200JSONResponse) VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactIntelligence400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactIntelligence400ApplicationProblemPlusJSONResponse) VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactIntelligence401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactIntelligence401ApplicationProblemPlusJSONResponse) VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactIntelligence404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactIntelligence404ApplicationProblemPlusJSONResponse) VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligenceRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceArtifactIntelligenceParams
+	Body         *ReplaceArtifactIntelligenceJSONRequestBody
+}
+
+type ReplaceArtifactIntelligenceResponseObject interface {
+	VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error
+}
+
+type ReplaceArtifactIntelligence200JSONResponse struct {
+	ArtifactIntelligenceJSONResponse
+}
+
+func (response ReplaceArtifactIntelligence200JSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligence400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceArtifactIntelligence400ApplicationProblemPlusJSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligence403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactIntelligence403ApplicationProblemPlusJSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligence404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactIntelligence404ApplicationProblemPlusJSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12208,6 +12628,12 @@ type StrictServerInterface interface {
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/artifact-intelligence)
+	GetArtifactIntelligence(ctx context.Context, request GetArtifactIntelligenceRequestObject) (GetArtifactIntelligenceResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/artifact-intelligence)
+	ReplaceArtifactIntelligence(ctx context.Context, request ReplaceArtifactIntelligenceRequestObject) (ReplaceArtifactIntelligenceResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
 
@@ -13543,6 +13969,67 @@ func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRepositoryResponseObject); ok {
 		if err := validResponse.VisitUpdateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactIntelligence operation middleware
+func (sh *strictHandler) GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetArtifactIntelligenceParams) {
+	var request GetArtifactIntelligenceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactIntelligence(ctx, request.(GetArtifactIntelligenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactIntelligence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactIntelligenceResponseObject); ok {
+		if err := validResponse.VisitGetArtifactIntelligenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceArtifactIntelligence operation middleware
+func (sh *strictHandler) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactIntelligenceParams) {
+	var request ReplaceArtifactIntelligenceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceArtifactIntelligenceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceArtifactIntelligence(ctx, request.(ReplaceArtifactIntelligenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceArtifactIntelligence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceArtifactIntelligenceResponseObject); ok {
+		if err := validResponse.VisitReplaceArtifactIntelligenceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

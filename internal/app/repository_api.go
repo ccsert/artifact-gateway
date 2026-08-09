@@ -91,6 +91,7 @@ type GatewayStore interface {
 	repository.RepositoryRetentionPolicyStore
 	repository.RepositoryCapacityStore
 	repository.ArtifactTombstoneStore
+	repository.ArtifactIntelligenceStore
 	repository.AuditRetentionStore
 	repository.LifecycleJobStore
 	repository.ReplicationStore
@@ -233,7 +234,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, retentionPolicies: store, capacities: store, tombstones: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, queueStats: store, diagnostics: dependencies}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, retentionPolicies: store, capacities: store, tombstones: store, intelligence: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, queueStats: store, diagnostics: dependencies}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

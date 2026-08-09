@@ -191,6 +191,16 @@ AuthorizationTemplateList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/AuthorizationTemplateList"
+ArtifactIntelligence:
+  description: Security, build provenance, license, and vulnerability metadata for one immutable artifact identity
+  headers:
+    ETag:
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactIntelligence"
 RetentionPolicy:
   description: Retention policy
   content:

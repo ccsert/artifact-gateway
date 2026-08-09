@@ -60,9 +60,9 @@ func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNod
 	addIssue := func(code, severity, message string) {
 		issue := adminopenapi.RuntimeNodeHealthIssue{Code: code, Message: message}
 		if severity == "error" {
-			issue.Severity = adminopenapi.Error
+			issue.Severity = adminopenapi.RuntimeNodeHealthIssueSeverityError
 		} else {
-			issue.Severity = adminopenapi.Warning
+			issue.Severity = adminopenapi.RuntimeNodeHealthIssueSeverityWarning
 		}
 		health.Issues = append(health.Issues, issue)
 	}
@@ -89,7 +89,7 @@ func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNod
 	}
 	health.Status = adminopenapi.Healthy
 	for _, issue := range health.Issues {
-		if issue.Severity == adminopenapi.Error {
+		if issue.Severity == adminopenapi.RuntimeNodeHealthIssueSeverityError {
 			health.Status = adminopenapi.Critical
 			break
 		}

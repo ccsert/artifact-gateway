@@ -7,15 +7,16 @@ import (
 )
 
 var (
-	ErrNotFound            = errors.New("group not found")
-	ErrDisabled            = errors.New("group is disabled")
-	ErrNameExists          = errors.New("group name already exists")
-	ErrIdempotencyConflict = errors.New("idempotency key conflicts with request")
-	ErrVersionConflict     = errors.New("resource version conflicts with current state")
-	ErrQuotaExceeded       = errors.New("repository capacity quota exceeded")
-	ErrUpstreamChanged     = errors.New("upstream immutable artifact metadata changed")
-	ErrInvalidRuntimeNode  = errors.New("runtime node identity is invalid")
-	ErrTemplateNameExists  = errors.New("authorization template name already exists")
+	ErrNotFound                    = errors.New("group not found")
+	ErrDisabled                    = errors.New("group is disabled")
+	ErrNameExists                  = errors.New("group name already exists")
+	ErrIdempotencyConflict         = errors.New("idempotency key conflicts with request")
+	ErrVersionConflict             = errors.New("resource version conflicts with current state")
+	ErrQuotaExceeded               = errors.New("repository capacity quota exceeded")
+	ErrUpstreamChanged             = errors.New("upstream immutable artifact metadata changed")
+	ErrInvalidRuntimeNode          = errors.New("runtime node identity is invalid")
+	ErrTemplateNameExists          = errors.New("authorization template name already exists")
+	ErrInvalidArtifactIntelligence = errors.New("artifact intelligence is invalid")
 )
 
 type HostedRepositoryStore interface {
@@ -94,6 +95,11 @@ type BackgroundOperationQueueStore interface {
 type ArtifactTombstoneStore interface {
 	GetArtifactTombstone(context.Context, string, Format, string) (ArtifactTombstone, error)
 	ListArtifactTombstones(context.Context, string, Format, string, int, string) ([]ArtifactTombstone, error)
+}
+
+type ArtifactIntelligenceStore interface {
+	GetArtifactIntelligence(context.Context, string, Format, string, string) (ArtifactIntelligence, error)
+	ReplaceArtifactIntelligence(context.Context, ArtifactIntelligence, string) (ArtifactIntelligence, error)
 }
 
 type LifecycleJobStore interface {

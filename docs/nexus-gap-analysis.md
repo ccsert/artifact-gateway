@@ -365,9 +365,14 @@ A suggested sequence for closing the gaps, scoped so each item is
 independently deliverable.
 
 1. **P1 Rich global search and artifact intelligence.** Checksum/digest indexes
-   and exact global digest search are delivered; the remaining work is to
-   surface signatures, SBOM, provenance, license, and vulnerability metadata
-   through the shared artifact detail experience.
+   and exact global digest search are delivered. A format-neutral artifact
+   intelligence contract now stores administrator-supplied signatures, SBOM
+   references, provenance, license identifiers, and vulnerability summaries by
+   immutable repository/format/coordinate/digest identity; anonymous reads
+   follow repository policy and writes use `If-Match` version control. The
+   Console renders these facts in format-aware detail views. Scanner execution,
+   external evidence ingestion, and per-finding vulnerability detail remain
+   future work.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository
    grant prefixes, retaining effective-access simulation as the preview and

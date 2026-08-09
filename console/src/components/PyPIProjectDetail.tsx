@@ -8,6 +8,7 @@ import {
   UsageSnippetBlock,
 } from "./PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { pypiUsage } from "../lib/usage";
@@ -39,6 +40,7 @@ function fileVersion(file: PyPIFile): string {
 }
 
 export function PyPIProjectDetail({
+  repositoryId,
   repoName,
   project,
   initialVersion,
@@ -46,6 +48,7 @@ export function PyPIProjectDetail({
   publisher,
   onVersionChange,
 }: {
+  repositoryId?: string;
   repoName: string;
   project: string;
   initialVersion?: string;
@@ -141,6 +144,7 @@ export function PyPIProjectDetail({
   const selectedFiles = document.files.filter(
     (file) => fileVersion(file) === selectedVersion,
   );
+  const selectedDigest = selectedFiles.find((file) => file.hashes.sha256)?.hashes.sha256;
   const latestMetadata = selectedFiles[0]?.["_artifact-gateway"];
   const totalSize = selectedFiles.reduce(
     (total, file) => total + (file["_artifact-gateway"]?.size ?? 0),
@@ -210,6 +214,12 @@ export function PyPIProjectDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <ArtifactIntelligencePanel
+        repositoryId={repositoryId}
+        format="pypi"
+        coordinate={project}
+        digest={selectedDigest ? `sha256:${selectedDigest}` : undefined}
+      />
       <div>
         <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
           {text("选择版本", "Select version")} ({versions.length})

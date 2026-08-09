@@ -1517,6 +1517,101 @@ ArtifactSummaryPage:
         "$ref": "#/ArtifactSummary"
     nextPageToken:
       type: string
+ArtifactSignature:
+  type: object
+  required: [keyId, algorithm, identity, signature, verified]
+  additionalProperties: false
+  properties:
+    keyId: {type: string, minLength: 1, maxLength: 512}
+    algorithm: {type: string, minLength: 1, maxLength: 128}
+    identity: {type: string, minLength: 1, maxLength: 1024}
+    signature: {type: string, minLength: 1, maxLength: 4096}
+    verified: {type: boolean}
+    verifiedAt: {type: string, format: date-time}
+ArtifactSBOM:
+  type: object
+  required: [mediaType, digest]
+  additionalProperties: false
+  properties:
+    mediaType: {type: string, minLength: 1, maxLength: 255}
+    digest: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+    url: {type: string, format: uri, maxLength: 2048}
+    size: {type: integer, format: int64, minimum: 0}
+ArtifactProvenance:
+  type: object
+  required: [builder, buildType, sourceRepository, sourceCommit, buildId]
+  additionalProperties: false
+  properties:
+    builder: {type: string, minLength: 1, maxLength: 512}
+    buildType: {type: string, minLength: 1, maxLength: 512}
+    sourceRepository: {type: string, maxLength: 2048}
+    sourceCommit: {type: string, maxLength: 256}
+    buildId: {type: string, maxLength: 512}
+    startedAt: {type: string, format: date-time}
+    finishedAt: {type: string, format: date-time}
+ArtifactLicense:
+  type: object
+  required: [spdxId, name]
+  additionalProperties: false
+  properties:
+    spdxId: {type: string, minLength: 1, maxLength: 128}
+    name: {type: string, minLength: 1, maxLength: 512}
+    source: {type: string, maxLength: 2048}
+ArtifactVulnerabilitySummary:
+  type: object
+  required: [scanner, status, critical, high, medium, low, unknown]
+  additionalProperties: false
+  properties:
+    scanner: {type: string, minLength: 1, maxLength: 256}
+    scannedAt: {type: string, format: date-time}
+    status: {type: string, enum: [not_scanned, clean, affected, error]}
+    critical: {type: integer, minimum: 0}
+    high: {type: integer, minimum: 0}
+    medium: {type: integer, minimum: 0}
+    low: {type: integer, minimum: 0}
+    unknown: {type: integer, minimum: 0}
+ArtifactIntelligence:
+  type: object
+  required: [repositoryId, format, coordinate, digest, signatures, sboms, licenses, version, createdAt, updatedAt, updatedBy]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    format: {"$ref": "#/Format"}
+    coordinate: {type: string}
+    digest: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+    signatures:
+      type: array
+      items: {"$ref": "#/ArtifactSignature"}
+    sboms:
+      type: array
+      items: {"$ref": "#/ArtifactSBOM"}
+    provenance: {"$ref": "#/ArtifactProvenance"}
+    licenses:
+      type: array
+      items: {"$ref": "#/ArtifactLicense"}
+    vulnerability: {"$ref": "#/ArtifactVulnerabilitySummary"}
+    version: {type: string}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+    updatedBy: {type: string}
+ArtifactIntelligenceWritable:
+  type: object
+  required: [signatures, sboms, licenses]
+  additionalProperties: false
+  properties:
+    signatures:
+      type: array
+      maxItems: 20
+      items: {"$ref": "#/ArtifactSignature"}
+    sboms:
+      type: array
+      maxItems: 20
+      items: {"$ref": "#/ArtifactSBOM"}
+    provenance: {"$ref": "#/ArtifactProvenance"}
+    licenses:
+      type: array
+      maxItems: 100
+      items: {"$ref": "#/ArtifactLicense"}
+    vulnerability: {"$ref": "#/ArtifactVulnerabilitySummary"}
 GlobalArtifactSearchHit:
   allOf:
   - "$ref": "#/ArtifactSummary"

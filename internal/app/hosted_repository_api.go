@@ -203,7 +203,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 		return "", false
 	}
 	parts := strings.Split(rest, "/")
-	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search") {
+	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search" || parts[1] == "artifact-intelligence") {
 		return parts[0], true
 	}
 	if len(parts) == 3 && parts[1] == "artifacts" {
@@ -243,6 +243,7 @@ type generatedRepositoryAPIAdapter struct {
 	proxyCache        proxyCacheBrowseHandler
 	mavenProxy        mavenProxyOperationsHandler
 	searchProjection  repository.ArtifactSearchStore
+	intelligence      repository.ArtifactIntelligenceStore
 	runtimeNodes      repository.RuntimeNodeStore
 	scheduledTasks    repository.ScheduledTaskStore
 	queueStats        repository.BackgroundOperationQueueStore
@@ -2732,6 +2733,165 @@ func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *h
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(Principal, repository.HostedRepository) {
 		h.sessions.listArtifacts(w, r, repositoryID.String())
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetArtifactIntelligenceParams) {
+	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		coordinate := strings.TrimSpace(params.Coordinate)
+		digest := strings.TrimSpace(params.Digest)
+		if !validArtifactIntelligenceIdentity(repo.Format, coordinate, digest) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate and digest must identify an artifact")
+			return
+		}
+		value, err := h.intelligence.GetArtifactIntelligence(r.Context(), repo.ID, repo.Format, coordinate, digest)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "artifact intelligence not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get artifact intelligence failed")
+			return
+		}
+		writeArtifactIntelligence(w, value)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceArtifactIntelligenceParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		coordinate := strings.TrimSpace(params.Coordinate)
+		digest := strings.TrimSpace(params.Digest)
+		if !validArtifactIntelligenceIdentity(repo.Format, coordinate, digest) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate and digest must identify an artifact")
+			return
+		}
+		var input adminopenapi.ArtifactIntelligenceWritable
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 512<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || !validArtifactIntelligencePayload(input) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "artifact intelligence payload is invalid")
+			return
+		}
+		payload, err := json.Marshal(input)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "artifact intelligence payload is invalid")
+			return
+		}
+		var metadata struct {
+			Signatures    []repository.ArtifactSignature           `json:"signatures"`
+			SBOMs         []repository.ArtifactSBOM                `json:"sboms"`
+			Provenance    *repository.ArtifactProvenance           `json:"provenance,omitempty"`
+			Licenses      []repository.ArtifactLicense             `json:"licenses"`
+			Vulnerability *repository.ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
+		}
+		if err := json.Unmarshal(payload, &metadata); err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "artifact intelligence payload is invalid")
+			return
+		}
+		value := repository.ArtifactIntelligence{RepositoryID: repo.ID, Format: repo.Format, Coordinate: coordinate, Digest: digest, Signatures: metadata.Signatures, SBOMs: metadata.SBOMs, Provenance: metadata.Provenance, Licenses: metadata.Licenses, Vulnerability: metadata.Vulnerability, UpdatedBy: principal.Actor}
+		expected := ""
+		if params.IfMatch != nil {
+			expected = string(*params.IfMatch)
+		}
+		updated, err := h.intelligence.ReplaceArtifactIntelligence(r.Context(), value, expected)
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current intelligence version")
+			return
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository or artifact intelligence not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace artifact intelligence failed")
+			return
+		}
+		writeArtifactIntelligence(w, updated)
+	})
+}
+
+func validArtifactIntelligenceIdentity(format repository.Format, coordinate, digest string) bool {
+	if coordinate == "" || len(coordinate) > 1024 || strings.ContainsRune(coordinate, '\x00') || !validSHA256Digest(digest) {
+		return false
+	}
+	return repository.IsSupportedFormat(format)
+}
+
+func validSHA256Digest(value string) bool {
+	if len(value) != len("sha256:")+64 || !strings.HasPrefix(value, "sha256:") {
+		return false
+	}
+	for _, r := range value[len("sha256:"):] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validArtifactText(value string, max int) bool {
+	return strings.TrimSpace(value) != "" && len(value) <= max && !strings.ContainsRune(value, '\x00')
+}
+
+func validArtifactIntelligencePayload(input adminopenapi.ArtifactIntelligenceWritable) bool {
+	if input.Signatures == nil || input.Sboms == nil || input.Licenses == nil || len(input.Signatures) > 20 || len(input.Sboms) > 20 || len(input.Licenses) > 100 {
+		return false
+	}
+	for _, signature := range input.Signatures {
+		if !validArtifactText(signature.KeyId, 512) || !validArtifactText(signature.Algorithm, 128) || !validArtifactText(signature.Identity, 1024) || !validArtifactText(signature.Signature, 4096) {
+			return false
+		}
+	}
+	for _, sbom := range input.Sboms {
+		if !validArtifactText(sbom.MediaType, 255) || !validSHA256Digest(sbom.Digest) || sbom.Size != nil && *sbom.Size < 0 {
+			return false
+		}
+		if sbom.Url != nil {
+			if len(*sbom.Url) > 2048 || strings.TrimSpace(*sbom.Url) == "" || strings.ContainsRune(*sbom.Url, '\x00') {
+				return false
+			}
+			if parsed, err := url.Parse(*sbom.Url); err != nil || parsed.Scheme == "" || parsed.Host == "" {
+				return false
+			}
+		}
+	}
+	for _, license := range input.Licenses {
+		if !validArtifactText(license.SpdxId, 128) || !validArtifactText(license.Name, 512) {
+			return false
+		}
+		if license.Source != nil && (len(*license.Source) > 2048 || strings.ContainsRune(*license.Source, '\x00')) {
+			return false
+		}
+	}
+	if input.Provenance != nil {
+		provenance := input.Provenance
+		if !validArtifactText(provenance.Builder, 512) || !validArtifactText(provenance.BuildType, 512) || !validArtifactText(provenance.SourceRepository, 2048) || !validArtifactText(provenance.SourceCommit, 256) || !validArtifactText(provenance.BuildId, 512) {
+			return false
+		}
+	}
+	if input.Vulnerability != nil {
+		if !validArtifactText(input.Vulnerability.Scanner, 256) {
+			return false
+		}
+		switch input.Vulnerability.Status {
+		case "not_scanned", "clean", "affected", "error":
+		default:
+			return false
+		}
+		if input.Vulnerability.Critical < 0 || input.Vulnerability.High < 0 || input.Vulnerability.Medium < 0 || input.Vulnerability.Low < 0 || input.Vulnerability.Unknown < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func writeArtifactIntelligence(w http.ResponseWriter, value repository.ArtifactIntelligence) {
+	payload, _ := json.Marshal(value)
+	var response adminopenapi.ArtifactIntelligence
+	_ = json.Unmarshal(payload, &response)
+	response.RepositoryId = uuid.MustParse(value.RepositoryID)
+	response.Format = adminopenapi.Format(value.Format)
+	w.Header().Set("ETag", value.Version)
+	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
 func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIImagesParams) {

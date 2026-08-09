@@ -571,6 +571,7 @@ export function SearchPage() {
         )}
         {row.format === "raw" && (
           <RawArtifactDetail
+            repositoryId={row.repositoryId}
             repoName={row.repositoryName}
             meta={{
               coordinate: row.coordinate,
@@ -584,6 +585,7 @@ export function SearchPage() {
         )}
         {row.format === "npm" && (
           <NpmPackageDetail
+            repositoryId={row.repositoryId}
             repoName={row.repositoryName}
             packageName={row.coordinate}
             initialVersion={row.version}
@@ -593,6 +595,7 @@ export function SearchPage() {
         )}
         {row.format === "pypi" && (
           <PyPIProjectDetail
+            repositoryId={row.repositoryId}
             repoName={row.repositoryName}
             project={row.coordinate}
             initialVersion={row.version}
@@ -602,6 +605,7 @@ export function SearchPage() {
         )}
         {row.format === "go" && (
           <GoModuleDetail
+            repositoryId={row.repositoryId}
             repoName={row.repositoryName}
             modulePath={row.coordinate}
             initialVersion={row.version}

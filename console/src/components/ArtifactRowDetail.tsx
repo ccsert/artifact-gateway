@@ -39,6 +39,7 @@ export function MavenArtifactDetail({
       publisher?: string;
       createdAt?: string;
       buildNumber?: number;
+      digest?: string;
     }[]
   >([]);
   // coordinate 是 GA（2 段）时直接用它，否则取 GA 部分
@@ -59,6 +60,7 @@ export function MavenArtifactDetail({
         buildNumber?: number;
         publisher?: string;
         createdAt?: string;
+        digest?: string;
       }[] = [];
       let pageToken: string | undefined;
       do {
@@ -91,6 +93,7 @@ export function MavenArtifactDetail({
             publisher: x.publisher,
             createdAt: x.createdAt,
             buildNumber: x.buildNumber,
+            digest: x.digest,
           };
         })
         .filter((v) => v.label);
@@ -123,6 +126,7 @@ export function MavenArtifactDetail({
         publisher: selectedMeta.publisher ?? meta.publisher,
         createdAt: selectedMeta.createdAt ?? meta.createdAt,
         buildNumber: selectedMeta.buildNumber,
+        digest: selectedMeta.digest ?? meta.digest,
       }
     : meta;
   const currentVersion =
@@ -168,6 +172,7 @@ export function MavenArtifactDetail({
   return (
     <ArtifactDetailView
       format="maven"
+      repositoryId={repoId}
       repoName={repoName}
       meta={effectiveMeta}
 
@@ -408,6 +413,7 @@ export function ConanArtifactDetail({
   return (
     <ArtifactDetailView
       format="conan"
+      repositoryId={repoId}
       repoName={repoName}
       meta={meta}
       versions={
@@ -485,10 +491,12 @@ export function ConanArtifactDetail({
 
 // Raw 制品详情：使用方法 + 元信息
 export function RawArtifactDetail({
+  repositoryId,
   repoName,
   meta,
   onDeleted,
 }: {
+  repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
   onDeleted?: () => void;
@@ -526,7 +534,7 @@ export function RawArtifactDetail({
   };
   return (
     <div className="space-y-4">
-      <ArtifactDetailView format="raw" repoName={repoName} meta={meta} />
+      <ArtifactDetailView repositoryId={repositoryId} format="raw" repoName={repoName} meta={meta} />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
         <div>
           <div className="text-xs font-medium text-zinc-200">

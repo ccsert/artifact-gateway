@@ -10,6 +10,7 @@ import { usePreferences } from "../lib/preferences";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { npmUsage } from "../lib/usage";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 interface NpmVersionManifest {
   name: string;
@@ -40,6 +41,7 @@ interface NpmPackument {
 }
 
 export function NpmPackageDetail({
+  repositoryId,
   repoName,
   packageName,
   initialVersion,
@@ -47,6 +49,7 @@ export function NpmPackageDetail({
   publisher,
   onVersionChange,
 }: {
+  repositoryId?: string;
   repoName: string;
   packageName: string;
   initialVersion?: string;
@@ -146,6 +149,12 @@ export function NpmPackageDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <ArtifactIntelligencePanel
+        repositoryId={repositoryId}
+        format="npm"
+        coordinate={packageName}
+        digest={artifactMetadata?.digest}
+      />
       <div>
         <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
           {text("选择版本", "Select version")} ({versions.length})

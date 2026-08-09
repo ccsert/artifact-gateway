@@ -117,6 +117,8 @@ paths:
     "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_search"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
+  "/repositories/{repositoryId}/artifact-intelligence":
+    "$ref": "./management/intelligence.yaml#/repositories_repositoryId_artifact_intelligence"
   "/repositories/{repositoryId}/oci/images":
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/repositories/{repositoryId}/oci/manifests":

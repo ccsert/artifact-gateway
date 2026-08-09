@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { goUsage } from "../lib/usage";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -37,6 +38,7 @@ function goModuleBase(repoName: string, modulePath: string): string {
 }
 
 export function GoModuleDetail({
+  repositoryId,
   repoName,
   modulePath,
   initialVersion,
@@ -44,6 +46,7 @@ export function GoModuleDetail({
   publisher,
   onVersionChange,
 }: {
+  repositoryId?: string;
   repoName: string;
   modulePath: string;
   initialVersion?: string;
@@ -58,6 +61,7 @@ export function GoModuleDetail({
   const [info, setInfo] = useState<GoModuleInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [infoLoading, setInfoLoading] = useState(false);
+  const [versionDigest, setVersionDigest] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const base = useMemo(
@@ -151,6 +155,28 @@ export function GoModuleDetail({
     };
   }, [base, selectedVersion, text, token]);
 
+  useEffect(() => {
+    if (!selectedVersion) {
+      setVersionDigest(undefined);
+      return;
+    }
+    let cancelled = false;
+    setVersionDigest(undefined);
+    const escapedVersion = encodeURIComponent(escapeGoValue(selectedVersion));
+    void fetch(`${base}/@v/${escapedVersion}.zip`, {
+      method: "HEAD",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }).then((response) => {
+      if (cancelled || !response.ok) return;
+      const etag = response.headers.get("ETag")?.replaceAll('"', "") ?? "";
+      if (/^[a-f0-9]{64}$/.test(etag)) setVersionDigest(`sha256:${etag}`);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [base, selectedVersion, token]);
+
   const snippets = useMemo(
     () =>
       selectedVersion ? goUsage(repoName, modulePath, selectedVersion) : [],
@@ -179,6 +205,12 @@ export function GoModuleDetail({
 
   return (
     <div className="space-y-4 px-1 py-2">
+      <ArtifactIntelligencePanel
+        repositoryId={repositoryId}
+        format="go"
+        coordinate={`${modulePath}@${selectedVersion}`}
+        digest={versionDigest}
+      />
       {error && <Alert type="warning" showIcon title={error} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>

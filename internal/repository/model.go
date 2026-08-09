@@ -409,6 +409,68 @@ type ArtifactTombstone struct {
 	TombstonedAt time.Time
 }
 
+// ArtifactIntelligence is format-neutral security and build metadata attached
+// to one immutable artifact identity. Scanners and CI systems produce the
+// evidence represented here; the Gateway stores and serves the summaries.
+type ArtifactIntelligence struct {
+	RepositoryID  string
+	Format        Format
+	Coordinate    string
+	Digest        string
+	Signatures    []ArtifactSignature
+	SBOMs         []ArtifactSBOM
+	Provenance    *ArtifactProvenance
+	Licenses      []ArtifactLicense
+	Vulnerability *ArtifactVulnerabilitySummary
+	Version       string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	UpdatedBy     string
+}
+
+type ArtifactSignature struct {
+	KeyID      string    `json:"keyId"`
+	Algorithm  string    `json:"algorithm"`
+	Identity   string    `json:"identity"`
+	Signature  string    `json:"signature"`
+	Verified   bool      `json:"verified"`
+	VerifiedAt time.Time `json:"verifiedAt,omitempty"`
+}
+
+type ArtifactSBOM struct {
+	MediaType string `json:"mediaType"`
+	Digest    string `json:"digest"`
+	URL       string `json:"url,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+}
+
+type ArtifactProvenance struct {
+	Builder          string    `json:"builder"`
+	BuildType        string    `json:"buildType"`
+	SourceRepository string    `json:"sourceRepository"`
+	SourceCommit     string    `json:"sourceCommit"`
+	BuildID          string    `json:"buildId"`
+	StartedAt        time.Time `json:"startedAt,omitempty"`
+	FinishedAt       time.Time `json:"finishedAt,omitempty"`
+}
+
+type ArtifactLicense struct {
+	SPDXID string `json:"spdxId"`
+	Name   string `json:"name"`
+	Source string `json:"source,omitempty"`
+}
+
+type ArtifactVulnerabilitySummary struct {
+	Scanner   string    `json:"scanner"`
+	ScannedAt time.Time `json:"scannedAt,omitempty"`
+	Status    string    `json:"status"`
+	Critical  int       `json:"critical"`
+	High      int       `json:"high"`
+	Medium    int       `json:"medium"`
+	Low       int       `json:"low"`
+	Unknown   int       `json:"unknown"`
+}
+
 type LifecycleJobKind string
 
 const (

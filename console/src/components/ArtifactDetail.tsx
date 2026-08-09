@@ -6,6 +6,7 @@ import type { UsageSnippet } from "../lib/usage";
 import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 function CopyButton({ text }: { text: string }) {
   const { text: localizedText } = usePreferences();
@@ -64,12 +65,14 @@ export interface ArtifactMeta {
 // 统一的制品详情：使用方法 + 元信息。版本列表由父组件按格式单独渲染。
 export function ArtifactDetailView({
   format,
+  repositoryId,
   repoName,
   meta,
   tag,
   versions,
 }: {
   format: string;
+  repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
   tag?: string;
@@ -80,6 +83,7 @@ export function ArtifactDetailView({
 
   return (
     <div className="space-y-4">
+      <ArtifactIntelligencePanel repositoryId={repositoryId} format={format} coordinate={meta.coordinate} digest={meta.digest} />
       {/* 元信息 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (

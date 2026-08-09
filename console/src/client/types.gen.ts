@@ -1041,6 +1041,73 @@ export type GroupCapacity = {
   members: Array<GroupCapacityMember>;
 };
 
+export type ArtifactSignature = {
+  keyId: string;
+  algorithm: string;
+  identity: string;
+  signature: string;
+  verified: boolean;
+  verifiedAt?: string;
+};
+
+export type ArtifactSbom = {
+  mediaType: string;
+  digest: string;
+  url?: string;
+  size?: number;
+};
+
+export type ArtifactProvenance = {
+  builder: string;
+  buildType: string;
+  sourceRepository: string;
+  sourceCommit: string;
+  buildId: string;
+  startedAt?: string;
+  finishedAt?: string;
+};
+
+export type ArtifactLicense = {
+  spdxId: string;
+  name: string;
+  source?: string;
+};
+
+export type ArtifactVulnerabilitySummary = {
+  scanner: string;
+  scannedAt?: string;
+  status: "not_scanned" | "clean" | "affected" | "error";
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+};
+
+export type ArtifactIntelligence = {
+  repositoryId: string;
+  format: Format;
+  coordinate: string;
+  digest: string;
+  signatures: Array<ArtifactSignature>;
+  sboms: Array<ArtifactSbom>;
+  provenance?: ArtifactProvenance;
+  licenses: Array<ArtifactLicense>;
+  vulnerability?: ArtifactVulnerabilitySummary;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export type ArtifactIntelligenceWritable = {
+  signatures: Array<ArtifactSignature>;
+  sboms: Array<ArtifactSbom>;
+  provenance?: ArtifactProvenance;
+  licenses: Array<ArtifactLicense>;
+  vulnerability?: ArtifactVulnerabilitySummary;
+};
+
 export type OciManifestSummary = {
   digest: string;
   mediaType: string;
@@ -3755,6 +3822,93 @@ export type GetArtifactResponses = {
 
 export type GetArtifactResponse =
   GetArtifactResponses[keyof GetArtifactResponses];
+
+export type GetArtifactIntelligenceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    coordinate: string;
+    digest: string;
+  };
+  url: "/repositories/{repositoryId}/artifact-intelligence";
+};
+
+export type GetArtifactIntelligenceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetArtifactIntelligenceError =
+  GetArtifactIntelligenceErrors[keyof GetArtifactIntelligenceErrors];
+
+export type GetArtifactIntelligenceResponses = {
+  /**
+   * Security, build provenance, license, and vulnerability metadata for one immutable artifact identity
+   */
+  200: ArtifactIntelligence;
+};
+
+export type GetArtifactIntelligenceResponse =
+  GetArtifactIntelligenceResponses[keyof GetArtifactIntelligenceResponses];
+
+export type ReplaceArtifactIntelligenceData = {
+  body: ArtifactIntelligenceWritable;
+  headers?: {
+    "If-Match"?: string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    coordinate: string;
+    digest: string;
+  };
+  url: "/repositories/{repositoryId}/artifact-intelligence";
+};
+
+export type ReplaceArtifactIntelligenceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceArtifactIntelligenceError =
+  ReplaceArtifactIntelligenceErrors[keyof ReplaceArtifactIntelligenceErrors];
+
+export type ReplaceArtifactIntelligenceResponses = {
+  /**
+   * Security, build provenance, license, and vulnerability metadata for one immutable artifact identity
+   */
+  200: ArtifactIntelligence;
+};
+
+export type ReplaceArtifactIntelligenceResponse =
+  ReplaceArtifactIntelligenceResponses[keyof ReplaceArtifactIntelligenceResponses];
 
 export type ListOciImagesData = {
   body?: never;

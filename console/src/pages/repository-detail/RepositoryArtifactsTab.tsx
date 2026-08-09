@@ -1207,6 +1207,7 @@ export function RepositoryArtifactsTab({
     if (format === "npm") {
       return (
         <NpmPackageDetail
+          repositoryId={repo.id}
           repoName={repo.name}
           packageName={r.coordinate}
           initialVersion={
@@ -1223,6 +1224,7 @@ export function RepositoryArtifactsTab({
     if (format === "pypi") {
       return (
         <PyPIProjectDetail
+          repositoryId={repo.id}
           repoName={repo.name}
           project={r.coordinate}
           initialVersion={
@@ -1239,6 +1241,7 @@ export function RepositoryArtifactsTab({
     if (format === "go") {
       return (
         <GoModuleDetail
+          repositoryId={repo.id}
           repoName={repo.name}
           modulePath={r.coordinate}
           initialVersion={
@@ -1266,6 +1269,7 @@ export function RepositoryArtifactsTab({
     }
     return (
       <RawArtifactDetail
+        repositoryId={repo.id}
         repoName={repo.name}
         onDeleted={() => void load(q)}
         meta={{
