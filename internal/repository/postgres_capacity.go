@@ -32,6 +32,12 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_npm_versions WHERE object_key<>'' GROUP BY repository_id
+	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
+	FROM native_pypi_files WHERE object_key<>'' AND state='visible' GROUP BY repository_id
+	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
+	FROM native_go_assets GROUP BY repository_id
 ), totals AS (
 	SELECT repository_id,SUM(used_bytes)::bigint AS used_bytes,SUM(object_count)::bigint AS object_count
 	FROM usage GROUP BY repository_id
@@ -67,6 +73,7 @@ func (s *PostgresStore) GetRepositoryCapacity(ctx context.Context, id string) (R
 		FormatConan: `SELECT COALESCE(SUM(a.size),0),COUNT(*) FROM native_conan_assets a JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision WHERE a.repository_id::text=$1 AND r.state='visible' AND (a.package_id='' OR p.state='visible')`,
 		FormatNPM:   `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_npm_versions WHERE repository_id::text=$1 AND object_key<>''`,
 		FormatPyPI:  `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_pypi_files WHERE repository_id::text=$1 AND object_key<>'' AND state='visible'`,
+		FormatGo:    `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_go_assets WHERE repository_id::text=$1`,
 	}[capacity.Format]
 	if err = s.db.QueryRowContext(ctx, query, id).Scan(&capacity.UsedBytes, &capacity.ObjectCount); err != nil {
 		return RepositoryCapacity{}, err

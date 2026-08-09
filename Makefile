@@ -6,10 +6,10 @@ OPENAPI_TOOLS := tools/openapi
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 openapi-bundle:
 	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
@@ -132,6 +132,9 @@ native-npm-e2e:
 
 native-pypi-e2e:
 	@./scripts/native-pypi-e2e.sh
+
+native-go-e2e:
+	@./scripts/native-go-e2e.sh
 
 readiness-e2e:
 	@./scripts/readiness-e2e.sh

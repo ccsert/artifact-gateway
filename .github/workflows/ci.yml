@@ -44,6 +44,8 @@ jobs:
         run: make native-npm-e2e
       - name: Run Native PyPI E2E
         run: make native-pypi-e2e
+      - name: Run Go Module Proxy E2E
+        run: make native-go-e2e
       - name: Run Conan E2E
         run: make conan-e2e
       - name: Run integration tests

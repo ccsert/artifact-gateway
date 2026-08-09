@@ -26,6 +26,10 @@ a dated version heading without rewriting their meaning.
   read-through package caching.
 - npm and PyPI artifact lifecycle operations covering retention, tombstones,
   restore, object collection, promotion, and replication.
+- Go Module Proxy and Group repositories with standard `GOPROXY` endpoints,
+  verified read-through caching, offline resolution, anonymous/grant filtering,
+  search, capacity accounting, deep-linked Console browsing, and a real Go CLI
+  acceptance gate.
 
 ### Changed
 
@@ -47,6 +51,7 @@ a dated version heading without rewriting their meaning.
   created and completed reliably across worker instances.
 - Stabilized generated OpenAPI output, dependency installation, integration
   readiness, and lifecycle ordering in CI.
+- Included PyPI and Go object usage in aggregate repository capacity views.
 
 ### Security
 

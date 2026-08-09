@@ -13,13 +13,17 @@ for every declared capability:
 1. Define canonical package, version, asset, and immutable digest identities.
 2. Add forward-only PostgreSQL migrations and in-memory/PostgreSQL store parity.
 3. Implement native Hosted publication and reads using protocol-compatible
-   clients, including integrity validation and atomic visibility.
+   clients, including integrity validation and atomic visibility. A format
+   whose ecosystem has no publication protocol may instead follow
+   `docs/adr/0003-protocol-only-formats.md` and declare only Proxy and Group.
 4. Implement Proxy caching and Group resolution with format-specific cache keys,
    negative caching, upstream protection, and ordered member behavior.
 5. Add management browse/search projections and stable artifact/version deep
    links. Global search must be able to return a directly addressable result.
 6. Implement logical deletion, tombstones, restore, retention, delayed reclaim,
    promotion, and checkpointed replication before declaring those operations.
+   Protocol-only formats must omit unsupported lifecycle operations rather than
+   exposing placeholders.
 7. Apply repository grants, anonymous-read gates, audit fields, bounded metrics,
    worker-format filtering, capacity, quota, backup, and recovery behavior.
 8. Extend OpenAPI, generated Go/TypeScript clients, Console selectors, protocol

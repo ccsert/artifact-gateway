@@ -231,6 +231,108 @@ func TestNativePyPIProxyCachesVerifiedDistributionAndServesOffline(t *testing.T)
 	}
 }
 
+func TestNativePyPIAnonymousReadAndManagedGrantBoundaries(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	public, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "pypi-public", Name: "pypi-public", Format: repository.FormatPyPI, AnonymousRead: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "pypi-private", Name: "pypi-private", Format: repository.FormatPyPI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicFile := publishPyPITestFile(t, store, objects, public, "public-widget", "1.0.0")
+	_ = publishPyPITestFile(t, store, objects, private, "private-widget", "1.0.0")
+	if _, err = store.ReplaceRepositoryGrants(ctx, private.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	request := func(path, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if token != "" {
+			authorize(req, token)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	publicProject := "/pypi/" + public.Name + "/simple/public-widget/"
+	if response := request(publicProject, ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous without global policy=%d", response.Code)
+	}
+	if _, err = store.ReplaceAnonymousAccessPolicy(ctx, repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(publicProject, ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), publicFile.Filename) {
+		t.Fatalf("anonymous project=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request("/pypi/"+public.Name+"/packages/"+publicFile.Filename, ""); response.Code != http.StatusOK {
+		t.Fatalf("anonymous distribution=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request("/pypi/"+private.Name+"/simple/private-widget/", ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("private anonymous=%d", response.Code)
+	}
+	if response := request("/pypi/"+private.Name+"/simple/private-widget/", "resolver-secret"); response.Code != http.StatusForbidden {
+		t.Fatalf("ungranted authenticated read=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestNativePyPIGroupFiltersMembersByManagedGrant(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	denied, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "pypi-group-denied", Name: "pypi-group-denied", Format: repository.FormatPyPI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "pypi-group-allowed", Name: "pypi-group-allowed", Format: repository.FormatPyPI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedFile := publishPyPITestFile(t, store, objects, denied, "shared-widget", "9.0.0")
+	allowedFile := publishPyPITestFile(t, store, objects, allowed, "shared-widget", "1.0.0")
+	if _, err = store.ReplaceRepositoryGrants(ctx, denied.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, allowed.ID, []repository.RepositoryGrant{{
+		Principal: "build-agent", Scopes: []string{"repositories:read"}, ResourcePrefix: "shared-widget",
+	}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{
+		ID: "pypi-authorized-group", Name: "pypi-authorized-group", Format: repository.FormatPyPI,
+		Members: []repository.GroupMember{{RepositoryID: denied.ID}, {RepositoryID: allowed.ID, Position: 1}},
+	}, "admin", "pypi-authorized-group", "payload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodGet, "/pypi/"+group.Name+"/simple/shared-widget/", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), allowedFile.Filename) || strings.Contains(response.Body.String(), deniedFile.Filename) {
+		t.Fatalf("authorized group project=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, audit := range store.Audits {
+		if audit.GroupName == group.Name && audit.MemberName == denied.Name && audit.Outcome == repository.AuditAccessDenied {
+			return
+		}
+	}
+	t.Fatalf("missing PyPI group member denial audit: %#v", store.Audits)
+}
+
 func TestNativePyPIGroupMergesMembersAndPrefersHostedConflict(t *testing.T) {
 	ctx := context.Background()
 	project := "group-widget"
@@ -335,4 +437,25 @@ func pypiFixtureWheel(t *testing.T, distribution, version string) []byte {
 		t.Fatal(err)
 	}
 	return buffer.Bytes()
+}
+
+func publishPyPITestFile(t *testing.T, store *repository.MemoryStore, objects OCIObjectStore, repo repository.HostedRepository, project, version string) repository.PyPIFile {
+	t.Helper()
+	distribution := strings.ReplaceAll(project, "-", "_")
+	data := pypiFixtureWheel(t, distribution, version)
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	file := repository.PyPIFile{
+		RepositoryID: repo.ID, Project: project, Version: version,
+		Filename: distribution + "-" + version + "-py3-none-any.whl", FileType: "bdist_wheel",
+		Digest: "sha256:" + digest, ObjectKey: "native/pypi/sha256/" + digest, Size: int64(len(data)),
+	}
+	if err := objects.Put(context.Background(), file.ObjectKey, data); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.PublishPyPIFile(context.Background(), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stored
 }

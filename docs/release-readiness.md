@@ -1,7 +1,8 @@
 # Full Artifact Repository V1 Release Readiness
 
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
-Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths.
+Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths plus the Go
+Module Proxy/Group read path.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -14,6 +15,7 @@ make native-raw-e2e
 make native-maven-e2e
 make native-npm-e2e
 make native-pypi-e2e
+make native-go-e2e
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
@@ -40,7 +42,7 @@ storage credentials, or unredacted upstream URLs in that record.
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
 	  `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
-	  `make native-pypi-e2e`,
+	  `make native-pypi-e2e`, `make native-go-e2e`,
       and `make conan-e2e`
       pass.
 - [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
@@ -59,6 +61,9 @@ storage credentials, or unredacted upstream URLs in that record.
 	  PyPI uses real twine and pip clients to publish Hosted content, install
 	  Proxy content through a Group, stop the upstream, and reinstall from the
 	  verified local cache.
+	  Go uses a real `go mod download` against the Gateway `GOPROXY`, stops its
+	  upstream, clears the module cache, and downloads the same `.info`, `.mod`,
+	  and `.zip` assets from Gateway storage.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
@@ -144,7 +149,7 @@ storage credentials, or unredacted upstream URLs in that record.
 
 ```mermaid
 flowchart LR
-  clients[Docker / ORAS / Maven / Gradle] --> gateway[Artifact Gateway]
+  clients[Docker / ORAS / Maven / Gradle / npm / pip / Go] --> gateway[Artifact Gateway]
   gateway --> auth[Static tokens or OIDC]
   gateway --> postgres[(PostgreSQL metadata, audit, and cache coordination)]
   gateway --> cache[(S3-compatible cache)]
@@ -164,6 +169,9 @@ flowchart LR
   v2 Hosted publication, revision delete/restore, Group/Proxy reads, promotion,
   and replication. Conan 1, remote-to-remote copies, and general upstream index
   aggregation are unsupported.
+- Go supports standard Proxy/Group reads only. It intentionally has no Hosted,
+  retention, promotion, or replication capability because Go modules define no
+  standard repository publication protocol.
 - Static-token rotation revokes issued Gateway bearer tokens only after the
   Gateway is restarted. OIDC token revocation is governed by token expiry and
   the identity provider; JWKS refresh is cached for five minutes.
