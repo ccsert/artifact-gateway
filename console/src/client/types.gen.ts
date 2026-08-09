@@ -777,6 +777,43 @@ export type RuntimeNodeList = {
   health: RuntimeNodeHealth;
 };
 
+export type DiagnosticBuild = {
+  version: string;
+  goVersion: string;
+  revision: string;
+  modified?: boolean;
+};
+
+export type DiagnosticRuntime = {
+  instanceId: string;
+  roles: Array<string>;
+  workerFormats: Array<Format>;
+  workerKinds: Array<string>;
+};
+
+export type DiagnosticDependency = {
+  name: string;
+  status: "reachable" | "unreachable" | "not_configured";
+  detail?: string;
+};
+
+export type DiagnosticQueueStat = {
+  kind: "lifecycle" | "promotion" | "replication";
+  format: Format;
+  state: "pending" | "retrying" | "running" | "failed";
+  count: number;
+  oldestCreatedAt?: string;
+};
+
+export type Diagnostics = {
+  generatedAt: string;
+  build: DiagnosticBuild;
+  runtime: DiagnosticRuntime;
+  dependencies: Array<DiagnosticDependency>;
+  queues: Array<DiagnosticQueueStat>;
+  nodes: RuntimeNodeHealth;
+};
+
 export type AuditPage = {
   items: Array<AuditRecord>;
   nextPageToken?: string;
@@ -1473,6 +1510,33 @@ export type ListRuntimeNodesResponses = {
 
 export type ListRuntimeNodesResponse =
   ListRuntimeNodesResponses[keyof ListRuntimeNodesResponses];
+
+export type GetDiagnosticsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/diagnostics";
+};
+
+export type GetDiagnosticsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type GetDiagnosticsError =
+  GetDiagnosticsErrors[keyof GetDiagnosticsErrors];
+
+export type GetDiagnosticsResponses = {
+  /**
+   * Sanitized runtime and dependency diagnostics for administrators
+   */
+  200: Diagnostics;
+};
+
+export type GetDiagnosticsResponse =
+  GetDiagnosticsResponses[keyof GetDiagnosticsResponses];
 
 export type ListApiKeysData = {
   body?: never;

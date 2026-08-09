@@ -32,6 +32,7 @@ import { StateBadge } from "../components/Badge";
 import { formatDate } from "../lib/format";
 import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
 import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
+import { SystemDiagnosticsPanel } from "../components/SystemDiagnosticsPanel";
 import {
   FilterBar,
   FilterField,
@@ -583,6 +584,11 @@ export function OperationsPage() {
                 )}
               </>
             ),
+          },
+          {
+            key: "diagnostics",
+            label: text("系统诊断", "System diagnostics"),
+            children: <SystemDiagnosticsPanel />,
           },
         ]}
       />
