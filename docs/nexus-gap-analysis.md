@@ -37,7 +37,7 @@ the Console described in `console/src/app/router.tsx`.
 | Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
 | Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
 | User and role admin pages | Full Security section | Users, API Keys, Access Control and repository Grants pages; LDAP/SAML/privilege designer remain future work | Medium |
-| Task scheduler | User-created scheduled and manual tasks | Lifecycle-driven jobs only; no general scheduler or UI | Medium |
+| Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | None | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
@@ -100,10 +100,15 @@ inspect blob stores, run compaction, or attach a second store.
 
 Nexus exposes a Task Scheduler where an administrator creates scheduled or
 manual tasks: rebuild index, compact blob store, purge, run cleanup policies,
-rebuild repository browse, export. Artifact Gateway runs only lifecycle-driven
-jobs (retention, reclaim, promotion, replication, audit retention). There is
-no general task scheduler, no cron configuration, and no UI to create or run
-operator tasks.
+rebuild repository browse, export. Artifact Gateway provides an
+administrator-managed task catalog for repository retention and audit
+retention. Tasks use bounded fixed intervals, may be enabled or disabled, can
+be dispatched manually, and retain a history linked to the existing lifecycle
+or audit-cleanup job. PostgreSQL `SKIP LOCKED` claiming prevents duplicate
+scheduled dispatch across Scheduler replicas, while downtime recovery emits
+only one run instead of a catch-up storm. Arbitrary commands and SQL are not
+accepted. Cron expressions, index rebuilds, blob compaction, exports, and
+additional task types remain gaps.
 
 ### Security And Quality Scanning
 
@@ -191,10 +196,11 @@ selector design remains a deliberate gap.
 
 ### System Settings And Operations Pages
 
-The following Nexus operator pages are absent: Blob Stores, Tasks, Routing
-Rules, Email/SMTP, HTTP/SSL, Capabilities, System Information, and Support
-Bundle generation. Artifact Gateway exposes no system-info, version, or
-feature-flag screen.
+The following Nexus operator pages are absent: Blob Stores, Routing Rules,
+Email/SMTP, HTTP/SSL, Capabilities, System Information, and Support Bundle
+generation. The Operations page now exposes scheduled retention tasks and
+background job history, but Artifact Gateway still has no system-info, version,
+or feature-flag screen.
 
 ### Artifact-Level Operations
 
@@ -210,8 +216,10 @@ hard-purged through the UI despite a `reclaim` capability.
 
 Replication plans can be created, inspected, cancelled while pending, retried,
 and run immediately through lifecycle controls. Checkpoint progress is fenced
-by leases. Promotion and retention are represented as lifecycle jobs; a general
-Nexus-style scheduler is not implemented.
+by leases. Promotion and retention are represented as lifecycle jobs.
+Repository and audit retention can also be dispatched by the fixed-interval
+task scheduler; promotion/replication schedules and arbitrary Nexus task types
+are not exposed.
 
 ### Notifications And Feedback
 
@@ -362,7 +370,7 @@ independently deliverable.
    runtime-node, dependency, queue, and configuration evidence for operators.
 4. **P2 Server-side dashboard trends.** Add time-series metrics, throughput,
    cache-hit rate, and storage-growth visualization.
-5. **P2 Task scheduler, blob store management, and system settings pages.**
+5. **P2 Broaden scheduled task types, blob store management, and system settings pages.**
 6. **P3 Notifications and ecosystem breadth.** Add webhooks/email and additional
    package formats; tombstone hard-purge remains intentionally out of scope.
 

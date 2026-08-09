@@ -11,7 +11,7 @@ Artifact Gateway 使用 PostgreSQL 保存元数据和后台任务，使用共享
 | 角色 | 职责 | 对外路由 |
 | --- | --- | --- |
 | `api` | 协议处理、管理 API、公开搜索 | 完整 Gateway API |
-| `scheduler` | 周期扫描、创建 retention/reclaim/cache 任务 | 仅运维端点 |
+| `scheduler` | 周期扫描、抢占管理员计划并创建 retention/reclaim/cache/audit 任务 | 仅运维端点 |
 | `worker` | 领取并执行持久化任务、复制和晋升 | 仅运维端点 |
 | `standalone` | 同时启用以上三个角色 | 完整 Gateway API |
 
@@ -61,7 +61,9 @@ clients ------>| api x 2            |
 ```
 
 API 节点可以使用负载均衡器扩容。Scheduler 一般部署一个副本即可；如果部署多个
-副本，扫描写入必须依赖任务幂等键。Worker 可以按格式独立扩容，任务领取通过
+副本，`scheduled_tasks` 使用 `FOR UPDATE SKIP LOCKED` 单次抢占并提前推进
+`next_run_at`，下游任务同时使用包含计划和投递 ID 的幂等键。停机恢复只补投一次，
+不会按遗漏周期连续补跑。Worker 可以按格式独立扩容，任务领取通过
 `FOR UPDATE SKIP LOCKED`、advisory lock 和 lease token 防止重复提交。
 
 每个进程都会将实例 ID、启动会话、角色、Worker 格式/任务过滤器和最近心跳写入
