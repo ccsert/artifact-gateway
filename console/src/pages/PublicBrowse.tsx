@@ -44,11 +44,12 @@ import {
 } from "../components/PublicBrowsePrimitives";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
+import { GoModuleDetail } from "../components/GoModuleDetail";
 
 interface PublicRepository {
   id: string;
   name: string;
-  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi";
+  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go";
   type?: string;
 }
 
@@ -269,6 +270,16 @@ function repositoryUsage(
       {
         label: "pip",
         code: `pip config set global.index-url ${index}`,
+      },
+    ];
+  }
+  if (format === "go") {
+    const proxy = `${origin}/go/${repoName}`;
+    return [
+      { label: "GOPROXY", code: `go env -w GOPROXY=${proxy}` },
+      {
+        label: text("临时使用", "One-off usage"),
+        code: `GOPROXY=${proxy} go mod download`,
       },
     ];
   }
@@ -1465,7 +1476,9 @@ export function PublicBrowsePage() {
             ? text("注册 npm 仓库源", "Register an npm registry")
             : selectedRepository?.format === "pypi"
               ? text("注册 PyPI 仓库源", "Register a PyPI repository")
-              : text("注册 Raw 源地址", "Register a Raw source");
+              : selectedRepository?.format === "go"
+                ? text("注册 Go Module Proxy", "Register a Go module proxy")
+                : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -1705,7 +1718,8 @@ export function PublicBrowsePage() {
                     undefined,
                     undefined,
                     selectedRepository?.format === "npm" ||
-                      selectedRepository?.format === "pypi"
+                      selectedRepository?.format === "pypi" ||
+                      selectedRepository?.format === "go"
                       ? (row.item.version ?? versionParam)
                       : undefined,
                   )
@@ -1774,6 +1788,30 @@ export function PublicBrowsePage() {
         <PyPIProjectDetail
           repoName={selectedRepository.name}
           project={row.item.coordinate}
+          initialVersion={
+            artifactParam === row.item.coordinate
+              ? versionParam || row.item.version
+              : row.item.version
+          }
+          size={row.item.size}
+          publisher={row.item.publisher}
+          onVersionChange={(version) =>
+            openArtifact(
+              row.item.coordinate,
+              undefined,
+              undefined,
+              undefined,
+              version,
+            )
+          }
+        />
+      );
+    }
+    if (selectedRepository?.format === "go") {
+      return (
+        <GoModuleDetail
+          repoName={selectedRepository.name}
+          modulePath={row.item.coordinate}
           initialVersion={
             artifactParam === row.item.coordinate
               ? versionParam || row.item.version

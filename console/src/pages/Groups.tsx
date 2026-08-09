@@ -45,7 +45,7 @@ import {
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
-import { npmRegistryURL, pypiIndexURL } from "../lib/usage";
+import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../lib/usage";
 
 function CreateGroupDialog({
   repos,
@@ -629,6 +629,13 @@ export function GroupsPage() {
             <CopyableValue
               value={pypiIndexURL(name)}
               label={`/pypi/${name}/simple/`}
+              className="mt-1 max-w-full text-[11px] text-zinc-500"
+            />
+          )}
+          {group.format === "go" && (
+            <CopyableValue
+              value={goProxyURL(name)}
+              label={`/go/${name}`}
               className="mt-1 max-w-full text-[11px] text-zinc-500"
             />
           )}

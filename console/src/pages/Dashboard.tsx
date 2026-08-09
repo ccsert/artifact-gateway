@@ -31,8 +31,17 @@ const FORMAT_COLORS: Record<string, string> = {
   raw: "#38bdf8",
   npm: "#f43f5e",
   pypi: "#34d399",
+  go: "#60a5fa",
 };
-const FORMAT_ORDER = ["oci", "maven", "npm", "pypi", "conan", "raw"] as const;
+const FORMAT_ORDER = [
+  "oci",
+  "maven",
+  "npm",
+  "pypi",
+  "go",
+  "conan",
+  "raw",
+] as const;
 
 export function DashboardPage() {
   const { locale, text } = usePreferences();
@@ -280,7 +289,7 @@ export function DashboardPage() {
             value: FORMAT_ORDER.map(
               (format) => `${format} ${formatCount(format)}`,
             ).join(" · "),
-            hint: "OCI · Maven · npm · PyPI · Conan · Raw",
+            hint: "OCI · Maven · npm · PyPI · Go · Conan · Raw",
           },
           {
             label: text("存储占用", "Storage used"),

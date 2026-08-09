@@ -29,6 +29,7 @@ import {
 } from "../../components/ArtifactRowDetail";
 import { NpmPackageDetail } from "../../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../../components/PyPIProjectDetail";
+import { GoModuleDetail } from "../../components/GoModuleDetail";
 import { RawUploadDialog } from "../../components/RawUploadDialog";
 import { useAuth } from "../../lib/auth";
 import {
@@ -760,6 +761,7 @@ export function RepositoryArtifactsTab({
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const proxyNpm = format === "npm" && repo.type === "proxy";
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
+  const proxyGo = format === "go" && repo.type === "proxy";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
 
   const load = useCallback(
@@ -893,7 +895,7 @@ export function RepositoryArtifactsTab({
           });
           next = r.data?.nextPageToken;
         }
-      } else if (format === "npm" || format === "pypi") {
+      } else if (format === "npm" || format === "pypi" || format === "go") {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
           query: { q: query || undefined, ...page },
@@ -980,6 +982,7 @@ export function RepositoryArtifactsTab({
     conan: text("按引用名过滤…", "Filter by reference…"),
     npm: text("按包名前缀过滤…", "Filter by package name prefix…"),
     pypi: text("按项目名前缀过滤…", "Filter by project name prefix…"),
+    go: text("按模块路径前缀过滤…", "Filter by module path prefix…"),
     raw: text("搜索路径…", "Search paths…"),
   };
 
@@ -1051,7 +1054,10 @@ export function RepositoryArtifactsTab({
               ),
             },
           ]
-        : format === "maven" || format === "npm" || format === "pypi"
+        : format === "maven" ||
+            format === "npm" ||
+            format === "pypi" ||
+            format === "go"
           ? [
               {
                 title:
@@ -1059,7 +1065,9 @@ export function RepositoryArtifactsTab({
                     ? text("包", "Package")
                     : format === "pypi"
                       ? text("项目", "Project")
-                      : text("制品", "Artifact"),
+                      : format === "go"
+                        ? text("模块", "Module")
+                        : text("制品", "Artifact"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -1078,10 +1086,12 @@ export function RepositoryArtifactsTab({
                 width: 120,
                 render: (_, record) => (
                   <Badge tone="zinc">
-                    {text(
-                      `${record.versionCount ?? 1} 个版本`,
-                      `${record.versionCount ?? 1} versions`,
-                    )}
+                    {record.versionCount !== undefined
+                      ? text(
+                          `${record.versionCount} 个版本`,
+                          `${record.versionCount} versions`,
+                        )
+                      : text("展开查看", "Open to inspect")}
                   </Badge>
                 ),
               },
@@ -1215,6 +1225,22 @@ export function RepositoryArtifactsTab({
         <PyPIProjectDetail
           repoName={repo.name}
           project={r.coordinate}
+          initialVersion={
+            artifactTarget === r.coordinate ? versionTarget : undefined
+          }
+          size={r.size}
+          publisher={r.publisher}
+          onVersionChange={(version) =>
+            onVersionChange?.(r.coordinate, version)
+          }
+        />
+      );
+    }
+    if (format === "go") {
+      return (
+        <GoModuleDetail
+          repoName={repo.name}
+          modulePath={r.coordinate}
           initialVersion={
             artifactTarget === r.coordinate ? versionTarget : undefined
           }
@@ -1360,10 +1386,15 @@ export function RepositoryArtifactsTab({
                           "通过 pip install 拉取项目后会显示上游文件与缓存状态",
                           "Upstream files and cache status appear after pip install retrieves a project.",
                         )
-                      : text(
-                          `通过 ${format} 客户端推送制品后会显示在这里`,
-                          "Push artifacts with the matching client to display them here.",
-                        )
+                      : proxyGo
+                        ? text(
+                            "通过 go mod download 拉取模块后会显示上游版本与缓存资产",
+                            "Upstream versions and cached assets appear after go mod download retrieves a module.",
+                          )
+                        : text(
+                            `通过 ${format} 客户端推送制品后会显示在这里`,
+                            "Push artifacts with the matching client to display them here.",
+                          )
             }
           />
         </>

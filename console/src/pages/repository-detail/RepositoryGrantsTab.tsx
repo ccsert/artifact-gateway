@@ -80,6 +80,11 @@ function resourcePrefixHint(
         "例如 gateway-widget（PyPI 项目前缀）",
         "For example: gateway-widget (PyPI project prefix)",
       );
+    case "go":
+      return text(
+        "例如 github.com/company（Go 模块路径前缀）",
+        "For example: github.com/company (Go module path prefix)",
+      );
   }
 }
 

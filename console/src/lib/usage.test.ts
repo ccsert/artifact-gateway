@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  goProxyURL,
+  goUsage,
   npmRegistryURL,
   npmUsage,
   pypiIndexURL,
   pypiUsage,
   usageFor,
 } from "./usage";
+
+describe("Go usage", () => {
+  it("builds GOPROXY and exact module-version snippets", () => {
+    const snippets = goUsage("go-all", "example.com/Acme/widget", "v1.2.3");
+    expect(snippets[0].code).toBe(
+      `go env -w GOPROXY=${window.location.origin}/go/go-all`,
+    );
+    expect(snippets[1].code).toContain(
+      "go mod download example.com/Acme/widget@v1.2.3",
+    );
+    expect(
+      usageFor("go", "go-all", "example.com/Acme/widget", "v1.2.3")[2].code,
+    ).toContain("go get example.com/Acme/widget@v1.2.3");
+    expect(goProxyURL("go-all")).toBe(`${window.location.origin}/go/go-all`);
+  });
+});
 
 describe("npm usage", () => {
   it("builds exact install and scoped registry snippets", () => {

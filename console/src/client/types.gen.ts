@@ -4,7 +4,7 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
-export type Format = "raw" | "oci" | "maven" | "conan" | "npm" | "pypi";
+export type Format = "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go";
 
 export type FormatProfile = {
   format: Format;

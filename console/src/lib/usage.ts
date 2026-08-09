@@ -22,6 +22,10 @@ export function pypiIndexURL(repoName: string): string {
   return `${gatewayBase()}/pypi/${repoName}/simple/`;
 }
 
+export function goProxyURL(repoName: string): string {
+  return `${gatewayBase()}/go/${repoName}`;
+}
+
 // Maven GAV 坐标 → 各用法
 export interface MavenUsageOptions {
   buildNumber?: number;
@@ -181,6 +185,28 @@ export function pypiUsage(
   ];
 }
 
+export function goUsage(
+  repoName: string,
+  modulePath: string,
+  version: string,
+): UsageSnippet[] {
+  const proxy = goProxyURL(repoName);
+  return [
+    {
+      label: "GOPROXY",
+      code: `go env -w GOPROXY=${proxy}`,
+    },
+    {
+      label: "go mod download",
+      code: `GOPROXY=${proxy} go mod download ${modulePath}@${version}`,
+    },
+    {
+      label: "go get",
+      code: `GOPROXY=${proxy} go get ${modulePath}@${version}`,
+    },
+  ];
+}
+
 export function usageFor(
   format: Format | string,
   repoName: string,
@@ -201,6 +227,8 @@ export function usageFor(
       return npmUsage(repoName, coordinate, tag ?? "latest");
     case "pypi":
       return pypiUsage(repoName, coordinate, tag ?? "latest");
+    case "go":
+      return goUsage(repoName, coordinate, tag ?? "latest");
     default:
       return [];
   }

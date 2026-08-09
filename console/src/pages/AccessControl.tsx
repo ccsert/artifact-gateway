@@ -90,6 +90,8 @@ function resourcePlaceholder(format: Repository["format"] | undefined) {
       return "@scope/package";
     case "pypi":
       return "gateway-widget";
+    case "go":
+      return "example.com/team/widget";
     default:
       return "";
   }

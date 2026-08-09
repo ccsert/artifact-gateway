@@ -46,6 +46,7 @@ export default defineConfig(({ mode }) => {
         "/conan": gateway,
         "/npm": gateway,
         "/pypi": gateway,
+        "/go": gateway,
       },
     },
   };

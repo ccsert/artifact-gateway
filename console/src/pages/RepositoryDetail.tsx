@@ -407,7 +407,8 @@ function RepositorySettingsTab({
     repo.format === "raw" ||
     repo.format === "conan" ||
     repo.format === "npm" ||
-    repo.format === "pypi";
+    repo.format === "pypi" ||
+    repo.format === "go";
 
   const resetForm = () => {
     setEndpoint(repo.endpoint ?? "");
@@ -554,8 +555,8 @@ function RepositorySettingsTab({
               hint={
                 requiresHosts
                   ? text(
-                      "逗号分隔，Raw / Conan / npm / PyPI 代理必填。",
-                      "Comma-separated. Required for Raw, Conan, npm, and PyPI proxies.",
+                      "逗号分隔，Raw / Conan / npm / PyPI / Go 代理必填。",
+                      "Comma-separated. Required for Raw, Conan, npm, PyPI, and Go proxies.",
                     )
                   : text(
                       "逗号分隔；OCI / Maven 代理可留空。",
