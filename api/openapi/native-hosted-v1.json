@@ -2862,7 +2862,8 @@
               "enum": [
                 "repositories:read",
                 "repositories:write",
-                "repositories:admin"
+                "repositories:admin",
+                "repositories:intelligence"
               ]
             }
           },
@@ -4061,7 +4062,8 @@
               "enum": [
                 "repositories:read",
                 "repositories:write",
-                "repositories:admin"
+                "repositories:admin",
+                "repositories:intelligence"
               ]
             }
           },
@@ -4468,7 +4470,8 @@
         "required": [
           "read",
           "write",
-          "admin"
+          "admin",
+          "intelligence"
         ],
         "properties": {
           "read": {
@@ -4478,6 +4481,9 @@
             "$ref": "#/components/schemas/EffectiveAccessDecision"
           },
           "admin": {
+            "$ref": "#/components/schemas/EffectiveAccessDecision"
+          },
+          "intelligence": {
             "$ref": "#/components/schemas/EffectiveAccessDecision"
           }
         }

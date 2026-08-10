@@ -20,16 +20,21 @@ The evaluator has these inputs:
 
 - principal: authenticated actor and administrator bit;
 - target: hosted repository ID, name, and format;
-- operation: `read`, `write`, or `admin`;
+- operation: `read`, `write`, `intelligence`, or `admin`;
 - policy: repository grant set and legacy static reader/writer patterns.
 
 An administrator is always allowed. This preserves the bootstrap and recovery
 path provided by `GATEWAY_ADMIN_TOKEN` and OIDC administrator subjects.
 
 For non-administrators, a managed grant set is authoritative for its target
-repository. `repositories:admin` includes write and read; `repositories:write`
-includes read; `repositories:read` permits only read. Grants are exact
-principal matches. A grant never grants access to another repository.
+repository. `repositories:admin` includes write, read, and intelligence writes;
+`repositories:write` includes read; `repositories:read` permits only read; and
+`repositories:intelligence` is an independent metadata-writing capability that
+does not imply any repository read, publish, delete, or administration access.
+API keys may intentionally have no global role and authenticate only through
+explicit repository grants, which is the recommended shape for CI and scanner
+credentials. Grants are exact principal matches. A grant never grants access to
+another repository.
 
 Until a repository has a managed grant set, legacy patterns remain in force:
 
@@ -53,7 +58,8 @@ deleting policy state.
 | --- | --- | --- |
 | Read | `repositories:read` | Native Maven download, OCI blob/manifest/tag fetch, Raw GET/HEAD, Conan proxy/read-through |
 | Write | `repositories:write` | Native Maven publication, OCI upload/manifest/delete, Raw PUT/DELETE |
-| Admin | `repositories:admin` | Repository grant replacement and future repository-scoped administrative mutations |
+| Intelligence | `repositories:intelligence` | Write signatures, SBOM, provenance, license, and vulnerability summaries without publish/delete/admin access |
+| Admin | `repositories:admin` | Repository grant replacement and future repository-scoped administrative mutations; also includes intelligence writes |
 
 V2 separates global discovery from known-resource operations. A principal with
 an applicable `read` grant (including `write` and `admin`) may read the known

@@ -112,7 +112,10 @@ export type MemberList = Array<Member>;
 export type Grant = {
   principal: string;
   scopes: Array<
-    "repositories:read" | "repositories:write" | "repositories:admin"
+    | "repositories:read"
+    | "repositories:write"
+    | "repositories:admin"
+    | "repositories:intelligence"
   >;
   /**
    * Optional canonical resource prefix. Empty or omitted grants repository-wide access.
@@ -330,7 +333,7 @@ export type ApiKeyList = {
 
 export type CreateApiKey = {
   name: string;
-  roles: Array<"admin" | "writer" | "reader">;
+  roles?: Array<"admin" | "writer" | "reader">;
   /**
    * Optional expiry. Defaults to 90 days and cannot exceed 365 days.
    */
@@ -864,7 +867,10 @@ export type RepositoryGrantRecord = {
   format: Format;
   principal: string;
   scopes: Array<
-    "repositories:read" | "repositories:write" | "repositories:admin"
+    | "repositories:read"
+    | "repositories:write"
+    | "repositories:admin"
+    | "repositories:intelligence"
   >;
   resourcePrefix?: string;
 };
@@ -874,7 +880,10 @@ export type RepositoryGrantRecordList = Array<RepositoryGrantRecord>;
 export type AuthorizationTemplateGrant = {
   principal: string;
   scopes: Array<
-    "repositories:read" | "repositories:write" | "repositories:admin"
+    | "repositories:read"
+    | "repositories:write"
+    | "repositories:admin"
+    | "repositories:intelligence"
   >;
   resourcePrefix?: string;
 };
@@ -1001,6 +1010,7 @@ export type EffectiveAccessPermissions = {
   read: EffectiveAccessDecision;
   write: EffectiveAccessDecision;
   admin: EffectiveAccessDecision;
+  intelligence: EffectiveAccessDecision;
 };
 
 export type RepositoryEffectiveAccess = {

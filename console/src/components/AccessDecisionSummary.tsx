@@ -13,12 +13,12 @@ export function accessSourceLabel(source: string, text: Localize): string {
       return text("管理员身份", "Administrator identity");
     case "role":
       return text("全局角色", "Global role");
-    case "repository_grants":
-      return text("仓库授权", "Repository grant");
     case "legacy_static":
       return text("旧版静态策略", "Legacy static policy");
     case "anonymous_policy":
       return text("匿名访问策略", "Anonymous access policy");
+    case "repository_grants":
+      return text("仓库授权", "Repository grant");
     default:
       return source || text("未说明", "Not specified");
   }
@@ -125,9 +125,10 @@ export function AccessDecisionSummary({
     { label: text("读取", "Read"), decision: access.permissions.read },
     { label: text("写入", "Write"), decision: access.permissions.write },
     { label: text("管理", "Admin"), decision: access.permissions.admin },
+    { label: text("制品情报", "Artifact intelligence"), decision: access.permissions.intelligence },
   ];
   return (
-    <div className="grid grid-cols-4 divide-x divide-zinc-800/70 overflow-hidden rounded-md border border-zinc-800/70 bg-zinc-950/20">
+    <div className="grid grid-cols-5 divide-x divide-zinc-800/70 overflow-hidden rounded-md border border-zinc-800/70 bg-zinc-950/20">
       {decisions.map((item) => (
         <Decision key={item.label} {...item} />
       ))}

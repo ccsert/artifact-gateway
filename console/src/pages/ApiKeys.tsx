@@ -25,7 +25,7 @@ function CreateKeyDialog({
   const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"reader" | "writer" | "admin">("reader");
+  const [role, setRole] = useState<"" | "reader" | "writer" | "admin">("reader");
   const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -36,7 +36,7 @@ function CreateKeyDialog({
     const { data, error: err } = await createApiKey({
       body: {
         name: name.trim(),
-        roles: [role],
+        roles: role ? [role] : [],
         expiresAt: new Date(Date.now() + validDays * 86_400_000).toISOString(),
       },
     });
@@ -114,6 +114,13 @@ function CreateKeyDialog({
               value={role}
               onChange={setRole}
               options={[
+                {
+                  value: "",
+                  label: text(
+                    "无全局角色 · 仅依赖仓库授权",
+                    "No global role · repository grants only",
+                  ),
+                },
                 {
                   value: "reader",
                   label: text(

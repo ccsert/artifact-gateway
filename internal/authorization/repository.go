@@ -12,9 +12,10 @@ import (
 type RepositoryOperation string
 
 const (
-	RepositoryRead  RepositoryOperation = "read"
-	RepositoryWrite RepositoryOperation = "write"
-	RepositoryAdmin RepositoryOperation = "admin"
+	RepositoryRead         RepositoryOperation = "read"
+	RepositoryWrite        RepositoryOperation = "write"
+	RepositoryAdmin        RepositoryOperation = "admin"
+	RepositoryIntelligence RepositoryOperation = "intelligence"
 )
 
 // Role is a coarse, globally-scoped capability granted to a credential such as
@@ -182,6 +183,10 @@ func grantAllows(scopes []string, operation RepositoryOperation) bool {
 			}
 		case RepositoryAdmin:
 			if scope == "repositories:admin" {
+				return true
+			}
+		case RepositoryIntelligence:
+			if scope == "repositories:intelligence" || scope == "repositories:admin" {
 				return true
 			}
 		}

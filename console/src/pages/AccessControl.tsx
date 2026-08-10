@@ -135,17 +135,17 @@ const AUTHORIZATION_STEPS = [
   },
   {
     title: "再看全局角色",
-    text: "admin 允许全部操作，writer 允许读取和写入，reader 只允许读取。",
+    text: "admin 允许全部操作（包括写入制品情报），writer 允许读取和发布，reader 只允许读取；制品情报是独立的最小权限。",
     titleEn: "Apply the global role",
     textEn:
-      "Admin allows all operations, writer allows reads and writes, and reader allows reads only.",
+      "Admin allows all operations, including artifact intelligence writes. Writer allows reads and publishing, reader allows reads only; artifact intelligence is an independent least-privilege scope.",
   },
   {
     title: "再看仓库规则",
-    text: "主体、权限级别和资源前缀都匹配才放行；未匹配会拒绝。",
+    text: "主体、权限级别和资源前缀都匹配才放行；制品情报权限只允许写安全元数据，未匹配会拒绝。",
     titleEn: "Apply repository rules",
     textEn:
-      "The principal, permission, and resource prefix must all match; otherwise access is denied.",
+      "The principal, permission, and resource prefix must all match. Artifact intelligence only writes security metadata; otherwise access is denied.",
   },
   {
     title: "兼容旧策略",
@@ -160,10 +160,12 @@ function scopeLabel(
   scopes: string[],
   english = false,
 ): {
-  key: "read" | "write" | "admin" | "unknown";
+  key: "read" | "write" | "admin" | "intelligence" | "unknown";
   label: string;
-  tone: "red" | "blue" | "green" | "zinc";
+  tone: "red" | "blue" | "green" | "cyan" | "zinc";
 } {
+  if (scopes.includes("repositories:intelligence"))
+    return { key: "intelligence", label: english ? "Artifact intelligence" : "制品情报", tone: "cyan" };
   if (scopes.includes("repositories:admin"))
     return { key: "admin", label: english ? "Admin" : "管理员", tone: "red" };
   if (scopes.includes("repositories:write"))

@@ -39,8 +39,10 @@ func TestRepositoryAuthorizerUsesManagedGrantScopes(t *testing.T) {
 		{name: "writer inherits read", principal: "writer", operation: RepositoryRead, allowed: true},
 		{name: "writer can write", principal: "writer", operation: RepositoryWrite, allowed: true},
 		{name: "writer cannot administer", principal: "writer", operation: RepositoryAdmin},
+		{name: "writer cannot write intelligence", principal: "writer", operation: RepositoryIntelligence},
 		{name: "admin scope inherits write", principal: "operator", operation: RepositoryWrite, allowed: true},
 		{name: "admin scope administers", principal: "operator", operation: RepositoryAdmin, allowed: true},
+		{name: "admin scope writes intelligence", principal: "operator", operation: RepositoryIntelligence, allowed: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -49,6 +51,22 @@ func TestRepositoryAuthorizerUsesManagedGrantScopes(t *testing.T) {
 				t.Fatalf("decision=%+v", decision)
 			}
 		})
+	}
+}
+
+func TestRepositoryAuthorizerIntelligenceScopeDoesNotGrantRepositoryAccess(t *testing.T) {
+	authorizer := RepositoryAuthorizer{Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "2", Grants: []repository.RepositoryGrant{
+		{Principal: "scanner", Scopes: []string{"repositories:intelligence"}},
+	}}}}
+	target := repository.HostedRepository{ID: "repo-id", Name: "releases"}
+	for _, operation := range []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin} {
+		decision := authorizer.Authorize(context.Background(), Principal{Actor: "scanner"}, target, operation)
+		if decision.Allowed || decision.Source != "repository_grants" || decision.Reason != "scope_not_granted" {
+			t.Fatalf("operation=%s decision=%+v", operation, decision)
+		}
+	}
+	if decision := authorizer.Authorize(context.Background(), Principal{Actor: "scanner"}, target, RepositoryIntelligence); !decision.Allowed {
+		t.Fatalf("intelligence decision=%+v", decision)
 	}
 }
 

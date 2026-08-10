@@ -22,7 +22,7 @@ import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 
 type Localize = (chinese: string, english: string) => string;
 
-type GrantLevel = "read" | "write" | "admin";
+type GrantLevel = "read" | "write" | "admin" | "intelligence";
 const CUSTOM_PRINCIPAL = "__custom__";
 
 interface PrincipalOption {
@@ -89,19 +89,29 @@ function resourcePrefixHint(
 }
 
 function grantLevelLabel(level: GrantLevel, text: Localize): string {
-  if (level === "admin") return text("管理员", "Administrator");
+	if (level === "intelligence") return text("制品情报", "Artifact intelligence");
+	if (level === "admin") return text("管理员", "Administrator");
   if (level === "write") return text("写入", "Write");
   return text("读取", "Read");
 }
 
 function grantCapabilitiesLabel(level: GrantLevel, text: Localize): string {
+	if (level === "intelligence") return text("写入签名 / SBOM / 漏洞摘要", "Write signatures / SBOM / vulnerability summaries");
   if (level === "admin")
     return text("读取 + 写入 + 管理", "Read + write + admin");
   if (level === "write") return text("读取 + 写入", "Read + write");
   return text("读取", "Read");
 }
 
+function grantTone(level: GrantLevel): "red" | "blue" | "green" | "cyan" {
+  if (level === "intelligence") return "cyan";
+  if (level === "admin") return "red";
+  if (level === "write") return "blue";
+  return "green";
+}
+
 function grantLevel(scopes: Grant["scopes"]): GrantLevel {
+	if (scopes.includes("repositories:intelligence")) return "intelligence";
   if (scopes.includes("repositories:admin")) return "admin";
   if (scopes.includes("repositories:write")) return "write";
   return "read";
@@ -416,6 +426,13 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                         )}
                         options={[
                           {
+                            value: "intelligence",
+                            label: text(
+                              "制品情报 · 写入安全元数据",
+                              "Artifact intelligence · write security metadata",
+                            ),
+                          },
+                          {
                             label: text("用户", "Users"),
                             options: principalChoices
                               .filter((choice) =>
@@ -563,13 +580,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                     </div>
                     <div className="flex min-h-10 items-center">
                       <Badge
-                        tone={
-                          level === "admin"
-                            ? "red"
-                            : level === "write"
-                              ? "blue"
-                              : "green"
-                        }
+                        tone={grantTone(level)}
                       >
                         {grantCapabilitiesLabel(level, text)}
                       </Badge>

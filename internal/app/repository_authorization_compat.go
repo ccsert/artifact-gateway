@@ -18,12 +18,13 @@ type AuthorizationDecision = authorization.AuthorizationDecision
 type RepositoryAuthorizer = authorization.RepositoryAuthorizer
 
 const (
-	RoleReader      = authorization.RoleReader
-	RoleWriter      = authorization.RoleWriter
-	RoleAdmin       = authorization.RoleAdmin
-	RepositoryRead  = authorization.RepositoryRead
-	RepositoryWrite = authorization.RepositoryWrite
-	RepositoryAdmin = authorization.RepositoryAdmin
+	RoleReader             = authorization.RoleReader
+	RoleWriter             = authorization.RoleWriter
+	RoleAdmin              = authorization.RoleAdmin
+	RepositoryRead         = authorization.RepositoryRead
+	RepositoryWrite        = authorization.RepositoryWrite
+	RepositoryAdmin        = authorization.RepositoryAdmin
+	RepositoryIntelligence = authorization.RepositoryIntelligence
 )
 
 var NewOIDCValidator = authorization.NewOIDCValidator

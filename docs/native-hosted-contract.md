@@ -99,8 +99,13 @@ Repository creation, and Hosted Group lifecycle remain administrator-only.
 For an identified Repository, `repositories:read` permits Repository detail,
 retention-policy reads, Maven session/artifact reads; `repositories:write`
 permits Repository disablement and Maven publication/artifact deletion; and
-`repositories:admin` permits grant and retention-policy replacement. Scope
-inheritance is `admin -> write -> read`. Raw/OCI/Maven protocol reads and
+`repositories:admin` permits grant and retention-policy replacement. The
+additional `repositories:intelligence` scope permits only artifact intelligence
+replacement, allowing CI and scanners to publish signed metadata without
+publishing or managing the repository. Scope inheritance is `admin -> write -> read`
+for repository operations; `admin` also includes intelligence writes, while
+`writer` and `reader` do not. The standalone `repositories:intelligence` scope
+does not grant repository reads, writes, or administration. Raw/OCI/Maven protocol reads and
 writes use their protocol authentication contracts, but resolve to the same
 principal and Repository authorization policy.
 

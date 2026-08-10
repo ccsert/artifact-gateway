@@ -135,15 +135,18 @@ func (e AuthenticationKind) Valid() bool {
 
 // Defines values for AuthorizationTemplateGrantScopes.
 const (
-	AuthorizationTemplateGrantScopesRepositoriesAdmin AuthorizationTemplateGrantScopes = "repositories:admin"
-	AuthorizationTemplateGrantScopesRepositoriesRead  AuthorizationTemplateGrantScopes = "repositories:read"
-	AuthorizationTemplateGrantScopesRepositoriesWrite AuthorizationTemplateGrantScopes = "repositories:write"
+	AuthorizationTemplateGrantScopesRepositoriesAdmin        AuthorizationTemplateGrantScopes = "repositories:admin"
+	AuthorizationTemplateGrantScopesRepositoriesIntelligence AuthorizationTemplateGrantScopes = "repositories:intelligence"
+	AuthorizationTemplateGrantScopesRepositoriesRead         AuthorizationTemplateGrantScopes = "repositories:read"
+	AuthorizationTemplateGrantScopesRepositoriesWrite        AuthorizationTemplateGrantScopes = "repositories:write"
 )
 
 // Valid indicates whether the value is a known member of the AuthorizationTemplateGrantScopes enum.
 func (e AuthorizationTemplateGrantScopes) Valid() bool {
 	switch e {
 	case AuthorizationTemplateGrantScopesRepositoriesAdmin:
+		return true
+	case AuthorizationTemplateGrantScopesRepositoriesIntelligence:
 		return true
 	case AuthorizationTemplateGrantScopesRepositoriesRead:
 		return true
@@ -537,15 +540,18 @@ func (e GlobalArtifactSearchHitMatchKind) Valid() bool {
 
 // Defines values for GrantScopes.
 const (
-	GrantScopesRepositoriesAdmin GrantScopes = "repositories:admin"
-	GrantScopesRepositoriesRead  GrantScopes = "repositories:read"
-	GrantScopesRepositoriesWrite GrantScopes = "repositories:write"
+	GrantScopesRepositoriesAdmin        GrantScopes = "repositories:admin"
+	GrantScopesRepositoriesIntelligence GrantScopes = "repositories:intelligence"
+	GrantScopesRepositoriesRead         GrantScopes = "repositories:read"
+	GrantScopesRepositoriesWrite        GrantScopes = "repositories:write"
 )
 
 // Valid indicates whether the value is a known member of the GrantScopes enum.
 func (e GrantScopes) Valid() bool {
 	switch e {
 	case GrantScopesRepositoriesAdmin:
+		return true
+	case GrantScopesRepositoriesIntelligence:
 		return true
 	case GrantScopesRepositoriesRead:
 		return true
@@ -957,15 +963,18 @@ func (e RepositoryEffectiveAccessRepositoryType) Valid() bool {
 
 // Defines values for RepositoryGrantRecordScopes.
 const (
-	RepositoryGrantRecordScopesRepositoriesAdmin RepositoryGrantRecordScopes = "repositories:admin"
-	RepositoryGrantRecordScopesRepositoriesRead  RepositoryGrantRecordScopes = "repositories:read"
-	RepositoryGrantRecordScopesRepositoriesWrite RepositoryGrantRecordScopes = "repositories:write"
+	RepositoryGrantRecordScopesRepositoriesAdmin        RepositoryGrantRecordScopes = "repositories:admin"
+	RepositoryGrantRecordScopesRepositoriesIntelligence RepositoryGrantRecordScopes = "repositories:intelligence"
+	RepositoryGrantRecordScopesRepositoriesRead         RepositoryGrantRecordScopes = "repositories:read"
+	RepositoryGrantRecordScopesRepositoriesWrite        RepositoryGrantRecordScopes = "repositories:write"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryGrantRecordScopes enum.
 func (e RepositoryGrantRecordScopes) Valid() bool {
 	switch e {
 	case RepositoryGrantRecordScopesRepositoriesAdmin:
+		return true
+	case RepositoryGrantRecordScopesRepositoriesIntelligence:
 		return true
 	case RepositoryGrantRecordScopesRepositoriesRead:
 		return true
@@ -1672,9 +1681,9 @@ type ConanReferencePage struct {
 // CreateAPIKey defines model for CreateAPIKey.
 type CreateAPIKey struct {
 	// ExpiresAt Optional expiry. Defaults to 90 days and cannot exceed 365 days.
-	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
-	Name      string              `json:"name"`
-	Roles     []CreateAPIKeyRoles `json:"roles"`
+	ExpiresAt *time.Time           `json:"expiresAt,omitempty"`
+	Name      string               `json:"name"`
+	Roles     *[]CreateAPIKeyRoles `json:"roles,omitempty"`
 }
 
 // CreateAPIKeyRoles defines model for CreateAPIKey.Roles.
@@ -1861,9 +1870,10 @@ type EffectiveAccessDecision struct {
 
 // EffectiveAccessPermissions defines model for EffectiveAccessPermissions.
 type EffectiveAccessPermissions struct {
-	Admin EffectiveAccessDecision `json:"admin"`
-	Read  EffectiveAccessDecision `json:"read"`
-	Write EffectiveAccessDecision `json:"write"`
+	Admin        EffectiveAccessDecision `json:"admin"`
+	Intelligence EffectiveAccessDecision `json:"intelligence"`
+	Read         EffectiveAccessDecision `json:"read"`
+	Write        EffectiveAccessDecision `json:"write"`
 }
 
 // EgressProxy Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.

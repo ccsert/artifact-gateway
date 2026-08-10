@@ -88,3 +88,25 @@ func TestAPIKeyManagementValidatesExpiryAndRequestShape(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIKeyManagementAllowsRepositoryOnlyKey(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store})
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", bytes.NewBufferString(`{"name":"scanner"}`))
+	request.Header.Set("Authorization", "Bearer root")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create repository-only key status=%d body=%s", response.Code, response.Body.String())
+	}
+	var created struct {
+		Roles []string `json:"roles"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Roles == nil || len(created.Roles) != 0 {
+		t.Fatalf("repository-only key roles=%#v", created.Roles)
+	}
+}

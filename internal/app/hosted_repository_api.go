@@ -275,8 +275,8 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 	var request adminopenapi.CreateAPIKey
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" || len(request.Roles) == 0 {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name and at least one role are required")
+	if err := decoder.Decode(&request); err != nil || strings.TrimSpace(request.Name) == "" {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name is required")
 		return
 	}
 	now := time.Now().UTC()
@@ -288,8 +288,11 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "API key expiry must be in the future and no more than 365 days away")
 		return
 	}
-	roles := make([]string, 0, len(request.Roles))
-	for _, role := range request.Roles {
+	roles := make([]string, 0)
+	if request.Roles != nil {
+		roles = make([]string, 0, len(*request.Roles))
+	}
+	for _, role := range valueOrEmptyRoles(request.Roles) {
 		switch role {
 		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesWriter, adminopenapi.CreateAPIKeyRolesReader:
 		default:
@@ -314,6 +317,13 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 		response.Roles = append(response.Roles, adminopenapi.CreatedAPIKeyRoles(role))
 	}
 	writeNativeMavenJSON(w, http.StatusCreated, response)
+}
+
+func valueOrEmptyRoles(roles *[]adminopenapi.CreateAPIKeyRoles) []adminopenapi.CreateAPIKeyRoles {
+	if roles == nil {
+		return nil
+	}
+	return *roles
 }
 
 func (h generatedRepositoryAPIAdapter) RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyID uuid.UUID) {
@@ -919,9 +929,10 @@ func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Con
 			Reason:  anonymousReason,
 		},
 		Permissions: adminopenapi.EffectiveAccessPermissions{
-			Read:  decision(RepositoryRead),
-			Write: decision(RepositoryWrite),
-			Admin: decision(RepositoryAdmin),
+			Read:         decision(RepositoryRead),
+			Write:        decision(RepositoryWrite),
+			Admin:        decision(RepositoryAdmin),
+			Intelligence: decision(RepositoryIntelligence),
 		},
 	}
 	response.Repository.Id = uuid.MustParse(repo.ID)
@@ -1252,7 +1263,7 @@ func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool 
 	if len(grants) > 500 {
 		return false
 	}
-	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true, "repositories:intelligence": true}
 	keys := map[string]bool{}
 	for _, grant := range grants {
 		if strings.TrimSpace(grant.Principal) == "" || len(grant.Principal) > 512 || strings.ContainsAny(grant.Principal, "\x00\r\n") || len(grant.Scopes) == 0 || len(grant.ResourcePrefix) > 255 || strings.ContainsAny(grant.ResourcePrefix, "\x00\r\n") {
@@ -1474,7 +1485,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *h
 }
 
 func validRepositoryGrants(grants []repository.RepositoryGrant, format repository.Format) bool {
-	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true}
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true, "repositories:intelligence": true}
 	keys := map[string]bool{}
 	for _, grant := range grants {
 		if strings.TrimSpace(grant.Principal) == "" || len(grant.Scopes) == 0 || !validArtifactSearchQuery(format, grant.ResourcePrefix) {
@@ -2757,7 +2768,7 @@ func (h generatedRepositoryAPIAdapter) GetArtifactIntelligence(w http.ResponseWr
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceArtifactIntelligenceParams) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryIntelligence, func(principal Principal, repo repository.HostedRepository) {
 		coordinate := strings.TrimSpace(params.Coordinate)
 		digest := strings.TrimSpace(params.Digest)
 		if !validArtifactIntelligenceIdentity(repo.Format, coordinate, digest) {

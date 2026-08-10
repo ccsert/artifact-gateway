@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -55,6 +56,41 @@ func TestArtifactIntelligenceManagementHTTP(t *testing.T) {
 	invalid := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-intelligence?coordinate=x&digest=bad", "", "", "")
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestArtifactIntelligenceScopeIsNarrowerThanRepositoryWrite(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "33333333-3333-3333-3333-333333333333", Name: "scoped-oci", Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyToken := "scanner-key"
+	key, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: "44444444-4444-4444-4444-444444444444", Name: "scanner", SecretHash: authorization.HashAPIKey(keyToken), Roles: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "api-key:" + key.ID, Scopes: []string{"repositories:intelligence"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	auth := testAuthenticator()
+	auth.APIKeys = store
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	digest := "sha256:" + strings.Repeat("c", 64)
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		authorize(r, keyToken)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	path := "/api/v2/repositories/" + repo.ID + "/artifact-intelligence?coordinate=library/scoped&digest=" + digest
+	if response := request(http.MethodPut, path, `{"signatures":[],"sboms":[],"licenses":[]}`); response.Code != http.StatusOK {
+		t.Fatalf("intelligence write=%d body=%s", response.Code, response.Body.String())
+	}
+	artifacts := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts", "")
+	if artifacts.Code != http.StatusForbidden {
+		t.Fatalf("artifact browse=%d body=%s", artifacts.Code, artifacts.Body.String())
 	}
 }
 

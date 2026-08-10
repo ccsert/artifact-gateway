@@ -43,7 +43,7 @@ the Console described in `console/src/app/router.tsx`.
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls and lifecycle Jobs view; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
-| API key governance | Scoped roles, expiry, last-used | Reader/writer/admin roles, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
+| API key governance | Scoped roles, expiry, last-used | Optional global role, repository-scoped `repositories:intelligence` writer scope for CI/scanners, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
 
 ## Functional Gaps
 
