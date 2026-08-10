@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { SyncOutlined } from "@ant-design/icons";
 import { Alert, Button, Popconfirm, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  reconcileRepositoryArtifactIntelligence,
   listRepositoryLifecycleJobs,
   listRepositoryTombstones,
   restoreRepositoryArtifact,
@@ -25,6 +27,9 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const [jobs, setJobs] = useState<LifecycleJob[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [reconcileError, setReconcileError] = useState<unknown>(null);
+  const [reconcileNotice, setReconcileNotice] = useState("");
+  const [reconciling, setReconciling] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -43,6 +48,35 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
     const timer = setInterval(() => void load(), 10000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const failedIntelligenceJobs =
+    jobs?.filter(
+      (job) =>
+        job.kind === "intelligence" &&
+        (job.state === "failed" || job.state === "cancelled"),
+    ) ?? [];
+
+  const reconcileIntelligence = async () => {
+    setReconciling(true);
+    setReconcileError(null);
+    setReconcileNotice("");
+    const { data, error: err } = await reconcileRepositoryArtifactIntelligence({
+      path: { repositoryId: repo.id },
+      query: { limit: 100 },
+    });
+    setReconciling(false);
+    if (err) {
+      setReconcileError(err);
+      return;
+    }
+    setReconcileNotice(
+      text(
+        `已重新排队 ${data?.requeued ?? 0} 个情报同步任务`,
+        `Requeued ${data?.requeued ?? 0} intelligence sync job(s)`,
+      ),
+    );
+    void load();
+  };
 
   if (error !== null)
     return isNotFound(error) ? (
@@ -130,30 +164,69 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   ];
 
   return (
-    <Table<LifecycleJob>
-      className="ag-console-table"
-      rowKey="id"
-      size="middle"
-      dataSource={jobs}
-      columns={jobColumns}
-      expandable={{
-        expandedRowKeys: expandedJobId ? [expandedJobId] : [],
-        onExpand: (expanded, job) => setExpandedJobId(expanded ? job.id : null),
-        rowExpandable: (job) => Boolean(job.details || job.lastError),
-        expandedRowRender: (job) => (
-          <div className="space-y-2 py-1">
-            {job.details && <LifecycleJobDetails details={job.details} />}
-            {job.lastError && (
-              <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
-                {job.lastError}
-              </div>
+    <div className="space-y-3">
+      {reconcileNotice && (
+        <Alert type="success" showIcon title={reconcileNotice} />
+      )}
+      {reconcileError !== null && <ErrorBanner error={reconcileError} />}
+      {failedIntelligenceJobs.length > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-md border border-cyan-900/50 bg-cyan-950/20 px-4 py-3">
+          <div className="text-xs text-cyan-200/80">
+            {text(
+              `${failedIntelligenceJobs.length} 个情报同步任务需要补偿`,
+              `${failedIntelligenceJobs.length} intelligence sync job(s) need reconciliation`,
             )}
           </div>
-        ),
-      }}
-      pagination={false}
-      scroll={{ x: 1100 }}
-    />
+          <Popconfirm
+            title={text(
+              "重新排队失败的情报同步？",
+              "Requeue failed intelligence syncs?",
+            )}
+            description={text(
+              "只会重置失败或取消的情报同步任务，不会修改制品内容。",
+              "Only failed or cancelled sync jobs are reset; artifact content is unchanged.",
+            )}
+            okText={text("重新排队", "Requeue")}
+            cancelText={text("取消", "Cancel")}
+            onConfirm={() => void reconcileIntelligence()}
+          >
+            <Button
+              size="small"
+              type="primary"
+              icon={<SyncOutlined />}
+              loading={reconciling}
+            >
+              {text("补偿情报同步", "Reconcile intelligence")}
+            </Button>
+          </Popconfirm>
+        </div>
+      )}
+      <Table<LifecycleJob>
+        className="ag-console-table"
+        rowKey="id"
+        size="middle"
+        dataSource={jobs}
+        columns={jobColumns}
+        expandable={{
+          expandedRowKeys: expandedJobId ? [expandedJobId] : [],
+          onExpand: (expanded, job) =>
+            setExpandedJobId(expanded ? job.id : null),
+          rowExpandable: (job) => Boolean(job.details || job.lastError),
+          expandedRowRender: (job) => (
+            <div className="space-y-2 py-1">
+              {job.details && <LifecycleJobDetails details={job.details} />}
+              {job.lastError && (
+                <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
+                  {job.lastError}
+                </div>
+              )}
+            </div>
+          ),
+        }}
+        pagination={false}
+        scroll={{ x: 1100 }}
+      />
+    </div>
   );
 }
 

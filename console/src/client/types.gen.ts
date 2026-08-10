@@ -1052,6 +1052,12 @@ export type PromotionRequest = {
   digest: string;
 };
 
+export type LifecycleJobReconciliation = {
+  repositoryId: string;
+  requeued: number;
+  requeuedJobIds: Array<string>;
+};
+
 export type EffectiveAccessDecision = {
   allowed: boolean;
   source: string;
@@ -3419,6 +3425,45 @@ export type ListRepositoryLifecycleJobsResponses = {
 
 export type ListRepositoryLifecycleJobsResponse =
   ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
+
+export type ReconcileRepositoryArtifactIntelligenceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    limit?: number;
+  };
+  url: "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence";
+};
+
+export type ReconcileRepositoryArtifactIntelligenceErrors = {
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ReconcileRepositoryArtifactIntelligenceError =
+  ReconcileRepositoryArtifactIntelligenceErrors[keyof ReconcileRepositoryArtifactIntelligenceErrors];
+
+export type ReconcileRepositoryArtifactIntelligenceResponses = {
+  /**
+   * Reconciliation summary
+   */
+  200: LifecycleJobReconciliation;
+};
+
+export type ReconcileRepositoryArtifactIntelligenceResponse =
+  ReconcileRepositoryArtifactIntelligenceResponses[keyof ReconcileRepositoryArtifactIntelligenceResponses];
 
 export type RunRepositoryLifecycleJobNowData = {
   body?: never;
