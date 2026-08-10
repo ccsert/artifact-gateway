@@ -699,17 +699,18 @@ func (e OIDCSettingsSource) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	AccessDenied        ProblemCode = "access_denied"
-	CoordinateExists    ProblemCode = "coordinate_exists"
-	DigestMismatch      ProblemCode = "digest_mismatch"
-	IdempotencyConflict ProblemCode = "idempotency_conflict"
-	InternalError       ProblemCode = "internal_error"
-	InvalidPageToken    ProblemCode = "invalid_page_token"
-	InvalidRequest      ProblemCode = "invalid_request"
-	NotFound            ProblemCode = "not_found"
-	RetentionProtected  ProblemCode = "retention_protected"
-	SessionClosed       ProblemCode = "session_closed"
-	VersionConflict     ProblemCode = "version_conflict"
+	AccessDenied         ProblemCode = "access_denied"
+	CoordinateExists     ProblemCode = "coordinate_exists"
+	DigestMismatch       ProblemCode = "digest_mismatch"
+	IdempotencyConflict  ProblemCode = "idempotency_conflict"
+	InternalError        ProblemCode = "internal_error"
+	InvalidPageToken     ProblemCode = "invalid_page_token"
+	InvalidRequest       ProblemCode = "invalid_request"
+	NotFound             ProblemCode = "not_found"
+	RetentionProtected   ProblemCode = "retention_protected"
+	SecurityPolicyDenied ProblemCode = "security_policy_denied"
+	SessionClosed        ProblemCode = "session_closed"
+	VersionConflict      ProblemCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
@@ -732,6 +733,8 @@ func (e ProblemCode) Valid() bool {
 	case NotFound:
 		return true
 	case RetentionProtected:
+		return true
+	case SecurityPolicyDenied:
 		return true
 	case SessionClosed:
 		return true
@@ -1113,19 +1116,19 @@ func (e RuntimeNodeStatus) Valid() bool {
 
 // Defines values for RuntimeNodeHealthStatus.
 const (
-	Critical RuntimeNodeHealthStatus = "critical"
-	Degraded RuntimeNodeHealthStatus = "degraded"
-	Healthy  RuntimeNodeHealthStatus = "healthy"
+	RuntimeNodeHealthStatusCritical RuntimeNodeHealthStatus = "critical"
+	RuntimeNodeHealthStatusDegraded RuntimeNodeHealthStatus = "degraded"
+	RuntimeNodeHealthStatusHealthy  RuntimeNodeHealthStatus = "healthy"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeNodeHealthStatus enum.
 func (e RuntimeNodeHealthStatus) Valid() bool {
 	switch e {
-	case Critical:
+	case RuntimeNodeHealthStatusCritical:
 		return true
-	case Degraded:
+	case RuntimeNodeHealthStatusDegraded:
 		return true
-	case Healthy:
+	case RuntimeNodeHealthStatusHealthy:
 		return true
 	default:
 		return false
@@ -1234,6 +1237,33 @@ func (e ScheduledTaskRunTrigger) Valid() bool {
 	case Manual:
 		return true
 	case Scheduled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SecurityPolicyMaxAllowedSeverity.
+const (
+	SecurityPolicyMaxAllowedSeverityCritical SecurityPolicyMaxAllowedSeverity = "critical"
+	SecurityPolicyMaxAllowedSeverityHigh     SecurityPolicyMaxAllowedSeverity = "high"
+	SecurityPolicyMaxAllowedSeverityLow      SecurityPolicyMaxAllowedSeverity = "low"
+	SecurityPolicyMaxAllowedSeverityMedium   SecurityPolicyMaxAllowedSeverity = "medium"
+	SecurityPolicyMaxAllowedSeverityNone     SecurityPolicyMaxAllowedSeverity = "none"
+)
+
+// Valid indicates whether the value is a known member of the SecurityPolicyMaxAllowedSeverity enum.
+func (e SecurityPolicyMaxAllowedSeverity) Valid() bool {
+	switch e {
+	case SecurityPolicyMaxAllowedSeverityCritical:
+		return true
+	case SecurityPolicyMaxAllowedSeverityHigh:
+		return true
+	case SecurityPolicyMaxAllowedSeverityLow:
+		return true
+	case SecurityPolicyMaxAllowedSeverityMedium:
+		return true
+	case SecurityPolicyMaxAllowedSeverityNone:
 		return true
 	default:
 		return false
@@ -2716,6 +2746,41 @@ type ScheduledTaskRunTargetKind string
 // ScheduledTaskRunTrigger defines model for ScheduledTaskRun.Trigger.
 type ScheduledTaskRunTrigger string
 
+// SecurityPolicy defines model for SecurityPolicy.
+type SecurityPolicy struct {
+	AllowedLicenses *[]string `json:"allowedLicenses,omitempty"`
+
+	// Enabled Enforce for promotions into this repository.
+	Enabled                  *bool                             `json:"enabled,omitempty"`
+	FailOnScanError          *bool                             `json:"failOnScanError,omitempty"`
+	MaxAllowedSeverity       *SecurityPolicyMaxAllowedSeverity `json:"maxAllowedSeverity,omitempty"`
+	RequireProvenance        *bool                             `json:"requireProvenance,omitempty"`
+	RequireSbom              *bool                             `json:"requireSbom,omitempty"`
+	RequireSignature         *bool                             `json:"requireSignature,omitempty"`
+	RequireVerifiedSignature *bool                             `json:"requireVerifiedSignature,omitempty"`
+	RequireVulnerabilityScan *bool                             `json:"requireVulnerabilityScan,omitempty"`
+	Version                  string                            `json:"version"`
+}
+
+// SecurityPolicyMaxAllowedSeverity defines model for SecurityPolicy.MaxAllowedSeverity.
+type SecurityPolicyMaxAllowedSeverity string
+
+// SecurityPolicyEvaluation defines model for SecurityPolicyEvaluation.
+type SecurityPolicyEvaluation struct {
+	Allowed             bool     `json:"allowed"`
+	Enforced            bool     `json:"enforced"`
+	IntelligencePresent bool     `json:"intelligencePresent"`
+	PolicyVersion       string   `json:"policyVersion"`
+	Reasons             []string `json:"reasons"`
+}
+
+// SecurityPolicyEvaluationRequest defines model for SecurityPolicyEvaluationRequest.
+type SecurityPolicyEvaluationRequest struct {
+	Coordinate         string             `json:"coordinate"`
+	Digest             string             `json:"digest"`
+	SourceRepositoryId openapi_types.UUID `json:"sourceRepositoryId"`
+}
+
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
@@ -3129,6 +3194,11 @@ type ExecuteRepositoryRetentionParams struct {
 	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
 }
 
+// ReplaceSecurityPolicyParams defines parameters for ReplaceSecurityPolicy.
+type ReplaceSecurityPolicyParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListRepositoryTombstonesParams defines parameters for ListRepositoryTombstones.
 type ListRepositoryTombstonesParams struct {
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
@@ -3219,6 +3289,12 @@ type RestoreRepositoryArtifactJSONRequestBody = RestoreArtifact
 
 // ReplaceRetentionPolicyJSONRequestBody defines body for ReplaceRetentionPolicy for application/json ContentType.
 type ReplaceRetentionPolicyJSONRequestBody = RetentionPolicy
+
+// ReplaceSecurityPolicyJSONRequestBody defines body for ReplaceSecurityPolicy for application/json ContentType.
+type ReplaceSecurityPolicyJSONRequestBody = SecurityPolicy
+
+// EvaluateSecurityPolicyJSONRequestBody defines body for EvaluateSecurityPolicy for application/json ContentType.
+type EvaluateSecurityPolicyJSONRequestBody = SecurityPolicyEvaluationRequest
 
 // TombstoneRepositoryArtifactJSONRequestBody defines body for TombstoneRepositoryArtifact for application/json ContentType.
 type TombstoneRepositoryArtifactJSONRequestBody = RestoreArtifact
@@ -3519,6 +3595,15 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/retention:execute)
 	ExecuteRepositoryRetention(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ExecuteRepositoryRetentionParams)
+
+	// (GET /repositories/{repositoryId}/security-policy)
+	GetSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /repositories/{repositoryId}/security-policy)
+	ReplaceSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceSecurityPolicyParams)
+
+	// (POST /repositories/{repositoryId}/security-policy:evaluate)
+	EvaluateSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryTombstonesParams)
@@ -7031,6 +7116,112 @@ func (siw *ServerInterfaceWrapper) ExecuteRepositoryRetention(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// GetSecurityPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetSecurityPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSecurityPolicy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceSecurityPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceSecurityPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceSecurityPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceSecurityPolicy(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EvaluateSecurityPolicy operation middleware
+func (siw *ServerInterfaceWrapper) EvaluateSecurityPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EvaluateSecurityPolicy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryTombstones operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryTombstones(w http.ResponseWriter, r *http.Request) {
 
@@ -7705,6 +7896,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/retention-policy", wrapper.ReplaceRetentionPolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:dry-run", wrapper.DryRunRepositoryRetention)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/retention:execute", wrapper.ExecuteRepositoryRetention)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/security-policy", wrapper.GetSecurityPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/security-policy", wrapper.ReplaceSecurityPolicy)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/security-policy:evaluate", wrapper.EvaluateSecurityPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.ListRepositoryTombstones)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.TombstoneRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
@@ -7852,6 +8046,17 @@ type RetentionDryRunTextcsvResponse struct {
 type RetentionPolicyJSONResponse RetentionPolicy
 
 type RuntimeNodeListJSONResponse RuntimeNodeList
+
+type SecurityPolicyResponseHeaders struct {
+	ETag string
+}
+type SecurityPolicyJSONResponse struct {
+	Body SecurityPolicy
+
+	Headers SecurityPolicyResponseHeaders
+}
+
+type SecurityPolicyEvaluationJSONResponse SecurityPolicyEvaluation
 
 type UserJSONResponse User
 
@@ -11698,6 +11903,139 @@ func (response ExecuteRepositoryRetention412ApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type GetSecurityPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetSecurityPolicyResponseObject interface {
+	VisitGetSecurityPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetSecurityPolicy200JSONResponse struct{ SecurityPolicyJSONResponse }
+
+func (response GetSecurityPolicy200JSONResponse) VisitGetSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecurityPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceSecurityPolicyParams
+	Body         *ReplaceSecurityPolicyJSONRequestBody
+}
+
+type ReplaceSecurityPolicyResponseObject interface {
+	VisitReplaceSecurityPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceSecurityPolicy200JSONResponse struct{ SecurityPolicyJSONResponse }
+
+func (response ReplaceSecurityPolicy200JSONResponse) VisitReplaceSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecurityPolicy400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceSecurityPolicy400ApplicationProblemPlusJSONResponse) VisitReplaceSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecurityPolicy412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecurityPolicy412ApplicationProblemPlusJSONResponse) VisitReplaceSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EvaluateSecurityPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *EvaluateSecurityPolicyJSONRequestBody
+}
+
+type EvaluateSecurityPolicyResponseObject interface {
+	VisitEvaluateSecurityPolicyResponse(w http.ResponseWriter) error
+}
+
+type EvaluateSecurityPolicy200JSONResponse struct {
+	SecurityPolicyEvaluationJSONResponse
+}
+
+func (response EvaluateSecurityPolicy200JSONResponse) VisitEvaluateSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EvaluateSecurityPolicy400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EvaluateSecurityPolicy400ApplicationProblemPlusJSONResponse) VisitEvaluateSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EvaluateSecurityPolicy404ApplicationProblemPlusJSONResponse Problem
+
+func (response EvaluateSecurityPolicy404ApplicationProblemPlusJSONResponse) VisitEvaluateSecurityPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryTombstonesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListRepositoryTombstonesParams
@@ -12802,6 +13140,15 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/retention:execute)
 	ExecuteRepositoryRetention(ctx context.Context, request ExecuteRepositoryRetentionRequestObject) (ExecuteRepositoryRetentionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/security-policy)
+	GetSecurityPolicy(ctx context.Context, request GetSecurityPolicyRequestObject) (GetSecurityPolicyResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/security-policy)
+	ReplaceSecurityPolicy(ctx context.Context, request ReplaceSecurityPolicyRequestObject) (ReplaceSecurityPolicyResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/security-policy:evaluate)
+	EvaluateSecurityPolicy(ctx context.Context, request EvaluateSecurityPolicyRequestObject) (EvaluateSecurityPolicyResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/tombstones)
 	ListRepositoryTombstones(ctx context.Context, request ListRepositoryTombstonesRequestObject) (ListRepositoryTombstonesResponseObject, error)
@@ -15196,6 +15543,99 @@ func (sh *strictHandler) ExecuteRepositoryRetention(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ExecuteRepositoryRetentionResponseObject); ok {
 		if err := validResponse.VisitExecuteRepositoryRetentionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSecurityPolicy operation middleware
+func (sh *strictHandler) GetSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetSecurityPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSecurityPolicy(ctx, request.(GetSecurityPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSecurityPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSecurityPolicyResponseObject); ok {
+		if err := validResponse.VisitGetSecurityPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceSecurityPolicy operation middleware
+func (sh *strictHandler) ReplaceSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceSecurityPolicyParams) {
+	var request ReplaceSecurityPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceSecurityPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceSecurityPolicy(ctx, request.(ReplaceSecurityPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceSecurityPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceSecurityPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceSecurityPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EvaluateSecurityPolicy operation middleware
+func (sh *strictHandler) EvaluateSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request EvaluateSecurityPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body EvaluateSecurityPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EvaluateSecurityPolicy(ctx, request.(EvaluateSecurityPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EvaluateSecurityPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EvaluateSecurityPolicyResponseObject); ok {
+		if err := validResponse.VisitEvaluateSecurityPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

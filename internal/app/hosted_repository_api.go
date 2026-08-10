@@ -225,6 +225,7 @@ type generatedRepositoryAPIAdapter struct {
 	grants            repository.RepositoryGrantStore
 	templates         repository.AuthorizationTemplateStore
 	retentionPolicies repository.RepositoryRetentionPolicyStore
+	securityPolicies  repository.RepositorySecurityPolicyStore
 	capacities        repository.RepositoryCapacityStore
 	tombstones        repository.ArtifactTombstoneStore
 	lifecycleJobs     repository.LifecycleJobStore
@@ -1556,6 +1557,250 @@ func normalizeRetentionPatterns(patterns []string) ([]string, error) {
 	return result, nil
 }
 
+func normalizeAndValidateSecurityPolicy(policy *repository.RepositorySecurityPolicy) error {
+	if policy.Version == "" {
+		return errors.New("version must be valid")
+	}
+	if policy.MaxAllowedSeverity == "" {
+		policy.MaxAllowedSeverity = repository.SecuritySeverityCritical
+	}
+	if !repository.ValidSecuritySeverity(policy.MaxAllowedSeverity) {
+		return errors.New("maxAllowedSeverity must be none, low, medium, high, or critical")
+	}
+	if len(policy.AllowedLicenses) > 100 {
+		return errors.New("allowedLicenses must contain at most 100 entries")
+	}
+	licenses := make([]string, 0, len(policy.AllowedLicenses))
+	seen := make(map[string]struct{}, len(policy.AllowedLicenses))
+	for _, license := range policy.AllowedLicenses {
+		license = strings.TrimSpace(license)
+		if license == "" || len(license) > 128 {
+			return errors.New("allowedLicenses must contain non-empty values of at most 128 characters")
+		}
+		key := strings.ToLower(license)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		licenses = append(licenses, license)
+	}
+	policy.AllowedLicenses = licenses
+	return nil
+}
+
+func securityPolicyResponse(policy repository.RepositorySecurityPolicy) adminopenapi.SecurityPolicy {
+	enabled := policy.Enabled
+	requireSignature := policy.RequireSignature
+	requireVerifiedSignature := policy.RequireVerifiedSignature
+	requireSBOM := policy.RequireSBOM
+	requireProvenance := policy.RequireProvenance
+	requireVulnerabilityScan := policy.RequireVulnerabilityScan
+	failOnScanError := policy.FailOnScanError
+	severity := adminopenapi.SecurityPolicyMaxAllowedSeverity(policy.MaxAllowedSeverity)
+	licenses := append([]string{}, policy.AllowedLicenses...)
+	return adminopenapi.SecurityPolicy{
+		Version:                  policy.Version,
+		Enabled:                  &enabled,
+		RequireSignature:         &requireSignature,
+		RequireVerifiedSignature: &requireVerifiedSignature,
+		RequireSbom:              &requireSBOM,
+		RequireProvenance:        &requireProvenance,
+		RequireVulnerabilityScan: &requireVulnerabilityScan,
+		MaxAllowedSeverity:       &severity,
+		FailOnScanError:          &failOnScanError,
+		AllowedLicenses:          &licenses,
+	}
+}
+
+func repositorySecurityPolicyFromRequest(input adminopenapi.SecurityPolicy) (repository.RepositorySecurityPolicy, error) {
+	policy := repository.DefaultRepositorySecurityPolicy()
+	policy.Version = strings.TrimSpace(input.Version)
+	if input.Enabled != nil {
+		policy.Enabled = *input.Enabled
+	}
+	if input.RequireSignature != nil {
+		policy.RequireSignature = *input.RequireSignature
+	}
+	if input.RequireVerifiedSignature != nil {
+		policy.RequireVerifiedSignature = *input.RequireVerifiedSignature
+	}
+	if input.RequireSbom != nil {
+		policy.RequireSBOM = *input.RequireSbom
+	}
+	if input.RequireProvenance != nil {
+		policy.RequireProvenance = *input.RequireProvenance
+	}
+	if input.RequireVulnerabilityScan != nil {
+		policy.RequireVulnerabilityScan = *input.RequireVulnerabilityScan
+	}
+	if input.MaxAllowedSeverity != nil {
+		policy.MaxAllowedSeverity = string(*input.MaxAllowedSeverity)
+	}
+	if input.FailOnScanError != nil {
+		policy.FailOnScanError = *input.FailOnScanError
+	}
+	if input.AllowedLicenses != nil {
+		policy.AllowedLicenses = append([]string{}, (*input.AllowedLicenses)...)
+	}
+	if err := normalizeAndValidateSecurityPolicy(&policy); err != nil {
+		return repository.RepositorySecurityPolicy{}, err
+	}
+	return policy, nil
+}
+
+func securityPolicyEvaluationResponse(value repository.SecurityPolicyEvaluation) adminopenapi.SecurityPolicyEvaluation {
+	return adminopenapi.SecurityPolicyEvaluation{
+		Allowed:             value.Allowed,
+		Enforced:            value.Enforced,
+		PolicyVersion:       value.PolicyVersion,
+		IntelligencePresent: value.IntelligencePresent,
+		Reasons:             append([]string{}, value.Reasons...),
+	}
+}
+
+func securityPolicyArtifactVisible(ctx context.Context, store repository.ArtifactSearchStore, repositoryID string, format repository.Format, coordinate, digest string) (bool, error) {
+	const pageSize = 200
+	after := repository.ArtifactSearchPosition{}
+	for {
+		items, err := store.SearchArtifactProjection(ctx, repositoryID, format, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByDigest, Value: digest}, pageSize, after)
+		if err != nil {
+			return false, err
+		}
+		for _, item := range items {
+			if item.Coordinate == coordinate && item.Digest == digest {
+				return true, nil
+			}
+		}
+		if len(items) < pageSize {
+			return false, nil
+		}
+		last := items[len(items)-1]
+		next := repository.ArtifactSearchPosition{Coordinate: last.Coordinate, BuildNumber: last.BuildNumber, Digest: last.Digest}
+		if next == after {
+			return false, errors.New("artifact search projection did not advance")
+		}
+		after = next
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) GetSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, _ repository.HostedRepository) {
+		policy, err := h.securityPolicies.GetRepositorySecurityPolicy(r.Context(), repositoryID.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get security policy failed")
+			return
+		}
+		w.Header().Set("ETag", policy.Version)
+		writeNativeMavenJSON(w, http.StatusOK, securityPolicyResponse(policy))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceSecurityPolicyParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		var input adminopenapi.SecurityPolicy
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "security policy payload is invalid")
+			return
+		}
+		policy, err := repositorySecurityPolicyFromRequest(input)
+		if err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		updated, err := h.securityPolicies.ReplaceRepositorySecurityPolicy(r.Context(), repo.ID, policy, string(params.IfMatch))
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current security policy version")
+			return
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace security policy failed")
+			return
+		}
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: "repositories/" + repo.ID + "/security-policy", Operation: "security_policy.replace", Status: http.StatusOK, CacheDisposition: "bypass"})
+		}
+		w.Header().Set("ETag", updated.Version)
+		writeNativeMavenJSON(w, http.StatusOK, securityPolicyResponse(updated))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) EvaluateSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, target repository.HostedRepository) {
+		var input adminopenapi.SecurityPolicyEvaluationRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || input.SourceRepositoryId == uuid.Nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "sourceRepositoryId, coordinate, and digest are required")
+			return
+		}
+		source, err := h.store.GetHostedRepository(r.Context(), input.SourceRepositoryId.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "source repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get source repository failed")
+			return
+		}
+		if source.Format != target.Format || source.State != repository.RepositoryActive {
+			writeHostedProblem(w, http.StatusConflict, "invalid_source", "source must be an active repository with the same format")
+			return
+		}
+		if decision := h.authorizer.Authorize(r.Context(), principal, source, RepositoryRead); !decision.Allowed {
+			h.recordAuthorizationDenial(r, principal, source, RepositoryRead, decision)
+			writeHostedProblem(w, http.StatusForbidden, "access_denied", "source repository read scope is required")
+			return
+		}
+		coordinate := strings.TrimSpace(input.Coordinate)
+		digest := strings.TrimSpace(input.Digest)
+		if !validArtifactIntelligenceIdentity(target.Format, coordinate, digest) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate and digest must identify an artifact")
+			return
+		}
+		if h.searchProjection == nil {
+			writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "artifact search projection is unavailable")
+			return
+		}
+		visible, err := securityPolicyArtifactVisible(r.Context(), h.searchProjection, source.ID, source.Format, coordinate, digest)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "verify source artifact failed")
+			return
+		}
+		if !visible {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "source artifact not found")
+			return
+		}
+		policy, err := h.securityPolicies.GetRepositorySecurityPolicy(r.Context(), target.ID)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get security policy failed")
+			return
+		}
+		var intelligence *repository.ArtifactIntelligence
+		value, intelligenceErr := h.intelligence.GetArtifactIntelligence(r.Context(), source.ID, source.Format, coordinate, digest)
+		if intelligenceErr == nil {
+			intelligence = &value
+		} else if !errors.Is(intelligenceErr, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get artifact intelligence failed")
+			return
+		}
+		evaluation := repository.EvaluateRepositorySecurityPolicy(policy, intelligence)
+		if !evaluation.Allowed && h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: target.Name, Repository: target.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "management", Resource: coordinate, Representation: digest, Operation: "security_policy.evaluate", Status: http.StatusOK, AuthorizationReason: strings.Join(evaluation.Reasons, ",")})
+		}
+		writeNativeMavenJSON(w, http.StatusOK, securityPolicyEvaluationResponse(evaluation))
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) GetRetentionPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
 		if repo.Type != repository.RepositoryTypeHosted || !supportsRepositoryRetention(repo.Format) {
@@ -1905,6 +2150,26 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
 			if err != nil || target.Format != source.Format || target.State != repository.RepositoryActive {
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+				return
+			}
+			policy, policyErr := h.securityPolicies.GetRepositorySecurityPolicy(r.Context(), target.ID)
+			if policyErr != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get security policy failed")
+				return
+			}
+			var intelligence *repository.ArtifactIntelligence
+			if value, intelligenceErr := h.intelligence.GetArtifactIntelligence(r.Context(), source.ID, source.Format, request.Coordinate, request.Digest); intelligenceErr == nil {
+				intelligence = &value
+			} else if !errors.Is(intelligenceErr, repository.ErrNotFound) {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get artifact intelligence failed")
+				return
+			}
+			evaluation := repository.EvaluateRepositorySecurityPolicy(policy, intelligence)
+			if !evaluation.Allowed {
+				if h.audit != nil {
+					_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: target.Name, Repository: target.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "management", Resource: request.Coordinate, Representation: request.Digest, Operation: "promote.security_policy", Status: http.StatusForbidden, AuthorizationReason: strings.Join(evaluation.Reasons, ",")})
+				}
+				writeHostedProblem(w, http.StatusForbidden, "security_policy_denied", "promotion denied by security policy: "+strings.Join(evaluation.Reasons, ","))
 				return
 			}
 			var job repository.LifecycleJob

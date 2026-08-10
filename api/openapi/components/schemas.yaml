@@ -853,6 +853,50 @@ RetentionPolicy:
       maxItems: 20
       description: RE2 regular expressions protecting matching coordinates from cleanup.
       items: {type: string, minLength: 1, maxLength: 256}
+SecurityPolicy:
+  type: object
+  required: [version]
+  additionalProperties: false
+  properties:
+    version: {type: string}
+    enabled: {type: boolean, default: false, description: Enforce for promotions into this repository.}
+    requireSignature: {type: boolean, default: false}
+    requireVerifiedSignature: {type: boolean, default: false}
+    requireSbom: {type: boolean, default: false}
+    requireProvenance: {type: boolean, default: false}
+    requireVulnerabilityScan: {type: boolean, default: false}
+    maxAllowedSeverity:
+      type: string
+      enum: [none, low, medium, high, critical]
+      default: critical
+    failOnScanError: {type: boolean, default: true}
+    allowedLicenses:
+      type: array
+      maxItems: 100
+      uniqueItems: true
+      items: {type: string, minLength: 1, maxLength: 128}
+SecurityPolicyEvaluationRequest:
+  type: object
+  required: [sourceRepositoryId, coordinate, digest]
+  additionalProperties: false
+  properties:
+    sourceRepositoryId:
+      type: string
+      format: uuid
+    coordinate: {type: string, minLength: 1, maxLength: 1024}
+    digest: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+SecurityPolicyEvaluation:
+  type: object
+  required: [allowed, enforced, policyVersion, intelligencePresent, reasons]
+  additionalProperties: false
+  properties:
+    allowed: {type: boolean}
+    enforced: {type: boolean}
+    policyVersion: {type: string}
+    intelligencePresent: {type: boolean}
+    reasons:
+      type: array
+      items: {type: string}
 RepositoryCapacity:
   type: object
   required: [repositoryId, format, usedBytes, objectCount, quotaBytes]
@@ -2002,6 +2046,7 @@ Problem:
       - session_closed
       - digest_mismatch
       - retention_protected
+      - security_policy_denied
       - internal_error
     message:
       type: string

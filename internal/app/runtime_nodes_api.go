@@ -87,13 +87,13 @@ func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNod
 	if health.Stale > 0 {
 		addIssue("stale_nodes", "warning", "存在心跳过期的运行节点")
 	}
-	health.Status = adminopenapi.Healthy
+	health.Status = adminopenapi.RuntimeNodeHealthStatusHealthy
 	for _, issue := range health.Issues {
 		if issue.Severity == adminopenapi.RuntimeNodeHealthIssueSeverityError {
-			health.Status = adminopenapi.Critical
+			health.Status = adminopenapi.RuntimeNodeHealthStatusCritical
 			break
 		}
-		health.Status = adminopenapi.Degraded
+		health.Status = adminopenapi.RuntimeNodeHealthStatusDegraded
 	}
 	return health
 }

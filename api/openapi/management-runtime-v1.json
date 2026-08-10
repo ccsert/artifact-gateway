@@ -1273,6 +1273,81 @@
         }
       }
     },
+    "/repositories/{repositoryId}/security-policy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getSecurityPolicy",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SecurityPolicy"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceSecurityPolicy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SecurityPolicy"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/security-policy:evaluate": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "evaluateSecurityPolicy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityPolicyEvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SecurityPolicyEvaluation"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/capacity": {
       "parameters": [
         {
@@ -3172,6 +3247,123 @@
           }
         }
       },
+      "SecurityPolicy": {
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enforce for promotions into this repository."
+          },
+          "requireSignature": {
+            "type": "boolean",
+            "default": false
+          },
+          "requireVerifiedSignature": {
+            "type": "boolean",
+            "default": false
+          },
+          "requireSbom": {
+            "type": "boolean",
+            "default": false
+          },
+          "requireProvenance": {
+            "type": "boolean",
+            "default": false
+          },
+          "requireVulnerabilityScan": {
+            "type": "boolean",
+            "default": false
+          },
+          "maxAllowedSeverity": {
+            "type": "string",
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "default": "critical"
+          },
+          "failOnScanError": {
+            "type": "boolean",
+            "default": true
+          },
+          "allowedLicenses": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      },
+      "SecurityPolicyEvaluationRequest": {
+        "type": "object",
+        "required": [
+          "sourceRepositoryId",
+          "coordinate",
+          "digest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      },
+      "SecurityPolicyEvaluation": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "enforced",
+          "policyVersion",
+          "intelligencePresent",
+          "reasons"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "enforced": {
+            "type": "boolean"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "intelligencePresent": {
+            "type": "boolean"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "RepositoryCapacity": {
         "type": "object",
         "required": [
@@ -4309,6 +4501,7 @@
               "session_closed",
               "digest_mismatch",
               "retention_protected",
+              "security_policy_denied",
               "internal_error"
             ]
           },
@@ -7124,6 +7317,34 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RetentionPolicy"
+            }
+          }
+        }
+      },
+      "SecurityPolicy": {
+        "description": "Repository security admission policy",
+        "headers": {
+          "ETag": {
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SecurityPolicy"
+            }
+          }
+        }
+      },
+      "SecurityPolicyEvaluation": {
+        "description": "Security admission evaluation for an immutable artifact",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SecurityPolicyEvaluation"
             }
           }
         }

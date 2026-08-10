@@ -212,6 +212,32 @@ type RepositoryRetentionPolicy struct {
 	ProtectedPatterns  []string `json:"protectedPatterns"`
 }
 
+// RepositorySecurityPolicy defines the admission rules applied when an
+// immutable artifact is promoted into this repository. It intentionally does
+// not affect ordinary reads or writes in the source repository.
+type RepositorySecurityPolicy struct {
+	Version                  string   `json:"version"`
+	Enabled                  bool     `json:"enabled"`
+	RequireSignature         bool     `json:"requireSignature"`
+	RequireVerifiedSignature bool     `json:"requireVerifiedSignature"`
+	RequireSBOM              bool     `json:"requireSbom"`
+	RequireProvenance        bool     `json:"requireProvenance"`
+	RequireVulnerabilityScan bool     `json:"requireVulnerabilityScan"`
+	MaxAllowedSeverity       string   `json:"maxAllowedSeverity"`
+	FailOnScanError          bool     `json:"failOnScanError"`
+	AllowedLicenses          []string `json:"allowedLicenses"`
+}
+
+// SecurityPolicyEvaluation is the stable result returned by dry-run checks
+// and used by promotion admission. Reasons are machine-readable codes.
+type SecurityPolicyEvaluation struct {
+	Allowed             bool     `json:"allowed"`
+	Enforced            bool     `json:"enforced"`
+	PolicyVersion       string   `json:"policyVersion"`
+	IntelligencePresent bool     `json:"intelligencePresent"`
+	Reasons             []string `json:"reasons"`
+}
+
 type RawAsset struct {
 	RepositoryID, Path, Digest, ObjectKey, ContentType string
 	Size                                               int64

@@ -73,6 +73,10 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/security-policy":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_security_policy"
+  "/repositories/{repositoryId}/security-policy:evaluate":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_security_policy_evaluate"
   "/repositories/{repositoryId}/capacity":
     "$ref": "./management/capacity.yaml#/repositories_repositoryId_capacity"
   "/repositories/{repositoryId}/retention:dry-run":
@@ -183,6 +187,12 @@ components:
       "$ref": "./components/schemas.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/schemas.yaml#/RetentionPolicy"
+    SecurityPolicy:
+      "$ref": "./components/schemas.yaml#/SecurityPolicy"
+    SecurityPolicyEvaluationRequest:
+      "$ref": "./components/schemas.yaml#/SecurityPolicyEvaluationRequest"
+    SecurityPolicyEvaluation:
+      "$ref": "./components/schemas.yaml#/SecurityPolicyEvaluation"
     RepositoryCapacity:
       "$ref": "./components/schemas.yaml#/RepositoryCapacity"
     RepositoryCapacityQuota:
@@ -375,6 +385,10 @@ components:
       "$ref": "./components/responses.yaml#/GrantList"
     RetentionPolicy:
       "$ref": "./components/responses.yaml#/RetentionPolicy"
+    SecurityPolicy:
+      "$ref": "./components/responses.yaml#/SecurityPolicy"
+    SecurityPolicyEvaluation:
+      "$ref": "./components/responses.yaml#/SecurityPolicyEvaluation"
     RepositoryCapacity:
       "$ref": "./components/responses.yaml#/RepositoryCapacity"
     RetentionDryRun:

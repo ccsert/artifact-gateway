@@ -74,7 +74,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	if len(diagnostics.Queues) != 1 || diagnostics.Queues[0].Kind != adminopenapi.DiagnosticQueueStatKindPromotion || diagnostics.Queues[0].Format != adminopenapi.Format(repository.FormatMaven) || diagnostics.Queues[0].Count != 1 {
 		t.Fatalf("queues = %#v", diagnostics.Queues)
 	}
-	if diagnostics.Nodes.Status != adminopenapi.Healthy || diagnostics.Nodes.Online != 1 {
+	if diagnostics.Nodes.Status != adminopenapi.RuntimeNodeHealthStatusHealthy || diagnostics.Nodes.Online != 1 {
 		t.Fatalf("nodes = %#v", diagnostics.Nodes)
 	}
 }

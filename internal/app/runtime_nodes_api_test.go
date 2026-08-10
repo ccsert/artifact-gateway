@@ -48,7 +48,7 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 	if byID["api-01"].Status != adminopenapi.Online || byID["worker-01"].Status != adminopenapi.Stale || byID["scheduler-01"].Status != adminopenapi.Offline {
 		t.Fatalf("runtime node statuses=%#v", byID)
 	}
-	if body.Health.Status != adminopenapi.Degraded || body.Health.Online != 1 || body.Health.Stale != 1 || body.Health.Offline != 1 {
+	if body.Health.Status != adminopenapi.RuntimeNodeHealthStatusDegraded || body.Health.Online != 1 || body.Health.Stale != 1 || body.Health.Offline != 1 {
 		t.Fatalf("runtime node health=%#v", body.Health)
 	}
 	worker := byID["worker-01"]
@@ -63,7 +63,7 @@ func TestRuntimeNodeHealthReportsDuplicateSessionsAndMissingRoles(t *testing.T) 
 		{InstanceId: "worker-01", SessionId: "worker-session-1", Roles: []string{"worker"}, Status: adminopenapi.Online},
 		{InstanceId: "worker-01", SessionId: "worker-session-2", Roles: []string{"worker"}, Status: adminopenapi.Online},
 	})
-	if health.Status != adminopenapi.Degraded {
+	if health.Status != adminopenapi.RuntimeNodeHealthStatusDegraded {
 		t.Fatalf("health status=%q", health.Status)
 	}
 	if len(health.Issues) != 2 {

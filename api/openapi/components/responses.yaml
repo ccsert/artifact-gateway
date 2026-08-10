@@ -207,6 +207,22 @@ RetentionPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/RetentionPolicy"
+SecurityPolicy:
+  description: Repository security admission policy
+  headers:
+    ETag:
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/SecurityPolicy"
+SecurityPolicyEvaluation:
+  description: Security admission evaluation for an immutable artifact
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/SecurityPolicyEvaluation"
 AuditRetentionPolicy:
   description: Global audit retention policy
   content:

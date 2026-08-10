@@ -229,3 +229,46 @@ repositories_repositoryId_retention_policy:
         "$ref": "../components/responses.yaml#/RetentionPolicy"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_security_policy:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getSecurityPolicy
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/SecurityPolicy"
+  put:
+    operationId: replaceSecurityPolicy
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/SecurityPolicy"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/SecurityPolicy"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_security_policy_evaluate:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: evaluateSecurityPolicy
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/SecurityPolicyEvaluationRequest"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/SecurityPolicyEvaluation"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

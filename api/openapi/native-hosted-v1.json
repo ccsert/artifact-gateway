@@ -3516,6 +3516,7 @@
               "session_closed",
               "digest_mismatch",
               "retention_protected",
+              "security_policy_denied",
               "internal_error"
             ]
           },
