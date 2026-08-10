@@ -83,6 +83,12 @@ For a gradual rollout, keep the policy disabled while scanners begin writing
 artifact intelligence, use the evaluation endpoint from CI, then enable the
 target repository after the expected evidence coverage is established.
 
+The bounded external scanner transport and its multi-object input contract are
+documented in [artifact-scanner-contract.md](artifact-scanner-contract.md).
+That module validates and streams scanner input but is not yet connected to
+automatic lifecycle jobs or intelligence persistence; CI and administrators
+must continue writing accepted intelligence through the management endpoint.
+
 After a promotion publishes the target artifact, the source repository's
 artifact intelligence is copied by immutable identity. Existing equivalent
 evidence is treated as already synchronized. If the target contains different

@@ -380,9 +380,11 @@ independently deliverable.
    immutable repository/format/coordinate/digest identity; versioned admission
    policies evaluate promotions, and immutable evidence propagation is visible
    through lifecycle operations. The Console renders these facts in
-   format-aware detail views. Scanner execution, vulnerability databases,
-   external evidence automation, and per-finding vulnerability detail remain
-   future work.
+   format-aware detail views. A bounded, streaming HTTP scanner adapter now
+   defines the multi-object scanner contract, verifies every streamed asset,
+   and validates summary responses. Durable scan scheduling, format-specific
+   asset resolution, vulnerability databases, automatic evidence persistence,
+   and per-finding vulnerability detail remain future work.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository
    grant prefixes, retaining effective-access simulation as the preview and
