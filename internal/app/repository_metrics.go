@@ -94,6 +94,7 @@ const (
 	backgroundOperationLifecycle backgroundOperationKind = iota
 	backgroundOperationPromotion
 	backgroundOperationReplication
+	backgroundOperationScan
 	backgroundOperationKindCount
 )
 
@@ -106,6 +107,7 @@ const (
 	backgroundOperationRaw
 	backgroundOperationNPM
 	backgroundOperationPyPI
+	backgroundOperationGo
 	backgroundOperationFormatCount
 )
 
@@ -119,8 +121,8 @@ const (
 	backgroundOperationOutcomeCount
 )
 
-var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication"}
-var backgroundOperationFormats = repository.WorkerFormats()
+var backgroundOperationKinds = [...]string{"lifecycle", "promotion", "replication", "scan"}
+var backgroundOperationFormats = repository.SupportedFormats()
 var backgroundOperationOutcomes = [...]string{"started", "completed", "failed", "retried"}
 
 type backgroundOperationQueueState uint8

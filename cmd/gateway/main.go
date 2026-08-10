@@ -95,6 +95,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = store.Close() }()
+	if dependencies.ArtifactScanner != nil {
+		dependencies.ArtifactScanResolver = app.NewNativeArtifactScanResolver(store, objectStore)
+	}
 	oidcRuntime := app.NewOIDCRuntime(store, app.OIDCRuntimeConfig{
 		Enabled: cfg.OIDCIssuer != "" && cfg.OIDCAudience != "", Issuer: cfg.OIDCIssuer,
 		Audience: cfg.OIDCAudience, JWKSURL: cfg.OIDCJWKSURL, ClientID: cfg.OIDCClientID,
@@ -156,7 +159,11 @@ func main() {
 		PruneInterval: cfg.RuntimeNodePruneInterval,
 	}
 	heartbeatDone := heartbeat.Start(runtimeContext, 10*time.Second)
-	(backgroundRuntime{store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics}).Start(runtimeContext, cfg)
+	(backgroundRuntime{
+		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
+		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
+		scannerFormats: dependencies.ArtifactScannerFormats,
+	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
 		handler = app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{

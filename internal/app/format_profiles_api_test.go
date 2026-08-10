@@ -80,7 +80,7 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 }
 
 func TestBackgroundOperationMetricFormatsTrackProfiles(t *testing.T) {
-	formats := repository.WorkerFormats()
+	formats := repository.SupportedFormats()
 	if len(backgroundOperationFormats) != len(formats) || len(formats) != int(backgroundOperationFormatCount) {
 		t.Fatalf("metric formats=%v profiles=%v count=%d", backgroundOperationFormats, formats, backgroundOperationFormatCount)
 	}

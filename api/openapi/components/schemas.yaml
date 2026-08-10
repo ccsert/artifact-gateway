@@ -1075,6 +1075,7 @@ LifecycleJob:
       - replication
       - reclaim
       - intelligence
+      - scan
     state:
       type: string
       enum:
@@ -1123,12 +1124,24 @@ LifecycleJob:
 LifecycleJobDetails:
   type: object
   additionalProperties: false
-  required: [format, sourceRepositoryId, coordinate, digest]
+  required: [format, coordinate, digest]
   properties:
     format: {"$ref": "#/Format"}
     sourceRepositoryId: {type: string, format: uuid}
     coordinate: {type: string}
     digest: {type: string}
+ArtifactScanRequest:
+  type: object
+  additionalProperties: false
+  required: [coordinate, digest]
+  properties:
+    coordinate:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    digest:
+      type: string
+      pattern: '^sha256:[0-9a-f]{64}$'
 LifecycleJobReconciliation:
   type: object
   additionalProperties: false

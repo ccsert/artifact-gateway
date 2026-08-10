@@ -1671,6 +1671,55 @@
         }
       }
     },
+    "/repositories/{repositoryId}/artifact-scans": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "createRepositoryArtifactScan",
+        "summary": "Queue an external scan for one immutable artifact",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactScanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/LifecycleJob"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence": {
       "parameters": [
         {
@@ -3603,7 +3652,8 @@
               "promotion",
               "replication",
               "reclaim",
-              "intelligence"
+              "intelligence",
+              "scan"
             ]
           },
           "state": {
@@ -3664,6 +3714,25 @@
           },
           "details": {
             "$ref": "#/components/schemas/LifecycleJobDetails"
+          }
+        }
+      },
+      "ArtifactScanRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "coordinate",
+          "digest"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
       },
@@ -6118,7 +6187,6 @@
         "additionalProperties": false,
         "required": [
           "format",
-          "sourceRepositoryId",
           "coordinate",
           "digest"
         ],

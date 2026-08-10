@@ -33,6 +33,9 @@ a dated version heading without rewriting their meaning.
   verified read-through caching, offline resolution, anonymous/grant filtering,
   search, capacity accounting, deep-linked Console browsing, and a real Go CLI
   acceptance gate.
+- Configurable external artifact scanning with durable, idempotent management
+  jobs; isolated workers; native Raw, Maven, OCI, npm, PyPI, Go, and Conan asset
+  resolution; and optimistic security-intelligence merging.
 
 ### Changed
 

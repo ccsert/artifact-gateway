@@ -93,6 +93,8 @@ paths:
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
+  "/repositories/{repositoryId}/artifact-scans":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_artifact_scans"
   "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_reconcile_intelligence"
   "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run":
@@ -205,6 +207,8 @@ components:
       "$ref": "./components/schemas.yaml#/RestoreArtifact"
     LifecycleJob:
       "$ref": "./components/schemas.yaml#/LifecycleJob"
+    ArtifactScanRequest:
+      "$ref": "./components/schemas.yaml#/ArtifactScanRequest"
     ScheduledTask:
       "$ref": "./components/schemas.yaml#/ScheduledTask"
     ScheduledTaskRun:

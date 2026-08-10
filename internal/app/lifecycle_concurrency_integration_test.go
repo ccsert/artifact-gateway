@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
 )
 
@@ -102,6 +103,89 @@ func TestPostgresLifecycleRetriesAndRecoversExpiredLeases(t *testing.T) {
 	job, err = store.RetryLifecycleJob(ctx, repo.ID, jobID)
 	if err != nil || job.State != repository.LifecycleJobPending || job.Attempts != 0 {
 		t.Fatalf("retried=%#v err=%v", job, err)
+	}
+}
+
+func TestPostgresArtifactScanWorkerRenewsLeaseDuringScan(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "scan-lease-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := testScanDigest("postgres long scan")
+	job, _, err := repository.EnqueueArtifactScanJob(ctx, store, repo.ID, uuid.NewString(), repository.ArtifactScanPayload{Format: repository.FormatRaw, Coordinate: "long.bin", Digest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	worker := ArtifactScanWorker{
+		Store: store,
+		Resolver: artifactScanResolverFunc(func(context.Context, string, repository.ArtifactScanPayload) (scanning.Artifact, error) {
+			return scanning.Artifact{RepositoryID: repo.ID, Format: repository.FormatRaw, Coordinate: "long.bin", Digest: digest}, nil
+		}),
+		Scanner: scanning.ScannerFunc(func(ctx context.Context, _ scanning.Artifact) (scanning.Report, error) {
+			close(started)
+			select {
+			case <-ctx.Done():
+				return scanning.Report{}, ctx.Err()
+			case <-release:
+				return scanning.Report{}, nil
+			}
+		}),
+		WorkerFormats:        []repository.Format{repository.FormatRaw},
+		LeaseRefreshInterval: 20 * time.Millisecond,
+	}
+	done := make(chan error, 1)
+	go func() { done <- worker.RunJobs(ctx, 1) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scanner did not start")
+	}
+	claimed, err := store.GetLifecycleJob(ctx, repo.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var renewed repository.LifecycleJob
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		renewed, err = store.GetLifecycleJob(ctx, repo.ID, job.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if renewed.LeaseExpiresAt.After(claimed.LeaseExpiresAt) && renewed.ProgressMessage == "scanning artifact" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lease was not renewed: before=%s after=%s message=%q", claimed.LeaseExpiresAt, renewed.LeaseExpiresAt, renewed.ProgressMessage)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	recoveryCutoff := claimed.LeaseExpiresAt.Add(renewed.LeaseExpiresAt.Sub(claimed.LeaseExpiresAt) / 2)
+	if _, err := store.RecoverExpiredLifecycleJobs(ctx, recoveryCutoff); err != nil {
+		t.Fatal(err)
+	}
+	stillRunning, err := store.GetLifecycleJob(ctx, repo.ID, job.ID)
+	if err != nil || stillRunning.State != repository.LifecycleJobRunning {
+		t.Fatalf("renewed job was recovered: job=%+v err=%v", stillRunning, err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	completed, err := store.GetLifecycleJob(ctx, repo.ID, job.ID)
+	if err != nil || completed.State != repository.LifecycleJobCompleted {
+		t.Fatalf("job=%+v err=%v", completed, err)
 	}
 }
 

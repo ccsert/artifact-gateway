@@ -106,7 +106,7 @@ func TestLoadConfiguresArtifactScanner(t *testing.T) {
 	t.Setenv("GATEWAY_SCANNER_TIMEOUT", "90s")
 	t.Setenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", "4096")
 	t.Setenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES", "1000000")
-	t.Setenv("GATEWAY_SCANNER_FORMATS", "OCI,maven,oci")
+	t.Setenv("GATEWAY_SCANNER_FORMATS", "OCI,maven,go,oci")
 
 	cfg, err := Load()
 	if err != nil {
@@ -115,7 +115,7 @@ func TestLoadConfiguresArtifactScanner(t *testing.T) {
 	if !cfg.ScannerEnabled() || cfg.ScannerName != "trivy" || cfg.ScannerToken != "scanner-token" || cfg.ScannerTimeout != 90*time.Second || cfg.ScannerMaxResponseBytes != 4096 || cfg.ScannerMaxArtifactBytes != 1000000 {
 		t.Fatalf("scanner config enabled=%t name=%q timeout=%s response_limit=%d artifact_limit=%d", cfg.ScannerEnabled(), cfg.ScannerName, cfg.ScannerTimeout, cfg.ScannerMaxResponseBytes, cfg.ScannerMaxArtifactBytes)
 	}
-	if len(cfg.ScannerFormats) != 2 || !cfg.ScannerFormatEnabled("oci") || !cfg.ScannerFormatEnabled("maven") || cfg.ScannerFormatEnabled("raw") {
+	if len(cfg.ScannerFormats) != 3 || !cfg.ScannerFormatEnabled("oci") || !cfg.ScannerFormatEnabled("maven") || !cfg.ScannerFormatEnabled("go") || cfg.ScannerFormatEnabled("raw") {
 		t.Fatalf("scanner formats = %#v", cfg.ScannerFormats)
 	}
 }

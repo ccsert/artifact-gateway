@@ -611,6 +611,7 @@ const (
 	LifecycleJobKindReclaim      LifecycleJobKind = "reclaim"
 	LifecycleJobKindReplication  LifecycleJobKind = "replication"
 	LifecycleJobKindRetention    LifecycleJobKind = "retention"
+	LifecycleJobKindScan         LifecycleJobKind = "scan"
 )
 
 // Valid indicates whether the value is a known member of the LifecycleJobKind enum.
@@ -625,6 +626,8 @@ func (e LifecycleJobKind) Valid() bool {
 	case LifecycleJobKindReplication:
 		return true
 	case LifecycleJobKindRetention:
+		return true
+	case LifecycleJobKindScan:
 		return true
 	default:
 		return false
@@ -1538,6 +1541,12 @@ type ArtifactSBOM struct {
 	Url       *string `json:"url,omitempty"`
 }
 
+// ArtifactScanRequest defines model for ArtifactScanRequest.
+type ArtifactScanRequest struct {
+	Coordinate string `json:"coordinate"`
+	Digest     string `json:"digest"`
+}
+
 // ArtifactSignature defines model for ArtifactSignature.
 type ArtifactSignature struct {
 	Algorithm  string     `json:"algorithm"`
@@ -2147,10 +2156,10 @@ type LifecycleJobState string
 
 // LifecycleJobDetails defines model for LifecycleJobDetails.
 type LifecycleJobDetails struct {
-	Coordinate         string             `json:"coordinate"`
-	Digest             string             `json:"digest"`
-	Format             Format             `json:"format"`
-	SourceRepositoryId openapi_types.UUID `json:"sourceRepositoryId"`
+	Coordinate         string              `json:"coordinate"`
+	Digest             string              `json:"digest"`
+	Format             Format              `json:"format"`
+	SourceRepositoryId *openapi_types.UUID `json:"sourceRepositoryId,omitempty"`
 }
 
 // LifecycleJobReconciliation defines model for LifecycleJobReconciliation.
@@ -3075,6 +3084,11 @@ type ReplaceArtifactIntelligenceParams struct {
 	IfMatch    *OptionalIfMatch `json:"If-Match,omitempty"`
 }
 
+// CreateRepositoryArtifactScanParams defines parameters for CreateRepositoryArtifactScan.
+type CreateRepositoryArtifactScanParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
 type SearchRepositoryArtifactsParams struct {
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
@@ -3283,6 +3297,9 @@ type UpdateRepositoryJSONRequestBody = UpdateRepository
 
 // ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
 type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
+
+// CreateRepositoryArtifactScanJSONRequestBody defines body for CreateRepositoryArtifactScan for application/json ContentType.
+type CreateRepositoryArtifactScanJSONRequestBody = ArtifactScanRequest
 
 // InvalidateProxyCacheJSONRequestBody defines body for InvalidateProxyCache for application/json ContentType.
 type InvalidateProxyCacheJSONRequestBody = ProxyCacheInvalidateRequest
@@ -3502,6 +3519,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactIntelligenceParams)
+	// CreateRepositoryArtifactScan Queue an external scan for one immutable artifact
+	// (POST /repositories/{repositoryId}/artifact-scans)
+	CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryArtifactScanParams)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
@@ -5302,6 +5322,60 @@ func (siw *ServerInterfaceWrapper) ReplaceArtifactIntelligence(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceArtifactIntelligence(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepositoryArtifactScan operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRepositoryArtifactScanParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepositoryArtifactScan(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7926,6 +8000,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.CreateRepositoryArtifactScan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
@@ -10049,6 +10124,116 @@ func (response ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScanRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       CreateRepositoryArtifactScanParams
+	Body         *CreateRepositoryArtifactScanJSONRequestBody
+}
+
+type CreateRepositoryArtifactScanResponseObject interface {
+	VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error
+}
+
+type CreateRepositoryArtifactScan202JSONResponse struct{ LifecycleJobJSONResponse }
+
+func (response CreateRepositoryArtifactScan202JSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepositoryArtifactScan400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryArtifactScan401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryArtifactScan403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryArtifactScan404ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryArtifactScan409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryArtifactScan503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryArtifactScan503ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -13160,6 +13345,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(ctx context.Context, request ReplaceArtifactIntelligenceRequestObject) (ReplaceArtifactIntelligenceResponseObject, error)
+	// CreateRepositoryArtifactScan Queue an external scan for one immutable artifact
+	// (POST /repositories/{repositoryId}/artifact-scans)
+	CreateRepositoryArtifactScan(ctx context.Context, request CreateRepositoryArtifactScanRequestObject) (CreateRepositoryArtifactScanResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
@@ -14569,6 +14757,40 @@ func (sh *strictHandler) ReplaceArtifactIntelligence(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceArtifactIntelligenceResponseObject); ok {
 		if err := validResponse.VisitReplaceArtifactIntelligenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepositoryArtifactScan operation middleware
+func (sh *strictHandler) CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryArtifactScanParams) {
+	var request CreateRepositoryArtifactScanRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreateRepositoryArtifactScanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepositoryArtifactScan(ctx, request.(CreateRepositoryArtifactScanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepositoryArtifactScan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryArtifactScanResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryArtifactScanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

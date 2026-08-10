@@ -41,9 +41,17 @@ var supportedWorkerFormats = func() map[string]struct{} {
 	return formats
 }()
 
+var supportedScannerFormats = func() map[string]struct{} {
+	formats := make(map[string]struct{})
+	for _, format := range repository.SupportedFormats() {
+		formats[string(format)] = struct{}{}
+	}
+	return formats
+}()
+
 var supportedWorkerKinds = map[string]struct{}{
 	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},
-	"intelligence": {}, "deletion": {}, "recovery": {}, "cache": {}, "audit": {},
+	"intelligence": {}, "scan": {}, "deletion": {}, "recovery": {}, "cache": {}, "audit": {},
 }
 
 type Config struct {
@@ -375,9 +383,9 @@ func configureScanner(cfg *Config) error {
 	if cfg.ScannerMaxArtifactBytes > 1<<40 {
 		return fmt.Errorf("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES must not exceed 1099511627776")
 	}
-	cfg.ScannerFormats = parseFilter(os.Getenv("GATEWAY_SCANNER_FORMATS"), supportedWorkerFormats)
+	cfg.ScannerFormats = parseFilter(os.Getenv("GATEWAY_SCANNER_FORMATS"), supportedScannerFormats)
 	for _, format := range cfg.ScannerFormats {
-		if _, ok := supportedWorkerFormats[format]; !ok {
+		if _, ok := supportedScannerFormats[format]; !ok {
 			return fmt.Errorf("GATEWAY_SCANNER_FORMATS contains unsupported format %q", format)
 		}
 	}

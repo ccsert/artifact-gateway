@@ -42,6 +42,7 @@ type Dependencies struct {
 	NPMProxyCoordinator    OCICacheCoordinator
 	ArtifactScanner        scanning.Scanner
 	ArtifactScannerFormats []repository.Format
+	ArtifactScanResolver   ArtifactScanResolver
 	OIDCClient             *authorization.OIDCClient
 	OIDCLoginValidator     *authorization.OIDCValidator
 	OIDCRuntime            *OIDCRuntime

@@ -26,6 +26,7 @@ import (
 	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
 )
 
@@ -220,35 +221,37 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 // binding for the active repository-management surface.
 type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
-	sessions          nativeMavenHandler
-	groups            repository.HostedGroupStore
-	grants            repository.RepositoryGrantStore
-	templates         repository.AuthorizationTemplateStore
-	retentionPolicies repository.RepositoryRetentionPolicyStore
-	securityPolicies  repository.RepositorySecurityPolicyStore
-	capacities        repository.RepositoryCapacityStore
-	tombstones        repository.ArtifactTombstoneStore
-	lifecycleJobs     repository.LifecycleJobStore
-	auditRetention    repository.AuditRetentionStore
-	anonymousAccess   repository.AnonymousAccessPolicyStore
-	oidcRuntime       *OIDCRuntime
-	replication       repository.ReplicationStore
-	oci               repository.NativeOCIStore
-	conan             repository.NativeConanStore
-	apiKeys           repository.APIKeyStore
-	users             repository.UserStore
-	authorizer        RepositoryAuthorizer
-	audit             repository.Store
-	metrics           *Metrics
-	maintenance       *CacheMaintenance
-	proxyCache        proxyCacheBrowseHandler
-	mavenProxy        mavenProxyOperationsHandler
-	searchProjection  repository.ArtifactSearchStore
-	intelligence      repository.ArtifactIntelligenceStore
-	runtimeNodes      repository.RuntimeNodeStore
-	scheduledTasks    repository.ScheduledTaskStore
-	queueStats        repository.BackgroundOperationQueueStore
-	diagnostics       Dependencies
+	sessions            nativeMavenHandler
+	groups              repository.HostedGroupStore
+	grants              repository.RepositoryGrantStore
+	templates           repository.AuthorizationTemplateStore
+	retentionPolicies   repository.RepositoryRetentionPolicyStore
+	securityPolicies    repository.RepositorySecurityPolicyStore
+	capacities          repository.RepositoryCapacityStore
+	tombstones          repository.ArtifactTombstoneStore
+	lifecycleJobs       repository.LifecycleJobStore
+	auditRetention      repository.AuditRetentionStore
+	anonymousAccess     repository.AnonymousAccessPolicyStore
+	oidcRuntime         *OIDCRuntime
+	replication         repository.ReplicationStore
+	oci                 repository.NativeOCIStore
+	conan               repository.NativeConanStore
+	apiKeys             repository.APIKeyStore
+	users               repository.UserStore
+	authorizer          RepositoryAuthorizer
+	audit               repository.Store
+	metrics             *Metrics
+	maintenance         *CacheMaintenance
+	proxyCache          proxyCacheBrowseHandler
+	mavenProxy          mavenProxyOperationsHandler
+	searchProjection    repository.ArtifactSearchStore
+	intelligence        repository.ArtifactIntelligenceStore
+	runtimeNodes        repository.RuntimeNodeStore
+	scheduledTasks      repository.ScheduledTaskStore
+	queueStats          repository.BackgroundOperationQueueStore
+	diagnostics         Dependencies
+	artifactScanner     scanning.Scanner
+	artifactScanFormats []repository.Format
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -2557,6 +2560,15 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryLifecycleJobs(w http.Respon
 	})
 }
 
+func (h generatedRepositoryAPIAdapter) CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.CreateRepositoryArtifactScanParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryIntelligence, func(principal Principal, repo repository.HostedRepository) {
+		artifactScanEnqueueHandler{
+			jobs: h.lifecycleJobs, audit: h.audit,
+			scanner: h.artifactScanner, formats: h.artifactScanFormats,
+		}.serve(w, r, principal, repo)
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params adminopenapi.ListLifecycleJobsParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
@@ -2625,11 +2637,17 @@ func lifecycleJobResponse(job repository.LifecycleJob) adminopenapi.LifecycleJob
 			if sourceRepositoryID, err := uuid.Parse(payload.SourceRepositoryID); err == nil {
 				item.Details = &adminopenapi.LifecycleJobDetails{
 					Format:             adminopenapi.Format(payload.Format),
-					SourceRepositoryId: sourceRepositoryID,
+					SourceRepositoryId: &sourceRepositoryID,
 					Coordinate:         payload.Coordinate,
 					Digest:             payload.Digest,
 				}
 			}
+		}
+	}
+	if job.Kind == repository.LifecycleJobScan {
+		var payload repository.ArtifactScanPayload
+		if err := json.Unmarshal(job.Payload, &payload); err == nil && payload.Format != "" && payload.Coordinate != "" && payload.Digest != "" {
+			item.Details = &adminopenapi.LifecycleJobDetails{Format: adminopenapi.Format(payload.Format), Coordinate: payload.Coordinate, Digest: payload.Digest}
 		}
 	}
 	return item

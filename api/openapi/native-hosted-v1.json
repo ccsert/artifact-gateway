@@ -3178,7 +3178,8 @@
               "promotion",
               "replication",
               "reclaim",
-              "intelligence"
+              "intelligence",
+              "scan"
             ]
           },
           "state": {
@@ -4195,7 +4196,6 @@
         "additionalProperties": false,
         "required": [
           "format",
-          "sourceRepositoryId",
           "coordinate",
           "digest"
         ],

@@ -244,7 +244,13 @@ export type RestoreArtifact = {
 
 export type LifecycleJob = {
   id: string;
-  kind: "retention" | "promotion" | "replication" | "reclaim" | "intelligence";
+  kind:
+    | "retention"
+    | "promotion"
+    | "replication"
+    | "reclaim"
+    | "intelligence"
+    | "scan";
   state:
     "pending" | "running" | "retrying" | "completed" | "failed" | "cancelled";
   createdAt: string;
@@ -259,6 +265,11 @@ export type LifecycleJob = {
   progressMessage?: string;
   lastError?: string;
   details?: LifecycleJobDetails;
+};
+
+export type ArtifactScanRequest = {
+  coordinate: string;
+  digest: string;
 };
 
 export type ScheduledTask = {
@@ -956,7 +967,7 @@ export type RepositoryCapacityList = Array<RepositoryCapacity>;
 
 export type LifecycleJobDetails = {
   format: Format;
-  sourceRepositoryId: string;
+  sourceRepositoryId?: string;
   coordinate: string;
   digest: string;
 };
@@ -3425,6 +3436,58 @@ export type ListRepositoryLifecycleJobsResponses = {
 
 export type ListRepositoryLifecycleJobsResponse =
   ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
+
+export type CreateRepositoryArtifactScanData = {
+  body: ArtifactScanRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/artifact-scans";
+};
+
+export type CreateRepositoryArtifactScanErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CreateRepositoryArtifactScanError =
+  CreateRepositoryArtifactScanErrors[keyof CreateRepositoryArtifactScanErrors];
+
+export type CreateRepositoryArtifactScanResponses = {
+  /**
+   * Updated lifecycle job
+   */
+  202: LifecycleJob;
+};
+
+export type CreateRepositoryArtifactScanResponse =
+  CreateRepositoryArtifactScanResponses[keyof CreateRepositoryArtifactScanResponses];
 
 export type ReconcileRepositoryArtifactIntelligenceData = {
   body?: never;

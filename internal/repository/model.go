@@ -519,7 +519,17 @@ const (
 	LifecycleJobReplication  LifecycleJobKind = "replication"
 	LifecycleJobReclaim      LifecycleJobKind = "reclaim"
 	LifecycleJobIntelligence LifecycleJobKind = "intelligence"
+	LifecycleJobScan         LifecycleJobKind = "scan"
 )
+
+// ArtifactScanPayload identifies one immutable artifact for a scanner worker.
+// Asset bytes are resolved from repository metadata at execution time so a
+// queued request cannot smuggle arbitrary object-store keys into a scanner.
+type ArtifactScanPayload struct {
+	Format     Format `json:"format"`
+	Coordinate string `json:"coordinate"`
+	Digest     string `json:"digest"`
+}
 
 // ScheduledTaskKind is intentionally a closed set. Scheduled tasks may only
 // dispatch operations implemented by the gateway; they never execute user

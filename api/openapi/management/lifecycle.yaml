@@ -28,6 +28,29 @@ repositories_repositoryId_lifecycle_jobs:
       '403':
         "$ref": "../components/responses.yaml#/Problem"
 
+repositories_repositoryId_artifact_scans:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createRepositoryArtifactScan
+    summary: Queue an external scan for one immutable artifact
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/ArtifactScanRequest"
+    responses:
+      '202': {"$ref": "#/components/responses/LifecycleJob"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '503': {"$ref": "../components/responses.yaml#/Problem"}
+
 repositories_repositoryId_lifecycle_jobs_reconcile_intelligence:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

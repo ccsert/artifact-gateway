@@ -11,14 +11,18 @@ import (
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 )
 
 type backgroundRuntime struct {
-	store       *repository.PostgresStore
-	objects     app.OCIObjectStore
-	taskQueue   *app.PostgresCacheTaskQueue
-	maintenance *app.CacheMaintenance
-	metrics     *app.Metrics
+	store          *repository.PostgresStore
+	objects        app.OCIObjectStore
+	taskQueue      *app.PostgresCacheTaskQueue
+	maintenance    *app.CacheMaintenance
+	metrics        *app.Metrics
+	scanner        scanning.Scanner
+	scanResolver   app.ArtifactScanResolver
+	scannerFormats []repository.Format
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -61,6 +65,9 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	}
 	if cfg.WorkerKindEnabled("intelligence") {
 		app.ArtifactIntelligenceCopyWorker{Store: r.store, WorkerFormats: cfg.WorkerFormats, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("scan") && r.scanner != nil && r.scanResolver != nil {
+		app.ArtifactScanWorker{Store: r.store, Scanner: r.scanner, Resolver: r.scanResolver, WorkerFormats: r.scannerFormats, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	r.startMavenWorkers(ctx, cfg)
 	r.startOCIWorkers(ctx, cfg)

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { LifecycleJobDetails as LifecycleJobDetailsData } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
@@ -23,5 +23,25 @@ describe("LifecycleJobDetails", () => {
     expect(screen.getByText("oci")).toBeInTheDocument();
     expect(screen.getByText("demo/api")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "复制" })).toHaveLength(3);
+  });
+
+  it("omits source repository details for scan jobs", () => {
+    const { container } = render(
+      <PreferencesProvider>
+        <LifecycleJobDetails
+          details={{
+            format: "raw",
+            coordinate: "release/widget.bin",
+            digest:
+              "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          }}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(within(container).queryByText("源仓库 ID")).not.toBeInTheDocument();
+    expect(
+      within(container).getAllByRole("button", { name: "复制" }),
+    ).toHaveLength(2);
   });
 });
