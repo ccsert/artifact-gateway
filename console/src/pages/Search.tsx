@@ -8,6 +8,7 @@ import type { GlobalArtifactSearchHit } from "../client";
 import { PageHeader } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { Badge, FormatBadge } from "../components/Badge";
+import { ArtifactSecurityBadge } from "../components/ArtifactSecurityBadge";
 import { formatBytes, formatDate } from "../lib/format";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import {
@@ -110,20 +111,6 @@ function mavenVersionLabel(hit: GlobalArtifactSearchHit): string {
   return hit.buildNumber && hit.buildNumber > 0
     ? `${version} · build #${hit.buildNumber}`
     : version;
-}
-
-function intelligenceBadge(
-  summary: GlobalArtifactSearchHit["intelligence"],
-  text: (zh: string, en: string) => string,
-) {
-  if (!summary) return <Badge tone="zinc">{text("未扫描", "Not scanned")}</Badge>;
-  if (summary.vulnerabilityStatus === "affected") {
-    const findings = (summary.critical ?? 0) + (summary.high ?? 0) + (summary.medium ?? 0) + (summary.low ?? 0) + (summary.unknown ?? 0);
-    return <Badge tone="red">{text("有风险", "Affected")} · {findings}</Badge>;
-  }
-  if (summary.vulnerabilityStatus === "clean") return <Badge tone="green">{text("通过", "Clean")}</Badge>;
-  if (summary.vulnerabilityStatus === "error") return <Badge tone="amber">{text("扫描错误", "Scan error")}</Badge>;
-  return <Badge tone="cyan">{summary.signatureCount + summary.sbomCount + summary.licenseCount} {text("项证据", "evidence")}</Badge>;
 }
 
 function mavenIntelligence(hits: GlobalArtifactSearchHit[]) {
@@ -309,11 +296,16 @@ export function SearchPage() {
       title: text("安全情报", "Security"),
       key: "intelligence",
       width: 150,
-      render: (_, tableRow) =>
-        intelligenceBadge(
-          isMavenGroup(tableRow.row) ? mavenIntelligence(tableRow.row.hits) : tableRow.row.intelligence,
-          text,
-        ),
+      render: (_, tableRow) => (
+        <ArtifactSecurityBadge
+          summary={
+            isMavenGroup(tableRow.row)
+              ? mavenIntelligence(tableRow.row.hits)
+              : tableRow.row.intelligence
+          }
+          text={text}
+        />
+      ),
     },
     {
       title: text("更新时间", "Updated"),

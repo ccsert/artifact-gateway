@@ -16,6 +16,7 @@ import { useAuth } from "../lib/auth";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
+import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 // Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
@@ -358,16 +359,19 @@ export function ConanArtifactDetail({
         );
         return;
       }
-      setPackageRevisions(
-        pages
-          .flatMap((page) => page.data?.items ?? [])
-          .filter((item) => item.state === "visible"),
-      );
+      const visible = pages
+        .flatMap((page) => page.data?.items ?? [])
+        .filter((item) => item.state === "visible");
+      setPackageRevisions(visible);
     })();
     return () => {
       cancelled = true;
     };
   }, [repoId, reference, managed, selectedRecipe, text]);
+
+  const intelligenceDigest = recipeRevisions.find(
+    (item) => item.revision === selectedRecipe,
+  )?.digest;
 
   const deletePackage = async (item: {
     recipeRevision: string;
@@ -420,6 +424,14 @@ export function ConanArtifactDetail({
         managed ? (
           <div className="space-y-4">
             {error && <Alert type="error" showIcon title={error} />}
+            {selectedRecipe && intelligenceDigest && (
+              <ArtifactIntelligencePanel
+                repositoryId={repoId}
+                format="conan"
+                coordinate={reference}
+                digest={intelligenceDigest}
+              />
+            )}
             <VersionList
               title={text("Recipe revisions", "Recipe revisions")}
               items={recipeRevisions.map((item) => ({

@@ -12,8 +12,13 @@ import {
   refreshProxyCache,
   searchRepositoryArtifacts,
 } from "../../client";
-import type { ProxyCacheAsset, Repository } from "../../client";
+import type {
+  ArtifactIntelligenceSummary,
+  ProxyCacheAsset,
+  Repository,
+} from "../../client";
 import { Badge } from "../../components/Badge";
+import { ArtifactSecurityBadge } from "../../components/ArtifactSecurityBadge";
 import {
   EmptyState,
   ErrorBanner,
@@ -56,6 +61,7 @@ interface ArtifactRow {
   size?: number;
   contentType?: string;
   publisher?: string;
+  intelligence?: ArtifactIntelligenceSummary;
   buildNumber?: number;
   // maven 聚合：同 group:artifact 的版本数与最新版本
   versionCount?: number;
@@ -88,6 +94,7 @@ async function fetchMavenArtifactPage(
       contentType: item.contentType,
       publisher: item.publisher,
       buildNumber: item.buildNumber,
+      intelligence: item.intelligence,
     })),
     nextPageToken: response.data?.nextPageToken,
     error: response.error,
@@ -908,6 +915,7 @@ export function RepositoryArtifactsTab({
           createdAt: item.createdAt,
           size: item.size,
           publisher: item.publisher,
+          intelligence: item.intelligence,
           versionCount: item.versionCount,
           latestVersion: item.version,
         }));
@@ -940,6 +948,7 @@ export function RepositoryArtifactsTab({
           createdAt: x.createdAt,
           size: x.size,
           contentType: x.contentType,
+          intelligence: x.intelligence,
         }));
         next = r.data?.nextPageToken;
       }
@@ -984,6 +993,21 @@ export function RepositoryArtifactsTab({
     pypi: text("按项目名前缀过滤…", "Filter by project name prefix…"),
     go: text("按模块路径前缀过滤…", "Filter by module path prefix…"),
     raw: text("搜索路径…", "Search paths…"),
+  };
+
+  const showSecurityColumn =
+    format === "npm" ||
+    format === "pypi" ||
+    format === "go" ||
+    format === "raw" ||
+    (format === "maven" && Boolean(q) && !proxyMaven);
+  const securityColumn: ColumnsType<ArtifactRow>[number] = {
+    title: text("安全", "Security"),
+    key: "intelligence",
+    width: 150,
+    render: (_, record) => (
+      <ArtifactSecurityBadge summary={record.intelligence} text={text} />
+    ),
   };
 
   const columns: ColumnsType<ArtifactRow> =
@@ -1117,6 +1141,7 @@ export function RepositoryArtifactsTab({
                   </span>
                 ),
               },
+              ...(showSecurityColumn ? [securityColumn] : []),
             ]
           : [
               {
@@ -1170,6 +1195,7 @@ export function RepositoryArtifactsTab({
                   </span>
                 ),
               },
+              ...(showSecurityColumn ? [securityColumn] : []),
             ];
 
   const expandedRowRender = (r: ArtifactRow) => {
