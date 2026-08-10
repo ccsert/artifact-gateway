@@ -43,7 +43,7 @@ var supportedWorkerFormats = func() map[string]struct{} {
 
 var supportedWorkerKinds = map[string]struct{}{
 	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},
-	"deletion": {}, "recovery": {}, "cache": {}, "audit": {},
+	"intelligence": {}, "deletion": {}, "recovery": {}, "cache": {}, "audit": {},
 }
 
 type Config struct {

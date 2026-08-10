@@ -80,6 +80,24 @@ func TestLoadParsesClusterNodeRolesAndWorkerFilters(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsDedicatedIntelligenceWorker(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_NODE_ROLES", "worker")
+	t.Setenv("GATEWAY_WORKER_FORMATS", "maven,oci")
+	t.Setenv("GATEWAY_WORKER_KINDS", "intelligence")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.WorkerKinds) != 1 || !cfg.WorkerEnabled("maven", "intelligence") || !cfg.WorkerEnabled("oci", "intelligence") {
+		t.Fatalf("dedicated intelligence worker filters formats=%#v kinds=%#v", cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+	if cfg.WorkerEnabled("maven", "promotion") || cfg.WorkerEnabled("raw", "intelligence") {
+		t.Fatalf("dedicated intelligence worker admitted an excluded route: formats=%#v kinds=%#v", cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+}
+
 func TestLoadRejectsUnknownClusterRoleOrWorkerFilter(t *testing.T) {
 	setCompleteConfiguration(t)
 	for name, value := range map[string]string{

@@ -59,7 +59,7 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	if cfg.WorkerKindEnabled("audit") {
 		app.AuditRetentionWorker{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Hour)
 	}
-	if cfg.WorkerKindEnabled("promotion") {
+	if cfg.WorkerKindEnabled("intelligence") {
 		app.ArtifactIntelligenceCopyWorker{Store: r.store, WorkerFormats: cfg.WorkerFormats, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	r.startMavenWorkers(ctx, cfg)
