@@ -2153,6 +2153,13 @@ type LifecycleJobDetails struct {
 	SourceRepositoryId openapi_types.UUID `json:"sourceRepositoryId"`
 }
 
+// LifecycleJobReconciliation defines model for LifecycleJobReconciliation.
+type LifecycleJobReconciliation struct {
+	RepositoryId   openapi_types.UUID `json:"repositoryId"`
+	Requeued       int                `json:"requeued"`
+	RequeuedJobIds []string           `json:"requeuedJobIds"`
+}
+
 // MavenCacheRefreshRequest defines model for MavenCacheRefreshRequest.
 type MavenCacheRefreshRequest struct {
 	Gav  *string `json:"gav,omitempty"`
@@ -3149,6 +3156,11 @@ type ReplaceGrantsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ReconcileRepositoryArtifactIntelligenceParams defines parameters for ReconcileRepositoryArtifactIntelligence.
+type ReconcileRepositoryArtifactIntelligenceParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListMavenCoordinatesParams defines parameters for ListMavenCoordinates.
 type ListMavenCoordinatesParams struct {
 	// Q Maven coordinate prefix used to filter the committed-coordinate projection.
@@ -3562,6 +3574,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run)
 	RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, lifecycleJobId LifecycleJobId)
+	// ReconcileRepositoryArtifactIntelligence Requeue failed artifact intelligence copy jobs
+	// (POST /repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence)
+	ReconcileRepositoryArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReconcileRepositoryArtifactIntelligenceParams)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListMavenCoordinatesParams)
@@ -6393,6 +6408,48 @@ func (siw *ServerInterfaceWrapper) RunRepositoryLifecycleJobNow(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// ReconcileRepositoryArtifactIntelligence operation middleware
+func (siw *ServerInterfaceWrapper) ReconcileRepositoryArtifactIntelligence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileRepositoryArtifactIntelligenceParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReconcileRepositoryArtifactIntelligence(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMavenCoordinates operation middleware
 func (siw *ServerInterfaceWrapper) ListMavenCoordinates(w http.ResponseWriter, r *http.Request) {
 
@@ -7893,6 +7950,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel", wrapper.CancelRepositoryLifecycleJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry", wrapper.RetryRepositoryLifecycleJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run", wrapper.RunRepositoryLifecycleJobNow)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence", wrapper.ReconcileRepositoryArtifactIntelligence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/maven/coordinates", wrapper.ListMavenCoordinates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/images", wrapper.ListOCIImages)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/oci/manifests", wrapper.ListOCIManifests)
@@ -11172,6 +11230,73 @@ func (response RunRepositoryLifecycleJobNow409ApplicationProblemPlusJSONResponse
 	return err
 }
 
+type ReconcileRepositoryArtifactIntelligenceRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReconcileRepositoryArtifactIntelligenceParams
+}
+
+type ReconcileRepositoryArtifactIntelligenceResponseObject interface {
+	VisitReconcileRepositoryArtifactIntelligenceResponse(w http.ResponseWriter) error
+}
+
+type ReconcileRepositoryArtifactIntelligence200JSONResponse LifecycleJobReconciliation
+
+func (response ReconcileRepositoryArtifactIntelligence200JSONResponse) VisitReconcileRepositoryArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactIntelligence403ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReconcileRepositoryArtifactIntelligence403ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactIntelligence404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactIntelligence404ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactIntelligence500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactIntelligence500ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMavenCoordinatesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListMavenCoordinatesParams
@@ -13107,6 +13232,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run)
 	RunRepositoryLifecycleJobNow(ctx context.Context, request RunRepositoryLifecycleJobNowRequestObject) (RunRepositoryLifecycleJobNowResponseObject, error)
+	// ReconcileRepositoryArtifactIntelligence Requeue failed artifact intelligence copy jobs
+	// (POST /repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence)
+	ReconcileRepositoryArtifactIntelligence(ctx context.Context, request ReconcileRepositoryArtifactIntelligenceRequestObject) (ReconcileRepositoryArtifactIntelligenceResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/maven/coordinates)
 	ListMavenCoordinates(ctx context.Context, request ListMavenCoordinatesRequestObject) (ListMavenCoordinatesResponseObject, error)
@@ -15119,6 +15247,33 @@ func (sh *strictHandler) RunRepositoryLifecycleJobNow(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RunRepositoryLifecycleJobNowResponseObject); ok {
 		if err := validResponse.VisitRunRepositoryLifecycleJobNowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReconcileRepositoryArtifactIntelligence operation middleware
+func (sh *strictHandler) ReconcileRepositoryArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReconcileRepositoryArtifactIntelligenceParams) {
+	var request ReconcileRepositoryArtifactIntelligenceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReconcileRepositoryArtifactIntelligence(ctx, request.(ReconcileRepositoryArtifactIntelligenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReconcileRepositoryArtifactIntelligence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReconcileRepositoryArtifactIntelligenceResponseObject); ok {
+		if err := validResponse.VisitReconcileRepositoryArtifactIntelligenceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

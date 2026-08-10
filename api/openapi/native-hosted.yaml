@@ -51,6 +51,8 @@ paths:
     "$ref": "./management/restore.yaml#/repositories_repositoryId_restore"
   "/repositories/{repositoryId}/lifecycle-jobs":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
+  "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_reconcile_intelligence"
   "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_lifecycleJobId_run"
   "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/retry":

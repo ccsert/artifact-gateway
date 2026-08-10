@@ -119,6 +119,7 @@ type LifecycleJobStore interface {
 	RecoverExpiredLifecycleJobs(context.Context, time.Time) (int, error)
 	RunLifecycleJobNow(context.Context, string, string) (LifecycleJob, error)
 	RetryLifecycleJob(context.Context, string, string) (LifecycleJob, error)
+	RequeueFailedLifecycleJobs(context.Context, string, LifecycleJobKind, int) ([]LifecycleJob, error)
 	CancelLifecycleJob(context.Context, string, string) (LifecycleJob, error)
 	UpdateLifecycleJobProgress(context.Context, string, string, int, int, string) error
 	CompleteLifecycleJob(context.Context, string, string) error

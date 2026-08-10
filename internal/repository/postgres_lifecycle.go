@@ -162,6 +162,32 @@ func (s *PostgresStore) RetryLifecycleJob(ctx context.Context, repositoryID, id 
 	return s.controlLifecycleJob(ctx, repositoryID, id, `UPDATE lifecycle_jobs SET state='pending',attempts=0,next_attempt_at=now(),started_at=NULL,completed_at=NULL,lease_expires_at=NULL,last_error='',progress_current=0,progress_message='' WHERE repository_id::text=$1 AND id::text=$2 AND state IN ('failed','cancelled') RETURNING `+lifecycleJobColumns)
 }
 
+func (s *PostgresStore) RequeueFailedLifecycleJobs(ctx context.Context, repositoryID string, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (
+        SELECT id FROM lifecycle_jobs
+        WHERE repository_id::text=$1 AND kind=$2 AND state IN ('failed','cancelled')
+        ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $3
+    ) UPDATE lifecycle_jobs jobs SET state='pending',attempts=0,next_attempt_at=now(),started_at=NULL,
+        completed_at=NULL,lease_expires_at=NULL,lease_token='',last_error='',progress_current=0,progress_message=''
+    FROM candidates WHERE jobs.id=candidates.id RETURNING `+prefixedLifecycleJobColumns("jobs"), repositoryID, kind, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	jobs := make([]LifecycleJob, 0, limit)
+	for rows.Next() {
+		var job LifecycleJob
+		if err := scanLifecycleJob(rows, &job); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
 func (s *PostgresStore) CancelLifecycleJob(ctx context.Context, repositoryID, id string) (LifecycleJob, error) {
 	return s.controlLifecycleJob(ctx, repositoryID, id, `UPDATE lifecycle_jobs SET state='cancelled',completed_at=now(),next_attempt_at=NULL WHERE repository_id::text=$1 AND id::text=$2 AND state IN ('pending','retrying') RETURNING `+lifecycleJobColumns)
 }

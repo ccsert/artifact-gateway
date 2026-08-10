@@ -190,12 +190,45 @@ func (s *MemoryStore) RetryLifecycleJob(_ context.Context, repositoryID, id stri
 		if job.State != LifecycleJobFailed && job.State != LifecycleJobCancelled {
 			return ErrVersionConflict
 		}
-		job.State, job.NextAttemptAt = LifecycleJobPending, now
-		job.Attempts, job.LastError = 0, ""
-		job.StartedAt, job.CompletedAt, job.LeaseExpiresAt, job.LeaseToken = time.Time{}, time.Time{}, time.Time{}, ""
-		job.ProgressCurrent, job.ProgressMessage = 0, ""
+		resetLifecycleJobForRetry(job, now)
 		return nil
 	})
+}
+
+func (s *MemoryStore) RequeueFailedLifecycleJobs(_ context.Context, repositoryID string, kind LifecycleJobKind, limit int) ([]LifecycleJob, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	keys := make([]string, 0, limit)
+	for key, job := range s.lifecycleJobs {
+		if job.RepositoryID == repositoryID && job.Kind == kind && (job.State == LifecycleJobFailed || job.State == LifecycleJobCancelled) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return s.lifecycleJobs[keys[i]].CreatedAt.Before(s.lifecycleJobs[keys[j]].CreatedAt)
+	})
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
+	now := time.Now().UTC()
+	jobs := make([]LifecycleJob, 0, len(keys))
+	for _, key := range keys {
+		job := s.lifecycleJobs[key]
+		resetLifecycleJobForRetry(&job, now)
+		s.lifecycleJobs[key] = job
+		jobs = append(jobs, cloneLifecycleJob(job))
+	}
+	return jobs, nil
+}
+
+func resetLifecycleJobForRetry(job *LifecycleJob, now time.Time) {
+	job.State, job.NextAttemptAt = LifecycleJobPending, now
+	job.Attempts, job.LastError = 0, ""
+	job.StartedAt, job.CompletedAt, job.LeaseExpiresAt, job.LeaseToken = time.Time{}, time.Time{}, time.Time{}, ""
+	job.ProgressCurrent, job.ProgressMessage = 0, ""
 }
 
 func (s *MemoryStore) CancelLifecycleJob(_ context.Context, repositoryID, id string) (LifecycleJob, error) {

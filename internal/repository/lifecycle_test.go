@@ -194,6 +194,42 @@ func TestMemoryLifecycleJobRecoversExpiredLeaseAndSupportsControls(t *testing.T)
 	}
 }
 
+func TestMemoryLifecycleJobsRequeueFailedJobsByKind(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	jobs := []LifecycleJob{
+		{ID: "intelligence-one", RepositoryID: "repo", Kind: LifecycleJobIntelligence, IdempotencyKey: "intelligence-one", Payload: []byte(`{"format":"oci"}`), MaxAttempts: 1},
+		{ID: "intelligence-two", RepositoryID: "repo", Kind: LifecycleJobIntelligence, IdempotencyKey: "intelligence-two", Payload: []byte(`{"format":"oci"}`), MaxAttempts: 1},
+		{ID: "retention", RepositoryID: "repo", Kind: LifecycleJobRetention, IdempotencyKey: "retention", Payload: []byte(`{"format":"oci"}`), MaxAttempts: 1},
+	}
+	for _, job := range jobs {
+		if _, _, err := store.EnqueueLifecycleJob(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, kind := range []LifecycleJobKind{LifecycleJobIntelligence, LifecycleJobIntelligence, LifecycleJobRetention} {
+		claimed, err := store.ClaimLifecycleJobsByKind(ctx, kind, 1)
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("kind=%s claimed=%#v err=%v", kind, claimed, err)
+		}
+		if err = store.FailLifecycleJob(ctx, claimed[0].ID, claimed[0].LeaseToken, "dependency unavailable"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requeued, err := store.RequeueFailedLifecycleJobs(ctx, "repo", LifecycleJobIntelligence, 1)
+	if err != nil || len(requeued) != 1 || requeued[0].ID != "intelligence-one" || requeued[0].State != LifecycleJobPending || requeued[0].Attempts != 0 || requeued[0].LastError != "" {
+		t.Fatalf("requeued=%#v err=%v", requeued, err)
+	}
+	retention, err := store.GetLifecycleJob(ctx, "repo", "retention")
+	if err != nil || retention.State != LifecycleJobFailed {
+		t.Fatalf("retention=%#v err=%v", retention, err)
+	}
+	remaining, err := store.RequeueFailedLifecycleJobs(ctx, "repo", LifecycleJobIntelligence, 100)
+	if err != nil || len(remaining) != 1 || remaining[0].ID != "intelligence-two" {
+		t.Fatalf("remaining=%#v err=%v", remaining, err)
+	}
+}
+
 func TestMemoryLifecycleJobLeaseTokenFencesExpiredWorkerAndProgressRenewsLease(t *testing.T) {
 	store := NewMemoryStore()
 	ctx := context.Background()

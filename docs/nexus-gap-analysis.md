@@ -42,7 +42,7 @@ the Console described in `console/src/app/router.tsx`.
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Administrator-supplied artifact intelligence (signatures, SBOM, provenance, licenses, vulnerability summaries), versioned admission policies, and promotion-time evidence propagation; automatic scanner execution, vulnerability databases, and malicious-component blocking remain future work | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
-| Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls and lifecycle Jobs view; general scheduler remains future work | Low |
+| Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls, lifecycle Jobs view, and repository-level intelligence reconciliation; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
 | API key governance | Scoped roles, expiry, last-used | Optional global role, repository-scoped `repositories:intelligence` writer scope for CI/scanners, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
 

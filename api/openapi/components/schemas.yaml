@@ -1129,6 +1129,17 @@ LifecycleJobDetails:
     sourceRepositoryId: {type: string, format: uuid}
     coordinate: {type: string}
     digest: {type: string}
+LifecycleJobReconciliation:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, requeued, requeuedJobIds]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    requeued: {type: integer, minimum: 0}
+    requeuedJobIds:
+      type: array
+      maxItems: 100
+      items: {type: string, maxLength: 255}
 RepositoryLifecycleJob:
   type: object
   required: [repositoryId, repositoryName, job]

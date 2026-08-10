@@ -93,4 +93,7 @@ the same follow-up job without replaying the artifact publication.
 If the metadata store cannot persist either the evidence or its follow-up job,
 the promotion still completes and emits the bounded
 `intelligence-copy/deferred` background-operation metric. Alert on that metric
-and reconcile the missing evidence after storage recovers.
+and reconcile the missing evidence after storage recovers. Repository
+administrators can use `POST /api/v2/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence`
+to atomically requeue up to 100 failed or cancelled copy jobs without
+republishing the artifact.

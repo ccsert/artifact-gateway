@@ -28,6 +28,34 @@ repositories_repositoryId_lifecycle_jobs:
       '403':
         "$ref": "../components/responses.yaml#/Problem"
 
+repositories_repositoryId_lifecycle_jobs_reconcile_intelligence:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: reconcileRepositoryArtifactIntelligence
+    summary: Requeue failed artifact intelligence copy jobs
+    description: Requeues up to 100 failed or cancelled intelligence copy jobs
+      for this repository. Running, pending, retrying, and completed jobs are
+      left unchanged. Candidate selection and state reset are atomic.
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 100
+    responses:
+      '200':
+        description: Reconciliation summary
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/LifecycleJobReconciliation"
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '500': {"$ref": "../components/responses.yaml#/Problem"}
+
 repositories_repositoryId_lifecycle_jobs_lifecycleJobId_run:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

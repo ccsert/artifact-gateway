@@ -814,6 +814,51 @@
         }
       }
     },
+    "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "reconcileRepositoryArtifactIntelligence",
+        "summary": "Requeue failed artifact intelligence copy jobs",
+        "description": "Requeues up to 100 failed or cancelled intelligence copy jobs for this repository. Running, pending, retrying, and completed jobs are left unchanged. Candidate selection and state reset are atomic.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleJobReconciliation"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run": {
       "parameters": [
         {
@@ -4420,6 +4465,33 @@
             }
           }
         ]
+      },
+      "LifecycleJobReconciliation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "requeued",
+          "requeuedJobIds"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requeued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requeuedJobIds": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        }
       },
       "RepositoryCapabilities": {
         "type": "object",
