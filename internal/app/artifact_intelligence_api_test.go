@@ -55,6 +55,13 @@ func TestArtifactIntelligenceManagementHTTP(t *testing.T) {
 	if err := json.Unmarshal(read.Body.Bytes(), &response); err != nil || response["version"] != "1" {
 		t.Fatalf("response=%#v err=%v", response, err)
 	}
+	audits, err := store.ListAudits(context.Background(), repository.AuditQuery{Repository: repo.Name, Operation: "artifact.intelligence.replace"})
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("intelligence audits=%#v err=%v", audits, err)
+	}
+	if audit := audits[0]; audit.Actor != "alice" || audit.Format != "oci" || audit.Resource != "library/widget" || audit.Representation != digest || audit.Outcome != repository.AuditResolved || audit.Status != http.StatusOK {
+		t.Fatalf("intelligence audit=%#v", audit)
+	}
 	stale := request(http.MethodPut, path, `{"signatures":[],"sboms":[],"licenses":[],"vulnerability":{"scanner":"grype","status":"affected","critical":1,"high":0,"medium":0,"low":0,"unknown":0}}`, "admin-secret", "0")
 	if stale.Code != http.StatusPreconditionFailed {
 		t.Fatalf("stale=%d body=%s", stale.Code, stale.Body.String())

@@ -2834,6 +2834,15 @@ func (h generatedRepositoryAPIAdapter) ReplaceArtifactIntelligence(w http.Respon
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace artifact intelligence failed")
 			return
 		}
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+				GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor,
+				Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(),
+				Format: string(repo.Format), Resource: coordinate, Representation: digest,
+				Operation: "artifact.intelligence.replace", Status: http.StatusOK,
+				CacheDisposition: "bypass",
+			})
+		}
 		writeArtifactIntelligence(w, updated)
 	})
 }
