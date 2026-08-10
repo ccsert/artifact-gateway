@@ -2619,6 +2619,19 @@ func lifecycleJobResponse(job repository.LifecycleJob) adminopenapi.LifecycleJob
 	if job.LastError != "" {
 		item.LastError = &job.LastError
 	}
+	if job.Kind == repository.LifecycleJobIntelligence {
+		var payload repository.ArtifactIntelligenceCopyPayload
+		if err := json.Unmarshal(job.Payload, &payload); err == nil && payload.Format != "" && payload.SourceRepositoryID != "" && payload.Coordinate != "" && payload.Digest != "" {
+			if sourceRepositoryID, err := uuid.Parse(payload.SourceRepositoryID); err == nil {
+				item.Details = &adminopenapi.LifecycleJobDetails{
+					Format:             adminopenapi.Format(payload.Format),
+					SourceRepositoryId: sourceRepositoryID,
+					Coordinate:         payload.Coordinate,
+					Digest:             payload.Digest,
+				}
+			}
+		}
+	}
 	return item
 }
 

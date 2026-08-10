@@ -3191,6 +3191,9 @@
           "lastError": {
             "type": "string",
             "maxLength": 1024
+          },
+          "details": {
+            "$ref": "#/components/schemas/LifecycleJobDetails"
           }
         }
       },
@@ -4140,6 +4143,31 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RepositoryCapacity"
+        }
+      },
+      "LifecycleJobDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "sourceRepositoryId",
+          "coordinate",
+          "digest"
+        ],
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          }
         }
       },
       "RepositoryLifecycleJob": {

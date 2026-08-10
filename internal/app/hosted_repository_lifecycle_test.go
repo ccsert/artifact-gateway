@@ -611,6 +611,19 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	if _, _, err = store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobRetention, IdempotencyKey: "retention-run", Payload: []byte(`{"format":"conan"}`)}); err != nil {
 		t.Fatal(err)
 	}
+	sourceRepositoryID := uuid.NewString()
+	intelligencePayload, err := json.Marshal(repository.ArtifactIntelligenceCopyPayload{
+		Format:             repository.FormatConan,
+		SourceRepositoryID: sourceRepositoryID,
+		Coordinate:         "pkg/1.0#rrev",
+		Digest:             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: repo.ID, Kind: repository.LifecycleJobIntelligence, IdempotencyKey: "intelligence-copy", Payload: intelligencePayload}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "job-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +633,7 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"retrying"`) || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"lastError":"object store unavailable"`) || strings.Contains(response.Body.String(), "secret-object-key") || strings.Contains(response.Body.String(), "idempotencyKey") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"retrying"`) || !strings.Contains(response.Body.String(), `"state":"pending"`) || !strings.Contains(response.Body.String(), `"lastError":"object store unavailable"`) || !strings.Contains(response.Body.String(), `"coordinate":"pkg/1.0#rrev"`) || !strings.Contains(response.Body.String(), `"sourceRepositoryId":"`+sourceRepositoryID+`"`) || strings.Contains(response.Body.String(), "secret-object-key") || strings.Contains(response.Body.String(), "idempotencyKey") {
 		t.Fatalf("jobs=%d body=%s", response.Code, response.Body.String())
 	}
 	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)

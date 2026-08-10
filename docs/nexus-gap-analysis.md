@@ -11,9 +11,10 @@ Repository/Group/Hosted/Proxy Console improvement backlog lives in
 
 ## Scope
 
-Artifact Gateway is a complete artifact repository for its four supported
-formats: OCI, Maven, Raw, and Conan. Nexus Repository Manager is a mature,
-general-purpose artifact repository spanning twenty-plus package ecosystems.
+Artifact Gateway is a complete artifact repository across OCI, Maven, Raw,
+Conan, npm, and PyPI Hosted/Proxy/Group paths, plus a read-only Go
+Proxy/Group path. Nexus Repository Manager is a mature, general-purpose
+artifact repository spanning twenty-plus package ecosystems.
 
 This analysis intentionally **excludes the difference in supported package
 ecosystem count** (Nexus supports npm, NuGet, PyPI, Helm, APT, YUM, Go, Cargo,
@@ -39,7 +40,7 @@ the Console described in `console/src/app/router.tsx`.
 | User and role admin pages | Full Security section | Users, API Keys, Access Control and repository Grants pages; LDAP/SAML/privilege designer remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
-| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | None | Medium |
+| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Administrator-supplied artifact intelligence (signatures, SBOM, provenance, licenses, vulnerability summaries), versioned admission policies, and promotion-time evidence propagation; automatic scanner execution, vulnerability databases, and malicious-component blocking remain future work | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls and lifecycle Jobs view; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
@@ -117,12 +118,18 @@ additional task types remain gaps.
 
 Nexus integrates repository health checks, component vulnerability scanning,
 and malicious-component blocking through IQ Server and Firewall. Artifact
-Gateway has no vulnerability scanning, no license or compliance reporting, no
-malicious-component blocking, and no component popularity or download metadata.
+Gateway stores administrator-supplied signatures, SBOM references, provenance,
+license identifiers, and vulnerability summaries behind a separate
+`repositories:intelligence` write scope. Versioned admission policies can
+require that evidence before promotion, and the promotion worker propagates
+immutable evidence to the target without overwriting target-owned records.
+Automatic scanner execution, vulnerability databases, malicious-component
+blocking, compliance reports, and component popularity/download metadata
+remain future work.
 
 ### Shared Format Depth
 
-Even within the four supported formats, depth gaps remain. Some are documented
+Even within the supported formats, depth gaps remain. Some are documented
 in the Known Limitations of [release readiness](release-readiness.md); others
 reflect the backend checklist having closed Hosted lifecycle while the
 operator-facing surface is thinner:
@@ -356,7 +363,8 @@ backend API additions listed below.
   (maximum 365), revocation and last-used timestamps are recorded, and local
   user accounts with the same roles are managed via `/api/v2/users`. Full
   privilege/content-selector design remains future work.
-- **Hosted lifecycle coverage** is delivered for Maven, OCI, Raw and Conan:
+- **Hosted lifecycle coverage** is delivered for Maven, OCI, Raw, Conan, npm
+  and PyPI:
   retention policies expose dry-run, protection patterns, version caps, CSV
   export and queued jobs; replication uses fenced, resumable checkpoints.
 
@@ -365,14 +373,15 @@ backend API additions listed below.
 A suggested sequence for closing the gaps, scoped so each item is
 independently deliverable.
 
-1. **P1 Rich global search and artifact intelligence.** Checksum/digest indexes
-   and exact global digest search are delivered. A format-neutral artifact
+1. **P1 Automatic artifact security evidence.** Checksum/digest indexes and
+   exact global digest search are delivered. A format-neutral artifact
    intelligence contract now stores administrator-supplied signatures, SBOM
    references, provenance, license identifiers, and vulnerability summaries by
-   immutable repository/format/coordinate/digest identity; anonymous reads
-   follow repository policy and writes use `If-Match` version control. The
-   Console renders these facts in format-aware detail views. Scanner execution,
-   external evidence ingestion, and per-finding vulnerability detail remain
+   immutable repository/format/coordinate/digest identity; versioned admission
+   policies evaluate promotions, and immutable evidence propagation is visible
+   through lifecycle operations. The Console renders these facts in
+   format-aware detail views. Scanner execution, vulnerability databases,
+   external evidence automation, and per-finding vulnerability detail remain
    future work.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository

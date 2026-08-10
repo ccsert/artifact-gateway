@@ -2122,20 +2122,21 @@ type GroupPage struct {
 
 // LifecycleJob defines model for LifecycleJob.
 type LifecycleJob struct {
-	Attempts        int               `json:"attempts"`
-	CompletedAt     *time.Time        `json:"completedAt,omitempty"`
-	CreatedAt       time.Time         `json:"createdAt"`
-	Id              string            `json:"id"`
-	Kind            LifecycleJobKind  `json:"kind"`
-	LastError       *string           `json:"lastError,omitempty"`
-	LeaseExpiresAt  *time.Time        `json:"leaseExpiresAt,omitempty"`
-	MaxAttempts     int               `json:"maxAttempts"`
-	NextAttemptAt   *time.Time        `json:"nextAttemptAt,omitempty"`
-	ProgressCurrent int               `json:"progressCurrent"`
-	ProgressMessage *string           `json:"progressMessage,omitempty"`
-	ProgressTotal   int               `json:"progressTotal"`
-	StartedAt       *time.Time        `json:"startedAt,omitempty"`
-	State           LifecycleJobState `json:"state"`
+	Attempts        int                  `json:"attempts"`
+	CompletedAt     *time.Time           `json:"completedAt,omitempty"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	Details         *LifecycleJobDetails `json:"details,omitempty"`
+	Id              string               `json:"id"`
+	Kind            LifecycleJobKind     `json:"kind"`
+	LastError       *string              `json:"lastError,omitempty"`
+	LeaseExpiresAt  *time.Time           `json:"leaseExpiresAt,omitempty"`
+	MaxAttempts     int                  `json:"maxAttempts"`
+	NextAttemptAt   *time.Time           `json:"nextAttemptAt,omitempty"`
+	ProgressCurrent int                  `json:"progressCurrent"`
+	ProgressMessage *string              `json:"progressMessage,omitempty"`
+	ProgressTotal   int                  `json:"progressTotal"`
+	StartedAt       *time.Time           `json:"startedAt,omitempty"`
+	State           LifecycleJobState    `json:"state"`
 }
 
 // LifecycleJobKind defines model for LifecycleJob.Kind.
@@ -2143,6 +2144,14 @@ type LifecycleJobKind string
 
 // LifecycleJobState defines model for LifecycleJob.State.
 type LifecycleJobState string
+
+// LifecycleJobDetails defines model for LifecycleJobDetails.
+type LifecycleJobDetails struct {
+	Coordinate         string             `json:"coordinate"`
+	Digest             string             `json:"digest"`
+	Format             Format             `json:"format"`
+	SourceRepositoryId openapi_types.UUID `json:"sourceRepositoryId"`
+}
 
 // MavenCacheRefreshRequest defines model for MavenCacheRefreshRequest.
 type MavenCacheRefreshRequest struct {

@@ -159,19 +159,17 @@ flowchart LR
 
 ## Known Limitations
 
-- V1 supports OCI, Maven, Raw, and Conan Hosted lifecycle paths. Checkpointed
-  replication and promotion workers publish verified Artifacts for each of
-  those formats. The backup/restore rehearsal retains their persisted jobs and
-  plans, but does not require a worker to complete them after restore.
+- V1 supports OCI, Maven, Raw, Conan, npm, and PyPI Hosted lifecycle paths.
+  Checkpointed replication and promotion workers publish verified Artifacts for
+  each of those formats. Go supports standard Proxy/Group reads only. The
+  backup/restore rehearsal retains persisted lifecycle jobs and plans, but does
+  not require a worker to complete them after restore.
 - Raw Hosted supports authenticated PUT and DELETE, single-byte-range GET/HEAD,
   derived checksum sidecars, and resumable uploads. Conditional write/update
   semantics and non-HTTP client tooling are unsupported. Conan supports Conan 2
   v2 Hosted publication, revision delete/restore, Group/Proxy reads, promotion,
   and replication. Conan 1, remote-to-remote copies, and general upstream index
   aggregation are unsupported.
-- Go supports standard Proxy/Group reads only. It intentionally has no Hosted,
-  retention, promotion, or replication capability because Go modules define no
-  standard repository publication protocol.
 - Static-token rotation revokes issued Gateway bearer tokens only after the
   Gateway is restarted. OIDC token revocation is governed by token expiry and
   the identity provider; JWKS refresh is cached for five minutes.
