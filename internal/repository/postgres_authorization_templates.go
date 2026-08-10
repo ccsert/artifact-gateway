@@ -49,7 +49,7 @@ func (s *PostgresStore) ListAuthorizationTemplates(ctx context.Context) ([]Autho
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []AuthorizationTemplate{}
 	for rows.Next() {
 		item, err := scanAuthorizationTemplate(rows)
@@ -112,7 +112,7 @@ func (s *PostgresStore) ApplyAuthorizationTemplate(ctx context.Context, template
 	if err != nil {
 		return RepositoryGrantSet{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var template AuthorizationTemplate
 	var encoded []byte
 	err = tx.QueryRowContext(ctx, `SELECT `+authorizationTemplateColumns+` FROM authorization_templates WHERE id::text=$1 FOR SHARE`, templateID).Scan(&template.ID, &template.Name, &template.Description, &encoded, &template.Version, &template.CreatedAt, &template.UpdatedAt)

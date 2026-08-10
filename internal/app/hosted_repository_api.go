@@ -1419,7 +1419,7 @@ func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.Respons
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repositoryId is required")
 		return
 	}
-	repo, err := h.hostedRepositoryAPIHandler.store.GetHostedRepository(r.Context(), body.RepositoryId.String())
+	repo, err := h.store.GetHostedRepository(r.Context(), body.RepositoryId.String())
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 		return

@@ -13,6 +13,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -39,6 +40,8 @@ type Dependencies struct {
 	NPMNegativeTTL         time.Duration
 	NPMBreakerTTL          time.Duration
 	NPMProxyCoordinator    OCICacheCoordinator
+	ArtifactScanner        scanning.Scanner
+	ArtifactScannerFormats []repository.Format
 	OIDCClient             *authorization.OIDCClient
 	OIDCLoginValidator     *authorization.OIDCValidator
 	OIDCRuntime            *OIDCRuntime

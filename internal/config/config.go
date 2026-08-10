@@ -52,6 +52,13 @@ type Config struct {
 	InstanceID               string
 	WorkerFormats            []string
 	WorkerKinds              []string
+	ScannerEndpoint          string
+	ScannerName              string
+	ScannerToken             string
+	ScannerTimeout           time.Duration
+	ScannerMaxResponseBytes  int64
+	ScannerMaxArtifactBytes  int64
+	ScannerFormats           []string
 	RuntimeNodeRetention     time.Duration
 	RuntimeNodePruneInterval time.Duration
 	DatabaseURL              string
@@ -101,6 +108,12 @@ func Load() (Config, error) {
 		InstanceID:               value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
 		WorkerFormats:            parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:              parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
+		ScannerEndpoint:          strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
+		ScannerName:              strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_NAME")),
+		ScannerToken:             os.Getenv("GATEWAY_SCANNER_TOKEN"),
+		ScannerTimeout:           2 * time.Minute,
+		ScannerMaxResponseBytes:  512 << 10,
+		ScannerMaxArtifactBytes:  20 << 30,
 		RuntimeNodeRetention:     7 * 24 * time.Hour,
 		RuntimeNodePruneInterval: time.Hour,
 		DatabaseURL:              os.Getenv("GATEWAY_DATABASE_URL"),
@@ -158,6 +171,9 @@ func Load() (Config, error) {
 	}
 	if _, err := url.ParseRequestURI(cfg.S3Endpoint); err != nil {
 		return Config{}, fmt.Errorf("GATEWAY_S3_ENDPOINT is not a valid URL")
+	}
+	if err := configureScanner(&cfg); err != nil {
+		return Config{}, err
 	}
 	if cfg.OIDCIssuer != "" {
 		if cfg.OIDCAudience == "" {
@@ -320,6 +336,54 @@ func secureOrLoopbackHTTP(parsed *url.URL) bool {
 	}
 }
 
+func configureScanner(cfg *Config) error {
+	requestedWithoutEndpoint := cfg.ScannerName != "" || cfg.ScannerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_FORMATS")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_TIMEOUT")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES")) != ""
+	if cfg.ScannerEndpoint == "" {
+		if requestedWithoutEndpoint {
+			return fmt.Errorf("GATEWAY_SCANNER_ENDPOINT is required when artifact scanner settings are configured")
+		}
+		cfg.ScannerName = ""
+		cfg.ScannerToken = ""
+		cfg.ScannerFormats = []string{}
+		return nil
+	}
+	parsed, err := url.ParseRequestURI(cfg.ScannerEndpoint)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !secureOrLoopbackHTTP(parsed) {
+		return fmt.Errorf("GATEWAY_SCANNER_ENDPOINT must be an HTTPS URL without credentials, query, or fragment outside localhost")
+	}
+	if cfg.ScannerName == "" {
+		cfg.ScannerName = "artifact-scanner"
+	}
+	if len(cfg.ScannerName) > 128 || strings.ContainsAny(cfg.ScannerName, "\r\n\x00") || strings.ContainsAny(cfg.ScannerToken, "\r\n") {
+		return fmt.Errorf("artifact scanner name or token is invalid")
+	}
+	if cfg.ScannerTimeout, err = durationEnv("GATEWAY_SCANNER_TIMEOUT", cfg.ScannerTimeout); err != nil {
+		return err
+	}
+	if cfg.ScannerTimeout < time.Second || cfg.ScannerTimeout > 30*time.Minute {
+		return fmt.Errorf("GATEWAY_SCANNER_TIMEOUT must be between 1s and 30m")
+	}
+	if cfg.ScannerMaxResponseBytes, err = positiveInt64Env("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", cfg.ScannerMaxResponseBytes); err != nil {
+		return err
+	}
+	if cfg.ScannerMaxResponseBytes < 1024 || cfg.ScannerMaxResponseBytes > 8<<20 {
+		return fmt.Errorf("GATEWAY_SCANNER_MAX_RESPONSE_BYTES must be between 1024 and 8388608")
+	}
+	if cfg.ScannerMaxArtifactBytes, err = positiveInt64Env("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES", cfg.ScannerMaxArtifactBytes); err != nil {
+		return err
+	}
+	if cfg.ScannerMaxArtifactBytes > 1<<40 {
+		return fmt.Errorf("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES must not exceed 1099511627776")
+	}
+	cfg.ScannerFormats = parseFilter(os.Getenv("GATEWAY_SCANNER_FORMATS"), supportedWorkerFormats)
+	for _, format := range cfg.ScannerFormats {
+		if _, ok := supportedWorkerFormats[format]; !ok {
+			return fmt.Errorf("GATEWAY_SCANNER_FORMATS contains unsupported format %q", format)
+		}
+	}
+	return nil
+}
+
 func oidcScopes(raw string) []string {
 	values := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
 	seen := map[string]bool{"openid": true}
@@ -360,6 +424,14 @@ func (c Config) WorkerFormatEnabled(format string) bool {
 
 func (c Config) WorkerKindEnabled(kind string) bool {
 	return contains(c.WorkerKinds, kind)
+}
+
+func (c Config) ScannerEnabled() bool {
+	return c.ScannerEndpoint != ""
+}
+
+func (c Config) ScannerFormatEnabled(format string) bool {
+	return c.ScannerEnabled() && contains(c.ScannerFormats, format)
 }
 
 func validateRuntimeConfig(cfg Config) error {
@@ -467,6 +539,18 @@ func positiveIntEnv(name string, fallback int, allowZero bool) (int, error) {
 		if allowZero {
 			return 0, fmt.Errorf("%s must be a non-negative integer", name)
 		}
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
+}
+
+func positiveInt64Env(name string, fallback int64) (int64, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", name)
 	}
 	return value, nil

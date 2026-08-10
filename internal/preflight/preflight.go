@@ -116,6 +116,8 @@ func configurationResult(cfg config.Config) Result {
 			"repository_cache_quota_count":       len(cfg.RepositoryCacheQuotas),
 			"oidc_admin_subject_count":           len(cfg.OIDCAdminSubjects),
 			"settings_encryption_key_configured": strings.TrimSpace(os.Getenv(secrets.KeyEnv)) != "",
+			"artifact_scanner_enabled":           cfg.ScannerEnabled(),
+			"artifact_scanner_format_count":      len(cfg.ScannerFormats),
 		},
 	}
 }

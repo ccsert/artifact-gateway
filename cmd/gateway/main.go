@@ -16,6 +16,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
 )
 
@@ -60,6 +61,21 @@ func main() {
 	dependencies.NativeNPMObjectStore = objectStore
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
+	if cfg.ScannerEnabled() {
+		artifactScanner, scannerErr := scanning.NewHTTPScanner(scanning.HTTPOptions{
+			Name: cfg.ScannerName, Endpoint: cfg.ScannerEndpoint, Token: cfg.ScannerToken,
+			Timeout: cfg.ScannerTimeout, MaxResponseBytes: cfg.ScannerMaxResponseBytes,
+			MaxArtifactBytes: cfg.ScannerMaxArtifactBytes,
+		})
+		if scannerErr != nil {
+			slog.Error("initialize artifact scanner")
+			os.Exit(1)
+		}
+		dependencies.ArtifactScanner = artifactScanner
+		for _, format := range cfg.ScannerFormats {
+			dependencies.ArtifactScannerFormats = append(dependencies.ArtifactScannerFormats, repository.Format(format))
+		}
+	}
 	databasePool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL connection pool", "error", err)
@@ -126,7 +142,7 @@ func main() {
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
-	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds)
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats)
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{

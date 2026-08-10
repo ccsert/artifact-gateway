@@ -98,6 +98,71 @@ func TestLoadSupportsDedicatedIntelligenceWorker(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresArtifactScanner(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_SCANNER_ENDPOINT", "http://127.0.0.1:18082/v1/scan")
+	t.Setenv("GATEWAY_SCANNER_NAME", "trivy")
+	t.Setenv("GATEWAY_SCANNER_TOKEN", "scanner-token")
+	t.Setenv("GATEWAY_SCANNER_TIMEOUT", "90s")
+	t.Setenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", "4096")
+	t.Setenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES", "1000000")
+	t.Setenv("GATEWAY_SCANNER_FORMATS", "OCI,maven,oci")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ScannerEnabled() || cfg.ScannerName != "trivy" || cfg.ScannerToken != "scanner-token" || cfg.ScannerTimeout != 90*time.Second || cfg.ScannerMaxResponseBytes != 4096 || cfg.ScannerMaxArtifactBytes != 1000000 {
+		t.Fatalf("scanner config enabled=%t name=%q timeout=%s response_limit=%d artifact_limit=%d", cfg.ScannerEnabled(), cfg.ScannerName, cfg.ScannerTimeout, cfg.ScannerMaxResponseBytes, cfg.ScannerMaxArtifactBytes)
+	}
+	if len(cfg.ScannerFormats) != 2 || !cfg.ScannerFormatEnabled("oci") || !cfg.ScannerFormatEnabled("maven") || cfg.ScannerFormatEnabled("raw") {
+		t.Fatalf("scanner formats = %#v", cfg.ScannerFormats)
+	}
+}
+
+func TestLoadRejectsInvalidArtifactScannerConfiguration(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "insecure endpoint", value: "http://scanner.example.test/v1/scan"},
+		{name: "endpoint query", value: "https://scanner.example.test/v1/scan?token=secret"},
+		{name: "unknown format", value: "maven,unknown"},
+		{name: "short timeout", value: "500ms"},
+		{name: "small response limit", value: "512"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			setCompleteConfiguration(t)
+			switch testCase.name {
+			case "unknown format":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_FORMATS", testCase.value)
+			case "short timeout":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_TIMEOUT", testCase.value)
+			case "small response limit":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", testCase.value)
+			default:
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", testCase.value)
+			}
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted invalid scanner configuration")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsScannerSettingsWithoutEndpoint(t *testing.T) {
+	setCompleteConfiguration(t)
+	secret := "scanner-secret-that-must-not-be-logged"
+	t.Setenv("GATEWAY_SCANNER_TOKEN", secret)
+	if _, err := Load(); err == nil || strings.Contains(err.Error(), secret) {
+		t.Fatalf("Load() error=%v", err)
+	}
+}
+
 func TestLoadRejectsUnknownClusterRoleOrWorkerFilter(t *testing.T) {
 	setCompleteConfiguration(t)
 	for name, value := range map[string]string{

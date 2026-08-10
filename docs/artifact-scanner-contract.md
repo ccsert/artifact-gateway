@@ -4,10 +4,31 @@ The `internal/scanning` module is the controlled seam between Artifact Gateway
 and an external security scanner. It does not execute user-configured commands
 and does not allow a scanner to mutate repository state directly.
 
-This is currently a transport and validation foundation. Automatic job
+This is currently a transport and validation foundation. The adapter can be
+enabled at process startup with `GATEWAY_SCANNER_ENDPOINT`; automatic job
 creation, format-specific asset resolution, and merging a successful report
 into stored artifact intelligence are separate runtime work and are not yet
 enabled by configuration.
+
+## Configuration
+
+Set `GATEWAY_SCANNER_ENDPOINT` to enable the adapter. The other settings are
+optional:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GATEWAY_SCANNER_NAME` | `artifact-scanner` | Bounded scanner identity recorded with vulnerability summaries. |
+| `GATEWAY_SCANNER_TOKEN` | empty | Bearer token sent to the configured endpoint. |
+| `GATEWAY_SCANNER_TIMEOUT` | `2m` | Per-scan request deadline, between `1s` and `30m`. |
+| `GATEWAY_SCANNER_MAX_RESPONSE_BYTES` | `524288` | Maximum JSON response, between 1 KiB and 8 MiB. |
+| `GATEWAY_SCANNER_MAX_ARTIFACT_BYTES` | `21474836480` | Maximum streamed logical artifact, up to 1 TiB. |
+| `GATEWAY_SCANNER_FORMATS` | all lifecycle formats | Comma-separated format allowlist. |
+
+The endpoint must be HTTPS outside localhost/loopback and cannot contain
+credentials, query parameters, or fragments. Scanner settings without an
+endpoint are rejected so a misspelled deployment does not silently look
+enabled. Startup logs and preflight diagnostics expose only enabled state,
+name, and format count; the endpoint and token remain private.
 
 ## Logical artifact input
 
