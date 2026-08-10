@@ -132,25 +132,25 @@ func (e AuditCleanupJobState) Valid() bool {
 
 // Defines values for AuthenticationKind.
 const (
-	ApiKey         AuthenticationKind = "api_key"
-	LocalSession   AuthenticationKind = "local_session"
-	Oidc           AuthenticationKind = "oidc"
-	StaticAdmin    AuthenticationKind = "static_admin"
-	StaticResolver AuthenticationKind = "static_resolver"
+	AuthenticationKindApiKey         AuthenticationKind = "api_key"
+	AuthenticationKindLocalSession   AuthenticationKind = "local_session"
+	AuthenticationKindOidc           AuthenticationKind = "oidc"
+	AuthenticationKindStaticAdmin    AuthenticationKind = "static_admin"
+	AuthenticationKindStaticResolver AuthenticationKind = "static_resolver"
 )
 
 // Valid indicates whether the value is a known member of the AuthenticationKind enum.
 func (e AuthenticationKind) Valid() bool {
 	switch e {
-	case ApiKey:
+	case AuthenticationKindApiKey:
 		return true
-	case LocalSession:
+	case AuthenticationKindLocalSession:
 		return true
-	case Oidc:
+	case AuthenticationKindOidc:
 		return true
-	case StaticAdmin:
+	case AuthenticationKindStaticAdmin:
 		return true
-	case StaticResolver:
+	case AuthenticationKindStaticResolver:
 		return true
 	default:
 		return false
@@ -685,6 +685,45 @@ func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
 	}
 }
 
+// Defines values for OIDCSettingsJitDefaultRole.
+const (
+	OIDCSettingsJitDefaultRoleAdmin  OIDCSettingsJitDefaultRole = "admin"
+	OIDCSettingsJitDefaultRoleReader OIDCSettingsJitDefaultRole = "reader"
+	OIDCSettingsJitDefaultRoleWriter OIDCSettingsJitDefaultRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the OIDCSettingsJitDefaultRole enum.
+func (e OIDCSettingsJitDefaultRole) Valid() bool {
+	switch e {
+	case OIDCSettingsJitDefaultRoleAdmin:
+		return true
+	case OIDCSettingsJitDefaultRoleReader:
+		return true
+	case OIDCSettingsJitDefaultRoleWriter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OIDCSettingsProvisioningMode.
+const (
+	OIDCSettingsProvisioningModeDisabled OIDCSettingsProvisioningMode = "disabled"
+	OIDCSettingsProvisioningModeJit      OIDCSettingsProvisioningMode = "jit"
+)
+
+// Valid indicates whether the value is a known member of the OIDCSettingsProvisioningMode enum.
+func (e OIDCSettingsProvisioningMode) Valid() bool {
+	switch e {
+	case OIDCSettingsProvisioningModeDisabled:
+		return true
+	case OIDCSettingsProvisioningModeJit:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OIDCSettingsSource.
 const (
 	OIDCSettingsSourceDatabase    OIDCSettingsSource = "database"
@@ -697,6 +736,45 @@ func (e OIDCSettingsSource) Valid() bool {
 	case OIDCSettingsSourceDatabase:
 		return true
 	case OIDCSettingsSourceEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OIDCSettingsUpdateJitDefaultRole.
+const (
+	OIDCSettingsUpdateJitDefaultRoleAdmin  OIDCSettingsUpdateJitDefaultRole = "admin"
+	OIDCSettingsUpdateJitDefaultRoleReader OIDCSettingsUpdateJitDefaultRole = "reader"
+	OIDCSettingsUpdateJitDefaultRoleWriter OIDCSettingsUpdateJitDefaultRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the OIDCSettingsUpdateJitDefaultRole enum.
+func (e OIDCSettingsUpdateJitDefaultRole) Valid() bool {
+	switch e {
+	case OIDCSettingsUpdateJitDefaultRoleAdmin:
+		return true
+	case OIDCSettingsUpdateJitDefaultRoleReader:
+		return true
+	case OIDCSettingsUpdateJitDefaultRoleWriter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OIDCSettingsUpdateProvisioningMode.
+const (
+	OIDCSettingsUpdateProvisioningModeDisabled OIDCSettingsUpdateProvisioningMode = "disabled"
+	OIDCSettingsUpdateProvisioningModeJit      OIDCSettingsUpdateProvisioningMode = "jit"
+)
+
+// Valid indicates whether the value is a known member of the OIDCSettingsUpdateProvisioningMode enum.
+func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
+	switch e {
+	case OIDCSettingsUpdateProvisioningModeDisabled:
+		return true
+	case OIDCSettingsUpdateProvisioningModeJit:
 		return true
 	default:
 		return false
@@ -1354,6 +1432,21 @@ func (e UserState) Valid() bool {
 	}
 }
 
+// Defines values for UserIdentityKind.
+const (
+	UserIdentityKindOidc UserIdentityKind = "oidc"
+)
+
+// Valid indicates whether the value is a known member of the UserIdentityKind enum.
+func (e UserIdentityKind) Valid() bool {
+	switch e {
+	case UserIdentityKindOidc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProxyCacheEntriesParamsGroupBy.
 const (
 	ListProxyCacheEntriesParamsGroupByAsset     ListProxyCacheEntriesParamsGroupBy = "asset"
@@ -1414,6 +1507,45 @@ func (e GetRepositoryEffectiveAccessParamsRole) Valid() bool {
 	case GetRepositoryEffectiveAccessParamsRoleReader:
 		return true
 	case GetRepositoryEffectiveAccessParamsRoleWriter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListUsersParamsRole.
+const (
+	ListUsersParamsRoleAdmin  ListUsersParamsRole = "admin"
+	ListUsersParamsRoleReader ListUsersParamsRole = "reader"
+	ListUsersParamsRoleWriter ListUsersParamsRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the ListUsersParamsRole enum.
+func (e ListUsersParamsRole) Valid() bool {
+	switch e {
+	case ListUsersParamsRoleAdmin:
+		return true
+	case ListUsersParamsRoleReader:
+		return true
+	case ListUsersParamsRoleWriter:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListUsersParamsState.
+const (
+	ListUsersParamsStateActive   ListUsersParamsState = "active"
+	ListUsersParamsStateDisabled ListUsersParamsState = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the ListUsersParamsState enum.
+func (e ListUsersParamsState) Valid() bool {
+	switch e {
+	case ListUsersParamsStateActive:
+		return true
+	case ListUsersParamsStateDisabled:
 		return true
 	default:
 		return false
@@ -1838,13 +1970,23 @@ type CreateScheduledTaskKind string
 
 // CreateUser defines model for CreateUser.
 type CreateUser struct {
-	Name     string         `json:"name"`
-	Password string         `json:"password"`
-	Role     CreateUserRole `json:"role"`
+	Description        *string              `json:"description,omitempty"`
+	DisplayName        *string              `json:"displayName,omitempty"`
+	Email              *openapi_types.Email `json:"email,omitempty"`
+	MustChangePassword *bool                `json:"mustChangePassword,omitempty"`
+	Name               string               `json:"name"`
+	Password           string               `json:"password"`
+	Role               CreateUserRole       `json:"role"`
 }
 
 // CreateUserRole defines model for CreateUser.Role.
 type CreateUserRole string
+
+// CreateUserIdentity defines model for CreateUserIdentity.
+type CreateUserIdentity struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
+}
 
 // CreatedAPIKey defines model for CreatedAPIKey.
 type CreatedAPIKey struct {
@@ -2285,42 +2427,60 @@ type OIDCRoleMappingMatchGatewayRole string
 
 // OIDCSettings defines model for OIDCSettings.
 type OIDCSettings struct {
-	AdminRoles             []string           `json:"adminRoles"`
-	AdminSubjects          []string           `json:"adminSubjects"`
-	Audience               string             `json:"audience"`
-	ClientId               string             `json:"clientId"`
-	ClientSecretConfigured bool               `json:"clientSecretConfigured"`
-	Enabled                bool               `json:"enabled"`
-	Issuer                 string             `json:"issuer"`
-	JwksUrl                *string            `json:"jwksUrl,omitempty"`
-	ReaderRoles            []string           `json:"readerRoles"`
-	RedirectUrl            string             `json:"redirectUrl"`
-	Scopes                 []string           `json:"scopes"`
-	Source                 OIDCSettingsSource `json:"source"`
-	UpdatedAt              *time.Time         `json:"updatedAt,omitempty"`
-	Version                string             `json:"version"`
-	WriterRoles            []string           `json:"writerRoles"`
+	AdminRoles             []string                     `json:"adminRoles"`
+	AdminSubjects          []string                     `json:"adminSubjects"`
+	Audience               string                       `json:"audience"`
+	ClientId               string                       `json:"clientId"`
+	ClientSecretConfigured bool                         `json:"clientSecretConfigured"`
+	EmailLinkingEnabled    bool                         `json:"emailLinkingEnabled"`
+	Enabled                bool                         `json:"enabled"`
+	Issuer                 string                       `json:"issuer"`
+	JitDefaultRole         OIDCSettingsJitDefaultRole   `json:"jitDefaultRole"`
+	JwksUrl                *string                      `json:"jwksUrl,omitempty"`
+	ProvisioningMode       OIDCSettingsProvisioningMode `json:"provisioningMode"`
+	ReaderRoles            []string                     `json:"readerRoles"`
+	RedirectUrl            string                       `json:"redirectUrl"`
+	Scopes                 []string                     `json:"scopes"`
+	Source                 OIDCSettingsSource           `json:"source"`
+	UpdatedAt              *time.Time                   `json:"updatedAt,omitempty"`
+	Version                string                       `json:"version"`
+	WriterRoles            []string                     `json:"writerRoles"`
 }
+
+// OIDCSettingsJitDefaultRole defines model for OIDCSettings.JitDefaultRole.
+type OIDCSettingsJitDefaultRole string
+
+// OIDCSettingsProvisioningMode defines model for OIDCSettings.ProvisioningMode.
+type OIDCSettingsProvisioningMode string
 
 // OIDCSettingsSource defines model for OIDCSettings.Source.
 type OIDCSettingsSource string
 
 // OIDCSettingsUpdate defines model for OIDCSettingsUpdate.
 type OIDCSettingsUpdate struct {
-	AdminRoles        []string `json:"adminRoles"`
-	AdminSubjects     []string `json:"adminSubjects"`
-	Audience          string   `json:"audience"`
-	ClearClientSecret *bool    `json:"clearClientSecret,omitempty"`
-	ClientId          string   `json:"clientId"`
-	ClientSecret      *string  `json:"clientSecret,omitempty"`
-	Enabled           bool     `json:"enabled"`
-	Issuer            string   `json:"issuer"`
-	JwksUrl           *string  `json:"jwksUrl,omitempty"`
-	ReaderRoles       []string `json:"readerRoles"`
-	RedirectUrl       string   `json:"redirectUrl"`
-	Scopes            []string `json:"scopes"`
-	WriterRoles       []string `json:"writerRoles"`
+	AdminRoles          []string                           `json:"adminRoles"`
+	AdminSubjects       []string                           `json:"adminSubjects"`
+	Audience            string                             `json:"audience"`
+	ClearClientSecret   *bool                              `json:"clearClientSecret,omitempty"`
+	ClientId            string                             `json:"clientId"`
+	ClientSecret        *string                            `json:"clientSecret,omitempty"`
+	EmailLinkingEnabled bool                               `json:"emailLinkingEnabled"`
+	Enabled             bool                               `json:"enabled"`
+	Issuer              string                             `json:"issuer"`
+	JitDefaultRole      OIDCSettingsUpdateJitDefaultRole   `json:"jitDefaultRole"`
+	JwksUrl             *string                            `json:"jwksUrl,omitempty"`
+	ProvisioningMode    OIDCSettingsUpdateProvisioningMode `json:"provisioningMode"`
+	ReaderRoles         []string                           `json:"readerRoles"`
+	RedirectUrl         string                             `json:"redirectUrl"`
+	Scopes              []string                           `json:"scopes"`
+	WriterRoles         []string                           `json:"writerRoles"`
 }
+
+// OIDCSettingsUpdateJitDefaultRole defines model for OIDCSettingsUpdate.JitDefaultRole.
+type OIDCSettingsUpdateJitDefaultRole string
+
+// OIDCSettingsUpdateProvisioningMode defines model for OIDCSettingsUpdate.ProvisioningMode.
+type OIDCSettingsUpdateProvisioningMode string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -2608,6 +2768,12 @@ type RepositoryPage struct {
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
+// ResetUserPassword defines model for ResetUserPassword.
+type ResetUserPassword struct {
+	MustChangePassword *bool  `json:"mustChangePassword,omitempty"`
+	Password           string `json:"password"`
+}
+
 // RestoreArtifact defines model for RestoreArtifact.
 type RestoreArtifact struct {
 	Coordinate string `json:"coordinate"`
@@ -2829,8 +2995,11 @@ type UpdateScheduledTask = CreateScheduledTask
 
 // UpdateUser defines model for UpdateUser.
 type UpdateUser struct {
-	Role  *UpdateUserRole  `json:"role,omitempty"`
-	State *UpdateUserState `json:"state,omitempty"`
+	Description *string              `json:"description,omitempty"`
+	DisplayName *string              `json:"displayName,omitempty"`
+	Email       *openapi_types.Email `json:"email,omitempty"`
+	Role        *UpdateUserRole      `json:"role,omitempty"`
+	State       *UpdateUserState     `json:"state,omitempty"`
 }
 
 // UpdateUserRole defines model for UpdateUser.Role.
@@ -2841,13 +3010,22 @@ type UpdateUserState string
 
 // User defines model for User.
 type User struct {
-	CreatedAt time.Time          `json:"createdAt"`
-	Id        openapi_types.UUID `json:"id"`
-	Name      string             `json:"name"`
-	Role      UserRole           `json:"role"`
-	State     UserState          `json:"state"`
-	UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
-	Version   string             `json:"version"`
+	CreatedAt            time.Time          `json:"createdAt"`
+	Description          string             `json:"description"`
+	DisplayName          string             `json:"displayName"`
+	Email                string             `json:"email"`
+	FailedLoginAttempts  int                `json:"failedLoginAttempts"`
+	Id                   openapi_types.UUID `json:"id"`
+	LastLoginAt          *time.Time         `json:"lastLoginAt,omitempty"`
+	LocalPasswordEnabled bool               `json:"localPasswordEnabled"`
+	LockedUntil          *time.Time         `json:"lockedUntil,omitempty"`
+	MustChangePassword   bool               `json:"mustChangePassword"`
+	Name                 string             `json:"name"`
+	PasswordChangedAt    *time.Time         `json:"passwordChangedAt,omitempty"`
+	Role                 UserRole           `json:"role"`
+	State                UserState          `json:"state"`
+	UpdatedAt            *time.Time         `json:"updatedAt,omitempty"`
+	Version              string             `json:"version"`
 }
 
 // UserRole defines model for User.Role.
@@ -2856,9 +3034,35 @@ type UserRole string
 // UserState defines model for User.State.
 type UserState string
 
+// UserIdentity defines model for UserIdentity.
+type UserIdentity struct {
+	CreatedAt     time.Time          `json:"createdAt"`
+	DisplayName   string             `json:"displayName"`
+	Email         string             `json:"email"`
+	EmailVerified bool               `json:"emailVerified"`
+	Id            openapi_types.UUID `json:"id"`
+	Issuer        string             `json:"issuer"`
+	Kind          UserIdentityKind   `json:"kind"`
+	LastLoginAt   *time.Time         `json:"lastLoginAt,omitempty"`
+	Subject       string             `json:"subject"`
+	UpdatedAt     *time.Time         `json:"updatedAt,omitempty"`
+	UserId        openapi_types.UUID `json:"userId"`
+}
+
+// UserIdentityKind defines model for UserIdentity.Kind.
+type UserIdentityKind string
+
+// UserIdentityList defines model for UserIdentityList.
+type UserIdentityList struct {
+	Items []UserIdentity `json:"items"`
+}
+
 // UserList defines model for UserList.
 type UserList struct {
-	Items []User `json:"items"`
+	Items  []User `json:"items"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+	Total  int    `json:"total"`
 }
 
 // AuthorizationTemplateId defines model for AuthorizationTemplateId.
@@ -3254,8 +3458,33 @@ type ListScheduledTaskRunsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListUsersParams defines parameters for ListUsers.
+type ListUsersParams struct {
+	Search *string               `form:"search,omitempty" json:"search,omitempty"`
+	Role   *ListUsersParamsRole  `form:"role,omitempty" json:"role,omitempty"`
+	State  *ListUsersParamsState `form:"state,omitempty" json:"state,omitempty"`
+	Limit  *int                  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int                  `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListUsersParamsRole defines parameters for ListUsers.
+type ListUsersParamsRole string
+
+// ListUsersParamsState defines parameters for ListUsers.
+type ListUsersParamsState string
+
 // UpdateUserParams defines parameters for UpdateUser.
 type UpdateUserParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ResetUserPasswordParams defines parameters for ResetUserPassword.
+type ResetUserPasswordParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// RevokeUserSessionsParams defines parameters for RevokeUserSessions.
+type RevokeUserSessionsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
@@ -3351,6 +3580,12 @@ type CreateUserJSONRequestBody = CreateUser
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUser
+
+// CreateUserIdentityJSONRequestBody defines body for CreateUserIdentity for application/json ContentType.
+type CreateUserIdentityJSONRequestBody = CreateUserIdentity
+
+// ResetUserPasswordJSONRequestBody defines body for ResetUserPassword for application/json ContentType.
+type ResetUserPasswordJSONRequestBody = ResetUserPassword
 
 // AsCreateMavenPublishSession returns the union data inside the CreatePublishSession as a CreateMavenPublishSession
 func (t CreatePublishSession) AsCreateMavenPublishSession() (CreateMavenPublishSession, error) {
@@ -3689,7 +3924,7 @@ type ServerInterface interface {
 	ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params ListScheduledTaskRunsParams)
 
 	// (GET /users)
-	ListUsers(w http.ResponseWriter, r *http.Request)
+	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
 
 	// (POST /users)
 	CreateUser(w http.ResponseWriter, r *http.Request)
@@ -3702,6 +3937,21 @@ type ServerInterface interface {
 
 	// (PATCH /users/{userId})
 	UpdateUser(w http.ResponseWriter, r *http.Request, userId string, params UpdateUserParams)
+
+	// (GET /users/{userId}/identities)
+	ListUserIdentities(w http.ResponseWriter, r *http.Request, userId string)
+
+	// (POST /users/{userId}/identities)
+	CreateUserIdentity(w http.ResponseWriter, r *http.Request, userId string)
+
+	// (DELETE /users/{userId}/identities/{identityId})
+	DeleteUserIdentity(w http.ResponseWriter, r *http.Request, userId string, identityId string)
+
+	// (POST /users/{userId}/password)
+	ResetUserPassword(w http.ResponseWriter, r *http.Request, userId string, params ResetUserPasswordParams)
+
+	// (POST /users/{userId}/sessions:revoke)
+	RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId string, params RevokeUserSessionsParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -7706,8 +7956,79 @@ func (siw *ServerInterfaceWrapper) ListScheduledTaskRuns(w http.ResponseWriter, 
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUsersParams
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", r.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "search"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "role", r.URL.Query(), &params.Role, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "role"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListUsers(w, r)
+		siw.Handler.ListUsers(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7828,6 +8149,201 @@ func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateUser(w, r, userId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUserIdentities operation middleware
+func (siw *ServerInterfaceWrapper) ListUserIdentities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUserIdentities(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateUserIdentity operation middleware
+func (siw *ServerInterfaceWrapper) CreateUserIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateUserIdentity(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteUserIdentity operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUserIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "identityId" -------------
+	var identityId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "identityId", r.PathValue("identityId"), &identityId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "identityId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUserIdentity(w, r, userId, identityId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResetUserPasswordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetUserPassword(w, r, userId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeUserSessions operation middleware
+func (siw *ServerInterfaceWrapper) RevokeUserSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeUserSessionsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeUserSessions(w, r, userId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8061,6 +8577,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{userId}", wrapper.GetUser)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/users/{userId}", wrapper.UpdateUser)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{userId}/identities", wrapper.ListUserIdentities)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/identities", wrapper.CreateUserIdentity)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}/identities/{identityId}", wrapper.DeleteUserIdentity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/password", wrapper.ResetUserPassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/sessions:revoke", wrapper.RevokeUserSessions)
 
 	return m
 }
@@ -8204,6 +8725,10 @@ type SecurityPolicyJSONResponse struct {
 type SecurityPolicyEvaluationJSONResponse SecurityPolicyEvaluation
 
 type UserJSONResponse User
+
+type UserIdentityJSONResponse UserIdentity
+
+type UserIdentityListJSONResponse UserIdentityList
 
 type UserListJSONResponse UserList
 
@@ -12946,6 +13471,7 @@ func (response ListScheduledTaskRuns404ApplicationProblemPlusJSONResponse) Visit
 }
 
 type ListUsersRequestObject struct {
+	Params ListUsersParams
 }
 
 type ListUsersResponseObject interface {
@@ -13094,6 +13620,20 @@ func (response DeleteUser404ApplicationProblemPlusJSONResponse) VisitDeleteUserR
 	return err
 }
 
+type DeleteUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteUser409ApplicationProblemPlusJSONResponse) VisitDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUserRequestObject struct {
 	UserId string `json:"userId"`
 }
@@ -13200,9 +13740,352 @@ func (response UpdateUser404ApplicationProblemPlusJSONResponse) VisitUpdateUserR
 	return err
 }
 
+type UpdateUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateUser409ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateUser412ApplicationProblemPlusJSONResponse Problem
 
 func (response UpdateUser412ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserIdentitiesRequestObject struct {
+	UserId string `json:"userId"`
+}
+
+type ListUserIdentitiesResponseObject interface {
+	VisitListUserIdentitiesResponse(w http.ResponseWriter) error
+}
+
+type ListUserIdentities200JSONResponse struct{ UserIdentityListJSONResponse }
+
+func (response ListUserIdentities200JSONResponse) VisitListUserIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserIdentities401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserIdentities401ApplicationProblemPlusJSONResponse) VisitListUserIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserIdentities404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListUserIdentities404ApplicationProblemPlusJSONResponse) VisitListUserIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserIdentityRequestObject struct {
+	UserId string `json:"userId"`
+	Body   *CreateUserIdentityJSONRequestBody
+}
+
+type CreateUserIdentityResponseObject interface {
+	VisitCreateUserIdentityResponse(w http.ResponseWriter) error
+}
+
+type CreateUserIdentity201JSONResponse struct{ UserIdentityJSONResponse }
+
+func (response CreateUserIdentity201JSONResponse) VisitCreateUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserIdentity400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserIdentity400ApplicationProblemPlusJSONResponse) VisitCreateUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserIdentity401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUserIdentity401ApplicationProblemPlusJSONResponse) VisitCreateUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserIdentity404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUserIdentity404ApplicationProblemPlusJSONResponse) VisitCreateUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserIdentity409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUserIdentity409ApplicationProblemPlusJSONResponse) VisitCreateUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserIdentityRequestObject struct {
+	UserId     string `json:"userId"`
+	IdentityId string `json:"identityId"`
+}
+
+type DeleteUserIdentityResponseObject interface {
+	VisitDeleteUserIdentityResponse(w http.ResponseWriter) error
+}
+
+type DeleteUserIdentity204Response struct {
+}
+
+func (response DeleteUserIdentity204Response) VisitDeleteUserIdentityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteUserIdentity401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserIdentity401ApplicationProblemPlusJSONResponse) VisitDeleteUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserIdentity404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteUserIdentity404ApplicationProblemPlusJSONResponse) VisitDeleteUserIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPasswordRequestObject struct {
+	UserId string `json:"userId"`
+	Params ResetUserPasswordParams
+	Body   *ResetUserPasswordJSONRequestBody
+}
+
+type ResetUserPasswordResponseObject interface {
+	VisitResetUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type ResetUserPassword200JSONResponse struct{ UserJSONResponse }
+
+func (response ResetUserPassword200JSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPassword400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ResetUserPassword400ApplicationProblemPlusJSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPassword401ApplicationProblemPlusJSONResponse Problem
+
+func (response ResetUserPassword401ApplicationProblemPlusJSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPassword404ApplicationProblemPlusJSONResponse Problem
+
+func (response ResetUserPassword404ApplicationProblemPlusJSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPassword412ApplicationProblemPlusJSONResponse Problem
+
+func (response ResetUserPassword412ApplicationProblemPlusJSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSessionsRequestObject struct {
+	UserId string `json:"userId"`
+	Params RevokeUserSessionsParams
+}
+
+type RevokeUserSessionsResponseObject interface {
+	VisitRevokeUserSessionsResponse(w http.ResponseWriter) error
+}
+
+type RevokeUserSessions200JSONResponse struct{ UserJSONResponse }
+
+func (response RevokeUserSessions200JSONResponse) VisitRevokeUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSessions401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserSessions401ApplicationProblemPlusJSONResponse) VisitRevokeUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSessions404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeUserSessions404ApplicationProblemPlusJSONResponse) VisitRevokeUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSessions412ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeUserSessions412ApplicationProblemPlusJSONResponse) VisitRevokeUserSessionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -13528,6 +14411,21 @@ type StrictServerInterface interface {
 
 	// (PATCH /users/{userId})
 	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
+
+	// (GET /users/{userId}/identities)
+	ListUserIdentities(ctx context.Context, request ListUserIdentitiesRequestObject) (ListUserIdentitiesResponseObject, error)
+
+	// (POST /users/{userId}/identities)
+	CreateUserIdentity(ctx context.Context, request CreateUserIdentityRequestObject) (CreateUserIdentityResponseObject, error)
+
+	// (DELETE /users/{userId}/identities/{identityId})
+	DeleteUserIdentity(ctx context.Context, request DeleteUserIdentityRequestObject) (DeleteUserIdentityResponseObject, error)
+
+	// (POST /users/{userId}/password)
+	ResetUserPassword(ctx context.Context, request ResetUserPasswordRequestObject) (ResetUserPasswordResponseObject, error)
+
+	// (POST /users/{userId}/sessions:revoke)
+	RevokeUserSessions(ctx context.Context, request RevokeUserSessionsRequestObject) (RevokeUserSessionsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -16359,8 +17257,10 @@ func (sh *strictHandler) ListScheduledTaskRuns(w http.ResponseWriter, r *http.Re
 }
 
 // ListUsers operation middleware
-func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
 	var request ListUsersRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListUsers(ctx, request.(ListUsersRequestObject))
@@ -16492,6 +17392,153 @@ func (sh *strictHandler) UpdateUser(w http.ResponseWriter, r *http.Request, user
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateUserResponseObject); ok {
 		if err := validResponse.VisitUpdateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUserIdentities operation middleware
+func (sh *strictHandler) ListUserIdentities(w http.ResponseWriter, r *http.Request, userId string) {
+	var request ListUserIdentitiesRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUserIdentities(ctx, request.(ListUserIdentitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUserIdentities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUserIdentitiesResponseObject); ok {
+		if err := validResponse.VisitListUserIdentitiesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateUserIdentity operation middleware
+func (sh *strictHandler) CreateUserIdentity(w http.ResponseWriter, r *http.Request, userId string) {
+	var request CreateUserIdentityRequestObject
+
+	request.UserId = userId
+
+	var body CreateUserIdentityJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateUserIdentity(ctx, request.(CreateUserIdentityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateUserIdentity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateUserIdentityResponseObject); ok {
+		if err := validResponse.VisitCreateUserIdentityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteUserIdentity operation middleware
+func (sh *strictHandler) DeleteUserIdentity(w http.ResponseWriter, r *http.Request, userId string, identityId string) {
+	var request DeleteUserIdentityRequestObject
+
+	request.UserId = userId
+	request.IdentityId = identityId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteUserIdentity(ctx, request.(DeleteUserIdentityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteUserIdentity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteUserIdentityResponseObject); ok {
+		if err := validResponse.VisitDeleteUserIdentityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResetUserPassword operation middleware
+func (sh *strictHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request, userId string, params ResetUserPasswordParams) {
+	var request ResetUserPasswordRequestObject
+
+	request.UserId = userId
+	request.Params = params
+
+	var body ResetUserPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResetUserPassword(ctx, request.(ResetUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResetUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResetUserPasswordResponseObject); ok {
+		if err := validResponse.VisitResetUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeUserSessions operation middleware
+func (sh *strictHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId string, params RevokeUserSessionsParams) {
+	var request RevokeUserSessionsRequestObject
+
+	request.UserId = userId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeUserSessions(ctx, request.(RevokeUserSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeUserSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeUserSessionsResponseObject); ok {
+		if err := validResponse.VisitRevokeUserSessionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

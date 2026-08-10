@@ -51,23 +51,29 @@ type OIDCSettingsView struct {
 	ReaderRoles            []string  `json:"readerRoles"`
 	WriterRoles            []string  `json:"writerRoles"`
 	AdminRoles             []string  `json:"adminRoles"`
+	ProvisioningMode       string    `json:"provisioningMode"`
+	EmailLinkingEnabled    bool      `json:"emailLinkingEnabled"`
+	JITDefaultRole         string    `json:"jitDefaultRole"`
 	UpdatedAt              time.Time `json:"updatedAt,omitempty"`
 }
 
 type OIDCSettingsUpdate struct {
-	Enabled           bool
-	Issuer            string
-	Audience          string
-	JWKSURL           string
-	ClientID          string
-	ClientSecret      *string
-	ClearClientSecret bool
-	RedirectURL       string
-	Scopes            []string
-	AdminSubjects     []string
-	ReaderRoles       []string
-	WriterRoles       []string
-	AdminRoles        []string
+	Enabled             bool
+	Issuer              string
+	Audience            string
+	JWKSURL             string
+	ClientID            string
+	ClientSecret        *string
+	ClearClientSecret   bool
+	RedirectURL         string
+	Scopes              []string
+	AdminSubjects       []string
+	ReaderRoles         []string
+	WriterRoles         []string
+	AdminRoles          []string
+	ProvisioningMode    string
+	EmailLinkingEnabled bool
+	JITDefaultRole      string
 }
 
 type OIDCConnectionTest struct {
@@ -138,6 +144,8 @@ func (o *OIDCRuntime) Replace(ctx context.Context, update OIDCSettingsUpdate, ex
 		JWKSURL: normalized.JWKSURL, ClientID: normalized.ClientID, ClientSecret: encryptedSecret,
 		RedirectURL: normalized.RedirectURL, Scopes: normalized.Scopes, AdminSubjects: normalized.AdminSubjects,
 		ReaderRoles: normalized.ReaderRoles, WriterRoles: normalized.WriterRoles, AdminRoles: normalized.AdminRoles,
+		ProvisioningMode: normalized.ProvisioningMode, EmailLinkingEnabled: normalized.EmailLinkingEnabled,
+		JITDefaultRole: normalized.JITDefaultRole,
 	}, expectedVersion)
 	if err != nil {
 		return OIDCSettingsView{}, err
@@ -274,7 +282,8 @@ func (o *OIDCRuntime) stateFromBootstrap() *oidcRuntimeState {
 		ClientSecretConfigured: config.ClientSecret != "", RedirectURL: config.RedirectURL,
 		Scopes: normalizeStrings(config.Scopes), AdminSubjects: normalizeStrings(config.AdminSubjects),
 		ReaderRoles: normalizeStrings(config.Roles.Reader), WriterRoles: normalizeStrings(config.Roles.Writer),
-		AdminRoles: normalizeStrings(config.Roles.Admin),
+		AdminRoles:       normalizeStrings(config.Roles.Admin),
+		ProvisioningMode: "disabled", JITDefaultRole: "reader",
 	}
 	return buildOIDCRuntimeState(view, config.ClientSecret)
 }
@@ -290,6 +299,8 @@ func (o *OIDCRuntime) stateFromStored(stored repository.OIDCSettings, source str
 		ClientSecretConfigured: stored.ClientSecret != "", RedirectURL: stored.RedirectURL,
 		Scopes: stored.Scopes, AdminSubjects: stored.AdminSubjects, ReaderRoles: stored.ReaderRoles,
 		WriterRoles: stored.WriterRoles, AdminRoles: stored.AdminRoles, UpdatedAt: stored.UpdatedAt,
+		ProvisioningMode: stored.ProvisioningMode, EmailLinkingEnabled: stored.EmailLinkingEnabled,
+		JITDefaultRole: stored.JITDefaultRole,
 	}
 	return buildOIDCRuntimeState(view, clientSecret), nil
 }
@@ -344,6 +355,18 @@ func normalizeOIDCSettingsUpdate(update OIDCSettingsUpdate) (OIDCSettingsUpdate,
 	update.ReaderRoles = normalizeStrings(update.ReaderRoles)
 	update.WriterRoles = normalizeStrings(update.WriterRoles)
 	update.AdminRoles = normalizeStrings(update.AdminRoles)
+	if update.ProvisioningMode == "" {
+		update.ProvisioningMode = "disabled"
+	}
+	if update.JITDefaultRole == "" {
+		update.JITDefaultRole = "reader"
+	}
+	if update.ProvisioningMode != "disabled" && update.ProvisioningMode != "jit" {
+		return update, errors.New("provisioningMode must be disabled or jit")
+	}
+	if update.JITDefaultRole != "admin" && update.JITDefaultRole != "writer" && update.JITDefaultRole != "reader" {
+		return update, errors.New("jitDefaultRole must be admin, writer, or reader")
+	}
 	if !update.Enabled {
 		return update, nil
 	}

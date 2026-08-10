@@ -36,6 +36,10 @@ a dated version heading without rewriting their meaning.
 - Configurable external artifact scanning with durable, idempotent management
   jobs; isolated workers; native Raw, Maven, OCI, npm, PyPI, Go, and Conan asset
   resolution; and optimistic security-intelligence merging.
+- Local-user governance with profile metadata, case-insensitive identities,
+  failed-sign-in lockout, last-sign-in and password-change timestamps,
+  mandatory password changes, administrator password resets, revocable
+  versioned sessions, and last-active-administrator protection.
 
 ### Changed
 
@@ -48,6 +52,8 @@ a dated version heading without rewriting their meaning.
   accessibility, component-test, and coverage gates.
 - Added session-aware distributed node inventory, graceful offline state,
   retention cleanup, and cluster capability health summaries.
+- Reworked Console user management around server-side search, filtering, and
+  pagination plus a focused account drawer for profile and security actions.
 
 ### Fixed
 
@@ -58,6 +64,8 @@ a dated version heading without rewriting their meaning.
 - Stabilized generated OpenAPI output, dependency installation, integration
   readiness, and lifecycle ordering in CI.
 - Included PyPI and Go object usage in aggregate repository capacity views.
+- Corrected user-management audits so the actor is the administrator performing
+  the action and self-service password changes use their own audit resource.
 
 ### Security
 

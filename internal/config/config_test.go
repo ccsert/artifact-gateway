@@ -29,6 +29,8 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_NPM_METADATA_CACHE_TTL", "2m")
 	t.Setenv("GATEWAY_NPM_NEGATIVE_CACHE_TTL", "45s")
 	t.Setenv("GATEWAY_NPM_PROXY_BREAKER_TTL", "12s")
+	t.Setenv("GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS", "7")
+	t.Setenv("GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION", "20m")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -45,6 +47,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	if cfg.NPMMetadataCacheTTL != 2*time.Minute || cfg.NPMNegativeCacheTTL != 45*time.Second || cfg.NPMProxyBreakerTTL != 12*time.Second {
 		t.Fatalf("npm proxy TTLs = metadata %s negative %s breaker %s", cfg.NPMMetadataCacheTTL, cfg.NPMNegativeCacheTTL, cfg.NPMProxyBreakerTTL)
 	}
+	if cfg.LocalAuthMaxFailedAttempts != 7 || cfg.LocalAuthLockoutDuration != 20*time.Minute {
+		t.Fatalf("local auth policy = attempts %d lockout %s", cfg.LocalAuthMaxFailedAttempts, cfg.LocalAuthLockoutDuration)
+	}
 	if !cfg.HasRole(NodeRoleAPI) || !cfg.HasRole(NodeRoleScheduler) || !cfg.HasRole(NodeRoleWorker) {
 		t.Fatalf("default node roles = %#v", cfg.NodeRoles)
 	}
@@ -53,6 +58,20 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
 		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
+}
+
+func TestLoadRejectsInvalidLocalAuthenticationPolicy(t *testing.T) {
+	for name, value := range map[string]string{
+		"GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS": "0",
+		"GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION":    "30s",
+	} {
+		setCompleteConfiguration(t)
+		t.Setenv(name, value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() accepted %s=%q", name, value)
+		}
+		t.Setenv(name, "")
 	}
 }
 

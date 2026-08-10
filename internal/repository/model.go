@@ -649,14 +649,57 @@ type MavenDeclaredObject struct {
 // carries a coarse role (reader/writer/admin). SecretHash is a bcrypt hash and
 // is never returned by management responses.
 type User struct {
-	ID         string
-	Name       string
-	SecretHash string
-	Role       string
-	State      string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Version    string
+	ID                  string
+	Name                string
+	DisplayName         string
+	Email               string
+	Description         string
+	SecretHash          string
+	Role                string
+	State               string
+	LastLoginAt         *time.Time
+	PasswordChangedAt   *time.Time
+	FailedLoginAttempts int
+	LockedUntil         *time.Time
+	MustChangePassword  bool
+	SessionVersion      int64
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Version             string
+}
+
+// UserIdentity is an external credential linked to a local account. Issuer
+// and Subject together form the provider-owned immutable identity key.
+type UserIdentity struct {
+	ID            string
+	UserID        string
+	Kind          string
+	Issuer        string
+	Subject       string
+	Email         string
+	DisplayName   string
+	EmailVerified bool
+	LastLoginAt   *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+const UserIdentityOIDC = "oidc"
+
+// OIDCIdentityProvision describes verified claims and the explicit
+// provisioning policy observed during an OIDC sign-in.
+type OIDCIdentityProvision struct {
+	Issuer            string
+	Subject           string
+	Email             string
+	DisplayName       string
+	PreferredUsername string
+	EmailVerified     bool
+	Role              string
+	Provision         bool
+	MatchEmail        bool
+	DefaultRole       string
+	OccurredAt        time.Time
 }
 
 const (
@@ -882,20 +925,23 @@ type AuditRetentionPolicy struct {
 // browser OIDC authentication. ClientSecret contains ciphertext at the
 // repository boundary and must never be serialized by an API response.
 type OIDCSettings struct {
-	Version       string    `json:"version"`
-	Enabled       bool      `json:"enabled"`
-	Issuer        string    `json:"issuer"`
-	Audience      string    `json:"audience"`
-	JWKSURL       string    `json:"jwksUrl,omitempty"`
-	ClientID      string    `json:"clientId"`
-	ClientSecret  string    `json:"-"`
-	RedirectURL   string    `json:"redirectUrl"`
-	Scopes        []string  `json:"scopes"`
-	AdminSubjects []string  `json:"adminSubjects"`
-	ReaderRoles   []string  `json:"readerRoles"`
-	WriterRoles   []string  `json:"writerRoles"`
-	AdminRoles    []string  `json:"adminRoles"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	Version             string    `json:"version"`
+	Enabled             bool      `json:"enabled"`
+	Issuer              string    `json:"issuer"`
+	Audience            string    `json:"audience"`
+	JWKSURL             string    `json:"jwksUrl,omitempty"`
+	ClientID            string    `json:"clientId"`
+	ClientSecret        string    `json:"-"`
+	RedirectURL         string    `json:"redirectUrl"`
+	Scopes              []string  `json:"scopes"`
+	AdminSubjects       []string  `json:"adminSubjects"`
+	ReaderRoles         []string  `json:"readerRoles"`
+	WriterRoles         []string  `json:"writerRoles"`
+	AdminRoles          []string  `json:"adminRoles"`
+	ProvisioningMode    string    `json:"provisioningMode"`
+	EmailLinkingEnabled bool      `json:"emailLinkingEnabled"`
+	JITDefaultRole      string    `json:"jitDefaultRole"`
+	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
 type AuditCleanupJob struct {

@@ -389,8 +389,17 @@ export type CreatedApiKey = ApiKey & {
 export type User = {
   id: string;
   name: string;
+  displayName: string;
+  email: string;
+  description: string;
   role: "admin" | "writer" | "reader";
   state: "active" | "disabled";
+  lastLoginAt?: string;
+  passwordChangedAt?: string;
+  localPasswordEnabled: boolean;
+  failedLoginAttempts: number;
+  lockedUntil?: string;
+  mustChangePassword: boolean;
   createdAt: string;
   updatedAt?: string;
   version: string;
@@ -398,6 +407,9 @@ export type User = {
 
 export type UserList = {
   items: Array<User>;
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 export type CurrentIdentity = {
@@ -410,13 +422,25 @@ export type CurrentIdentity = {
 
 export type CreateUser = {
   name: string;
+  displayName?: string;
+  email?: string;
+  description?: string;
   password: string;
   role: "admin" | "writer" | "reader";
+  mustChangePassword?: boolean;
 };
 
 export type UpdateUser = {
+  displayName?: string;
+  email?: string;
+  description?: string;
   role?: "admin" | "writer" | "reader";
   state?: "active" | "disabled";
+};
+
+export type ResetUserPassword = {
+  password: string;
+  mustChangePassword?: boolean;
 };
 
 /**
@@ -720,6 +744,9 @@ export type OidcSettings = {
   readerRoles: Array<string>;
   writerRoles: Array<string>;
   adminRoles: Array<string>;
+  provisioningMode: "disabled" | "jit";
+  emailLinkingEnabled: boolean;
+  jitDefaultRole: "admin" | "writer" | "reader";
   updatedAt?: string;
 };
 
@@ -736,6 +763,9 @@ export type OidcSettingsUpdate = {
   readerRoles: Array<string>;
   writerRoles: Array<string>;
   adminRoles: Array<string>;
+  provisioningMode: "disabled" | "jit";
+  emailLinkingEnabled: boolean;
+  jitDefaultRole: "admin" | "writer" | "reader";
 };
 
 export type OidcConnectionTest = {
@@ -871,6 +901,29 @@ export type Diagnostics = {
   dependencies: Array<DiagnosticDependency>;
   queues: Array<DiagnosticQueueStat>;
   nodes: RuntimeNodeHealth;
+};
+
+export type UserIdentity = {
+  id: string;
+  userId: string;
+  kind: "oidc";
+  issuer: string;
+  subject: string;
+  email: string;
+  displayName: string;
+  emailVerified: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type UserIdentityList = {
+  items: Array<UserIdentity>;
+};
+
+export type CreateUserIdentity = {
+  issuer: string;
+  subject: string;
 };
 
 export type AuditPage = {
@@ -1286,6 +1339,9 @@ export type OidcSettingsUpdateWritable = {
   readerRoles: Array<string>;
   writerRoles: Array<string>;
   adminRoles: Array<string>;
+  provisioningMode: "disabled" | "jit";
+  emailLinkingEnabled: boolean;
+  jitDefaultRole: "admin" | "writer" | "reader";
 };
 
 /**
@@ -1804,7 +1860,13 @@ export type RevokeApiKeyResponse =
 export type ListUsersData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    search?: string;
+    role?: "admin" | "writer" | "reader";
+    state?: "active" | "disabled";
+    limit?: number;
+    offset?: number;
+  };
   url: "/users";
 };
 
@@ -1877,6 +1939,10 @@ export type DeleteUserErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
 };
 
 export type DeleteUserError = DeleteUserErrors[keyof DeleteUserErrors];
@@ -1945,6 +2011,10 @@ export type UpdateUserErrors = {
   /**
    * Problem response
    */
+  409: Problem;
+  /**
+   * Problem response
+   */
   412: Problem;
 };
 
@@ -1958,6 +2028,198 @@ export type UpdateUserResponses = {
 };
 
 export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
+
+export type ResetUserPasswordData = {
+  body: ResetUserPassword;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    userId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/password";
+};
+
+export type ResetUserPasswordErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ResetUserPasswordError =
+  ResetUserPasswordErrors[keyof ResetUserPasswordErrors];
+
+export type ResetUserPasswordResponses = {
+  /**
+   * User account metadata. The password hash is never returned.
+   */
+  200: User;
+};
+
+export type ResetUserPasswordResponse =
+  ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
+
+export type RevokeUserSessionsData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    userId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/sessions:revoke";
+};
+
+export type RevokeUserSessionsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type RevokeUserSessionsError =
+  RevokeUserSessionsErrors[keyof RevokeUserSessionsErrors];
+
+export type RevokeUserSessionsResponses = {
+  /**
+   * User account metadata. The password hash is never returned.
+   */
+  200: User;
+};
+
+export type RevokeUserSessionsResponse =
+  RevokeUserSessionsResponses[keyof RevokeUserSessionsResponses];
+
+export type ListUserIdentitiesData = {
+  body?: never;
+  path: {
+    userId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/identities";
+};
+
+export type ListUserIdentitiesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListUserIdentitiesError =
+  ListUserIdentitiesErrors[keyof ListUserIdentitiesErrors];
+
+export type ListUserIdentitiesResponses = {
+  /**
+   * External identities linked to a local user
+   */
+  200: UserIdentityList;
+};
+
+export type ListUserIdentitiesResponse =
+  ListUserIdentitiesResponses[keyof ListUserIdentitiesResponses];
+
+export type CreateUserIdentityData = {
+  body: CreateUserIdentity;
+  path: {
+    userId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/identities";
+};
+
+export type CreateUserIdentityErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateUserIdentityError =
+  CreateUserIdentityErrors[keyof CreateUserIdentityErrors];
+
+export type CreateUserIdentityResponses = {
+  /**
+   * External identity linked to a local user
+   */
+  201: UserIdentity;
+};
+
+export type CreateUserIdentityResponse =
+  CreateUserIdentityResponses[keyof CreateUserIdentityResponses];
+
+export type DeleteUserIdentityData = {
+  body?: never;
+  path: {
+    userId: string;
+    identityId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/identities/{identityId}";
+};
+
+export type DeleteUserIdentityErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type DeleteUserIdentityError =
+  DeleteUserIdentityErrors[keyof DeleteUserIdentityErrors];
+
+export type DeleteUserIdentityResponses = {
+  /**
+   * Identity unlinked
+   */
+  204: void;
+};
+
+export type DeleteUserIdentityResponse =
+  DeleteUserIdentityResponses[keyof DeleteUserIdentityResponses];
 
 export type ListAuditsData = {
   body?: never;

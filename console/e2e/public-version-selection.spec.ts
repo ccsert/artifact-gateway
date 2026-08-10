@@ -175,6 +175,16 @@ test("managed Maven deep links scan later pages for the exact snapshot build", a
         },
       });
     }
+    if (path.endsWith("/artifact-intelligence")) {
+      return route.fulfill({
+        status: 404,
+        json: {
+          code: "not_found",
+          message: "artifact intelligence not found",
+          status: 404,
+        },
+      });
+    }
     return route.fulfill({
       json: {
         id: ids.managedMaven,

@@ -33,6 +33,14 @@ paths:
     "$ref": "./management/users.yaml#/users"
   "/users/{userId}":
     "$ref": "./management/users.yaml#/users_userId"
+  "/users/{userId}/password":
+    "$ref": "./management/users.yaml#/users_userId_password"
+  "/users/{userId}/sessions:revoke":
+    "$ref": "./management/users.yaml#/users_userId_sessions_revoke"
+  "/users/{userId}/identities":
+    "$ref": "./management/users.yaml#/users_userId_identities"
+  "/users/{userId}/identities/{identityId}":
+    "$ref": "./management/users.yaml#/users_userId_identities_identityId"
   "/audits":
     "$ref": "./management/audits.yaml#/audits"
   "/audits/page":
@@ -245,6 +253,8 @@ components:
       "$ref": "./components/schemas.yaml#/CreateUser"
     UpdateUser:
       "$ref": "./components/schemas.yaml#/UpdateUser"
+    ResetUserPassword:
+      "$ref": "./components/schemas.yaml#/ResetUserPassword"
     CreatePublishSession:
       "$ref": "./components/schemas.yaml#/CreatePublishSession"
     CreateMavenPublishSession:

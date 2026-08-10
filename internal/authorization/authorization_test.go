@@ -271,6 +271,25 @@ func TestAuthenticatorRestoresUserRoleForIssuedProtocolToken(t *testing.T) {
 	}
 }
 
+func TestAuthenticatorRejectsRevokedVersionedUserSession(t *testing.T) {
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(context.Background(), repository.User{ID: "versioned-user", Name: "versioned", Role: string(RoleAdmin)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{AdminToken: "admin-secret", Users: store}
+	token := authenticator.IssueUserSession(user.ID, user.SessionVersion)
+	if _, ok := authenticator.Authenticate("Bearer " + token); !ok {
+		t.Fatal("fresh versioned user session was rejected")
+	}
+	if _, err := store.RevokeUserSessions(context.Background(), user.ID, user.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := authenticator.Authenticate("Bearer " + token); ok {
+		t.Fatal("revoked versioned user session authenticated")
+	}
+}
+
 func TestAuthenticatorRestoresStaticAdminForIssuedProtocolToken(t *testing.T) {
 	authenticator := Authenticator{
 		AdminToken:    "admin-secret",
@@ -345,6 +364,71 @@ func TestAuthenticatorWebSessionPreservesBoundedOIDCIdentity(t *testing.T) {
 		t.Fatal("non-OIDC web session retained OIDC metadata")
 	}
 }
+
+func TestAuthenticatorBoundOIDCWebSessionRechecksUserStateAndSessionVersion(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(ctx, repository.User{ID: "bound-user", Name: "bound", Role: string(RoleWriter)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateUserIdentity(ctx, repository.UserIdentity{
+		ID: "bound-identity", UserID: user.ID, Kind: repository.UserIdentityOIDC,
+		Issuer: "https://issuer.example.test", Subject: "subject",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{AdminToken: "admin-secret", UserIdentities: store, Users: store}
+	token := authenticator.IssueWebSession(Principal{
+		Actor: "user:bound", Role: RoleWriter, AuthenticationKind: AuthenticationOIDC,
+	}, user.SessionVersion)
+	principal, ok := authenticator.Authenticate("Bearer " + token)
+	if !ok || principal.Actor != "user:bound" || principal.Role != RoleWriter || principal.Admin || principal.AuthenticationKind != AuthenticationOIDC {
+		t.Fatalf("bound session principal=%#v ok=%v", principal, ok)
+	}
+
+	if _, err = store.RevokeUserSessions(ctx, user.ID, user.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + token); ok {
+		t.Fatal("revoked bound OIDC web session authenticated")
+	}
+
+	updated, err := store.GetUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.UpdateUser(ctx, repository.UserUpdate{ID: user.ID, State: ptrString(repository.UserDisabled)}, updated.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + authenticator.IssueWebSession(Principal{
+		Actor: "user:bound", Role: RoleWriter, AuthenticationKind: AuthenticationOIDC,
+	}, updated.SessionVersion)); ok {
+		t.Fatal("disabled bound OIDC web session authenticated")
+	}
+}
+
+func TestAuthenticatorBoundOIDCWebSessionHonorsRequiredPasswordChange(t *testing.T) {
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(context.Background(), repository.User{
+		ID: "password-change-user", Name: "password-change", Role: string(RoleAdmin),
+		SecretHash: "local-hash", MustChangePassword: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{AdminToken: "admin-secret", Users: store}
+	token := authenticator.IssueWebSession(Principal{
+		Actor: "user:password-change", Role: RoleAdmin, Admin: true,
+		AuthenticationKind: AuthenticationOIDC,
+	}, user.SessionVersion)
+	principal, ok := authenticator.Authenticate("Bearer " + token)
+	if !ok || !principal.MustChangePassword || principal.Admin || principal.Role != "" || principal.AuthenticationKind != AuthenticationOIDC {
+		t.Fatalf("required-password-change principal=%#v ok=%v", principal, ok)
+	}
+}
+
+func ptrString(value string) *string { return &value }
 
 func TestAuthenticatorMavenPoliciesKeepReadAndWriteSeparate(t *testing.T) {
 	authenticator := Authenticator{

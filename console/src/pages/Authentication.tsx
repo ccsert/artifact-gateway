@@ -48,6 +48,9 @@ interface AuthenticationFormValues {
   readerRoles: string[];
   writerRoles: string[];
   adminRoles: string[];
+  provisioningMode: "disabled" | "jit";
+  emailLinkingEnabled: boolean;
+  jitDefaultRole: "admin" | "writer" | "reader";
 }
 
 export function AuthenticationPage() {
@@ -106,6 +109,9 @@ export function AuthenticationPage() {
       readerRoles: settings.readerRoles,
       writerRoles: settings.writerRoles,
       adminRoles: settings.adminRoles,
+      provisioningMode: settings.provisioningMode,
+      emailLinkingEnabled: settings.emailLinkingEnabled,
+      jitDefaultRole: settings.jitDefaultRole,
     });
   }, [form, settings]);
 
@@ -167,6 +173,9 @@ export function AuthenticationPage() {
       readerRoles: values.readerRoles ?? [],
       writerRoles: values.writerRoles ?? [],
       adminRoles: values.adminRoles ?? [],
+      provisioningMode: values.provisioningMode,
+      emailLinkingEnabled: values.emailLinkingEnabled,
+      jitDefaultRole: values.jitDefaultRole,
     };
     if (values.jwksUrl.trim()) body.jwksUrl = values.jwksUrl.trim();
     if (values.clientSecret.trim())
@@ -540,6 +549,63 @@ export function AuthenticationPage() {
                   )}
                 >
                   <Select mode="tags" tokenSeparators={[",", " "]} />
+                </Form.Item>
+                <Form.Item
+                  name="provisioningMode"
+                  label={text("未绑定身份", "Unlinked identities")}
+                  extra={text(
+                    "关闭时只有管理员手动绑定的身份可以进入本地账户；JIT 会在首次登录时创建账户。",
+                    "When disabled, only administrator-linked identities can enter local accounts. JIT creates an account on first sign-in.",
+                  )}
+                >
+                  <Select
+                    options={[
+                      {
+                        value: "disabled",
+                        label: text(
+                          "拒绝并保持外部身份",
+                          "Keep external principal",
+                        ),
+                      },
+                      {
+                        value: "jit",
+                        label: text(
+                          "首次登录自动创建",
+                          "Provision on first sign-in",
+                        ),
+                      },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="jitDefaultRole"
+                  label={text("JIT 默认角色", "JIT default role")}
+                  extra={text(
+                    "仅当声明没有匹配角色映射时使用。",
+                    "Used only when no external role mapping matches.",
+                  )}
+                >
+                  <Select
+                    options={[
+                      { value: "reader", label: "reader" },
+                      { value: "writer", label: "writer" },
+                      { value: "admin", label: "admin" },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="emailLinkingEnabled"
+                  label={text("已验证邮箱自动关联", "Verified email linking")}
+                  valuePropName="checked"
+                  extra={text(
+                    "仅使用 email_verified=true 的声明；多个匹配账户会拒绝登录。",
+                    "Only email_verified=true claims are used; multiple matching accounts reject sign-in.",
+                  )}
+                >
+                  <Switch
+                    checkedChildren={text("允许", "On")}
+                    unCheckedChildren={text("关闭", "Off")}
+                  />
                 </Form.Item>
               </div>
             </section>

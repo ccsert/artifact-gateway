@@ -14,7 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
-func TestOIDCBrowserLoginDiscoversProviderAndIssuesCookieSession(t *testing.T) {
+func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,20 @@ func TestOIDCBrowserLoginDiscoversProviderAndIssuesCookieSession(t *testing.T) {
 		Issuer: provider.URL, Audience: "artifact-gateway-console", JWKSURL: provider.URL + "/jwks",
 		Roles: OIDCRoleMapping{Reader: []string{"artifact-reader"}},
 	})}
-	handler := NewGatewayHandler(dependencies, repository.NewMemoryStore(), TestAdapter{}, authenticator)
+	store := repository.NewMemoryStore()
+	localUser, err := store.CreateUser(t.Context(), repository.User{
+		ID: "browser-oidc-user", Name: "local-user", Role: "writer",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateUserIdentity(t.Context(), repository.UserIdentity{
+		ID: "browser-oidc-identity", UserID: localUser.ID, Kind: repository.UserIdentityOIDC,
+		Issuer: provider.URL, Subject: "gitlab-user",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(dependencies, store, TestAdapter{}, authenticator)
 
 	configResponse := httptest.NewRecorder()
 	handler.ServeHTTP(configResponse, httptest.NewRequest(http.MethodGet, "/auth/oidc/config", nil))
@@ -117,8 +130,23 @@ func TestOIDCBrowserLoginDiscoversProviderAndIssuesCookieSession(t *testing.T) {
 	identity.AddCookie(sessionCookie)
 	identityResponse := httptest.NewRecorder()
 	handler.ServeHTTP(identityResponse, identity)
-	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"actor":"gitlab-user"`) || !strings.Contains(identityResponse.Body.String(), `"kind":"oidc"`) || !strings.Contains(identityResponse.Body.String(), `"role":"reader"`) {
+	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"actor":"user:local-user"`) || !strings.Contains(identityResponse.Body.String(), `"kind":"oidc"`) || !strings.Contains(identityResponse.Body.String(), `"role":"writer"`) {
 		t.Fatalf("identity=%d body=%s", identityResponse.Code, identityResponse.Body.String())
+	}
+
+	current, err := store.GetUser(t.Context(), localUser.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RevokeUserSessions(t.Context(), current.ID, current.Version); err != nil {
+		t.Fatal(err)
+	}
+	revokedIdentity := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
+	revokedIdentity.AddCookie(sessionCookie)
+	revokedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokedResponse, revokedIdentity)
+	if revokedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked cookie identity=%d body=%s", revokedResponse.Code, revokedResponse.Body.String())
 	}
 }
 

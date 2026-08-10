@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type Principal struct {
 	AuthenticationKind AuthenticationKind
 	OIDCAdminSubject   bool
 	OIDCRoleMappings   []OIDCRoleMappingMatch
+	MustChangePassword bool
 }
 
 // AuthenticationKind is the bounded credential source retained after
@@ -56,6 +58,10 @@ type Authenticator struct {
 	ResolverToken string
 	AdminActor    string
 	ResolverActor string
+	// LocalAuthMaxAttempts and LocalAuthLockout control temporary lockout for
+	// local password authentication. Zero values use conservative defaults.
+	LocalAuthMaxAttempts int
+	LocalAuthLockout     time.Duration
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
@@ -66,6 +72,7 @@ type Authenticator struct {
 	OIDCSource        OIDCValidatorSource
 	APIKeys           repository.APIKeyStore
 	Users             repository.UserStore
+	UserIdentities    repository.UserIdentityStore
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
@@ -99,10 +106,14 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationAPIKey}, true
 		}
 	}
-	if userID, ok := a.userSessionActor(token); ok && a.Users != nil {
+	if userID, sessionVersion, ok := a.userSessionClaims(token); ok && a.Users != nil {
 		user, err := a.Users.GetUser(context.Background(), userID)
-		if err == nil && user.State == repository.UserActive {
+		versionMatches := sessionVersion == user.SessionVersion || sessionVersion == 0 && user.SessionVersion == 1
+		if err == nil && user.State == repository.UserActive && versionMatches {
 			role := Role(user.Role)
+			if user.MustChangePassword {
+				return Principal{Actor: "user:" + user.Name, AuthenticationKind: AuthenticationLocalSession, MustChangePassword: true}, true
+			}
 			return Principal{Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationLocalSession}, true
 		}
 	}
@@ -114,6 +125,29 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	if oidcValidator != nil {
 		if identity, ok := oidcValidator.Validate(context.Background(), token); ok {
+			if a.UserIdentities != nil {
+				user, _, err := a.UserIdentities.GetUserByOIDCIdentity(context.Background(), identity.Issuer, identity.Subject)
+				if err == nil {
+					if user.State != repository.UserActive {
+						return Principal{}, false
+					}
+					role := Role(user.Role)
+					if user.MustChangePassword {
+						return Principal{
+							Actor: "user:" + user.Name, RepositoryPatterns: a.RepositoryReaders["user:"+user.Name],
+							AuthenticationKind: AuthenticationOIDC, MustChangePassword: true,
+						}, true
+					}
+					return Principal{
+						Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role,
+						RepositoryPatterns: a.RepositoryReaders["user:"+user.Name], AuthenticationKind: AuthenticationOIDC,
+						OIDCAdminSubject: identity.AdminSubject, OIDCRoleMappings: identity.RoleMappings,
+					}, true
+				}
+				if !errors.Is(err, repository.ErrNotFound) {
+					return Principal{}, false
+				}
+			}
 			principal := a.PrincipalForActor(identity.Subject)
 			principal.Admin = identity.Admin
 			principal.Role = identity.Role
@@ -136,6 +170,9 @@ func (a Authenticator) principalForTokenActor(actor string) (Principal, bool) {
 		return Principal{}, false
 	}
 	role := Role(user.Role)
+	if user.MustChangePassword {
+		return Principal{Actor: actor, RepositoryPatterns: a.RepositoryReaders[actor], AuthenticationKind: AuthenticationLocalSession, MustChangePassword: true}, true
+	}
 	return Principal{Actor: actor, Admin: role == RoleAdmin, Role: role, RepositoryPatterns: a.RepositoryReaders[actor], AuthenticationKind: AuthenticationLocalSession}, true
 }
 
@@ -238,9 +275,16 @@ func (a Authenticator) IssuePrincipalToken(principal Principal) string {
 // carries only the user id and an expiry; the user's current role and active
 // state are rechecked on every authenticated request, so role changes and
 // disabling take effect without a session store.
-func (a Authenticator) IssueUserSession(userID string) string {
+func (a Authenticator) IssueUserSession(userID string, sessionVersions ...int64) string {
 	expiresAt := time.Now().UTC().Add(12 * time.Hour).Unix()
-	payload := "us." + base64.RawURLEncoding.EncodeToString([]byte(userID)) + "." + strconv.FormatInt(expiresAt, 10)
+	identity := []byte(userID)
+	if len(sessionVersions) > 0 && sessionVersions[0] > 0 {
+		identity, _ = json.Marshal(struct {
+			ID      string `json:"i"`
+			Version int64  `json:"v"`
+		}{ID: userID, Version: sessionVersions[0]})
+	}
+	payload := "us." + base64.RawURLEncoding.EncodeToString(identity) + "." + strconv.FormatInt(expiresAt, 10)
 	mac := hmac.New(sha256.New, []byte(a.AdminToken))
 	_, _ = mac.Write([]byte(payload))
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -249,8 +293,12 @@ func (a Authenticator) IssueUserSession(userID string) string {
 // IssueWebSession mints the HttpOnly browser session used after a successful
 // OIDC Authorization Code exchange. It contains the already validated bounded
 // identity, never provider access or refresh tokens.
-func (a Authenticator) IssueWebSession(principal Principal) string {
+func (a Authenticator) IssueWebSession(principal Principal, sessionVersions ...int64) string {
 	expiresAt := time.Now().UTC().Add(12 * time.Hour).Unix()
+	var sessionVersion int64
+	if len(sessionVersions) > 0 {
+		sessionVersion = sessionVersions[0]
+	}
 	claims, _ := json.Marshal(struct {
 		Actor            string                 `json:"a"`
 		Role             Role                   `json:"r,omitempty"`
@@ -258,10 +306,11 @@ func (a Authenticator) IssueWebSession(principal Principal) string {
 		Authentication   AuthenticationKind     `json:"k"`
 		OIDCAdminSubject bool                   `json:"s,omitempty"`
 		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m,omitempty"`
+		SessionVersion   int64                  `json:"v,omitempty"`
 	}{
 		Actor: principal.Actor, Role: principal.Role, Admin: principal.Admin,
 		Authentication: principal.AuthenticationKind, OIDCAdminSubject: principal.OIDCAdminSubject,
-		OIDCRoleMappings: principal.OIDCRoleMappings,
+		OIDCRoleMappings: principal.OIDCRoleMappings, SessionVersion: sessionVersion,
 	})
 	payload := "ws." + base64.RawURLEncoding.EncodeToString(claims) + "." + strconv.FormatInt(expiresAt, 10)
 	mac := hmac.New(sha256.New, []byte(a.AdminToken))
@@ -298,9 +347,32 @@ func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
 		Authentication   AuthenticationKind     `json:"k"`
 		OIDCAdminSubject bool                   `json:"s"`
 		OIDCRoleMappings []OIDCRoleMappingMatch `json:"m"`
+		SessionVersion   int64                  `json:"v"`
 	}
 	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
 		return Principal{}, false
+	}
+	if strings.HasPrefix(claims.Actor, "user:") {
+		if a.Users == nil {
+			return Principal{}, false
+		}
+		user, err := a.Users.GetUserByName(context.Background(), strings.TrimPrefix(claims.Actor, "user:"))
+		versionMatches := claims.SessionVersion == user.SessionVersion || claims.SessionVersion == 0 && user.SessionVersion == 1
+		if err != nil || user.State != repository.UserActive || !versionMatches {
+			return Principal{}, false
+		}
+		role := Role(user.Role)
+		if user.MustChangePassword {
+			return Principal{
+				Actor: claims.Actor, RepositoryPatterns: a.RepositoryReaders[claims.Actor],
+				AuthenticationKind: AuthenticationOIDC, MustChangePassword: true,
+			}, true
+		}
+		return Principal{
+			Actor: claims.Actor, Admin: role == RoleAdmin, Role: role,
+			RepositoryPatterns: a.RepositoryReaders[claims.Actor], AuthenticationKind: AuthenticationOIDC,
+			OIDCAdminSubject: claims.OIDCAdminSubject, OIDCRoleMappings: claims.OIDCRoleMappings,
+		}, true
 	}
 	return Principal{
 		Actor:              claims.Actor,
@@ -313,29 +385,39 @@ func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
 	}, true
 }
 
-func (a Authenticator) userSessionActor(token string) (string, bool) {
+func (a Authenticator) userSessionClaims(token string) (string, int64, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 || parts[0] != "us" || a.AdminToken == "" {
-		return "", false
+		return "", 0, false
 	}
-	userID, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || len(userID) == 0 {
-		return "", false
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || len(raw) == 0 {
+		return "", 0, false
 	}
 	expiresAt, err := strconv.ParseInt(parts[2], 10, 64)
 	if err != nil || time.Now().UTC().Unix() >= expiresAt {
-		return "", false
+		return "", 0, false
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(parts[3])
 	if err != nil {
-		return "", false
+		return "", 0, false
 	}
 	mac := hmac.New(sha256.New, []byte(a.AdminToken))
 	_, _ = mac.Write([]byte(strings.Join(parts[:3], ".")))
 	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return "", false
+		return "", 0, false
 	}
-	return string(userID), true
+	var claims struct {
+		ID      string `json:"i"`
+		Version int64  `json:"v"`
+	}
+	if raw[0] == '{' {
+		if json.Unmarshal(raw, &claims) != nil || claims.ID == "" || claims.Version <= 0 {
+			return "", 0, false
+		}
+		return claims.ID, claims.Version, true
+	}
+	return string(raw), 0, true
 }
 
 func (a Authenticator) tokenActor(token string) (string, bool) {

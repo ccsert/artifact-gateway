@@ -45,6 +45,20 @@ API Bearer tokens are checked against `GATEWAY_OIDC_AUDIENCE`. Browser ID
 tokens are checked independently against `GATEWAY_OIDC_CLIENT_ID`, so the API
 and Console may use separate audiences.
 
+## Local account linkage
+
+Validated OIDC identities can be bound to local accounts by normalized issuer
+and stable `sub`. Administrators may manage links from the Users page. The
+runtime Authentication settings can also enable just-in-time account creation,
+choose its default role, and opt into linking an existing account by a unique
+verified email claim. These provisioning options default to disabled.
+
+Once linked, both OIDC Bearer and browser-session authentication use the local
+account's current role and security state. Disabling the account, requiring a
+password change, or incrementing its session version therefore takes effect on
+the next authenticated request. An unlinked identity continues to use the
+external-principal behavior when JIT provisioning is disabled.
+
 ## Keycloak
 
 Create an OpenID Connect client, enable Standard Flow, and register the exact

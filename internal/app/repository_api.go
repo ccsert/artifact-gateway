@@ -105,6 +105,7 @@ type GatewayStore interface {
 	repository.NativeGoStore
 	repository.APIKeyStore
 	repository.UserStore
+	repository.UserIdentityStore
 	repository.RuntimeNodeStore
 	repository.ScheduledTaskStore
 	repository.BackgroundOperationQueueStore
@@ -148,6 +149,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	resolver := Resolver{Store: store, Adapter: adapter, Metrics: metrics}
 	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, groups: store, anonymous: store})
 	authenticator.Users = store
+	authenticator.UserIdentities = store
 	if dependencies.OIDCRuntime != nil {
 		authenticator.OIDCSource = dependencies.OIDCRuntime
 	}
@@ -311,7 +313,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("/conan/v2/", conanGroupRouter)
 	mux.Handle("/conan/", conan)
 	mux.HandleFunc("GET /auth/token", oci.Token)
-	mux.HandleFunc("POST /auth/login", userLoginHandler(store, authenticator))
+	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))
+	mux.HandleFunc("POST /auth/change-password", userChangePasswordHandler(store, store, authenticator))
 	oidcLoginValidator := dependencies.OIDCLoginValidator
 	if oidcLoginValidator == nil {
 		// Keep embedded handlers compatible. The runtime supplies a dedicated
@@ -320,7 +323,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	oidcLogin := oidcLoginHandler{
 		client: dependencies.OIDCClient, validator: oidcLoginValidator,
-		runtime: dependencies.OIDCRuntime, authenticator: authenticator,
+		runtime: dependencies.OIDCRuntime, authenticator: authenticator, identities: store,
 	}
 	mux.HandleFunc("GET /auth/oidc/config", oidcLogin.config)
 	mux.HandleFunc("GET /auth/oidc/login", oidcLogin.start)

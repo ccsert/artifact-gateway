@@ -54,9 +54,17 @@ test("operations survives legacy runtime node null arrays", async ({
       }),
     }),
   );
+  await page.route("**/api/v2/scheduled-tasks", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    }),
+  );
 
   await page.goto("/operations");
   await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible();
+  await page.getByRole("tab", { name: "执行记录" }).click();
   await expect(page.getByRole("heading", { name: "运行节点" })).toBeVisible();
   await expect(page.getByText("legacy-worker", { exact: true })).toBeVisible();
   await expect(page.getByText("无格式 Worker", { exact: true })).toBeVisible();

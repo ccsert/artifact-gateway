@@ -61,6 +61,18 @@ test("global Maven search groups versions and preserves an exact deep link", asy
         },
       }),
   );
+  await page.route(
+    `**/api/v2/repositories/${repositoryId}/artifact-intelligence**`,
+    (route) =>
+      route.fulfill({
+        status: 404,
+        json: {
+          code: "not_found",
+          message: "artifact intelligence not found",
+          status: 404,
+        },
+      }),
+  );
 
   await page.goto("/search?q=demo");
   await expect(

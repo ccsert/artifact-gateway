@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 const (
@@ -28,6 +29,7 @@ type oidcLoginHandler struct {
 	validator     *authorization.OIDCValidator
 	runtime       *OIDCRuntime
 	authenticator Authenticator
+	identities    repository.UserIdentityStore
 }
 
 type oidcFlowState struct {
@@ -150,6 +152,52 @@ func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
 		h.redirectError(w, r, "invalid_identity")
 		return
 	}
+	if h.identities != nil {
+		settings := OIDCSettingsView{ProvisioningMode: "disabled", JITDefaultRole: "reader"}
+		if h.runtime != nil {
+			if current, err := h.runtime.Settings(ctx); err == nil {
+				settings = current
+			}
+		}
+		issuer := identity.Issuer
+		if issuer == "" {
+			issuer = client.Issuer()
+		}
+		user, _, _, resolveErr := h.identities.ResolveOIDCIdentity(ctx, repository.OIDCIdentityProvision{
+			Issuer: issuer, Subject: identity.Subject, Email: identity.Email,
+			DisplayName: identity.DisplayName, PreferredUsername: identity.Username,
+			EmailVerified: identity.EmailVerified, Role: string(identity.Role),
+			Provision: settings.ProvisioningMode == "jit", MatchEmail: settings.EmailLinkingEnabled,
+			DefaultRole: settings.JITDefaultRole, OccurredAt: time.Now().UTC(),
+		})
+		switch {
+		case resolveErr == nil:
+			if user.State != repository.UserActive {
+				h.redirectError(w, r, "account_disabled")
+				return
+			}
+			principal := h.authenticator.PrincipalForActor("user:" + user.Name)
+			principal.Admin = user.Role == string(authorization.RoleAdmin)
+			principal.Role = authorization.Role(user.Role)
+			principal.AuthenticationKind = authorization.AuthenticationOIDC
+			principal.OIDCAdminSubject = identity.AdminSubject
+			principal.OIDCRoleMappings = identity.RoleMappings
+			session := h.authenticator.IssueWebSession(principal, user.SessionVersion)
+			h.setWebSessionCookie(w, client, session)
+			values := url.Values{"oidc": {"success"}, "redirect": {safeConsoleRedirect(flow.Redirect)}}
+			http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
+			return
+		case errors.Is(resolveErr, repository.ErrNotFound):
+			// Provisioning is disabled and the subject is not manually linked;
+			// preserve the existing external-principal behavior.
+		case errors.Is(resolveErr, repository.ErrIdentityAmbiguous):
+			h.redirectError(w, r, "identity_ambiguous")
+			return
+		default:
+			h.redirectError(w, r, "identity_unavailable")
+			return
+		}
+	}
 	principal := h.authenticator.PrincipalForActor(identity.Subject)
 	principal.Admin = identity.Admin
 	principal.Role = identity.Role
@@ -157,12 +205,16 @@ func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
 	principal.OIDCAdminSubject = identity.AdminSubject
 	principal.OIDCRoleMappings = identity.RoleMappings
 	session := h.authenticator.IssueWebSession(principal)
+	h.setWebSessionCookie(w, client, session)
+	values := url.Values{"oidc": {"success"}, "redirect": {safeConsoleRedirect(flow.Redirect)}}
+	http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
+}
+
+func (h oidcLoginHandler) setWebSessionCookie(w http.ResponseWriter, client *authorization.OIDCClient, session string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: webSessionCookieName, Value: session, Path: "/", MaxAge: int(webSessionLifetime.Seconds()),
 		HttpOnly: true, Secure: oidcSecureCookie(client.RedirectURL()), SameSite: http.SameSiteLaxMode,
 	})
-	values := url.Values{"oidc": {"success"}, "redirect": {safeConsoleRedirect(flow.Redirect)}}
-	http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
 }
 
 func (h oidcLoginHandler) logout(w http.ResponseWriter, r *http.Request) {

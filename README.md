@@ -105,6 +105,14 @@ The high-level runtime and ownership boundaries are documented in
 [`SECURITY.md`](SECURITY.md), and user-visible changes are collected in
 [`CHANGELOG.md`](CHANGELOG.md).
 
+Local administrator-managed accounts support profile metadata, failed-login
+lockout, mandatory password changes, password reset, and immediate session
+revocation. Configure the lock threshold with
+`GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS` (default `5`) and the lock interval
+with `GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION` (default `15m`). See the
+[local user governance guide](docs/user-governance.md) for API behavior,
+operator checks, and current limitations.
+
 ## OpenAPI contract workflow
 
 The editable Native Hosted contract starts at

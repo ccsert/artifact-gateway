@@ -22,3 +22,4 @@ console/openapi-ts-error-*.log
 /console/.product-design-audit/
 .vscode/
 console/*.png
+.VSCodeCounter/

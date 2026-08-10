@@ -36,11 +36,16 @@ type OIDCConfig struct {
 }
 
 type OIDCIdentity struct {
-	Subject      string
-	Admin        bool
-	Role         Role
-	AdminSubject bool
-	RoleMappings []OIDCRoleMappingMatch
+	Issuer        string
+	Subject       string
+	Email         string
+	DisplayName   string
+	Username      string
+	EmailVerified bool
+	Admin         bool
+	Role          Role
+	AdminSubject  bool
+	RoleMappings  []OIDCRoleMappingMatch
 }
 
 type OIDCValidator struct {
@@ -93,14 +98,18 @@ func (v *OIDCValidator) validate(ctx context.Context, token, expectedNonce strin
 		KeyID     string `json:"kid"`
 	}
 	var claims struct {
-		Issuer      string          `json:"iss"`
-		Subject     string          `json:"sub"`
-		Audience    json.RawMessage `json:"aud"`
-		Expires     int64           `json:"exp"`
-		Nonce       string          `json:"nonce"`
-		Roles       []string        `json:"roles"`
-		Groups      []string        `json:"groups"`
-		RealmAccess struct {
+		Issuer        string          `json:"iss"`
+		Subject       string          `json:"sub"`
+		Email         string          `json:"email"`
+		Name          string          `json:"name"`
+		Username      string          `json:"preferred_username"`
+		EmailVerified bool            `json:"email_verified"`
+		Audience      json.RawMessage `json:"aud"`
+		Expires       int64           `json:"exp"`
+		Nonce         string          `json:"nonce"`
+		Roles         []string        `json:"roles"`
+		Groups        []string        `json:"groups"`
+		RealmAccess   struct {
 			Roles []string `json:"roles"`
 		} `json:"realm_access"`
 		ResourceAccess map[string]struct {
@@ -122,7 +131,11 @@ func (v *OIDCValidator) validate(ctx context.Context, token, expectedNonce strin
 	if rsa.VerifyPKCS1v15(key, crypto.SHA256, digest[:], signature) != nil {
 		return OIDCIdentity{}, false
 	}
-	identity := OIDCIdentity{Subject: claims.Subject}
+	identity := OIDCIdentity{
+		Issuer: claims.Issuer, Subject: claims.Subject, Email: strings.TrimSpace(claims.Email),
+		DisplayName: strings.TrimSpace(claims.Name), Username: strings.TrimSpace(claims.Username),
+		EmailVerified: claims.EmailVerified,
+	}
 	for _, subject := range v.config.AdminSubjects {
 		if subject == identity.Subject {
 			identity.Admin = true

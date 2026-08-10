@@ -34,7 +34,7 @@ func TestPostgresOIDCSettingsVersionedReplacement(t *testing.T) {
 		Scopes: []string{"openid", "profile"}, ReaderRoles: []string{"artifact-reader"},
 		WriterRoles: []string{"artifact-writer"}, AdminRoles: []string{"artifact-admin"},
 	}, "0")
-	if err != nil || created.Version != "1" || created.UpdatedAt.IsZero() {
+	if err != nil || created.Version != "1" || created.UpdatedAt.IsZero() || created.ProvisioningMode != "disabled" || created.JITDefaultRole != "reader" {
 		t.Fatalf("created=%#v err=%v", created, err)
 	}
 

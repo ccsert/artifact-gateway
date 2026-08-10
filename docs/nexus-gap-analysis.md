@@ -32,12 +32,12 @@ the Console described in `console/src/app/router.tsx`.
 
 | Area | Nexus | Artifact Gateway | Severity |
 | --- | --- | --- | --- |
-| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Local users, API keys, global reader/writer/admin roles, repository grants with resource prefixes, effective-access explanation, and OIDC role mapping; reusable privilege templates and LDAP/SAML remain future work | Medium |
+| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Governed local users, API keys, global reader/writer/admin roles, repository grants with resource prefixes, effective-access explanation, and OIDC role mapping; custom multi-role assignments and LDAP/SAML remain future work | Medium |
 | Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Local credentials, bearer tokens, and database-configured OIDC authorization-code SSO with encrypted client secrets; session inventory, back-channel logout, and IdP-initiated logout remain future work | Low |
 | Global artifact search | Cross-repo component, checksum, class-name, tag search | Server-side cross-repository coordinate/path search with permission filtering and deep links; checksum/class-name/saved queries remain future work | Medium |
 | Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
 | Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
-| User and role admin pages | Full Security section | Users, API Keys, Access Control and repository Grants pages; LDAP/SAML/privilege designer remain future work | Medium |
+| User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control and repository Grants pages; LDAP/SAML, soft deletion and a custom-role designer remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual jobs, bounded transport, optimistic intelligence merge, versioned admission policies, and promotion-time evidence propagation; scan-on-publication, vulnerability databases, and malicious-component blocking remain future work | Medium |
@@ -61,6 +61,18 @@ flow uses HttpOnly sessions, encrypted client secrets, discovery/JWKS
 validation, and reader/writer/admin role mapping. Local users and API keys have
 bounded global roles, expiry/revocation where applicable, and last-used
 tracking.
+
+Local accounts additionally record profile metadata, last successful sign-in,
+password-change time, failed attempts, temporary lock state, mandatory password
+change state, and a monotonically increasing session version. Administrators
+can reset a password or revoke every local session immediately, while the API
+prevents disabling, demoting, or deleting the last active administrator.
+Management actions audit the performing administrator separately from the
+target account. OIDC issuer/subject identities are durably linked to local
+accounts through administrator binding, optional verified-email matching, or
+opt-in just-in-time provisioning. Remaining account-model gaps are soft deletion
+and restoration, password expiry/complexity policies, multiple role
+assignments, and per-session inventory.
 
 Repository grants add read/write/admin permissions for users, API keys, or
 external actors and may be narrowed by a canonical resource prefix. The

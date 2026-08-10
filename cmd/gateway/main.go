@@ -167,13 +167,15 @@ func main() {
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
 		handler = app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
-			AdminToken:        cfg.AdminToken,
-			ResolverToken:     cfg.ResolverToken,
-			AdminActor:        cfg.AdminActor,
-			ResolverActor:     cfg.ResolverActor,
-			RepositoryReaders: cfg.RepositoryReaders,
-			OIDCSource:        oidcRuntime,
-			APIKeys:           store,
+			AdminToken:           cfg.AdminToken,
+			ResolverToken:        cfg.ResolverToken,
+			AdminActor:           cfg.AdminActor,
+			ResolverActor:        cfg.ResolverActor,
+			LocalAuthMaxAttempts: cfg.LocalAuthMaxFailedAttempts,
+			LocalAuthLockout:     cfg.LocalAuthLockoutDuration,
+			RepositoryReaders:    cfg.RepositoryReaders,
+			OIDCSource:           oidcRuntime,
+			APIKeys:              store,
 		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})
 	}
 	server := &http.Server{

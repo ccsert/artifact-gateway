@@ -1,5 +1,24 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+
+async function mockFormatProfiles(page: Page) {
+  await page.route("**/api/v2/formats", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            format: "oci",
+            repositoryTypes: ["hosted", "proxy"],
+            groupSupported: true,
+            anonymousRead: true,
+            hostedOperations: ["read", "publish", "browse"],
+            proxyOperations: ["read", "browse"],
+          },
+        ],
+      },
+    }),
+  );
+}
 
 test("theme and language preferences persist on the sign-in surface", async ({
   page,
@@ -152,6 +171,7 @@ test("management tables keep action columns opaque and cards separated", async (
 }) => {
   await page.setViewportSize({ width: 900, height: 800 });
   await authenticateAsAdmin(page);
+  await mockFormatProfiles(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
       status: 200,
@@ -184,6 +204,21 @@ test("management tables keep action columns opaque and cards separated", async (
       }),
     }),
   );
+  await page.route("**/api/v2/repository-capacities", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          repositoryId: "repo-1",
+          format: "oci",
+          usedBytes: 1024,
+          objectCount: 1,
+          quotaBytes: 0,
+        },
+      ]),
+    }),
+  );
   await page.route("**/api/v2/users**", (route) =>
     route.fulfill({
       status: 200,
@@ -206,11 +241,13 @@ test("management tables keep action columns opaque and cards separated", async (
   await page.goto("/users");
   await expect(page.getByRole("heading", { name: "用户" })).toBeVisible();
 
-  const summary = page.getByRole("group", { name: "页面摘要" });
-  const card = summary.locator(
+  const pageHeader = page
+    .getByRole("heading", { name: "用户" })
+    .locator("xpath=../..");
+  const card = pageHeader.locator(
     "xpath=following-sibling::*[contains(@class, 'ant-card')][1]",
   );
-  const gap = await summary.evaluate((element) => {
+  const gap = await pageHeader.evaluate((element) => {
     const next = element.nextElementSibling;
     if (!next) return 0;
     return (
@@ -238,6 +275,7 @@ test("deleted repositories stay archived unless explicitly requested", async ({
   page,
 }) => {
   await authenticateAsAdmin(page);
+  await mockFormatProfiles(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
       status: 200,
@@ -275,6 +313,21 @@ test("deleted repositories stay archived unless explicitly requested", async ({
         objectCount: 0,
         quotaBytes: 0,
       }),
+    }),
+  );
+  await page.route("**/api/v2/repository-capacities", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          repositoryId: "repo-active",
+          format: "oci",
+          usedBytes: 0,
+          objectCount: 0,
+          quotaBytes: 0,
+        },
+      ]),
     }),
   );
 

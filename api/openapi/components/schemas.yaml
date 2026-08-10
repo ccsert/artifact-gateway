@@ -447,8 +447,14 @@ User:
   required:
   - id
   - name
+  - displayName
+  - email
+  - description
   - role
   - state
+  - localPasswordEnabled
+  - failedLoginAttempts
+  - mustChangePassword
   - createdAt
   - version
   properties:
@@ -456,6 +462,12 @@ User:
       type: string
       format: uuid
     name:
+      type: string
+    displayName:
+      type: string
+    email:
+      type: string
+    description:
       type: string
     role:
       type: string
@@ -468,6 +480,22 @@ User:
       enum:
       - active
       - disabled
+    lastLoginAt:
+      type: string
+      format: date-time
+    passwordChangedAt:
+      type: string
+      format: date-time
+    localPasswordEnabled:
+      type: boolean
+    failedLoginAttempts:
+      type: integer
+      minimum: 0
+    lockedUntil:
+      type: string
+      format: date-time
+    mustChangePassword:
+      type: boolean
     createdAt:
       type: string
       format: date-time
@@ -480,11 +508,23 @@ UserList:
   type: object
   required:
   - items
+  - total
+  - offset
+  - limit
   properties:
     items:
       type: array
       items:
         "$ref": "#/User"
+    total:
+      type: integer
+      minimum: 0
+    offset:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
 CreateUser:
   type: object
   required:
@@ -497,20 +537,44 @@ CreateUser:
       type: string
       minLength: 1
       maxLength: 128
+    displayName:
+      type: string
+      maxLength: 128
+    email:
+      type: string
+      format: email
+      maxLength: 254
+    description:
+      type: string
+      maxLength: 512
     password:
       type: string
       format: password
       minLength: 8
+      maxLength: 72
     role:
       type: string
       enum:
       - admin
       - writer
       - reader
+    mustChangePassword:
+      type: boolean
+      default: false
 UpdateUser:
   type: object
   additionalProperties: false
   properties:
+    displayName:
+      type: string
+      maxLength: 128
+    email:
+      type: string
+      format: email
+      maxLength: 254
+    description:
+      type: string
+      maxLength: 512
     role:
       type: string
       enum:
@@ -522,6 +586,20 @@ UpdateUser:
       enum:
       - active
       - disabled
+ResetUserPassword:
+  type: object
+  required:
+  - password
+  additionalProperties: false
+  properties:
+    password:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+    mustChangePassword:
+      type: boolean
+      default: true
 OCITagList:
   type: object
   required:
@@ -1249,7 +1327,7 @@ AnonymousAccessPolicy:
       description: Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
 OIDCSettings:
   type: object
-  required: [version, source, enabled, issuer, audience, clientId, clientSecretConfigured, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles]
+  required: [version, source, enabled, issuer, audience, clientId, clientSecretConfigured, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
   additionalProperties: false
   properties:
     version: {type: string}
@@ -1276,10 +1354,13 @@ OIDCSettings:
     adminRoles:
       type: array
       items: {type: string}
+    provisioningMode: {type: string, enum: [disabled, jit]}
+    emailLinkingEnabled: {type: boolean}
+    jitDefaultRole: {type: string, enum: [admin, writer, reader]}
     updatedAt: {type: string, format: date-time}
 OIDCSettingsUpdate:
   type: object
-  required: [enabled, issuer, audience, clientId, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles]
+  required: [enabled, issuer, audience, clientId, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
   additionalProperties: false
   properties:
     enabled: {type: boolean}
@@ -1307,6 +1388,9 @@ OIDCSettingsUpdate:
     adminRoles:
       type: array
       items: {type: string}
+    provisioningMode: {type: string, enum: [disabled, jit]}
+    emailLinkingEnabled: {type: boolean}
+    jitDefaultRole: {type: string, enum: [admin, writer, reader]}
 OIDCConnectionTest:
   type: object
   required: [reachable, issuer, latencyMs, checkedAt]
@@ -1319,6 +1403,36 @@ OIDCConnectionTest:
     jwksUrl: {type: string, format: uri}
     latencyMs: {type: integer, minimum: 0}
     checkedAt: {type: string, format: date-time}
+UserIdentity:
+  type: object
+  required: [id, userId, kind, issuer, subject, email, displayName, emailVerified, createdAt]
+  additionalProperties: false
+  properties:
+    id: {type: string, format: uuid}
+    userId: {type: string, format: uuid}
+    kind: {type: string, enum: [oidc]}
+    issuer: {type: string, format: uri}
+    subject: {type: string, minLength: 1}
+    email: {type: string}
+    displayName: {type: string}
+    emailVerified: {type: boolean}
+    lastLoginAt: {type: string, format: date-time}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+UserIdentityList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/UserIdentity"}
+CreateUserIdentity:
+  type: object
+  required: [issuer, subject]
+  additionalProperties: false
+  properties:
+    issuer: {type: string, format: uri}
+    subject: {type: string, minLength: 1, maxLength: 512}
 AuditCleanupJob:
   type: object
   required: [id, policyVersion, cutoffAt, batchSize, deleted, state, createdAt]

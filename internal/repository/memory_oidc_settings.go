@@ -16,6 +16,7 @@ func (s *MemoryStore) GetOIDCSettings(_ context.Context) (OIDCSettings, error) {
 }
 
 func (s *MemoryStore) ReplaceOIDCSettings(_ context.Context, settings OIDCSettings, expectedVersion string) (OIDCSettings, error) {
+	settings = normalizeOIDCSettingsDefaults(settings)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.oidcSettings == nil {

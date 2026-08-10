@@ -298,6 +298,58 @@
     "/users": {
       "get": {
         "operationId": "listUsers",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "writer",
+                "reader"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "disabled"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/UserList"
@@ -387,6 +439,9 @@
           "404": {
             "$ref": "#/components/responses/Problem"
           },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
           "412": {
             "$ref": "#/components/responses/Problem"
           }
@@ -397,6 +452,180 @@
         "responses": {
           "204": {
             "description": "User deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/users/{userId}/password": {
+      "parameters": [
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "resetUserPassword",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetUserPassword"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/User"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/users/{userId}/sessions:revoke": {
+      "parameters": [
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "revokeUserSessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/User"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/users/{userId}/identities": {
+      "parameters": [
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listUserIdentities",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UserIdentityList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createUserIdentity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserIdentity"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/UserIdentity"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/users/{userId}/identities/{identityId}": {
+      "parameters": [
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "identityId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteUserIdentity",
+        "responses": {
+          "204": {
+            "description": "Identity unlinked"
           },
           "401": {
             "$ref": "#/components/responses/Problem"
@@ -4207,8 +4436,14 @@
         "required": [
           "id",
           "name",
+          "displayName",
+          "email",
+          "description",
           "role",
           "state",
+          "localPasswordEnabled",
+          "failedLoginAttempts",
+          "mustChangePassword",
           "createdAt",
           "version"
         ],
@@ -4218,6 +4453,15 @@
             "format": "uuid"
           },
           "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "description": {
             "type": "string"
           },
           "role": {
@@ -4235,6 +4479,28 @@
               "disabled"
             ]
           },
+          "lastLoginAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "passwordChangedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localPasswordEnabled": {
+            "type": "boolean"
+          },
+          "failedLoginAttempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lockedUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4251,7 +4517,10 @@
       "UserList": {
         "type": "object",
         "required": [
-          "items"
+          "items",
+          "total",
+          "offset",
+          "limit"
         ],
         "properties": {
           "items": {
@@ -4259,6 +4528,18 @@
             "items": {
               "$ref": "#/components/schemas/User"
             }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },
@@ -4308,10 +4589,24 @@
             "minLength": 1,
             "maxLength": 128
           },
+          "displayName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512
+          },
           "password": {
             "type": "string",
             "format": "password",
-            "minLength": 8
+            "minLength": 8,
+            "maxLength": 72
           },
           "role": {
             "type": "string",
@@ -4320,6 +4615,10 @@
               "writer",
               "reader"
             ]
+          },
+          "mustChangePassword": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -4327,6 +4626,19 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -4341,6 +4653,25 @@
               "active",
               "disabled"
             ]
+          }
+        }
+      },
+      "ResetUserPassword": {
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72
+          },
+          "mustChangePassword": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
@@ -5231,7 +5562,10 @@
           "adminSubjects",
           "readerRoles",
           "writerRoles",
-          "adminRoles"
+          "adminRoles",
+          "provisioningMode",
+          "emailLinkingEnabled",
+          "jitDefaultRole"
         ],
         "additionalProperties": false,
         "properties": {
@@ -5299,6 +5633,24 @@
               "type": "string"
             }
           },
+          "provisioningMode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "jit"
+            ]
+          },
+          "emailLinkingEnabled": {
+            "type": "boolean"
+          },
+          "jitDefaultRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -5317,7 +5669,10 @@
           "adminSubjects",
           "readerRoles",
           "writerRoles",
-          "adminRoles"
+          "adminRoles",
+          "provisioningMode",
+          "emailLinkingEnabled",
+          "jitDefaultRole"
         ],
         "additionalProperties": false,
         "properties": {
@@ -5379,6 +5734,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "provisioningMode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "jit"
+            ]
+          },
+          "emailLinkingEnabled": {
+            "type": "boolean"
+          },
+          "jitDefaultRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
           }
         }
       },
@@ -5931,6 +6304,99 @@
           },
           "nodes": {
             "$ref": "#/components/schemas/RuntimeNodeHealth"
+          }
+        }
+      },
+      "UserIdentity": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "kind",
+          "issuer",
+          "subject",
+          "email",
+          "displayName",
+          "emailVerified",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "oidc"
+            ]
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "lastLoginAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserIdentityList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserIdentity"
+            }
+          }
+        }
+      },
+      "CreateUserIdentity": {
+        "type": "object",
+        "required": [
+          "issuer",
+          "subject"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
           }
         }
       },
@@ -7885,6 +8351,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/APIKey"
+            }
+          }
+        }
+      },
+      "UserIdentityList": {
+        "description": "External identities linked to a local user",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UserIdentityList"
+            }
+          }
+        }
+      },
+      "UserIdentity": {
+        "description": "External identity linked to a local user",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UserIdentity"
             }
           }
         }

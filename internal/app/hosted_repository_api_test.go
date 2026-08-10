@@ -1516,6 +1516,9 @@ func TestUserManagementLoginAndSessionAuth(t *testing.T) {
 	if code := createUser(`{"name":"root","password":"supersecret","role":"admin"}`); code != http.StatusCreated {
 		t.Fatalf("create root=%d", code)
 	}
+	if code := createUser(`{"name":"backup-admin","password":"supersecret","role":"admin"}`); code != http.StatusCreated {
+		t.Fatalf("create backup admin=%d", code)
+	}
 
 	list := httptest.NewRequest(http.MethodGet, "/api/v2/users", nil)
 	authorize(list, "admin-secret")

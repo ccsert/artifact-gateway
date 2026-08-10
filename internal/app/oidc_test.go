@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -48,6 +49,67 @@ func TestOIDCAuthenticatorValidatesRS256ClaimsAndRepositoryAccess(t *testing.T) 
 	admin, ok := authenticator.Authenticate("Bearer " + adminToken)
 	if !ok || !admin.Admin || !admin.OIDCAdminSubject || admin.Role != RoleAdmin {
 		t.Fatalf("admin = %#v, authenticated=%t", admin, ok)
+	}
+}
+
+func TestOIDCBearerIdentityUsesBoundLocalAccountRoleAndState(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const keyID = "bound-identity-key"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(oidcJWKS(t, keyID, &privateKey.PublicKey))
+	}))
+	defer server.Close()
+
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(context.Background(), repository.User{
+		ID: "bound-user", Name: "bound-user", Role: string(RoleReader),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateUserIdentity(context.Background(), repository.UserIdentity{
+		ID: "bound-identity", UserID: user.ID, Kind: repository.UserIdentityOIDC,
+		Issuer: "https://issuer.example.test", Subject: "provider-admin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{
+		OIDC: NewOIDCValidator(OIDCConfig{
+			Issuer: "https://issuer.example.test", Audience: "artifact-gateway", JWKSURL: server.URL,
+			Roles: OIDCRoleMapping{Admin: []string{"provider-admin-role"}},
+		}),
+		Users: store, UserIdentities: store,
+	}
+	token := signedOIDCTokenWithRoles(
+		t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "provider-admin",
+		time.Now().Add(time.Minute), []string{"provider-admin-role"},
+	)
+	principal, ok := authenticator.Authenticate("Bearer " + token)
+	if !ok || principal.Actor != "user:bound-user" || principal.Role != authorization.RoleReader || principal.Admin || principal.AuthenticationKind != authorization.AuthenticationOIDC {
+		t.Fatalf("bound bearer principal=%#v ok=%v", principal, ok)
+	}
+
+	passwordRestricted, err := store.UpdateUserPassword(context.Background(), user.ID, "local-hash", user.Version, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, ok = authenticator.Authenticate("Bearer " + token)
+	if !ok || !principal.MustChangePassword || principal.Role != "" || principal.Admin {
+		t.Fatalf("password-restricted bearer principal=%#v ok=%v", principal, ok)
+	}
+	passwordReady, err := store.UpdateUserPassword(context.Background(), user.ID, "new-local-hash", passwordRestricted.Version, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := repository.UserDisabled
+	if _, err = store.UpdateUser(context.Background(), repository.UserUpdate{ID: user.ID, State: &disabled}, passwordReady.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + token); ok {
+		t.Fatal("disabled local account authenticated with bound OIDC bearer")
 	}
 }
 

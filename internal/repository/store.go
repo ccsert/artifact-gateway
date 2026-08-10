@@ -12,6 +12,7 @@ var (
 	ErrNameExists                   = errors.New("group name already exists")
 	ErrIdempotencyConflict          = errors.New("idempotency key conflicts with request")
 	ErrVersionConflict              = errors.New("resource version conflicts with current state")
+	ErrLastActiveAdmin              = errors.New("last active administrator cannot be removed")
 	ErrQuotaExceeded                = errors.New("repository capacity quota exceeded")
 	ErrUpstreamChanged              = errors.New("upstream immutable artifact metadata changed")
 	ErrInvalidRuntimeNode           = errors.New("runtime node identity is invalid")
@@ -19,6 +20,8 @@ var (
 	ErrInvalidArtifactIntelligence  = errors.New("artifact intelligence is invalid")
 	ErrArtifactIntelligenceConflict = errors.New("target artifact intelligence conflicts with source")
 	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
+	ErrIdentityExists               = errors.New("user identity already exists")
+	ErrIdentityAmbiguous            = errors.New("user identity matches multiple accounts")
 )
 
 type HostedRepositoryStore interface {
@@ -40,6 +43,17 @@ type AnonymousAccessPolicyStore interface {
 type OIDCSettingsStore interface {
 	GetOIDCSettings(context.Context) (OIDCSettings, error)
 	ReplaceOIDCSettings(context.Context, OIDCSettings, string) (OIDCSettings, error)
+}
+
+// UserIdentityStore links provider credentials to a local account. The
+// provider subject is the stable external identity; email and display name
+// are informational claims refreshed at successful sign-in.
+type UserIdentityStore interface {
+	ListUserIdentities(context.Context, string) ([]UserIdentity, error)
+	CreateUserIdentity(context.Context, UserIdentity) (UserIdentity, error)
+	DeleteUserIdentity(context.Context, string, string) error
+	GetUserByOIDCIdentity(context.Context, string, string) (User, UserIdentity, error)
+	ResolveOIDCIdentity(context.Context, OIDCIdentityProvision) (User, UserIdentity, bool, error)
 }
 
 type HostedGroupStore interface {

@@ -3881,7 +3881,10 @@
           "adminSubjects",
           "readerRoles",
           "writerRoles",
-          "adminRoles"
+          "adminRoles",
+          "provisioningMode",
+          "emailLinkingEnabled",
+          "jitDefaultRole"
         ],
         "additionalProperties": false,
         "properties": {
@@ -3949,6 +3952,24 @@
               "type": "string"
             }
           },
+          "provisioningMode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "jit"
+            ]
+          },
+          "emailLinkingEnabled": {
+            "type": "boolean"
+          },
+          "jitDefaultRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -3967,7 +3988,10 @@
           "adminSubjects",
           "readerRoles",
           "writerRoles",
-          "adminRoles"
+          "adminRoles",
+          "provisioningMode",
+          "emailLinkingEnabled",
+          "jitDefaultRole"
         ],
         "additionalProperties": false,
         "properties": {
@@ -4029,6 +4053,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "provisioningMode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "jit"
+            ]
+          },
+          "emailLinkingEnabled": {
+            "type": "boolean"
+          },
+          "jitDefaultRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "writer",
+              "reader"
+            ]
           }
         }
       },

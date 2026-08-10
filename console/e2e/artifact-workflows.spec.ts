@@ -253,5 +253,5 @@ test("expired API keys are clearly distinguished from active and revoked keys", 
   await page.getByText("已过期", { exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: apiKeyName });
   await expect(row).toBeVisible();
-  await expect(row.getByText("expired", { exact: true })).toBeVisible();
+  await expect(row.getByText("已过期", { exact: true })).toBeVisible();
 });

@@ -2,6 +2,35 @@
 users:
   get:
     operationId: listUsers
+    parameters:
+    - name: search
+      in: query
+      schema:
+        type: string
+        maxLength: 128
+    - name: role
+      in: query
+      schema:
+        type: string
+        enum: [admin, writer, reader]
+    - name: state
+      in: query
+      schema:
+        type: string
+        enum: [active, disabled]
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    - name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
     responses:
       '200':
         "$ref": "../components/responses.yaml#/UserList"
@@ -57,6 +86,8 @@ users_userId:
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
   delete:
@@ -64,6 +95,112 @@ users_userId:
     responses:
       '204':
         description: User deleted
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId_password:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+  post:
+    operationId: resetUserPassword
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/ResetUserPassword"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/User"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId_sessions_revoke:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+  post:
+    operationId: revokeUserSessions
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/User"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId_identities:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+  get:
+    operationId: listUserIdentities
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/UserIdentityList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createUserIdentity
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateUserIdentity"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/UserIdentity"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId_identities_identityId:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+  - name: identityId
+    in: path
+    required: true
+    schema:
+      type: string
+  delete:
+    operationId: deleteUserIdentity
+    responses:
+      '204':
+        description: Identity unlinked
       '401':
         "$ref": "../components/responses.yaml#/Problem"
       '404':

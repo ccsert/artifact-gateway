@@ -243,6 +243,16 @@ OIDCConnectionTest:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/OIDCConnectionTest"}
+UserIdentityList:
+  description: External identities linked to a local user
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/UserIdentityList"}
+UserIdentity:
+  description: External identity linked to a local user
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/UserIdentity"}
 AuditCleanupJob:
   description: Audit cleanup job
   content:
