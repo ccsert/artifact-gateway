@@ -258,6 +258,7 @@ export type LifecycleJob = {
   progressTotal: number;
   progressMessage?: string;
   lastError?: string;
+  details?: LifecycleJobDetails;
 };
 
 export type ScheduledTask = {
@@ -952,6 +953,13 @@ export type ApplyAuthorizationTemplate = {
 };
 
 export type RepositoryCapacityList = Array<RepositoryCapacity>;
+
+export type LifecycleJobDetails = {
+  format: Format;
+  sourceRepositoryId: string;
+  coordinate: string;
+  digest: string;
+};
 
 export type RepositoryLifecycleJob = {
   repositoryId: string;

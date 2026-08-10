@@ -8,6 +8,7 @@ import {
 } from "../../client";
 import type { ArtifactTombstone, LifecycleJob, Repository } from "../../client";
 import { Badge, StateBadge } from "../../components/Badge";
+import { LifecycleJobDetails } from "../../components/LifecycleJobDetails";
 import {
   EmptyState,
   ErrorBanner,
@@ -23,6 +24,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const { text } = usePreferences();
   const [jobs, setJobs] = useState<LifecycleJob[] | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -134,6 +136,21 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       size="middle"
       dataSource={jobs}
       columns={jobColumns}
+      expandable={{
+        expandedRowKeys: expandedJobId ? [expandedJobId] : [],
+        onExpand: (expanded, job) => setExpandedJobId(expanded ? job.id : null),
+        rowExpandable: (job) => Boolean(job.details || job.lastError),
+        expandedRowRender: (job) => (
+          <div className="space-y-2 py-1">
+            {job.details && <LifecycleJobDetails details={job.details} />}
+            {job.lastError && (
+              <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
+                {job.lastError}
+              </div>
+            )}
+          </div>
+        ),
+      }}
       pagination={false}
       scroll={{ x: 1100 }}
     />

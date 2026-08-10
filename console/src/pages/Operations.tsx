@@ -33,6 +33,7 @@ import { formatDate } from "../lib/format";
 import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
 import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
 import { SystemDiagnosticsPanel } from "../components/SystemDiagnosticsPanel";
+import { LifecycleJobDetails } from "../components/LifecycleJobDetails";
 import {
   FilterBar,
   FilterField,
@@ -56,6 +57,7 @@ type OperationRow = {
   progressTotal?: number;
   progressMessage?: string;
   lastError?: string;
+  details?: LifecycleJob["details"];
 };
 
 const KIND_LABELS: Record<string, [string, string]> = {
@@ -63,6 +65,7 @@ const KIND_LABELS: Record<string, [string, string]> = {
   promotion: ["制品晋级", "Artifact promotion"],
   replication: ["仓库复制", "Repository replication"],
   reclaim: ["对象回收", "Object reclamation"],
+  intelligence: ["情报同步", "Intelligence sync"],
   "audit-retention": ["审计保留", "Audit retention"],
 };
 
@@ -82,6 +85,7 @@ export function OperationsPage() {
   const [kindFilter, setKindFilter] = useState("all");
   const [repositoryFilter, setRepositoryFilter] = useState("all");
   const [actingJob, setActingJob] = useState<string | null>(null);
+  const [expandedJobKey, setExpandedJobKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +130,7 @@ export function OperationsPage() {
             ? text("历史任务", "Historical job")
             : job.progressMessage,
           lastError: job.lastError,
+          details: job.details,
         };
       });
       const auditRows: OperationRow[] = (auditRetention.data ?? []).map(
@@ -576,6 +581,27 @@ export function OperationsPage() {
                       size="middle"
                       dataSource={visibleRows}
                       columns={columns}
+                      expandable={{
+                        expandedRowKeys: expandedJobKey ? [expandedJobKey] : [],
+                        onExpand: (expanded, row) =>
+                          setExpandedJobKey(
+                            expanded ? `${row.kind}-${row.id}` : null,
+                          ),
+                        rowExpandable: (row) =>
+                          Boolean(row.details || row.lastError),
+                        expandedRowRender: (row) => (
+                          <div className="space-y-2 py-1">
+                            {row.details && (
+                              <LifecycleJobDetails details={row.details} />
+                            )}
+                            {row.lastError && (
+                              <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
+                                {row.lastError}
+                              </div>
+                            )}
+                          </div>
+                        ),
+                      }}
                       pagination={false}
                       virtual
                       scroll={{ x: 1520, y: 520 }}
