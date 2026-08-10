@@ -102,7 +102,9 @@ permits Repository disablement and Maven publication/artifact deletion; and
 `repositories:admin` permits grant and retention-policy replacement. The
 additional `repositories:intelligence` scope permits only artifact intelligence
 replacement, allowing CI and scanners to publish signed metadata without
-publishing or managing the repository. Scope inheritance is `admin -> write -> read`
+publishing or managing the repository. A replacement must reference a currently
+visible artifact identity in the target repository; the Gateway rejects orphan
+coordinate/digest pairs before storing metadata. Scope inheritance is `admin -> write -> read`
 for repository operations; `admin` also includes intelligence writes, while
 `writer` and `reader` do not. The standalone `repositories:intelligence` scope
 does not grant repository reads, writes, or administration. Raw/OCI/Maven protocol reads and

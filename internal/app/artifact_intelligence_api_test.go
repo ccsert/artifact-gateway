@@ -19,11 +19,17 @@ func TestArtifactIntelligenceManagementHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	digest := "sha256:" + strings.Repeat("b", 64)
+	if _, err := store.PutOCIManifest(context.Background(), repository.OCIManifest{
+		RepositoryID: repo.ID, Name: "library/widget", Digest: digest,
+		ObjectKey: "oci/library/widget", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 128,
+	}, "latest"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
-	digest := "sha256:" + strings.Repeat("b", 64)
 	request := func(method, path, body, token, ifMatch string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if token != "" {
@@ -65,6 +71,13 @@ func TestArtifactIntelligenceScopeIsNarrowerThanRepositoryWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	digest := "sha256:" + strings.Repeat("c", 64)
+	if _, err := store.PutOCIManifest(context.Background(), repository.OCIManifest{
+		RepositoryID: repo.ID, Name: "library/scoped", Digest: digest,
+		ObjectKey: "oci/library/scoped", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 128,
+	}, "latest"); err != nil {
+		t.Fatal(err)
+	}
 	keyToken := "scanner-key"
 	key, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: "44444444-4444-4444-4444-444444444444", Name: "scanner", SecretHash: authorization.HashAPIKey(keyToken), Roles: []string{}})
 	if err != nil {
@@ -76,7 +89,6 @@ func TestArtifactIntelligenceScopeIsNarrowerThanRepositoryWrite(t *testing.T) {
 	auth := testAuthenticator()
 	auth.APIKeys = store
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
-	digest := "sha256:" + strings.Repeat("c", 64)
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, keyToken)
@@ -91,6 +103,25 @@ func TestArtifactIntelligenceScopeIsNarrowerThanRepositoryWrite(t *testing.T) {
 	artifacts := request(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts", "")
 	if artifacts.Code != http.StatusForbidden {
 		t.Fatalf("artifact browse=%d body=%s", artifacts.Code, artifacts.Body.String())
+	}
+}
+
+func TestArtifactIntelligenceRejectsUnknownArtifact(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "55555555-5555-5555-5555-555555555555", Name: "unknown-oci", Format: repository.FormatOCI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	digest := "sha256:" + strings.Repeat("d", 64)
+	request := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/artifact-intelligence?coordinate=library/missing&digest="+digest, strings.NewReader(`{"signatures":[],"sboms":[],"licenses":[]}`))
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "artifact for intelligence metadata not found") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

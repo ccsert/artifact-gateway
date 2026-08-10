@@ -58,7 +58,7 @@ deleting policy state.
 | --- | --- | --- |
 | Read | `repositories:read` | Native Maven download, OCI blob/manifest/tag fetch, Raw GET/HEAD, Conan proxy/read-through |
 | Write | `repositories:write` | Native Maven publication, OCI upload/manifest/delete, Raw PUT/DELETE |
-| Intelligence | `repositories:intelligence` | Write signatures, SBOM, provenance, license, and vulnerability summaries without publish/delete/admin access |
+| Intelligence | `repositories:intelligence` | Write signatures, SBOM, provenance, license, and vulnerability summaries for an existing visible artifact without publish/delete/admin access |
 | Admin | `repositories:admin` | Repository grant replacement and future repository-scoped administrative mutations; also includes intelligence writes |
 
 V2 separates global discovery from known-resource operations. A principal with
