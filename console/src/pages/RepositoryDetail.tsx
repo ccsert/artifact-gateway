@@ -74,12 +74,17 @@ const RepositoryRetentionTab = lazy(async () => ({
   default: (await import("./repository-detail/RepositoryRetentionTab"))
     .RepositoryRetentionTab,
 }));
+const RepositorySecurityTab = lazy(async () => ({
+  default: (await import("./repository-detail/RepositorySecurityTab"))
+    .RepositorySecurityTab,
+}));
 
 type Tab =
   | "artifacts"
   | "publish"
   | "grants"
   | "retention"
+  | "security"
   | "capacity"
   | "distribute"
   | "jobs"
@@ -105,6 +110,13 @@ const TABS: {
     key: "retention",
     label: "保留策略",
     labelEn: "Retention",
+    formats: ["maven", "oci", "conan", "raw", "npm", "pypi"],
+    hostedOnly: true,
+  },
+  {
+    key: "security",
+    label: "安全准入",
+    labelEn: "Security admission",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi"],
     hostedOnly: true,
   },
@@ -958,6 +970,7 @@ export function RepositoryDetailPage() {
             </>
           )}
           {tab === "retention" && <RepositoryRetentionTab repo={repo} />}
+          {tab === "security" && <RepositorySecurityTab repo={repo} />}
           {tab === "capacity" && <RepositoryCapacityTab repo={repo} />}
           {tab === "distribute" && <RepositoryDistributionTab repo={repo} />}
           {tab === "jobs" && <RepositoryJobsTab repo={repo} />}

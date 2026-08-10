@@ -157,6 +157,36 @@ export type RetentionPolicy = {
   protectedPatterns?: Array<string>;
 };
 
+export type SecurityPolicy = {
+  version: string;
+  /**
+   * Enforce for promotions into this repository.
+   */
+  enabled?: boolean;
+  requireSignature?: boolean;
+  requireVerifiedSignature?: boolean;
+  requireSbom?: boolean;
+  requireProvenance?: boolean;
+  requireVulnerabilityScan?: boolean;
+  maxAllowedSeverity?: "none" | "low" | "medium" | "high" | "critical";
+  failOnScanError?: boolean;
+  allowedLicenses?: Array<string>;
+};
+
+export type SecurityPolicyEvaluationRequest = {
+  sourceRepositoryId: string;
+  coordinate: string;
+  digest: string;
+};
+
+export type SecurityPolicyEvaluation = {
+  allowed: boolean;
+  enforced: boolean;
+  policyVersion: string;
+  intelligencePresent: boolean;
+  reasons: Array<string>;
+};
+
 export type RepositoryCapacity = {
   repositoryId: string;
   format: Format;
@@ -469,6 +499,7 @@ export type Problem = {
     | "session_closed"
     | "digest_mismatch"
     | "retention_protected"
+    | "security_policy_denied"
     | "internal_error";
   message: string;
   requestId: string;
@@ -2933,6 +2964,94 @@ export type ReplaceRetentionPolicyResponses = {
 
 export type ReplaceRetentionPolicyResponse =
   ReplaceRetentionPolicyResponses[keyof ReplaceRetentionPolicyResponses];
+
+export type GetSecurityPolicyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/security-policy";
+};
+
+export type GetSecurityPolicyResponses = {
+  /**
+   * Repository security admission policy
+   */
+  200: SecurityPolicy;
+};
+
+export type GetSecurityPolicyResponse =
+  GetSecurityPolicyResponses[keyof GetSecurityPolicyResponses];
+
+export type ReplaceSecurityPolicyData = {
+  body: SecurityPolicy;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/security-policy";
+};
+
+export type ReplaceSecurityPolicyErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceSecurityPolicyError =
+  ReplaceSecurityPolicyErrors[keyof ReplaceSecurityPolicyErrors];
+
+export type ReplaceSecurityPolicyResponses = {
+  /**
+   * Repository security admission policy
+   */
+  200: SecurityPolicy;
+};
+
+export type ReplaceSecurityPolicyResponse =
+  ReplaceSecurityPolicyResponses[keyof ReplaceSecurityPolicyResponses];
+
+export type EvaluateSecurityPolicyData = {
+  body: SecurityPolicyEvaluationRequest;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/security-policy:evaluate";
+};
+
+export type EvaluateSecurityPolicyErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type EvaluateSecurityPolicyError =
+  EvaluateSecurityPolicyErrors[keyof EvaluateSecurityPolicyErrors];
+
+export type EvaluateSecurityPolicyResponses = {
+  /**
+   * Security admission evaluation for an immutable artifact
+   */
+  200: SecurityPolicyEvaluation;
+};
+
+export type EvaluateSecurityPolicyResponse =
+  EvaluateSecurityPolicyResponses[keyof EvaluateSecurityPolicyResponses];
 
 export type GetRepositoryCapacityData = {
   body?: never;
