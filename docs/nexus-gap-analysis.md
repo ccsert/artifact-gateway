@@ -280,9 +280,10 @@ referenced commits.
 - **Global cross-repository artifact search (P1).** A header search bar and a
   `/search` results page use the server-side `/api/v2/artifact-search` cursor
   endpoint, enforce per-repository read permissions, and preserve exact deep
-  links including Maven SNAPSHOT build numbers. The search now also recognizes
-  full or bare SHA-256 values, returns a `matchKind`, and can locate historical
-  visible OCI/Conan versions rather than only the latest coordinate projection.
+  links including Maven SNAPSHOT build numbers. The search recognizes full or
+  bare SHA-256 values, returns a `matchKind`, locates historical visible
+  OCI/Conan versions, and includes bounded signature/SBOM/license/vulnerability
+  summaries so operators can triage risk without opening every artifact.
 - **Audit CSV export (P3).** The audits page exports the currently filtered
   records to a UTF-8 BOM CSV via a reusable `lib/csv.ts`. (`103e9117`)
 - **Audit cursor paging (P1).** The audit Console uses a signed, filter-scoped

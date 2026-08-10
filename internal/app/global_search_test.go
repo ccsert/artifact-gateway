@@ -31,6 +31,13 @@ func TestGlobalArtifactSearchPaginatesReadableRepositoriesWithoutLeakingDeniedOn
 		return repo
 	}
 	first := createRepository("00000000-0000-0000-0000-000000000003", "first", "packages/alpha.bin", "a", "search-user")
+	if _, err := store.ReplaceArtifactIntelligence(ctx, repository.ArtifactIntelligence{
+		RepositoryID: first.ID, Format: repository.FormatRaw, Coordinate: "packages/alpha.bin", Digest: "sha256:" + strings.Repeat("a", 64),
+		Signatures: []repository.ArtifactSignature{{KeyID: "cosign-prod"}}, SBOMs: []repository.ArtifactSBOM{{Digest: "sha256:" + strings.Repeat("d", 64)}},
+		Licenses: []repository.ArtifactLicense{{SPDXID: "Apache-2.0"}}, Vulnerability: &repository.ArtifactVulnerabilitySummary{Status: "clean"},
+	}, ""); err != nil {
+		t.Fatal(err)
+	}
 	denied := createRepository("00000000-0000-0000-0000-000000000002", "denied", "packages/private.bin", "b", "other-user")
 	last := createRepository("00000000-0000-0000-0000-000000000001", "last", "packages/omega.bin", "c", "search-user")
 
@@ -53,6 +60,12 @@ func TestGlobalArtifactSearchPaginatesReadableRepositoriesWithoutLeakingDeniedOn
 			RepositoryID   string `json:"repositoryId"`
 			RepositoryName string `json:"repositoryName"`
 			Coordinate     string `json:"coordinate"`
+			Intelligence   *struct {
+				SignatureCount      int    `json:"signatureCount"`
+				SbomCount           int    `json:"sbomCount"`
+				LicenseCount        int    `json:"licenseCount"`
+				VulnerabilityStatus string `json:"vulnerabilityStatus"`
+			} `json:"intelligence"`
 		} `json:"items"`
 		SearchedRepositories int    `json:"searchedRepositories"`
 		NextPageToken        string `json:"nextPageToken"`
@@ -63,7 +76,7 @@ func TestGlobalArtifactSearchPaginatesReadableRepositoriesWithoutLeakingDeniedOn
 	if firstResponse.Code != http.StatusOK || json.Unmarshal(firstResponse.Body.Bytes(), &firstPage) != nil {
 		t.Fatalf("first page=%d body=%s", firstResponse.Code, firstResponse.Body.String())
 	}
-	if len(firstPage.Items) != 1 || firstPage.Items[0].RepositoryID != first.ID || firstPage.Items[0].Coordinate != "packages/alpha.bin" || firstPage.SearchedRepositories != 2 || firstPage.NextPageToken == "" {
+	if len(firstPage.Items) != 1 || firstPage.Items[0].RepositoryID != first.ID || firstPage.Items[0].Coordinate != "packages/alpha.bin" || firstPage.Items[0].Intelligence == nil || firstPage.Items[0].Intelligence.SignatureCount != 1 || firstPage.Items[0].Intelligence.SbomCount != 1 || firstPage.Items[0].Intelligence.LicenseCount != 1 || firstPage.Items[0].Intelligence.VulnerabilityStatus != "clean" || firstPage.SearchedRepositories != 2 || firstPage.NextPageToken == "" {
 		t.Fatalf("first page=%#v", firstPage)
 	}
 	if strings.Contains(firstResponse.Body.String(), denied.Name) || strings.Contains(firstResponse.Body.String(), "private.bin") {
