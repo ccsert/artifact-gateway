@@ -138,7 +138,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 				value := item.Version
 				version = &value
 			}
-			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Version: version, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher)})
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Version: version, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher), Intelligence: artifactIntelligenceSummaryResponse(item.Intelligence)})
 		}
 		return items, nil
 	}

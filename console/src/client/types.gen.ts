@@ -441,6 +441,7 @@ export type ArtifactSummary = {
    * Publisher actor when the format records it.
    */
   publisher?: string;
+  intelligence?: ArtifactIntelligenceSummary;
 };
 
 export type ArtifactSummaryPage = {
@@ -728,6 +729,18 @@ export type OidcRoleMappingMatch = {
 export type OidcIdentityDetails = {
   adminSubject: boolean;
   roleMappings: Array<OidcRoleMappingMatch>;
+};
+
+export type ArtifactIntelligenceSummary = {
+  signatureCount: number;
+  sbomCount: number;
+  licenseCount: number;
+  vulnerabilityStatus?: "not_scanned" | "clean" | "affected" | "error";
+  critical?: number;
+  high?: number;
+  medium?: number;
+  low?: number;
+  unknown?: number;
 };
 
 export type GlobalArtifactSearchHit = ArtifactSummary & {

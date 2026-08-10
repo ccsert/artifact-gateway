@@ -19,11 +19,18 @@ func TestMemoryArtifactSearchProjectionFindsOlderOCIManifestByDigest(t *testing.
 	store.ociManifests[ociManifestKey("repo", "library/postgres", newerDigest)] = OCIManifest{
 		RepositoryID: "repo", Name: "library/postgres", Digest: newerDigest, CreatedAt: newer, Size: 20,
 	}
+	if _, err := store.ReplaceArtifactIntelligence(context.Background(), ArtifactIntelligence{
+		RepositoryID: "repo", Format: FormatOCI, Coordinate: "library/postgres", Digest: newerDigest,
+		Signatures: []ArtifactSignature{{KeyID: "cosign-prod"}}, SBOMs: []ArtifactSBOM{{Digest: "sha256:" + strings.Repeat("c", 64)}},
+		Licenses: []ArtifactLicense{{SPDXID: "Apache-2.0"}}, Vulnerability: &ArtifactVulnerabilitySummary{Status: "affected", Critical: 1, High: 2},
+	}, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	coordinate, err := store.SearchArtifactProjection(context.Background(), "repo", FormatOCI, ArtifactSearchQuery{
 		Mode: ArtifactSearchByCoordinate, Value: "library/",
 	}, 10, ArtifactSearchPosition{})
-	if err != nil || len(coordinate) != 1 || coordinate[0].Digest != newerDigest {
+	if err != nil || len(coordinate) != 1 || coordinate[0].Digest != newerDigest || coordinate[0].Intelligence == nil || coordinate[0].Intelligence.SignatureCount != 1 || coordinate[0].Intelligence.VulnerabilityStatus != "affected" || coordinate[0].Intelligence.Critical != 1 {
 		t.Fatalf("coordinate=%#v err=%v", coordinate, err)
 	}
 

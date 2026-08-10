@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -33,14 +34,15 @@ type ArtifactSearchQuery struct {
 }
 
 type ArtifactSearchItem struct {
-	Coordinate  string
-	Version     string
-	Digest      string
-	CreatedAt   *time.Time
-	Size        *int64
-	Publisher   string
-	BuildNumber int
-	ContentType string
+	Coordinate   string
+	Version      string
+	Digest       string
+	CreatedAt    *time.Time
+	Size         *int64
+	Publisher    string
+	BuildNumber  int
+	ContentType  string
+	Intelligence *ArtifactIntelligenceSummary
 }
 
 // ArtifactSearchStore exposes the format-neutral management projection. Both
@@ -70,8 +72,21 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 			  AND (($3='coordinate' AND ($4='' OR coordinate LIKE $4 || '%' ESCAPE '\'))
 			       OR ($3='digest' AND digest=$4))
 		)
-		SELECT coordinate,COALESCE(digest,''),created_at,size,COALESCE(publisher,''),build_number,COALESCE(content_type,''),version
+		SELECT coordinate,COALESCE(digest,''),created_at,size,COALESCE(publisher,''),build_number,COALESCE(content_type,''),version,
+		       CASE WHEN ai.repository_id IS NULL THEN NULL ELSE jsonb_build_object(
+		         'signatureCount', jsonb_array_length(ai.signatures),
+		         'sbomCount', jsonb_array_length(ai.sboms),
+		         'licenseCount', jsonb_array_length(ai.licenses),
+		         'vulnerabilityStatus', ai.vulnerability->>'status',
+		         'critical', COALESCE((ai.vulnerability->>'critical')::int, 0),
+		         'high', COALESCE((ai.vulnerability->>'high')::int, 0),
+		         'medium', COALESCE((ai.vulnerability->>'medium')::int, 0),
+		         'low', COALESCE((ai.vulnerability->>'low')::int, 0),
+		         'unknown', COALESCE((ai.vulnerability->>'unknown')::int, 0)
+		       ) END AS intelligence
 		FROM ranked
+		LEFT JOIN artifact_intelligence ai
+		  ON ai.repository_id::text=$1 AND ai.format=$2 AND ai.coordinate=ranked.coordinate AND ai.digest=ranked.digest
 		WHERE (($3='coordinate' AND ($2='maven' OR coordinate_rank=1))
 		       OR ($3='digest' AND ($2='maven' OR digest_rank=1)))
 		  AND (coordinate>$5
@@ -88,7 +103,8 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		var item ArtifactSearchItem
 		var createdAt sql.NullTime
 		var size sql.NullInt64
-		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType, &item.Version); err != nil {
+		var intelligence []byte
+		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType, &item.Version, &intelligence); err != nil {
 			return nil, err
 		}
 		if createdAt.Valid {
@@ -98,6 +114,12 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		if size.Valid {
 			value := size.Int64
 			item.Size = &value
+		}
+		if len(intelligence) > 0 && string(intelligence) != "null" {
+			item.Intelligence = &ArtifactIntelligenceSummary{}
+			if err := json.Unmarshal(intelligence, item.Intelligence); err != nil {
+				return nil, err
+			}
 		}
 		items = append(items, item)
 	}

@@ -112,6 +112,26 @@ function mavenVersionLabel(hit: GlobalArtifactSearchHit): string {
     : version;
 }
 
+function intelligenceBadge(
+  summary: GlobalArtifactSearchHit["intelligence"],
+  text: (zh: string, en: string) => string,
+) {
+  if (!summary) return <Badge tone="zinc">{text("未扫描", "Not scanned")}</Badge>;
+  if (summary.vulnerabilityStatus === "affected") {
+    const findings = (summary.critical ?? 0) + (summary.high ?? 0) + (summary.medium ?? 0) + (summary.low ?? 0) + (summary.unknown ?? 0);
+    return <Badge tone="red">{text("有风险", "Affected")} · {findings}</Badge>;
+  }
+  if (summary.vulnerabilityStatus === "clean") return <Badge tone="green">{text("通过", "Clean")}</Badge>;
+  if (summary.vulnerabilityStatus === "error") return <Badge tone="amber">{text("扫描错误", "Scan error")}</Badge>;
+  return <Badge tone="cyan">{summary.signatureCount + summary.sbomCount + summary.licenseCount} {text("项证据", "evidence")}</Badge>;
+}
+
+function mavenIntelligence(hits: GlobalArtifactSearchHit[]) {
+  const summaries = hits.map((hit) => hit.intelligence).filter(Boolean);
+  if (summaries.some((summary) => summary?.vulnerabilityStatus === "affected")) return summaries.find((summary) => summary?.vulnerabilityStatus === "affected");
+  return summaries[0];
+}
+
 export function SearchPage() {
   const { locale, text } = usePreferences();
   const [params] = useSearchParams();
@@ -284,6 +304,16 @@ export function SearchPage() {
             : artifactVersionSizeLabel(tableRow.row)}
         </span>
       ),
+    },
+    {
+      title: text("安全情报", "Security"),
+      key: "intelligence",
+      width: 150,
+      render: (_, tableRow) =>
+        intelligenceBadge(
+          isMavenGroup(tableRow.row) ? mavenIntelligence(tableRow.row.hits) : tableRow.row.intelligence,
+          text,
+        ),
     },
     {
       title: text("更新时间", "Updated"),

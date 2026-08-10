@@ -21,6 +21,14 @@ func (s *MemoryStore) SearchArtifactProjection(_ context.Context, repositoryID s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	items := s.artifactSearchItemsLocked(repositoryID, format)
+	for index := range items {
+		if items[index].Digest == "" {
+			continue
+		}
+		if value, ok := s.artifactIntelligence[artifactIntelligenceKey(repositoryID, format, items[index].Coordinate, items[index].Digest)]; ok {
+			items[index].Intelligence = summarizeArtifactIntelligence(value)
+		}
+	}
 	matched := make([]ArtifactSearchItem, 0, len(items))
 	for _, item := range items {
 		if query.Mode == ArtifactSearchByCoordinate && !strings.HasPrefix(item.Coordinate, query.Value) {
@@ -46,6 +54,23 @@ func (s *MemoryStore) SearchArtifactProjection(_ context.Context, repositoryID s
 		matched = matched[:limit]
 	}
 	return matched, nil
+}
+
+func summarizeArtifactIntelligence(value ArtifactIntelligence) *ArtifactIntelligenceSummary {
+	summary := &ArtifactIntelligenceSummary{
+		SignatureCount: len(value.Signatures),
+		SBOMCount:      len(value.SBOMs),
+		LicenseCount:   len(value.Licenses),
+	}
+	if value.Vulnerability != nil {
+		summary.VulnerabilityStatus = value.Vulnerability.Status
+		summary.Critical = value.Vulnerability.Critical
+		summary.High = value.Vulnerability.High
+		summary.Medium = value.Vulnerability.Medium
+		summary.Low = value.Vulnerability.Low
+		summary.Unknown = value.Vulnerability.Unknown
+	}
+	return summary
 }
 
 func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Format) []ArtifactSearchItem {

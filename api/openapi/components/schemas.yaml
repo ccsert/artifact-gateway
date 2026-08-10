@@ -1508,6 +1508,8 @@ ArtifactSummary:
     publisher:
       type: string
       description: Publisher actor when the format records it.
+    intelligence:
+      "$ref": "#/ArtifactIntelligenceSummary"
 ArtifactSummaryPage:
   type: object
   required:
@@ -1559,6 +1561,22 @@ ArtifactLicense:
     spdxId: {type: string, minLength: 1, maxLength: 128}
     name: {type: string, minLength: 1, maxLength: 512}
     source: {type: string, maxLength: 2048}
+ArtifactIntelligenceSummary:
+  type: object
+  required: [signatureCount, sbomCount, licenseCount]
+  additionalProperties: false
+  properties:
+    signatureCount: {type: integer, minimum: 0}
+    sbomCount: {type: integer, minimum: 0}
+    licenseCount: {type: integer, minimum: 0}
+    vulnerabilityStatus:
+      type: string
+      enum: [not_scanned, clean, affected, error]
+    critical: {type: integer, minimum: 0}
+    high: {type: integer, minimum: 0}
+    medium: {type: integer, minimum: 0}
+    low: {type: integer, minimum: 0}
+    unknown: {type: integer, minimum: 0}
 ArtifactVulnerabilitySummary:
   type: object
   required: [scanner, status, critical, high, medium, low, unknown]

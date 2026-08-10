@@ -58,6 +58,30 @@ func (e ArtifactState) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactIntelligenceSummaryVulnerabilityStatus.
+const (
+	ArtifactIntelligenceSummaryVulnerabilityStatusAffected   ArtifactIntelligenceSummaryVulnerabilityStatus = "affected"
+	ArtifactIntelligenceSummaryVulnerabilityStatusClean      ArtifactIntelligenceSummaryVulnerabilityStatus = "clean"
+	ArtifactIntelligenceSummaryVulnerabilityStatusError      ArtifactIntelligenceSummaryVulnerabilityStatus = "error"
+	ArtifactIntelligenceSummaryVulnerabilityStatusNotScanned ArtifactIntelligenceSummaryVulnerabilityStatus = "not_scanned"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactIntelligenceSummaryVulnerabilityStatus enum.
+func (e ArtifactIntelligenceSummaryVulnerabilityStatus) Valid() bool {
+	switch e {
+	case ArtifactIntelligenceSummaryVulnerabilityStatusAffected:
+		return true
+	case ArtifactIntelligenceSummaryVulnerabilityStatusClean:
+		return true
+	case ArtifactIntelligenceSummaryVulnerabilityStatusError:
+		return true
+	case ArtifactIntelligenceSummaryVulnerabilityStatusNotScanned:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactVulnerabilitySummaryStatus.
 const (
 	ArtifactVulnerabilitySummaryStatusAffected   ArtifactVulnerabilitySummaryStatus = "affected"
@@ -1424,6 +1448,22 @@ type ArtifactIntelligence struct {
 	Vulnerability *ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
 }
 
+// ArtifactIntelligenceSummary defines model for ArtifactIntelligenceSummary.
+type ArtifactIntelligenceSummary struct {
+	Critical            *int                                            `json:"critical,omitempty"`
+	High                *int                                            `json:"high,omitempty"`
+	LicenseCount        int                                             `json:"licenseCount"`
+	Low                 *int                                            `json:"low,omitempty"`
+	Medium              *int                                            `json:"medium,omitempty"`
+	SbomCount           int                                             `json:"sbomCount"`
+	SignatureCount      int                                             `json:"signatureCount"`
+	Unknown             *int                                            `json:"unknown,omitempty"`
+	VulnerabilityStatus *ArtifactIntelligenceSummaryVulnerabilityStatus `json:"vulnerabilityStatus,omitempty"`
+}
+
+// ArtifactIntelligenceSummaryVulnerabilityStatus defines model for ArtifactIntelligenceSummary.VulnerabilityStatus.
+type ArtifactIntelligenceSummaryVulnerabilityStatus string
+
 // ArtifactIntelligenceWritable defines model for ArtifactIntelligenceWritable.
 type ArtifactIntelligenceWritable struct {
 	Licenses      []ArtifactLicense             `json:"licenses"`
@@ -1478,11 +1518,12 @@ type ArtifactSignature struct {
 // ArtifactSummary defines model for ArtifactSummary.
 type ArtifactSummary struct {
 	// BuildNumber Snapshot build number; zero for release coordinates.
-	BuildNumber *int32     `json:"buildNumber,omitempty"`
-	ContentType *string    `json:"contentType,omitempty"`
-	Coordinate  string     `json:"coordinate"`
-	CreatedAt   *time.Time `json:"createdAt,omitempty"`
-	Digest      *string    `json:"digest,omitempty"`
+	BuildNumber  *int32                       `json:"buildNumber,omitempty"`
+	ContentType  *string                      `json:"contentType,omitempty"`
+	Coordinate   string                       `json:"coordinate"`
+	CreatedAt    *time.Time                   `json:"createdAt,omitempty"`
+	Digest       *string                      `json:"digest,omitempty"`
+	Intelligence *ArtifactIntelligenceSummary `json:"intelligence,omitempty"`
 
 	// Publisher Publisher actor when the format records it.
 	Publisher *string `json:"publisher,omitempty"`
@@ -1957,12 +1998,13 @@ type FormatProfileList struct {
 // GlobalArtifactSearchHit defines model for GlobalArtifactSearchHit.
 type GlobalArtifactSearchHit struct {
 	// BuildNumber Snapshot build number; zero for release coordinates.
-	BuildNumber *int32     `json:"buildNumber,omitempty"`
-	ContentType *string    `json:"contentType,omitempty"`
-	Coordinate  string     `json:"coordinate"`
-	CreatedAt   *time.Time `json:"createdAt,omitempty"`
-	Digest      *string    `json:"digest,omitempty"`
-	Format      Format     `json:"format"`
+	BuildNumber  *int32                       `json:"buildNumber,omitempty"`
+	ContentType  *string                      `json:"contentType,omitempty"`
+	Coordinate   string                       `json:"coordinate"`
+	CreatedAt    *time.Time                   `json:"createdAt,omitempty"`
+	Digest       *string                      `json:"digest,omitempty"`
+	Format       Format                       `json:"format"`
+	Intelligence *ArtifactIntelligenceSummary `json:"intelligence,omitempty"`
 
 	// MatchKind Whether this result matched a coordinate prefix or an exact digest.
 	MatchKind GlobalArtifactSearchHitMatchKind `json:"matchKind"`

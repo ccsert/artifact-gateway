@@ -428,6 +428,20 @@ type ArtifactIntelligence struct {
 	UpdatedBy     string
 }
 
+// ArtifactIntelligenceSummary is the bounded, list-friendly projection of
+// security metadata. Full evidence remains available from the detail endpoint.
+type ArtifactIntelligenceSummary struct {
+	SignatureCount      int    `json:"signatureCount"`
+	SBOMCount           int    `json:"sbomCount"`
+	LicenseCount        int    `json:"licenseCount"`
+	VulnerabilityStatus string `json:"vulnerabilityStatus,omitempty"`
+	Critical            int    `json:"critical,omitempty"`
+	High                int    `json:"high,omitempty"`
+	Medium              int    `json:"medium,omitempty"`
+	Low                 int    `json:"low,omitempty"`
+	Unknown             int    `json:"unknown,omitempty"`
+}
+
 type ArtifactSignature struct {
 	KeyID      string    `json:"keyId"`
 	Algorithm  string    `json:"algorithm"`

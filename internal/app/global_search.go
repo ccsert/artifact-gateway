@@ -169,9 +169,33 @@ func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopen
 		RepositoryId: uuid.MustParse(repo.ID), RepositoryName: repo.Name, Format: adminopenapi.Format(repo.Format),
 		MatchKind:  adminopenapi.GlobalArtifactSearchHitMatchKind(mode),
 		Coordinate: summary.Coordinate, Digest: summary.Digest, Size: summary.Size, ContentType: summary.ContentType,
-		CreatedAt: summary.CreatedAt, BuildNumber: summary.BuildNumber, Publisher: summary.Publisher,
+		CreatedAt: summary.CreatedAt, BuildNumber: summary.BuildNumber, Publisher: summary.Publisher, Intelligence: summary.Intelligence,
 		Version: summary.Version, VersionCount: summary.VersionCount,
 	}
+}
+
+func artifactIntelligenceSummaryResponse(summary *repository.ArtifactIntelligenceSummary) *adminopenapi.ArtifactIntelligenceSummary {
+	if summary == nil {
+		return nil
+	}
+	critical := summary.Critical
+	high := summary.High
+	medium := summary.Medium
+	low := summary.Low
+	unknown := summary.Unknown
+	return &adminopenapi.ArtifactIntelligenceSummary{
+		SignatureCount: summary.SignatureCount, SbomCount: summary.SBOMCount, LicenseCount: summary.LicenseCount,
+		VulnerabilityStatus: optionalArtifactVulnerabilityStatus(summary.VulnerabilityStatus),
+		Critical:            &critical, High: &high, Medium: &medium, Low: &low, Unknown: &unknown,
+	}
+}
+
+func optionalArtifactVulnerabilityStatus(value string) *adminopenapi.ArtifactIntelligenceSummaryVulnerabilityStatus {
+	if value == "" {
+		return nil
+	}
+	status := adminopenapi.ArtifactIntelligenceSummaryVulnerabilityStatus(value)
+	return &status
 }
 
 func (h hostedRepositoryAPIHandler) encodeGlobalArtifactSearchCursor(query repository.ArtifactSearchQuery, format repository.Format, repositoryID, coordinate string, buildNumber int, digest string) string {

@@ -3654,6 +3654,58 @@
           "$ref": "#/components/schemas/AuditRecord"
         }
       },
+      "ArtifactIntelligenceSummary": {
+        "type": "object",
+        "required": [
+          "signatureCount",
+          "sbomCount",
+          "licenseCount"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "signatureCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sbomCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "licenseCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "vulnerabilityStatus": {
+            "type": "string",
+            "enum": [
+              "not_scanned",
+              "clean",
+              "affected",
+              "error"
+            ]
+          },
+          "critical": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "high": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medium": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "low": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknown": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "ArtifactSummary": {
         "type": "object",
         "required": [
@@ -3698,6 +3750,9 @@
           "publisher": {
             "type": "string",
             "description": "Publisher actor when the format records it."
+          },
+          "intelligence": {
+            "$ref": "#/components/schemas/ArtifactIntelligenceSummary"
           }
         }
       },
