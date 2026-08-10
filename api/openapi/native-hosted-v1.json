@@ -3132,7 +3132,8 @@
               "retention",
               "promotion",
               "replication",
-              "reclaim"
+              "reclaim",
+              "intelligence"
             ]
           },
           "state": {

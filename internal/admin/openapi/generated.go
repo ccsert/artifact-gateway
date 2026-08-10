@@ -606,15 +606,18 @@ func (e GroupCapacityMemberType) Valid() bool {
 
 // Defines values for LifecycleJobKind.
 const (
-	LifecycleJobKindPromotion   LifecycleJobKind = "promotion"
-	LifecycleJobKindReclaim     LifecycleJobKind = "reclaim"
-	LifecycleJobKindReplication LifecycleJobKind = "replication"
-	LifecycleJobKindRetention   LifecycleJobKind = "retention"
+	LifecycleJobKindIntelligence LifecycleJobKind = "intelligence"
+	LifecycleJobKindPromotion    LifecycleJobKind = "promotion"
+	LifecycleJobKindReclaim      LifecycleJobKind = "reclaim"
+	LifecycleJobKindReplication  LifecycleJobKind = "replication"
+	LifecycleJobKindRetention    LifecycleJobKind = "retention"
 )
 
 // Valid indicates whether the value is a known member of the LifecycleJobKind enum.
 func (e LifecycleJobKind) Valid() bool {
 	switch e {
+	case LifecycleJobKindIntelligence:
+		return true
 	case LifecycleJobKindPromotion:
 		return true
 	case LifecycleJobKindReclaim:

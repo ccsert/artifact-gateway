@@ -3,6 +3,7 @@ package maven
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -231,7 +232,8 @@ type NativePromotion struct {
 		repository.NativeMavenStore
 		repository.LifecycleJobStore
 	}
-	Metrics repository.BackgroundOperationMetrics
+	Intelligence repository.ArtifactIntelligenceStore
+	Metrics      repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -267,6 +269,15 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, fmt.Sprintf("promote Maven artifact failed: %v", err))
 			m.endPromotion("failed")
 			continue
+		}
+		intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatMaven, p.Coordinate, p.Digest)
+		if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, fmt.Sprintf("copy Maven artifact intelligence failed: %v", intelligenceErr))
+			m.endPromotion("failed")
+			continue
+		}
+		if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+			m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatMaven, "deferred")
 		}
 		if err := m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 			m.endPromotion("failed")

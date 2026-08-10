@@ -43,9 +43,18 @@ func TestNativePromotionRetriesFailedJobAndKeepsSourceVisible(t *testing.T) {
 	if _, err = base.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: "org/example/widget/1.0.0/widget-1.0.0.jar", ObjectKey: "native/maven/widget", Digest: session.Objects[0].Digest, Size: 3}}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = base.ReplaceArtifactIntelligence(ctx, repository.ArtifactIntelligence{
+		RepositoryID: source.ID,
+		Format:       repository.FormatMaven,
+		Coordinate:   session.Coordinate,
+		Digest:       session.Objects[0].Digest,
+		SBOMs:        []repository.ArtifactSBOM{{MediaType: "application/spdx+json", Digest: session.Objects[0].Digest}},
+	}, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	store := &failOncePromotionStore{MemoryStore: base, fail: true}
-	worker := NativePromotion{Store: store}
+	worker := NativePromotion{Store: store, Intelligence: store}
 	job, replayed, err := worker.Enqueue(ctx, target.ID, "promotion-1", PromotionPayload{SourceRepositoryID: source.ID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, PromotionID: "promoted"})
 	if err != nil || replayed {
 		t.Fatalf("enqueue job=%#v replayed=%t err=%v", job, replayed, err)
@@ -75,5 +84,8 @@ func TestNativePromotionRetriesFailedJobAndKeepsSourceVisible(t *testing.T) {
 	}
 	if _, err = base.GetMavenAsset(ctx, target.ID, "org/example/widget/1.0.0/widget-1.0.0.jar"); err != nil {
 		t.Fatalf("promoted asset unavailable: %v", err)
+	}
+	if copied, err := base.GetArtifactIntelligence(ctx, target.ID, repository.FormatMaven, session.Coordinate, session.Objects[0].Digest); err != nil || len(copied.SBOMs) != 1 {
+		t.Fatalf("promoted intelligence=%#v err=%v", copied, err)
 	}
 }

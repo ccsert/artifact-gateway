@@ -16,7 +16,8 @@ type NativePromotion struct {
 		repository.NativeNPMStore
 		repository.LifecycleJobStore
 	}
-	Metrics repository.BackgroundOperationMetrics
+	Intelligence repository.ArtifactIntelligenceStore
+	Metrics      repository.BackgroundOperationMetrics
 }
 
 type PromotionPayload struct {
@@ -90,6 +91,13 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	source.RepositoryID = job.RepositoryID
 	if _, err = m.Store.PublishNPMVersion(ctx, source, tags); err != nil {
 		return m.fail(ctx, job, "publish target npm version failed")
+	}
+	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatNPM, payload.PackageName+"@"+payload.Version, payload.Digest)
+	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+		return m.fail(ctx, job, fmt.Sprintf("copy npm artifact intelligence failed: %v", intelligenceErr))
+	}
+	if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatNPM, "deferred")
 	}
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }

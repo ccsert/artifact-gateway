@@ -59,6 +59,9 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	if cfg.WorkerKindEnabled("audit") {
 		app.AuditRetentionWorker{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Hour)
 	}
+	if cfg.WorkerKindEnabled("promotion") {
+		app.ArtifactIntelligenceCopyWorker{Store: r.store, WorkerFormats: cfg.WorkerFormats, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
 	r.startMavenWorkers(ctx, cfg)
 	r.startOCIWorkers(ctx, cfg)
 	r.startRawWorkers(ctx, cfg)
@@ -75,7 +78,7 @@ func (r backgroundRuntime) startPyPIWorkers(ctx context.Context, cfg config.Conf
 		app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		app.NativePyPIPromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		app.NativePyPIPromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.PyPIReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
@@ -90,7 +93,7 @@ func (r backgroundRuntime) startNPMWorkers(ctx context.Context, cfg config.Confi
 		app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		npmprotocol.NativePromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		npmprotocol.NativePromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.NPMReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
@@ -105,7 +108,7 @@ func (r backgroundRuntime) startMavenWorkers(ctx context.Context, cfg config.Con
 		app.NativeMavenMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		app.NativeMavenPromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		app.NativeMavenPromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.MavenReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
@@ -120,7 +123,7 @@ func (r backgroundRuntime) startOCIWorkers(ctx context.Context, cfg config.Confi
 		app.NativeOCIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		app.NativeOCIPromotion{Store: r.store, Objects: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+		app.NativeOCIPromotion{Store: r.store, Objects: r.objects, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.OCIReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
@@ -135,7 +138,7 @@ func (r backgroundRuntime) startRawWorkers(ctx context.Context, cfg config.Confi
 		rawmaintenance.Collector{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		rawprotocol.NativePromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		rawprotocol.NativePromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.RawReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
@@ -150,7 +153,7 @@ func (r backgroundRuntime) startConanWorkers(ctx context.Context, cfg config.Con
 		app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		conanprotocol.NativePromotion{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		conanprotocol.NativePromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
 		app.ConanReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)

@@ -72,7 +72,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 			  AND (($3='coordinate' AND ($4='' OR coordinate LIKE $4 || '%' ESCAPE '\'))
 			       OR ($3='digest' AND digest=$4))
 		)
-		SELECT coordinate,COALESCE(digest,''),created_at,size,COALESCE(publisher,''),build_number,COALESCE(content_type,''),version,
+		SELECT ranked.coordinate,COALESCE(ranked.digest,''),ranked.created_at,ranked.size,COALESCE(ranked.publisher,''),ranked.build_number,COALESCE(ranked.content_type,''),ranked.version,
 		       CASE WHEN ai.repository_id IS NULL THEN NULL ELSE jsonb_build_object(
 		         'signatureCount', jsonb_array_length(ai.signatures),
 		         'sbomCount', jsonb_array_length(ai.sboms),
@@ -87,12 +87,12 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		FROM ranked
 		LEFT JOIN artifact_intelligence ai
 		  ON ai.repository_id::text=$1 AND ai.format=$2 AND ai.coordinate=ranked.coordinate AND ai.digest=ranked.digest
-		WHERE (($3='coordinate' AND ($2='maven' OR coordinate_rank=1))
-		       OR ($3='digest' AND ($2='maven' OR digest_rank=1)))
-		  AND (coordinate>$5
-		       OR (coordinate=$5 AND build_number>$6)
-		       OR ($7<>'' AND coordinate=$5 AND build_number=$6 AND digest>$7))
-		ORDER BY coordinate,build_number,digest
+		WHERE (($3='coordinate' AND ($2='maven' OR ranked.coordinate_rank=1))
+		       OR ($3='digest' AND ($2='maven' OR ranked.digest_rank=1)))
+		  AND (ranked.coordinate>$5
+		       OR (ranked.coordinate=$5 AND ranked.build_number>$6)
+		       OR ($7<>'' AND ranked.coordinate=$5 AND ranked.build_number=$6 AND ranked.digest>$7))
+		ORDER BY ranked.coordinate,ranked.build_number,ranked.digest
 		LIMIT $8`, repositoryID, format, query.Mode, value, after.Coordinate, after.BuildNumber, after.Digest, limit)
 	if err != nil {
 		return nil, err

@@ -82,3 +82,15 @@ unknown_vulnerabilities
 For a gradual rollout, keep the policy disabled while scanners begin writing
 artifact intelligence, use the evaluation endpoint from CI, then enable the
 target repository after the expected evidence coverage is established.
+
+After a promotion publishes the target artifact, the source repository's
+artifact intelligence is copied by immutable identity. Existing equivalent
+evidence is treated as already synchronized. If the target contains different
+evidence, the gateway never overwrites it; it records a failed `intelligence`
+lifecycle job for operator review. Temporary storage failures are retried by
+the same follow-up job without replaying the artifact publication.
+
+If the metadata store cannot persist either the evidence or its follow-up job,
+the promotion still completes and emits the bounded
+`intelligence-copy/deferred` background-operation metric. Alert on that metric
+and reconcile the missing evidence after storage recovers.

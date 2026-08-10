@@ -13,6 +13,22 @@ type failOnceRawPromotionStore struct {
 	fail bool
 }
 
+type unavailableRawIntelligenceStore struct {
+	*repository.MemoryStore
+	err error
+}
+
+func (s *unavailableRawIntelligenceStore) ReplaceArtifactIntelligence(ctx context.Context, value repository.ArtifactIntelligence, expectedVersion string) (repository.ArtifactIntelligence, error) {
+	if value.RepositoryID == "target" {
+		return repository.ArtifactIntelligence{}, s.err
+	}
+	return s.MemoryStore.ReplaceArtifactIntelligence(ctx, value, expectedVersion)
+}
+
+func (s *unavailableRawIntelligenceStore) EnqueueLifecycleJob(context.Context, repository.LifecycleJob) (repository.LifecycleJob, bool, error) {
+	return repository.LifecycleJob{}, false, s.err
+}
+
 func (s *failOnceRawPromotionStore) PutRawAsset(ctx context.Context, asset repository.RawAsset) (repository.RawAsset, error) {
 	if s.fail {
 		s.fail = false
@@ -51,5 +67,39 @@ func TestNativePromotionRetriesFailedRawPublication(t *testing.T) {
 	}
 	if target, err := base.GetRawAsset(ctx, "target", "releases/widget.txt"); err != nil || target.Digest != "sha256:widget" {
 		t.Fatalf("target=%#v err=%v", target, err)
+	}
+}
+
+func TestNativePromotionCompletesWhenIntelligenceQueueIsUnavailable(t *testing.T) {
+	ctx := context.Background()
+	base := repository.NewMemoryStore()
+	asset := repository.RawAsset{RepositoryID: "source", Path: "releases/widget.txt", Digest: "sha256:widget", ObjectKey: "raw/widget", Size: 7}
+	if _, err := base.PutRawAsset(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := base.ReplaceArtifactIntelligence(ctx, repository.ArtifactIntelligence{
+		RepositoryID: asset.RepositoryID,
+		Format:       repository.FormatRaw,
+		Coordinate:   asset.Path,
+		Digest:       asset.Digest,
+		Licenses:     []repository.ArtifactLicense{{SPDXID: "Apache-2.0"}},
+	}, ""); err != nil {
+		t.Fatal(err)
+	}
+	job, _, err := base.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: "promotion", RepositoryID: "target", Kind: repository.LifecycleJobPromotion, IdempotencyKey: "promotion", Payload: []byte(`{"format":"raw","sourceRepositoryId":"source","path":"releases/widget.txt","digest":"sha256:widget"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &unavailableRawIntelligenceStore{MemoryStore: base, err: errors.New("database unavailable")}
+	worker := NativePromotion{Store: store, Intelligence: store}
+	if err = worker.RunJobs(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = base.GetRawAsset(ctx, "target", asset.Path); err != nil {
+		t.Fatalf("target asset unavailable: %v", err)
+	}
+	j, err := base.GetLifecycleJob(ctx, "target", job.ID)
+	if err != nil || j.State != repository.LifecycleJobCompleted {
+		t.Fatalf("job=%#v err=%v, want completed publication", j, err)
 	}
 }

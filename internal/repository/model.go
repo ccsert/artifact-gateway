@@ -514,10 +514,11 @@ type ArtifactVulnerabilitySummary struct {
 type LifecycleJobKind string
 
 const (
-	LifecycleJobRetention   LifecycleJobKind = "retention"
-	LifecycleJobPromotion   LifecycleJobKind = "promotion"
-	LifecycleJobReplication LifecycleJobKind = "replication"
-	LifecycleJobReclaim     LifecycleJobKind = "reclaim"
+	LifecycleJobRetention    LifecycleJobKind = "retention"
+	LifecycleJobPromotion    LifecycleJobKind = "promotion"
+	LifecycleJobReplication  LifecycleJobKind = "replication"
+	LifecycleJobReclaim      LifecycleJobKind = "reclaim"
+	LifecycleJobIntelligence LifecycleJobKind = "intelligence"
 )
 
 // ScheduledTaskKind is intentionally a closed set. Scheduled tasks may only

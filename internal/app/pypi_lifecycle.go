@@ -18,7 +18,8 @@ type NativePyPIPromotion struct {
 		repository.NativePyPIStore
 		repository.LifecycleJobStore
 	}
-	Metrics repository.BackgroundOperationMetrics
+	Intelligence repository.ArtifactIntelligenceStore
+	Metrics      repository.BackgroundOperationMetrics
 }
 
 type PyPIPromotionPayload struct {
@@ -89,6 +90,13 @@ func (m NativePyPIPromotion) run(ctx context.Context, job repository.LifecycleJo
 	defer release()
 	if _, err = m.Store.PublishPyPIVersion(ctx, selected); err != nil {
 		return m.fail(ctx, job, "publish target PyPI version failed")
+	}
+	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatPyPI, payload.Project+"@"+payload.Version, payload.Digest)
+	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+		return m.fail(ctx, job, fmt.Sprintf("copy PyPI artifact intelligence failed: %v", intelligenceErr))
+	}
+	if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatPyPI, "deferred")
 	}
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }

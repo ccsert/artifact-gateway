@@ -3,6 +3,7 @@ package raw
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,7 +20,8 @@ type NativePromotion struct {
 		repository.NativeRawStore
 		repository.LifecycleJobStore
 	}
-	Metrics repository.BackgroundOperationMetrics
+	Intelligence repository.ArtifactIntelligenceStore
+	Metrics      repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -108,6 +110,13 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	source.RepositoryID = job.RepositoryID
 	if _, err = m.Store.PutRawAsset(ctx, source); err != nil {
 		return m.fail(ctx, job, "publish target Raw asset failed")
+	}
+	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatRaw, p.Path, p.Digest)
+	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+		return m.fail(ctx, job, fmt.Sprintf("copy Raw artifact intelligence failed: %v", intelligenceErr))
+	}
+	if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatRaw, "deferred")
 	}
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }

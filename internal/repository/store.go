@@ -7,16 +7,18 @@ import (
 )
 
 var (
-	ErrNotFound                    = errors.New("group not found")
-	ErrDisabled                    = errors.New("group is disabled")
-	ErrNameExists                  = errors.New("group name already exists")
-	ErrIdempotencyConflict         = errors.New("idempotency key conflicts with request")
-	ErrVersionConflict             = errors.New("resource version conflicts with current state")
-	ErrQuotaExceeded               = errors.New("repository capacity quota exceeded")
-	ErrUpstreamChanged             = errors.New("upstream immutable artifact metadata changed")
-	ErrInvalidRuntimeNode          = errors.New("runtime node identity is invalid")
-	ErrTemplateNameExists          = errors.New("authorization template name already exists")
-	ErrInvalidArtifactIntelligence = errors.New("artifact intelligence is invalid")
+	ErrNotFound                     = errors.New("group not found")
+	ErrDisabled                     = errors.New("group is disabled")
+	ErrNameExists                   = errors.New("group name already exists")
+	ErrIdempotencyConflict          = errors.New("idempotency key conflicts with request")
+	ErrVersionConflict              = errors.New("resource version conflicts with current state")
+	ErrQuotaExceeded                = errors.New("repository capacity quota exceeded")
+	ErrUpstreamChanged              = errors.New("upstream immutable artifact metadata changed")
+	ErrInvalidRuntimeNode           = errors.New("runtime node identity is invalid")
+	ErrTemplateNameExists           = errors.New("authorization template name already exists")
+	ErrInvalidArtifactIntelligence  = errors.New("artifact intelligence is invalid")
+	ErrArtifactIntelligenceConflict = errors.New("target artifact intelligence conflicts with source")
+	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
 )
 
 type HostedRepositoryStore interface {

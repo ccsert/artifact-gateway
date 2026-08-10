@@ -3,6 +3,7 @@ package conan
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -14,7 +15,8 @@ type NativePromotion struct {
 		repository.NativeConanStore
 		repository.LifecycleJobStore
 	}
-	Metrics repository.BackgroundOperationMetrics
+	Intelligence repository.ArtifactIntelligenceStore
+	Metrics      repository.BackgroundOperationMetrics
 }
 type PromotionPayload struct {
 	Format             repository.Format `json:"format"`
@@ -62,6 +64,17 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			}
 			m.end("failed")
 			continue
+		}
+		intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatConan, p.Reference+"#"+p.Revision, p.Digest)
+		if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "copy Conan artifact intelligence failed"); e != nil && firstErr == nil {
+				firstErr = e
+			}
+			m.end("failed")
+			continue
+		}
+		if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+			m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatConan, "deferred")
 		}
 		if err = m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 			m.end("failed")
