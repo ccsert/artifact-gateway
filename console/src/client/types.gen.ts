@@ -244,7 +244,7 @@ export type RestoreArtifact = {
 
 export type LifecycleJob = {
   id: string;
-  kind: "retention" | "promotion" | "replication" | "reclaim";
+  kind: "retention" | "promotion" | "replication" | "reclaim" | "intelligence";
   state:
     "pending" | "running" | "retrying" | "completed" | "failed" | "cancelled";
   createdAt: string;

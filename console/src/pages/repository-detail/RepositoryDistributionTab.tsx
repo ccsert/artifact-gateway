@@ -5,6 +5,7 @@ import {
   createRepositoryPromotion,
   createRepositoryReplication,
   deleteRepositoryReplication,
+  evaluateSecurityPolicy,
   getRepositoryReplication,
   listRepositories,
   listRepositoryReplications,
@@ -13,6 +14,7 @@ import type {
   ReplicationPlan,
   ReplicationPlanDetail,
   Repository,
+  SecurityPolicyEvaluation,
 } from "../../client";
 import { StateBadge } from "../../components/Badge";
 import {
@@ -26,6 +28,45 @@ import { Modal } from "../../components/Modal";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 
+function securityReason(
+  reason: string,
+  text: (zh: string, en: string) => string,
+) {
+  const labels: Record<string, [string, string]> = {
+    policy_disabled: ["策略未启用", "Policy is disabled"],
+    signature_required: ["缺少签名", "Signature is required"],
+    verified_signature_required: [
+      "缺少已验证签名",
+      "A verified signature is required",
+    ],
+    sbom_required: ["缺少 SBOM", "An SBOM is required"],
+    provenance_required: ["缺少 provenance", "Provenance is required"],
+    vulnerability_scan_required: [
+      "缺少漏洞扫描结果",
+      "A vulnerability scan is required",
+    ],
+    license_required: ["缺少许可证信息", "License information is required"],
+    license_not_allowed: [
+      "许可证不在白名单中",
+      "A license is not allow-listed",
+    ],
+    vulnerability_scan_error: ["漏洞扫描失败", "The vulnerability scan failed"],
+    low_vulnerabilities: ["存在低危漏洞", "Low vulnerabilities found"],
+    medium_vulnerabilities: ["存在中危漏洞", "Medium vulnerabilities found"],
+    high_vulnerabilities: ["存在高危漏洞", "High vulnerabilities found"],
+    critical_vulnerabilities: [
+      "存在严重漏洞",
+      "Critical vulnerabilities found",
+    ],
+    unknown_vulnerabilities: [
+      "存在未知等级漏洞",
+      "Unknown-severity vulnerabilities found",
+    ],
+  };
+  const label = labels[reason];
+  return label ? text(label[0], label[1]) : reason;
+}
+
 export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const { text } = usePreferences();
   const [repos, setRepos] = useState<Repository[]>([]);
@@ -38,6 +79,10 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const [actionError, setActionError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<"promote" | "replicate" | null>(null);
+  const [evaluation, setEvaluation] = useState<SecurityPolicyEvaluation | null>(
+    null,
+  );
+  const [evaluating, setEvaluating] = useState(false);
 
   const targets = repos.filter(
     (r) => r.id !== repo.id && r.format === repo.format && r.state === "active",
@@ -129,6 +174,27 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
     setCoordinate("");
     setDigest("");
     void load();
+  };
+
+  const evaluate = async () => {
+    if (!targetId || !coordinate.trim() || !digest.trim()) return;
+    setEvaluating(true);
+    setActionError(null);
+    const { data, error: err } = await evaluateSecurityPolicy({
+      path: { repositoryId: targetId },
+      body: {
+        sourceRepositoryId: repo.id,
+        coordinate: coordinate.trim(),
+        digest: digest.trim(),
+      },
+    });
+    setEvaluating(false);
+    if (err) {
+      setActionError(err);
+      setEvaluation(null);
+      return;
+    }
+    setEvaluation(data ?? null);
   };
 
   const showDetail = async (planId: string) => {
@@ -305,7 +371,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
         <div className="mb-3 text-sm font-medium text-zinc-200">
           {text("发起晋升 / 复制", "Start promotion / replication")}
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(170px,1fr)_minmax(220px,1.2fr)_minmax(200px,1.1fr)_max-content]">
           <Field label={text("目标仓库", "Target repository")}>
             <Select
               className="w-full"
@@ -316,7 +382,10 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
                 "Select a repository with the same format…",
               )}
               options={targets.map((r) => ({ value: r.id, label: r.name }))}
-              onChange={setTargetId}
+              onChange={(value) => {
+                setTargetId(value);
+                setEvaluation(null);
+              }}
             />
           </Field>
           <Field
@@ -330,7 +399,10 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               className="font-mono"
               placeholder={coordinatePlaceholder[repo.format] ?? "coordinate"}
               value={coordinate}
-              onChange={(e) => setCoordinate(e.target.value)}
+              onChange={(e) => {
+                setCoordinate(e.target.value);
+                setEvaluation(null);
+              }}
             />
           </Field>
           <Field label={text("摘要 digest", "Digest")}>
@@ -338,10 +410,26 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               className="font-mono"
               placeholder="sha256:…"
               value={digest}
-              onChange={(e) => setDigest(e.target.value)}
+              onChange={(e) => {
+                setDigest(e.target.value);
+                setEvaluation(null);
+              }}
             />
           </Field>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <Button
+              loading={evaluating}
+              onClick={() => void evaluate()}
+              disabled={
+                busy !== null ||
+                evaluating ||
+                !targetId ||
+                !coordinate.trim() ||
+                !digest.trim()
+              }
+            >
+              {text("评估准入", "Evaluate admission")}
+            </Button>
             <Button
               type="primary"
               loading={busy === "promote"}
@@ -375,6 +463,53 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             "Promotion creates a visible copy of the artifact in the target repository with an audit trail. Replication copies artifact bytes asynchronously with checkpoints.",
           )}
         </p>
+        {evaluation && (
+          <Alert
+            className="mt-4"
+            type={evaluation.allowed ? "success" : "error"}
+            showIcon
+            title={text(
+              evaluation.allowed ? "安全策略允许晋升" : "安全策略阻止晋升",
+              evaluation.allowed
+                ? "Security policy allows promotion"
+                : "Security policy blocks promotion",
+            )}
+            description={
+              <div className="space-y-2 text-xs">
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-zinc-500">
+                  <span>
+                    {text("策略版本", "Policy version")}:{" "}
+                    {evaluation.policyVersion}
+                  </span>
+                  <span>
+                    {text("策略状态", "Enforcement")}:{" "}
+                    {evaluation.enforced
+                      ? text("已启用", "enabled")
+                      : text("未启用", "disabled")}
+                  </span>
+                  <span>
+                    {text("制品情报", "Artifact intelligence")}:{" "}
+                    {evaluation.intelligencePresent
+                      ? text("已找到", "found")
+                      : text("未找到", "not found")}
+                  </span>
+                </div>
+                {evaluation.reasons.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {evaluation.reasons.map((reason) => (
+                      <span
+                        className="rounded border border-current/20 px-2 py-1 font-mono"
+                        key={reason}
+                      >
+                        {securityReason(reason, text)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
+          />
+        )}
       </div>
 
       {/* 复制计划列表 */}
