@@ -144,7 +144,8 @@ export function PyPIProjectDetail({
   const selectedFiles = document.files.filter(
     (file) => fileVersion(file) === selectedVersion,
   );
-  const selectedDigest = selectedFiles.find((file) => file.hashes.sha256)?.hashes.sha256;
+  const selectedDigest = selectedFiles.find((file) => file.hashes.sha256)
+    ?.hashes.sha256;
   const latestMetadata = selectedFiles[0]?.["_artifact-gateway"];
   const totalSize = selectedFiles.reduce(
     (total, file) => total + (file["_artifact-gateway"]?.size ?? 0),

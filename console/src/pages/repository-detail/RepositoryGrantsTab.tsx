@@ -89,14 +89,19 @@ function resourcePrefixHint(
 }
 
 function grantLevelLabel(level: GrantLevel, text: Localize): string {
-	if (level === "intelligence") return text("制品情报", "Artifact intelligence");
-	if (level === "admin") return text("管理员", "Administrator");
+  if (level === "intelligence")
+    return text("制品情报", "Artifact intelligence");
+  if (level === "admin") return text("管理员", "Administrator");
   if (level === "write") return text("写入", "Write");
   return text("读取", "Read");
 }
 
 function grantCapabilitiesLabel(level: GrantLevel, text: Localize): string {
-	if (level === "intelligence") return text("写入签名 / SBOM / 漏洞摘要", "Write signatures / SBOM / vulnerability summaries");
+  if (level === "intelligence")
+    return text(
+      "写入签名 / SBOM / 漏洞摘要",
+      "Write signatures / SBOM / vulnerability summaries",
+    );
   if (level === "admin")
     return text("读取 + 写入 + 管理", "Read + write + admin");
   if (level === "write") return text("读取 + 写入", "Read + write");
@@ -111,7 +116,7 @@ function grantTone(level: GrantLevel): "red" | "blue" | "green" | "cyan" {
 }
 
 function grantLevel(scopes: Grant["scopes"]): GrantLevel {
-	if (scopes.includes("repositories:intelligence")) return "intelligence";
+  if (scopes.includes("repositories:intelligence")) return "intelligence";
   if (scopes.includes("repositories:admin")) return "admin";
   if (scopes.includes("repositories:write")) return "write";
   return "read";
@@ -579,9 +584,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                       </div>
                     </div>
                     <div className="flex min-h-10 items-center">
-                      <Badge
-                        tone={grantTone(level)}
-                      >
+                      <Badge tone={grantTone(level)}>
                         {grantCapabilitiesLabel(level, text)}
                       </Badge>
                     </div>

@@ -546,7 +546,12 @@ export function RawArtifactDetail({
   };
   return (
     <div className="space-y-4">
-      <ArtifactDetailView repositoryId={repositoryId} format="raw" repoName={repoName} meta={meta} />
+      <ArtifactDetailView
+        repositoryId={repositoryId}
+        format="raw"
+        repoName={repoName}
+        meta={meta}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
         <div>
           <div className="text-xs font-medium text-zinc-200">

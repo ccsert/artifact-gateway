@@ -25,7 +25,9 @@ function CreateKeyDialog({
   const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"" | "reader" | "writer" | "admin">("reader");
+  const [role, setRole] = useState<"" | "reader" | "writer" | "admin">(
+    "reader",
+  );
   const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);

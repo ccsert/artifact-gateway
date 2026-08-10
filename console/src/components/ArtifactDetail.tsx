@@ -83,7 +83,12 @@ export function ArtifactDetailView({
 
   return (
     <div className="space-y-4">
-      <ArtifactIntelligencePanel repositoryId={repositoryId} format={format} coordinate={meta.coordinate} digest={meta.digest} />
+      <ArtifactIntelligencePanel
+        repositoryId={repositoryId}
+        format={format}
+        coordinate={meta.coordinate}
+        digest={meta.digest}
+      />
       {/* 元信息 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (

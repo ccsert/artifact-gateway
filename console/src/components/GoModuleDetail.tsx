@@ -167,11 +167,13 @@ export function GoModuleDetail({
       method: "HEAD",
       credentials: "include",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }).then((response) => {
-      if (cancelled || !response.ok) return;
-      const etag = response.headers.get("ETag")?.replaceAll('"', "") ?? "";
-      if (/^[a-f0-9]{64}$/.test(etag)) setVersionDigest(`sha256:${etag}`);
-    }).catch(() => undefined);
+    })
+      .then((response) => {
+        if (cancelled || !response.ok) return;
+        const etag = response.headers.get("ETag")?.replaceAll('"', "") ?? "";
+        if (/^[a-f0-9]{64}$/.test(etag)) setVersionDigest(`sha256:${etag}`);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

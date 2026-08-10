@@ -22,7 +22,8 @@ export function ArtifactSecurityBadge({
   summary?: ArtifactIntelligenceSummary;
   text: Localize;
 }) {
-  if (!summary) return <Badge tone="zinc">{text("未扫描", "Not scanned")}</Badge>;
+  if (!summary)
+    return <Badge tone="zinc">{text("未扫描", "Not scanned")}</Badge>;
   if (summary.vulnerabilityStatus === "affected") {
     return (
       <Badge tone="red">
@@ -38,7 +39,8 @@ export function ArtifactSecurityBadge({
   }
   return (
     <Badge tone="cyan">
-      {summary.signatureCount + summary.sbomCount + summary.licenseCount} {text("项证据", "evidence")}
+      {summary.signatureCount + summary.sbomCount + summary.licenseCount}{" "}
+      {text("项证据", "evidence")}
     </Badge>
   );
 }

@@ -115,7 +115,10 @@ function mavenVersionLabel(hit: GlobalArtifactSearchHit): string {
 
 function mavenIntelligence(hits: GlobalArtifactSearchHit[]) {
   const summaries = hits.map((hit) => hit.intelligence).filter(Boolean);
-  if (summaries.some((summary) => summary?.vulnerabilityStatus === "affected")) return summaries.find((summary) => summary?.vulnerabilityStatus === "affected");
+  if (summaries.some((summary) => summary?.vulnerabilityStatus === "affected"))
+    return summaries.find(
+      (summary) => summary?.vulnerabilityStatus === "affected",
+    );
   return summaries[0];
 }
 

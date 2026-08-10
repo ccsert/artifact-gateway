@@ -165,7 +165,11 @@ function scopeLabel(
   tone: "red" | "blue" | "green" | "cyan" | "zinc";
 } {
   if (scopes.includes("repositories:intelligence"))
-    return { key: "intelligence", label: english ? "Artifact intelligence" : "制品情报", tone: "cyan" };
+    return {
+      key: "intelligence",
+      label: english ? "Artifact intelligence" : "制品情报",
+      tone: "cyan",
+    };
   if (scopes.includes("repositories:admin"))
     return { key: "admin", label: english ? "Admin" : "管理员", tone: "red" };
   if (scopes.includes("repositories:write"))

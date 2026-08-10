@@ -404,7 +404,14 @@ export function OciImageDetail({
           )}
         </div>
       )}
-      {selectedVersion && <ArtifactIntelligencePanel repositoryId={repositoryId} format="oci" coordinate={image} digest={selectedVersion.digest} />}
+      {selectedVersion && (
+        <ArtifactIntelligencePanel
+          repositoryId={repositoryId}
+          format="oci"
+          coordinate={image}
+          digest={selectedVersion.digest}
+        />
+      )}
 
       {selectedVersion && (
         <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/30 p-3">

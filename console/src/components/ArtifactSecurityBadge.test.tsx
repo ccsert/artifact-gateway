@@ -4,7 +4,7 @@ import type { ArtifactIntelligenceSummary } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
 import { ArtifactSecurityBadge } from "./ArtifactSecurityBadge";
 
-const text = (zh: string, en: string) => (zh || en);
+const text = (zh: string, en: string) => zh || en;
 const renderBadge = (summary?: ArtifactIntelligenceSummary) =>
   render(
     <PreferencesProvider>
@@ -31,11 +31,21 @@ describe("ArtifactSecurityBadge", () => {
     [undefined, "未扫描"],
     [{ signatureCount: 0, sbomCount: 1, licenseCount: 0 }, "1 项证据"],
     [
-      { signatureCount: 0, sbomCount: 0, licenseCount: 0, vulnerabilityStatus: "clean" },
+      {
+        signatureCount: 0,
+        sbomCount: 0,
+        licenseCount: 0,
+        vulnerabilityStatus: "clean",
+      },
       "通过",
     ],
     [
-      { signatureCount: 0, sbomCount: 0, licenseCount: 0, vulnerabilityStatus: "error" },
+      {
+        signatureCount: 0,
+        sbomCount: 0,
+        licenseCount: 0,
+        vulnerabilityStatus: "error",
+      },
       "扫描错误",
     ],
   ])("renders %s as %s", (summary, label) => {

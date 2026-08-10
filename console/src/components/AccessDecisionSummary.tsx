@@ -125,7 +125,10 @@ export function AccessDecisionSummary({
     { label: text("读取", "Read"), decision: access.permissions.read },
     { label: text("写入", "Write"), decision: access.permissions.write },
     { label: text("管理", "Admin"), decision: access.permissions.admin },
-    { label: text("制品情报", "Artifact intelligence"), decision: access.permissions.intelligence },
+    {
+      label: text("制品情报", "Artifact intelligence"),
+      decision: access.permissions.intelligence,
+    },
   ];
   return (
     <div className="grid grid-cols-5 divide-x divide-zinc-800/70 overflow-hidden rounded-md border border-zinc-800/70 bg-zinc-950/20">
