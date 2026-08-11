@@ -2080,6 +2080,55 @@
           "$ref": "#/components/parameters/RepositoryId"
         }
       ],
+      "get": {
+        "operationId": "getRepositoryArtifactScanStatus",
+        "summary": "Get the latest durable scan status for one immutable artifact",
+        "parameters": [
+          {
+            "name": "coordinate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "digest",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest scan status, including never scanned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactScanStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
       "post": {
         "operationId": "createRepositoryArtifactScan",
         "summary": "Queue an external scan for one immutable artifact",
@@ -2115,6 +2164,60 @@
             "$ref": "#/components/responses/Problem"
           },
           "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/artifact-scans:reconcile": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "reconcileRepositoryArtifactScans",
+        "summary": "Reconcile visible publications with the durable scan queue",
+        "description": "Prioritizes visible immutable artifacts with missing, failed, or cancelled scans, enqueues missing scans with stable idempotency keys, and retries failed or cancelled scans. Repeated calls progress through large repositories without requiring automatic publication scanning to be enabled.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan reconciliation summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactScanReconciliation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
             "$ref": "#/components/responses/Problem"
           },
           "503": {
@@ -7244,6 +7347,80 @@
           },
           "digest": {
             "type": "string"
+          }
+        }
+      },
+      "ArtifactScanStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "coordinate",
+          "digest",
+          "state"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "never",
+              "pending",
+              "running",
+              "retrying",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "job": {
+            "$ref": "#/components/schemas/LifecycleJob"
+          }
+        }
+      },
+      "ArtifactScanReconciliation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "inspected",
+          "enqueued",
+          "retried",
+          "skipped",
+          "jobIds"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inspected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "enqueued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "retried": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "jobIds": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "string",
+              "maxLength": 255
+            }
           }
         }
       },

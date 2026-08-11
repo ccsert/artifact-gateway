@@ -98,6 +98,28 @@ func (s *MemoryStore) GetLifecycleJob(_ context.Context, repositoryID, id string
 	return LifecycleJob{}, ErrNotFound
 }
 
+func (s *MemoryStore) GetLatestArtifactScanJob(_ context.Context, repositoryID string, format Format, coordinate, digest string) (LifecycleJob, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var latest LifecycleJob
+	for _, job := range s.lifecycleJobs {
+		if job.RepositoryID != repositoryID || job.Kind != LifecycleJobScan {
+			continue
+		}
+		var payload ArtifactScanPayload
+		if json.Unmarshal(job.Payload, &payload) != nil || payload.Format != format || payload.Coordinate != coordinate || payload.Digest != digest {
+			continue
+		}
+		if latest.ID == "" || job.CreatedAt.After(latest.CreatedAt) || job.CreatedAt.Equal(latest.CreatedAt) && job.ID > latest.ID {
+			latest = job
+		}
+	}
+	if latest.ID == "" {
+		return LifecycleJob{}, ErrNotFound
+	}
+	return cloneLifecycleJob(latest), nil
+}
+
 func (s *MemoryStore) ClaimLifecycleJobs(_ context.Context, limit int) ([]LifecycleJob, error) {
 	return s.claimLifecycleJobs("", "", limit)
 }

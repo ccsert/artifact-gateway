@@ -68,6 +68,7 @@ type MemoryStore struct {
 	artifactTombstones     map[string]ArtifactTombstone
 	artifactIntelligence   map[string]ArtifactIntelligence
 	lifecycleJobs          map[string]LifecycleJob
+	artifactScanLocks      map[string]*sync.Mutex
 	lifecycleCreatedAt     time.Time
 	replicationPlans       map[string]ReplicationPlan
 	replicationKeys        map[string]string

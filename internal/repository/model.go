@@ -573,6 +573,14 @@ type ArtifactScanPayload struct {
 	Digest     string `json:"digest"`
 }
 
+// ArtifactScanCandidate is one visible immutable artifact identity that can be
+// reconciled against the durable lifecycle queue.
+type ArtifactScanCandidate struct {
+	Coordinate  string
+	Digest      string
+	PublishedAt time.Time
+}
+
 // ScheduledTaskKind is intentionally a closed set. Scheduled tasks may only
 // dispatch operations implemented by the gateway; they never execute user
 // supplied commands or SQL.

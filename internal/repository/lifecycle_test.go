@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,6 +39,46 @@ func TestMemoryLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	}
 	if err := store.CompleteLifecycleJob(context.Background(), job.ID, leaseToken); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("repeat completion error=%v", err)
+	}
+}
+
+func TestMemoryLifecycleJobsFindLatestArtifactScanByImmutableIdentity(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	payload := ArtifactScanPayload{Format: FormatRaw, Coordinate: "release/widget.bin", Digest: "sha256:" + strings.Repeat("a", 64)}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "first", RepositoryID: "repo", Kind: LifecycleJobScan, IdempotencyKey: "first", Payload: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	second, _, err := store.EnqueueLifecycleJob(ctx, LifecycleJob{ID: "second", RepositoryID: "repo", Kind: LifecycleJobScan, IdempotencyKey: "second", Payload: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest, err := store.GetLatestArtifactScanJob(ctx, "repo", FormatRaw, payload.Coordinate, payload.Digest)
+	if err != nil || latest.ID != second.ID || latest.ID == first.ID {
+		t.Fatalf("latest=%#v err=%v", latest, err)
+	}
+	if _, err = store.GetLatestArtifactScanJob(ctx, "repo", FormatRaw, "missing.bin", payload.Digest); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing error=%v", err)
+	}
+}
+
+func TestMemoryArtifactScanEnqueueDeduplicatesActiveIdentity(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	payload := ArtifactScanPayload{Format: FormatRaw, Coordinate: "release/widget.bin", Digest: "sha256:" + strings.Repeat("b", 64)}
+	first, replayed, err := EnqueueArtifactScanJob(ctx, store, "repo", "manual-1", payload)
+	if err != nil || replayed {
+		t.Fatalf("first=%#v replayed=%v err=%v", first, replayed, err)
+	}
+	second, replayed, err := EnqueueArtifactScanJob(ctx, store, "repo", "manual-2", payload)
+	if err != nil || !replayed || second.ID != first.ID {
+		t.Fatalf("second=%#v replayed=%v err=%v", second, replayed, err)
 	}
 }
 

@@ -48,9 +48,7 @@ func (s publicationScanScheduler) Schedule(ctx context.Context, repo repository.
 		return nil
 	}
 
-	identity := strings.Join([]string{repo.ID, string(repo.Format), coordinate, digest}, "\x00")
-	sum := sha256.Sum256([]byte(identity))
-	key := "publish-scan:" + hex.EncodeToString(sum[:])
+	key := publicationScanIdempotencyKey(repo.ID, repo.Format, coordinate, digest)
 	_, _, err = repository.EnqueueArtifactScanJob(ctx, s.store, repo.ID, key, repository.ArtifactScanPayload{
 		Format: repo.Format, Coordinate: coordinate, Digest: digest,
 	})
@@ -59,6 +57,12 @@ func (s publicationScanScheduler) Schedule(ctx context.Context, repo repository.
 	}
 	_ = s.store.RecordAudit(ctx, publicationScanAudit(repo, coordinate, digest, actor, repository.AuditResolved, http.StatusAccepted, ""))
 	return nil
+}
+
+func publicationScanIdempotencyKey(repositoryID string, format repository.Format, coordinate, digest string) string {
+	identity := strings.Join([]string{repositoryID, string(format), coordinate, digest}, "\x00")
+	sum := sha256.Sum256([]byte(identity))
+	return "publish-scan:" + hex.EncodeToString(sum[:])
 }
 
 func (s publicationScanScheduler) ScheduleRepository(ctx context.Context, repositoryID string, format repository.Format, coordinate, digest, actor string) error {

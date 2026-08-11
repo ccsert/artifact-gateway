@@ -1262,6 +1262,31 @@ ArtifactScanRequest:
     digest:
       type: string
       pattern: '^sha256:[0-9a-f]{64}$'
+ArtifactScanStatus:
+  type: object
+  additionalProperties: false
+  required: [coordinate, digest, state]
+  properties:
+    coordinate: {type: string}
+    digest: {type: string}
+    state:
+      type: string
+      enum: [never, pending, running, retrying, completed, failed, cancelled]
+    job: {"$ref": "#/LifecycleJob"}
+ArtifactScanReconciliation:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, inspected, enqueued, retried, skipped, jobIds]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    inspected: {type: integer, minimum: 0}
+    enqueued: {type: integer, minimum: 0}
+    retried: {type: integer, minimum: 0}
+    skipped: {type: integer, minimum: 0}
+    jobIds:
+      type: array
+      maxItems: 1000
+      items: {type: string, maxLength: 255}
 LifecycleJobReconciliation:
   type: object
   additionalProperties: false

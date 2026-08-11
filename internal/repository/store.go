@@ -148,6 +148,7 @@ type LifecycleJobStore interface {
 	EnqueueLifecycleJob(context.Context, LifecycleJob) (LifecycleJob, bool, error)
 	ListLifecycleJobs(context.Context, string, int) ([]LifecycleJob, error)
 	GetLifecycleJob(context.Context, string, string) (LifecycleJob, error)
+	GetLatestArtifactScanJob(context.Context, string, Format, string, string) (LifecycleJob, error)
 	ClaimLifecycleJobs(context.Context, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKind(context.Context, LifecycleJobKind, int) ([]LifecycleJob, error)
 	ClaimLifecycleJobsByKindAndFormat(context.Context, LifecycleJobKind, Format, int) ([]LifecycleJob, error)
@@ -159,6 +160,16 @@ type LifecycleJobStore interface {
 	UpdateLifecycleJobProgress(context.Context, string, string, int, int, string) error
 	CompleteLifecycleJob(context.Context, string, string) error
 	FailLifecycleJob(context.Context, string, string, string) error
+}
+
+// ArtifactScanIdentityLockStore serializes enqueue/reconcile decisions for one
+// immutable artifact identity across concurrent Gateway nodes.
+type ArtifactScanIdentityLockStore interface {
+	LockArtifactScanIdentity(context.Context, string, Format, string, string) (func(), error)
+}
+
+type ArtifactScanCandidateStore interface {
+	ListArtifactScanCandidates(context.Context, string, Format, int) ([]ArtifactScanCandidate, error)
 }
 
 type RepositoryLifecycleJobStore interface {

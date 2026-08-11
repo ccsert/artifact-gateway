@@ -1176,6 +1176,29 @@ export type PromotionRequest = {
   digest: string;
 };
 
+export type ArtifactScanStatus = {
+  coordinate: string;
+  digest: string;
+  state:
+    | "never"
+    | "pending"
+    | "running"
+    | "retrying"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  job?: LifecycleJob;
+};
+
+export type ArtifactScanReconciliation = {
+  repositoryId: string;
+  inspected: number;
+  enqueued: number;
+  retried: number;
+  skipped: number;
+  jobIds: Array<string>;
+};
+
 export type LifecycleJobReconciliation = {
   repositoryId: string;
   requeued: number;
@@ -3990,6 +4013,50 @@ export type ListRepositoryLifecycleJobsResponses = {
 export type ListRepositoryLifecycleJobsResponse =
   ListRepositoryLifecycleJobsResponses[keyof ListRepositoryLifecycleJobsResponses];
 
+export type GetRepositoryArtifactScanStatusData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    coordinate: string;
+    digest: string;
+  };
+  url: "/repositories/{repositoryId}/artifact-scans";
+};
+
+export type GetRepositoryArtifactScanStatusErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetRepositoryArtifactScanStatusError =
+  GetRepositoryArtifactScanStatusErrors[keyof GetRepositoryArtifactScanStatusErrors];
+
+export type GetRepositoryArtifactScanStatusResponses = {
+  /**
+   * Latest scan status, including never scanned
+   */
+  200: ArtifactScanStatus;
+};
+
+export type GetRepositoryArtifactScanStatusResponse =
+  GetRepositoryArtifactScanStatusResponses[keyof GetRepositoryArtifactScanStatusResponses];
+
 export type CreateRepositoryArtifactScanData = {
   body: ArtifactScanRequest;
   headers: {
@@ -4041,6 +4108,57 @@ export type CreateRepositoryArtifactScanResponses = {
 
 export type CreateRepositoryArtifactScanResponse =
   CreateRepositoryArtifactScanResponses[keyof CreateRepositoryArtifactScanResponses];
+
+export type ReconcileRepositoryArtifactScansData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    limit?: number;
+  };
+  url: "/repositories/{repositoryId}/artifact-scans:reconcile";
+};
+
+export type ReconcileRepositoryArtifactScansErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ReconcileRepositoryArtifactScansError =
+  ReconcileRepositoryArtifactScansErrors[keyof ReconcileRepositoryArtifactScansErrors];
+
+export type ReconcileRepositoryArtifactScansResponses = {
+  /**
+   * Scan reconciliation summary
+   */
+  200: ArtifactScanReconciliation;
+};
+
+export type ReconcileRepositoryArtifactScansResponse =
+  ReconcileRepositoryArtifactScansResponses[keyof ReconcileRepositoryArtifactScansResponses];
 
 export type ReconcileRepositoryArtifactIntelligenceData = {
   body?: never;

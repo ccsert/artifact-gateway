@@ -111,6 +111,8 @@ paths:
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs"
   "/repositories/{repositoryId}/artifact-scans":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_artifact_scans"
+  "/repositories/{repositoryId}/artifact-scans:reconcile":
+    "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_artifact_scans_reconcile"
   "/repositories/{repositoryId}/lifecycle-jobs:reconcile-intelligence":
     "$ref": "./management/lifecycle.yaml#/repositories_repositoryId_lifecycle_jobs_reconcile_intelligence"
   "/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/run":

@@ -86,6 +86,19 @@ func (s *PostgresStore) GetLifecycleJob(ctx context.Context, repositoryID, id st
 	return job, err
 }
 
+func (s *PostgresStore) GetLatestArtifactScanJob(ctx context.Context, repositoryID string, format Format, coordinate, digest string) (LifecycleJob, error) {
+	var job LifecycleJob
+	err := scanLifecycleJob(s.db.QueryRowContext(ctx, `SELECT `+lifecycleJobColumns+`
+		FROM lifecycle_jobs
+		WHERE repository_id::text=$1 AND kind='scan'
+		  AND payload->>'format'=$2 AND payload->>'coordinate'=$3 AND payload->>'digest'=$4
+		ORDER BY created_at DESC,id DESC LIMIT 1`, repositoryID, format, coordinate, digest), &job)
+	if errors.Is(err, sql.ErrNoRows) {
+		return LifecycleJob{}, ErrNotFound
+	}
+	return job, err
+}
+
 func (s *PostgresStore) ClaimLifecycleJobs(ctx context.Context, limit int) ([]LifecycleJob, error) {
 	return s.claimLifecycleJobs(ctx, "", "", limit)
 }

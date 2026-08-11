@@ -82,6 +82,39 @@ func (e ArtifactIntelligenceSummaryVulnerabilityStatus) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactScanStatusState.
+const (
+	ArtifactScanStatusStateCancelled ArtifactScanStatusState = "cancelled"
+	ArtifactScanStatusStateCompleted ArtifactScanStatusState = "completed"
+	ArtifactScanStatusStateFailed    ArtifactScanStatusState = "failed"
+	ArtifactScanStatusStateNever     ArtifactScanStatusState = "never"
+	ArtifactScanStatusStatePending   ArtifactScanStatusState = "pending"
+	ArtifactScanStatusStateRetrying  ArtifactScanStatusState = "retrying"
+	ArtifactScanStatusStateRunning   ArtifactScanStatusState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactScanStatusState enum.
+func (e ArtifactScanStatusState) Valid() bool {
+	switch e {
+	case ArtifactScanStatusStateCancelled:
+		return true
+	case ArtifactScanStatusStateCompleted:
+		return true
+	case ArtifactScanStatusStateFailed:
+		return true
+	case ArtifactScanStatusStateNever:
+		return true
+	case ArtifactScanStatusStatePending:
+		return true
+	case ArtifactScanStatusStateRetrying:
+		return true
+	case ArtifactScanStatusStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactVulnerabilitySummaryStatus.
 const (
 	ArtifactVulnerabilitySummaryStatusAffected   ArtifactVulnerabilitySummaryStatus = "affected"
@@ -1742,11 +1775,32 @@ type ArtifactSBOM struct {
 	Url       *string `json:"url,omitempty"`
 }
 
+// ArtifactScanReconciliation defines model for ArtifactScanReconciliation.
+type ArtifactScanReconciliation struct {
+	Enqueued     int                `json:"enqueued"`
+	Inspected    int                `json:"inspected"`
+	JobIds       []string           `json:"jobIds"`
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Retried      int                `json:"retried"`
+	Skipped      int                `json:"skipped"`
+}
+
 // ArtifactScanRequest defines model for ArtifactScanRequest.
 type ArtifactScanRequest struct {
 	Coordinate string `json:"coordinate"`
 	Digest     string `json:"digest"`
 }
+
+// ArtifactScanStatus defines model for ArtifactScanStatus.
+type ArtifactScanStatus struct {
+	Coordinate string                  `json:"coordinate"`
+	Digest     string                  `json:"digest"`
+	Job        *LifecycleJob           `json:"job,omitempty"`
+	State      ArtifactScanStatusState `json:"state"`
+}
+
+// ArtifactScanStatusState defines model for ArtifactScanStatus.State.
+type ArtifactScanStatusState string
 
 // ArtifactSignature defines model for ArtifactSignature.
 type ArtifactSignature struct {
@@ -3435,9 +3489,20 @@ type ReplaceArtifactIntelligenceParams struct {
 	IfMatch    *OptionalIfMatch `json:"If-Match,omitempty"`
 }
 
+// GetRepositoryArtifactScanStatusParams defines parameters for GetRepositoryArtifactScanStatus.
+type GetRepositoryArtifactScanStatusParams struct {
+	Coordinate string `form:"coordinate" json:"coordinate"`
+	Digest     string `form:"digest" json:"digest"`
+}
+
 // CreateRepositoryArtifactScanParams defines parameters for CreateRepositoryArtifactScan.
 type CreateRepositoryArtifactScanParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ReconcileRepositoryArtifactScansParams defines parameters for ReconcileRepositoryArtifactScans.
+type ReconcileRepositoryArtifactScansParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
@@ -3927,9 +3992,15 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactIntelligenceParams)
+	// GetRepositoryArtifactScanStatus Get the latest durable scan status for one immutable artifact
+	// (GET /repositories/{repositoryId}/artifact-scans)
+	GetRepositoryArtifactScanStatus(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetRepositoryArtifactScanStatusParams)
 	// CreateRepositoryArtifactScan Queue an external scan for one immutable artifact
 	// (POST /repositories/{repositoryId}/artifact-scans)
 	CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryArtifactScanParams)
+	// ReconcileRepositoryArtifactScans Reconcile visible publications with the durable scan queue
+	// (POST /repositories/{repositoryId}/artifact-scans:reconcile)
+	ReconcileRepositoryArtifactScans(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReconcileRepositoryArtifactScansParams)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
@@ -5894,6 +5965,61 @@ func (siw *ServerInterfaceWrapper) ReplaceArtifactIntelligence(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// GetRepositoryArtifactScanStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryArtifactScanStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRepositoryArtifactScanStatusParams
+
+	// ------------- Required query parameter "coordinate" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "coordinate", r.URL.Query(), &params.Coordinate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "coordinate"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "coordinate", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "digest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "digest", r.URL.Query(), &params.Digest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digest", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryArtifactScanStatus(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateRepositoryArtifactScan operation middleware
 func (siw *ServerInterfaceWrapper) CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request) {
 
@@ -5939,6 +6065,48 @@ func (siw *ServerInterfaceWrapper) CreateRepositoryArtifactScan(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRepositoryArtifactScan(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReconcileRepositoryArtifactScans operation middleware
+func (siw *ServerInterfaceWrapper) ReconcileRepositoryArtifactScans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileRepositoryArtifactScansParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReconcileRepositoryArtifactScans(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8911,7 +9079,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.GetRepositoryArtifactScanStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.CreateRepositoryArtifactScan)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans:reconcile", wrapper.ReconcileRepositoryArtifactScans)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
@@ -11301,6 +11471,87 @@ func (response ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type GetRepositoryArtifactScanStatusRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       GetRepositoryArtifactScanStatusParams
+}
+
+type GetRepositoryArtifactScanStatusResponseObject interface {
+	VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryArtifactScanStatus200JSONResponse ArtifactScanStatus
+
+func (response GetRepositoryArtifactScanStatus200JSONResponse) VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryArtifactScanStatus400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryArtifactScanStatus400ApplicationProblemPlusJSONResponse) VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryArtifactScanStatus401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryArtifactScanStatus401ApplicationProblemPlusJSONResponse) VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryArtifactScanStatus403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryArtifactScanStatus403ApplicationProblemPlusJSONResponse) VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryArtifactScanStatus404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryArtifactScanStatus404ApplicationProblemPlusJSONResponse) VisitGetRepositoryArtifactScanStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRepositoryArtifactScanRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreateRepositoryArtifactScanParams
@@ -11400,6 +11651,115 @@ func (response CreateRepositoryArtifactScan409ApplicationProblemPlusJSONResponse
 type CreateRepositoryArtifactScan503ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateRepositoryArtifactScan503ApplicationProblemPlusJSONResponse) VisitCreateRepositoryArtifactScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScansRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReconcileRepositoryArtifactScansParams
+}
+
+type ReconcileRepositoryArtifactScansResponseObject interface {
+	VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error
+}
+
+type ReconcileRepositoryArtifactScans200JSONResponse ArtifactScanReconciliation
+
+func (response ReconcileRepositoryArtifactScans200JSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReconcileRepositoryArtifactScans400ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactScans401ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactScans403ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactScans404ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactScans500ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReconcileRepositoryArtifactScans503ApplicationProblemPlusJSONResponse Problem
+
+func (response ReconcileRepositoryArtifactScans503ApplicationProblemPlusJSONResponse) VisitReconcileRepositoryArtifactScansResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -14997,9 +15357,15 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(ctx context.Context, request ReplaceArtifactIntelligenceRequestObject) (ReplaceArtifactIntelligenceResponseObject, error)
+	// GetRepositoryArtifactScanStatus Get the latest durable scan status for one immutable artifact
+	// (GET /repositories/{repositoryId}/artifact-scans)
+	GetRepositoryArtifactScanStatus(ctx context.Context, request GetRepositoryArtifactScanStatusRequestObject) (GetRepositoryArtifactScanStatusResponseObject, error)
 	// CreateRepositoryArtifactScan Queue an external scan for one immutable artifact
 	// (POST /repositories/{repositoryId}/artifact-scans)
 	CreateRepositoryArtifactScan(ctx context.Context, request CreateRepositoryArtifactScanRequestObject) (CreateRepositoryArtifactScanResponseObject, error)
+	// ReconcileRepositoryArtifactScans Reconcile visible publications with the durable scan queue
+	// (POST /repositories/{repositoryId}/artifact-scans:reconcile)
+	ReconcileRepositoryArtifactScans(ctx context.Context, request ReconcileRepositoryArtifactScansRequestObject) (ReconcileRepositoryArtifactScansResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
@@ -16578,6 +16944,33 @@ func (sh *strictHandler) ReplaceArtifactIntelligence(w http.ResponseWriter, r *h
 	}
 }
 
+// GetRepositoryArtifactScanStatus operation middleware
+func (sh *strictHandler) GetRepositoryArtifactScanStatus(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetRepositoryArtifactScanStatusParams) {
+	var request GetRepositoryArtifactScanStatusRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryArtifactScanStatus(ctx, request.(GetRepositoryArtifactScanStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryArtifactScanStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryArtifactScanStatusResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryArtifactScanStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateRepositoryArtifactScan operation middleware
 func (sh *strictHandler) CreateRepositoryArtifactScan(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryArtifactScanParams) {
 	var request CreateRepositoryArtifactScanRequestObject
@@ -16605,6 +16998,33 @@ func (sh *strictHandler) CreateRepositoryArtifactScan(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRepositoryArtifactScanResponseObject); ok {
 		if err := validResponse.VisitCreateRepositoryArtifactScanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReconcileRepositoryArtifactScans operation middleware
+func (sh *strictHandler) ReconcileRepositoryArtifactScans(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReconcileRepositoryArtifactScansParams) {
+	var request ReconcileRepositoryArtifactScansRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReconcileRepositoryArtifactScans(ctx, request.(ReconcileRepositoryArtifactScansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReconcileRepositoryArtifactScans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReconcileRepositoryArtifactScansResponseObject); ok {
+		if err := validResponse.VisitReconcileRepositoryArtifactScansResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
