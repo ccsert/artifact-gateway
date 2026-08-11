@@ -1,4 +1,5 @@
-// Package lifecycle defines the format-neutral artifact state machine.
+// Package lifecycle defines format-neutral artifact state and durable job
+// execution semantics.
 package lifecycle
 
 type State string

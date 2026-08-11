@@ -297,6 +297,20 @@ func (s *MemoryStore) UpdateLifecycleJobProgress(_ context.Context, id, leaseTok
 	return ErrNotFound
 }
 
+func (s *MemoryStore) RenewLifecycleJobLease(_ context.Context, id, leaseToken string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, job := range s.lifecycleJobs {
+		if job.ID != id || job.State != LifecycleJobRunning || job.LeaseToken != leaseToken {
+			continue
+		}
+		job.LeaseExpiresAt = time.Now().UTC().Add(lifecycleJobLeaseDuration)
+		s.lifecycleJobs[key] = job
+		return nil
+	}
+	return ErrNotFound
+}
+
 func lifecycleJobMatchesFormat(payload []byte, format Format) bool {
 	if format == "" {
 		return true

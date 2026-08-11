@@ -41,6 +41,12 @@ through PostgreSQL leases, fencing tokens, idempotency keys, advisory locks,
 `FOR UPDATE SKIP LOCKED`, and best-effort `LISTEN/NOTIFY` wakeups. Notifications
 are never the source of truth; polling recovers from missed notifications.
 
+`internal/lifecycle.Runtime` owns the shared claim, lease heartbeat, terminal
+state, metrics, polling, and notification semantics for migrated lifecycle job
+workers. Domain workers retain only their job-specific implementation. Worker
+migration is incremental so each tracer slice preserves the existing durable
+job contract and recovery behavior.
+
 Deployment constraints and topology examples live in
 `docs/distributed-deployment.md`.
 

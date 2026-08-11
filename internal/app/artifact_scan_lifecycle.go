@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/lifecycle"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 )
@@ -23,7 +24,7 @@ type ArtifactScanResolver interface {
 type ArtifactScanWorker struct {
 	Store interface {
 		repository.ArtifactIntelligenceStore
-		repository.LifecycleJobStore
+		lifecycle.Store
 	}
 	Scanner              scanning.Scanner
 	Resolver             ArtifactScanResolver
@@ -36,111 +37,46 @@ func (w ArtifactScanWorker) RunJobs(ctx context.Context, limit int) error {
 	if w.Scanner == nil || w.Resolver == nil {
 		return errors.New("artifact scanner worker is not configured")
 	}
-	if limit <= 0 {
-		limit = 100
-	}
+	return w.runtime(w.formats()).RunJobs(ctx, limit, w.execute)
+}
+
+func (w ArtifactScanWorker) formats() []repository.Format {
 	formats := append([]repository.Format(nil), w.WorkerFormats...)
 	if len(formats) == 0 {
 		formats = repository.SupportedFormats()
 	}
-	var firstErr error
-	remaining := limit
-	for _, format := range formats {
-		if remaining == 0 {
-			break
-		}
-		jobs, err := w.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobScan, format, remaining)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		remaining -= len(jobs)
-		for _, job := range jobs {
-			if err := w.run(ctx, job); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-	}
-	return firstErr
+	return formats
 }
 
-func (w ArtifactScanWorker) run(ctx context.Context, job repository.LifecycleJob) error {
+func (w ArtifactScanWorker) execute(ctx context.Context, job repository.LifecycleJob) error {
 	var payload repository.ArtifactScanPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.Format == "" || payload.Coordinate == "" || payload.Digest == "" {
-		return w.fail(ctx, job, "invalid artifact scan payload")
+		return errors.New("invalid artifact scan payload")
 	}
-	if w.Metrics != nil {
-		w.Metrics.RecordBackgroundOperation("scan", payload.Format, "started")
-		w.Metrics.AddBackgroundOperationInFlight("scan", payload.Format, 1)
-		defer w.Metrics.AddBackgroundOperationInFlight("scan", payload.Format, -1)
-	}
-	scanCtx, cancelScan := context.WithCancel(ctx)
-	stopHeartbeat := w.startLeaseHeartbeat(scanCtx, cancelScan, job)
-	fail := func(message string) error {
-		if leaseErr := stopHeartbeat(); leaseErr != nil {
-			message = fmt.Sprintf("artifact scan lease renewal failed: %v", leaseErr)
-		}
-		return w.fail(ctx, job, message)
-	}
-	artifact, err := w.Resolver.ResolveArtifactScan(scanCtx, job.RepositoryID, payload)
+	artifact, err := w.Resolver.ResolveArtifactScan(ctx, job.RepositoryID, payload)
 	if err != nil {
-		return fail(fmt.Sprintf("resolve artifact scan assets failed: %v", err))
+		return fmt.Errorf("resolve artifact scan assets failed: %v", err)
 	}
-	report, err := w.Scanner.Scan(scanCtx, artifact)
+	report, err := w.Scanner.Scan(ctx, artifact)
 	if err != nil {
-		return fail(fmt.Sprintf("artifact scanner failed: %v", err))
+		return fmt.Errorf("artifact scanner failed: %v", err)
 	}
-	if err := w.mergeReport(scanCtx, artifact, report); err != nil {
-		return fail(fmt.Sprintf("merge artifact scan report failed: %v", err))
-	}
-	if leaseErr := stopHeartbeat(); leaseErr != nil {
-		return w.fail(ctx, job, fmt.Sprintf("artifact scan lease renewal failed: %v", leaseErr))
-	}
-	if err := w.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
-		return err
-	}
-	if w.Metrics != nil {
-		w.Metrics.RecordBackgroundOperation("scan", payload.Format, "completed")
+	if err := w.mergeReport(ctx, artifact, report); err != nil {
+		return fmt.Errorf("merge artifact scan report failed: %v", err)
 	}
 	return nil
 }
 
-func (w ArtifactScanWorker) startLeaseHeartbeat(ctx context.Context, cancelScan context.CancelFunc, job repository.LifecycleJob) func() error {
-	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
-	result := make(chan error, 1)
-	interval := w.LeaseRefreshInterval
-	if interval <= 0 {
-		interval = 3 * time.Minute
-	}
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-heartbeatCtx.Done():
-				result <- nil
-				return
-			case <-ticker.C:
-				err := w.Store.UpdateLifecycleJobProgress(heartbeatCtx, job.ID, job.LeaseToken, job.ProgressCurrent, job.ProgressTotal, "scanning artifact")
-				if err == nil {
-					continue
-				}
-				if heartbeatCtx.Err() != nil {
-					result <- nil
-					return
-				}
-				cancelScan()
-				result <- err
-				return
-			}
-		}
-	}()
-	return func() error {
-		cancelHeartbeat()
-		cancelScan()
-		return <-result
+func (w ArtifactScanWorker) runtime(formats []repository.Format) lifecycle.Runtime {
+	return lifecycle.Runtime{
+		Store:                w.Store,
+		Kind:                 repository.LifecycleJobScan,
+		Formats:              formats,
+		Name:                 "artifact scan",
+		Operation:            "scan",
+		Metrics:              w.Metrics,
+		LeaseRefreshInterval: w.LeaseRefreshInterval,
+		LeaseProgressMessage: "scanning artifact",
 	}
 }
 
@@ -195,31 +131,9 @@ func scannerActor(report scanning.Report) string {
 	return "scanner:artifact-scanner"
 }
 
-func (w ArtifactScanWorker) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
-	_ = w.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message)
-	if w.Metrics != nil {
-		var payload repository.ArtifactScanPayload
-		_ = json.Unmarshal(job.Payload, &payload)
-		w.Metrics.RecordBackgroundOperation("scan", payload.Format, "failed")
-	}
-	return errors.New(message)
-}
-
 func (w ArtifactScanWorker) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 || w.Scanner == nil || w.Resolver == nil {
 		return
 	}
-	go func() {
-		_ = w.RunJobs(ctx, 100)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				_ = w.RunJobs(ctx, 100)
-			}
-		}
-	}()
+	w.runtime(w.formats()).Start(ctx, interval, 100, w.execute)
 }

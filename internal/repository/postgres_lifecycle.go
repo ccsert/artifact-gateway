@@ -236,6 +236,17 @@ func (s *PostgresStore) UpdateLifecycleJobProgress(ctx context.Context, id, leas
 	return nil
 }
 
+func (s *PostgresStore) RenewLifecycleJobLease(ctx context.Context, id, leaseToken string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET lease_expires_at=now()+interval '10 minutes' WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) CompleteLifecycleJob(ctx context.Context, id, leaseToken string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET state='completed',completed_at=now(),lease_expires_at=NULL,lease_token='',next_attempt_at=NULL,last_error='',progress_current=CASE WHEN progress_total>0 THEN progress_total ELSE progress_current END WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
 	if err != nil {

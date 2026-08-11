@@ -24,6 +24,25 @@ func (f artifactScanResolverFunc) ResolveArtifactScan(ctx context.Context, repos
 	return f(ctx, repositoryID, payload)
 }
 
+type artifactScanWakeStore struct {
+	*repository.MemoryStore
+	wake          chan struct{}
+	claimFinished chan struct{}
+}
+
+func (s *artifactScanWakeStore) Listen(context.Context, string) <-chan struct{} {
+	return s.wake
+}
+
+func (s *artifactScanWakeStore) ClaimLifecycleJobsByKindAndFormat(ctx context.Context, kind repository.LifecycleJobKind, format repository.Format, limit int) ([]repository.LifecycleJob, error) {
+	jobs, err := s.MemoryStore.ClaimLifecycleJobsByKindAndFormat(ctx, kind, format, limit)
+	select {
+	case s.claimFinished <- struct{}{}:
+	default:
+	}
+	return jobs, err
+}
+
 func TestArtifactScanWorkerMergesScannerFieldsAndPreservesTrustEvidence(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
@@ -197,6 +216,50 @@ func TestArtifactScanWorkerStartProcessesPendingJobs(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("job state=%q want=%q", completed.State, repository.LifecycleJobCompleted)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestArtifactScanWorkerStartProcessesJobsAfterLifecycleNotification(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &artifactScanWakeStore{
+		MemoryStore:   repository.NewMemoryStore(),
+		wake:          make(chan struct{}, 1),
+		claimFinished: make(chan struct{}, 1),
+	}
+	digest := testScanDigest("notification scan")
+	worker := ArtifactScanWorker{
+		Store: store,
+		Resolver: artifactScanResolverFunc(func(context.Context, string, repository.ArtifactScanPayload) (scanning.Artifact, error) {
+			return scanning.Artifact{RepositoryID: "repo", Format: repository.FormatRaw, Coordinate: "notified.bin", Digest: digest}, nil
+		}),
+		Scanner:       scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) { return scanning.Report{}, nil }),
+		WorkerFormats: []repository.Format{repository.FormatRaw},
+	}
+	worker.Start(ctx, time.Hour)
+	select {
+	case <-store.claimFinished:
+	case <-time.After(time.Second):
+		t.Fatal("initial scan claim did not finish")
+	}
+	job, _, err := repository.EnqueueArtifactScanJob(ctx, store, "repo", "scan-notification", repository.ArtifactScanPayload{Format: repository.FormatRaw, Coordinate: "notified.bin", Digest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.wake <- struct{}{}
+	deadline := time.Now().Add(time.Second)
+	for {
+		completed, getErr := store.GetLifecycleJob(ctx, "repo", job.ID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		if completed.State == repository.LifecycleJobCompleted {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job state=%q want=%q after lifecycle notification", completed.State, repository.LifecycleJobCompleted)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
