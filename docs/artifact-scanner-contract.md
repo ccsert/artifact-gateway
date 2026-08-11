@@ -161,9 +161,25 @@ The scanner returns `application/json`:
     "status": "affected",
     "critical": 0,
     "high": 1,
-    "medium": 2,
-    "low": 3,
-    "unknown": 0
+    "medium": 0,
+    "low": 0,
+    "unknown": 0,
+    "findings": [
+      {
+        "id": "CVE-2026-1234",
+        "source": "nvd",
+        "severity": "high",
+        "component": "pkg:maven/com.example/widget@1.2.3",
+        "version": "1.2.3",
+        "fixedVersion": "1.2.4",
+        "location": "widget-1.2.3.jar",
+        "title": "Example remote code execution",
+        "description": "A crafted payload can execute code.",
+        "url": "https://scanner.example.test/vulnerabilities/CVE-2026-1234",
+        "cvssScore": 8.1,
+        "cvssVector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+      }
+    ]
   }
 }
 ```
@@ -172,6 +188,16 @@ Unknown response fields, invalid URLs or digests, negative counts, oversized
 collections, non-JSON responses, and trailing JSON values are rejected. The
 Gateway records the configured adapter name and its own completion time rather
 than trusting scanner-supplied identity or timestamps.
+
+`findings` is optional so existing summary-only `v1` adapters remain valid. If
+it is present, it is the complete set represented by the severity counters:
+every finding must use `critical`, `high`, `medium`, `low`, or `unknown`, and
+the counters must match exactly. Duplicate ID/source/component/version/location
+identities are rejected. A report contains at most 1,000 findings and remains
+subject to the configured response-byte limit. An `affected` report must
+contain at least one counted vulnerability; `clean` and `not_scanned` reports
+cannot contain non-zero counts. This invariant is enforced both at the scanner
+boundary and the management intelligence write boundary.
 
 ## Health and vulnerability database freshness
 
@@ -214,11 +240,12 @@ so a temporary scanner outage does not take repository reads and writes down.
   artifact bytes to a different endpoint.
 - Scanner error bodies are not propagated into lifecycle state or operator
   responses.
-- Reports can contain SBOM references, licenses, and vulnerability summaries.
-  They cannot replace publisher signatures or provenance.
+- Reports can contain SBOM references, licenses, vulnerability summaries, and
+  bounded per-vulnerability findings. They cannot replace publisher signatures
+  or provenance.
 
-Per-vulnerability finding detail and malicious-component quarantine remain
-future work.
+Malicious-component quarantine and repository-read blocking remain future
+work.
 
 ## Durable status and reconciliation
 

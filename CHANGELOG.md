@@ -45,6 +45,8 @@ a dated version heading without rewriting their meaning.
   and capability-aware Console controls.
 - Per-artifact scan status, manual rescan controls, and bounded reconciliation
   for publications that missed automatic scanning or need a failed scan retried.
+- Bounded per-vulnerability scanner findings with severity-count consistency,
+  immutable evidence persistence, and searchable bilingual Console details.
 - Local-user governance with profile metadata, case-insensitive identities,
   failed-sign-in lockout, last-sign-in and password-change timestamps,
   mandatory password changes, administrator password resets, revocable

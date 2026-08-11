@@ -20,6 +20,11 @@ product boundary; see [the full repository roadmap](full-artifact-repository-roa
 
 ## Contract alignment
 
+- The format-neutral scanner contract applies to immutable artifacts resolved
+  by the native Maven, OCI, Raw, npm, PyPI, Go, and Conan stores. Detailed
+  findings are persisted with artifact intelligence and do not alter package-
+  protocol response bytes; quarantine enforcement remains a separate future
+  policy layer.
 - Raw and OCI do not use the management publish-session contract. Raw writes are
   ordinary protocol `PUT` requests. OCI writes are ordinary Registry V2 upload
   and manifest requests.
