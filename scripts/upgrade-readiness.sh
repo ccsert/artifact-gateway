@@ -11,6 +11,8 @@ git cat-file -e "$base_ref^{commit}"
 
 free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }
 project="artifact-gateway-upgrade-${RANDOM}-${RANDOM}"
+gateway_image="${project}-gateway:latest"
+rollback_image="${project}-rollback-gateway:local"
 old_tree=$(mktemp -d)
 # macOS exposes /var as a symlink to /private/var. Git records the physical
 # worktree path, so normalize it before registration and cleanup.
@@ -23,6 +25,7 @@ minio_console_port=$(free_port)
 cleanup() {
   COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$isolated_environment" -f compose.yml down -v --remove-orphans >/dev/null 2>&1 || true
   test -f "$old_tree/compose.yml" && COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$isolated_environment" -f "$old_tree/compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  docker image rm "$rollback_image" "$gateway_image" >/dev/null 2>&1 || true
   git worktree remove --force "$old_tree" >/dev/null 2>&1 || rm -rf "$old_tree"
   rm -f "$isolated_environment"
 }
@@ -38,7 +41,26 @@ current_compose=(docker compose --env-file "$isolated_environment" -f compose.ym
 status() { curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@"; }
 admin=(-H "Authorization: Bearer $(awk -F= '$1 == "GATEWAY_ADMIN_TOKEN" { print substr($0, index($0, "=") + 1) }' "$isolated_environment")")
 
-COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --build --wait
+build_gateway() {
+  local label=$1
+  shift
+  local attempt
+  for attempt in 1 2 3; do
+    if COMPOSE_PROJECT_NAME="$project" "$@" build gateway; then
+      return 0
+    fi
+    if [[ "$attempt" -eq 3 ]]; then
+      printf 'Building the %s Gateway failed after %s attempts.\n' "$label" "$attempt" >&2
+      return 1
+    fi
+    printf 'Building the %s Gateway failed; retrying (%s/3).\n' "$label" "$((attempt + 1))" >&2
+    sleep "$attempt"
+  done
+}
+
+build_gateway base "${old_compose[@]}"
+COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --no-build --wait
+docker image tag "$gateway_image" "$rollback_image"
 suffix="upgrade-${RANDOM}"
 for format in oci maven; do
   payload=$(printf '{"name":"%s-%s","members":[{"name":"legacy","type":"hosted","endpoint":"http://host.docker.internal:9","position":0}]}' "$format" "$suffix")
@@ -47,7 +69,8 @@ for format in oci maven; do
 done
 COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" down --remove-orphans
 
-COMPOSE_PROJECT_NAME="$project" "${current_compose[@]}" up -d --build --wait
+build_gateway current "${current_compose[@]}"
+COMPOSE_PROJECT_NAME="$project" "${current_compose[@]}" up -d --no-build --wait
 for format in oci maven; do
   code=$(status "${admin[@]}" "$gateway_url/api/v1/$format/groups/$format-$suffix")
   [[ "$code" == 200 ]] || { printf 'Current Gateway could not read base %s Group: HTTP %s.\n' "$format" "$code" >&2; exit 1; }
@@ -59,7 +82,8 @@ for format in raw conan; do
 done
 COMPOSE_PROJECT_NAME="$project" "${current_compose[@]}" down --remove-orphans
 
-COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --build --wait
+docker image tag "$rollback_image" "$gateway_image"
+COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --no-build --wait
 code=$(status "${admin[@]}" "$gateway_url/api/v1/oci/groups/oci-$suffix")
 [[ "$code" == 200 ]] || { printf 'Rollback Gateway could not read base OCI Group: HTTP %s.\n' "$code" >&2; exit 1; }
 printf '%s\n' 'Upgrade readiness passed: current migration retained legacy OCI/Maven Groups and the rollback binary can read the persisted OCI Group.'
