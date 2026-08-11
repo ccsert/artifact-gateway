@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AutoComplete,
   Button,
+  Dropdown,
   Input,
   Modal,
   Popconfirm,
@@ -12,7 +14,9 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  AppstoreOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   PlusOutlined,
   SafetyCertificateOutlined,
@@ -42,6 +46,68 @@ type DraftGrant = {
   resourcePrefix?: string;
 };
 
+export type PrincipalOption = { value: string; label: string };
+
+type TemplatePreset = {
+  key: string;
+  name: string;
+  nameEn: string;
+  description: string;
+  descriptionEn: string;
+  grants: Array<Pick<DraftGrant, "principal" | "scopes" | "resourcePrefix">>;
+};
+
+export const AUTHORIZATION_TEMPLATE_PRESETS: TemplatePreset[] = [
+  {
+    key: "read-only-consumer",
+    name: "团队只读",
+    nameEn: "Team read-only",
+    description: "适合下载、搜索和浏览制品的主体。",
+    descriptionEn:
+      "For principals that only download, search, and browse artifacts.",
+    grants: [{ principal: "", scopes: ["repositories:read"] }],
+  },
+  {
+    key: "release-publisher",
+    name: "发布机器人",
+    nameEn: "Release publisher",
+    description: "适合 CI 发布和编辑制品的主体。",
+    descriptionEn: "For CI principals that publish and edit artifacts.",
+    grants: [{ principal: "", scopes: ["repositories:write"] }],
+  },
+  {
+    key: "security-bot",
+    name: "制品情报机器人",
+    nameEn: "Artifact intelligence bot",
+    description: "只允许写入安全与制品情报元数据。",
+    descriptionEn:
+      "Only allows security and artifact-intelligence metadata writes.",
+    grants: [{ principal: "", scopes: ["repositories:intelligence"] }],
+  },
+  {
+    key: "repository-owner",
+    name: "仓库管理员",
+    nameEn: "Repository owner",
+    description: "适合负责仓库配置、授权和制品生命周期的主体。",
+    descriptionEn:
+      "For principals responsible for repository configuration, grants, and lifecycle.",
+    grants: [{ principal: "", scopes: ["repositories:admin"] }],
+  },
+];
+
+export const RESOURCE_PREFIX_EXAMPLES: Partial<
+  Record<Repository["format"], string[]>
+> = {
+  maven: ["com/example/", "org/example/"],
+  oci: ["team/", "library/"],
+  conan: ["pkg/1.0/", "pkg/"],
+  raw: ["releases/", "snapshots/"],
+  npm: ["@scope/", "packages/"],
+  pypi: ["gateway-", "internal-"],
+  go: ["example.com/team/", "git.example.com/"],
+  apt: ["dists/bookworm/", "pool/main/"],
+};
+
 function emptyGrant(): DraftGrant {
   return {
     key: `${Date.now()}-${Math.random()}`,
@@ -57,9 +123,15 @@ function toDraft(template: AuthorizationTemplate): DraftGrant[] {
   }));
 }
 
-type Props = { repositories: Repository[] };
+type Props = {
+  repositories: Repository[];
+  principalOptions?: PrincipalOption[];
+};
 
-export function AuthorizationTemplatesPanel({ repositories }: Props) {
+export function AuthorizationTemplatesPanel({
+  repositories,
+  principalOptions = [],
+}: Props) {
   const { text } = usePreferences();
   const [templates, setTemplates] = useState<AuthorizationTemplate[] | null>(
     null,
@@ -78,6 +150,27 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
   const [applyRepository, setApplyRepository] = useState("");
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<unknown>(null);
+
+  const resourcePrefixOptions = useMemo(() => {
+    const formats = new Set(
+      repositories.map((repository) => repository.format),
+    );
+    const formatsToShow = formats.size
+      ? Array.from(formats)
+      : (Object.keys(RESOURCE_PREFIX_EXAMPLES) as Repository["format"][]);
+    return [
+      {
+        value: "",
+        label: text("整个仓库 · 留空前缀", "Entire repository · blank prefix"),
+      },
+      ...formatsToShow.flatMap((format) =>
+        (RESOURCE_PREFIX_EXAMPLES[format] ?? []).map((value) => ({
+          value,
+          label: `${format} · ${value}`,
+        })),
+      ),
+    ];
+  }, [repositories, text]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -106,6 +199,38 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
     setDraftGrants([emptyGrant()]);
     setSaveError(null);
   };
+
+  const applyPreset = (presetKey: string) => {
+    const preset = AUTHORIZATION_TEMPLATE_PRESETS.find(
+      (item) => item.key === presetKey,
+    );
+    if (!preset) return;
+    setEditing(null);
+    setEditorOpen(true);
+    setDraftName(text(preset.name, preset.nameEn));
+    setDraftDescription(text(preset.description, preset.descriptionEn));
+    setDraftGrants(
+      preset.grants.map((grant) => ({
+        ...grant,
+        key: `${Date.now()}-${Math.random()}`,
+      })),
+    );
+    setSaveError(null);
+  };
+
+  const presetMenuItems = AUTHORIZATION_TEMPLATE_PRESETS.map((preset) => ({
+    key: preset.key,
+    label: (
+      <div className="min-w-[220px]">
+        <div className="text-xs font-medium">
+          {text(preset.name, preset.nameEn)}
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          {text(preset.description, preset.descriptionEn)}
+        </div>
+      </div>
+    ),
+  }));
 
   const openEdit = (template: AuthorizationTemplate) => {
     setEditing(template);
@@ -301,13 +426,26 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
   ];
 
   return (
-    <Card className="mt-4" bodyClassName="p-0">
+    <Card bodyClassName="p-0">
       <CardHeader
         title={text("授权模板", "Authorization templates")}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {text("新建模板", "New template")}
-          </Button>
+          <Space>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: presetMenuItems,
+                onClick: ({ key }) => applyPreset(String(key)),
+              }}
+            >
+              <Button icon={<AppstoreOutlined />}>
+                {text("内置模板", "Built-in templates")} <DownOutlined />
+              </Button>
+            </Dropdown>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {text("新建模板", "New template")}
+            </Button>
+          </Space>
         }
       />
       <div className="px-5 py-3 text-xs text-zinc-500">
@@ -325,6 +463,7 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
         <Loading />
       ) : templates.length === 0 ? (
         <EmptyState
+          compact
           title={text("尚未创建授权模板", "No authorization templates yet")}
           hint={text(
             "模板适合复用一组主体、权限和资源前缀规则。",
@@ -379,6 +518,12 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
             onChange={(event) => setDraftDescription(event.target.value)}
           />
         </div>
+        <div className="mt-3 text-xs leading-5 text-zinc-500">
+          {text(
+            "主体支持选择已知用户或 API Key，也可以直接填写 OIDC / CI actor。资源前缀留空表示整个仓库；下拉建议按仓库格式提供常见写法。",
+            "Choose a known user or API key, or enter an OIDC / CI actor directly. Leave the resource prefix blank for the entire repository; suggestions follow the repository format.",
+          )}
+        </div>
         <Table<DraftGrant>
           className="mt-4"
           rowKey="key"
@@ -391,14 +536,20 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
               title: text("主体", "Principal"),
               key: "principal",
               render: (_, grant) => (
-                <Input
+                <AutoComplete
+                  className="w-full"
+                  allowClear
+                  options={principalOptions}
                   value={grant.principal}
-                  placeholder="user:release"
-                  onChange={(event) =>
+                  placeholder={text(
+                    "选择或输入 actor，例如 user:release",
+                    "Choose or enter an actor, e.g. user:release",
+                  )}
+                  onChange={(value) =>
                     setDraftGrants((current) =>
                       current.map((item) =>
                         item.key === grant.key
-                          ? { ...item, principal: event.target.value }
+                          ? { ...item, principal: value }
                           : item,
                       ),
                     )
@@ -446,18 +597,20 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
               key: "prefix",
               width: 260,
               render: (_, grant) => (
-                <Input
-                  className="font-mono"
+                <AutoComplete
+                  className="w-full font-mono"
+                  allowClear
+                  options={resourcePrefixOptions}
                   value={grant.resourcePrefix}
                   placeholder={text(
                     "例如 org.example；留空表示整个仓库",
                     "For example org.example; blank means entire repository",
                   )}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setDraftGrants((current) =>
                       current.map((item) =>
                         item.key === grant.key
-                          ? { ...item, resourcePrefix: event.target.value }
+                          ? { ...item, resourcePrefix: value }
                           : item,
                       ),
                     )

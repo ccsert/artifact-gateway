@@ -7,10 +7,11 @@ import {
   Select,
   Switch,
   Table,
+  Tabs,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ClearOutlined, ExperimentOutlined } from "@ant-design/icons";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   getAnonymousAccessPolicy,
   getRepositoryEffectiveAccess,
@@ -44,7 +45,10 @@ import {
   MetricStrip,
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
-import { AuthorizationTemplatesPanel } from "../components/AuthorizationTemplatesPanel";
+import {
+  AuthorizationTemplatesPanel,
+  type PrincipalOption,
+} from "../components/AuthorizationTemplatesPanel";
 
 interface GrantRow {
   repositoryId: string;
@@ -56,6 +60,13 @@ interface GrantRow {
 }
 
 type EvaluatorRole = "none" | "reader" | "writer" | "admin";
+export type AccessControlTab = "grants" | "evaluate" | "policies";
+
+export function accessControlTabFromQuery(
+  value: string | null,
+): AccessControlTab {
+  return value === "evaluate" || value === "policies" ? value : "grants";
+}
 
 interface EvaluatorPrincipal {
   value: string;
@@ -224,6 +235,8 @@ function Principal({ value }: { value: string }) {
 export function AccessControlPage() {
   const { identity, identityLoading } = useAuth();
   const { locale, text } = usePreferences();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = accessControlTabFromQuery(searchParams.get("tab"));
   const english = locale === "en-US";
   const canManageAnonymousPolicy = identity?.administrator === true;
   const [rows, setRows] = useState<GrantRow[] | null>(null);
@@ -442,6 +455,42 @@ export function AccessControlPage() {
       ? customRole
       : (selectedPrincipalChoice?.role ?? "none");
 
+  const principalOptions = useMemo<PrincipalOption[]>(() => {
+    const options: PrincipalOption[] = [];
+    const seen = new Set<string>();
+    const add = (value: string, label: string) => {
+      const normalized = value.trim();
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      options.push({ value: normalized, label });
+    };
+
+    if (identity?.actor) {
+      add(
+        identity.actor,
+        `${text("当前身份", "Current identity")} · ${identity.actor}`,
+      );
+    }
+    users
+      .filter((user) => user.state === "active")
+      .forEach((user) =>
+        add(
+          `user:${user.name}`,
+          `${text("用户", "User")} · ${user.name}${
+            user.displayName ? ` · ${user.displayName}` : ""
+          }`,
+        ),
+      );
+    apiKeys
+      .filter(
+        (key) =>
+          !key.revokedAt &&
+          (!key.expiresAt || Date.parse(key.expiresAt) > Date.now()),
+      )
+      .forEach((key) => add(`api-key:${key.id}`, `API Key · ${key.name}`));
+    return options;
+  }, [apiKeys, identity, text, users]);
+
   const runEvaluation = async () => {
     const choice = selectedPrincipalChoice;
     if (!choice || !selectedRepository) {
@@ -625,407 +674,483 @@ export function AccessControlPage() {
           },
         ]}
       />
-      <Card className="mt-4" bodyClassName="p-0">
-        <div className="flex items-start justify-between gap-6 border-b border-zinc-800/70 px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-              <ExperimentOutlined className="text-cyan-400" />
-              {text("权限检查", "Access evaluation")}
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {text(
-                "使用网关真实判定链检查全局角色、仓库授权和资源前缀叠加后的结果。",
-                "Run the Gateway decision chain across global roles, repository grants, and resource prefixes.",
-              )}
-            </p>
-          </div>
-          {(evaluatorOptionsLoading || identityLoading) && <Spinner />}
-        </div>
-        <div className="px-5 py-4">
-          {evaluatorOptionsError !== null && (
-            <div className="mb-4">
-              <ErrorBanner error={evaluatorOptionsError} />
-            </div>
-          )}
-          <div className="grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] items-end gap-3">
-            <FilterField label={text("授权主体", "Principal")}>
-              <Select
-                className="w-full"
-                showSearch={{ optionFilterProp: "label" }}
-                loading={evaluatorOptionsLoading || identityLoading}
-                value={selectedPrincipal}
-                options={evaluatorPrincipals.map((choice) => ({
-                  value: choice.value,
-                  label: `${choice.label} · ${choice.detail}`,
-                  disabled: choice.disabled,
-                }))}
-                onChange={(value) => {
-                  setSelectedPrincipal(value);
-                  setEvaluation(null);
-                  setEvaluationError(null);
-                }}
-              />
-            </FilterField>
-            <FilterField label={text("全局角色", "Global role")}>
-              <Select
-                className="w-full"
-                value={effectiveEvaluatorRole}
-                disabled={selectedPrincipal !== CUSTOM_PRINCIPAL}
-                options={[
-                  { value: "none", label: text("无", "None") },
-                  { value: "reader", label: "reader" },
-                  { value: "writer", label: "writer" },
-                  { value: "admin", label: "admin" },
-                ]}
-                onChange={(value: EvaluatorRole) => {
-                  setCustomRole(value);
-                  setEvaluation(null);
-                }}
-              />
-            </FilterField>
-            <FilterField label={text("仓库", "Repository")}>
-              <Select
-                className="w-full"
-                showSearch={{ optionFilterProp: "label" }}
-                loading={evaluatorOptionsLoading}
-                value={selectedRepository || undefined}
-                placeholder={text("选择仓库", "Select repository")}
-                options={repositories.map((repository) => ({
-                  value: repository.id,
-                  label: `${repository.name} · ${repository.format}`,
-                }))}
-                onChange={(value) => {
-                  setSelectedRepository(value);
-                  setResource("");
-                  setEvaluation(null);
-                  setEvaluationError(null);
-                }}
-              />
-            </FilterField>
-            <FilterField
-              label={text("具体资源（可选）", "Resource (optional)")}
-            >
-              <Input
-                className="font-mono"
-                allowClear
-                placeholder={
-                  resourcePlaceholder(selectedRepositoryChoice?.format) ||
-                  text(
-                    "留空检查整个仓库",
-                    "Blank evaluates repository-wide access",
-                  )
-                }
-                value={resource}
-                onChange={(event) => {
-                  setResource(event.target.value);
-                  setEvaluation(null);
-                  setEvaluationError(null);
-                }}
-                onPressEnter={() => void runEvaluation()}
-              />
-            </FilterField>
-            <Button
-              type="primary"
-              icon={<ExperimentOutlined />}
-              loading={evaluating}
-              disabled={evaluatorOptionsLoading || !selectedRepository}
-              onClick={() => void runEvaluation()}
-            >
-              {text("检查", "Evaluate")}
-            </Button>
-          </div>
-          {selectedPrincipal === CUSTOM_PRINCIPAL && (
-            <div className="mt-3 grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] gap-3">
-              <FilterField
-                label={text("完整 actor 标识", "Complete actor identifier")}
-                className="col-span-2"
-              >
-                <Input
-                  className="font-mono"
-                  placeholder={text(
-                    "例如 oidc:gitlab:team/release 或 ci-bot",
-                    "For example: oidc:gitlab:team/release or ci-bot",
-                  )}
-                  value={customActor}
-                  onChange={(event) => {
-                    setCustomActor(event.target.value);
-                    setEvaluation(null);
-                    setEvaluationError(null);
-                  }}
-                  onPressEnter={() => void runEvaluation()}
-                />
-              </FilterField>
-              <div className="col-span-3 flex items-end pb-2 text-[11px] text-zinc-600">
-                {text(
-                  "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
-                  "This must exactly match the authenticated actor; choose the global role produced by the OIDC mapping.",
-                )}
-              </div>
-            </div>
-          )}
-          {evaluationError !== null && (
-            <div className="mt-4">
-              <ErrorBanner error={evaluationError} />
-            </div>
-          )}
-          {evaluation && (
-            <div className="mt-4 border-t border-zinc-800/70 pt-4">
-              <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-zinc-500">
-                <Badge tone={evaluation.simulated ? "cyan" : "green"}>
-                  {evaluation.simulated
-                    ? text("模拟结果", "Simulated")
-                    : text("当前身份", "Current identity")}
-                </Badge>
-                <span className="font-mono text-zinc-300">
-                  {evaluation.actor}
-                </span>
-                <span>·</span>
-                <span>{evaluation.repository.name}</span>
-                <span>·</span>
-                <span className="min-w-0 truncate font-mono">
-                  {evaluation.resource || text("整个仓库", "Entire repository")}
-                </span>
-              </div>
-              <AccessDecisionSummary access={evaluation} />
-            </div>
-          )}
-        </div>
-      </Card>
-      <Card className="mt-4" bodyClassName="px-4 py-3">
-        <div className="flex items-center justify-between gap-6">
-          <div>
-            <div className="text-sm font-medium text-zinc-200">
-              {text("全局匿名读取", "Global anonymous reads")}
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {text(
-                "只有同时满足全局策略与仓库 / 组策略时，未认证客户端才能读取。",
-                "Unauthenticated clients can read only when both global and repository/group policy allow it.",
-              )}
-            </p>
-          </div>
-          {anonymousPolicy && canManageAnonymousPolicy ? (
-            <Popconfirm
-              title={
-                anonymousPolicy.enabled
-                  ? text(
-                      "确认停用全局匿名读取？",
-                      "Disable global anonymous reads?",
-                    )
-                  : text(
-                      "确认启用全局匿名读取？",
-                      "Enable global anonymous reads?",
-                    )
-              }
-              description={
-                anonymousPolicy.enabled
-                  ? text(
-                      "停用后所有未认证协议读取都会被拒绝。",
-                      "All unauthenticated protocol reads will be rejected.",
-                    )
-                  : text(
-                      "启用后满足仓库或组策略的制品可被未认证客户端读取。",
-                      "Artifacts allowed by repository or group policy become readable without authentication.",
-                    )
-              }
-              okText={text("继续", "Continue")}
-              cancelText={text("取消", "Cancel")}
-              okButtonProps={{
-                danger: anonymousPolicy.enabled,
-                loading: savingAnonymousPolicy,
-              }}
-              onConfirm={() => updateAnonymousPolicy(!anonymousPolicy.enabled)}
-            >
-              <Switch
-                checked={anonymousPolicy.enabled}
-                loading={savingAnonymousPolicy}
-                aria-label={text(
-                  "切换全局匿名读取",
-                  "Toggle global anonymous reads",
-                )}
-                onChange={() => undefined}
-              />
-            </Popconfirm>
-          ) : canManageAnonymousPolicy ? (
-            <span className="text-xs text-zinc-500">
-              {text("加载中…", "Loading…")}
-            </span>
-          ) : (
-            <Badge tone="zinc">{text("只读", "Read-only")}</Badge>
-          )}
-        </div>
-        {anonymousPolicyError !== null && (
-          <div className="mt-3">
-            <ErrorBanner error={anonymousPolicyError} />
-          </div>
-        )}
-      </Card>
-      <AuthorizationTemplatesPanel repositories={repositories} />
-      <Collapse
-        ghost
+      <Tabs
+        className="ag-access-tabs"
+        size="small"
+        activeKey={activeTab}
+        onChange={(key) => {
+          const nextTab = accessControlTabFromQuery(key);
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current);
+              if (nextTab === "grants") next.delete("tab");
+              else next.set("tab", nextTab);
+              return next;
+            },
+            { replace: true },
+          );
+        }}
         items={[
           {
-            key: "authorization",
-            label: (
-              <span className="text-xs text-zinc-400">
-                {text(
-                  "权限判定顺序与角色能力",
-                  "Authorization order and roles",
-                )}{" "}
-                <span className="ml-2 text-zinc-600">
-                  {text("了解规则如何叠加", "How rules combine")}
-                </span>
-              </span>
+            key: "grants",
+            label: text(
+              `授权记录（${grants.length}）`,
+              `Grants (${grants.length})`,
             ),
             children: (
-              <div>
-                <p className="mb-4 text-xs leading-5 text-zinc-500">
-                  {text(
-                    "仓库规则只追加权限，不能撤销全局角色。",
-                    "Repository rules add permissions; they cannot revoke a global role.",
+              <Card bodyClassName="p-0">
+                <CardHeader
+                  title={text(
+                    `逐仓库授权（${filtered.length}）`,
+                    `${filtered.length} repository grants`,
                   )}
-                </p>
-                <div className="grid grid-cols-4 gap-5">
-                  {AUTHORIZATION_STEPS.map((step, index) => (
-                    <div
-                      key={step.title}
-                      className="border-l border-zinc-700 pl-3"
+                />
+                <FilterBar
+                  embedded
+                  actions={
+                    <Button
+                      icon={<ClearOutlined />}
+                      disabled={!hasFilters}
+                      onClick={() => {
+                        setPrincipalFilter("");
+                        setRepoFilter("");
+                        setScopeFilter("all");
+                      }}
                     >
-                      <div className="text-xs font-medium text-zinc-300">
-                        {index + 1}. {english ? step.titleEn : step.title}
+                      {text("清除", "Clear")}
+                    </Button>
+                  }
+                >
+                  <FilterField
+                    label={text("授权主体", "Principal")}
+                    className="min-w-[260px]"
+                  >
+                    <Input
+                      allowClear
+                      placeholder={text(
+                        "用户名、API Key 或 actor",
+                        "Username, API key, or actor",
+                      )}
+                      value={principalFilter}
+                      onChange={(event) =>
+                        setPrincipalFilter(event.target.value)
+                      }
+                    />
+                  </FilterField>
+                  <FilterField
+                    label={text("仓库", "Repository")}
+                    className="min-w-[220px]"
+                  >
+                    <Input
+                      allowClear
+                      placeholder={text("仓库名称", "Repository name")}
+                      value={repoFilter}
+                      onChange={(event) => setRepoFilter(event.target.value)}
+                    />
+                  </FilterField>
+                  <FilterField
+                    label={text("权限级别", "Permission level")}
+                    className="min-w-[190px]"
+                  >
+                    <Select
+                      className="w-full"
+                      value={scopeFilter}
+                      options={[
+                        {
+                          value: "all",
+                          label: text("全部权限", "All permissions"),
+                        },
+                        {
+                          value: "read",
+                          label: text(
+                            "读取 · 浏览 / 拉取",
+                            "Read · browse / pull",
+                          ),
+                        },
+                        {
+                          value: "write",
+                          label: text(
+                            "写入 · 发布 / 编辑",
+                            "Write · publish / edit",
+                          ),
+                        },
+                        {
+                          value: "admin",
+                          label: text(
+                            "管理员 · 授权 / 删除",
+                            "Admin · grant / delete",
+                          ),
+                        },
+                      ]}
+                      onChange={(value: typeof scopeFilter) =>
+                        setScopeFilter(value)
+                      }
+                    />
+                  </FilterField>
+                </FilterBar>
+                {error ? (
+                  <div className="px-4 py-4">
+                    <ErrorBanner error={error} />
+                  </div>
+                ) : !rows ? (
+                  <Loading />
+                ) : filtered.length === 0 ? (
+                  <EmptyState
+                    title={
+                      rows.length === 0
+                        ? text("暂无逐仓库授权", "No repository grants")
+                        : text("没有匹配的授权记录", "No matching grants")
+                    }
+                    hint={
+                      rows.length === 0
+                        ? text(
+                            "在各仓库的「访问授权」Tab 添加主体即可在此汇总",
+                            "Add a principal from a repository's Access grants tab to see it here",
+                          )
+                        : text("换个过滤条件试试", "Try another filter")
+                    }
+                  />
+                ) : (
+                  <Table<GrantRow>
+                    className="ag-console-table"
+                    rowKey={(row) =>
+                      `${row.repositoryId}-${row.principal}-${row.resourcePrefix}`
+                    }
+                    size="middle"
+                    dataSource={filtered}
+                    columns={columns}
+                    pagination={false}
+                    scroll={{ x: 1050, y: 480 }}
+                  />
+                )}
+              </Card>
+            ),
+          },
+          {
+            key: "evaluate",
+            label: text("权限检查", "Access evaluation"),
+            children: (
+              <div className="ag-page-stack">
+                <Card bodyClassName="p-0">
+                  <div className="flex items-start justify-between gap-6 border-b border-zinc-800/70 px-5 py-4">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                        <ExperimentOutlined className="text-cyan-400" />
+                        {text("权限检查", "Access evaluation")}
                       </div>
-                      <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-                        {english ? step.textEn : step.text}
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {text(
+                          "使用网关真实判定链检查全局角色、仓库授权和资源前缀叠加后的结果。",
+                          "Run the Gateway decision chain across global roles, repository grants, and resource prefixes.",
+                        )}
                       </p>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-5 grid grid-cols-3 gap-3 border-t border-zinc-800/80 pt-4">
-                  {ROLE_REFERENCE.map((item) => (
-                    <div
-                      key={item.role}
-                      className="flex items-start gap-2 text-xs text-zinc-400"
-                    >
-                      <Badge tone={item.tone}>{item.role}</Badge>
-                      <span>{english ? item.descEn : item.desc}</span>
+                    {(evaluatorOptionsLoading || identityLoading) && (
+                      <Spinner />
+                    )}
+                  </div>
+                  <div className="px-5 py-4">
+                    {evaluatorOptionsError !== null && (
+                      <div className="mb-4">
+                        <ErrorBanner error={evaluatorOptionsError} />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] items-end gap-3">
+                      <FilterField label={text("授权主体", "Principal")}>
+                        <Select
+                          className="w-full"
+                          showSearch={{ optionFilterProp: "label" }}
+                          loading={evaluatorOptionsLoading || identityLoading}
+                          value={selectedPrincipal}
+                          options={evaluatorPrincipals.map((choice) => ({
+                            value: choice.value,
+                            label: `${choice.label} · ${choice.detail}`,
+                            disabled: choice.disabled,
+                          }))}
+                          onChange={(value) => {
+                            setSelectedPrincipal(value);
+                            setEvaluation(null);
+                            setEvaluationError(null);
+                          }}
+                        />
+                      </FilterField>
+                      <FilterField label={text("全局角色", "Global role")}>
+                        <Select
+                          className="w-full"
+                          value={effectiveEvaluatorRole}
+                          disabled={selectedPrincipal !== CUSTOM_PRINCIPAL}
+                          options={[
+                            { value: "none", label: text("无", "None") },
+                            { value: "reader", label: "reader" },
+                            { value: "writer", label: "writer" },
+                            { value: "admin", label: "admin" },
+                          ]}
+                          onChange={(value: EvaluatorRole) => {
+                            setCustomRole(value);
+                            setEvaluation(null);
+                          }}
+                        />
+                      </FilterField>
+                      <FilterField label={text("仓库", "Repository")}>
+                        <Select
+                          className="w-full"
+                          showSearch={{ optionFilterProp: "label" }}
+                          loading={evaluatorOptionsLoading}
+                          value={selectedRepository || undefined}
+                          placeholder={text("选择仓库", "Select repository")}
+                          options={repositories.map((repository) => ({
+                            value: repository.id,
+                            label: `${repository.name} · ${repository.format}`,
+                          }))}
+                          onChange={(value) => {
+                            setSelectedRepository(value);
+                            setResource("");
+                            setEvaluation(null);
+                            setEvaluationError(null);
+                          }}
+                        />
+                      </FilterField>
+                      <FilterField
+                        label={text("具体资源（可选）", "Resource (optional)")}
+                      >
+                        <Input
+                          className="font-mono"
+                          allowClear
+                          placeholder={
+                            resourcePlaceholder(
+                              selectedRepositoryChoice?.format,
+                            ) ||
+                            text(
+                              "留空检查整个仓库",
+                              "Blank evaluates repository-wide access",
+                            )
+                          }
+                          value={resource}
+                          onChange={(event) => {
+                            setResource(event.target.value);
+                            setEvaluation(null);
+                            setEvaluationError(null);
+                          }}
+                          onPressEnter={() => void runEvaluation()}
+                        />
+                      </FilterField>
+                      <Button
+                        type="primary"
+                        icon={<ExperimentOutlined />}
+                        loading={evaluating}
+                        disabled={
+                          evaluatorOptionsLoading || !selectedRepository
+                        }
+                        onClick={() => void runEvaluation()}
+                      >
+                        {text("检查", "Evaluate")}
+                      </Button>
                     </div>
-                  ))}
-                </div>
+                    {selectedPrincipal === CUSTOM_PRINCIPAL && (
+                      <div className="mt-3 grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] gap-3">
+                        <FilterField
+                          label={text(
+                            "完整 actor 标识",
+                            "Complete actor identifier",
+                          )}
+                          className="col-span-2"
+                        >
+                          <Input
+                            className="font-mono"
+                            placeholder={text(
+                              "例如 oidc:gitlab:team/release 或 ci-bot",
+                              "For example: oidc:gitlab:team/release or ci-bot",
+                            )}
+                            value={customActor}
+                            onChange={(event) => {
+                              setCustomActor(event.target.value);
+                              setEvaluation(null);
+                              setEvaluationError(null);
+                            }}
+                            onPressEnter={() => void runEvaluation()}
+                          />
+                        </FilterField>
+                        <div className="col-span-3 flex items-end pb-2 text-[11px] text-zinc-600">
+                          {text(
+                            "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
+                            "This must exactly match the authenticated actor; choose the global role produced by the OIDC mapping.",
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {evaluationError !== null && (
+                      <div className="mt-4">
+                        <ErrorBanner error={evaluationError} />
+                      </div>
+                    )}
+                    {evaluation && (
+                      <div className="mt-4 border-t border-zinc-800/70 pt-4">
+                        <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-zinc-500">
+                          <Badge tone={evaluation.simulated ? "cyan" : "green"}>
+                            {evaluation.simulated
+                              ? text("模拟结果", "Simulated")
+                              : text("当前身份", "Current identity")}
+                          </Badge>
+                          <span className="font-mono text-zinc-300">
+                            {evaluation.actor}
+                          </span>
+                          <span>·</span>
+                          <span>{evaluation.repository.name}</span>
+                          <span>·</span>
+                          <span className="min-w-0 truncate font-mono">
+                            {evaluation.resource ||
+                              text("整个仓库", "Entire repository")}
+                          </span>
+                        </div>
+                        <AccessDecisionSummary access={evaluation} />
+                      </div>
+                    )}
+                  </div>
+                </Card>
+                <Collapse
+                  ghost
+                  items={[
+                    {
+                      key: "authorization",
+                      label: (
+                        <span className="text-xs text-zinc-400">
+                          {text(
+                            "权限判定顺序与角色能力",
+                            "Authorization order and roles",
+                          )}{" "}
+                          <span className="ml-2 text-zinc-600">
+                            {text("了解规则如何叠加", "How rules combine")}
+                          </span>
+                        </span>
+                      ),
+                      children: (
+                        <div>
+                          <p className="mb-4 text-xs leading-5 text-zinc-500">
+                            {text(
+                              "仓库规则只追加权限，不能撤销全局角色。",
+                              "Repository rules add permissions; they cannot revoke a global role.",
+                            )}
+                          </p>
+                          <div className="grid grid-cols-4 gap-5">
+                            {AUTHORIZATION_STEPS.map((step, index) => (
+                              <div
+                                key={step.title}
+                                className="border-l border-zinc-700 pl-3"
+                              >
+                                <div className="text-xs font-medium text-zinc-300">
+                                  {index + 1}.{" "}
+                                  {english ? step.titleEn : step.title}
+                                </div>
+                                <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                                  {english ? step.textEn : step.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-zinc-800/80 pt-4">
+                            {ROLE_REFERENCE.map((item) => (
+                              <div
+                                key={item.role}
+                                className="flex items-start gap-2 text-xs text-zinc-400"
+                              >
+                                <Badge tone={item.tone}>{item.role}</Badge>
+                                <span>{english ? item.descEn : item.desc}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "policies",
+            label: text("策略与模板", "Policies & templates"),
+            children: (
+              <div className="ag-page-stack">
+                <Card bodyClassName="px-4 py-3">
+                  <div className="flex items-center justify-between gap-6">
+                    <div>
+                      <div className="text-sm font-medium text-zinc-200">
+                        {text("全局匿名读取", "Global anonymous reads")}
+                      </div>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {text(
+                          "只有同时满足全局策略与仓库 / 组策略时，未认证客户端才能读取。",
+                          "Unauthenticated clients can read only when both global and repository/group policy allow it.",
+                        )}
+                      </p>
+                    </div>
+                    {anonymousPolicy && canManageAnonymousPolicy ? (
+                      <Popconfirm
+                        title={
+                          anonymousPolicy.enabled
+                            ? text(
+                                "确认停用全局匿名读取？",
+                                "Disable global anonymous reads?",
+                              )
+                            : text(
+                                "确认启用全局匿名读取？",
+                                "Enable global anonymous reads?",
+                              )
+                        }
+                        description={
+                          anonymousPolicy.enabled
+                            ? text(
+                                "停用后所有未认证协议读取都会被拒绝。",
+                                "All unauthenticated protocol reads will be rejected.",
+                              )
+                            : text(
+                                "启用后满足仓库或组策略的制品可被未认证客户端读取。",
+                                "Artifacts allowed by repository or group policy become readable without authentication.",
+                              )
+                        }
+                        okText={text("继续", "Continue")}
+                        cancelText={text("取消", "Cancel")}
+                        okButtonProps={{
+                          danger: anonymousPolicy.enabled,
+                          loading: savingAnonymousPolicy,
+                        }}
+                        onConfirm={() =>
+                          updateAnonymousPolicy(!anonymousPolicy.enabled)
+                        }
+                      >
+                        <Switch
+                          checked={anonymousPolicy.enabled}
+                          loading={savingAnonymousPolicy}
+                          aria-label={text(
+                            "切换全局匿名读取",
+                            "Toggle global anonymous reads",
+                          )}
+                          onChange={() => undefined}
+                        />
+                      </Popconfirm>
+                    ) : canManageAnonymousPolicy ? (
+                      <span className="text-xs text-zinc-500">
+                        {text("加载中…", "Loading…")}
+                      </span>
+                    ) : (
+                      <Badge tone="zinc">{text("只读", "Read-only")}</Badge>
+                    )}
+                  </div>
+                  {anonymousPolicyError !== null && (
+                    <div className="mt-3">
+                      <ErrorBanner error={anonymousPolicyError} />
+                    </div>
+                  )}
+                </Card>
+                <AuthorizationTemplatesPanel
+                  repositories={repositories}
+                  principalOptions={principalOptions}
+                />
               </div>
             ),
           },
         ]}
       />
-      <Card>
-        <CardHeader
-          title={text(
-            `授权记录（${filtered.length}）`,
-            `${filtered.length} grants`,
-          )}
-        />
-        <FilterBar
-          embedded
-          actions={
-            <Button
-              icon={<ClearOutlined />}
-              disabled={!hasFilters}
-              onClick={() => {
-                setPrincipalFilter("");
-                setRepoFilter("");
-                setScopeFilter("all");
-              }}
-            >
-              {text("清除", "Clear")}
-            </Button>
-          }
-        >
-          <FilterField
-            label={text("授权主体", "Principal")}
-            className="min-w-[260px]"
-          >
-            <Input
-              allowClear
-              placeholder={text(
-                "用户名、API Key 或 actor",
-                "Username, API key, or actor",
-              )}
-              value={principalFilter}
-              onChange={(event) => setPrincipalFilter(event.target.value)}
-            />
-          </FilterField>
-          <FilterField
-            label={text("仓库", "Repository")}
-            className="min-w-[220px]"
-          >
-            <Input
-              allowClear
-              placeholder={text("仓库名称", "Repository name")}
-              value={repoFilter}
-              onChange={(event) => setRepoFilter(event.target.value)}
-            />
-          </FilterField>
-          <FilterField
-            label={text("权限级别", "Permission level")}
-            className="min-w-[190px]"
-          >
-            <Select
-              className="w-full"
-              value={scopeFilter}
-              options={[
-                { value: "all", label: text("全部权限", "All permissions") },
-                {
-                  value: "read",
-                  label: text("读取 · 浏览 / 拉取", "Read · browse / pull"),
-                },
-                {
-                  value: "write",
-                  label: text("写入 · 发布 / 编辑", "Write · publish / edit"),
-                },
-                {
-                  value: "admin",
-                  label: text("管理员 · 授权 / 删除", "Admin · grant / delete"),
-                },
-              ]}
-              onChange={(value: typeof scopeFilter) => setScopeFilter(value)}
-            />
-          </FilterField>
-        </FilterBar>
-        {error ? (
-          <div className="px-4 py-4">
-            <ErrorBanner error={error} />
-          </div>
-        ) : !rows ? (
-          <Loading />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            title={
-              rows.length === 0
-                ? text("暂无逐仓库授权", "No repository grants")
-                : text("没有匹配的授权记录", "No matching grants")
-            }
-            hint={
-              rows.length === 0
-                ? text(
-                    "在各仓库的「访问授权」Tab 添加主体即可在此汇总",
-                    "Add a principal from a repository's Access grants tab to see it here",
-                  )
-                : text("换个过滤条件试试", "Try another filter")
-            }
-          />
-        ) : (
-          <Table<GrantRow>
-            className="ag-console-table"
-            rowKey={(row) =>
-              `${row.repositoryId}-${row.principal}-${row.resourcePrefix}`
-            }
-            size="middle"
-            dataSource={filtered}
-            columns={columns}
-            pagination={false}
-            scroll={{ x: 1050, y: 420 }}
-          />
-        )}
-      </Card>
     </div>
   );
 }

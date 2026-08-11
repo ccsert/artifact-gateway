@@ -505,12 +505,21 @@ button:not(:disabled):active,
 .ag-page-stack > .ag-feedback-stack + .ag-card,
 .ag-page-stack > .ag-card + .ag-filter-bar,
 .ag-page-stack > .ag-filter-bar + .ag-card,
+.ag-page-stack > .ag-metric-strip + .ant-tabs,
 .ag-page-stack > .ag-metric-strip + .ag-feedback-stack {
   margin-top: 16px;
 }
 
 .ag-page-stack > .ant-collapse {
   margin-block: 0;
+}
+
+.ag-access-tabs > .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.ag-access-tabs .ant-tabs-tab {
+  min-height: 36px;
 }
 
 /* ========== 指标条 ========== */

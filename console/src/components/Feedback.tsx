@@ -85,14 +85,16 @@ export function EmptyState({
   title,
   hint,
   action,
+  compact = false,
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <Empty
-      className="ag-feedback-enter py-12"
+      className={`ag-feedback-enter ${compact ? "py-5" : "py-12"}`}
       image={Empty.PRESENTED_IMAGE_SIMPLE}
       description={
         <div className="space-y-1 text-center">
