@@ -31,6 +31,18 @@ const diagnostics: Diagnostics = {
       detail: "health check failed",
     },
   ],
+  scanner: {
+    name: "trivy",
+    formats: ["maven", "oci"],
+    status: "healthy",
+    detail: "scanner health check passed",
+    checkedAt: "2026-08-10T08:00:00Z",
+    version: "0.61.0",
+    databaseFreshness: "fresh",
+    databaseVersion: "2026-08-10",
+    databaseUpdatedAt: "2026-08-10T06:00:00Z",
+    databaseMaxAgeSeconds: 86400,
+  },
   queues: [
     {
       kind: "promotion",
@@ -69,6 +81,9 @@ describe("SystemDiagnosticsPanel", () => {
     expect(screen.getByText("PostgreSQL")).toBeInTheDocument();
     expect(screen.getByText("对象存储")).toBeInTheDocument();
     expect(screen.getByText("不可用")).toBeInTheDocument();
+    expect(screen.getByText(/制品扫描器 · trivy/)).toBeInTheDocument();
+    expect(screen.getByText(/漏洞库新鲜/)).toBeInTheDocument();
+    expect(screen.getByText("健康")).toBeInTheDocument();
     expect(screen.getByText("promotion")).toBeInTheDocument();
     expect(screen.getAllByText("maven")).toHaveLength(2);
   });
@@ -114,5 +129,46 @@ describe("SystemDiagnosticsPanel", () => {
     expect(
       within(dependencyMetric as HTMLElement).getByText("1 项检查"),
     ).toBeInTheDocument();
+  });
+
+  it("surfaces a stale vulnerability database as a health warning", async () => {
+    mockGetDiagnostics.mockResolvedValue({
+      data: {
+        ...diagnostics,
+        dependencies: [
+          { name: "postgresql", status: "reachable", detail: "reachable" },
+        ],
+        queues: [],
+        nodes: {
+          status: "healthy",
+          online: 1,
+          stale: 0,
+          offline: 0,
+          issues: [],
+        },
+        scanner: {
+          ...diagnostics.scanner,
+          status: "degraded",
+          detail: "vulnerability database is stale",
+          databaseFreshness: "stale",
+          databaseUpdatedAt: "2026-08-08T06:00:00Z",
+        },
+      },
+    } as never);
+    renderPanel();
+
+    expect(await screen.findByText("系统运行状态需要关注")).toBeInTheDocument();
+    expect(screen.getByText(/漏洞库已过期/)).toBeInTheDocument();
+    expect(screen.getByText("需关注")).toBeInTheDocument();
+  });
+
+  it("remains compatible with diagnostics from an older rolling-upgrade node", async () => {
+    const legacyDiagnostics = { ...diagnostics };
+    delete legacyDiagnostics.scanner;
+    mockGetDiagnostics.mockResolvedValue({ data: legacyDiagnostics } as never);
+    renderPanel();
+
+    expect(await screen.findByText("PostgreSQL")).toBeInTheDocument();
+    expect(screen.queryByText(/制品扫描器/)).not.toBeInTheDocument();
   });
 });
