@@ -115,6 +115,10 @@ func validText(value string, maximum int) bool {
 	return strings.TrimSpace(value) != "" && len(value) <= maximum && !strings.ContainsRune(value, '\x00') && !strings.ContainsAny(value, "\r\n")
 }
 
+func validOptionalText(value string, maximum int) bool {
+	return value == "" || validText(value, maximum)
+}
+
 func validDigest(value string) bool {
 	if len(value) != len("sha256:")+64 || !strings.HasPrefix(value, "sha256:") {
 		return false

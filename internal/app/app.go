@@ -30,23 +30,26 @@ type Dependencies struct {
 	Runtime        DiagnosticRuntime
 	// NativeMavenObjectStore is supplied by the runtime after S3 is initialized.
 	// Tests omit it and receive an isolated in-memory store.
-	NativeMavenObjectStore OCIObjectStore
-	NativeOCIObjectStore   OCIObjectStore
-	NativeConanObjectStore OCIObjectStore
-	NativeNPMObjectStore   OCIObjectStore
-	NativePyPIObjectStore  OCIObjectStore
-	NativeGoObjectStore    OCIObjectStore
-	NativeAPTObjectStore   OCIObjectStore
-	NPMMetadataTTL         time.Duration
-	NPMNegativeTTL         time.Duration
-	NPMBreakerTTL          time.Duration
-	NPMProxyCoordinator    OCICacheCoordinator
-	ArtifactScanner        scanning.Scanner
-	ArtifactScannerFormats []repository.Format
-	ArtifactScanResolver   ArtifactScanResolver
-	OIDCClient             *authorization.OIDCClient
-	OIDCLoginValidator     *authorization.OIDCValidator
-	OIDCRuntime            *OIDCRuntime
+	NativeMavenObjectStore        OCIObjectStore
+	NativeOCIObjectStore          OCIObjectStore
+	NativeConanObjectStore        OCIObjectStore
+	NativeNPMObjectStore          OCIObjectStore
+	NativePyPIObjectStore         OCIObjectStore
+	NativeGoObjectStore           OCIObjectStore
+	NativeAPTObjectStore          OCIObjectStore
+	NPMMetadataTTL                time.Duration
+	NPMNegativeTTL                time.Duration
+	NPMBreakerTTL                 time.Duration
+	NPMProxyCoordinator           OCICacheCoordinator
+	ArtifactScanner               scanning.Scanner
+	ArtifactScannerName           string
+	ArtifactScannerHealthTimeout  time.Duration
+	ArtifactScannerDatabaseMaxAge time.Duration
+	ArtifactScannerFormats        []repository.Format
+	ArtifactScanResolver          ArtifactScanResolver
+	OIDCClient                    *authorization.OIDCClient
+	OIDCLoginValidator            *authorization.OIDCValidator
+	OIDCRuntime                   *OIDCRuntime
 }
 
 type DiagnosticRuntime struct {
@@ -71,10 +74,12 @@ func NewDependencies(cfg config.Config) Dependencies {
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
 		},
-		BuildVersion:   version,
-		BuildRevision:  revision,
-		BuildModified:  modified,
-		BuildGoVersion: runtime.Version(),
+		BuildVersion:                  version,
+		BuildRevision:                 revision,
+		BuildModified:                 modified,
+		BuildGoVersion:                runtime.Version(),
+		ArtifactScannerHealthTimeout:  2 * time.Second,
+		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
 		Runtime: DiagnosticRuntime{
 			InstanceID: cfg.InstanceID, Roles: roles,
 			WorkerFormats: formats,

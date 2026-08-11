@@ -17,8 +17,10 @@ import (
 
 const (
 	defaultScanTimeout      = 2 * time.Minute
+	defaultHealthTimeout    = 2 * time.Second
 	defaultMaxResponseBytes = 512 << 10
 	defaultMaxArtifactBytes = 20 << 30
+	maxHealthResponseBytes  = 64 << 10
 )
 
 var (
@@ -26,15 +28,18 @@ var (
 	ErrInvalidArtifact      = errors.New("artifact scan input is invalid")
 	ErrAssetIntegrity       = errors.New("artifact scan asset failed integrity validation")
 	ErrScannerUnavailable   = errors.New("artifact scanner is unavailable")
+	ErrHealthNotConfigured  = errors.New("artifact scanner health endpoint is not configured")
 	ErrInvalidResponse      = errors.New("artifact scanner response is invalid")
 )
 
 type HTTPOptions struct {
 	Name             string
 	Endpoint         string
+	HealthEndpoint   string
 	Token            string
 	Client           *http.Client
 	Timeout          time.Duration
+	HealthTimeout    time.Duration
 	MaxResponseBytes int64
 	MaxArtifactBytes int64
 }
@@ -44,9 +49,11 @@ type HTTPOptions struct {
 type HTTPScanner struct {
 	name             string
 	endpoint         string
+	healthEndpoint   string
 	token            string
 	client           *http.Client
 	timeout          time.Duration
+	healthTimeout    time.Duration
 	maxResponseBytes int64
 	maxArtifactBytes int64
 	now              func() time.Time
@@ -58,9 +65,21 @@ func NewHTTPScanner(options HTTPOptions) (*HTTPScanner, error) {
 	if err != nil || !validText(name, 128) || strings.ContainsAny(options.Token, "\r\n") {
 		return nil, ErrInvalidConfiguration
 	}
+	healthEndpoint := ""
+	if strings.TrimSpace(options.HealthEndpoint) != "" {
+		parsed, healthErr := validateEndpoint(options.HealthEndpoint)
+		if healthErr != nil {
+			return nil, ErrInvalidConfiguration
+		}
+		healthEndpoint = parsed.String()
+	}
 	timeout := options.Timeout
 	if timeout == 0 {
 		timeout = defaultScanTimeout
+	}
+	healthTimeout := options.HealthTimeout
+	if healthTimeout == 0 {
+		healthTimeout = defaultHealthTimeout
 	}
 	maxResponseBytes := options.MaxResponseBytes
 	if maxResponseBytes == 0 {
@@ -70,7 +89,7 @@ func NewHTTPScanner(options HTTPOptions) (*HTTPScanner, error) {
 	if maxArtifactBytes == 0 {
 		maxArtifactBytes = defaultMaxArtifactBytes
 	}
-	if timeout < time.Second || timeout > 30*time.Minute || maxResponseBytes < 1024 || maxResponseBytes > 8<<20 || maxArtifactBytes < 1 || maxArtifactBytes > 1<<40 {
+	if timeout < time.Second || timeout > 30*time.Minute || healthTimeout < time.Second || healthTimeout > 30*time.Second || maxResponseBytes < 1024 || maxResponseBytes > 8<<20 || maxArtifactBytes < 1 || maxArtifactBytes > 1<<40 {
 		return nil, ErrInvalidConfiguration
 	}
 	client := options.Client
@@ -82,10 +101,50 @@ func NewHTTPScanner(options HTTPOptions) (*HTTPScanner, error) {
 	// redirected endpoint.
 	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &HTTPScanner{
-		name: name, endpoint: endpoint.String(), token: options.Token, client: &clientCopy,
-		timeout: timeout, maxResponseBytes: maxResponseBytes, maxArtifactBytes: maxArtifactBytes,
+		name: name, endpoint: endpoint.String(), healthEndpoint: healthEndpoint,
+		token: options.Token, client: &clientCopy, timeout: timeout, healthTimeout: healthTimeout,
+		maxResponseBytes: maxResponseBytes, maxArtifactBytes: maxArtifactBytes,
 		now: func() time.Time { return time.Now().UTC() },
 	}, nil
+}
+
+// Health reads a bounded, read-only scanner status document. It uses a
+// separate endpoint so probing can never be mistaken for a scan request.
+func (s *HTTPScanner) Health(ctx context.Context) (Health, error) {
+	if s.healthEndpoint == "" {
+		return Health{}, ErrHealthNotConfigured
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.healthTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.healthEndpoint, nil)
+	if err != nil {
+		return Health{}, ErrInvalidConfiguration
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("X-Artifact-Scanner-Schema", SchemaVersion)
+	if s.token != "" {
+		request.Header.Set("Authorization", "Bearer "+s.token)
+	}
+	response, err := s.client.Do(request)
+	if err != nil {
+		if ctx.Err() != nil {
+			return Health{}, ctx.Err()
+		}
+		return Health{}, ErrScannerUnavailable
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return Health{}, fmt.Errorf("%w: HTTP %d", ErrScannerUnavailable, response.StatusCode)
+	}
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	if mediaType != "application/json" {
+		return Health{}, ErrInvalidResponse
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxHealthResponseBytes+1))
+	if err != nil || len(body) > maxHealthResponseBytes {
+		return Health{}, ErrInvalidResponse
+	}
+	return s.decodeHealth(body)
 }
 
 func (s *HTTPScanner) Scan(ctx context.Context, artifact Artifact) (Report, error) {
@@ -183,6 +242,47 @@ type wireVulnerability struct {
 	Medium   int    `json:"medium"`
 	Low      int    `json:"low"`
 	Unknown  int    `json:"unknown"`
+}
+
+type wireHealthResponse struct {
+	SchemaVersion string              `json:"schemaVersion"`
+	Status        HealthStatus        `json:"status"`
+	Version       string              `json:"version,omitempty"`
+	Database      *wireHealthDatabase `json:"database,omitempty"`
+}
+
+type wireHealthDatabase struct {
+	Version   string    `json:"version,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (s *HTTPScanner) decodeHealth(body []byte) (Health, error) {
+	var response wireHealthResponse
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&response); err != nil || response.SchemaVersion != SchemaVersion {
+		return Health{}, ErrInvalidResponse
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return Health{}, ErrInvalidResponse
+	}
+	switch response.Status {
+	case HealthHealthy, HealthDegraded, HealthUnhealthy:
+	default:
+		return Health{}, ErrInvalidResponse
+	}
+	if !validOptionalText(response.Version, 128) {
+		return Health{}, ErrInvalidResponse
+	}
+	checkedAt := s.now()
+	health := Health{Status: response.Status, Version: response.Version, CheckedAt: checkedAt}
+	if response.Database != nil {
+		if response.Database.UpdatedAt.IsZero() || response.Database.UpdatedAt.After(checkedAt.Add(5*time.Minute)) || !validOptionalText(response.Database.Version, 256) {
+			return Health{}, ErrInvalidResponse
+		}
+		health.Database = &DatabaseHealth{Version: response.Database.Version, UpdatedAt: response.Database.UpdatedAt}
+	}
+	return health, nil
 }
 
 func (s *HTTPScanner) decodeReport(body []byte) (Report, error) {

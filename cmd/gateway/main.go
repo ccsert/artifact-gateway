@@ -64,8 +64,8 @@ func main() {
 	dependencies.NativeAPTObjectStore = objectStore
 	if cfg.ScannerEnabled() {
 		artifactScanner, scannerErr := scanning.NewHTTPScanner(scanning.HTTPOptions{
-			Name: cfg.ScannerName, Endpoint: cfg.ScannerEndpoint, Token: cfg.ScannerToken,
-			Timeout: cfg.ScannerTimeout, MaxResponseBytes: cfg.ScannerMaxResponseBytes,
+			Name: cfg.ScannerName, Endpoint: cfg.ScannerEndpoint, HealthEndpoint: cfg.ScannerHealthEndpoint, Token: cfg.ScannerToken,
+			Timeout: cfg.ScannerTimeout, HealthTimeout: cfg.ScannerHealthTimeout, MaxResponseBytes: cfg.ScannerMaxResponseBytes,
 			MaxArtifactBytes: cfg.ScannerMaxArtifactBytes,
 		})
 		if scannerErr != nil {
@@ -73,6 +73,9 @@ func main() {
 			os.Exit(1)
 		}
 		dependencies.ArtifactScanner = artifactScanner
+		dependencies.ArtifactScannerName = cfg.ScannerName
+		dependencies.ArtifactScannerHealthTimeout = cfg.ScannerHealthTimeout
+		dependencies.ArtifactScannerDatabaseMaxAge = cfg.ScannerDatabaseMaxAge
 		for _, format := range cfg.ScannerFormats {
 			dependencies.ArtifactScannerFormats = append(dependencies.ArtifactScannerFormats, repository.Format(format))
 		}
@@ -146,7 +149,7 @@ func main() {
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
-	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats)
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge)
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{

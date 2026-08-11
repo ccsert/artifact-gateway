@@ -6,11 +6,20 @@ package scanning
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 const SchemaVersion = "v1"
+
+type HealthStatus string
+
+const (
+	HealthHealthy   HealthStatus = "healthy"
+	HealthDegraded  HealthStatus = "degraded"
+	HealthUnhealthy HealthStatus = "unhealthy"
+)
 
 // OpenAsset opens one immutable object from the Gateway object store. Callers
 // retain ownership of object lookup; scanners only receive a streaming reader.
@@ -44,9 +53,32 @@ type Report struct {
 	Vulnerability *repository.ArtifactVulnerabilitySummary
 }
 
+// DatabaseHealth describes the vulnerability database used by the external
+// scanner. UpdatedAt is required when database metadata is returned so the
+// Gateway can apply its own freshness policy.
+type DatabaseHealth struct {
+	Version   string
+	UpdatedAt time.Time
+}
+
+// Health is a sanitized snapshot reported by the external scanner. CheckedAt
+// is assigned by the Gateway and never accepted from the remote service.
+type Health struct {
+	Status    HealthStatus
+	Version   string
+	CheckedAt time.Time
+	Database  *DatabaseHealth
+}
+
 // Scanner hides transport and scanner-specific behavior behind one operation.
 type Scanner interface {
 	Scan(context.Context, Artifact) (Report, error)
+}
+
+// HealthChecker is an optional scanner capability. Keeping it separate from
+// Scanner preserves compatibility with focused in-process scanners and tests.
+type HealthChecker interface {
+	Health(context.Context) (Health, error)
 }
 
 // ScannerFunc adapts an in-process scanner or focused test implementation.

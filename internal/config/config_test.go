@@ -120,9 +120,12 @@ func TestLoadSupportsDedicatedIntelligenceWorker(t *testing.T) {
 func TestLoadConfiguresArtifactScanner(t *testing.T) {
 	setCompleteConfiguration(t)
 	t.Setenv("GATEWAY_SCANNER_ENDPOINT", "http://127.0.0.1:18082/v1/scan")
+	t.Setenv("GATEWAY_SCANNER_HEALTH_ENDPOINT", "http://127.0.0.1:18082/v1/health")
 	t.Setenv("GATEWAY_SCANNER_NAME", "trivy")
 	t.Setenv("GATEWAY_SCANNER_TOKEN", "scanner-token")
 	t.Setenv("GATEWAY_SCANNER_TIMEOUT", "90s")
+	t.Setenv("GATEWAY_SCANNER_HEALTH_TIMEOUT", "3s")
+	t.Setenv("GATEWAY_SCANNER_DATABASE_MAX_AGE", "12h")
 	t.Setenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", "4096")
 	t.Setenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES", "1000000")
 	t.Setenv("GATEWAY_SCANNER_FORMATS", "OCI,maven,go,oci")
@@ -131,8 +134,8 @@ func TestLoadConfiguresArtifactScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.ScannerEnabled() || cfg.ScannerName != "trivy" || cfg.ScannerToken != "scanner-token" || cfg.ScannerTimeout != 90*time.Second || cfg.ScannerMaxResponseBytes != 4096 || cfg.ScannerMaxArtifactBytes != 1000000 {
-		t.Fatalf("scanner config enabled=%t name=%q timeout=%s response_limit=%d artifact_limit=%d", cfg.ScannerEnabled(), cfg.ScannerName, cfg.ScannerTimeout, cfg.ScannerMaxResponseBytes, cfg.ScannerMaxArtifactBytes)
+	if !cfg.ScannerEnabled() || cfg.ScannerHealthEndpoint != "http://127.0.0.1:18082/v1/health" || cfg.ScannerName != "trivy" || cfg.ScannerToken != "scanner-token" || cfg.ScannerTimeout != 90*time.Second || cfg.ScannerHealthTimeout != 3*time.Second || cfg.ScannerDatabaseMaxAge != 12*time.Hour || cfg.ScannerMaxResponseBytes != 4096 || cfg.ScannerMaxArtifactBytes != 1000000 {
+		t.Fatalf("scanner config enabled=%t name=%q timeout=%s health_timeout=%s database_max_age=%s response_limit=%d artifact_limit=%d", cfg.ScannerEnabled(), cfg.ScannerName, cfg.ScannerTimeout, cfg.ScannerHealthTimeout, cfg.ScannerDatabaseMaxAge, cfg.ScannerMaxResponseBytes, cfg.ScannerMaxArtifactBytes)
 	}
 	if len(cfg.ScannerFormats) != 3 || !cfg.ScannerFormatEnabled("oci") || !cfg.ScannerFormatEnabled("maven") || !cfg.ScannerFormatEnabled("go") || cfg.ScannerFormatEnabled("raw") {
 		t.Fatalf("scanner formats = %#v", cfg.ScannerFormats)
@@ -146,20 +149,32 @@ func TestLoadRejectsInvalidArtifactScannerConfiguration(t *testing.T) {
 	}{
 		{name: "insecure endpoint", value: "http://scanner.example.test/v1/scan"},
 		{name: "endpoint query", value: "https://scanner.example.test/v1/scan?token=secret"},
+		{name: "insecure health endpoint", value: "http://scanner.example.test/health"},
 		{name: "unknown format", value: "maven,unknown"},
 		{name: "short timeout", value: "500ms"},
+		{name: "long health timeout", value: "31s"},
+		{name: "short database max age", value: "30s"},
 		{name: "small response limit", value: "512"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			setCompleteConfiguration(t)
 			switch testCase.name {
+			case "insecure health endpoint":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_HEALTH_ENDPOINT", testCase.value)
 			case "unknown format":
 				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
 				t.Setenv("GATEWAY_SCANNER_FORMATS", testCase.value)
 			case "short timeout":
 				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
 				t.Setenv("GATEWAY_SCANNER_TIMEOUT", testCase.value)
+			case "long health timeout":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_HEALTH_TIMEOUT", testCase.value)
+			case "short database max age":
+				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
+				t.Setenv("GATEWAY_SCANNER_DATABASE_MAX_AGE", testCase.value)
 			case "small response limit":
 				t.Setenv("GATEWAY_SCANNER_ENDPOINT", "https://scanner.example.test/v1/scan")
 				t.Setenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", testCase.value)

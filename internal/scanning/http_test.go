@@ -185,6 +185,65 @@ func TestHTTPScannerHonorsCallerCancellation(t *testing.T) {
 	}
 }
 
+func TestHTTPScannerReportsHealthAndVulnerabilityDatabaseMetadata(t *testing.T) {
+	updatedAt := time.Date(2026, 8, 10, 6, 0, 0, 0, time.UTC)
+	checkedAt := time.Date(2026, 8, 10, 8, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.Header.Get("Authorization") != "Bearer scanner-token" || request.Header.Get("X-Artifact-Scanner-Schema") != SchemaVersion {
+			t.Fatalf("request method=%s authorization=%q schema=%q", request.Method, request.Header.Get("Authorization"), request.Header.Get("X-Artifact-Scanner-Schema"))
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"schemaVersion":"v1","status":"healthy","version":"0.61.0","database":{"version":"2026-08-10","updatedAt":"2026-08-10T06:00:00Z"}}`)
+	}))
+	defer server.Close()
+
+	scanner, err := NewHTTPScanner(HTTPOptions{
+		Name: "trivy", Endpoint: server.URL + "/scan", HealthEndpoint: server.URL + "/health", Token: "scanner-token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner.now = func() time.Time { return checkedAt }
+	health, err := scanner.Health(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.Status != HealthHealthy || health.Version != "0.61.0" || health.CheckedAt != checkedAt || health.Database == nil || health.Database.Version != "2026-08-10" || health.Database.UpdatedAt != updatedAt {
+		t.Fatalf("health=%#v", health)
+	}
+}
+
+func TestHTTPScannerHealthIsOptionalAndStrictlyValidated(t *testing.T) {
+	scanner, err := NewHTTPScanner(HTTPOptions{Name: "scanner", Endpoint: "https://scanner.example.test/v1/scan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = scanner.Health(context.Background()); !errors.Is(err, ErrHealthNotConfigured) {
+		t.Fatalf("Health() error=%v, want ErrHealthNotConfigured", err)
+	}
+
+	for _, body := range []string{
+		`{"schemaVersion":"v1","status":"unknown"}`,
+		`{"schemaVersion":"v1","status":"healthy","database":{"updatedAt":"0001-01-01T00:00:00Z"}}`,
+		`{"schemaVersion":"v1","status":"healthy","unexpected":true}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, body)
+		}))
+		scanner, scannerErr := NewHTTPScanner(HTTPOptions{Name: "scanner", Endpoint: server.URL + "/scan", HealthEndpoint: server.URL + "/health"})
+		if scannerErr != nil {
+			server.Close()
+			t.Fatal(scannerErr)
+		}
+		if _, healthErr := scanner.Health(context.Background()); !errors.Is(healthErr, ErrInvalidResponse) {
+			server.Close()
+			t.Fatalf("body=%s error=%v", body, healthErr)
+		}
+		server.Close()
+	}
+}
+
 func TestHTTPScannerEnforcesConfiguredTimeout(t *testing.T) {
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -219,6 +278,9 @@ func TestNewHTTPScannerRequiresHTTPSOutsideLoopback(t *testing.T) {
 	}
 	if _, err := NewHTTPScanner(HTTPOptions{Name: "scanner", Endpoint: "https://scanner.example.test/v1/scan"}); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := NewHTTPScanner(HTTPOptions{Name: "scanner", Endpoint: "https://scanner.example.test/v1/scan", HealthEndpoint: "http://scanner.example.test/health"}); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("insecure health endpoint error=%v", err)
 	}
 }
 

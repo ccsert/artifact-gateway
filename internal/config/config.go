@@ -61,9 +61,12 @@ type Config struct {
 	WorkerFormats              []string
 	WorkerKinds                []string
 	ScannerEndpoint            string
+	ScannerHealthEndpoint      string
 	ScannerName                string
 	ScannerToken               string
 	ScannerTimeout             time.Duration
+	ScannerHealthTimeout       time.Duration
+	ScannerDatabaseMaxAge      time.Duration
 	ScannerMaxResponseBytes    int64
 	ScannerMaxArtifactBytes    int64
 	ScannerFormats             []string
@@ -119,9 +122,12 @@ func Load() (Config, error) {
 		WorkerFormats:              parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:                parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
 		ScannerEndpoint:            strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
+		ScannerHealthEndpoint:      strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_HEALTH_ENDPOINT")),
 		ScannerName:                strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_NAME")),
 		ScannerToken:               os.Getenv("GATEWAY_SCANNER_TOKEN"),
 		ScannerTimeout:             2 * time.Minute,
+		ScannerHealthTimeout:       2 * time.Second,
+		ScannerDatabaseMaxAge:      24 * time.Hour,
 		ScannerMaxResponseBytes:    512 << 10,
 		ScannerMaxArtifactBytes:    20 << 30,
 		RuntimeNodeRetention:       7 * 24 * time.Hour,
@@ -365,7 +371,7 @@ func secureOrLoopbackHTTP(parsed *url.URL) bool {
 }
 
 func configureScanner(cfg *Config) error {
-	requestedWithoutEndpoint := cfg.ScannerName != "" || cfg.ScannerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_FORMATS")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_TIMEOUT")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES")) != ""
+	requestedWithoutEndpoint := cfg.ScannerHealthEndpoint != "" || cfg.ScannerName != "" || cfg.ScannerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_FORMATS")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_TIMEOUT")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_HEALTH_TIMEOUT")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_DATABASE_MAX_AGE")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_RESPONSE_BYTES")) != "" || strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_MAX_ARTIFACT_BYTES")) != ""
 	if cfg.ScannerEndpoint == "" {
 		if requestedWithoutEndpoint {
 			return fmt.Errorf("GATEWAY_SCANNER_ENDPOINT is required when artifact scanner settings are configured")
@@ -379,6 +385,12 @@ func configureScanner(cfg *Config) error {
 	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !secureOrLoopbackHTTP(parsed) {
 		return fmt.Errorf("GATEWAY_SCANNER_ENDPOINT must be an HTTPS URL without credentials, query, or fragment outside localhost")
 	}
+	if cfg.ScannerHealthEndpoint != "" {
+		parsed, err = url.ParseRequestURI(cfg.ScannerHealthEndpoint)
+		if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !secureOrLoopbackHTTP(parsed) {
+			return fmt.Errorf("GATEWAY_SCANNER_HEALTH_ENDPOINT must be an HTTPS URL without credentials, query, or fragment outside localhost")
+		}
+	}
 	if cfg.ScannerName == "" {
 		cfg.ScannerName = "artifact-scanner"
 	}
@@ -390,6 +402,18 @@ func configureScanner(cfg *Config) error {
 	}
 	if cfg.ScannerTimeout < time.Second || cfg.ScannerTimeout > 30*time.Minute {
 		return fmt.Errorf("GATEWAY_SCANNER_TIMEOUT must be between 1s and 30m")
+	}
+	if cfg.ScannerHealthTimeout, err = durationEnv("GATEWAY_SCANNER_HEALTH_TIMEOUT", cfg.ScannerHealthTimeout); err != nil {
+		return err
+	}
+	if cfg.ScannerHealthTimeout < time.Second || cfg.ScannerHealthTimeout > 30*time.Second {
+		return fmt.Errorf("GATEWAY_SCANNER_HEALTH_TIMEOUT must be between 1s and 30s")
+	}
+	if cfg.ScannerDatabaseMaxAge, err = durationEnv("GATEWAY_SCANNER_DATABASE_MAX_AGE", cfg.ScannerDatabaseMaxAge); err != nil {
+		return err
+	}
+	if cfg.ScannerDatabaseMaxAge < time.Minute || cfg.ScannerDatabaseMaxAge > 30*24*time.Hour {
+		return fmt.Errorf("GATEWAY_SCANNER_DATABASE_MAX_AGE must be between 1m and 720h")
 	}
 	if cfg.ScannerMaxResponseBytes, err = positiveInt64Env("GATEWAY_SCANNER_MAX_RESPONSE_BYTES", cfg.ScannerMaxResponseBytes); err != nil {
 		return err
