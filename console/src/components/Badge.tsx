@@ -85,6 +85,7 @@ export function StateBadge({ state }: { state: string | undefined }) {
     critical: ["严重", "Critical"],
     denied: ["拒绝", "Denied"],
     submitted: ["已投递", "Submitted"],
+    never: ["未扫描", "Not scanned"],
   };
   const label = labels[value];
   return (

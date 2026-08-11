@@ -16,7 +16,6 @@ import { useAuth } from "../lib/auth";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
-import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 // Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
@@ -266,6 +265,7 @@ export function ConanArtifactDetail({
       createdAt: string;
     }[]
   >([]);
+  const [selectedPackageKey, setSelectedPackageKey] = useState("");
   const [deleting, setDeleting] = useState("");
   const [error, setError] = useState("");
 
@@ -315,10 +315,12 @@ export function ConanArtifactDetail({
   useEffect(() => {
     if (!managed || !selectedRecipe) {
       setPackageRevisions([]);
+      setSelectedPackageKey("");
       return;
     }
     let cancelled = false;
     setPackageRevisions([]);
+    setSelectedPackageKey("");
     setError("");
     void (async () => {
       const { data: ids, error: idsError } = await listConanPackageIds({
@@ -372,6 +374,28 @@ export function ConanArtifactDetail({
   const intelligenceDigest = recipeRevisions.find(
     (item) => item.revision === selectedRecipe,
   )?.digest;
+  const selectedPackage = packageRevisions.find(
+    (item) =>
+      `${item.recipeRevision}:${item.packageId}:${item.revision}` ===
+      selectedPackageKey,
+  );
+  const detailMeta: ArtifactMeta = selectedPackage
+    ? {
+        ...meta,
+        coordinate: `${reference}#${selectedPackage.recipeRevision}/${selectedPackage.packageId}#${selectedPackage.revision}`,
+        digest: selectedPackage.digest,
+        createdAt: selectedPackage.createdAt,
+      }
+    : selectedRecipe && intelligenceDigest
+      ? {
+          ...meta,
+          coordinate: `${reference}#${selectedRecipe}`,
+          digest: intelligenceDigest,
+          createdAt: recipeRevisions.find(
+            (item) => item.revision === selectedRecipe,
+          )?.createdAt,
+        }
+      : meta;
 
   const deletePackage = async (item: {
     recipeRevision: string;
@@ -409,6 +433,11 @@ export function ConanArtifactDetail({
             candidate.revision !== item.revision,
         ),
       );
+      setSelectedPackageKey((current) =>
+        current === `${item.recipeRevision}:${item.packageId}:${item.revision}`
+          ? ""
+          : current,
+      );
       onDeleted?.();
     }
     setDeleting("");
@@ -419,19 +448,11 @@ export function ConanArtifactDetail({
       format="conan"
       repositoryId={repoId}
       repoName={repoName}
-      meta={meta}
+      meta={detailMeta}
       versions={
         managed ? (
           <div className="space-y-4">
             {error && <Alert type="error" showIcon title={error} />}
-            {selectedRecipe && intelligenceDigest && (
-              <ArtifactIntelligencePanel
-                repositoryId={repoId}
-                format="conan"
-                coordinate={reference}
-                digest={intelligenceDigest}
-              />
-            )}
             <VersionList
               title={text("Recipe revisions", "Recipe revisions")}
               items={recipeRevisions.map((item) => ({
@@ -439,7 +460,10 @@ export function ConanArtifactDetail({
                 hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt, locale)}`,
               }))}
               current={selectedRecipe}
-              onSelect={setSelectedRecipe}
+              onSelect={(revision) => {
+                setSelectedRecipe(revision);
+                setSelectedPackageKey("");
+              }}
             />
             {packageRevisions.length > 0 && (
               <div className="overflow-hidden rounded-lg border border-zinc-800">
@@ -447,13 +471,13 @@ export function ConanArtifactDetail({
                   {text("Package revisions", "Package revisions")}
                 </div>
                 {packageRevisions.map((item) => {
-                  const deletingItem =
-                    deleting ===
-                    `package:${item.recipeRevision}:${item.packageId}:${item.revision}`;
+                  const packageKey = `${item.recipeRevision}:${item.packageId}:${item.revision}`;
+                  const deletingItem = deleting === `package:${packageKey}`;
+                  const selected = selectedPackageKey === packageKey;
                   return (
                     <div
-                      key={`${item.recipeRevision}:${item.packageId}:${item.revision}`}
-                      className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0"
+                      key={packageKey}
+                      className={`flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0 ${selected ? "bg-cyan-950/20" : ""}`}
                     >
                       <div className="min-w-0">
                         <div className="font-mono text-xs text-zinc-200">
@@ -464,31 +488,45 @@ export function ConanArtifactDetail({
                           {formatDate(item.createdAt, locale)}
                         </div>
                       </div>
-                      {canDelete && (
-                        <Popconfirm
-                          title={text(
-                            "删除 package revision？",
-                            "Delete this package revision?",
-                          )}
-                          description={text(
-                            "删除后该二进制包 revision 将不可见。",
-                            "This binary package revision will no longer be visible.",
-                          )}
-                          okText={text("删除", "Delete")}
-                          cancelText={text("取消", "Cancel")}
-                          okButtonProps={{ danger: true }}
-                          onConfirm={() => void deletePackage(item)}
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          size="small"
+                          type={selected ? "primary" : "text"}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setSelectedPackageKey(selected ? "" : packageKey)
+                          }
                         >
-                          <Button
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            loading={deletingItem}
+                          {selected
+                            ? text("查看 Recipe", "View recipe")
+                            : text("查看详情", "Inspect")}
+                        </Button>
+                        {canDelete && (
+                          <Popconfirm
+                            title={text(
+                              "删除 package revision？",
+                              "Delete this package revision?",
+                            )}
+                            description={text(
+                              "删除后该二进制包 revision 将不可见。",
+                              "This binary package revision will no longer be visible.",
+                            )}
+                            okText={text("删除", "Delete")}
+                            cancelText={text("取消", "Cancel")}
+                            okButtonProps={{ danger: true }}
+                            onConfirm={() => void deletePackage(item)}
                           >
-                            {text("删除", "Delete")}
-                          </Button>
-                        </Popconfirm>
-                      )}
+                            <Button
+                              danger
+                              size="small"
+                              icon={<DeleteOutlined />}
+                              loading={deletingItem}
+                            >
+                              {text("删除", "Delete")}
+                            </Button>
+                          </Popconfirm>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

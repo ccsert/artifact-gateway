@@ -6,6 +6,7 @@ import { formatBytes, formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { goUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -207,6 +208,12 @@ export function GoModuleDetail({
 
   return (
     <div className="space-y-4 px-1 py-2">
+      <ArtifactScanStatus
+        repositoryId={repositoryId}
+        format="go"
+        coordinate={`${modulePath}@${selectedVersion}`}
+        digest={versionDigest}
+      />
       <ArtifactIntelligencePanel
         repositoryId={repositoryId}
         format="go"

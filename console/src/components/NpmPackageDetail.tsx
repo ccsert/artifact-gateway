@@ -11,6 +11,7 @@ import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { npmUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactScanStatus } from "./ArtifactScanStatus";
 
 interface NpmVersionManifest {
   name: string;
@@ -149,10 +150,16 @@ export function NpmPackageDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <ArtifactScanStatus
+        repositoryId={repositoryId}
+        format="npm"
+        coordinate={`${packageName}@${selectedVersion}`}
+        digest={artifactMetadata?.digest}
+      />
       <ArtifactIntelligencePanel
         repositoryId={repositoryId}
         format="npm"
-        coordinate={packageName}
+        coordinate={`${packageName}@${selectedVersion}`}
         digest={artifactMetadata?.digest}
       />
       <div>

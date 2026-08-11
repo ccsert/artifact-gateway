@@ -12,6 +12,7 @@ import { UsageSnippetBlock } from "./PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../lib/usage";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactScanStatus } from "./ArtifactScanStatus";
 
 interface OciDescriptor {
   mediaType: string;
@@ -403,6 +404,14 @@ export function OciImageDetail({
             <Badge tone="amber">无标签</Badge>
           )}
         </div>
+      )}
+      {selectedVersion && (
+        <ArtifactScanStatus
+          repositoryId={repositoryId}
+          format="oci"
+          coordinate={image}
+          digest={selectedVersion.digest}
+        />
       )}
       {selectedVersion && (
         <ArtifactIntelligencePanel

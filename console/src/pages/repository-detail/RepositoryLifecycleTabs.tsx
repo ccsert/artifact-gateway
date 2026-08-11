@@ -4,6 +4,7 @@ import { Alert, Button, Popconfirm, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   reconcileRepositoryArtifactIntelligence,
+  reconcileRepositoryArtifactScans,
   listRepositoryLifecycleJobs,
   listRepositoryTombstones,
   restoreRepositoryArtifact,
@@ -30,6 +31,9 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const [reconcileError, setReconcileError] = useState<unknown>(null);
   const [reconcileNotice, setReconcileNotice] = useState("");
   const [reconciling, setReconciling] = useState(false);
+  const [scanReconciling, setScanReconciling] = useState(false);
+  const [scanReconcileError, setScanReconcileError] = useState<unknown>(null);
+  const [scanReconcileNotice, setScanReconcileNotice] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -78,6 +82,40 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
     void load();
   };
 
+  const reconcileScans = async () => {
+    setScanReconciling(true);
+    setScanReconcileError(null);
+    setScanReconcileNotice("");
+    const { data, error: err } = await reconcileRepositoryArtifactScans({
+      path: { repositoryId: repo.id },
+      query: { limit: 500 },
+    });
+    setScanReconciling(false);
+    if (err) {
+      setScanReconcileError(err);
+      return;
+    }
+    setScanReconcileNotice(
+      text(
+        `已检查 ${data?.inspected ?? 0} 个制品，补入 ${data?.enqueued ?? 0} 个，重试 ${data?.retried ?? 0} 个`,
+        `Inspected ${data?.inspected ?? 0} artifacts, queued ${data?.enqueued ?? 0}, retried ${data?.retried ?? 0}`,
+      ),
+    );
+    void load();
+  };
+
+  const scanReconcileAction = (
+    <Button
+      size="small"
+      type="primary"
+      icon={<SyncOutlined />}
+      loading={scanReconciling}
+      onClick={() => void reconcileScans()}
+    >
+      {text("对账并补扫", "Reconcile scans")}
+    </Button>
+  );
+
   if (error !== null)
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
@@ -96,6 +134,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
           "保留清理、晋升、复制任务会显示在这里",
           "Retention cleanup, promotion, and replication tasks appear here.",
         )}
+        action={scanReconcileAction}
       />
     );
 
@@ -169,6 +208,21 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
         <Alert type="success" showIcon title={reconcileNotice} />
       )}
       {reconcileError !== null && <ErrorBanner error={reconcileError} />}
+      {scanReconcileNotice && (
+        <Alert type="success" showIcon title={scanReconcileNotice} />
+      )}
+      {scanReconcileError !== null && (
+        <ErrorBanner error={scanReconcileError} />
+      )}
+      <div className="flex items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+        <div className="text-xs text-zinc-500">
+          {text(
+            "对账可补入发布时漏掉的扫描任务，并重试失败任务。",
+            "Reconciliation fills publication scan gaps and retries failed jobs.",
+          )}
+        </div>
+        {scanReconcileAction}
+      </div>
       {failedIntelligenceJobs.length > 0 && (
         <div className="flex items-center justify-between gap-4 rounded-md border border-cyan-900/50 bg-cyan-950/20 px-4 py-3">
           <div className="text-xs text-cyan-200/80">

@@ -9,6 +9,7 @@ import {
 } from "./PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { pypiUsage } from "../lib/usage";
@@ -215,10 +216,20 @@ export function PyPIProjectDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <ArtifactScanStatus
+        repositoryId={repositoryId}
+        format="pypi"
+        coordinate={`${project}@${selectedVersion}`}
+        digest={
+          selectedDigest
+            ? `sha256:${selectedDigest.replace(/^sha256:/, "")}`
+            : undefined
+        }
+      />
       <ArtifactIntelligencePanel
         repositoryId={repositoryId}
         format="pypi"
-        coordinate={project}
+        coordinate={`${project}@${selectedVersion}`}
         digest={selectedDigest ? `sha256:${selectedDigest}` : undefined}
       />
       <div>

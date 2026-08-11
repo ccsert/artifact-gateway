@@ -7,6 +7,7 @@ import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactScanStatus } from "./ArtifactScanStatus";
 
 function CopyButton({ text }: { text: string }) {
   const { text: localizedText } = usePreferences();
@@ -89,6 +90,12 @@ export function ArtifactDetailView({
 
   return (
     <div className="space-y-4">
+      <ArtifactScanStatus
+        repositoryId={repositoryId}
+        format={format}
+        coordinate={meta.coordinate}
+        digest={meta.digest}
+      />
       <ArtifactIntelligencePanel
         repositoryId={repositoryId}
         format={format}
