@@ -93,6 +93,8 @@ function resourcePlaceholder(format: Repository["format"] | undefined) {
       return "gateway-widget";
     case "go":
       return "example.com/team/widget";
+    case "apt":
+      return "dists/bookworm/InRelease";
     default:
       return "";
   }
@@ -591,7 +593,7 @@ export function AccessControlPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("访问控制", "Access control")}
         description={text(
@@ -645,7 +647,7 @@ export function AccessControlPage() {
               <ErrorBanner error={evaluatorOptionsError} />
             </div>
           )}
-          <div className="grid grid-cols-[minmax(250px,1.25fr)_150px_minmax(190px,1fr)_minmax(210px,1fr)_auto] items-end gap-3">
+          <div className="grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] items-end gap-3">
             <FilterField label={text("授权主体", "Principal")}>
               <Select
                 className="w-full"
@@ -733,7 +735,7 @@ export function AccessControlPage() {
             </Button>
           </div>
           {selectedPrincipal === CUSTOM_PRINCIPAL && (
-            <div className="mt-3 grid grid-cols-[minmax(250px,1.25fr)_150px_minmax(190px,1fr)_minmax(210px,1fr)_auto] gap-3">
+            <div className="mt-3 grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] gap-3">
               <FilterField
                 label={text("完整 actor 标识", "Complete actor identifier")}
                 className="col-span-2"
@@ -861,7 +863,6 @@ export function AccessControlPage() {
       <AuthorizationTemplatesPanel repositories={repositories} />
       <Collapse
         ghost
-        className="my-4"
         items={[
           {
             key: "authorization",
@@ -923,6 +924,7 @@ export function AccessControlPage() {
           )}
         />
         <FilterBar
+          embedded
           actions={
             <Button
               icon={<ClearOutlined />}

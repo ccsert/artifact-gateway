@@ -377,7 +377,7 @@ export function AuditsPage() {
   );
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("审计日志", "Audit log")}
         description={text(
@@ -410,6 +410,7 @@ export function AuditsPage() {
       />
       <Card className="mt-4">
         <FilterBar
+          embedded
           actions={
             <Space size="small">
               <Button
@@ -458,7 +459,7 @@ export function AuditsPage() {
                   );
                 }}
               >
-                {text("导出当前页 CSV", "Export current page CSV")}
+                {text("导出 CSV", "Export CSV")}
               </Button>
             </Space>
           }
@@ -521,7 +522,7 @@ export function AuditsPage() {
                 </span>
               ),
               children: (
-                <FilterBar>
+                <FilterBar embedded>
                   <AuditSelect
                     label={text("操作类型", "Operation")}
                     value={operation}

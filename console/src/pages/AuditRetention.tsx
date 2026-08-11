@@ -183,7 +183,7 @@ export function AuditRetentionPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("审计保留策略", "Audit retention policy")}
         description={text(
@@ -232,8 +232,8 @@ export function AuditRetentionPage() {
           },
         ]}
       />
-      <Card className="mt-4 mb-6">
-        <div className="grid max-w-5xl gap-8 p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Card>
+        <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)_300px] gap-6 p-5">
           <div className="min-w-0">
             <div className="mb-4">
               <h2 className="text-sm font-semibold text-zinc-200">

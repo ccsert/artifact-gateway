@@ -71,14 +71,18 @@ export function FilterField({
 export function FilterBar({
   children,
   actions,
+  embedded = false,
   className = "",
 }: {
   children: ReactNode;
   actions?: ReactNode;
+  embedded?: boolean;
   className?: string;
 }) {
   return (
-    <div className={`ag-filter-bar ${className}`}>
+    <div
+      className={`ag-filter-bar${embedded ? " ag-filter-bar-embedded" : ""} ${className}`}
+    >
       <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
         {children}
       </div>

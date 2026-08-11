@@ -476,6 +476,7 @@ button:not(:disabled):active,
 
 .ag-card {
   position: relative;
+  overflow: hidden;
   border-color: var(--ag-border-subtle) !important;
   border-radius: var(--ag-radius) !important;
   background: var(--ag-surface) !important;
@@ -494,6 +495,22 @@ button:not(:disabled):active,
 .ag-metric-strip + .ag-card,
 .ag-filter-bar + .ag-card {
   margin-top: 16px;
+}
+
+/* Ant Design component styles outrank utility margins. Keep page-level
+   surfaces on an explicit spacing rhythm instead of relying on mt/mb classes. */
+.ag-page-stack > .ag-card + .ag-card,
+.ag-page-stack > .ag-card + .ant-collapse,
+.ag-page-stack > .ant-collapse + .ag-card,
+.ag-page-stack > .ag-feedback-stack + .ag-card,
+.ag-page-stack > .ag-card + .ag-filter-bar,
+.ag-page-stack > .ag-filter-bar + .ag-card,
+.ag-page-stack > .ag-metric-strip + .ag-feedback-stack {
+  margin-top: 16px;
+}
+
+.ag-page-stack > .ant-collapse {
+  margin-block: 0;
 }
 
 /* ========== 指标条 ========== */
@@ -531,6 +548,17 @@ button:not(:disabled):active,
   border-radius: var(--ag-radius);
   background: var(--ag-surface);
   backdrop-filter: blur(8px);
+}
+
+.ag-filter-bar-embedded {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.ant-collapse-content-box > .ag-filter-bar-embedded {
+  padding: 0;
 }
 
 /* ========== 表格 ========== */

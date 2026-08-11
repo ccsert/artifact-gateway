@@ -243,7 +243,7 @@ export function AuthenticationPage() {
   const secretConfigured = settings.clientSecretConfigured && !clearSecret;
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("身份认证", "Authentication")}
         description={text(
@@ -288,7 +288,7 @@ export function AuthenticationPage() {
         ]}
       />
 
-      <div className="mt-4 space-y-4">
+      <div className="ag-feedback-stack space-y-4">
         {settings.source === "environment" && (
           <Alert
             type="info"
@@ -314,7 +314,7 @@ export function AuthenticationPage() {
         )}
       </div>
 
-      <Card className="mt-4">
+      <Card>
         <Form<AuthenticationFormValues>
           form={form}
           layout="vertical"

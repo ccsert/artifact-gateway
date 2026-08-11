@@ -416,7 +416,7 @@ export function OperationsPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("任务中心", "Operations")}
         description={text(
@@ -436,7 +436,7 @@ export function OperationsPage() {
             key: "jobs",
             label: text("执行记录", "Job history"),
             children: (
-              <>
+              <div className="ag-page-stack">
                 <MetricStrip
                   items={[
                     {
@@ -468,7 +468,6 @@ export function OperationsPage() {
                 />
                 <RuntimeNodesPanel />
                 <FilterBar
-                  className="mt-4 mb-4"
                   actions={
                     <Space>
                       {(stateFilter !== "all" ||
@@ -608,7 +607,7 @@ export function OperationsPage() {
                     />
                   </Card>
                 )}
-              </>
+              </div>
             ),
           },
           {
