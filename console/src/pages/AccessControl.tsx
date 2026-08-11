@@ -49,6 +49,7 @@ import {
   AuthorizationTemplatesPanel,
   type PrincipalOption,
 } from "../components/AuthorizationTemplatesPanel";
+import { AuthorizationRolesPanel } from "../components/AuthorizationRolesPanel";
 
 interface GrantRow {
   repositoryId: string;
@@ -251,6 +252,7 @@ export function AccessControlPage() {
   const [anonymousPolicyError, setAnonymousPolicyError] =
     useState<unknown>(null);
   const [savingAnonymousPolicy, setSavingAnonymousPolicy] = useState(false);
+  const [rolesRevision, setRolesRevision] = useState(0);
   const [users, setUsers] = useState<User[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -1142,9 +1144,13 @@ export function AccessControlPage() {
                     </div>
                   )}
                 </Card>
+                <AuthorizationRolesPanel
+                  onChanged={() => setRolesRevision((value) => value + 1)}
+                />
                 <AuthorizationTemplatesPanel
                   repositories={repositories}
                   principalOptions={principalOptions}
+                  rolesRevision={rolesRevision}
                 />
               </div>
             ),

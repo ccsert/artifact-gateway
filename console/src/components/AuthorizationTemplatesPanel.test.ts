@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  AUTHORIZATION_TEMPLATE_PRESETS,
-  RESOURCE_PREFIX_EXAMPLES,
-} from "./AuthorizationTemplatesPanel";
+import { AUTHORIZATION_TEMPLATE_PRESETS } from "./AuthorizationTemplatesPanel";
+import { RESOURCE_PREFIX_EXAMPLES } from "./ResourcePrefixEditor";
 
 describe("authorization template presets", () => {
   it("provides least-privilege references without choosing a real principal", () => {

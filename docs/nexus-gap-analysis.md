@@ -32,12 +32,12 @@ the Console described in `console/src/app/router.tsx`.
 
 | Area | Nexus | Artifact Gateway | Severity |
 | --- | --- | --- | --- |
-| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Governed local users, API keys, global reader/writer/admin roles, repository grants with resource prefixes, effective-access explanation, and OIDC role mapping; custom multi-role assignments and LDAP/SAML remain future work | Medium |
+| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Governed local users, API keys, reusable permission roles, global reader/writer/admin roles, format-aware repository grants, effective-access explanation, and OIDC role mapping; multi-role identity assignments and LDAP/SAML remain future work | Medium |
 | Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Local credentials, bearer tokens, database-configured OIDC authorization-code SSO with encrypted client secrets, and per-client session inventory/revocation; back-channel and IdP-initiated logout remain future work | Low |
 | Global artifact search | Cross-repo component, checksum, class-name, tag search | Server-side cross-repository coordinate/path search with permission filtering and deep links; checksum/class-name/saved queries remain future work | Medium |
 | Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
 | Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
-| User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control and repository Grants pages; LDAP/SAML, soft deletion and a custom-role designer remain future work | Medium |
+| User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control, reusable authorization roles and repository Grants pages; LDAP/SAML and soft deletion remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual jobs, bounded transport, optimistic intelligence merge, versioned admission policies, and promotion-time evidence propagation; scan-on-publication, vulnerability databases, and malicious-component blocking remain future work | Medium |
@@ -84,8 +84,11 @@ global role, repository, and resource through the same authorization chain
 used by protocol requests, then explains the source and reason for every
 decision.
 
-Authorization templates now provide reusable named grant sets with canonical
-resource prefixes, versioned edits, administrator-only management, and an
+Authorization roles now provide reusable named permission sets. Selecting a
+role in a grant or template copies its scopes as an explicit snapshot, so later
+role edits cannot silently alter existing authorization decisions. Authorization
+templates provide reusable named grant sets with format-aware canonical resource
+prefix editing, versioned edits, administrator-only management, and an
 optimistic-concurrency-protected apply operation. Remaining gaps are richer
 selector composition beyond a canonical prefix, external directory protocols
 such as LDAP/SAML, OIDC back-channel logout, and identity-provider-initiated
@@ -215,9 +218,9 @@ concurrency; format, type, and name remain immutable by design.
 
 Nexus ships a broader Security section including LDAP, SAML and content
 selectors. Artifact Gateway provides Users, API Keys, Access Control, grants,
-anonymous policy, local roles and OIDC role mapping. API Keys expose bounded
-roles, expiry, revocation and last-used timestamps; full privilege/content
-selector design remains a deliberate gap.
+anonymous policy, reusable authorization roles and OIDC role mapping. API Keys
+expose bounded roles, expiry, revocation and last-used timestamps; selector
+composition beyond a canonical format-aware prefix remains a deliberate gap.
 
 ### System Settings And Operations Pages
 
@@ -377,7 +380,7 @@ backend API additions listed below.
   `writer`/`admin` roles are enforced, keys expire by default after 90 days
   (maximum 365), revocation and last-used timestamps are recorded, and local
   user accounts with the same roles are managed via `/api/v2/users`. Full
-  privilege/content-selector design remains future work.
+  arbitrary privilege/content-selector expressions remain future work.
 - **Hosted lifecycle coverage** is delivered for Maven, OCI, Raw, Conan, npm
   and PyPI:
   retention policies expose dry-run, protection patterns, version caps, CSV

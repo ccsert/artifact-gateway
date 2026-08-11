@@ -27,23 +27,31 @@ import {
   createAuthorizationTemplate,
   deleteAuthorizationTemplate,
   listGrants,
+  listAuthorizationRoles,
   listAuthorizationTemplates,
   updateAuthorizationTemplate,
 } from "../client";
 import type {
   AuthorizationTemplate,
   AuthorizationTemplateGrant,
+  AuthorizationRole,
   Repository,
 } from "../client";
 import { EmptyState, ErrorBanner, Loading } from "./Feedback";
 import { Card, CardHeader } from "./Layout";
 import { usePreferences } from "../lib/preferences";
+import {
+  inferResourcePrefixFormat,
+  ResourcePrefixEditor,
+} from "./ResourcePrefixEditor";
 
 type DraftGrant = {
   key: string;
   principal: string;
   scopes: AuthorizationTemplateGrant["scopes"];
   resourcePrefix?: string;
+  roleId?: string;
+  selectorFormat?: Repository["format"];
 };
 
 export type PrincipalOption = { value: string; label: string };
@@ -95,19 +103,6 @@ export const AUTHORIZATION_TEMPLATE_PRESETS: TemplatePreset[] = [
   },
 ];
 
-export const RESOURCE_PREFIX_EXAMPLES: Partial<
-  Record<Repository["format"], string[]>
-> = {
-  maven: ["com/example/", "org/example/"],
-  oci: ["team/", "library/"],
-  conan: ["pkg/1.0/", "pkg/"],
-  raw: ["releases/", "snapshots/"],
-  npm: ["@scope/", "packages/"],
-  pypi: ["gateway-", "internal-"],
-  go: ["example.com/team/", "git.example.com/"],
-  apt: ["dists/bookworm/", "pool/main/"],
-};
-
 function emptyGrant(): DraftGrant {
   return {
     key: `${Date.now()}-${Math.random()}`,
@@ -116,27 +111,39 @@ function emptyGrant(): DraftGrant {
   };
 }
 
-function toDraft(template: AuthorizationTemplate): DraftGrant[] {
+const CUSTOM_ROLE = "__custom__";
+
+function toDraft(
+  template: AuthorizationTemplate,
+  formats: Repository["format"][],
+): DraftGrant[] {
   return template.grants.map((grant) => ({
     ...grant,
     key: crypto.randomUUID(),
+    selectorFormat: inferResourcePrefixFormat(
+      grant.resourcePrefix ?? "",
+      formats,
+    ),
   }));
 }
 
 type Props = {
   repositories: Repository[];
   principalOptions?: PrincipalOption[];
+  rolesRevision?: number;
 };
 
 export function AuthorizationTemplatesPanel({
   repositories,
   principalOptions = [],
+  rolesRevision = 0,
 }: Props) {
   const { text } = usePreferences();
   const [templates, setTemplates] = useState<AuthorizationTemplate[] | null>(
     null,
   );
   const [error, setError] = useState<unknown>(null);
+  const [roles, setRoles] = useState<AuthorizationRole[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AuthorizationTemplate | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -151,45 +158,43 @@ export function AuthorizationTemplatesPanel({
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<unknown>(null);
 
-  const resourcePrefixOptions = useMemo(() => {
-    const formats = new Set(
-      repositories.map((repository) => repository.format),
-    );
-    const formatsToShow = formats.size
-      ? Array.from(formats)
-      : (Object.keys(RESOURCE_PREFIX_EXAMPLES) as Repository["format"][]);
-    return [
-      {
-        value: "",
-        label: text("整个仓库 · 留空前缀", "Entire repository · blank prefix"),
-      },
-      ...formatsToShow.flatMap((format) =>
-        (RESOURCE_PREFIX_EXAMPLES[format] ?? []).map((value) => ({
-          value,
-          label: `${format} · ${value}`,
-        })),
-      ),
-    ];
-  }, [repositories, text]);
+  const availableFormats = useMemo(
+    () =>
+      Array.from(new Set(repositories.map((repository) => repository.format))),
+    [repositories],
+  );
 
   const load = useCallback(async () => {
     setError(null);
-    const result = await listAuthorizationTemplates();
-    if (result.error || !result.data) {
+    const [templateResult, roleResult] = await Promise.all([
+      listAuthorizationTemplates(),
+      listAuthorizationRoles(),
+    ]);
+    if (
+      templateResult.error ||
+      !templateResult.data ||
+      roleResult.error ||
+      !roleResult.data
+    ) {
       setError(
-        result.error ??
+        templateResult.error ??
+          roleResult.error ??
           new Error(
-            text("加载授权模板失败", "Failed to load authorization templates"),
+            text(
+              "加载授权模板或角色失败",
+              "Failed to load authorization templates or roles",
+            ),
           ),
       );
       return;
     }
-    setTemplates(result.data);
+    setTemplates(templateResult.data);
+    setRoles(roleResult.data);
   }, [text]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, rolesRevision]);
 
   const openCreate = () => {
     setEditing(null);
@@ -237,7 +242,7 @@ export function AuthorizationTemplatesPanel({
     setEditorOpen(true);
     setDraftName(template.name);
     setDraftDescription(template.description ?? "");
-    setDraftGrants(toDraft(template));
+    setDraftGrants(toDraft(template, availableFormats));
     setSaveError(null);
   };
 
@@ -560,52 +565,112 @@ export function AuthorizationTemplatesPanel({
             {
               title: text("权限", "Scopes"),
               key: "scopes",
-              width: 220,
-              render: (_, grant) => (
-                <Select
-                  className="w-full"
-                  value={grant.scopes[0]}
-                  options={[
-                    { value: "repositories:read", label: text("读取", "Read") },
-                    {
-                      value: "repositories:write",
-                      label: text("写入", "Write"),
-                    },
-                    {
-                      value: "repositories:admin",
-                      label: text("管理员", "Admin"),
-                    },
-                    {
-                      value: "repositories:intelligence",
-                      label: text("制品情报", "Artifact intelligence"),
-                    },
-                  ]}
-                  onChange={(value) =>
-                    setDraftGrants((current) =>
-                      current.map((item) =>
-                        item.key === grant.key
-                          ? { ...item, scopes: [value] }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              ),
+              width: 280,
+              render: (_, grant) => {
+                const role = roles.find((item) => item.id === grant.roleId);
+                return (
+                  <div className="space-y-2">
+                    <Select
+                      className="w-full"
+                      showSearch={{ optionFilterProp: "label" }}
+                      value={grant.roleId ?? CUSTOM_ROLE}
+                      options={[
+                        {
+                          value: CUSTOM_ROLE,
+                          label: text("自定义权限", "Custom permissions"),
+                        },
+                        ...roles.map((item) => ({
+                          value: item.id,
+                          label: item.name,
+                        })),
+                      ]}
+                      onChange={(value) =>
+                        setDraftGrants((current) =>
+                          current.map((item) => {
+                            if (item.key !== grant.key) return item;
+                            if (value === CUSTOM_ROLE)
+                              return { ...item, roleId: undefined };
+                            const selected = roles.find(
+                              (candidate) => candidate.id === value,
+                            );
+                            return selected
+                              ? {
+                                  ...item,
+                                  roleId: selected.id,
+                                  scopes: [...selected.scopes],
+                                }
+                              : item;
+                          }),
+                        )
+                      }
+                    />
+                    {role ? (
+                      <div className="flex flex-wrap gap-1">
+                        {role.scopes.map((scope) => (
+                          <Tag key={scope} className="m-0 text-[10px]">
+                            {scope.replace("repositories:", "")}
+                          </Tag>
+                        ))}
+                      </div>
+                    ) : (
+                      <Select
+                        className="w-full"
+                        mode="multiple"
+                        maxTagCount="responsive"
+                        value={grant.scopes}
+                        options={[
+                          {
+                            value: "repositories:read",
+                            label: text("读取", "Read"),
+                          },
+                          {
+                            value: "repositories:write",
+                            label: text("写入", "Write"),
+                          },
+                          {
+                            value: "repositories:admin",
+                            label: text("管理员", "Admin"),
+                          },
+                          {
+                            value: "repositories:intelligence",
+                            label: text("制品情报", "Artifact intelligence"),
+                          },
+                        ]}
+                        onChange={(value) =>
+                          setDraftGrants((current) =>
+                            current.map((item) =>
+                              item.key === grant.key
+                                ? { ...item, scopes: value }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              },
             },
             {
               title: text("资源前缀", "Resource prefix"),
               key: "prefix",
-              width: 260,
+              width: 420,
               render: (_, grant) => (
-                <AutoComplete
-                  className="w-full font-mono"
-                  allowClear
-                  options={resourcePrefixOptions}
+                <ResourcePrefixEditor
+                  format={
+                    grant.selectorFormat ?? availableFormats[0] ?? "maven"
+                  }
                   value={grant.resourcePrefix}
-                  placeholder={text(
-                    "例如 org.example；留空表示整个仓库",
-                    "For example org.example; blank means entire repository",
-                  )}
+                  formats={availableFormats}
+                  onFormatChange={(format) =>
+                    setDraftGrants((current) =>
+                      current.map((item) =>
+                        item.key === grant.key
+                          ? { ...item, selectorFormat: format }
+                          : item,
+                      ),
+                    )
+                  }
                   onChange={(value) =>
                     setDraftGrants((current) =>
                       current.map((item) =>

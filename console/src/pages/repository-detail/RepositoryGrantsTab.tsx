@@ -3,12 +3,19 @@ import { Alert, Button, Input, Select, Space, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import {
+  listAuthorizationRoles,
   listApiKeys,
   listGrants,
   listUsers,
   replaceGrants,
 } from "../../client";
-import type { ApiKey, Grant, Repository, User } from "../../client";
+import type {
+  ApiKey,
+  AuthorizationRole,
+  Grant,
+  Repository,
+  User,
+} from "../../client";
 import { Badge } from "../../components/Badge";
 import {
   EmptyState,
@@ -19,11 +26,17 @@ import {
 import { Modal, useDisclosure } from "../../components/Modal";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { ResourcePrefixEditor } from "../../components/ResourcePrefixEditor";
 
 type Localize = (chinese: string, english: string) => string;
 
 type GrantLevel = "read" | "write" | "admin" | "intelligence";
 const CUSTOM_PRINCIPAL = "__custom__";
+const BUILTIN_PERMISSION_PREFIX = "builtin:";
+const CUSTOM_ROLE_PREFIX = "role:";
+const SNAPSHOT_PERMISSION = "snapshot";
+
+type DraftGrant = Grant & { roleId?: string };
 
 interface PrincipalOption {
   value: string;
@@ -45,74 +58,6 @@ function principalEditorKind(principal: string): PrincipalKind | "" {
   return principal ? principalKind(principal) : "";
 }
 
-function resourcePrefixHint(
-  format: Repository["format"],
-  text: Localize,
-): string {
-  switch (format) {
-    case "maven":
-      return text(
-        "例如 org/example（Maven group 前缀）",
-        "For example: org/example (Maven group prefix)",
-      );
-    case "oci":
-      return text(
-        "例如 team/backend（镜像名称前缀）",
-        "For example: team/backend (image name prefix)",
-      );
-    case "conan":
-      return text(
-        "例如 pkg/1.0/user/stable（reference 前缀）",
-        "For example: pkg/1.0/user/stable (reference prefix)",
-      );
-    case "raw":
-      return text(
-        "例如 releases/2026（路径前缀）",
-        "For example: releases/2026 (path prefix)",
-      );
-    case "npm":
-      return text(
-        "例如 @scope/package（npm 包名前缀）",
-        "For example: @scope/package (npm package prefix)",
-      );
-    case "pypi":
-      return text(
-        "例如 gateway-widget（PyPI 项目前缀）",
-        "For example: gateway-widget (PyPI project prefix)",
-      );
-    case "go":
-      return text(
-        "例如 github.com/company（Go 模块路径前缀）",
-        "For example: github.com/company (Go module path prefix)",
-      );
-    case "apt":
-      return text(
-        "例如 dists/bookworm 或 pool/main（APT 路径前缀）",
-        "For example: dists/bookworm or pool/main (APT path prefix)",
-      );
-  }
-}
-
-function grantLevelLabel(level: GrantLevel, text: Localize): string {
-  if (level === "intelligence")
-    return text("制品情报", "Artifact intelligence");
-  if (level === "admin") return text("管理员", "Administrator");
-  if (level === "write") return text("写入", "Write");
-  return text("读取", "Read");
-}
-
-function grantCapabilitiesLabel(level: GrantLevel, text: Localize): string {
-  if (level === "intelligence")
-    return text(
-      "写入签名 / SBOM / 漏洞摘要",
-      "Write signatures / SBOM / vulnerability summaries",
-    );
-  if (level === "admin")
-    return text("读取 + 写入 + 管理", "Read + write + admin");
-  if (level === "write") return text("读取 + 写入", "Read + write");
-  return text("读取", "Read");
-}
-
 function grantTone(level: GrantLevel): "red" | "blue" | "green" | "cyan" {
   if (level === "intelligence") return "cyan";
   if (level === "admin") return "red";
@@ -129,6 +74,36 @@ function grantLevel(scopes: Grant["scopes"]): GrantLevel {
 
 function scopesForLevel(level: GrantLevel): Grant["scopes"] {
   return [`repositories:${level}`] as Grant["scopes"];
+}
+
+function permissionSelection(
+  grant: DraftGrant,
+  roles: AuthorizationRole[],
+): string {
+  if (grant.roleId && roles.some((role) => role.id === grant.roleId))
+    return `${CUSTOM_ROLE_PREFIX}${grant.roleId}`;
+  return grant.scopes.length === 1
+    ? `${BUILTIN_PERMISSION_PREFIX}${grantLevel(grant.scopes)}`
+    : SNAPSHOT_PERMISSION;
+}
+
+function grantedCapabilitiesLabel(
+  scopes: Grant["scopes"],
+  text: Localize,
+): string {
+  if (scopes.includes("repositories:admin"))
+    return text(
+      "读取 + 写入 + 管理 + 制品情报",
+      "Read + write + admin + intelligence",
+    );
+  const capabilities: string[] = scopes.includes("repositories:write")
+    ? [text("读取 + 写入", "Read + write")]
+    : scopes.includes("repositories:read")
+      ? [text("读取", "Read")]
+      : [];
+  if (scopes.includes("repositories:intelligence"))
+    capabilities.push(text("制品情报", "Artifact intelligence"));
+  return capabilities.join(" + ");
 }
 
 function principalOptions(
@@ -159,11 +134,14 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const [principalChoices, setPrincipalChoices] = useState<PrincipalOption[]>(
     [],
   );
+  const [authorizationRoles, setAuthorizationRoles] = useState<
+    AuthorizationRole[]
+  >([]);
   const [principalChoicesError, setPrincipalChoicesError] =
     useState<unknown>(null);
   const [version, setVersion] = useState("");
   const editor = useDisclosure();
-  const [draft, setDraft] = useState<Grant[]>([]);
+  const [draft, setDraft] = useState<DraftGrant[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
 
@@ -190,17 +168,18 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [usersResult, apiKeysResult] = await Promise.all([
+      const [usersResult, apiKeysResult, rolesResult] = await Promise.all([
         listUsers(),
         listApiKeys(),
+        listAuthorizationRoles(),
       ]);
       if (cancelled) return;
-      if (usersResult.error || apiKeysResult.error) {
+      if (usersResult.error || apiKeysResult.error || rolesResult.error) {
         setPrincipalChoicesError(
           new Error(
             text(
-              "无法加载用户或 API Key 列表，可继续使用自定义身份。",
-              "Could not load users or API keys. You can still enter a custom identity.",
+              "无法加载用户、API Key 或自定义角色，可继续使用自定义身份和内置权限。",
+              "Could not load users, API keys, or custom roles. You can still use a custom identity and built-in permissions.",
             ),
           ),
         );
@@ -212,6 +191,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
           text,
         ),
       );
+      setAuthorizationRoles(rolesResult.data ?? []);
     })();
     return () => {
       cancelled = true;
@@ -244,10 +224,9 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       return;
     }
     const normalized = draft.map((grant) => ({
-      ...grant,
       principal:
         grant.principal === CUSTOM_PRINCIPAL ? "" : grant.principal.trim(),
-      scopes: scopesForLevel(grantLevel(grant.scopes)),
+      scopes: [...grant.scopes],
       resourcePrefix: grant.resourcePrefix?.trim() || undefined,
     }));
     const duplicate = new Set<string>();
@@ -311,20 +290,12 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("权限级别", "Permission"),
+      title: text("授予能力", "Granted capabilities"),
       key: "level",
-      width: 150,
+      width: 260,
       render: (_, grant) => (
-        <Badge
-          tone={
-            grantLevel(grant.scopes) === "admin"
-              ? "red"
-              : grantLevel(grant.scopes) === "write"
-                ? "amber"
-                : "green"
-          }
-        >
-          {grantLevelLabel(grantLevel(grant.scopes), text)}
+        <Badge tone={grantTone(grantLevel(grant.scopes))}>
+          {grantedCapabilitiesLabel(grant.scopes, text)}
         </Badge>
       ),
     },
@@ -402,7 +373,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             />
           )}
           <div>
-            <div className="grid grid-cols-[minmax(340px,1.45fr)_185px_minmax(260px,1.15fr)_190px_40px] items-center gap-3 px-2 pb-2 text-[11px] font-medium text-zinc-500">
+            <div className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-center gap-3 px-2 pb-2 text-[11px] font-medium text-zinc-500">
               <span>{text("主体", "Principal")}</span>
               <span>{text("权限级别", "Permission")}</span>
               <span>{text("资源范围", "Resource scope")}</span>
@@ -416,10 +387,14 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                   (choice) => choice.value === g.principal,
                 );
                 const level = grantLevel(g.scopes);
+                const selectedPermission = permissionSelection(
+                  g,
+                  authorizationRoles,
+                );
                 return (
                   <div
                     key={i}
-                    className="grid grid-cols-[minmax(340px,1.45fr)_185px_minmax(260px,1.15fr)_190px_40px] items-start gap-3 border-t border-zinc-800/70 px-2 py-3"
+                    className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-start gap-3 border-t border-zinc-800/70 px-2 py-3"
                   >
                     <div className="min-w-0">
                       <Select
@@ -435,13 +410,6 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                           "Select a user, API key, or external identity",
                         )}
                         options={[
-                          {
-                            value: "intelligence",
-                            label: text(
-                              "制品情报 · 写入安全元数据",
-                              "Artifact intelligence · write security metadata",
-                            ),
-                          },
                           {
                             label: text("用户", "Users"),
                             options: principalChoices
@@ -531,66 +499,106 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                     <div className="min-w-0">
                       <Select
                         className="w-full"
-                        value={level}
+                        value={selectedPermission}
                         options={[
+                          ...(selectedPermission === SNAPSHOT_PERMISSION
+                            ? [
+                                {
+                                  value: SNAPSHOT_PERMISSION,
+                                  label: text(
+                                    "已保存的权限快照",
+                                    "Saved permission snapshot",
+                                  ),
+                                },
+                              ]
+                            : []),
                           {
-                            value: "read",
-                            label: text(
-                              "读取 · 浏览 / 拉取",
-                              "Read · browse / pull",
-                            ),
+                            label: text("内置权限", "Built-in permissions"),
+                            options: [
+                              {
+                                value: `${BUILTIN_PERMISSION_PREFIX}read`,
+                                label: text(
+                                  "读取 · 浏览 / 拉取",
+                                  "Read · browse / pull",
+                                ),
+                              },
+                              {
+                                value: `${BUILTIN_PERMISSION_PREFIX}write`,
+                                label: text(
+                                  "写入 · 发布 / 编辑",
+                                  "Write · publish / edit",
+                                ),
+                              },
+                              {
+                                value: `${BUILTIN_PERMISSION_PREFIX}admin`,
+                                label: text(
+                                  "管理 · 授权 / 删除",
+                                  "Admin · grant / delete",
+                                ),
+                              },
+                              {
+                                value: `${BUILTIN_PERMISSION_PREFIX}intelligence`,
+                                label: text(
+                                  "制品情报 · 安全元数据",
+                                  "Artifact intelligence · security metadata",
+                                ),
+                              },
+                            ],
                           },
                           {
-                            value: "write",
-                            label: text(
-                              "写入 · 发布 / 编辑",
-                              "Write · publish / edit",
-                            ),
-                          },
-                          {
-                            value: "admin",
-                            label: text(
-                              "管理 · 授权 / 删除",
-                              "Admin · grant / delete",
-                            ),
+                            label: text("自定义角色", "Custom roles"),
+                            options: authorizationRoles.map((role) => ({
+                              value: `${CUSTOM_ROLE_PREFIX}${role.id}`,
+                              label: role.name,
+                            })),
                           },
                         ]}
-                        onChange={(value: GrantLevel) =>
+                        onChange={(value) => {
+                          if (value === SNAPSHOT_PERMISSION) return;
+                          const role = value.startsWith(CUSTOM_ROLE_PREFIX)
+                            ? authorizationRoles.find(
+                                (item) =>
+                                  item.id ===
+                                  value.slice(CUSTOM_ROLE_PREFIX.length),
+                              )
+                            : undefined;
+                          const nextScopes = role
+                            ? ([...role.scopes] as Grant["scopes"])
+                            : scopesForLevel(
+                                value.slice(
+                                  BUILTIN_PERMISSION_PREFIX.length,
+                                ) as GrantLevel,
+                              );
                           setDraft((d) =>
                             d.map((x, j) =>
                               j === i
-                                ? { ...x, scopes: scopesForLevel(value) }
+                                ? {
+                                    ...x,
+                                    scopes: nextScopes,
+                                    roleId: role?.id,
+                                  }
                                 : x,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       />
                     </div>
                     <div className="min-w-0">
-                      <Input
-                        className="font-mono"
-                        placeholder={text(
-                          "留空表示整个仓库",
-                          "Leave blank for the entire repository",
-                        )}
+                      <ResourcePrefixEditor
+                        format={repo.format}
                         value={g.resourcePrefix ?? ""}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setDraft((d) =>
                             d.map((x, j) =>
-                              j === i
-                                ? { ...x, resourcePrefix: event.target.value }
-                                : x,
+                              j === i ? { ...x, resourcePrefix: value } : x,
                             ),
                           )
                         }
                       />
-                      <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
-                        {resourcePrefixHint(repo.format, text)}
-                      </div>
                     </div>
                     <div className="flex min-h-10 items-center">
                       <Badge tone={grantTone(level)}>
-                        {grantCapabilitiesLabel(level, text)}
+                        {grantedCapabilitiesLabel(g.scopes, text)}
                       </Badge>
                     </div>
                     <Tooltip title={text("移除规则", "Remove rule")}>
