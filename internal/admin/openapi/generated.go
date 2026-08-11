@@ -157,6 +157,54 @@ func (e AuthenticationKind) Valid() bool {
 	}
 }
 
+// Defines values for AuthorizationRoleScopes.
+const (
+	AuthorizationRoleScopesRepositoriesAdmin        AuthorizationRoleScopes = "repositories:admin"
+	AuthorizationRoleScopesRepositoriesIntelligence AuthorizationRoleScopes = "repositories:intelligence"
+	AuthorizationRoleScopesRepositoriesRead         AuthorizationRoleScopes = "repositories:read"
+	AuthorizationRoleScopesRepositoriesWrite        AuthorizationRoleScopes = "repositories:write"
+)
+
+// Valid indicates whether the value is a known member of the AuthorizationRoleScopes enum.
+func (e AuthorizationRoleScopes) Valid() bool {
+	switch e {
+	case AuthorizationRoleScopesRepositoriesAdmin:
+		return true
+	case AuthorizationRoleScopesRepositoriesIntelligence:
+		return true
+	case AuthorizationRoleScopesRepositoriesRead:
+		return true
+	case AuthorizationRoleScopesRepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuthorizationRoleWritableScopes.
+const (
+	AuthorizationRoleWritableScopesRepositoriesAdmin        AuthorizationRoleWritableScopes = "repositories:admin"
+	AuthorizationRoleWritableScopesRepositoriesIntelligence AuthorizationRoleWritableScopes = "repositories:intelligence"
+	AuthorizationRoleWritableScopesRepositoriesRead         AuthorizationRoleWritableScopes = "repositories:read"
+	AuthorizationRoleWritableScopesRepositoriesWrite        AuthorizationRoleWritableScopes = "repositories:write"
+)
+
+// Valid indicates whether the value is a known member of the AuthorizationRoleWritableScopes enum.
+func (e AuthorizationRoleWritableScopes) Valid() bool {
+	switch e {
+	case AuthorizationRoleWritableScopesRepositoriesAdmin:
+		return true
+	case AuthorizationRoleWritableScopesRepositoriesIntelligence:
+		return true
+	case AuthorizationRoleWritableScopesRepositoriesRead:
+		return true
+	case AuthorizationRoleWritableScopesRepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuthorizationTemplateGrantScopes.
 const (
 	AuthorizationTemplateGrantScopesRepositoriesAdmin        AuthorizationTemplateGrantScopes = "repositories:admin"
@@ -1834,6 +1882,33 @@ type AuditRetentionPolicy struct {
 // AuthenticationKind defines model for AuthenticationKind.
 type AuthenticationKind string
 
+// AuthorizationRole defines model for AuthorizationRole.
+type AuthorizationRole struct {
+	CreatedAt   time.Time                 `json:"createdAt"`
+	Description *string                   `json:"description,omitempty"`
+	Id          openapi_types.UUID        `json:"id"`
+	Name        string                    `json:"name"`
+	Scopes      []AuthorizationRoleScopes `json:"scopes"`
+	UpdatedAt   time.Time                 `json:"updatedAt"`
+	Version     string                    `json:"version"`
+}
+
+// AuthorizationRoleScopes defines model for AuthorizationRole.Scopes.
+type AuthorizationRoleScopes string
+
+// AuthorizationRoleList defines model for AuthorizationRoleList.
+type AuthorizationRoleList = []AuthorizationRole
+
+// AuthorizationRoleWritable defines model for AuthorizationRoleWritable.
+type AuthorizationRoleWritable struct {
+	Description *string                           `json:"description,omitempty"`
+	Name        string                            `json:"name"`
+	Scopes      []AuthorizationRoleWritableScopes `json:"scopes"`
+}
+
+// AuthorizationRoleWritableScopes defines model for AuthorizationRoleWritable.Scopes.
+type AuthorizationRoleWritableScopes string
+
 // AuthorizationTemplate defines model for AuthorizationTemplate.
 type AuthorizationTemplate struct {
 	CreatedAt   time.Time                    `json:"createdAt"`
@@ -3121,6 +3196,9 @@ type UserSessionList struct {
 	Items []UserSession `json:"items"`
 }
 
+// AuthorizationRoleId defines model for AuthorizationRoleId.
+type AuthorizationRoleId = openapi_types.UUID
+
 // AuthorizationTemplateId defines model for AuthorizationTemplateId.
 type AuthorizationTemplateId = openapi_types.UUID
 
@@ -3276,6 +3354,11 @@ type ListAuditPageParams struct {
 
 // ReplaceOIDCSettingsParams defines parameters for ReplaceOIDCSettings.
 type ReplaceOIDCSettingsParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// UpdateAuthorizationRoleParams defines parameters for UpdateAuthorizationRole.
+type UpdateAuthorizationRoleParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
@@ -3561,6 +3644,12 @@ type ReplaceAuditRetentionPolicyJSONRequestBody = AuditRetentionPolicy
 // ReplaceOIDCSettingsJSONRequestBody defines body for ReplaceOIDCSettings for application/json ContentType.
 type ReplaceOIDCSettingsJSONRequestBody = OIDCSettingsUpdate
 
+// CreateAuthorizationRoleJSONRequestBody defines body for CreateAuthorizationRole for application/json ContentType.
+type CreateAuthorizationRoleJSONRequestBody = AuthorizationRoleWritable
+
+// UpdateAuthorizationRoleJSONRequestBody defines body for UpdateAuthorizationRole for application/json ContentType.
+type UpdateAuthorizationRoleJSONRequestBody = AuthorizationRoleWritable
+
 // CreateAuthorizationTemplateJSONRequestBody defines body for CreateAuthorizationTemplate for application/json ContentType.
 type CreateAuthorizationTemplateJSONRequestBody = AuthorizationTemplateWritable
 
@@ -3731,6 +3820,21 @@ type ServerInterface interface {
 
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(w http.ResponseWriter, r *http.Request)
+
+	// (GET /authorization-roles)
+	ListAuthorizationRoles(w http.ResponseWriter, r *http.Request)
+
+	// (POST /authorization-roles)
+	CreateAuthorizationRole(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /authorization-roles/{roleId})
+	DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId)
+
+	// (GET /authorization-roles/{roleId})
+	GetAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId)
+
+	// (PUT /authorization-roles/{roleId})
+	UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId, params UpdateAuthorizationRoleParams)
 
 	// (GET /authorization-templates)
 	ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request)
@@ -4658,6 +4762,140 @@ func (siw *ServerInterfaceWrapper) TestOIDCSettings(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestOIDCSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuthorizationRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListAuthorizationRoles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuthorizationRoles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAuthorizationRole operation middleware
+func (siw *ServerInterfaceWrapper) CreateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAuthorizationRole(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAuthorizationRole operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleId" -------------
+	var roleId AuthorizationRoleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleId", r.PathValue("roleId"), &roleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAuthorizationRole(w, r, roleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuthorizationRole operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleId" -------------
+	var roleId AuthorizationRoleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleId", r.PathValue("roleId"), &roleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthorizationRole(w, r, roleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAuthorizationRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "roleId" -------------
+	var roleId AuthorizationRoleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roleId", r.PathValue("roleId"), &roleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAuthorizationRoleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAuthorizationRole(w, r, roleId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8632,6 +8870,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authentication/oidc", wrapper.GetOIDCSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authentication/oidc", wrapper.ReplaceOIDCSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authentication/oidc:test", wrapper.TestOIDCSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-roles", wrapper.ListAuthorizationRoles)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-roles", wrapper.CreateAuthorizationRole)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/authorization-roles/{roleId}", wrapper.DeleteAuthorizationRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-roles/{roleId}", wrapper.GetAuthorizationRole)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authorization-roles/{roleId}", wrapper.UpdateAuthorizationRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-templates", wrapper.ListAuthorizationTemplates)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-templates", wrapper.CreateAuthorizationTemplate)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.DeleteAuthorizationTemplate)
@@ -8762,6 +9005,10 @@ type AuditCleanupJobListJSONResponse []AuditCleanupJob
 type AuditListJSONResponse AuditList
 
 type AuditRetentionPolicyJSONResponse AuditRetentionPolicy
+
+type AuthorizationRoleJSONResponse AuthorizationRole
+
+type AuthorizationRoleListJSONResponse AuthorizationRoleList
 
 type AuthorizationTemplateJSONResponse AuthorizationTemplate
 
@@ -9563,6 +9810,249 @@ func (response TestOIDCSettings503ApplicationProblemPlusJSONResponse) VisitTestO
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuthorizationRolesRequestObject struct {
+}
+
+type ListAuthorizationRolesResponseObject interface {
+	VisitListAuthorizationRolesResponse(w http.ResponseWriter) error
+}
+
+type ListAuthorizationRoles200JSONResponse struct {
+	AuthorizationRoleListJSONResponse
+}
+
+func (response ListAuthorizationRoles200JSONResponse) VisitListAuthorizationRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuthorizationRoles401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAuthorizationRoles401ApplicationProblemPlusJSONResponse) VisitListAuthorizationRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationRoleRequestObject struct {
+	Body *CreateAuthorizationRoleJSONRequestBody
+}
+
+type CreateAuthorizationRoleResponseObject interface {
+	VisitCreateAuthorizationRoleResponse(w http.ResponseWriter) error
+}
+
+type CreateAuthorizationRole201JSONResponse struct{ AuthorizationRoleJSONResponse }
+
+func (response CreateAuthorizationRole201JSONResponse) VisitCreateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationRole400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAuthorizationRole400ApplicationProblemPlusJSONResponse) VisitCreateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAuthorizationRole409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAuthorizationRole409ApplicationProblemPlusJSONResponse) VisitCreateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAuthorizationRoleRequestObject struct {
+	RoleId AuthorizationRoleId `json:"roleId"`
+}
+
+type DeleteAuthorizationRoleResponseObject interface {
+	VisitDeleteAuthorizationRoleResponse(w http.ResponseWriter) error
+}
+
+type DeleteAuthorizationRole204Response struct {
+}
+
+func (response DeleteAuthorizationRole204Response) VisitDeleteAuthorizationRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAuthorizationRole404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAuthorizationRole404ApplicationProblemPlusJSONResponse) VisitDeleteAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthorizationRoleRequestObject struct {
+	RoleId AuthorizationRoleId `json:"roleId"`
+}
+
+type GetAuthorizationRoleResponseObject interface {
+	VisitGetAuthorizationRoleResponse(w http.ResponseWriter) error
+}
+
+type GetAuthorizationRole200JSONResponse struct{ AuthorizationRoleJSONResponse }
+
+func (response GetAuthorizationRole200JSONResponse) VisitGetAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthorizationRole404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAuthorizationRole404ApplicationProblemPlusJSONResponse) VisitGetAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationRoleRequestObject struct {
+	RoleId AuthorizationRoleId `json:"roleId"`
+	Params UpdateAuthorizationRoleParams
+	Body   *UpdateAuthorizationRoleJSONRequestBody
+}
+
+type UpdateAuthorizationRoleResponseObject interface {
+	VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateAuthorizationRole200JSONResponse struct{ AuthorizationRoleJSONResponse }
+
+func (response UpdateAuthorizationRole200JSONResponse) VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationRole400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAuthorizationRole400ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationRole404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationRole404ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationRole409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationRole409ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAuthorizationRole412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAuthorizationRole412ApplicationProblemPlusJSONResponse) VisitUpdateAuthorizationRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -14401,6 +14891,21 @@ type StrictServerInterface interface {
 	// (POST /authentication/oidc:test)
 	TestOIDCSettings(ctx context.Context, request TestOIDCSettingsRequestObject) (TestOIDCSettingsResponseObject, error)
 
+	// (GET /authorization-roles)
+	ListAuthorizationRoles(ctx context.Context, request ListAuthorizationRolesRequestObject) (ListAuthorizationRolesResponseObject, error)
+
+	// (POST /authorization-roles)
+	CreateAuthorizationRole(ctx context.Context, request CreateAuthorizationRoleRequestObject) (CreateAuthorizationRoleResponseObject, error)
+
+	// (DELETE /authorization-roles/{roleId})
+	DeleteAuthorizationRole(ctx context.Context, request DeleteAuthorizationRoleRequestObject) (DeleteAuthorizationRoleResponseObject, error)
+
+	// (GET /authorization-roles/{roleId})
+	GetAuthorizationRole(ctx context.Context, request GetAuthorizationRoleRequestObject) (GetAuthorizationRoleResponseObject, error)
+
+	// (PUT /authorization-roles/{roleId})
+	UpdateAuthorizationRole(ctx context.Context, request UpdateAuthorizationRoleRequestObject) (UpdateAuthorizationRoleResponseObject, error)
+
 	// (GET /authorization-templates)
 	ListAuthorizationTemplates(ctx context.Context, request ListAuthorizationTemplatesRequestObject) (ListAuthorizationTemplatesResponseObject, error)
 
@@ -15126,6 +15631,147 @@ func (sh *strictHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestOIDCSettingsResponseObject); ok {
 		if err := validResponse.VisitTestOIDCSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAuthorizationRoles operation middleware
+func (sh *strictHandler) ListAuthorizationRoles(w http.ResponseWriter, r *http.Request) {
+	var request ListAuthorizationRolesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuthorizationRoles(ctx, request.(ListAuthorizationRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuthorizationRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuthorizationRolesResponseObject); ok {
+		if err := validResponse.VisitListAuthorizationRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAuthorizationRole operation middleware
+func (sh *strictHandler) CreateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+	var request CreateAuthorizationRoleRequestObject
+
+	var body CreateAuthorizationRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAuthorizationRole(ctx, request.(CreateAuthorizationRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAuthorizationRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAuthorizationRoleResponseObject); ok {
+		if err := validResponse.VisitCreateAuthorizationRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAuthorizationRole operation middleware
+func (sh *strictHandler) DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId) {
+	var request DeleteAuthorizationRoleRequestObject
+
+	request.RoleId = roleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAuthorizationRole(ctx, request.(DeleteAuthorizationRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAuthorizationRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAuthorizationRoleResponseObject); ok {
+		if err := validResponse.VisitDeleteAuthorizationRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuthorizationRole operation middleware
+func (sh *strictHandler) GetAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId) {
+	var request GetAuthorizationRoleRequestObject
+
+	request.RoleId = roleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuthorizationRole(ctx, request.(GetAuthorizationRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuthorizationRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuthorizationRoleResponseObject); ok {
+		if err := validResponse.VisitGetAuthorizationRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAuthorizationRole operation middleware
+func (sh *strictHandler) UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request, roleId AuthorizationRoleId, params UpdateAuthorizationRoleParams) {
+	var request UpdateAuthorizationRoleRequestObject
+
+	request.RoleId = roleId
+	request.Params = params
+
+	var body UpdateAuthorizationRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAuthorizationRole(ctx, request.(UpdateAuthorizationRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAuthorizationRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAuthorizationRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateAuthorizationRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -17,6 +17,7 @@ var (
 	ErrUpstreamChanged              = errors.New("upstream immutable artifact metadata changed")
 	ErrInvalidRuntimeNode           = errors.New("runtime node identity is invalid")
 	ErrTemplateNameExists           = errors.New("authorization template name already exists")
+	ErrAuthorizationRoleNameExists  = errors.New("authorization role name already exists")
 	ErrInvalidArtifactIntelligence  = errors.New("artifact intelligence is invalid")
 	ErrArtifactIntelligenceConflict = errors.New("target artifact intelligence conflicts with source")
 	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
@@ -93,6 +94,14 @@ type AuthorizationTemplateStore interface {
 	UpdateAuthorizationTemplate(context.Context, AuthorizationTemplate, string) (AuthorizationTemplate, error)
 	DeleteAuthorizationTemplate(context.Context, string) error
 	ApplyAuthorizationTemplate(context.Context, string, string, string) (RepositoryGrantSet, error)
+}
+
+type AuthorizationRoleStore interface {
+	CreateAuthorizationRole(context.Context, AuthorizationRole) (AuthorizationRole, error)
+	ListAuthorizationRoles(context.Context) ([]AuthorizationRole, error)
+	GetAuthorizationRole(context.Context, string) (AuthorizationRole, error)
+	UpdateAuthorizationRole(context.Context, AuthorizationRole, string) (AuthorizationRole, error)
+	DeleteAuthorizationRole(context.Context, string) error
 }
 
 type RepositoryRetentionPolicyStore interface {

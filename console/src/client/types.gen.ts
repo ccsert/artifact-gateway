@@ -1044,6 +1044,26 @@ export type ApplyAuthorizationTemplate = {
   repositoryId: string;
 };
 
+export type AuthorizationRoleWritable = {
+  name: string;
+  description?: string;
+  scopes: Array<
+    | "repositories:read"
+    | "repositories:write"
+    | "repositories:admin"
+    | "repositories:intelligence"
+  >;
+};
+
+export type AuthorizationRole = AuthorizationRoleWritable & {
+  id: string;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AuthorizationRoleList = Array<AuthorizationRole>;
+
 export type RepositoryCapacityList = Array<RepositoryCapacity>;
 
 export type LifecycleJobDetails = {
@@ -1473,6 +1493,8 @@ export type IdempotencyKey = string;
 export type IfMatch = string;
 
 export type AuthorizationTemplateId = string;
+
+export type AuthorizationRoleId = string;
 
 export type ScheduledTaskId = string;
 
@@ -2806,6 +2828,166 @@ export type ApplyAuthorizationTemplateResponses = {
 
 export type ApplyAuthorizationTemplateResponse =
   ApplyAuthorizationTemplateResponses[keyof ApplyAuthorizationTemplateResponses];
+
+export type ListAuthorizationRolesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/authorization-roles";
+};
+
+export type ListAuthorizationRolesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListAuthorizationRolesError =
+  ListAuthorizationRolesErrors[keyof ListAuthorizationRolesErrors];
+
+export type ListAuthorizationRolesResponses = {
+  /**
+   * Reusable repository permission roles
+   */
+  200: AuthorizationRoleList;
+};
+
+export type ListAuthorizationRolesResponse =
+  ListAuthorizationRolesResponses[keyof ListAuthorizationRolesResponses];
+
+export type CreateAuthorizationRoleData = {
+  body: AuthorizationRoleWritable;
+  path?: never;
+  query?: never;
+  url: "/authorization-roles";
+};
+
+export type CreateAuthorizationRoleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateAuthorizationRoleError =
+  CreateAuthorizationRoleErrors[keyof CreateAuthorizationRoleErrors];
+
+export type CreateAuthorizationRoleResponses = {
+  /**
+   * Reusable repository permission role
+   */
+  201: AuthorizationRole;
+};
+
+export type CreateAuthorizationRoleResponse =
+  CreateAuthorizationRoleResponses[keyof CreateAuthorizationRoleResponses];
+
+export type DeleteAuthorizationRoleData = {
+  body?: never;
+  path: {
+    roleId: string;
+  };
+  query?: never;
+  url: "/authorization-roles/{roleId}";
+};
+
+export type DeleteAuthorizationRoleErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type DeleteAuthorizationRoleError =
+  DeleteAuthorizationRoleErrors[keyof DeleteAuthorizationRoleErrors];
+
+export type DeleteAuthorizationRoleResponses = {
+  /**
+   * Authorization role deleted
+   */
+  204: void;
+};
+
+export type DeleteAuthorizationRoleResponse =
+  DeleteAuthorizationRoleResponses[keyof DeleteAuthorizationRoleResponses];
+
+export type GetAuthorizationRoleData = {
+  body?: never;
+  path: {
+    roleId: string;
+  };
+  query?: never;
+  url: "/authorization-roles/{roleId}";
+};
+
+export type GetAuthorizationRoleErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetAuthorizationRoleError =
+  GetAuthorizationRoleErrors[keyof GetAuthorizationRoleErrors];
+
+export type GetAuthorizationRoleResponses = {
+  /**
+   * Reusable repository permission role
+   */
+  200: AuthorizationRole;
+};
+
+export type GetAuthorizationRoleResponse =
+  GetAuthorizationRoleResponses[keyof GetAuthorizationRoleResponses];
+
+export type UpdateAuthorizationRoleData = {
+  body: AuthorizationRoleWritable;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    roleId: string;
+  };
+  query?: never;
+  url: "/authorization-roles/{roleId}";
+};
+
+export type UpdateAuthorizationRoleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type UpdateAuthorizationRoleError =
+  UpdateAuthorizationRoleErrors[keyof UpdateAuthorizationRoleErrors];
+
+export type UpdateAuthorizationRoleResponses = {
+  /**
+   * Reusable repository permission role
+   */
+  200: AuthorizationRole;
+};
+
+export type UpdateAuthorizationRoleResponse =
+  UpdateAuthorizationRoleResponses[keyof UpdateAuthorizationRoleResponses];
 
 export type ListRepositoryCapacitiesData = {
   body?: never;

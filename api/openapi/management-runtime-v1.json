@@ -1146,6 +1146,107 @@
         }
       }
     },
+    "/authorization-roles": {
+      "get": {
+        "operationId": "listAuthorizationRoles",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationRoleList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAuthorizationRole",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRoleWritable"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/AuthorizationRole"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/authorization-roles/{roleId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AuthorizationRoleId"
+        }
+      ],
+      "get": {
+        "operationId": "getAuthorizationRole",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationRole"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateAuthorizationRole",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRoleWritable"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthorizationRole"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAuthorizationRole",
+        "responses": {
+          "204": {
+            "description": "Authorization role deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repository-capacities": {
       "get": {
         "operationId": "listRepositoryCapacities",
@@ -6796,6 +6897,78 @@
           }
         }
       },
+      "AuthorizationRoleWritable": {
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "repositories:read",
+                "repositories:write",
+                "repositories:admin",
+                "repositories:intelligence"
+              ]
+            }
+          }
+        }
+      },
+      "AuthorizationRole": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AuthorizationRoleWritable"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "version",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "AuthorizationRoleList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AuthorizationRole"
+        }
+      },
       "RepositoryCapacityList": {
         "type": "array",
         "items": {
@@ -7863,6 +8036,15 @@
           "format": "uuid"
         }
       },
+      "AuthorizationRoleId": {
+        "name": "roleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "ScheduledTaskId": {
         "name": "taskId",
         "in": "path",
@@ -8575,6 +8757,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuthorizationTemplate"
+            }
+          }
+        }
+      },
+      "AuthorizationRoleList": {
+        "description": "Reusable repository permission roles",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthorizationRoleList"
+            }
+          }
+        }
+      },
+      "AuthorizationRole": {
+        "description": "Reusable repository permission role",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthorizationRole"
             }
           }
         }

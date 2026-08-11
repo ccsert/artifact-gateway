@@ -119,6 +119,67 @@ authorization_templates_templateId_apply:
         "$ref": "../components/responses.yaml#/Problem"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
+authorization_roles:
+  get:
+    operationId: listAuthorizationRoles
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationRoleList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createAuthorizationRole
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/AuthorizationRoleWritable"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/AuthorizationRole"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+authorization_roles_roleId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/AuthorizationRoleId"
+  get:
+    operationId: getAuthorizationRole
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationRole"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: updateAuthorizationRole
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/AuthorizationRoleWritable"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/AuthorizationRole"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+  delete:
+    operationId: deleteAuthorizationRole
+    responses:
+      '204':
+        description: Authorization role deleted
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

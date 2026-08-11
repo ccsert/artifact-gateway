@@ -228,6 +228,7 @@ type generatedRepositoryAPIAdapter struct {
 	groups              repository.HostedGroupStore
 	grants              repository.RepositoryGrantStore
 	templates           repository.AuthorizationTemplateStore
+	authorizationRoles  repository.AuthorizationRoleStore
 	retentionPolicies   repository.RepositoryRetentionPolicyStore
 	securityPolicies    repository.RepositorySecurityPolicyStore
 	capacities          repository.RepositoryCapacityStore
@@ -1620,6 +1621,44 @@ func authorizationTemplateResponse(template repository.AuthorizationTemplate) ad
 	}
 }
 
+func authorizationRoleResponse(role repository.AuthorizationRole) adminopenapi.AuthorizationRole {
+	scopes := make([]adminopenapi.AuthorizationRoleScopes, 0, len(role.Scopes))
+	for _, scope := range role.Scopes {
+		scopes = append(scopes, adminopenapi.AuthorizationRoleScopes(scope))
+	}
+	description := role.Description
+	return adminopenapi.AuthorizationRole{
+		Id: templateID(role.ID), Name: role.Name, Description: &description,
+		Scopes: scopes, Version: role.Version, CreatedAt: role.CreatedAt, UpdatedAt: role.UpdatedAt,
+	}
+}
+
+func authorizationRoleScopes(body *adminopenapi.AuthorizationRoleWritable) []string {
+	if body == nil {
+		return nil
+	}
+	scopes := make([]string, 0, len(body.Scopes))
+	for _, scope := range body.Scopes {
+		scopes = append(scopes, string(scope))
+	}
+	return scopes
+}
+
+func validAuthorizationScopes(scopes []string) bool {
+	if len(scopes) == 0 || len(scopes) > 4 {
+		return false
+	}
+	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true, "repositories:intelligence": true}
+	seen := map[string]bool{}
+	for _, scope := range scopes {
+		if !validScopes[scope] || seen[scope] {
+			return false
+		}
+		seen[scope] = true
+	}
+	return true
+}
+
 func templateID(id string) uuid.UUID {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -1651,7 +1690,6 @@ func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool 
 	if len(grants) > 500 {
 		return false
 	}
-	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true, "repositories:intelligence": true}
 	keys := map[string]bool{}
 	for _, grant := range grants {
 		if strings.TrimSpace(grant.Principal) == "" || len(grant.Principal) > 512 || strings.ContainsAny(grant.Principal, "\x00\r\n") || len(grant.Scopes) == 0 || len(grant.ResourcePrefix) > 255 || strings.ContainsAny(grant.ResourcePrefix, "\x00\r\n") {
@@ -1662,15 +1700,133 @@ func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool 
 			return false
 		}
 		keys[key] = true
-		seen := map[string]bool{}
-		for _, scope := range grant.Scopes {
-			if !validScopes[scope] || seen[scope] {
-				return false
-			}
-			seen[scope] = true
+		if !validAuthorizationScopes(grant.Scopes) {
+			return false
 		}
 	}
 	return true
+}
+
+func (h generatedRepositoryAPIAdapter) ListAuthorizationRoles(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	items, err := h.authorizationRoles.ListAuthorizationRoles(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list authorization roles failed")
+		return
+	}
+	response := make(adminopenapi.AuthorizationRoleList, 0, len(items))
+	for _, item := range items {
+		response = append(response, authorizationRoleResponse(item))
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
+}
+
+func (h generatedRepositoryAPIAdapter) CreateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var body adminopenapi.AuthorizationRoleWritable
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid authorization role body")
+		return
+	}
+	scopes := authorizationRoleScopes(&body)
+	if strings.TrimSpace(body.Name) == "" || len(strings.TrimSpace(body.Name)) > 128 || (body.Description != nil && len(*body.Description) > 1000) || !validAuthorizationScopes(scopes) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role name and scopes must be valid")
+		return
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+	role, err := h.authorizationRoles.CreateAuthorizationRole(r.Context(), repository.AuthorizationRole{Name: body.Name, Description: description, Scopes: scopes})
+	if errors.Is(err, repository.ErrAuthorizationRoleNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "name_exists", "authorization role name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create authorization role failed")
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusCreated, authorizationRoleResponse(role))
+}
+
+func (h generatedRepositoryAPIAdapter) GetAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	role, err := h.authorizationRoles.GetAuthorizationRole(r.Context(), roleID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization role not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get authorization role failed")
+		return
+	}
+	w.Header().Set("ETag", role.Version)
+	writeNativeMavenJSON(w, http.StatusOK, authorizationRoleResponse(role))
+}
+
+func (h generatedRepositoryAPIAdapter) UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId, params adminopenapi.UpdateAuthorizationRoleParams) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	var body adminopenapi.AuthorizationRoleWritable
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid authorization role body")
+		return
+	}
+	scopes := authorizationRoleScopes(&body)
+	if strings.TrimSpace(body.Name) == "" || len(strings.TrimSpace(body.Name)) > 128 || (body.Description != nil && len(*body.Description) > 1000) || !validAuthorizationScopes(scopes) {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role name and scopes must be valid")
+		return
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+	role, err := h.authorizationRoles.UpdateAuthorizationRole(r.Context(), repository.AuthorizationRole{ID: roleID.String(), Name: body.Name, Description: description, Scopes: scopes}, string(params.IfMatch))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization role not found")
+		return
+	}
+	if errors.Is(err, repository.ErrVersionConflict) {
+		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current role version")
+		return
+	}
+	if errors.Is(err, repository.ErrAuthorizationRoleNameExists) {
+		writeHostedProblem(w, http.StatusConflict, "name_exists", "authorization role name already exists")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update authorization role failed")
+		return
+	}
+	w.Header().Set("ETag", role.Version)
+	writeNativeMavenJSON(w, http.StatusOK, authorizationRoleResponse(role))
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
+	if _, ok := h.authorize(w, r); !ok {
+		return
+	}
+	err := h.authorizationRoles.DeleteAuthorizationRole(r.Context(), roleID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization role not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete authorization role failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h generatedRepositoryAPIAdapter) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {

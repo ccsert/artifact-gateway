@@ -65,6 +65,10 @@ paths:
     "$ref": "./management/repositories.yaml#/authorization_templates_templateId"
   "/authorization-templates/{templateId}/apply":
     "$ref": "./management/repositories.yaml#/authorization_templates_templateId_apply"
+  "/authorization-roles":
+    "$ref": "./management/repositories.yaml#/authorization_roles"
+  "/authorization-roles/{roleId}":
+    "$ref": "./management/repositories.yaml#/authorization_roles_roleId"
   "/repository-capacities":
     "$ref": "./management/capacity.yaml#/repository_capacities"
   "/lifecycle-jobs":

@@ -205,6 +205,19 @@ type AuthorizationTemplate struct {
 	UpdatedAt   time.Time
 }
 
+// AuthorizationRole is a reusable repository permission set. Grants and
+// templates copy its scopes when edited so later role changes never mutate
+// already-persisted authorization decisions.
+type AuthorizationRole struct {
+	ID          string
+	Name        string
+	Description string
+	Scopes      []string
+	Version     string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type RepositoryRetentionPolicy struct {
 	Version            string   `json:"version"`
 	Enabled            bool     `json:"enabled"`

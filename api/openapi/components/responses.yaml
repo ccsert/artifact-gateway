@@ -191,6 +191,18 @@ AuthorizationTemplateList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/AuthorizationTemplateList"
+AuthorizationRole:
+  description: Reusable repository permission role
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/AuthorizationRole"
+AuthorizationRoleList:
+  description: Reusable repository permission roles
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/AuthorizationRoleList"
 ArtifactIntelligence:
   description: Security, build provenance, license, and vulnerability metadata for one immutable artifact identity
   headers:
