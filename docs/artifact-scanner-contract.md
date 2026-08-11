@@ -115,9 +115,11 @@ raise the byte limits within hard safety bounds.
 
 ## HTTP adapter
 
-The adapter sends `POST` with `multipart/form-data` and
-`X-Artifact-Scanner-Schema: v1`. The first part is named `metadata`, uses
-`application/json`, and has this shape:
+The adapter sends `POST` with `multipart/form-data`,
+`X-Artifact-Scanner-Schema: v1`, and
+`X-Artifact-Scanner-Accept-Schema: v2, v1`. The request body remains `v1`
+because detailed findings only extend the response. The first part is named
+`metadata`, uses `application/json`, and has this shape:
 
 ```json
 {
@@ -141,11 +143,12 @@ The adapter sends `POST` with `multipart/form-data` and
 The following parts use the names declared by `assets[].part`. The adapter
 streams them without buffering the complete artifact in process memory.
 
-The scanner returns `application/json`:
+The scanner returns `application/json`; this example uses the negotiated `v2`
+report:
 
 ```json
 {
-  "schemaVersion": "v1",
+  "schemaVersion": "v2",
   "sboms": [
     {
       "mediaType": "application/spdx+json",
@@ -189,8 +192,14 @@ collections, non-JSON responses, and trailing JSON values are rejected. The
 Gateway records the configured adapter name and its own completion time rather
 than trusting scanner-supplied identity or timestamps.
 
-`findings` is optional so existing summary-only `v1` adapters remain valid. If
-it is present, it is the complete set represented by the severity counters:
+An upgraded scanner returns `v2` only when the accept header advertises it. A
+scanner receiving a request without that header must keep returning a strict
+summary-only `v1` document, so an older Gateway does not reject `findings` as
+an unknown field during a rolling upgrade. The Gateway accepts either `v1` or
+`v2`; a `v1` response containing `findings` is invalid.
+
+`findings` is optional in `v2`. If it is present, it is the complete set
+represented by the severity counters:
 every finding must use `critical`, `high`, `medium`, `low`, or `unknown`, and
 the counters must match exactly. Duplicate ID/source/component/version/location
 identities are rejected. A report contains at most 1,000 findings and remains

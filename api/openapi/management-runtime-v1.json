@@ -7838,6 +7838,7 @@
       },
       "ArtifactVulnerabilityFinding": {
         "type": "object",
+        "description": "One affected component and remediation hint. Single-line identity fields cannot contain NUL, CR, or LF. Optional text may be omitted or empty.",
         "required": [
           "id",
           "severity",
@@ -7848,11 +7849,13 @@
           "id": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*$"
           },
           "source": {
             "type": "string",
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           },
           "severity": {
             "type": "string",
@@ -7867,32 +7870,41 @@
           "component": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 512
+            "maxLength": 512,
+            "pattern": "^[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*$"
           },
           "version": {
             "type": "string",
-            "maxLength": 256
+            "maxLength": 256,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           },
           "fixedVersion": {
             "type": "string",
-            "maxLength": 256
+            "maxLength": 256,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           },
           "location": {
             "type": "string",
-            "maxLength": 2048
+            "maxLength": 2048,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           },
           "title": {
             "type": "string",
-            "maxLength": 512
+            "maxLength": 512,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           },
           "description": {
             "type": "string",
-            "maxLength": 4096
+            "maxLength": 4096,
+            "pattern": "^(?:|[^\\x00]*\\S[^\\x00]*)$",
+            "description": "Optional multiline text; a non-empty value must contain at least one non-whitespace character."
           },
           "url": {
             "type": "string",
             "format": "uri",
-            "maxLength": 2048
+            "maxLength": 2048,
+            "pattern": "^https?://",
+            "description": "Optional HTTP(S) advisory URL without user information or credentials."
           },
           "cvssScore": {
             "type": "number",
@@ -7902,12 +7914,14 @@
           },
           "cvssVector": {
             "type": "string",
-            "maxLength": 256
+            "maxLength": 256,
+            "pattern": "^(?:|[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*)$"
           }
         }
       },
       "ArtifactVulnerabilitySummary": {
         "type": "object",
+        "description": "Bounded scanner result. affected requires at least one non-zero severity count; clean and not_scanned require zero counts. When findings is present, it is the complete set and its severity totals must exactly match the five counters. Duplicate id/source/component/version/location identities are not allowed.",
         "required": [
           "scanner",
           "status",
@@ -7922,7 +7936,8 @@
           "scanner": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 256,
+            "pattern": "^[^\\r\\n\\x00]*\\S[^\\r\\n\\x00]*$"
           },
           "scannedAt": {
             "type": "string",
@@ -7964,6 +7979,7 @@
           },
           "findings": {
             "type": "array",
+            "description": "Optional complete per-vulnerability evidence; omission keeps summary-only writers compatible.",
             "maxItems": 1000,
             "items": {
               "$ref": "#/components/schemas/ArtifactVulnerabilityFinding"

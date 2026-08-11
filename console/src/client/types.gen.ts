@@ -1311,6 +1311,9 @@ export type ArtifactLicense = {
   source?: string;
 };
 
+/**
+ * One affected component and remediation hint. Single-line identity fields cannot contain NUL, CR, or LF. Optional text may be omitted or empty.
+ */
 export type ArtifactVulnerabilityFinding = {
   id: string;
   source?: string;
@@ -1320,12 +1323,21 @@ export type ArtifactVulnerabilityFinding = {
   fixedVersion?: string;
   location?: string;
   title?: string;
+  /**
+   * Optional multiline text; a non-empty value must contain at least one non-whitespace character.
+   */
   description?: string;
+  /**
+   * Optional HTTP(S) advisory URL without user information or credentials.
+   */
   url?: string;
   cvssScore?: number;
   cvssVector?: string;
 };
 
+/**
+ * Bounded scanner result. affected requires at least one non-zero severity count; clean and not_scanned require zero counts. When findings is present, it is the complete set and its severity totals must exactly match the five counters. Duplicate id/source/component/version/location identities are not allowed.
+ */
 export type ArtifactVulnerabilitySummary = {
   scanner: string;
   scannedAt?: string;
@@ -1335,6 +1347,9 @@ export type ArtifactVulnerabilitySummary = {
   medium: number;
   low: number;
   unknown: number;
+  /**
+   * Optional complete per-vulnerability evidence; omission keeps summary-only writers compatible.
+   */
   findings?: Array<ArtifactVulnerabilityFinding>;
 };
 

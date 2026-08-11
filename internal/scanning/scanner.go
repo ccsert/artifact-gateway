@@ -11,7 +11,16 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
-const SchemaVersion = "v1"
+const (
+	// SchemaVersion is the stable request and health-document version. The
+	// logical artifact input did not change when detailed findings were added.
+	SchemaVersion = "v1"
+	// ReportSchemaVersion adds bounded per-vulnerability findings. Scanners
+	// select it only when the Gateway advertises support through the accept
+	// header, keeping upgraded scanners compatible with older Gateways.
+	ReportSchemaVersion       = "v2"
+	AcceptedReportSchemaValue = ReportSchemaVersion + ", " + SchemaVersion
+)
 
 type HealthStatus string
 

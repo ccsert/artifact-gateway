@@ -1781,18 +1781,20 @@ type ArtifactState string
 
 // ArtifactIntelligence defines model for ArtifactIntelligence.
 type ArtifactIntelligence struct {
-	Coordinate    string                        `json:"coordinate"`
-	CreatedAt     time.Time                     `json:"createdAt"`
-	Digest        string                        `json:"digest"`
-	Format        Format                        `json:"format"`
-	Licenses      []ArtifactLicense             `json:"licenses"`
-	Provenance    *ArtifactProvenance           `json:"provenance,omitempty"`
-	RepositoryId  openapi_types.UUID            `json:"repositoryId"`
-	Sboms         []ArtifactSBOM                `json:"sboms"`
-	Signatures    []ArtifactSignature           `json:"signatures"`
-	UpdatedAt     time.Time                     `json:"updatedAt"`
-	UpdatedBy     string                        `json:"updatedBy"`
-	Version       string                        `json:"version"`
+	Coordinate   string              `json:"coordinate"`
+	CreatedAt    time.Time           `json:"createdAt"`
+	Digest       string              `json:"digest"`
+	Format       Format              `json:"format"`
+	Licenses     []ArtifactLicense   `json:"licenses"`
+	Provenance   *ArtifactProvenance `json:"provenance,omitempty"`
+	RepositoryId openapi_types.UUID  `json:"repositoryId"`
+	Sboms        []ArtifactSBOM      `json:"sboms"`
+	Signatures   []ArtifactSignature `json:"signatures"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
+	UpdatedBy    string              `json:"updatedBy"`
+	Version      string              `json:"version"`
+
+	// Vulnerability Bounded scanner result. affected requires at least one non-zero severity count; clean and not_scanned require zero counts. When findings is present, it is the complete set and its severity totals must exactly match the five counters. Duplicate id/source/component/version/location identities are not allowed.
 	Vulnerability *ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
 }
 
@@ -1814,10 +1816,12 @@ type ArtifactIntelligenceSummaryVulnerabilityStatus string
 
 // ArtifactIntelligenceWritable defines model for ArtifactIntelligenceWritable.
 type ArtifactIntelligenceWritable struct {
-	Licenses      []ArtifactLicense             `json:"licenses"`
-	Provenance    *ArtifactProvenance           `json:"provenance,omitempty"`
-	Sboms         []ArtifactSBOM                `json:"sboms"`
-	Signatures    []ArtifactSignature           `json:"signatures"`
+	Licenses   []ArtifactLicense   `json:"licenses"`
+	Provenance *ArtifactProvenance `json:"provenance,omitempty"`
+	Sboms      []ArtifactSBOM      `json:"sboms"`
+	Signatures []ArtifactSignature `json:"signatures"`
+
+	// Vulnerability Bounded scanner result. affected requires at least one non-zero severity count; clean and not_scanned require zero counts. When findings is present, it is the complete set and its severity totals must exactly match the five counters. Duplicate id/source/component/version/location identities are not allowed.
 	Vulnerability *ArtifactVulnerabilitySummary `json:"vulnerability,omitempty"`
 }
 
@@ -1936,11 +1940,13 @@ type ArtifactTombstonePage struct {
 	NextPageToken *string             `json:"nextPageToken,omitempty"`
 }
 
-// ArtifactVulnerabilityFinding defines model for ArtifactVulnerabilityFinding.
+// ArtifactVulnerabilityFinding One affected component and remediation hint. Single-line identity fields cannot contain NUL, CR, or LF. Optional text may be omitted or empty.
 type ArtifactVulnerabilityFinding struct {
-	Component    string                               `json:"component"`
-	CvssScore    *float64                             `json:"cvssScore,omitempty"`
-	CvssVector   *string                              `json:"cvssVector,omitempty"`
+	Component  string   `json:"component"`
+	CvssScore  *float64 `json:"cvssScore,omitempty"`
+	CvssVector *string  `json:"cvssVector,omitempty"`
+
+	// Description Optional multiline text; a non-empty value must contain at least one non-whitespace character.
 	Description  *string                              `json:"description,omitempty"`
 	FixedVersion *string                              `json:"fixedVersion,omitempty"`
 	Id           string                               `json:"id"`
@@ -1948,16 +1954,20 @@ type ArtifactVulnerabilityFinding struct {
 	Severity     ArtifactVulnerabilityFindingSeverity `json:"severity"`
 	Source       *string                              `json:"source,omitempty"`
 	Title        *string                              `json:"title,omitempty"`
-	Url          *string                              `json:"url,omitempty"`
-	Version      *string                              `json:"version,omitempty"`
+
+	// Url Optional HTTP(S) advisory URL without user information or credentials.
+	Url     *string `json:"url,omitempty"`
+	Version *string `json:"version,omitempty"`
 }
 
 // ArtifactVulnerabilityFindingSeverity defines model for ArtifactVulnerabilityFinding.Severity.
 type ArtifactVulnerabilityFindingSeverity string
 
-// ArtifactVulnerabilitySummary defines model for ArtifactVulnerabilitySummary.
+// ArtifactVulnerabilitySummary Bounded scanner result. affected requires at least one non-zero severity count; clean and not_scanned require zero counts. When findings is present, it is the complete set and its severity totals must exactly match the five counters. Duplicate id/source/component/version/location identities are not allowed.
 type ArtifactVulnerabilitySummary struct {
-	Critical  int                                `json:"critical"`
+	Critical int `json:"critical"`
+
+	// Findings Optional complete per-vulnerability evidence; omission keeps summary-only writers compatible.
 	Findings  *[]ArtifactVulnerabilityFinding    `json:"findings,omitempty"`
 	High      int                                `json:"high"`
 	Low       int                                `json:"low"`

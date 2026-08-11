@@ -165,6 +165,7 @@ func (s *HTTPScanner) Scan(ctx context.Context, artifact Artifact) (Report, erro
 	request.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-Artifact-Scanner-Schema", SchemaVersion)
+	request.Header.Set("X-Artifact-Scanner-Accept-Schema", AcceptedReportSchemaValue)
 	if s.token != "" {
 		request.Header.Set("Authorization", "Bearer "+s.token)
 	}
@@ -236,13 +237,13 @@ type wireLicense struct {
 }
 
 type wireVulnerability struct {
-	Status   string                     `json:"status"`
-	Critical int                        `json:"critical"`
-	High     int                        `json:"high"`
-	Medium   int                        `json:"medium"`
-	Low      int                        `json:"low"`
-	Unknown  int                        `json:"unknown"`
-	Findings []wireVulnerabilityFinding `json:"findings,omitempty"`
+	Status   string          `json:"status"`
+	Critical int             `json:"critical"`
+	High     int             `json:"high"`
+	Medium   int             `json:"medium"`
+	Low      int             `json:"low"`
+	Unknown  int             `json:"unknown"`
+	Findings json.RawMessage `json:"findings,omitempty"`
 }
 
 type wireVulnerabilityFinding struct {
@@ -305,11 +306,28 @@ func (s *HTTPScanner) decodeReport(body []byte) (Report, error) {
 	var response wireResponse
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&response); err != nil || response.SchemaVersion != SchemaVersion || response.SBOMs == nil || response.Licenses == nil {
+	if err := decoder.Decode(&response); err != nil || response.SBOMs == nil || response.Licenses == nil {
+		return Report{}, ErrInvalidResponse
+	}
+	switch response.SchemaVersion {
+	case SchemaVersion:
+		if response.Vulnerability != nil && response.Vulnerability.Findings != nil {
+			return Report{}, ErrInvalidResponse
+		}
+	case ReportSchemaVersion:
+	default:
 		return Report{}, ErrInvalidResponse
 	}
 	if err := ensureJSONEOF(decoder); err != nil {
 		return Report{}, ErrInvalidResponse
+	}
+	var findings []wireVulnerabilityFinding
+	if response.Vulnerability != nil && response.Vulnerability.Findings != nil {
+		var err error
+		findings, err = decodeWireVulnerabilityFindings(response.Vulnerability.Findings)
+		if err != nil {
+			return Report{}, ErrInvalidResponse
+		}
 	}
 	report := Report{
 		SBOMs:    make([]repository.ArtifactSBOM, 0, len(response.SBOMs)),
@@ -333,10 +351,10 @@ func (s *HTTPScanner) decodeReport(body []byte) (Report, error) {
 			Unknown: response.Vulnerability.Unknown,
 		}
 		if response.Vulnerability.Findings != nil {
-			report.Vulnerability.Findings = make([]repository.ArtifactVulnerabilityFinding, 0, len(response.Vulnerability.Findings))
-			for _, value := range response.Vulnerability.Findings {
+			report.Vulnerability.Findings = make([]repository.ArtifactVulnerabilityFinding, 0, len(findings))
+			for _, value := range findings {
 				report.Vulnerability.Findings = append(report.Vulnerability.Findings, repository.ArtifactVulnerabilityFinding{
-					ID: value.ID, Source: value.Source, Severity: value.Severity, Component: value.Component,
+					ID: value.ID, Source: value.Source, Severity: repository.ArtifactVulnerabilitySeverity(value.Severity), Component: value.Component,
 					Version: value.Version, FixedVersion: value.FixedVersion, Location: value.Location,
 					Title: value.Title, Description: value.Description, URL: value.URL,
 					CVSSScore: value.CVSSScore, CVSSVector: value.CVSSVector,
@@ -348,6 +366,19 @@ func (s *HTTPScanner) decodeReport(body []byte) (Report, error) {
 		return Report{}, ErrInvalidResponse
 	}
 	return report, nil
+}
+
+func decodeWireVulnerabilityFindings(raw json.RawMessage) ([]wireVulnerabilityFinding, error) {
+	var findings []wireVulnerabilityFinding
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&findings); err != nil || findings == nil {
+		return nil, ErrInvalidResponse
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return nil, ErrInvalidResponse
+	}
+	return findings, nil
 }
 
 func ensureJSONEOF(decoder *json.Decoder) error {

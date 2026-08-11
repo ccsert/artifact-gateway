@@ -558,18 +558,18 @@ type ArtifactVulnerabilitySummary struct {
 // the scanner. Summary counts remain available for bounded list projections;
 // findings carry the evidence required to investigate and remediate a result.
 type ArtifactVulnerabilityFinding struct {
-	ID           string   `json:"id"`
-	Source       string   `json:"source,omitempty"`
-	Severity     string   `json:"severity"`
-	Component    string   `json:"component"`
-	Version      string   `json:"version,omitempty"`
-	FixedVersion string   `json:"fixedVersion,omitempty"`
-	Location     string   `json:"location,omitempty"`
-	Title        string   `json:"title,omitempty"`
-	Description  string   `json:"description,omitempty"`
-	URL          string   `json:"url,omitempty"`
-	CVSSScore    *float64 `json:"cvssScore,omitempty"`
-	CVSSVector   string   `json:"cvssVector,omitempty"`
+	ID           string                        `json:"id"`
+	Source       string                        `json:"source,omitempty"`
+	Severity     ArtifactVulnerabilitySeverity `json:"severity"`
+	Component    string                        `json:"component"`
+	Version      string                        `json:"version,omitempty"`
+	FixedVersion string                        `json:"fixedVersion,omitempty"`
+	Location     string                        `json:"location,omitempty"`
+	Title        string                        `json:"title,omitempty"`
+	Description  string                        `json:"description,omitempty"`
+	URL          string                        `json:"url,omitempty"`
+	CVSSScore    *float64                      `json:"cvssScore,omitempty"`
+	CVSSVector   string                        `json:"cvssVector,omitempty"`
 }
 
 type LifecycleJobKind string

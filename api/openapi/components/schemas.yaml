@@ -1930,10 +1930,16 @@ ArtifactIntelligenceSummary:
     unknown: {type: integer, minimum: 0}
 ArtifactVulnerabilitySummary:
   type: object
+  description: >-
+    Bounded scanner result. affected requires at least one non-zero severity
+    count; clean and not_scanned require zero counts. When findings is present,
+    it is the complete set and its severity totals must exactly match the five
+    counters. Duplicate id/source/component/version/location identities are not
+    allowed.
   required: [scanner, status, critical, high, medium, low, unknown]
   additionalProperties: false
   properties:
-    scanner: {type: string, minLength: 1, maxLength: 256}
+    scanner: {type: string, minLength: 1, maxLength: 256, pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'}
     scannedAt: {type: string, format: date-time}
     status: {type: string, enum: [not_scanned, clean, affected, error]}
     critical: {type: integer, minimum: 0, maximum: 1000000000}
@@ -1943,27 +1949,40 @@ ArtifactVulnerabilitySummary:
     unknown: {type: integer, minimum: 0, maximum: 1000000000}
     findings:
       type: array
+      description: Optional complete per-vulnerability evidence; omission keeps summary-only writers compatible.
       maxItems: 1000
       items: {"$ref": "#/ArtifactVulnerabilityFinding"}
 ArtifactVulnerabilityFinding:
   type: object
+  description: >-
+    One affected component and remediation hint. Single-line identity fields
+    cannot contain NUL, CR, or LF. Optional text may be omitted or empty.
   required: [id, severity, component]
   additionalProperties: false
   properties:
-    id: {type: string, minLength: 1, maxLength: 128}
-    source: {type: string, maxLength: 128}
+    id: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'}
+    source: {type: string, maxLength: 128, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
     severity:
       type: string
       enum: [critical, high, medium, low, unknown]
-    component: {type: string, minLength: 1, maxLength: 512}
-    version: {type: string, maxLength: 256}
-    fixedVersion: {type: string, maxLength: 256}
-    location: {type: string, maxLength: 2048}
-    title: {type: string, maxLength: 512}
-    description: {type: string, maxLength: 4096}
-    url: {type: string, format: uri, maxLength: 2048}
+    component: {type: string, minLength: 1, maxLength: 512, pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'}
+    version: {type: string, maxLength: 256, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
+    fixedVersion: {type: string, maxLength: 256, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
+    location: {type: string, maxLength: 2048, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
+    title: {type: string, maxLength: 512, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
+    description:
+      type: string
+      maxLength: 4096
+      pattern: '^(?:|[^\x00]*\S[^\x00]*)$'
+      description: Optional multiline text; a non-empty value must contain at least one non-whitespace character.
+    url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: '^https?://'
+      description: Optional HTTP(S) advisory URL without user information or credentials.
     cvssScore: {type: number, format: double, minimum: 0, maximum: 10}
-    cvssVector: {type: string, maxLength: 256}
+    cvssVector: {type: string, maxLength: 256, pattern: '^(?:|[^\r\n\x00]*\S[^\r\n\x00]*)$'}
 ArtifactIntelligence:
   type: object
   required: [repositoryId, format, coordinate, digest, signatures, sboms, licenses, version, createdAt, updatedAt, updatedBy]
