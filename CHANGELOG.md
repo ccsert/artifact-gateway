@@ -10,6 +10,9 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- One-command local development lifecycle targets for starting the complete
+  stack, checking the Console and Gateway paths, and stopping only the
+  checkout-managed Console.
 - Administrator-only sanitized system diagnostics covering build identity,
   runtime roles, dependency reachability, node health, and repository job
   queues, with a bilingual Console view and copyable support JSON.

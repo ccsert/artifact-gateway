@@ -17,10 +17,12 @@ Start the complete local stack from a checkout:
 ```sh
 cp .env.example .env
 # Replace every local credential placeholder before starting the stack.
-make up
+make dev
 ```
 
-`make down` stops the stack without deleting its PostgreSQL and MinIO volumes.
+`make dev-status` verifies the Console, its API proxy, and Gateway health.
+`make dev-down` stops only the checkout-managed Console; `make down` stops the
+Compose stack without deleting its PostgreSQL and MinIO volumes.
 
 ## Change workflow
 

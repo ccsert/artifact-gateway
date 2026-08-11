@@ -29,6 +29,7 @@ tokens, or unredacted upstream URLs.
 | make native-maven-e2e | | | | |
 | make native-npm-e2e | | | | |
 | make native-pypi-e2e | | | | |
+| make native-go-e2e | | | | |
 | make conan-e2e | | | | |
 | make readiness-e2e | | | | |
 | make resolver-rotation-e2e | | | | |
@@ -36,6 +37,8 @@ tokens, or unredacted upstream URLs.
 | make cache-operations-e2e | | | | |
 | make openapi-check | | | | |
 | make console-typecheck | | | | |
+| make console-check | | | | |
+| make console-test | | | | |
 | make console-build | | | | |
 | make console-e2e | | | | |
 | make upgrade-readiness | | | | |

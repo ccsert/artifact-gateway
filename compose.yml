@@ -1,5 +1,9 @@
 name: artifact-gateway
 
+x-local-dev:
+  gateway-port: ${GATEWAY_HTTP_PORT:-8080}
+  console-port: ${GATEWAY_CONSOLE_PORT:-4173}
+
 services:
   gateway:
     build: .
