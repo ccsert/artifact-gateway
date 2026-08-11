@@ -253,6 +253,16 @@ UserIdentity:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/UserIdentity"}
+UserSession:
+  description: Server-side metadata for one signed user session
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/UserSession"}
+UserSessionList:
+  description: User session metadata without bearer tokens
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/UserSessionList"}
 AuditCleanupJob:
   description: Audit cleanup job
   content:

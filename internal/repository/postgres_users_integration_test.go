@@ -69,13 +69,71 @@ func TestPostgresUserGovernanceLifecycle(t *testing.T) {
 	if err != nil || updated.DisplayName != displayName || updated.Description != "" {
 		t.Fatalf("updated profile=%+v err=%v", updated, err)
 	}
+	passwordSession, err := store.CreateUserSession(ctx, UserSession{
+		ID: uuid.NewString(), UserID: id, Kind: UserSessionLocal,
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	passwordUpdated, err := store.UpdateUserPassword(ctx, id, "new-hash", updated.Version, false)
 	if err != nil || passwordUpdated.SessionVersion != created.SessionVersion+1 || passwordUpdated.MustChangePassword {
 		t.Fatalf("password update=%+v err=%v", passwordUpdated, err)
 	}
+	passwordSession, err = store.GetUserSession(ctx, id, passwordSession.ID)
+	if err != nil || passwordSession.RevokedAt == nil {
+		t.Fatalf("password session=%+v err=%v", passwordSession, err)
+	}
 	revoked, err := store.RevokeUserSessions(ctx, id, passwordUpdated.Version)
 	if err != nil || revoked.SessionVersion != passwordUpdated.SessionVersion+1 {
 		t.Fatalf("session revoke=%+v err=%v", revoked, err)
+	}
+
+	activeSession, err := store.CreateUserSession(ctx, UserSession{
+		ID: uuid.NewString(), UserID: id, Kind: UserSessionLocal,
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour), UserAgent: "integration-client",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.CreateUserSession(ctx, UserSession{
+		ID: uuid.NewString(), UserID: id, Kind: UserSessionOIDC,
+		CreatedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeSessions, err := store.ListUserSessions(ctx, id, false)
+	if err != nil || len(activeSessions) != 1 || activeSessions[0].ID != activeSession.ID {
+		t.Fatalf("active sessions=%+v err=%v", activeSessions, err)
+	}
+	if session, err := store.RevokeUserSession(ctx, id, activeSession.ID); err != nil || session.RevokedAt == nil {
+		t.Fatalf("revoke session=%+v err=%v", session, err)
+	}
+	allSessions, err := store.ListUserSessions(ctx, id, true)
+	if err != nil || len(allSessions) != 3 {
+		t.Fatalf("session history=%+v err=%v", allSessions, err)
+	}
+	if pruned, err := store.PruneExpiredUserSessions(ctx, now, 1); err != nil || pruned != 1 {
+		t.Fatalf("pruned sessions=%d err=%v", pruned, err)
+	}
+
+	cascadeUser, err := store.CreateUser(ctx, User{ID: uuid.NewString(), Name: "cascade-" + name, Role: "reader"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cascadeSession, err := store.CreateUserSession(ctx, UserSession{
+		ID: uuid.NewString(), UserID: cascadeUser.ID, Kind: UserSessionLocal,
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DeleteUser(ctx, cascadeUser.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.GetUserSession(ctx, cascadeUser.ID, cascadeSession.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cascade session lookup err=%v", err)
 	}
 }
 

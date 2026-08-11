@@ -37,6 +37,7 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 
 func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.NativeRepositoryRetention) {
 	app.ScheduledTaskScheduler{Store: r.store}.Start(ctx, time.Minute)
+	app.UserSessionJanitor{Store: r.store}.Start(ctx, time.Hour)
 	r.taskQueue.StartCacheScheduler(ctx, 5*time.Minute)
 	app.NativeMavenMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeOCIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)

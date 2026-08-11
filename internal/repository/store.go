@@ -22,6 +22,7 @@ var (
 	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
 	ErrIdentityExists               = errors.New("user identity already exists")
 	ErrIdentityAmbiguous            = errors.New("user identity matches multiple accounts")
+	ErrInvalidUserSession           = errors.New("user session is invalid")
 )
 
 type HostedRepositoryStore interface {
@@ -54,6 +55,17 @@ type UserIdentityStore interface {
 	DeleteUserIdentity(context.Context, string, string) error
 	GetUserByOIDCIdentity(context.Context, string, string) (User, UserIdentity, error)
 	ResolveOIDCIdentity(context.Context, OIDCIdentityProvision) (User, UserIdentity, bool, error)
+}
+
+// UserSessionStore persists only signed-token identifiers and bounded client
+// metadata. Implementations must never persist the bearer token itself.
+type UserSessionStore interface {
+	CreateUserSession(context.Context, UserSession) (UserSession, error)
+	GetUserSession(context.Context, string, string) (UserSession, error)
+	ListUserSessions(context.Context, string, bool) ([]UserSession, error)
+	RevokeUserSession(context.Context, string, string) (UserSession, error)
+	RevokeAllUserSessionRecords(context.Context, string, time.Time) error
+	PruneExpiredUserSessions(context.Context, time.Time, int) (int, error)
 }
 
 type HostedGroupStore interface {

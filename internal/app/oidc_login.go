@@ -30,6 +30,7 @@ type oidcLoginHandler struct {
 	runtime       *OIDCRuntime
 	authenticator Authenticator
 	identities    repository.UserIdentityStore
+	sessions      repository.UserSessionStore
 }
 
 type oidcFlowState struct {
@@ -182,7 +183,18 @@ func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
 			principal.AuthenticationKind = authorization.AuthenticationOIDC
 			principal.OIDCAdminSubject = identity.AdminSubject
 			principal.OIDCRoleMappings = identity.RoleMappings
-			session := h.authenticator.IssueWebSession(principal, user.SessionVersion)
+			sessionID := newUserSessionID()
+			if h.sessions != nil {
+				if _, err := h.sessions.CreateUserSession(ctx, repository.UserSession{
+					ID: sessionID, UserID: user.ID, Kind: repository.UserSessionOIDC,
+					CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(authorization.UserSessionLifetime),
+					IPAddress: requestIPAddress(r), UserAgent: boundedUserAgent(r.UserAgent()),
+				}); err != nil {
+					h.redirectError(w, r, "session_unavailable")
+					return
+				}
+			}
+			session := h.authenticator.IssueWebSessionWithID(principal, sessionID, user.SessionVersion)
 			h.setWebSessionCookie(w, client, session)
 			values := url.Values{"oidc": {"success"}, "redirect": {safeConsoleRedirect(flow.Redirect)}}
 			http.Redirect(w, r, "/login?"+values.Encode(), http.StatusFound)
@@ -218,6 +230,9 @@ func (h oidcLoginHandler) setWebSessionCookie(w http.ResponseWriter, client *aut
 }
 
 func (h oidcLoginHandler) logout(w http.ResponseWriter, r *http.Request) {
+	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok && principal.UserID != "" && principal.SessionID != "" && h.sessions != nil {
+		_, _ = h.sessions.RevokeUserSession(r.Context(), principal.UserID, principal.SessionID)
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name: webSessionCookieName, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: oidcSecureRequest(r), SameSite: http.SameSiteLaxMode,

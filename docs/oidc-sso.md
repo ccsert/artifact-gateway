@@ -41,6 +41,14 @@ stores provider access or refresh tokens. After validating the ID token,
 issuer, audience, signature, expiry, state, and nonce, it creates a bounded
 12-hour HttpOnly `SameSite=Lax` Gateway session cookie.
 
+When the OIDC identity is linked to a local account, the signed cookie contains
+a random session identifier backed by server-side metadata. The database stores
+the identifier, account, login kind, bounded client address and user agent, and
+lifecycle timestamps, but never the cookie, access token, refresh token, or ID
+token. Administrators can inspect and revoke individual sessions from the user
+detail view. `POST /auth/logout` revokes the current linked session before
+clearing the browser cookie.
+
 API Bearer tokens are checked against `GATEWAY_OIDC_AUDIENCE`. Browser ID
 tokens are checked independently against `GATEWAY_OIDC_CLIENT_ID`, so the API
 and Console may use separate audiences.
@@ -56,8 +64,10 @@ verified email claim. These provisioning options default to disabled.
 Once linked, both OIDC Bearer and browser-session authentication use the local
 account's current role and security state. Disabling the account, requiring a
 password change, or incrementing its session version therefore takes effect on
-the next authenticated request. An unlinked identity continues to use the
-external-principal behavior when JIT provisioning is disabled.
+the next authenticated request. Linked browser sessions additionally require an
+active, unexpired server-side session record. An unlinked identity continues to
+use the external-principal behavior and a stateless browser session when JIT
+provisioning is disabled.
 
 ## Keycloak
 

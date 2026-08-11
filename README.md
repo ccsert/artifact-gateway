@@ -107,7 +107,9 @@ The high-level runtime and ownership boundaries are documented in
 
 Local administrator-managed accounts support profile metadata, failed-login
 lockout, mandatory password changes, password reset, and immediate session
-revocation. Configure the lock threshold with
+revocation. Administrators can inspect active and retained session metadata,
+identify the current client, and revoke one client without signing out the
+account everywhere. Configure the lock threshold with
 `GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS` (default `5`) and the lock interval
 with `GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION` (default `15m`). See the
 [local user governance guide](docs/user-governance.md) for API behavior,

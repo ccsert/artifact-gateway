@@ -169,6 +169,11 @@ func (s *MemoryStore) DeleteUser(_ context.Context, id string) error {
 			delete(s.userIdentities, identityID)
 		}
 	}
+	for sessionID, session := range s.userSessions {
+		if session.UserID == id {
+			delete(s.userSessions, sessionID)
+		}
+	}
 	return nil
 }
 
@@ -246,8 +251,10 @@ func (s *MemoryStore) UpdateUserPassword(_ context.Context, id, secretHash, expe
 	user.LockedUntil = nil
 	user.SessionVersion++
 	user.Version = nextHostedGroupVersion(user.Version)
-	user.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	user.UpdatedAt = now
 	s.users[id] = user
+	s.revokeUserSessionRecordsLocked(id, now)
 	return user, nil
 }
 
@@ -263,8 +270,10 @@ func (s *MemoryStore) RevokeUserSessions(_ context.Context, id, expectedVersion 
 	}
 	user.SessionVersion++
 	user.Version = nextHostedGroupVersion(user.Version)
-	user.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	user.UpdatedAt = now
 	s.users[id] = user
+	s.revokeUserSessionRecordsLocked(id, now)
 	return user, nil
 }
 

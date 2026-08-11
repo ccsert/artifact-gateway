@@ -106,6 +106,7 @@ type GatewayStore interface {
 	repository.APIKeyStore
 	repository.UserStore
 	repository.UserIdentityStore
+	repository.UserSessionStore
 	repository.RuntimeNodeStore
 	repository.ScheduledTaskStore
 	repository.BackgroundOperationQueueStore
@@ -150,6 +151,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.Handle("GET /api/v2/public/repositories", publicRepositoryCatalogHandler{repositories: store, groups: store, anonymous: store})
 	authenticator.Users = store
 	authenticator.UserIdentities = store
+	authenticator.UserSessions = store
 	if dependencies.OIDCRuntime != nil {
 		authenticator.OIDCSource = dependencies.OIDCRuntime
 	}
@@ -323,7 +325,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	oidcLogin := oidcLoginHandler{
 		client: dependencies.OIDCClient, validator: oidcLoginValidator,
-		runtime: dependencies.OIDCRuntime, authenticator: authenticator, identities: store,
+		runtime: dependencies.OIDCRuntime, authenticator: authenticator, identities: store, sessions: store,
 	}
 	mux.HandleFunc("GET /auth/oidc/config", oidcLogin.config)
 	mux.HandleFunc("GET /auth/oidc/login", oidcLogin.start)

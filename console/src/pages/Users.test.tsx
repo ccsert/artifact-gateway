@@ -1,7 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getOidcSettings, listUserIdentities, listUsers } from "../client";
+import {
+  getOidcSettings,
+  listUserIdentities,
+  listUserSessions,
+  listUsers,
+} from "../client";
 import type { User } from "../client";
 import { AntdProvider } from "../app/AntdProvider";
 import { PreferencesProvider } from "../lib/preferences";
@@ -15,14 +20,17 @@ vi.mock("../client", () => ({
   getOidcSettings: vi.fn(),
   listUsers: vi.fn(),
   listUserIdentities: vi.fn(),
+  listUserSessions: vi.fn(),
   resetUserPassword: vi.fn(),
   revokeUserSessions: vi.fn(),
+  revokeUserSession: vi.fn(),
   updateUser: vi.fn(),
 }));
 
 const mockListUsers = vi.mocked(listUsers);
 const mockListUserIdentities = vi.mocked(listUserIdentities);
 const mockGetOidcSettings = vi.mocked(getOidcSettings);
+const mockListUserSessions = vi.mocked(listUserSessions);
 
 const alice: User = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -66,6 +74,7 @@ describe("UsersPage", () => {
     mockGetOidcSettings.mockResolvedValue({
       data: { issuer: "https://issuer.example.test" },
     } as never);
+    mockListUserSessions.mockResolvedValue({ data: { items: [] } } as never);
 
     const user = userEvent.setup();
     renderPage();

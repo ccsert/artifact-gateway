@@ -290,6 +290,49 @@ func TestAuthenticatorRejectsRevokedVersionedUserSession(t *testing.T) {
 	}
 }
 
+func TestAuthenticatorChecksPersistedUserSessionIndependently(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	user, err := store.CreateUser(ctx, repository.User{ID: "session-user", Name: "session-user", Role: string(RoleAdmin)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, err = store.CreateUserSession(ctx, repository.UserSession{
+		ID: "active-session", UserID: user.ID, Kind: repository.UserSessionLocal,
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateUserSession(ctx, repository.UserSession{
+		ID: "expired-session", UserID: user.ID, Kind: repository.UserSessionLocal,
+		CreatedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{AdminToken: "admin-secret", Users: store, UserSessions: store}
+	if _, ok := authenticator.Authenticate("Bearer " + authenticator.IssueUserSessionWithID(user.ID, "active-session")); !ok {
+		t.Fatal("persisted session without an explicit version was rejected")
+	}
+	activeToken := authenticator.IssueUserSessionWithID(user.ID, "active-session", user.SessionVersion)
+	principal, ok := authenticator.Authenticate("Bearer " + activeToken)
+	if !ok || principal.UserID != user.ID || principal.SessionID != "active-session" {
+		t.Fatalf("active principal=%+v ok=%v", principal, ok)
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + authenticator.IssueUserSessionWithID(user.ID, "expired-session", user.SessionVersion)); ok {
+		t.Fatal("expired persisted session authenticated")
+	}
+	if _, err = store.RevokeUserSession(ctx, user.ID, "active-session"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + activeToken); ok {
+		t.Fatal("individually revoked session authenticated")
+	}
+	if _, ok = authenticator.Authenticate("Bearer " + authenticator.IssueUserSession(user.ID, user.SessionVersion)); !ok {
+		t.Fatal("legacy versioned session was not preserved")
+	}
+}
+
 func TestAuthenticatorRestoresStaticAdminForIssuedProtocolToken(t *testing.T) {
 	authenticator := Authenticator{
 		AdminToken:    "admin-secret",

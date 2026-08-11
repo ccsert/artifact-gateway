@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 // userLoginHandler exchanges local username/password credentials for a
@@ -56,10 +58,47 @@ func userLoginHandler(users repository.UserStore, audit userLoginAuditStore, aut
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "login failed")
 			return
 		}
-		token := authenticator.IssueUserSession(user.ID, user.SessionVersion)
+		sessionID := newUserSessionID()
+		if authenticator.UserSessions != nil {
+			if _, err := authenticator.UserSessions.CreateUserSession(r.Context(), repository.UserSession{
+				ID: sessionID, UserID: user.ID, Kind: repository.UserSessionLocal,
+				CreatedAt: now, ExpiresAt: now.Add(authorization.UserSessionLifetime),
+				IPAddress: requestIPAddress(r), UserAgent: boundedUserAgent(r.UserAgent()),
+			}); err != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create user session failed")
+				return
+			}
+		}
+		token := authenticator.IssueUserSessionWithID(user.ID, sessionID, user.SessionVersion)
 		recordUserLoginAudit(r, audit, user.Name, repository.AuditResolved, http.StatusOK, "authenticated")
 		writeNativeMavenJSON(w, http.StatusOK, map[string]any{"token": token, "username": user.Name, "displayName": user.DisplayName, "role": user.Role, "mustChangePassword": user.MustChangePassword})
 	}
+}
+
+func newUserSessionID() string { return uuid.NewString() }
+
+func requestIPAddress(r *http.Request) string {
+	value := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if comma := strings.IndexByte(value, ','); comma >= 0 {
+		value = value[:comma]
+	}
+	if value == "" {
+		value = strings.TrimSpace(r.RemoteAddr)
+		if host, _, err := net.SplitHostPort(value); err == nil {
+			value = host
+		}
+	}
+	return boundedString(value, 64)
+}
+
+func boundedUserAgent(value string) string { return boundedString(strings.TrimSpace(value), 512) }
+
+func boundedString(value string, max int) string {
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	return string(runes[:max])
 }
 
 func localAuthPolicy(authenticator Authenticator) (int, time.Duration) {

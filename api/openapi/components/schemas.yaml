@@ -1426,6 +1426,30 @@ UserIdentityList:
     items:
       type: array
       items: {"$ref": "#/UserIdentity"}
+UserSession:
+  type: object
+  required: [id, userId, kind, ipAddress, userAgent, createdAt, expiresAt, current]
+  additionalProperties: false
+  properties:
+    id: {type: string, format: uuid}
+    userId: {type: string, format: uuid}
+    kind: {type: string, enum: [local_session, oidc]}
+    ipAddress: {type: string, maxLength: 64}
+    userAgent: {type: string, maxLength: 512}
+    createdAt: {type: string, format: date-time}
+    expiresAt: {type: string, format: date-time}
+    revokedAt: {type: string, format: date-time}
+    current:
+      type: boolean
+      description: True when this is the session used for the management request.
+UserSessionList:
+  type: object
+  required: [items]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/UserSession"}
 CreateUserIdentity:
   type: object
   required: [issuer, subject]

@@ -903,6 +903,25 @@ export type Diagnostics = {
   nodes: RuntimeNodeHealth;
 };
 
+export type UserSession = {
+  id: string;
+  userId: string;
+  kind: "local_session" | "oidc";
+  ipAddress: string;
+  userAgent: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+  /**
+   * True when this is the session used for the management request.
+   */
+  current: boolean;
+};
+
+export type UserSessionList = {
+  items: Array<UserSession>;
+};
+
 export type UserIdentity = {
   id: string;
   userId: string;
@@ -2112,6 +2131,75 @@ export type RevokeUserSessionsResponses = {
 
 export type RevokeUserSessionsResponse =
   RevokeUserSessionsResponses[keyof RevokeUserSessionsResponses];
+
+export type ListUserSessionsData = {
+  body?: never;
+  path: {
+    userId: string;
+  };
+  query?: {
+    includeInactive?: boolean;
+  };
+  url: "/users/{userId}/sessions";
+};
+
+export type ListUserSessionsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListUserSessionsError =
+  ListUserSessionsErrors[keyof ListUserSessionsErrors];
+
+export type ListUserSessionsResponses = {
+  /**
+   * User session metadata without bearer tokens
+   */
+  200: UserSessionList;
+};
+
+export type ListUserSessionsResponse =
+  ListUserSessionsResponses[keyof ListUserSessionsResponses];
+
+export type RevokeUserSessionData = {
+  body?: never;
+  path: {
+    userId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/users/{userId}/sessions/{sessionId}";
+};
+
+export type RevokeUserSessionErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type RevokeUserSessionError =
+  RevokeUserSessionErrors[keyof RevokeUserSessionErrors];
+
+export type RevokeUserSessionResponses = {
+  /**
+   * Server-side metadata for one signed user session
+   */
+  200: UserSession;
+};
+
+export type RevokeUserSessionResponse =
+  RevokeUserSessionResponses[keyof RevokeUserSessionResponses];
 
 export type ListUserIdentitiesData = {
   body?: never;

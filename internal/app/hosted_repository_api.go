@@ -30,6 +30,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 var hostedRepositoryName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -259,6 +260,7 @@ type generatedRepositoryAPIAdapter struct {
 type userManagementStore interface {
 	repository.UserStore
 	repository.UserIdentityStore
+	repository.UserSessionStore
 }
 
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
@@ -393,6 +395,15 @@ func userIdentityResponse(identity repository.UserIdentity) adminopenapi.UserIde
 		response.UpdatedAt = &updated
 	}
 	return response
+}
+
+func userSessionResponse(session repository.UserSession, current bool) adminopenapi.UserSession {
+	return adminopenapi.UserSession{
+		Id: uuid.MustParse(session.ID), UserId: uuid.MustParse(session.UserID),
+		Kind: adminopenapi.UserSessionKind(session.Kind), IpAddress: session.IPAddress,
+		UserAgent: session.UserAgent, CreatedAt: session.CreatedAt, ExpiresAt: session.ExpiresAt,
+		RevokedAt: session.RevokedAt, Current: current,
+	}
 }
 
 func validUserRole(role string) bool {
@@ -685,6 +696,51 @@ func (h generatedRepositoryAPIAdapter) RevokeUserSessions(w http.ResponseWriter,
 	}
 	h.recordUserManagementAudit(r, user, "user.sessions.revoke", http.StatusOK)
 	writeNativeMavenJSON(w, http.StatusOK, userResponse(user))
+}
+
+func (h generatedRepositoryAPIAdapter) ListUserSessions(w http.ResponseWriter, r *http.Request, userID openapi_types.UUID, params adminopenapi.ListUserSessionsParams) {
+	principal, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	includeInactive := params.IncludeInactive != nil && *params.IncludeInactive
+	items, err := h.users.ListUserSessions(r.Context(), userID.String(), includeInactive)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list user sessions failed")
+		return
+	}
+	response := make([]adminopenapi.UserSession, 0, len(items))
+	for _, session := range items {
+		response = append(response, userSessionResponse(session, principal.UserID == session.UserID && principal.SessionID == session.ID))
+	}
+	if user, getErr := h.users.GetUser(r.Context(), userID.String()); getErr == nil {
+		h.recordUserManagementAudit(r, user, "user.session.list", http.StatusOK)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.UserSessionList{Items: response})
+}
+
+func (h generatedRepositoryAPIAdapter) RevokeUserSession(w http.ResponseWriter, r *http.Request, userID, sessionID openapi_types.UUID) {
+	principal, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	session, err := h.users.RevokeUserSession(r.Context(), userID.String(), sessionID.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "user session not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "revoke user session failed")
+		return
+	}
+	if user, getErr := h.users.GetUser(r.Context(), userID.String()); getErr == nil {
+		h.recordUserManagementAudit(r, user, "user.session.revoke", http.StatusOK)
+	}
+	writeNativeMavenJSON(w, http.StatusOK, userSessionResponse(session, principal.UserID == session.UserID && principal.SessionID == session.ID))
 }
 
 func (h generatedRepositoryAPIAdapter) ListUserIdentities(w http.ResponseWriter, r *http.Request, userID string) {

@@ -1447,6 +1447,24 @@ func (e UserIdentityKind) Valid() bool {
 	}
 }
 
+// Defines values for UserSessionKind.
+const (
+	UserSessionKindLocalSession UserSessionKind = "local_session"
+	UserSessionKindOidc         UserSessionKind = "oidc"
+)
+
+// Valid indicates whether the value is a known member of the UserSessionKind enum.
+func (e UserSessionKind) Valid() bool {
+	switch e {
+	case UserSessionKindLocalSession:
+		return true
+	case UserSessionKindOidc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProxyCacheEntriesParamsGroupBy.
 const (
 	ListProxyCacheEntriesParamsGroupByAsset     ListProxyCacheEntriesParamsGroupBy = "asset"
@@ -3065,6 +3083,29 @@ type UserList struct {
 	Total  int    `json:"total"`
 }
 
+// UserSession defines model for UserSession.
+type UserSession struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Current True when this is the session used for the management request.
+	Current   bool               `json:"current"`
+	ExpiresAt time.Time          `json:"expiresAt"`
+	Id        openapi_types.UUID `json:"id"`
+	IpAddress string             `json:"ipAddress"`
+	Kind      UserSessionKind    `json:"kind"`
+	RevokedAt *time.Time         `json:"revokedAt,omitempty"`
+	UserAgent string             `json:"userAgent"`
+	UserId    openapi_types.UUID `json:"userId"`
+}
+
+// UserSessionKind defines model for UserSession.Kind.
+type UserSessionKind string
+
+// UserSessionList defines model for UserSessionList.
+type UserSessionList struct {
+	Items []UserSession `json:"items"`
+}
+
 // AuthorizationTemplateId defines model for AuthorizationTemplateId.
 type AuthorizationTemplateId = openapi_types.UUID
 
@@ -3481,6 +3522,11 @@ type UpdateUserParams struct {
 // ResetUserPasswordParams defines parameters for ResetUserPassword.
 type ResetUserPasswordParams struct {
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListUserSessionsParams defines parameters for ListUserSessions.
+type ListUserSessionsParams struct {
+	IncludeInactive *bool `form:"includeInactive,omitempty" json:"includeInactive,omitempty"`
 }
 
 // RevokeUserSessionsParams defines parameters for RevokeUserSessions.
@@ -3949,6 +3995,12 @@ type ServerInterface interface {
 
 	// (POST /users/{userId}/password)
 	ResetUserPassword(w http.ResponseWriter, r *http.Request, userId string, params ResetUserPasswordParams)
+
+	// (GET /users/{userId}/sessions)
+	ListUserSessions(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, params ListUserSessionsParams)
+
+	// (DELETE /users/{userId}/sessions/{sessionId})
+	RevokeUserSession(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, sessionId openapi_types.UUID)
 
 	// (POST /users/{userId}/sessions:revoke)
 	RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId string, params RevokeUserSessionsParams)
@@ -8299,6 +8351,83 @@ func (siw *ServerInterfaceWrapper) ResetUserPassword(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListUserSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListUserSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUserSessionsParams
+
+	// ------------- Optional query parameter "includeInactive" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeInactive", r.URL.Query(), &params.IncludeInactive, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeInactive"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeInactive", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUserSessions(w, r, userId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeUserSession operation middleware
+func (siw *ServerInterfaceWrapper) RevokeUserSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeUserSession(w, r, userId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RevokeUserSessions operation middleware
 func (siw *ServerInterfaceWrapper) RevokeUserSessions(w http.ResponseWriter, r *http.Request) {
 
@@ -8581,6 +8710,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/identities", wrapper.CreateUserIdentity)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}/identities/{identityId}", wrapper.DeleteUserIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/password", wrapper.ResetUserPassword)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{userId}/sessions", wrapper.ListUserSessions)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}/sessions/{sessionId}", wrapper.RevokeUserSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/sessions:revoke", wrapper.RevokeUserSessions)
 
 	return m
@@ -8731,6 +8862,10 @@ type UserIdentityJSONResponse UserIdentity
 type UserIdentityListJSONResponse UserIdentityList
 
 type UserListJSONResponse UserList
+
+type UserSessionJSONResponse UserSession
+
+type UserSessionListJSONResponse UserSessionList
 
 type GetAnonymousAccessPolicyRequestObject struct {
 }
@@ -14030,6 +14165,112 @@ func (response ResetUserPassword412ApplicationProblemPlusJSONResponse) VisitRese
 	return err
 }
 
+type ListUserSessionsRequestObject struct {
+	UserId openapi_types.UUID `json:"userId"`
+	Params ListUserSessionsParams
+}
+
+type ListUserSessionsResponseObject interface {
+	VisitListUserSessionsResponse(w http.ResponseWriter) error
+}
+
+type ListUserSessions200JSONResponse struct{ UserSessionListJSONResponse }
+
+func (response ListUserSessions200JSONResponse) VisitListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserSessions401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserSessions401ApplicationProblemPlusJSONResponse) VisitListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserSessions404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListUserSessions404ApplicationProblemPlusJSONResponse) VisitListUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSessionRequestObject struct {
+	UserId    openapi_types.UUID `json:"userId"`
+	SessionId openapi_types.UUID `json:"sessionId"`
+}
+
+type RevokeUserSessionResponseObject interface {
+	VisitRevokeUserSessionResponse(w http.ResponseWriter) error
+}
+
+type RevokeUserSession200JSONResponse struct{ UserSessionJSONResponse }
+
+func (response RevokeUserSession200JSONResponse) VisitRevokeUserSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSession401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserSession401ApplicationProblemPlusJSONResponse) VisitRevokeUserSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserSession404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeUserSession404ApplicationProblemPlusJSONResponse) VisitRevokeUserSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RevokeUserSessionsRequestObject struct {
 	UserId string `json:"userId"`
 	Params RevokeUserSessionsParams
@@ -14423,6 +14664,12 @@ type StrictServerInterface interface {
 
 	// (POST /users/{userId}/password)
 	ResetUserPassword(ctx context.Context, request ResetUserPasswordRequestObject) (ResetUserPasswordResponseObject, error)
+
+	// (GET /users/{userId}/sessions)
+	ListUserSessions(ctx context.Context, request ListUserSessionsRequestObject) (ListUserSessionsResponseObject, error)
+
+	// (DELETE /users/{userId}/sessions/{sessionId})
+	RevokeUserSession(ctx context.Context, request RevokeUserSessionRequestObject) (RevokeUserSessionResponseObject, error)
 
 	// (POST /users/{userId}/sessions:revoke)
 	RevokeUserSessions(ctx context.Context, request RevokeUserSessionsRequestObject) (RevokeUserSessionsResponseObject, error)
@@ -17512,6 +17759,60 @@ func (sh *strictHandler) ResetUserPassword(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResetUserPasswordResponseObject); ok {
 		if err := validResponse.VisitResetUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUserSessions operation middleware
+func (sh *strictHandler) ListUserSessions(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, params ListUserSessionsParams) {
+	var request ListUserSessionsRequestObject
+
+	request.UserId = userId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUserSessions(ctx, request.(ListUserSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUserSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUserSessionsResponseObject); ok {
+		if err := validResponse.VisitListUserSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeUserSession operation middleware
+func (sh *strictHandler) RevokeUserSession(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, sessionId openapi_types.UUID) {
+	var request RevokeUserSessionRequestObject
+
+	request.UserId = userId
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeUserSession(ctx, request.(RevokeUserSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeUserSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeUserSessionResponseObject); ok {
+		if err := validResponse.VisitRevokeUserSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

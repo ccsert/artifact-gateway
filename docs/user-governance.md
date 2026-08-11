@@ -13,14 +13,21 @@ without regard to case. The stored security state includes:
 - last successful sign-in and password-change timestamps;
 - consecutive failed-sign-in count and an optional lock deadline;
 - whether the user must change the password at the next sign-in;
-- a monotonically increasing session version.
+- a monotonically increasing session version;
+- bounded server-side metadata for each local or linked OIDC session.
 
-Passwords are stored only as hashes. Password updates and explicit session
+Passwords are stored only as hashes. Password updates and explicit all-session
 revocation increment the session version, invalidating every previously issued
-local session token. A user required to change their password can authenticate
-only to `POST /auth/change-password`; management roles are withheld until that
-change succeeds. Local passwords must contain at least 8 characters and at most
-72 bytes; the byte upper bound is enforced explicitly because bcrypt cannot
+local and linked OIDC session. Each new sign-in also creates a random session
+identifier whose record contains only the user, login kind, bounded client
+metadata, and lifecycle timestamps; bearer tokens and provider tokens are
+never stored. An administrator can therefore revoke one client without
+invalidating unrelated sessions.
+
+A user required to change their password can authenticate only to
+`POST /auth/change-password`; management roles are withheld until that change
+succeeds. Local passwords must contain at least 8 characters and at most 72
+bytes; the byte upper bound is enforced explicitly because bcrypt cannot
 process longer inputs safely.
 
 ## Management API
@@ -33,7 +40,9 @@ All `/api/v2/users` operations require an administrator identity.
 | `POST /users` | Creates a profile, role, initial password, and optional mandatory password change |
 | `PATCH /users/{userId}` | Updates profile, role, or state with `If-Match` concurrency control |
 | `POST /users/{userId}/password` | Resets the password, optionally requires another change, and revokes sessions |
-| `POST /users/{userId}/sessions:revoke` | Invalidates all current local sessions with `If-Match` control |
+| `POST /users/{userId}/sessions:revoke` | Invalidates all current local and linked OIDC sessions with `If-Match` control |
+| `GET /users/{userId}/sessions` | Lists active session metadata; `includeInactive=true` includes retained revoked and expired history |
+| `DELETE /users/{userId}/sessions/{sessionId}` | Revokes one session without affecting the account's other clients |
 | `GET /users/{userId}/identities` | Lists external identities linked to the account |
 | `POST /users/{userId}/identities` | Links an OIDC issuer and subject from the configured provider |
 | `DELETE /users/{userId}/identities/{identityId}` | Removes an external identity link |
@@ -74,20 +83,33 @@ count and lock deadline. An administrator password reset also clears both.
 Successful and failed local sign-ins, self-service password changes, user
 creation/update/deletion, administrator password resets, and session revocation
 are audited. Management audit actors identify the administrator performing the
-operation; the resource identifies the target user.
+operation; the resource identifies the target user. Session listing and
+single-session revocation use the `user.session.list` and
+`user.session.revoke` audit actions.
+
+Expired session metadata is retained for 30 days and then removed in bounded
+500-row batches by the scheduler role. PostgreSQL cleanup uses locked,
+skip-locked batches so multiple scheduler nodes do not contend for the same
+records. The record expiry is enforced independently of the signed token
+expiry, account state, and session version.
 
 Operators should verify the following after changing authentication policy:
 
 1. Repeated failed logins lock the test account at the configured threshold.
 2. A password reset invalidates a token issued before the reset.
 3. Explicit session revocation invalidates every current token for the account.
-4. The final active administrator cannot be disabled or deleted.
-5. Audit queries distinguish the performing administrator from the target user.
+4. Revoking one listed session leaves an unrelated session usable.
+5. The final active administrator cannot be disabled or deleted.
+6. Audit queries distinguish the performing administrator from the target user.
 
 ## Current Limitations
 
 Deletion is permanent rather than a recoverable tombstone. A local account has
 one global role; custom roles and multiple role assignments are not yet part of
 the model. Password expiry and configurable complexity rules are not enforced.
-Session inventory, per-session revocation, OIDC back-channel logout, and
-identity-provider-initiated logout are not yet supported.
+OIDC back-channel logout and identity-provider-initiated logout are not yet
+supported. Unlinked external OIDC principals retain stateless browser sessions
+and therefore do not appear in a local account's session inventory. Signed
+sessions issued before server-side session identifiers were introduced remain
+compatible until their normal expiry, but still honor account state and session
+version checks.

@@ -149,6 +149,52 @@ users_userId_sessions_revoke:
         "$ref": "../components/responses.yaml#/Problem"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
+users_userId_sessions:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  get:
+    operationId: listUserSessions
+    parameters:
+    - name: includeInactive
+      in: query
+      schema:
+        type: boolean
+        default: false
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/UserSessionList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+users_userId_sessions_sessionId:
+  parameters:
+  - name: userId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: sessionId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  delete:
+    operationId: revokeUserSession
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/UserSession"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
 users_userId_identities:
   parameters:
   - name: userId

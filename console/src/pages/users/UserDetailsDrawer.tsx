@@ -37,6 +37,7 @@ import {
   localPasswordMeetsMinimum,
 } from "./passwordPolicy";
 import { UserIdentitiesPanel } from "./UserIdentitiesPanel";
+import { UserSessionsPanel } from "./UserSessionsPanel";
 import { isUserLocked, roleTone, userInitials } from "./userPresentation";
 
 interface UserDetailsDrawerProps {
@@ -59,6 +60,7 @@ export function UserDetailsDrawer({
   const [profileBusy, setProfileBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -127,6 +129,7 @@ export function UserDetailsDrawer({
         "Password reset and existing sessions revoked",
       ),
     );
+    setSessionsRefreshKey((current) => current + 1);
     onChanged(data);
   };
 
@@ -155,6 +158,7 @@ export function UserDetailsDrawer({
           throw requestError;
         }
         void message.success(text("全部会话已撤销", "All sessions revoked"));
+        setSessionsRefreshKey((current) => current + 1);
         onChanged(data);
       },
     });
@@ -397,6 +401,10 @@ export function UserDetailsDrawer({
             </Button>
           </Space>
         </section>
+
+        <Divider />
+
+        <UserSessionsPanel userId={user.id} refreshKey={sessionsRefreshKey} />
 
         <Divider />
 

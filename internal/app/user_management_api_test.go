@@ -7,8 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.T) {
@@ -89,6 +92,9 @@ func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.
 	}
 	if _, ok := testAuthenticatorWithUsers(store).Authenticate("Bearer " + login.Token); ok {
 		t.Fatal("password change did not revoke previous session")
+	}
+	if sessions, listErr := store.ListUserSessions(context.Background(), created.ID, false); listErr != nil || len(sessions) != 0 {
+		t.Fatalf("active sessions after password change=%+v err=%v", sessions, listErr)
 	}
 
 	loginRequest = httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"alice","password":"final-password"}`))
@@ -203,6 +209,108 @@ func TestUserManagementValidatesProfileAndPasswordBounds(t *testing.T) {
 	}, created.Version)
 	if maximumReset.Code != http.StatusOK {
 		t.Fatalf("72-byte password reset=%d body=%s", maximumReset.Code, maximumReset.Body.String())
+	}
+}
+
+func TestUserSessionManagementSupportsIndependentRevocation(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	hash, err := authorization.HashPassword("session-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := store.CreateUser(ctx, repository.User{
+		ID: uuid.NewString(), Name: "session-owner", SecretHash: hash, Role: "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	login := func(agent string) string {
+		request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"session-owner","password":"session-password"}`))
+		request.Header.Set("User-Agent", agent)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		var payload struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || response.Code != http.StatusOK || payload.Token == "" {
+			t.Fatalf("login=%d body=%s err=%v", response.Code, response.Body.String(), err)
+		}
+		return payload.Token
+	}
+	adminRequest := func(method, target, version string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, target, nil)
+		request.Header.Set("Authorization", "Bearer admin-secret")
+		if version != "" {
+			request.Header.Set("If-Match", version)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	list := func(target string) []struct {
+		ID        string     `json:"id"`
+		UserAgent string     `json:"userAgent"`
+		RevokedAt *time.Time `json:"revokedAt"`
+	} {
+		response := adminRequest(http.MethodGet, target, "")
+		var payload struct {
+			Items []struct {
+				ID        string     `json:"id"`
+				UserAgent string     `json:"userAgent"`
+				RevokedAt *time.Time `json:"revokedAt"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || response.Code != http.StatusOK {
+			t.Fatalf("list=%d body=%s err=%v", response.Code, response.Body.String(), err)
+		}
+		return payload.Items
+	}
+
+	firstToken := login("first-client")
+	firstItems := list("/api/v2/users/" + user.ID + "/sessions")
+	if len(firstItems) != 1 || firstItems[0].UserAgent != "first-client" || strings.Contains(firstItems[0].UserAgent, firstToken) {
+		t.Fatalf("first sessions=%+v", firstItems)
+	}
+	firstSessionID := firstItems[0].ID
+	secondToken := login("second-client")
+	if items := list("/api/v2/users/" + user.ID + "/sessions"); len(items) != 2 {
+		t.Fatalf("active sessions=%+v", items)
+	}
+	currentRequest := httptest.NewRequest(http.MethodGet, "/api/v2/users/"+user.ID+"/sessions", nil)
+	currentRequest.Header.Set("Authorization", "Bearer "+secondToken)
+	currentResponse := httptest.NewRecorder()
+	handler.ServeHTTP(currentResponse, currentRequest)
+	if currentResponse.Code != http.StatusOK || !strings.Contains(currentResponse.Body.String(), `"current":true`) {
+		t.Fatalf("current session=%d body=%s", currentResponse.Code, currentResponse.Body.String())
+	}
+	revoked := adminRequest(http.MethodDelete, "/api/v2/users/"+user.ID+"/sessions/"+firstSessionID, "")
+	if revoked.Code != http.StatusOK || !strings.Contains(revoked.Body.String(), `"revokedAt"`) {
+		t.Fatalf("revoke=%d body=%s", revoked.Code, revoked.Body.String())
+	}
+	if _, ok := (Authenticator{AdminToken: "admin-secret", Users: store, UserSessions: store}).Authenticate("Bearer " + firstToken); ok {
+		t.Fatal("individually revoked login token authenticated")
+	}
+	if _, ok := (Authenticator{AdminToken: "admin-secret", Users: store, UserSessions: store}).Authenticate("Bearer " + secondToken); !ok {
+		t.Fatal("unrelated login token was revoked")
+	}
+	if items := list("/api/v2/users/" + user.ID + "/sessions"); len(items) != 1 || items[0].UserAgent != "second-client" {
+		t.Fatalf("remaining active sessions=%+v", items)
+	}
+	if items := list("/api/v2/users/" + user.ID + "/sessions?includeInactive=true"); len(items) != 2 {
+		t.Fatalf("session history=%+v", items)
+	}
+	current, err := store.GetUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allRevoked := adminRequest(http.MethodPost, "/api/v2/users/"+user.ID+"/sessions:revoke", current.Version)
+	if allRevoked.Code != http.StatusOK {
+		t.Fatalf("revoke all=%d body=%s", allRevoked.Code, allRevoked.Body.String())
+	}
+	if _, ok := (Authenticator{AdminToken: "admin-secret", Users: store, UserSessions: store}).Authenticate("Bearer " + secondToken); ok {
+		t.Fatal("bulk-revoked login token authenticated")
 	}
 }
 

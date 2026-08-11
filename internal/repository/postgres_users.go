@@ -207,7 +207,11 @@ func (s *PostgresStore) RecordUserLoginFailure(ctx context.Context, id string, o
 
 func (s *PostgresStore) UpdateUserPassword(ctx context.Context, id, secretHash, expectedVersion string, mustChange bool) (User, error) {
 	var user User
-	err := scanUser(s.db.QueryRowContext(ctx, `UPDATE users SET secret_hash=$2, password_changed_at=now(), must_change_password=$3, session_version=session_version+1, failed_login_attempts=0, locked_until=NULL, version=version+1, updated_at=now() WHERE id::text=$1 AND version::text=$4 RETURNING `+userColumns, id, secretHash, mustChange, expectedVersion), &user)
+	err := scanUser(s.db.QueryRowContext(ctx, `WITH updated_user AS (
+		UPDATE users SET secret_hash=$2, password_changed_at=now(), must_change_password=$3, session_version=session_version+1, failed_login_attempts=0, locked_until=NULL, version=version+1, updated_at=now() WHERE id::text=$1 AND version::text=$4 RETURNING *
+	), revoked_sessions AS (
+		UPDATE user_sessions SET revoked_at=now() WHERE user_id=(SELECT id FROM updated_user) AND revoked_at IS NULL
+	) SELECT `+userColumns+` FROM updated_user`, id, secretHash, mustChange, expectedVersion), &user)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetUser(ctx, id); errors.Is(getErr, ErrNotFound) {
 			return User{}, ErrNotFound
@@ -219,7 +223,11 @@ func (s *PostgresStore) UpdateUserPassword(ctx context.Context, id, secretHash, 
 
 func (s *PostgresStore) RevokeUserSessions(ctx context.Context, id, expectedVersion string) (User, error) {
 	var user User
-	err := scanUser(s.db.QueryRowContext(ctx, `UPDATE users SET session_version=session_version+1, version=version+1, updated_at=now() WHERE id::text=$1 AND version::text=$2 RETURNING `+userColumns, id, expectedVersion), &user)
+	err := scanUser(s.db.QueryRowContext(ctx, `WITH updated_user AS (
+		UPDATE users SET session_version=session_version+1, version=version+1, updated_at=now() WHERE id::text=$1 AND version::text=$2 RETURNING *
+	), revoked_sessions AS (
+		UPDATE user_sessions SET revoked_at=now() WHERE user_id=(SELECT id FROM updated_user) AND revoked_at IS NULL
+	) SELECT `+userColumns+` FROM updated_user`, id, expectedVersion), &user)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetUser(ctx, id); errors.Is(getErr, ErrNotFound) {
 			return User{}, ErrNotFound

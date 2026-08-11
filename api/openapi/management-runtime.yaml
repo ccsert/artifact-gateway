@@ -37,6 +37,10 @@ paths:
     "$ref": "./management/users.yaml#/users_userId_password"
   "/users/{userId}/sessions:revoke":
     "$ref": "./management/users.yaml#/users_userId_sessions_revoke"
+  "/users/{userId}/sessions":
+    "$ref": "./management/users.yaml#/users_userId_sessions"
+  "/users/{userId}/sessions/{sessionId}":
+    "$ref": "./management/users.yaml#/users_userId_sessions_sessionId"
   "/users/{userId}/identities":
     "$ref": "./management/users.yaml#/users_userId_identities"
   "/users/{userId}/identities/{identityId}":

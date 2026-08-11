@@ -668,6 +668,24 @@ type User struct {
 	Version             string
 }
 
+// UserSession is server-side metadata for a signed browser or local login
+// token. ID is embedded in the signed token; token material is never stored.
+type UserSession struct {
+	ID        string
+	UserID    string
+	Kind      string
+	IPAddress string
+	UserAgent string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt *time.Time
+}
+
+const (
+	UserSessionLocal = "local_session"
+	UserSessionOIDC  = "oidc"
+)
+
 // UserIdentity is an external credential linked to a local account. Issuer
 // and Subject together form the provider-owned immutable identity key.
 type UserIdentity struct {

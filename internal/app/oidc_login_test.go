@@ -134,12 +134,16 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 		t.Fatalf("identity=%d body=%s", identityResponse.Code, identityResponse.Body.String())
 	}
 
-	current, err := store.GetUser(t.Context(), localUser.ID)
-	if err != nil {
-		t.Fatal(err)
+	sessions, err := store.ListUserSessions(t.Context(), localUser.ID, false)
+	if err != nil || len(sessions) != 1 || sessions[0].Kind != repository.UserSessionOIDC {
+		t.Fatalf("OIDC sessions=%+v err=%v", sessions, err)
 	}
-	if _, err = store.RevokeUserSessions(t.Context(), current.ID, current.Version); err != nil {
-		t.Fatal(err)
+	logout := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	logout.AddCookie(sessionCookie)
+	logoutResponse := httptest.NewRecorder()
+	handler.ServeHTTP(logoutResponse, logout)
+	if logoutResponse.Code != http.StatusNoContent {
+		t.Fatalf("logout=%d body=%s", logoutResponse.Code, logoutResponse.Body.String())
 	}
 	revokedIdentity := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
 	revokedIdentity.AddCookie(sessionCookie)
@@ -147,6 +151,10 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	handler.ServeHTTP(revokedResponse, revokedIdentity)
 	if revokedResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked cookie identity=%d body=%s", revokedResponse.Code, revokedResponse.Body.String())
+	}
+	sessions, err = store.ListUserSessions(t.Context(), localUser.ID, true)
+	if err != nil || len(sessions) != 1 || sessions[0].RevokedAt == nil {
+		t.Fatalf("revoked OIDC sessions=%+v err=%v", sessions, err)
 	}
 }
 
