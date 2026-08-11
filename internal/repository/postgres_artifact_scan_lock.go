@@ -1,18 +1,24 @@
 package repository
 
-import "context"
+import (
+	"context"
+)
 
 func (s *PostgresStore) LockArtifactScanIdentity(ctx context.Context, repositoryID string, format Format, coordinate, digest string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
+	return s.LockArtifactDistributionIdentities(ctx, []ArtifactDistributionLockIdentity{{RepositoryID: repositoryID, Format: format, Coordinate: coordinate, Digest: digest}})
+}
+
+func (s *PostgresStore) LockArtifactDistributionIdentities(ctx context.Context, identities []ArtifactDistributionLockIdentity) (func(), error) {
+	keys := make([]string, 0, len(identities))
+	seen := make(map[string]struct{}, len(identities))
+	for _, identity := range identities {
+		key := artifactScanLockKey(identity.RepositoryID, identity.Format, identity.Coordinate, identity.Digest)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
 	}
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, artifactScanLockKey(repositoryID, format, coordinate, digest)); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, artifactScanLockKey(repositoryID, format, coordinate, digest))
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, keys)
+	return release, err
 }

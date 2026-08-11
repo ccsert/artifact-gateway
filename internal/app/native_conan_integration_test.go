@@ -127,7 +127,7 @@ func TestPostgresMinIOConanReplicationPublishesTargetOwnedRevision(t *testing.T)
 	if err != nil || len(checks) != 1 {
 		t.Fatalf("checkpoints=%#v err=%v", checks, err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatConan, IdempotencyKey: "postgres-minio-conan-replication"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatConan, Coordinate: reference + "#" + revision, Digest: digest, IdempotencyKey: "postgres-minio-conan-replication"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, checks); err != nil {
 		t.Fatal(err)
 	}

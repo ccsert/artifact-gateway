@@ -284,17 +284,17 @@ func (h nativePyPIHandler) upload(w http.ResponseWriter, r *http.Request, repo r
 	}
 	digest := "sha256:" + digestHex
 	objectKey := "native/pypi/sha256/" + digestHex
-	objectRelease, err := h.store.LockPyPIObject(r.Context(), objectKey)
+	objectCtx, objectRelease, err := repository.LockObjectKeys(r.Context(), []string{objectKey}, h.store, repository.FormatPyPI, h.store.LockPyPIObject)
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "PyPI object coordination is unavailable")
 		return
 	}
 	defer objectRelease()
-	if err = h.objects.PutVerifiedReader(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), digest); err != nil {
+	if err = h.objects.PutVerifiedReader(objectCtx, objectKey, bytes.NewReader(data), int64(len(data)), digest); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "persist distribution failed")
 		return
 	}
-	published, err := h.store.PublishPyPIFile(r.Context(), repository.PyPIFile{
+	published, err := h.store.PublishPyPIFile(objectCtx, repository.PyPIFile{
 		RepositoryID: repo.ID, Project: project, Version: version, Filename: header.Filename,
 		FileType: strings.TrimSpace(r.FormValue("filetype")), PythonVersion: strings.TrimSpace(r.FormValue("pyversion")),
 		RequiresPython: strings.TrimSpace(r.FormValue("requires_python")), Digest: digest, ObjectKey: objectKey,

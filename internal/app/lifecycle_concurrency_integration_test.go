@@ -224,7 +224,10 @@ func TestPostgresBackgroundOperationQueueStatsIncludeLifecycleAndReplication(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	replicationPlan, _, err := store.CreateReplicationPlan(ctx, repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, IdempotencyKey: uuid.NewString()}, []repository.ReplicationCheckpoint{{ObjectKey: "widget", Digest: "sha256:" + strings.Repeat("a", 64), Size: 1}})
+	replicationPlan, _, err := store.CreateReplicationPlan(ctx, repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven,
+		Coordinate: "org.example:widget:1.0.0", Digest: "sha256:" + strings.Repeat("a", 64), IdempotencyKey: uuid.NewString(),
+	}, []repository.ReplicationCheckpoint{{ObjectKey: "widget", Digest: "sha256:" + strings.Repeat("a", 64), Size: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

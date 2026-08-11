@@ -58,9 +58,81 @@ func (m NativePyPIPromotion) run(ctx context.Context, job repository.LifecycleJo
 	if json.Unmarshal(job.Payload, &payload) != nil || payload.Format != repository.FormatPyPI || payload.SourceRepositoryID == "" || normalizePyPIProject(payload.Project) != payload.Project || !pypiVersionPattern.MatchString(payload.Version) || !validRepositoryDigest(payload.Digest) {
 		return m.fail(ctx, job, "invalid PyPI promotion payload")
 	}
+	coordinate := payload.Project + "@" + payload.Version
+	published := false
+	for attempt := 0; attempt < 3; attempt++ {
+		snapshot, loadErr := m.promotionFiles(ctx, job, payload)
+		if loadErr != nil {
+			return m.fail(ctx, job, loadErr.Error())
+		}
+		objectKeys := make([]string, 0, len(snapshot))
+		for _, file := range snapshot {
+			objectKeys = append(objectKeys, file.ObjectKey)
+		}
+		objectCtx, releaseObjects, lockErr := repository.LockObjectKeys(ctx, objectKeys, m.Store, repository.FormatPyPI, m.Store.LockPyPIObject)
+		if lockErr != nil {
+			return m.fail(ctx, job, "target PyPI object coordination failed")
+		}
+		admissionCtx, releaseAdmission, lockErr := repository.LockArtifactDistributionCoordinates(objectCtx, m.Store, []repository.ArtifactDistributionCoordinate{
+			{RepositoryID: payload.SourceRepositoryID, Format: repository.FormatPyPI, Coordinate: coordinate},
+			{RepositoryID: job.RepositoryID, Format: repository.FormatPyPI, Coordinate: coordinate},
+		})
+		if lockErr != nil {
+			releaseObjects()
+			return m.fail(ctx, job, "coordinate PyPI distribution admission failed")
+		}
+		selected, loadErr := m.promotionFiles(admissionCtx, job, payload)
+		if loadErr != nil {
+			releaseAdmission()
+			releaseObjects()
+			return m.fail(ctx, job, loadErr.Error())
+		}
+		if !samePyPIPromotionFiles(snapshot, selected) {
+			releaseAdmission()
+			releaseObjects()
+			continue
+		}
+		digests := make([]string, 0, len(selected))
+		for _, file := range selected {
+			digests = append(digests, file.Digest)
+		}
+		allowed, admissionErr := repository.ArtifactDistributionAllowedForDigests(admissionCtx, m.Store, payload.SourceRepositoryID, repository.FormatPyPI, coordinate, digests)
+		if admissionErr != nil {
+			releaseAdmission()
+			releaseObjects()
+			return m.fail(ctx, job, "evaluate PyPI artifact quarantine failed")
+		}
+		if !allowed {
+			releaseAdmission()
+			releaseObjects()
+			return m.fail(ctx, job, repository.ArtifactQuarantinedReason)
+		}
+		_, publishErr := m.Store.PublishPyPIVersion(admissionCtx, selected)
+		releaseAdmission()
+		releaseObjects()
+		if publishErr != nil {
+			return m.fail(ctx, job, "publish target PyPI version failed")
+		}
+		published = true
+		break
+	}
+	if !published {
+		return m.fail(ctx, job, "source PyPI version changed while coordinating publication")
+	}
+	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatPyPI, coordinate, payload.Digest)
+	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
+		return m.fail(ctx, job, fmt.Sprintf("copy PyPI artifact intelligence failed: %v", intelligenceErr))
+	}
+	if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
+		m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatPyPI, "deferred")
+	}
+	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+}
+
+func (m NativePyPIPromotion) promotionFiles(ctx context.Context, job repository.LifecycleJob, payload PyPIPromotionPayload) ([]repository.PyPIFile, error) {
 	files, err := m.Store.ListPyPIProjectFiles(ctx, payload.SourceRepositoryID, payload.Project)
 	if err != nil {
-		return m.fail(ctx, job, "source PyPI project is unavailable")
+		return nil, errors.New("source PyPI project is unavailable")
 	}
 	selected := make([]repository.PyPIFile, 0)
 	digestMatched := false
@@ -69,7 +141,7 @@ func (m NativePyPIPromotion) run(ctx context.Context, job repository.LifecycleJo
 			continue
 		}
 		if file.ObjectKey == "" {
-			return m.fail(ctx, job, "source PyPI version is not fully cached")
+			return nil, errors.New("source PyPI version is not fully cached")
 		}
 		digestMatched = digestMatched || file.Digest == payload.Digest
 		file.RepositoryID = job.RepositoryID
@@ -77,28 +149,21 @@ func (m NativePyPIPromotion) run(ctx context.Context, job repository.LifecycleJo
 		selected = append(selected, file)
 	}
 	if len(selected) == 0 || !digestMatched {
-		return m.fail(ctx, job, "source PyPI version is unavailable")
+		return nil, errors.New("source PyPI version is unavailable")
 	}
-	objectKeys := make([]string, 0, len(selected))
-	for _, file := range selected {
-		objectKeys = append(objectKeys, file.ObjectKey)
+	return selected, nil
+}
+
+func samePyPIPromotionFiles(left, right []repository.PyPIFile) bool {
+	if len(left) != len(right) {
+		return false
 	}
-	release, err := repository.LockObjectKeys(ctx, objectKeys, m.Store.LockPyPIObject)
-	if err != nil {
-		return m.fail(ctx, job, "target PyPI object coordination failed")
+	for index := range left {
+		if left[index].Filename != right[index].Filename || left[index].ObjectKey != right[index].ObjectKey || left[index].Digest != right[index].Digest || left[index].Size != right[index].Size {
+			return false
+		}
 	}
-	defer release()
-	if _, err = m.Store.PublishPyPIVersion(ctx, selected); err != nil {
-		return m.fail(ctx, job, "publish target PyPI version failed")
-	}
-	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatPyPI, payload.Project+"@"+payload.Version, payload.Digest)
-	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
-		return m.fail(ctx, job, fmt.Sprintf("copy PyPI artifact intelligence failed: %v", intelligenceErr))
-	}
-	if errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) && m.Metrics != nil {
-		m.Metrics.RecordBackgroundOperation("intelligence-copy", repository.FormatPyPI, "deferred")
-	}
-	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+	return true
 }
 
 func (m NativePyPIPromotion) fail(ctx context.Context, job repository.LifecycleJob, message string) error {
@@ -137,7 +202,40 @@ type PyPIReplication struct {
 }
 
 func (r PyPIReplication) RunJobs(ctx context.Context, limit int) error {
-	return (replication.Worker{Store: r.Store, Source: r.Source, Destination: r.Destination, ChunkBytes: r.ChunkBytes, Format: repository.FormatPyPI, Publish: r.publish, LockObject: r.Store.LockPyPIObject, Metrics: r.Metrics}).Run(ctx, limit)
+	return (replication.Worker{Store: r.Store, Source: r.Source, Destination: r.Destination, ChunkBytes: r.ChunkBytes, Format: repository.FormatPyPI, Publish: r.publish, LockObject: r.Store.LockPyPIObject, AdmissionSnapshot: r.admissionSnapshot, Metrics: r.Metrics}).Run(ctx, limit)
+}
+
+func (r PyPIReplication) admissionSnapshot(ctx context.Context, plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) ([]string, bool, error) {
+	files, err := r.currentVersionFiles(ctx, plan)
+	if err != nil {
+		return nil, false, err
+	}
+	digests := make([]string, 0, len(files))
+	for _, file := range files {
+		digests = append(digests, file.Digest)
+	}
+	return digests, pypiReplicationSnapshotMatches(files, checkpoints), nil
+}
+
+func (r PyPIReplication) currentVersionFiles(ctx context.Context, plan repository.ReplicationPlan) ([]repository.PyPIFile, error) {
+	project, version, ok := parsePyPIVersionCoordinate(plan.Coordinate)
+	if !ok {
+		return nil, errors.New("invalid PyPI replication coordinate")
+	}
+	files, err := r.Store.ListPyPIProjectFiles(ctx, plan.SourceRepositoryID, project)
+	if err != nil {
+		return nil, err
+	}
+	selected := make([]repository.PyPIFile, 0, len(files))
+	for _, file := range files {
+		if file.Version == version {
+			selected = append(selected, file)
+		}
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("source PyPI version is unavailable")
+	}
+	return selected, nil
 }
 
 func (r PyPIReplication) Start(ctx context.Context, interval time.Duration) {
@@ -166,9 +264,12 @@ func (r PyPIReplication) publish(ctx context.Context, plan repository.Replicatio
 	if plan.Format != repository.FormatPyPI || len(checkpoints) == 0 {
 		return errors.New("unsupported PyPI replication plan")
 	}
-	sourceFiles, err := r.sourceFiles(ctx, plan.SourceRepositoryID, checkpoints)
+	sourceFiles, err := r.currentVersionFiles(ctx, plan)
 	if err != nil {
 		return err
+	}
+	if !pypiReplicationSnapshotMatches(sourceFiles, checkpoints) {
+		return errors.New("source PyPI replication snapshot changed")
 	}
 	for index := range sourceFiles {
 		var checkpoint repository.ReplicationCheckpoint
@@ -191,46 +292,25 @@ func (r PyPIReplication) publish(ctx context.Context, plan repository.Replicatio
 	return err
 }
 
-func (r PyPIReplication) sourceFiles(ctx context.Context, repositoryID string, checkpoints []repository.ReplicationCheckpoint) ([]repository.PyPIFile, error) {
-	var available []repository.PyPIFile
-	after := ""
-	for {
-		projects, err := r.Store.ListPyPIProjects(ctx, repositoryID, "", 200, after)
-		if err != nil {
-			return nil, err
-		}
-		for _, project := range projects {
-			files, err := r.Store.ListPyPIProjectFiles(ctx, repositoryID, project.Project)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, files...)
-		}
-		if len(projects) < 200 {
-			break
-		}
-		after = projects[len(projects)-1].Project
+func pypiReplicationSnapshotMatches(files []repository.PyPIFile, checkpoints []repository.ReplicationCheckpoint) bool {
+	if len(files) == 0 || len(files) != len(checkpoints) {
+		return false
 	}
-	selected := make([]repository.PyPIFile, 0, len(checkpoints))
-	for _, checkpoint := range checkpoints {
+	matched := make([]bool, len(checkpoints))
+	for _, file := range files {
 		found := false
-		for _, file := range available {
-			if checkpoint.SourceObjectKey == file.ObjectKey && checkpoint.Digest == file.Digest && checkpoint.Size == file.Size && strings.HasSuffix(checkpoint.ObjectKey, "/"+file.Filename) {
-				selected = append(selected, file)
+		for index, checkpoint := range checkpoints {
+			if !matched[index] && checkpoint.SourceObjectKey == file.ObjectKey && checkpoint.Digest == file.Digest && checkpoint.Size == file.Size && strings.HasSuffix(checkpoint.ObjectKey, "/"+file.Filename) {
+				matched[index] = true
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, errors.New("source PyPI version is unavailable or changed")
+			return false
 		}
 	}
-	for _, file := range selected[1:] {
-		if file.Project != selected[0].Project || file.Version != selected[0].Version {
-			return nil, errors.New("PyPI replication checkpoints span multiple versions")
-		}
-	}
-	return selected, nil
+	return true
 }
 
 func pypiReplicationTargetObjectKey(repositoryID, filename, digest string) string {

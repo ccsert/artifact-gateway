@@ -57,6 +57,73 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 	}
 }
 
+func TestArtifactQuarantineRuntimeResponsesConformToOpenAPI(t *testing.T) {
+	loader := openapi3.NewLoader()
+	spec, err := loader.LoadFromFile(filepath.Join("..", "..", "api", "openapi", "management-runtime-v1.json"))
+	if err != nil || spec.Validate(loader.Context) != nil {
+		t.Fatalf("load runtime contract: %v", err)
+	}
+	router, err := legacy.NewRouter(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "contract-quarantine-source", Format: repository.FormatRaw, Type: repository.RepositoryTypeHosted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "contract-quarantine-target", Format: repository.FormatRaw, Type: repository.RepositoryTypeHosted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	coordinate := "releases/contract.bin"
+	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: source.ID, Path: coordinate, Digest: digest, ObjectKey: "raw/contract", Size: 8}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	quarantinePath := "/api/v2/repositories/" + source.ID + "/artifact-quarantine?coordinate=" + coordinate + "&digest=" + digest
+	distributionBody := `{"targetRepositoryId":"` + target.ID + `","coordinate":"` + coordinate + `","digest":"` + digest + `"}`
+
+	cases := []struct {
+		name, method, path, body, ifMatch, idempotencyKey string
+		wantStatus                                        int
+	}{
+		{name: "quarantine", method: http.MethodPut, path: quarantinePath, body: `{"state":"quarantined","reason":"contract verification"}`, ifMatch: "0", wantStatus: http.StatusOK},
+		{name: "duplicate quarantine", method: http.MethodPut, path: quarantinePath, body: `{"state":"quarantined","reason":"duplicate contract verification"}`, ifMatch: "1", wantStatus: http.StatusConflict},
+		{name: "stale release", method: http.MethodPut, path: quarantinePath, body: `{"state":"released","reason":"stale contract verification"}`, ifMatch: "0", wantStatus: http.StatusPreconditionFailed},
+		{name: "promotion denial", method: http.MethodPost, path: "/api/v2/repositories/" + source.ID + "/promotions", body: distributionBody, idempotencyKey: "contract-quarantine-promotion", wantStatus: http.StatusForbidden},
+		{name: "replication denial", method: http.MethodPost, path: "/api/v2/repositories/" + source.ID + "/replications", body: distributionBody, idempotencyKey: "contract-quarantine-replication", wantStatus: http.StatusForbidden},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(test.method, "https://gateway.example.com"+test.path, strings.NewReader(test.body))
+			authorize(req, "admin-secret")
+			if test.ifMatch != "" {
+				req.Header.Set("If-Match", test.ifMatch)
+			}
+			if test.idempotencyKey != "" {
+				req.Header.Set("Idempotency-Key", test.idempotencyKey)
+			}
+			route, params, routeErr := router.FindRoute(req)
+			if routeErr != nil {
+				t.Fatal(routeErr)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			input := &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route}
+			options := &openapi3filter.Options{IncludeResponseStatus: true}
+			if err := openapi3filter.ValidateResponse(req.Context(), (&openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Options: options}).SetBodyBytes(response.Body.Bytes())); err != nil {
+				t.Fatalf("status=%d does not conform: %v; body=%s", response.Code, err, response.Body.String())
+			}
+		})
+	}
+}
+
 // TestRuntimeManagementOperationInventory verifies that every published
 // management operation reaches the assembled Gateway. Scenario tests own the
 // successful state transitions; this inventory catches a route that is absent

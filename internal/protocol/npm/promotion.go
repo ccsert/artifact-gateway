@@ -56,21 +56,21 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	if json.Unmarshal(job.Payload, &payload) != nil || payload.Format != repository.FormatNPM || payload.SourceRepositoryID == "" || !ValidPackageName(payload.PackageName) || !ValidVersion(payload.Version) || payload.Digest == "" {
 		return m.fail(ctx, job, "invalid npm promotion payload")
 	}
-	release, err := m.Store.LockNPMProxy(ctx, "promotion:"+job.RepositoryID+":"+payload.PackageName+":"+payload.Version)
+	operationCtx, release, err := repository.LockNPMProxyWithContext(ctx, m.Store, "promotion:"+job.RepositoryID+":"+payload.PackageName+":"+payload.Version)
 	if err != nil {
 		return m.fail(ctx, job, "target npm version coordination failed")
 	}
 	defer release()
-	source, err := m.Store.GetNPMVersion(ctx, payload.SourceRepositoryID, payload.PackageName, payload.Version)
+	source, err := m.Store.GetNPMVersion(operationCtx, payload.SourceRepositoryID, payload.PackageName, payload.Version)
 	if err != nil || source.Digest != payload.Digest || source.ObjectKey == "" {
 		return m.fail(ctx, job, "source npm version is unavailable")
 	}
-	objectRelease, err := m.Store.LockNPMObject(ctx, source.ObjectKey)
+	objectCtx, objectRelease, err := repository.LockObjectKeys(operationCtx, []string{source.ObjectKey}, m.Store, repository.FormatNPM, m.Store.LockNPMObject)
 	if err != nil {
 		return m.fail(ctx, job, "target npm object coordination failed")
 	}
 	defer objectRelease()
-	if existing, lookupErr := m.Store.GetNPMVersion(ctx, job.RepositoryID, payload.PackageName, payload.Version); lookupErr == nil {
+	if existing, lookupErr := m.Store.GetNPMVersion(objectCtx, job.RepositoryID, payload.PackageName, payload.Version); lookupErr == nil {
 		if existing.Digest == source.Digest && existing.ObjectKey == source.ObjectKey {
 			return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 		}
@@ -78,7 +78,7 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	} else if !errors.Is(lookupErr, repository.ErrNotFound) {
 		return m.fail(ctx, job, "target npm version lookup failed")
 	}
-	pkg, err := m.Store.GetNPMPackage(ctx, payload.SourceRepositoryID, payload.PackageName)
+	pkg, err := m.Store.GetNPMPackage(objectCtx, payload.SourceRepositoryID, payload.PackageName)
 	if err != nil {
 		return m.fail(ctx, job, "source npm package is unavailable")
 	}
@@ -88,11 +88,21 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 			tags[tag] = version
 		}
 	}
+	coordinate := payload.PackageName + "@" + payload.Version
+	releaseAdmission, err := repository.LockArtifactDistributionAdmission(objectCtx, m.Store, payload.SourceRepositoryID, repository.FormatNPM, coordinate, payload.Digest)
+	if errors.Is(err, repository.ErrArtifactQuarantined) {
+		return m.fail(ctx, job, repository.ArtifactQuarantinedReason)
+	}
+	if err != nil {
+		return m.fail(ctx, job, "evaluate npm artifact quarantine failed")
+	}
 	source.RepositoryID = job.RepositoryID
-	if _, err = m.Store.PublishNPMVersion(ctx, source, tags); err != nil {
+	if _, err = m.Store.PublishNPMVersion(objectCtx, source, tags); err != nil {
+		releaseAdmission()
 		return m.fail(ctx, job, "publish target npm version failed")
 	}
-	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatNPM, payload.PackageName+"@"+payload.Version, payload.Digest)
+	releaseAdmission()
+	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, payload.SourceRepositoryID, repository.FormatNPM, coordinate, payload.Digest)
 	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
 		return m.fail(ctx, job, fmt.Sprintf("copy npm artifact intelligence failed: %v", intelligenceErr))
 	}

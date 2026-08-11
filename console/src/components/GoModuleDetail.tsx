@@ -7,6 +7,7 @@ import { usePreferences } from "../lib/preferences";
 import { goUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
+import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -46,6 +47,7 @@ export function GoModuleDetail({
   size,
   publisher,
   onVersionChange,
+  canQuarantine = false,
 }: {
   repositoryId?: string;
   repoName: string;
@@ -54,6 +56,7 @@ export function GoModuleDetail({
   size?: number;
   publisher?: string;
   onVersionChange?: (version: string) => void;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const { token } = useAuth();
@@ -208,6 +211,12 @@ export function GoModuleDetail({
 
   return (
     <div className="space-y-4 px-1 py-2">
+      <ArtifactQuarantinePanel
+        repositoryId={repositoryId}
+        coordinate={`${modulePath}@${selectedVersion}`}
+        digest={versionDigest}
+        canManage={canQuarantine}
+      />
       <ArtifactScanStatus
         repositoryId={repositoryId}
         format="go"

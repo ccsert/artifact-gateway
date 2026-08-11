@@ -118,9 +118,18 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	if err = m.Objects.PutVerifiedReader(ctx, key, bytes.NewReader(body), int64(len(body)), p.Digest); err != nil {
 		return m.fail(ctx, job, "persist target OCI manifest failed")
 	}
+	releaseAdmission, err := repository.LockArtifactDistributionAdmission(ctx, m.Store, p.SourceRepositoryID, repository.FormatOCI, p.Name, p.Digest)
+	if errors.Is(err, repository.ErrArtifactQuarantined) {
+		return m.fail(ctx, job, repository.ArtifactQuarantinedReason)
+	}
+	if err != nil {
+		return m.fail(ctx, job, "evaluate OCI artifact quarantine failed")
+	}
 	if _, err = m.Store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: job.RepositoryID, Name: p.Name, Digest: p.Digest, ObjectKey: key, MediaType: source.MediaType, SubjectDigest: source.SubjectDigest, ArtifactType: source.ArtifactType, Size: int64(len(body))}, p.Digest); err != nil {
+		releaseAdmission()
 		return m.fail(ctx, job, "publish target OCI manifest failed")
 	}
+	releaseAdmission()
 	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatOCI, p.Name, p.Digest)
 	if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
 		return m.fail(ctx, job, fmt.Sprintf("copy OCI artifact intelligence failed: %v", intelligenceErr))

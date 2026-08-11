@@ -28,7 +28,11 @@ type Worker struct {
 	// LockObject coordinates source reads and destination publication with
 	// format-specific garbage collectors. It is optional for legacy formats.
 	LockObject func(context.Context, string) (func(), error)
-	Metrics    repository.BackgroundOperationMetrics
+	// AdmissionSnapshot reloads an aggregate publication unit while its final
+	// distribution lock is held. It returns every current digest and whether
+	// the durable checkpoints still cover the complete immutable snapshot.
+	AdmissionSnapshot func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) ([]string, bool, error)
+	Metrics           repository.BackgroundOperationMetrics
 }
 
 func (w Worker) Run(ctx context.Context, limit int) error {
@@ -94,6 +98,24 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 	if err != nil {
 		return w.failPlan(ctx, plan.ID, "load replication checkpoints failed", plan.LeaseToken)
 	}
+	if plan.Coordinate == "" || plan.Digest == "" {
+		return w.failPlan(ctx, plan.ID, "replication artifact identity is unavailable", plan.LeaseToken)
+	}
+	releaseEarlyAdmission, admissionErr := repository.LockArtifactDistributionUnit(ctx, w.Store, plan.SourceRepositoryID, plan.Format, plan.Coordinate, replicationAdmissionDigests(plan, checks))
+	if admissionErr != nil {
+		return w.failPlan(ctx, plan.ID, "coordinate artifact quarantine failed", plan.LeaseToken)
+	}
+	allowed, admissionErr := repository.ArtifactDistributionAllowedForDigests(ctx, w.Store, plan.SourceRepositoryID, plan.Format, plan.Coordinate, replicationAdmissionDigests(plan, checks))
+	if admissionErr != nil {
+		releaseEarlyAdmission()
+		return w.failPlan(ctx, plan.ID, "evaluate artifact quarantine failed", plan.LeaseToken)
+	}
+	if !allowed {
+		parkErr := w.parkPlan(ctx, plan.ID, repository.ArtifactQuarantinedReason, plan.LeaseToken)
+		releaseEarlyAdmission()
+		return parkErr
+	}
+	releaseEarlyAdmission()
 	if w.Metrics != nil {
 		for _, checkpoint := range checks {
 			if checkpoint.Attempts > 0 {
@@ -107,10 +129,11 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 		for _, checkpoint := range checks {
 			objectKeys = append(objectKeys, checkpoint.SourceObjectKey, checkpoint.ObjectKey)
 		}
-		release, lockErr := repository.LockObjectKeys(ctx, objectKeys, w.LockObject)
+		lockedCtx, release, lockErr := repository.LockObjectKeys(ctx, objectKeys, w.Store, plan.Format, w.LockObject)
 		if lockErr != nil {
 			return w.failPlan(ctx, plan.ID, "replication object coordination failed", plan.LeaseToken)
 		}
+		ctx = lockedCtx
 		defer release()
 	}
 	for _, checkpoint := range checks {
@@ -156,11 +179,61 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 		if err := w.Store.UpdateReplicationCheckpointWithLease(ctx, checks[len(checks)-1], plan.LeaseToken); err != nil {
 			return err
 		}
-		if err := w.Publish(ctx, plan, checks); err != nil {
+		admissionDigests := replicationAdmissionDigests(plan, checks)
+		snapshotUnchanged := true
+		admissionCtx := ctx
+		var releaseAdmission func()
+		if plan.Format == repository.FormatPyPI {
+			admissionCtx, releaseAdmission, admissionErr = repository.LockArtifactDistributionCoordinates(ctx, w.Store, []repository.ArtifactDistributionCoordinate{
+				{RepositoryID: plan.SourceRepositoryID, Format: plan.Format, Coordinate: plan.Coordinate},
+				{RepositoryID: plan.TargetRepositoryID, Format: plan.Format, Coordinate: plan.Coordinate},
+			})
+		} else {
+			releaseAdmission, admissionErr = repository.LockArtifactDistributionUnit(ctx, w.Store, plan.SourceRepositoryID, plan.Format, plan.Coordinate, admissionDigests)
+		}
+		if admissionErr != nil {
+			return w.failPlan(ctx, plan.ID, "coordinate artifact quarantine failed", plan.LeaseToken)
+		}
+		if w.AdmissionSnapshot != nil {
+			admissionDigests, snapshotUnchanged, admissionErr = w.AdmissionSnapshot(admissionCtx, plan, checks)
+			if admissionErr != nil {
+				releaseAdmission()
+				return w.failPlan(ctx, plan.ID, "reload distribution admission identities failed", plan.LeaseToken)
+			}
+		}
+		allowed, admissionErr = repository.ArtifactDistributionAllowedForDigests(admissionCtx, w.Store, plan.SourceRepositoryID, plan.Format, plan.Coordinate, admissionDigests)
+		if admissionErr != nil {
+			releaseAdmission()
+			return w.failPlan(ctx, plan.ID, "evaluate artifact quarantine failed", plan.LeaseToken)
+		}
+		if !allowed {
+			parkErr := w.parkPlan(admissionCtx, plan.ID, repository.ArtifactQuarantinedReason, plan.LeaseToken)
+			releaseAdmission()
+			return parkErr
+		}
+		if !snapshotUnchanged {
+			parkErr := w.parkPlan(admissionCtx, plan.ID, repository.ReplicationSnapshotChangedReason, plan.LeaseToken)
+			releaseAdmission()
+			return parkErr
+		}
+		if err := w.Publish(admissionCtx, plan, checks); err != nil {
+			releaseAdmission()
 			return w.failPlan(ctx, plan.ID, "publish replicated artifacts failed", plan.LeaseToken)
 		}
+		releaseAdmission()
 	}
 	return w.Store.CompleteReplicationPlanWithLease(ctx, plan.ID, plan.LeaseToken)
+}
+
+func replicationAdmissionDigests(plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) []string {
+	digests := []string{plan.Digest}
+	if plan.Format != repository.FormatPyPI {
+		return digests
+	}
+	for _, checkpoint := range checkpoints {
+		digests = append(digests, checkpoint.Digest)
+	}
+	return digests
 }
 
 func (w Worker) copyCheckpoint(ctx context.Context, checkpoint repository.ReplicationCheckpoint, leaseToken string) error {
@@ -249,6 +322,10 @@ func (w Worker) failPlan(ctx context.Context, id, message, leaseToken string) er
 		return err
 	}
 	return nil
+}
+
+func (w Worker) parkPlan(ctx context.Context, id, message, leaseToken string) error {
+	return w.Store.ParkReplicationPlanWithLease(ctx, id, message, leaseToken)
 }
 
 func validSHA256(value string) bool {

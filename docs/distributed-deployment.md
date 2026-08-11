@@ -43,8 +43,11 @@ Worker 隔离部署。未设置过滤器时，worker 处理全部适用格式和
 2. 迁移必须由独立的 migration job 在启动副本前完成，Gateway 进程不负责竞争执行迁移。
 3. 每个实例设置稳定的 `GATEWAY_INSTANCE_ID`，用于日志和故障定位；Gateway 会为每次
    进程启动生成独立会话 ID，因此重复配置实例 ID 也不会覆盖节点会话。
-4. 多副本部署时按副本数降低 `GATEWAY_DATABASE_MAX_OPEN_CONNS`，并为 coordinator
-   和 notification pool 预留连接。
+4. 多副本部署时按副本数分别预算 primary、cache coordinator、artifact lock 和
+   notification pool。默认每个实例上限为 `32 + 8 + 4 + 2 = 46` 条连接；应按
+   PostgreSQL 的 `max_connections` 降低 `GATEWAY_DATABASE_MAX_OPEN_CONNS`、
+   `GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS` 与
+   `GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_OPEN_CONNS`，并为迁移和管理连接留余量。
 5. `LISTEN/NOTIFY` 只是唤醒提示，任务表和租约才是事实来源；通知丢失后 worker
    仍会通过定时轮询恢复任务。
 

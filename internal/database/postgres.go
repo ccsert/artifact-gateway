@@ -33,6 +33,13 @@ func DefaultCoordinatorPoolConfig() PoolConfig {
 	return config
 }
 
+func DefaultArtifactLockPoolConfig() PoolConfig {
+	config := DefaultPoolConfig()
+	config.MaxOpenConns = 4
+	config.MaxIdleConns = 1
+	return config
+}
+
 func NotificationPoolConfig() PoolConfig {
 	config := DefaultPoolConfig()
 	config.MaxOpenConns = 2

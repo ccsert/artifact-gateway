@@ -24,11 +24,13 @@ export function MavenArtifactDetail({
   repoName,
   meta,
   onDeleted,
+  canQuarantine = false,
 }: {
   repoId: string;
   repoName: string;
   meta: ArtifactMeta;
   onDeleted?: () => void;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const [versions, setVersions] = useState<
@@ -175,6 +177,7 @@ export function MavenArtifactDetail({
       repositoryId={repoId}
       repoName={repoName}
       meta={effectiveMeta}
+      canQuarantine={canQuarantine}
 
       versions={
         <div className="space-y-5">
@@ -243,6 +246,7 @@ export function ConanArtifactDetail({
   managed,
   canDelete,
   onDeleted,
+  canQuarantine = false,
 }: {
   repoId: string;
   repoName: string;
@@ -250,6 +254,7 @@ export function ConanArtifactDetail({
   managed: boolean;
   canDelete: boolean;
   onDeleted?: () => void;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const [recipeRevisions, setRecipeRevisions] = useState<
@@ -449,6 +454,11 @@ export function ConanArtifactDetail({
       repositoryId={repoId}
       repoName={repoName}
       meta={detailMeta}
+      // Conan promotion and replication publish a recipe revision as one
+      // unit. A package revision is not an independently enforceable
+      // distribution anchor, so do not offer a misleading transition there.
+      canQuarantine={canQuarantine && !selectedPackage}
+      showQuarantine={!selectedPackage}
       versions={
         managed ? (
           <div className="space-y-4">
@@ -545,11 +555,13 @@ export function RawArtifactDetail({
   repoName,
   meta,
   onDeleted,
+  canQuarantine = false,
 }: {
   repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
   onDeleted?: () => void;
+  canQuarantine?: boolean;
 }) {
   const { text } = usePreferences();
   const { token } = useAuth();
@@ -589,6 +601,7 @@ export function RawArtifactDetail({
         format="raw"
         repoName={repoName}
         meta={meta}
+        canQuarantine={canQuarantine}
       />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
         <div>

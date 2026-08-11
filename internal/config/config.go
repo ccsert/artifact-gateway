@@ -75,6 +75,7 @@ type Config struct {
 	DatabaseURL                string
 	DatabasePool               database.PoolConfig
 	DatabaseCoordinatorPool    database.PoolConfig
+	DatabaseArtifactLockPool   database.PoolConfig
 	S3Endpoint                 string
 	S3Bucket                   string
 	S3AccessKey                string
@@ -135,6 +136,7 @@ func Load() (Config, error) {
 		DatabaseURL:                os.Getenv("GATEWAY_DATABASE_URL"),
 		DatabasePool:               database.DefaultPoolConfig(),
 		DatabaseCoordinatorPool:    database.DefaultCoordinatorPoolConfig(),
+		DatabaseArtifactLockPool:   database.DefaultArtifactLockPoolConfig(),
 		S3Endpoint:                 os.Getenv("GATEWAY_S3_ENDPOINT"),
 		S3Bucket:                   os.Getenv("GATEWAY_S3_BUCKET"),
 		S3AccessKey:                os.Getenv("GATEWAY_S3_ACCESS_KEY"),
@@ -275,13 +277,28 @@ func Load() (Config, error) {
 	} else {
 		cfg.DatabaseCoordinatorPool.MaxIdleConns = value
 	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_OPEN_CONNS", cfg.DatabaseArtifactLockPool.MaxOpenConns, false); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabaseArtifactLockPool.MaxOpenConns = value
+	}
+	if value, err := positiveIntEnv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS", cfg.DatabaseArtifactLockPool.MaxIdleConns, true); err != nil {
+		return Config{}, err
+	} else {
+		cfg.DatabaseArtifactLockPool.MaxIdleConns = value
+	}
 	cfg.DatabaseCoordinatorPool.ConnMaxLifetime = cfg.DatabasePool.ConnMaxLifetime
 	cfg.DatabaseCoordinatorPool.ConnMaxIdleTime = cfg.DatabasePool.ConnMaxIdleTime
+	cfg.DatabaseArtifactLockPool.ConnMaxLifetime = cfg.DatabasePool.ConnMaxLifetime
+	cfg.DatabaseArtifactLockPool.ConnMaxIdleTime = cfg.DatabasePool.ConnMaxIdleTime
 	if err := cfg.DatabasePool.Validate(); err != nil {
 		return Config{}, fmt.Errorf("invalid database pool configuration: %w", err)
 	}
 	if err := cfg.DatabaseCoordinatorPool.Validate(); err != nil {
 		return Config{}, fmt.Errorf("invalid database coordinator pool configuration: %w", err)
+	}
+	if err := cfg.DatabaseArtifactLockPool.Validate(); err != nil {
+		return Config{}, fmt.Errorf("invalid database artifact lock pool configuration: %w", err)
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES")); raw != "" {
 		bytes, err := strconv.ParseInt(raw, 10, 64)

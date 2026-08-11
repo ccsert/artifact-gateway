@@ -1,0 +1,60 @@
+---
+repositories_repositoryId_artifact_quarantine:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - name: coordinate
+    in: query
+    required: true
+    description: |
+      Immutable format-specific distribution coordinate. For Conan this must
+      be a recipe revision (`reference#recipeRevision`); package revisions are
+      scanned independently but are distributed with their parent recipe and
+      cannot be quarantined independently.
+    schema: {type: string, minLength: 1, maxLength: 1024}
+  - name: digest
+    in: query
+    required: true
+    description: |
+      SHA-256 digest that completes the immutable distribution identity. For
+      Conan this is the recipe revision digest.
+    schema: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+  get:
+    operationId: getArtifactQuarantine
+    summary: Get the quarantine state for one immutable distribution anchor
+    description: |
+      Returns the current versioned quarantine record. Quarantine blocks new
+      promotion and replication requests for the artifact but does not block
+      ordinary repository reads. Conan package revisions remain independently
+      scannable but cannot be quarantined apart from their recipe revision.
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ArtifactQuarantine"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+  put:
+    operationId: replaceArtifactQuarantine
+    summary: Quarantine or release one immutable distribution anchor
+    description: |
+      Replaces the current quarantine state using optimistic concurrency.
+      Every transition requires an operator-supplied audit reason. Setting the
+      state to quarantined blocks subsequent promotion and replication
+      requests; setting it to released permits those operations again, subject
+      to their other admission checks. Conan package revisions remain
+      independently scannable but cannot be quarantined apart from their
+      recipe revision.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ArtifactQuarantineUpdate"}
+    responses:
+      '200': {"$ref": "../components/responses.yaml#/ArtifactQuarantine"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}

@@ -77,7 +77,10 @@ func TestRuntimeAndDatabasePoolMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = notifications.Close() }()
-	metrics := (&Metrics{}).WithDatabaseStats(pool.Stats).WithDatabasePoolStats("notifications", notifications.Stats)
+	metrics := (&Metrics{}).
+		WithDatabaseStats(pool.Stats).
+		WithDatabasePoolStats("artifact-locks", func() sql.DBStats { return sql.DBStats{MaxOpenConnections: 4} }).
+		WithDatabasePoolStats("notifications", notifications.Stats)
 	response := httptest.NewRecorder()
 	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	body := response.Body.String()
@@ -86,6 +89,7 @@ func TestRuntimeAndDatabasePoolMetrics(t *testing.T) {
 		"artifact_gateway_runtime_gc_cycles_total ",
 		"artifact_gateway_runtime_goroutines ",
 		`artifact_gateway_database_connections{pool="primary",state="max_open"} 7`,
+		`artifact_gateway_database_connections{pool="artifact-locks",state="max_open"} 4`,
 		`artifact_gateway_database_connections{pool="notifications",state="max_open"} 2`,
 	} {
 		if !strings.Contains(body, expected) {

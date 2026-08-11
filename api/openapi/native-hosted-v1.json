@@ -642,7 +642,7 @@
         },
         "responses": {
           "202": {
-            "description": "Immutable Maven or OCI promotion job accepted",
+            "description": "Immutable artifact promotion job accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -650,6 +650,21 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -662,6 +677,8 @@
       ],
       "post": {
         "operationId": "createRepositoryReplication",
+        "summary": "Create or replay an immutable artifact replication plan",
+        "description": "Newly accepted plans persist both the immutable source coordinate and\ndigest; neither field may be present without the other. A request-time\nquarantine denial returns 403 without creating a plan. If the final\nworker check instead observes quarantine, it parks the existing plan\nwithout publishing target metadata. After release, replaying the exact\nrequest with the same Idempotency-Key requeues and returns that plan; it\ndoes not create a second plan. A PyPI source version whose file membership\nchanges after enqueue is likewise parked with\n`replication_snapshot_changed`; exact replay atomically refreshes that\nplan's checkpoints before requeueing the same plan ID.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -691,7 +708,13 @@
           "400": {
             "$ref": "#/components/responses/Problem"
           },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
           "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
             "$ref": "#/components/responses/Problem"
           },
           "409": {
@@ -703,7 +726,7 @@
         "operationId": "listRepositoryReplications",
         "responses": {
           "200": {
-            "description": "Replication plans involving this repository",
+            "description": "Replication plans involving this repository. Coordinate and digest\nare both present for current plans and both absent only on historical\nplans created before immutable identity persistence was introduced.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -734,7 +757,7 @@
         "operationId": "getRepositoryReplication",
         "responses": {
           "200": {
-            "description": "Replication plan and checkpoint progress for this repository",
+            "description": "Replication plan and checkpoint progress for this repository.\nCoordinate and digest are both present for current plans and both\nabsent only on historical plans created before immutable identity\npersistence was introduced. A new worker fails closed rather than\npublishing a non-terminal historical plan with both fields absent.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -3476,6 +3499,17 @@
           "format": {
             "$ref": "#/components/schemas/Format"
           },
+          "coordinate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Immutable artifact digest. Omitted together with coordinate for legacy plans created before artifact identity was persisted."
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -3500,7 +3534,8 @@
           },
           "lastError": {
             "type": "string",
-            "maxLength": 1024
+            "maxLength": 1024,
+            "description": "Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons."
           }
         }
       },
@@ -3740,6 +3775,7 @@
             "type": "string",
             "enum": [
               "invalid_request",
+              "invalid_state",
               "invalid_page_token",
               "access_denied",
               "not_found",
@@ -3750,6 +3786,7 @@
               "digest_mismatch",
               "retention_protected",
               "security_policy_denied",
+              "artifact_quarantined",
               "internal_error"
             ]
           },

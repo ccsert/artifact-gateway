@@ -9,6 +9,7 @@ import {
 } from "./PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
+import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
@@ -40,6 +41,11 @@ function fileVersion(file: PyPIFile): string {
   return file["_artifact-gateway"]?.version ?? "";
 }
 
+function fileDigest(file: PyPIFile): string | undefined {
+  const hash = file.hashes.sha256?.replace(/^sha256:/, "").toLowerCase();
+  return hash && /^[a-f0-9]{64}$/.test(hash) ? `sha256:${hash}` : undefined;
+}
+
 export function PyPIProjectDetail({
   repositoryId,
   repoName,
@@ -48,6 +54,7 @@ export function PyPIProjectDetail({
   size,
   publisher,
   onVersionChange,
+  canQuarantine = false,
 }: {
   repositoryId?: string;
   repoName: string;
@@ -56,6 +63,7 @@ export function PyPIProjectDetail({
   size?: number;
   publisher?: string;
   onVersionChange?: (version: string) => void;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const { token } = useAuth();
@@ -145,8 +153,7 @@ export function PyPIProjectDetail({
   const selectedFiles = document.files.filter(
     (file) => fileVersion(file) === selectedVersion,
   );
-  const selectedDigest = selectedFiles.find((file) => file.hashes.sha256)
-    ?.hashes.sha256;
+  const selectedDigest = selectedFiles.map(fileDigest).find(Boolean);
   const latestMetadata = selectedFiles[0]?.["_artifact-gateway"];
   const totalSize = selectedFiles.reduce(
     (total, file) => total + (file["_artifact-gateway"]?.size ?? 0),
@@ -216,21 +223,30 @@ export function PyPIProjectDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      {selectedFiles.map((file) => {
+        const digest = fileDigest(file);
+        return digest ? (
+          <ArtifactQuarantinePanel
+            key={`quarantine:${file.filename}:${digest}`}
+            repositoryId={repositoryId}
+            coordinate={`${project}@${selectedVersion}`}
+            digest={digest}
+            canManage={canQuarantine}
+            label={file.filename}
+          />
+        ) : null;
+      })}
       <ArtifactScanStatus
         repositoryId={repositoryId}
         format="pypi"
         coordinate={`${project}@${selectedVersion}`}
-        digest={
-          selectedDigest
-            ? `sha256:${selectedDigest.replace(/^sha256:/, "")}`
-            : undefined
-        }
+        digest={selectedDigest}
       />
       <ArtifactIntelligencePanel
         repositoryId={repositoryId}
         format="pypi"
         coordinate={`${project}@${selectedVersion}`}
-        digest={selectedDigest ? `sha256:${selectedDigest}` : undefined}
+        digest={selectedDigest}
       />
       <div>
         <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">

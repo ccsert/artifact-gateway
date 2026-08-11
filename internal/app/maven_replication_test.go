@@ -34,7 +34,7 @@ func TestMavenReplicationCopiesTargetOwnedAssetsAndMetadata(t *testing.T) {
 	if _, err := store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: "source", Path: path, ObjectKey: sourceKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: "maven-replication", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatMaven, IdempotencyKey: "copy"}
+	plan := repository.ReplicationPlan{ID: "maven-replication", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatMaven, Coordinate: coordinate, Digest: digest, IdempotencyKey: "copy"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestMavenReplicationSharesTargetObjectForPathsWithTheSameDigest(t *testing.
 		t.Fatal(err)
 	}
 	targetKey := mavenReplicationTargetObjectKey("target", digest)
-	plan := repository.ReplicationPlan{ID: "shared-replication", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatMaven, IdempotencyKey: "shared"}
+	plan := repository.ReplicationPlan{ID: "shared-replication", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatMaven, Coordinate: coordinate, Digest: digest, IdempotencyKey: "shared"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: first, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}

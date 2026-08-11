@@ -509,7 +509,8 @@ func TestRepositoryManagementCancelsReplicationPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, _, err := store.CreateReplicationPlan(context.Background(), repository.ReplicationPlan{
-		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "cancel-key",
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw,
+		Coordinate: "releases/cancel.bin", Digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", IdempotencyKey: "cancel-key",
 	}, []repository.ReplicationCheckpoint{{PlanID: uuid.NewString(), SourceObjectKey: "a", ObjectKey: "a", Digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Size: 1}})
 	if err != nil {
 		t.Fatal(err)

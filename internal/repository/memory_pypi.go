@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -17,7 +18,12 @@ func (s *MemoryStore) LockPyPIObject(_ context.Context, objectKey string) (func(
 	return s.lockMemoryObject(s.pypiObjectLocks, objectKey)
 }
 
-func (s *MemoryStore) PublishPyPIFile(_ context.Context, file PyPIFile) (PyPIFile, error) {
+func (s *MemoryStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyPIFile, error) {
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, file.RepositoryID, FormatPyPI, []string{file.Project + "@" + file.Version})
+	if err != nil {
+		return PyPIFile{}, err
+	}
+	defer releaseDistribution()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := pypiFileKey(file.RepositoryID, file.Filename)
@@ -48,10 +54,15 @@ func (s *MemoryStore) PublishPyPIFile(_ context.Context, file PyPIFile) (PyPIFil
 	return clonePyPIFile(file), nil
 }
 
-func (s *MemoryStore) PublishPyPIVersion(_ context.Context, files []PyPIFile) ([]PyPIFile, error) {
+func (s *MemoryStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile) ([]PyPIFile, error) {
 	if len(files) == 0 {
 		return nil, ErrNotFound
 	}
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, files[0].RepositoryID, FormatPyPI, []string{files[0].Project + "@" + files[0].Version})
+	if err != nil {
+		return nil, err
+	}
+	defer releaseDistribution()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var used, additional int64
@@ -96,7 +107,16 @@ func (s *MemoryStore) PublishPyPIVersion(_ context.Context, files []PyPIFile) ([
 	return result, nil
 }
 
-func (s *MemoryStore) SyncPyPIProxyFiles(_ context.Context, repositoryID, project string, files []PyPIFile) error {
+func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, project string, files []PyPIFile) error {
+	coordinates := make([]string, 0, len(files))
+	for _, file := range files {
+		coordinates = append(coordinates, project+"@"+file.Version)
+	}
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, repositoryID, FormatPyPI, coordinates)
+	if err != nil {
+		return err
+	}
+	defer releaseDistribution()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -231,7 +251,12 @@ func (s *MemoryStore) ListPyPIProjects(_ context.Context, repositoryID, prefix s
 	return result, nil
 }
 
-func (s *MemoryStore) TombstonePyPIVersion(_ context.Context, repositoryID, project, version string) ([]PyPIFile, error) {
+func (s *MemoryStore) TombstonePyPIVersion(ctx context.Context, repositoryID, project, version string) ([]PyPIFile, error) {
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, repositoryID, FormatPyPI, []string{project + "@" + version})
+	if err != nil {
+		return nil, err
+	}
+	defer releaseDistribution()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -253,7 +278,37 @@ func (s *MemoryStore) TombstonePyPIVersion(_ context.Context, repositoryID, proj
 }
 
 func (s *MemoryStore) RestorePyPIVersion(ctx context.Context, repositoryID, project, version string) ([]PyPIFile, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		objectKeys, found, collected := s.deletedPyPIObjectKeys(repositoryID, project, version)
+		if !found {
+			return nil, ErrNotFound
+		}
+		if collected {
+			return nil, ErrDisabled
+		}
+		objectCtx, releaseObjects, err := LockObjectKeys(ctx, objectKeys, s, FormatPyPI, s.LockPyPIObject)
+		if err != nil {
+			return nil, err
+		}
+		releaseDistribution, err := lockArtifactDistributionCoordinates(objectCtx, s, repositoryID, FormatPyPI, []string{project + "@" + version})
+		if err != nil {
+			releaseObjects()
+			return nil, err
+		}
+		files, membershipChanged, restoreErr := s.restorePyPIVersionLocked(repositoryID, project, version, objectKeys)
+		releaseDistribution()
+		releaseObjects()
+		if membershipChanged {
+			continue
+		}
+		return files, restoreErr
+	}
+	return nil, ErrUpstreamChanged
+}
+
+func (s *MemoryStore) deletedPyPIObjectKeys(repositoryID, project, version string) ([]string, bool, bool) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	objectKeys := make([]string, 0)
 	seen := make(map[string]bool)
 	found, collected := false, false
@@ -268,35 +323,37 @@ func (s *MemoryStore) RestorePyPIVersion(ctx context.Context, repositoryID, proj
 			objectKeys = append(objectKeys, file.ObjectKey)
 		}
 	}
-	s.mu.RUnlock()
-	if !found {
-		return nil, ErrNotFound
-	}
-	if collected {
-		return nil, ErrDisabled
-	}
-	release, err := LockObjectKeys(ctx, objectKeys, s.LockPyPIObject)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
+	sort.Strings(objectKeys)
+	return objectKeys, found, collected
+}
 
+func (s *MemoryStore) restorePyPIVersionLocked(repositoryID, project, version string, expectedObjectKeys []string) ([]PyPIFile, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	files := make([]PyPIFile, 0)
-	found, collected = false, false
+	currentObjectKeys := make([]string, 0)
+	seen := make(map[string]bool)
+	found, collected := false, false
 	for _, file := range s.pypiFiles {
 		if file.RepositoryID == repositoryID && file.Project == project && file.Version == version && file.State == "deleted" {
 			found = true
 			collected = collected || !file.CollectedAt.IsZero()
+			if file.ObjectKey != "" && !seen[file.ObjectKey] {
+				seen[file.ObjectKey] = true
+				currentObjectKeys = append(currentObjectKeys, file.ObjectKey)
+			}
 		}
 	}
 	if !found {
-		return nil, ErrNotFound
+		return nil, false, ErrNotFound
 	}
 	if collected {
-		return nil, ErrDisabled
+		return nil, false, ErrDisabled
 	}
+	sort.Strings(currentObjectKeys)
+	if !slices.Equal(expectedObjectKeys, currentObjectKeys) {
+		return nil, true, nil
+	}
+	files := make([]PyPIFile, 0)
 	for key, file := range s.pypiFiles {
 		if file.RepositoryID != repositoryID || file.Project != project || file.Version != version || file.State != "deleted" {
 			continue
@@ -307,10 +364,10 @@ func (s *MemoryStore) RestorePyPIVersion(ctx context.Context, repositoryID, proj
 		files = append(files, file)
 	}
 	if len(files) == 0 {
-		return nil, ErrNotFound
+		return nil, false, ErrNotFound
 	}
 	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatPyPI)+"\x00"+project+"@"+version)
-	return files, nil
+	return files, false, nil
 }
 
 func (s *MemoryStore) ListReclaimablePyPIObjects(_ context.Context, before time.Time, limit int) ([]PyPIObject, error) {

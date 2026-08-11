@@ -57,7 +57,7 @@ func (m *Metrics) WithDatabasePoolStats(pool string, stats DatabaseStatsFunc) *M
 		return m
 	}
 	switch pool {
-	case "primary", "coordinator", "notifications":
+	case "primary", "artifact-locks", "coordinator", "notifications":
 		m.databaseStats = append(m.databaseStats, namedDatabaseStats{pool: pool, stats: stats})
 	}
 	return m

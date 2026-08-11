@@ -447,6 +447,8 @@ func TestLoadConfiguresDatabasePool(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_MAX_IDLE_CONNS", "6")
 	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS", "5")
 	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_IDLE_CONNS", "1")
+	t.Setenv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_OPEN_CONNS", "3")
+	t.Setenv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS", "1")
 	t.Setenv("GATEWAY_DATABASE_CONN_MAX_LIFETIME", "20m")
 	t.Setenv("GATEWAY_DATABASE_CONN_MAX_IDLE_TIME", "2m")
 
@@ -459,6 +461,9 @@ func TestLoadConfiguresDatabasePool(t *testing.T) {
 	}
 	if cfg.DatabaseCoordinatorPool.MaxOpenConns != 5 || cfg.DatabaseCoordinatorPool.MaxIdleConns != 1 || cfg.DatabaseCoordinatorPool.ConnMaxLifetime != 20*time.Minute || cfg.DatabaseCoordinatorPool.ConnMaxIdleTime != 2*time.Minute {
 		t.Fatalf("database coordinator pool=%+v", cfg.DatabaseCoordinatorPool)
+	}
+	if cfg.DatabaseArtifactLockPool.MaxOpenConns != 3 || cfg.DatabaseArtifactLockPool.MaxIdleConns != 1 || cfg.DatabaseArtifactLockPool.ConnMaxLifetime != 20*time.Minute || cfg.DatabaseArtifactLockPool.ConnMaxIdleTime != 2*time.Minute {
+		t.Fatalf("database artifact lock pool=%+v", cfg.DatabaseArtifactLockPool)
 	}
 }
 
@@ -489,6 +494,21 @@ func TestLoadRejectsCoordinatorIdleConnectionsAboveOpenLimit(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_IDLE_CONNS", "2")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want database coordinator pool validation error")
+	}
+}
+
+func TestLoadRejectsArtifactLockIdleConnectionsAboveOpenLimit(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
+	t.Setenv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_OPEN_CONNS", "1")
+	t.Setenv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS", "2")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want database artifact lock pool validation error")
 	}
 }
 

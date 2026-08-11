@@ -93,22 +93,30 @@ func (m NativePromotion) run(ctx context.Context, job repository.LifecycleJob) e
 	}
 	// Serialize the destination name, not the source digest: separate sources
 	// must never race into an immutable target path.
-	release, err := m.Store.LockRawObject(ctx, "promotion:"+job.RepositoryID+":"+strings.TrimPrefix(p.Path, "/"))
+	objectCtx, release, err := repository.LockObjectKeys(ctx, []string{"promotion:" + job.RepositoryID + ":" + strings.TrimPrefix(p.Path, "/")}, m.Store, repository.FormatRaw, m.Store.LockRawObject)
 	if err != nil {
 		return m.fail(ctx, job, "target Raw path coordination failed")
 	}
 	defer release()
-	if _, err := m.Store.GetRawAsset(ctx, job.RepositoryID, p.Path); err == nil {
+	if _, err := m.Store.GetRawAsset(objectCtx, job.RepositoryID, p.Path); err == nil {
 		return m.fail(ctx, job, "target Raw path already exists")
 	} else if err != repository.ErrNotFound {
 		return m.fail(ctx, job, "target Raw path lookup failed")
 	}
-	source, err := m.Store.GetRawAsset(ctx, p.SourceRepositoryID, p.Path)
+	source, err := m.Store.GetRawAsset(objectCtx, p.SourceRepositoryID, p.Path)
 	if err != nil || source.Digest != p.Digest {
 		return m.fail(ctx, job, "source Raw asset is unavailable")
 	}
+	releaseAdmission, err := repository.LockArtifactDistributionAdmission(objectCtx, m.Store, p.SourceRepositoryID, repository.FormatRaw, p.Path, p.Digest)
+	if errors.Is(err, repository.ErrArtifactQuarantined) {
+		return m.fail(ctx, job, repository.ArtifactQuarantinedReason)
+	}
+	if err != nil {
+		return m.fail(ctx, job, "evaluate Raw artifact quarantine failed")
+	}
+	defer releaseAdmission()
 	source.RepositoryID = job.RepositoryID
-	if _, err = m.Store.PutRawAsset(ctx, source); err != nil {
+	if _, err = m.Store.PutRawAsset(objectCtx, source); err != nil {
 		return m.fail(ctx, job, "publish target Raw asset failed")
 	}
 	intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatRaw, p.Path, p.Digest)

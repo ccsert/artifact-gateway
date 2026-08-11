@@ -265,11 +265,23 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			m.endPromotion("failed")
 			continue
 		}
+		releaseAdmission, admissionErr := repository.LockArtifactDistributionAdmission(ctx, m.Store, p.SourceRepositoryID, repository.FormatMaven, p.Coordinate, p.Digest)
+		if admissionErr != nil {
+			message := "evaluate Maven artifact quarantine failed"
+			if errors.Is(admissionErr, repository.ErrArtifactQuarantined) {
+				message = repository.ArtifactQuarantinedReason
+			}
+			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message)
+			m.endPromotion("failed")
+			continue
+		}
 		if _, err := m.Store.PromoteMavenArtifact(ctx, repository.MavenPromotion{ID: p.PromotionID, SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Coordinate: p.Coordinate, Digest: p.Digest}); err != nil {
+			releaseAdmission()
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, fmt.Sprintf("promote Maven artifact failed: %v", err))
 			m.endPromotion("failed")
 			continue
 		}
+		releaseAdmission()
 		intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatMaven, p.Coordinate, p.Digest)
 		if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
 			_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, fmt.Sprintf("copy Maven artifact intelligence failed: %v", intelligenceErr))

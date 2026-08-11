@@ -165,7 +165,7 @@ func TestPostgresMinIOOCIReplicationPublishesTargetOwnedManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	targetKey := ociReplicationTargetObjectKey(target.ID, "team/widget", manifestDigest)
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatOCI, IdempotencyKey: "postgres-minio-oci-replication"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatOCI, Coordinate: "team/widget", Digest: manifestDigest, IdempotencyKey: "postgres-minio-oci-replication"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: manifestDigest, Size: int64(len(manifestBody))}}); err != nil {
 		t.Fatal(err)
 	}

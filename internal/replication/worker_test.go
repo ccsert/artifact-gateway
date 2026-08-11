@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -16,6 +17,22 @@ type failingDestination struct {
 	objectstore.Store
 	failOnPut int
 	puts      int
+}
+
+type blockingParkReplicationStore struct {
+	*repository.MemoryStore
+	parkStarted  chan struct{}
+	continuePark chan struct{}
+}
+
+func (s *blockingParkReplicationStore) ParkReplicationPlanWithLease(ctx context.Context, id, message, leaseToken string) error {
+	close(s.parkStarted)
+	select {
+	case <-s.continuePark:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return s.MemoryStore.ParkReplicationPlanWithLease(ctx, id, message, leaseToken)
 }
 
 func (s *failingDestination) Put(ctx context.Context, key string, value []byte) error {
@@ -37,7 +54,7 @@ func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := repository.NewMemoryStore()
-	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, IdempotencyKey: "key"}
+	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, Coordinate: "releases/widget.bin", Digest: digest, IdempotencyKey: "key"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: "objects/source-widget", ObjectKey: "objects/widget", Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +92,7 @@ func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
 func TestWorkerRejectsInvalidDigest(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	plan := repository.ReplicationPlan{ID: "invalid", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, IdempotencyKey: "invalid"}
+	plan := repository.ReplicationPlan{ID: "invalid", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, Coordinate: "releases/invalid.bin", Digest: "sha256:" + strings.Repeat("a", 64), IdempotencyKey: "invalid"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: "object", Digest: "sha256:" + strings.Repeat("x", 64), Size: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +115,7 @@ func TestWorkerFailsPlanWhenObjectCoordinationFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := repository.NewMemoryStore()
-	plan := repository.ReplicationPlan{ID: "lock-failure", SourceRepositoryID: "source-repo", TargetRepositoryID: "target-repo", Format: repository.FormatNPM, IdempotencyKey: "lock-failure"}
+	plan := repository.ReplicationPlan{ID: "lock-failure", SourceRepositoryID: "source-repo", TargetRepositoryID: "target-repo", Format: repository.FormatNPM, Coordinate: "widget@1.0.0", Digest: digest, IdempotencyKey: "lock-failure"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: "source", ObjectKey: "target", Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -117,5 +134,142 @@ func TestWorkerFailsPlanWhenObjectCoordinationFails(t *testing.T) {
 	}
 	if _, err = worker.Destination.Get(ctx, "target"); !errors.Is(err, objectstore.ErrNotFound) {
 		t.Fatalf("destination changed before lock: %v", err)
+	}
+}
+
+func TestWorkerFailsClosedForLegacyPlanWithoutArtifactIdentity(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	plan := repository.ReplicationPlan{
+		ID: "legacy-empty-identity", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, IdempotencyKey: "legacy-empty-identity",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: "objects/widget", Digest: digest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	publishCalled := false
+	worker := Worker{
+		Store: store, Source: objectstore.NewMemoryStore(), Destination: objectstore.NewMemoryStore(),
+		Publish: func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error {
+			publishCalled = true
+			return nil
+		},
+	}
+	if err := worker.Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if publishCalled {
+		t.Fatal("legacy plan without artifact identity reached publication")
+	}
+	failed, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || failed.State != "failed" || failed.LastError != "replication artifact identity is unavailable" {
+		t.Fatalf("legacy plan=%#v err=%v", failed, err)
+	}
+}
+
+func TestWorkerParksBeforeReleaseTransitionAndReplayCanRequeue(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	base := repository.NewMemoryStore()
+	store := &blockingParkReplicationStore{
+		MemoryStore:  base,
+		parkStarted:  make(chan struct{}),
+		continuePark: make(chan struct{}),
+	}
+	digest := "sha256:" + strings.Repeat("d", 64)
+	coordinate := "releases/quarantined.bin"
+	plan := repository.ReplicationPlan{
+		ID: "park-release-replay", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: coordinate, Digest: digest,
+		IdempotencyKey: "park-release-replay", MaxAttempts: 2,
+	}
+	checkpoints := []repository.ReplicationCheckpoint{{ObjectKey: "native/raw/quarantined", Digest: digest, Size: 12}}
+	if _, replayed, err := store.CreateReplicationPlan(ctx, plan, checkpoints); err != nil || replayed {
+		t.Fatalf("create replayed=%t err=%v", replayed, err)
+	}
+	quarantined, err := store.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
+		RepositoryID: plan.SourceRepositoryID,
+		Format:       plan.Format,
+		Coordinate:   plan.Coordinate,
+		Digest:       plan.Digest,
+		State:        repository.ArtifactQuarantineStateQuarantined,
+		Reason:       "hold final publication",
+		UpdatedBy:    "user:security-admin",
+	}, "0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (Worker{Store: store, Source: objectstore.NewMemoryStore(), Destination: objectstore.NewMemoryStore()}).Run(ctx, 1)
+	}()
+	select {
+	case <-store.parkStarted:
+	case <-ctx.Done():
+		t.Fatal("worker did not reach quarantine Park")
+	}
+
+	type replayResult struct {
+		plan     repository.ReplicationPlan
+		replayed bool
+		err      error
+	}
+	transitionAttempted := make(chan struct{})
+	transitionAcquired := make(chan struct{})
+	replayDone := make(chan replayResult, 1)
+	go func() {
+		close(transitionAttempted)
+		releaseTransition, lockErr := repository.LockArtifactQuarantineTransition(ctx, store, plan.SourceRepositoryID, plan.Format, plan.Coordinate, plan.Digest)
+		if lockErr != nil {
+			replayDone <- replayResult{err: lockErr}
+			return
+		}
+		close(transitionAcquired)
+		released := quarantined
+		released.State = repository.ArtifactQuarantineStateReleased
+		released.Reason = "security review complete"
+		released.UpdatedBy = "user:security-admin"
+		_, replaceErr := store.ReplaceArtifactQuarantine(ctx, released, quarantined.Version)
+		releaseTransition()
+		if replaceErr != nil {
+			replayDone <- replayResult{err: replaceErr}
+			return
+		}
+		requeued, replayed, replayErr := store.CreateReplicationPlan(ctx, plan, checkpoints)
+		replayDone <- replayResult{plan: requeued, replayed: replayed, err: replayErr}
+	}()
+	<-transitionAttempted
+	transitionRanBeforePark := false
+	select {
+	case <-transitionAcquired:
+		transitionRanBeforePark = true
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(store.continuePark)
+	select {
+	case runErr := <-workerDone:
+		if runErr != nil {
+			t.Fatal(runErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("worker did not finish after Park was released")
+	}
+	var replay replayResult
+	select {
+	case replay = <-replayDone:
+	case <-ctx.Done():
+		t.Fatal("release transition and replay did not finish")
+	}
+	if transitionRanBeforePark {
+		t.Fatal("release transition acquired the admission lock before Park completed")
+	}
+	if replay.err != nil || !replay.replayed || replay.plan.ID != plan.ID || replay.plan.State != "pending" || replay.plan.LastError != "" || replay.plan.Attempts != 0 || replay.plan.NextAttemptAt.IsZero() {
+		t.Fatalf("release replay=%#v replayed=%t err=%v", replay.plan, replay.replayed, replay.err)
+	}
+	claimed, err := store.ClaimReplicationPlansByFormat(ctx, repository.FormatRaw, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != plan.ID {
+		t.Fatalf("requeued claim=%#v err=%v", claimed, err)
 	}
 }

@@ -70,7 +70,13 @@ Conan routes use `/conan/v2/<group>/conans/...`; the remote URL MUST include the
 
 `CONTRACT: conan-coordinate`
 
-A recipe coordinate is `name/version@user/channel`, with immutable revision `rrev`. A package coordinate adds `package_id`, and a package revision adds `prev`: `name/version@user/channel#rrev:package_id#prev`. The gateway stores each segment separately and performs only strict URL segment decoding. A revision is immutable once observed. Omitted `rrev` or `prev` caches selected upstream metadata only for its metadata TTL; it never creates a permanent alias.
+A recipe coordinate is `name/version/user/channel`, with immutable revision
+`rrev`. A package coordinate adds `package_id`, and a package revision adds
+`prev`: `name/version/user/channel#rrev/package_id#prev`. The gateway stores
+each segment separately and performs only strict URL segment decoding. A
+revision is immutable once observed. Omitted `rrev` or `prev` caches selected
+upstream metadata only for its metadata TTL; it never creates a permanent
+alias.
 
 `CONTRACT: conan2-read-endpoints`
 
@@ -113,7 +119,7 @@ The compatibility query surface remains exact: legacy OCI code can continue to s
 | `cache.quota_bytes` | Positive byte limit per Group; never delete another Group's cache. |
 | `cache.max_object_bytes` | Positive per-response limit; exceedance is not cached. |
 
-Metrics use bounded labels only. Protocol metrics use `format`, `operation`, `outcome`, `cache_disposition`, and member type; HTTP metrics use the fixed request `class` and status-code family; database metrics use the fixed pool names `primary`, `coordinator`, and `notifications`, fixed connection states, and fixed closure reasons. They MUST NOT label with path, coordinate, actor, upstream URL, checksum, or repository name. Counters cover requests, authorization denials, cache hit/miss/negative hit, proxy denials, checksum mismatches, upstream failures, bytes served, quota rejections, runtime health, and PostgreSQL pool pressure.
+Metrics use bounded labels only. Protocol metrics use `format`, `operation`, `outcome`, `cache_disposition`, and member type; HTTP metrics use the fixed request `class` and status-code family; database metrics use the fixed pool names `primary`, `artifact-locks`, `coordinator`, and `notifications`, fixed connection states, and fixed closure reasons. They MUST NOT label with path, coordinate, actor, upstream URL, checksum, or repository name. Counters cover requests, authorization denials, cache hit/miss/negative hit, proxy denials, checksum mismatches, upstream failures, bytes served, quota rejections, runtime health, and PostgreSQL pool pressure.
 
 ## Adapter boundary and compatibility matrix
 

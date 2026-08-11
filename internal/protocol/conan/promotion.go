@@ -54,7 +54,20 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			m.end("failed")
 			continue
 		}
+		releaseAdmission, admissionErr := repository.LockArtifactDistributionAdmission(ctx, m.Store, p.SourceRepositoryID, repository.FormatConan, p.Reference+"#"+p.Revision, p.Digest)
+		if admissionErr != nil {
+			message := "evaluate Conan artifact quarantine failed"
+			if errors.Is(admissionErr, repository.ErrArtifactQuarantined) {
+				message = repository.ArtifactQuarantinedReason
+			}
+			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, message); e != nil && firstErr == nil {
+				firstErr = e
+			}
+			m.end("failed")
+			continue
+		}
 		if _, err = m.Store.PromoteConanRecipeRevision(ctx, repository.ConanPromotion{SourceRepositoryID: p.SourceRepositoryID, TargetRepositoryID: job.RepositoryID, Reference: p.Reference, Revision: p.Revision, Digest: p.Digest}); err != nil {
+			releaseAdmission()
 			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "promote Conan recipe failed"); e != nil {
 				m.end("failed")
 				if firstErr == nil {
@@ -65,6 +78,7 @@ func (m NativePromotion) RunJobs(ctx context.Context, limit int) error {
 			m.end("failed")
 			continue
 		}
+		releaseAdmission()
 		intelligenceErr := repository.CopyArtifactIntelligenceOrEnqueue(ctx, m.Intelligence, m.Store, job.RepositoryID, p.SourceRepositoryID, repository.FormatConan, p.Reference+"#"+p.Revision, p.Digest)
 		if intelligenceErr != nil && !errors.Is(intelligenceErr, repository.ErrArtifactIntelligenceDeferred) {
 			if e := m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "copy Conan artifact intelligence failed"); e != nil && firstErr == nil {

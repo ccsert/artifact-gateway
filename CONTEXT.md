@@ -43,6 +43,16 @@ The durable record that makes a previously visible Artifact non-resolvable while
 allowing deferred reclamation of its bytes.
 _Avoid_: Hard delete
 
+**Quarantine**:
+A versioned, Repository-local governance decision attached to one immutable
+Artifact identity. Quarantine blocks Promotion and Replication but does not
+change native protocol reads or the Artifact lifecycle state; Release removes
+that distribution block without restoring or republishing the Artifact.
+For Conan, the distribution identity is the recipe revision and its complete
+visible package closure; package revisions remain separate scanner and
+lifecycle identities but are not independently quarantinable.
+_Avoid_: Tombstone, delete, artifact state
+
 ## Distribution And Operations
 
 **Promotion**:
@@ -59,12 +69,17 @@ _Avoid_: Copy request, move request
 **Promotion Snapshot**:
 The immutable source identity recorded by a Promotion Request: source
 Repository, format, coordinate, and digest. The worker rechecks that this
-identity remains visible before creating the target Artifact.
+identity remains visible and is not quarantined before creating the target
+Artifact.
 _Avoid_: Latest version, source selector
 
 **Replication**:
 An asynchronous, checkpointed copy of visible Artifact metadata and bytes to a
-configured destination.
+configured destination. Its durable plan retains the immutable source
+coordinate and digest so the worker can recheck Quarantine before publication.
+For aggregate PyPI versions, changed source-file membership parks the plan as
+`replication_snapshot_changed`; exact idempotent replay refreshes checkpoints
+before any complete-version publication.
 _Avoid_: Backup, cache
 
 **Retention Policy**:

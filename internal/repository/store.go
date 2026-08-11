@@ -19,6 +19,7 @@ var (
 	ErrTemplateNameExists           = errors.New("authorization template name already exists")
 	ErrAuthorizationRoleNameExists  = errors.New("authorization role name already exists")
 	ErrInvalidArtifactIntelligence  = errors.New("artifact intelligence is invalid")
+	ErrInvalidArtifactQuarantine    = errors.New("artifact quarantine is invalid")
 	ErrArtifactIntelligenceConflict = errors.New("target artifact intelligence conflicts with source")
 	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
 	ErrIdentityExists               = errors.New("user identity already exists")
@@ -144,6 +145,11 @@ type ArtifactIntelligenceStore interface {
 	ReplaceArtifactIntelligence(context.Context, ArtifactIntelligence, string) (ArtifactIntelligence, error)
 }
 
+type ArtifactQuarantineStore interface {
+	GetArtifactQuarantine(context.Context, string, Format, string, string) (ArtifactQuarantine, error)
+	ReplaceArtifactQuarantine(context.Context, ArtifactQuarantine, string) (ArtifactQuarantine, error)
+}
+
 type LifecycleJobStore interface {
 	EnqueueLifecycleJob(context.Context, LifecycleJob) (LifecycleJob, bool, error)
 	ListLifecycleJobs(context.Context, string, int) ([]LifecycleJob, error)
@@ -167,6 +173,28 @@ type LifecycleJobStore interface {
 // immutable artifact identity across concurrent Gateway nodes.
 type ArtifactScanIdentityLockStore interface {
 	LockArtifactScanIdentity(context.Context, string, Format, string, string) (func(), error)
+}
+
+type ArtifactDistributionLockIdentity struct {
+	RepositoryID string
+	Format       Format
+	Coordinate   string
+	Digest       string
+}
+
+// ArtifactDistributionIdentityLockStore acquires several immutable-identity
+// locks on one backend session. PostgreSQL implementations use this deeper
+// interface so a multi-file admission occupies one dedicated lock connection
+// instead of one primary-pool connection per digest.
+type ArtifactDistributionIdentityLockStore interface {
+	LockArtifactDistributionIdentities(context.Context, []ArtifactDistributionLockIdentity) (func(), error)
+}
+
+// ArtifactObjectKeysLockStore acquires all format object locks on one backend
+// session. PostgreSQL uses it for multi-file publication so a single worker
+// cannot exhaust the primary connection pool while coordinating many objects.
+type ArtifactObjectKeysLockStore interface {
+	LockArtifactObjectKeys(context.Context, Format, []string) (context.Context, func(), error)
 }
 
 type ArtifactScanCandidateStore interface {
@@ -200,6 +228,7 @@ type ReplicationStore interface {
 	UpdateReplicationCheckpointWithLease(context.Context, ReplicationCheckpoint, string) error
 	CompleteReplicationPlanWithLease(context.Context, string, string) error
 	FailReplicationPlanWithLease(context.Context, string, string, string) error
+	ParkReplicationPlanWithLease(context.Context, string, string, string) error
 	CancelReplicationPlan(context.Context, string, string) error
 }
 

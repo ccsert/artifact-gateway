@@ -262,6 +262,12 @@ for replication in \
   replication_completed "$target_id" "$plan_id"
 done
 
+quarantine_url="$gateway_url/api/v2/repositories/$repository_id/artifact-quarantine?coordinate=releases/app.txt&digest=$raw_digest"
+quarantine_response=$(curl --silent --show-error --fail --request PUT \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H 'If-Match: 0' \
+  --data '{"state":"quarantined","reason":"backup restore verification"}' "$quarantine_url")
+grep -Fq '"state":"quarantined"' <<<"$quarantine_response" || { printf '%s\n' 'Creating quarantine recovery evidence failed.' >&2; exit 1; }
+
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/backup-drill.sh "$backup_dir"
 mutation_payload=$(printf '{"name":"post-restore-%s","anonymous":false,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":false}]}' "$run_id")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
@@ -284,6 +290,10 @@ restored_grants=$(curl --silent --show-error --fail --dump-header "$grant_header
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id/grants")
 tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Restored Repository grants did not retain version 2.' >&2; exit 1; }
 grep -Fq '"principal":"recovery-reader"' <<<"$restored_grants" || { printf '%s\n' 'Restored Repository grants did not retain recovery-reader.' >&2; exit 1; }
+restored_quarantine=$(curl --silent --show-error --fail \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$quarantine_url")
+grep -Fq '"state":"quarantined"' <<<"$restored_quarantine" || { printf '%s\n' 'Restored artifact quarantine state is unavailable.' >&2; exit 1; }
+grep -Fq '"reason":"backup restore verification"' <<<"$restored_quarantine" || { printf '%s\n' 'Restored artifact quarantine reason is unavailable.' >&2; exit 1; }
 restored_replications=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$replication_target_id/replications")
 grep -Fq "\"id\":\"$replication_plan_id\"" <<<"$restored_replications" || { printf '%s\n' 'Restored replication plan is unavailable.' >&2; exit 1; }
 assert_restored_replication_completion "$replication_target_id" "$replication_plan_id"
@@ -324,4 +334,4 @@ grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%
 [[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
 [[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, Raw cache, Conan state, Repository grants, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, artifact quarantine, Raw cache, Conan state, Repository grants, and authorization audits.'

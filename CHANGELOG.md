@@ -47,6 +47,9 @@ a dated version heading without rewriting their meaning.
   for publications that missed automatic scanning or need a failed scan retried.
 - Bounded per-vulnerability scanner findings with severity-count consistency,
   immutable evidence persistence, and searchable bilingual Console details.
+- Versioned per-artifact quarantine and release controls with optimistic
+  concurrency, audit evidence, admission-time enforcement, and worker-time
+  protection against queued promotion or replication publication.
 - Local-user governance with profile metadata, case-insensitive identities,
   failed-sign-in lockout, last-sign-in and password-change timestamps,
   mandatory password changes, administrator password resets, revocable
@@ -69,6 +72,8 @@ a dated version heading without rewriting their meaning.
   retention cleanup, and cluster capability health summaries.
 - Reworked Console user management around server-side search, filtering, and
   pagination plus a focused account drawer for profile and security actions.
+- Isolated artifact publication locks in a bounded, observable PostgreSQL pool
+  and made multi-file object and coordinate locks share one backend session.
 
 ### Fixed
 
@@ -79,6 +84,9 @@ a dated version heading without rewriting their meaning.
 - Stabilized generated OpenAPI output, dependency installation, integration
   readiness, and lifecycle ordering in CI.
 - Included PyPI and Go object usage in aggregate repository capacity views.
+- Prevented PyPI promotion, replication, and restore from publishing or
+  restoring a partial version when its file membership changes mid-operation;
+  parked replication plans now refresh checkpoints on exact replay.
 - Corrected user-management audits so the actor is the administrator performing
   the action and self-service password changes use their own audit resource.
 

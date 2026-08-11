@@ -266,3 +266,240 @@ func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 		t.Fatalf("replicated bytes=%q err=%v", stored, err)
 	}
 }
+
+func TestRepositoryPyPIDistributionRejectsVersionWhenAnyFileIsQuarantined(t *testing.T) {
+	for _, operation := range []string{"promotions", "replications"} {
+		t.Run(operation, func(t *testing.T) {
+			ctx := context.Background()
+			store := repository.NewMemoryStore()
+			source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+				ID: uuid.NewString(), Name: "pypi-multifile-source-" + operation, Format: repository.FormatPyPI,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+				ID: uuid.NewString(), Name: "pypi-multifile-target-" + operation, Format: repository.FormatPyPI,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			coordinate := "widget@4.0.0"
+			files := []repository.PyPIFile{
+				{RepositoryID: source.ID, Project: "widget", Version: "4.0.0", Filename: "widget-4.0.0.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "native/pypi/widget-4.0.0-sdist", Size: 10},
+				{RepositoryID: source.ID, Project: "widget", Version: "4.0.0", Filename: "widget-4.0.0-py3-none-any.whl", Digest: "sha256:" + strings.Repeat("b", 64), ObjectKey: "native/pypi/widget-4.0.0-wheel", Size: 20},
+			}
+			if _, err = store.PublishPyPIVersion(ctx, files); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = store.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
+				RepositoryID: source.ID, Format: repository.FormatPyPI, Coordinate: coordinate, Digest: files[1].Digest,
+				State: repository.ArtifactQuarantineStateQuarantined, Reason: "wheel is malicious", UpdatedBy: "security-admin",
+			}, "0"); err != nil {
+				t.Fatal(err)
+			}
+
+			handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v2/repositories/"+source.ID+"/"+operation,
+				strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+coordinate+`","digest":"`+files[0].Digest+`"}`),
+			)
+			authorize(request, "admin-secret")
+			request.Header.Set("Idempotency-Key", "pypi-multifile-"+operation)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"artifact_quarantined"`) {
+				t.Fatalf("distribution=%d body=%s", response.Code, response.Body.String())
+			}
+			if operation == "promotions" {
+				jobs, listErr := store.ListLifecycleJobs(ctx, target.ID, 10)
+				if listErr != nil || len(jobs) != 0 {
+					t.Fatalf("denied promotion jobs=%#v err=%v", jobs, listErr)
+				}
+			} else {
+				plans, listErr := store.ListReplicationPlans(ctx, target.ID, 10)
+				if listErr != nil || len(plans) != 0 {
+					t.Fatalf("denied replication plans=%#v err=%v", plans, listErr)
+				}
+			}
+		})
+	}
+}
+
+func TestNativePyPIPromotionRechecksEveryVersionFileBeforePublish(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-promotion-multifile-source", Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-promotion-multifile-target", Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinate := "widget@4.1.0"
+	files := []repository.PyPIFile{
+		{RepositoryID: source.ID, Project: "widget", Version: "4.1.0", Filename: "widget-4.1.0.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "native/pypi/widget-4.1.0-sdist", Size: 10},
+		{RepositoryID: source.ID, Project: "widget", Version: "4.1.0", Filename: "widget-4.1.0-py3-none-any.whl", Digest: "sha256:" + strings.Repeat("b", 64), ObjectKey: "native/pypi/widget-4.1.0-wheel", Size: 20},
+	}
+	if _, err = store.PublishPyPIVersion(ctx, files); err != nil {
+		t.Fatal(err)
+	}
+	promotion := NativePyPIPromotion{Store: store}
+	job, replayed, err := promotion.Enqueue(ctx, target.ID, "pypi-promotion-multifile-worker", PyPIPromotionPayload{
+		SourceRepositoryID: source.ID, Project: "widget", Version: "4.1.0", Digest: files[0].Digest,
+	})
+	if err != nil || replayed {
+		t.Fatalf("enqueue job=%#v replayed=%v err=%v", job, replayed, err)
+	}
+	if _, err = store.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
+		RepositoryID: source.ID, Format: repository.FormatPyPI, Coordinate: coordinate, Digest: files[1].Digest,
+		State: repository.ArtifactQuarantineStateQuarantined, Reason: "wheel is malicious", UpdatedBy: "security-admin",
+	}, "0"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = promotion.RunJobs(ctx, 1); err == nil || !strings.Contains(err.Error(), repository.ArtifactQuarantinedReason) {
+		t.Fatalf("promotion worker err=%v", err)
+	}
+	if published, listErr := store.ListPyPIProjectFiles(ctx, target.ID, "widget"); !errors.Is(listErr, repository.ErrNotFound) {
+		t.Fatalf("target version should remain unpublished, files=%#v err=%v", published, listErr)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, target.ID, 10)
+	if err != nil || len(jobs) != 1 || jobs[0].State != repository.LifecycleJobRetrying || !strings.Contains(jobs[0].LastError, repository.ArtifactQuarantinedReason) {
+		t.Fatalf("promotion job=%#v err=%v", jobs, err)
+	}
+}
+
+func TestPyPIReplicationRechecksFilesAddedAfterPlanBeforePublish(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-replication-multifile-source", Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-replication-multifile-target", Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinate := "widget@4.2.0"
+	bodies := [][]byte{[]byte("widget 4.2.0 source distribution"), []byte("widget 4.2.0 universal wheel")}
+	filenames := []string{"widget-4.2.0.tar.gz", "widget-4.2.0-py3-none-any.whl"}
+	files := make([]repository.PyPIFile, 0, len(bodies))
+	for index, body := range bodies {
+		sum := sha256.Sum256(body)
+		digest := "sha256:" + hex.EncodeToString(sum[:])
+		file := repository.PyPIFile{
+			RepositoryID: source.ID, Project: "widget", Version: "4.2.0", Filename: filenames[index],
+			Digest: digest, ObjectKey: "native/pypi/source/" + digest, Size: int64(len(body)),
+		}
+		files = append(files, file)
+	}
+	if err = objects.Put(ctx, files[0].ObjectKey, bodies[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PublishPyPIVersion(ctx, files[:1]); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v2/repositories/"+source.ID+"/replications",
+		strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+coordinate+`","digest":"`+files[0].Digest+`"}`),
+	)
+	authorize(request, "admin-secret")
+	request.Header.Set("Idempotency-Key", "pypi-replication-multifile-worker")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("replication=%d body=%s", response.Code, response.Body.String())
+	}
+	plans, err := store.ListReplicationPlans(ctx, target.ID, 10)
+	if err != nil || len(plans) != 1 {
+		t.Fatalf("replication plans=%#v err=%v", plans, err)
+	}
+	checkpoints, err := store.ListReplicationCheckpoints(ctx, plans[0].ID)
+	if err != nil || len(checkpoints) != 1 || checkpoints[0].Digest != files[0].Digest {
+		t.Fatalf("plan snapshot checkpoints=%#v err=%v", checkpoints, err)
+	}
+
+	if err = objects.Put(ctx, files[1].ObjectKey, bodies[1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PublishPyPIVersion(ctx, files[1:]); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = (PyPIReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatalf("run replication worker after source membership changed: %v", err)
+	}
+	if published, listErr := store.ListPyPIProjectFiles(ctx, target.ID, "widget"); !errors.Is(listErr, repository.ErrNotFound) {
+		t.Fatalf("target version should not publish a checkpoint subset, files=%#v err=%v", published, listErr)
+	}
+	persisted, err := store.GetReplicationPlan(ctx, target.ID, plans[0].ID)
+	if err != nil || persisted.LastError != repository.ReplicationSnapshotChangedReason || persisted.Attempts != 0 || !persisted.NextAttemptAt.IsZero() {
+		t.Fatalf("snapshot-changed plan=%#v err=%v", persisted, err)
+	}
+	replay := func() *httptest.ResponseRecorder {
+		replayRequest := httptest.NewRequest(
+			http.MethodPost,
+			"/api/v2/repositories/"+source.ID+"/replications",
+			strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+coordinate+`","digest":"`+files[0].Digest+`"}`),
+		)
+		authorize(replayRequest, "admin-secret")
+		replayRequest.Header.Set("Idempotency-Key", "pypi-replication-multifile-worker")
+		replayResponse := httptest.NewRecorder()
+		handler.ServeHTTP(replayResponse, replayRequest)
+		return replayResponse
+	}
+	if replayResponse := replay(); replayResponse.Code != http.StatusAccepted {
+		t.Fatalf("snapshot replay=%d body=%s", replayResponse.Code, replayResponse.Body.String())
+	}
+	checkpoints, err = store.ListReplicationCheckpoints(ctx, plans[0].ID)
+	if err != nil || len(checkpoints) != 2 {
+		t.Fatalf("refreshed plan checkpoints=%#v err=%v", checkpoints, err)
+	}
+	if _, err = store.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
+		RepositoryID: source.ID, Format: repository.FormatPyPI, Coordinate: coordinate, Digest: files[1].Digest,
+		State: repository.ArtifactQuarantineStateQuarantined, Reason: "wheel added after plan is malicious", UpdatedBy: "security-admin",
+	}, "0"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = (PyPIReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatalf("run replication worker: %v", err)
+	}
+	if published, listErr := store.ListPyPIProjectFiles(ctx, target.ID, "widget"); !errors.Is(listErr, repository.ErrNotFound) {
+		t.Fatalf("target version should remain unpublished, files=%#v err=%v", published, listErr)
+	}
+	persisted, err = store.GetReplicationPlan(ctx, target.ID, plans[0].ID)
+	if err != nil || !strings.Contains(persisted.LastError, repository.ArtifactQuarantinedReason) {
+		t.Fatalf("replication plan=%#v err=%v", persisted, err)
+	}
+	quarantined, err := store.GetArtifactQuarantine(ctx, source.ID, repository.FormatPyPI, coordinate, files[1].Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
+		RepositoryID: source.ID, Format: repository.FormatPyPI, Coordinate: coordinate, Digest: files[1].Digest,
+		State: repository.ArtifactQuarantineStateReleased, Reason: "wheel cleared after review", UpdatedBy: "security-admin",
+	}, quarantined.Version); err != nil {
+		t.Fatal(err)
+	}
+	if replayResponse := replay(); replayResponse.Code != http.StatusAccepted {
+		t.Fatalf("release replay=%d body=%s", replayResponse.Code, replayResponse.Body.String())
+	}
+	if err = (PyPIReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+		t.Fatalf("run released replication worker: %v", err)
+	}
+	published, err := store.ListPyPIProjectFiles(ctx, target.ID, "widget")
+	if err != nil || len(published) != 2 {
+		t.Fatalf("released target version=%#v err=%v", published, err)
+	}
+	persisted, err = store.GetReplicationPlan(ctx, target.ID, plans[0].ID)
+	if err != nil || persisted.State != "completed" {
+		t.Fatalf("completed plan=%#v err=%v", persisted, err)
+	}
+}

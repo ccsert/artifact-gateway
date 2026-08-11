@@ -55,19 +55,12 @@ func (h generatedRepositoryAPIAdapter) ReplaceArtifactIntelligence(w http.Respon
 			return
 		}
 		if h.searchProjection != nil {
-			items, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByDigest, Value: digest}, 200, repository.ArtifactSearchPosition{})
+			visible, err := securityPolicyArtifactVisible(r.Context(), h.searchProjection, repo.ID, repo.Format, coordinate, digest)
 			if err != nil {
 				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "verify artifact intelligence identity failed")
 				return
 			}
-			found := false
-			for _, item := range items {
-				if item.Coordinate == coordinate && item.Digest == digest {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !visible {
 				writeHostedProblem(w, http.StatusNotFound, "not_found", "artifact for intelligence metadata not found")
 				return
 			}

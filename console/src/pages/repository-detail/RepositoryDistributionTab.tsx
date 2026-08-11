@@ -33,6 +33,10 @@ function securityReason(
   text: (zh: string, en: string) => string,
 ) {
   const labels: Record<string, [string, string]> = {
+    artifact_quarantined: [
+      "制品已隔离；请先解除隔离",
+      "Artifact is quarantined; release it first",
+    ],
     policy_disabled: ["策略未启用", "Policy is disabled"],
     signature_required: ["缺少签名", "Signature is required"],
     verified_signature_required: [
@@ -210,6 +214,9 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
 
   const repoName = (id: string) =>
     repos.find((r) => r.id === id)?.name ?? id.slice(0, 8) + "…";
+  const promotionBlocked = evaluation?.allowed === false;
+  const artifactQuarantined =
+    evaluation?.reasons.includes("artifact_quarantined") ?? false;
 
   if (error !== null) return <ErrorBanner error={error} onRetry={load} />;
 
@@ -436,6 +443,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               onClick={() => submit("promote")}
               disabled={
                 busy !== null ||
+                promotionBlocked ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()
@@ -448,6 +456,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               onClick={() => submit("replicate")}
               disabled={
                 busy !== null ||
+                artifactQuarantined ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()
@@ -469,13 +478,27 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             type={evaluation.allowed ? "success" : "error"}
             showIcon
             title={text(
-              evaluation.allowed ? "安全策略允许晋升" : "安全策略阻止晋升",
-              evaluation.allowed
-                ? "Security policy allows promotion"
-                : "Security policy blocks promotion",
+              artifactQuarantined
+                ? "制品已隔离，无法晋升或复制"
+                : evaluation.allowed
+                  ? "安全策略允许晋升"
+                  : "安全策略阻止晋升",
+              artifactQuarantined
+                ? "Artifact is quarantined and cannot be promoted or replicated"
+                : evaluation.allowed
+                  ? "Security policy allows promotion"
+                  : "Security policy blocks promotion",
             )}
             description={
               <div className="space-y-2 text-xs">
+                {artifactQuarantined && (
+                  <p>
+                    {text(
+                      "请先在制品详情中解除隔离，然后重新评估准入。",
+                      "Release the artifact from its details, then evaluate admission again.",
+                    )}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-zinc-500">
                   <span>
                     {text("策略版本", "Policy version")}:{" "}

@@ -71,5 +71,6 @@ goal. It intentionally excludes frontend work.
 ## Current Next Slice
 
 Run the release gates and record their output in the release record. Detailed
-vulnerability findings are delivered; versioned quarantine workflows and
-repository-read enforcement are the next security-specific slice.
+vulnerability findings and versioned quarantine workflows are delivered;
+repository-read enforcement remains a separate, compatibility-sensitive
+security slice.

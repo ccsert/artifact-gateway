@@ -4,11 +4,15 @@ import { usePreferences } from "../lib/preferences";
 import { formatDate } from "../lib/format";
 
 export function APTAssetDetail({
+  repositoryId,
   repoName,
   meta,
+  canQuarantine = false,
 }: {
+  repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const assetKind = meta.coordinate.startsWith("pool/")
@@ -20,8 +24,10 @@ export function APTAssetDetail({
   return (
     <ArtifactDetailView
       format="apt"
+      repositoryId={repositoryId}
       repoName={repoName}
       meta={meta}
+      canQuarantine={canQuarantine}
       timestampLabel={text("首次缓存", "First cached")}
       extra={
         <div className="grid gap-3 sm:grid-cols-3">

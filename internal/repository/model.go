@@ -477,6 +477,32 @@ type ArtifactTombstone struct {
 	TombstonedAt time.Time
 }
 
+// ArtifactQuarantineState is repository-local governance state for one
+// immutable artifact identity. It is deliberately independent from the
+// visible/tombstoned lifecycle state.
+type ArtifactQuarantineState string
+
+const (
+	ArtifactQuarantineStateQuarantined ArtifactQuarantineState = "quarantined"
+	ArtifactQuarantineStateReleased    ArtifactQuarantineState = "released"
+)
+
+// ArtifactQuarantine records the latest explicit quarantine decision for one
+// canonical repository, format, coordinate, and digest identity.
+type ArtifactQuarantine struct {
+	RepositoryID  string
+	Format        Format
+	Coordinate    string
+	Digest        string
+	State         ArtifactQuarantineState
+	Reason        string
+	UpdatedBy     string
+	Version       string
+	QuarantinedAt time.Time
+	ReleasedAt    time.Time
+	UpdatedAt     time.Time
+}
+
 // ArtifactIntelligence is format-neutral security and build metadata attached
 // to one immutable artifact identity. Scanners and CI systems produce the
 // evidence represented here; the Gateway stores and serves the summaries.
@@ -695,7 +721,8 @@ type RepositoryLifecycleJob struct {
 type ReplicationPlan struct {
 	ID, SourceRepositoryID, TargetRepositoryID string
 	Format                                     Format
-	IdempotencyKey, State, LastError           string
+	Coordinate, Digest, IdempotencyKey, State  string
+	LastError                                  string
 	CreatedAt, StartedAt, CompletedAt          time.Time
 	NextAttemptAt, LeaseExpiresAt              time.Time
 	LeaseToken                                 string

@@ -102,18 +102,8 @@ func (s *PostgresStore) StageRawObject(ctx context.Context, object RawObject) er
 	return err
 }
 func (s *PostgresStore) LockRawObject(ctx context.Context, digest string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-raw-object:"+digest); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-raw-object:"+digest)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.LockArtifactObjectKeys(ctx, FormatRaw, []string{digest})
+	return release, err
 }
 func (s *PostgresStore) GetRawAsset(ctx context.Context, repositoryID, path string) (RawAsset, error) {
 	var v RawAsset

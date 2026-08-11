@@ -23,8 +23,11 @@ product boundary; see [the full repository roadmap](full-artifact-repository-roa
 - The format-neutral scanner contract applies to immutable artifacts resolved
   by the native Maven, OCI, Raw, npm, PyPI, Go, and Conan stores. Detailed
   findings are persisted with artifact intelligence and do not alter package-
-  protocol response bytes; quarantine enforcement remains a separate future
-  policy layer.
+  protocol response bytes. Versioned quarantine is an independent governance
+  layer that blocks promotion and replication at request and worker publication
+  boundaries; it intentionally leaves package-protocol reads unchanged. A
+  Conan recipe revision is the atomic distribution unit and the only Conan
+  quarantine anchor; package revisions remain independently scannable.
 - Raw and OCI do not use the management publish-session contract. Raw writes are
   ordinary protocol `PUT` requests. OCI writes are ordinary Registry V2 upload
   and manifest requests.

@@ -170,7 +170,125 @@ func securityPolicyEvaluationResponse(value repository.SecurityPolicyEvaluation)
 	}
 }
 
+func artifactSearchItemMatchesCanonicalIdentity(format repository.Format, item repository.ArtifactSearchItem, coordinate, digest string) bool {
+	if item.Digest != digest {
+		return false
+	}
+	switch format {
+	case repository.FormatMaven, repository.FormatOCI, repository.FormatRaw, repository.FormatAPT:
+		return item.Coordinate == coordinate
+	case repository.FormatNPM, repository.FormatPyPI, repository.FormatGo:
+		return item.Coordinate != "" && item.Version != "" && item.Coordinate+"@"+item.Version == coordinate
+	default:
+		return false
+	}
+}
+
+func nativeVersionedArtifactVisible(ctx context.Context, store repository.ArtifactSearchStore, repositoryID string, format repository.Format, coordinate, digest string) (visible, handled bool, err error) {
+	switch format {
+	case repository.FormatNPM:
+		native, ok := store.(repository.NativeNPMStore)
+		if !ok {
+			return false, false, nil
+		}
+		packageName, version, ok := parseNPMVersionCoordinate(coordinate)
+		if !ok {
+			return false, true, nil
+		}
+		item, err := native.GetNPMVersion(ctx, repositoryID, packageName, version)
+		if errors.Is(err, repository.ErrNotFound) {
+			return false, true, nil
+		}
+		if err != nil {
+			return false, true, err
+		}
+		return item.RepositoryID == repositoryID && item.PackageName == packageName && item.Version == version && item.Digest == digest && item.State == "visible", true, nil
+	case repository.FormatPyPI:
+		native, ok := store.(repository.NativePyPIStore)
+		if !ok {
+			return false, false, nil
+		}
+		project, version, ok := parsePyPIVersionCoordinate(coordinate)
+		if !ok {
+			return false, true, nil
+		}
+		files, err := native.ListPyPIProjectFiles(ctx, repositoryID, project)
+		if errors.Is(err, repository.ErrNotFound) {
+			return false, true, nil
+		}
+		if err != nil {
+			return false, true, err
+		}
+		for _, file := range files {
+			if file.RepositoryID == repositoryID && file.Project == project && file.Version == version && file.Digest == digest && file.State == "visible" {
+				return true, true, nil
+			}
+		}
+		return false, true, nil
+	case repository.FormatGo:
+		native, ok := store.(repository.NativeGoStore)
+		if !ok {
+			return false, false, nil
+		}
+		module, version, ok := splitVersionCoordinate(coordinate)
+		if !ok {
+			return false, true, nil
+		}
+		item, err := native.GetGoModuleVersion(ctx, repositoryID, module, version)
+		if errors.Is(err, repository.ErrNotFound) {
+			return false, true, nil
+		}
+		if err != nil {
+			return false, true, err
+		}
+		if item.RepositoryID != repositoryID || item.Module != module || item.Version != version {
+			return false, true, nil
+		}
+		for _, kind := range []string{"info", "mod", "zip"} {
+			asset, assetErr := native.GetGoModuleAsset(ctx, repositoryID, module, version, kind)
+			if errors.Is(assetErr, repository.ErrNotFound) {
+				continue
+			}
+			if assetErr != nil {
+				return false, true, assetErr
+			}
+			if asset.RepositoryID == repositoryID && asset.Module == module && asset.Version == version && asset.Kind == kind && asset.Digest == digest {
+				return true, true, nil
+			}
+		}
+		return false, true, nil
+	default:
+		return false, false, nil
+	}
+}
+
 func securityPolicyArtifactVisible(ctx context.Context, store repository.ArtifactSearchStore, repositoryID string, format repository.Format, coordinate, digest string) (bool, error) {
+	if format == repository.FormatConan {
+		conanStore, ok := store.(repository.NativeConanStore)
+		if !ok {
+			return false, nil
+		}
+		reference, recipeRevision, packageID, packageRevision, packageCoordinate, ok := parseConanRestoreCoordinate(coordinate)
+		if !ok {
+			return false, nil
+		}
+		if packageCoordinate {
+			item, err := conanStore.GetConanPackageRevision(ctx, repositoryID, reference, recipeRevision, packageID, packageRevision)
+			if errors.Is(err, repository.ErrNotFound) {
+				return false, nil
+			}
+			return err == nil && item.State == "visible" && item.Digest == digest, err
+		}
+		item, err := conanStore.GetConanRecipeRevision(ctx, repositoryID, reference, recipeRevision)
+		if errors.Is(err, repository.ErrNotFound) {
+			return false, nil
+		}
+		return err == nil && item.State == "visible" && item.Digest == digest, err
+	}
+	if visible, handled, err := nativeVersionedArtifactVisible(ctx, store, repositoryID, format, coordinate, digest); handled {
+		return visible, err
+	}
+
 	const pageSize = 200
 	after := repository.ArtifactSearchPosition{}
 	for {
@@ -179,7 +297,7 @@ func securityPolicyArtifactVisible(ctx context.Context, store repository.Artifac
 			return false, err
 		}
 		for _, item := range items {
-			if item.Coordinate == coordinate && item.Digest == digest {
+			if artifactSearchItemMatchesCanonicalIdentity(format, item, coordinate, digest) {
 				return true, nil
 			}
 		}
@@ -306,6 +424,21 @@ func (h generatedRepositoryAPIAdapter) EvaluateSecurityPolicy(w http.ResponseWri
 			return
 		}
 		evaluation := repository.EvaluateRepositorySecurityPolicy(policy, intelligence)
+		distributionDigests, quarantineErr := h.artifactDistributionDigests(r.Context(), source, coordinate, digest)
+		if quarantineErr != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "evaluate distribution artifact identities failed")
+			return
+		}
+		quarantineAllowed, quarantineErr := repository.ArtifactDistributionAllowedForDigests(r.Context(), h.quarantine, source.ID, source.Format, coordinate, distributionDigests)
+		if quarantineErr != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "evaluate artifact quarantine failed")
+			return
+		}
+		if !quarantineAllowed {
+			evaluation.Allowed = false
+			evaluation.Enforced = true
+			evaluation.Reasons = []string{repository.ArtifactQuarantinedReason}
+		}
 		if !evaluation.Allowed && h.audit != nil {
 			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: target.Name, Repository: target.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "management", Resource: coordinate, Representation: digest, Operation: "security_policy.evaluate", Status: http.StatusOK, AuthorizationReason: strings.Join(evaluation.Reasons, ",")})
 		}

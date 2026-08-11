@@ -931,6 +931,9 @@ export function RepositoryDetailPage() {
             <RepositoryArtifactsTab
               repo={repo}
               canWrite={effectiveAccess?.permissions.write.allowed === true}
+              canQuarantine={
+                effectiveAccess?.permissions.admin.allowed === true
+              }
               artifactTarget={artifactTarget}
               buildTarget={buildTarget}
               referenceTarget={referenceTarget}

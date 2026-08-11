@@ -8,6 +8,7 @@ import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
+import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 
 function CopyButton({ text }: { text: string }) {
   const { text: localizedText } = usePreferences();
@@ -75,6 +76,8 @@ export function ArtifactDetailView({
   timestampLabel,
   extra,
   versions,
+  canQuarantine = false,
+  showQuarantine = true,
 }: {
   format: string;
   repositoryId?: string;
@@ -84,12 +87,22 @@ export function ArtifactDetailView({
   timestampLabel?: string;
   extra?: React.ReactNode;
   versions?: React.ReactNode;
+  canQuarantine?: boolean;
+  showQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const snippets = usageFor(format, repoName, meta.coordinate, tag);
 
   return (
     <div className="space-y-4">
+      {showQuarantine && (
+        <ArtifactQuarantinePanel
+          repositoryId={repositoryId}
+          coordinate={meta.coordinate}
+          digest={meta.digest}
+          canManage={canQuarantine}
+        />
+      )}
       <ArtifactScanStatus
         repositoryId={repositoryId}
         format={format}

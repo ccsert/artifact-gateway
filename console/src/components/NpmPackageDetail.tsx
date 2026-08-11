@@ -12,6 +12,7 @@ import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { npmUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
+import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 
 interface NpmVersionManifest {
   name: string;
@@ -49,6 +50,7 @@ export function NpmPackageDetail({
   size,
   publisher,
   onVersionChange,
+  canQuarantine = false,
 }: {
   repositoryId?: string;
   repoName: string;
@@ -57,6 +59,7 @@ export function NpmPackageDetail({
   size?: number;
   publisher?: string;
   onVersionChange?: (version: string) => void;
+  canQuarantine?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const { token } = useAuth();
@@ -150,6 +153,12 @@ export function NpmPackageDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <ArtifactQuarantinePanel
+        repositoryId={repositoryId}
+        coordinate={`${packageName}@${selectedVersion}`}
+        digest={artifactMetadata?.digest}
+        canManage={canQuarantine}
+      />
       <ArtifactScanStatus
         repositoryId={repositoryId}
         format="npm"

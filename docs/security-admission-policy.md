@@ -3,7 +3,9 @@
 Security admission policies protect a Hosted repository at the point where an
 immutable artifact is promoted into it. They do not change ordinary reads,
 writes to the source repository, proxy resolution, or artifact intelligence
-collection.
+collection. Artifact quarantine is a separate source-side governance invariant:
+it blocks promotion and replication even when the target admission policy is
+disabled, while ordinary reads remain unchanged.
 
 ## Policy fields
 
@@ -79,6 +81,83 @@ high_vulnerabilities
 critical_vulnerabilities
 unknown_vulnerabilities
 ```
+
+## Artifact quarantine
+
+Quarantine is versioned by immutable repository, format, coordinate, and digest
+identity. It is independent of tombstones and format-native artifact state.
+Read or transition the current record at:
+
+```http
+GET /api/v2/repositories/{sourceRepositoryId}/artifact-quarantine?coordinate=<coordinate>&digest=<sha256>
+PUT /api/v2/repositories/{sourceRepositoryId}/artifact-quarantine?coordinate=<coordinate>&digest=<sha256>
+If-Match: 0 | <current quarantine version>
+
+{
+  "state": "quarantined" | "released",
+  "reason": "operator-supplied audit reason"
+}
+```
+
+The initial quarantine uses `If-Match: 0`; every later transition uses the
+current response `ETag`. A stale version returns `412 version_conflict`, and a
+duplicate state transition returns `409 invalid_state`. Only an existing,
+visible artifact may receive its first quarantine record. Release remains
+possible after later lifecycle changes.
+
+For Conan, a recipe revision and all visible package revisions below it form
+one atomic distribution unit. The quarantine coordinate must therefore be the
+recipe revision (`reference#recipeRevision`). Package revisions remain
+independent scanner, intelligence, tombstone, and retention identities, but a
+package-only quarantine is rejected because recipe promotion or replication
+would otherwise carry that package to the target.
+
+A quarantined source returns `403 artifact_quarantined` from promotion and
+replication before any job or plan is created. Both worker types recheck the
+same immutable identity immediately before publishing target metadata, under a
+shared identity lock, so quarantining an already queued operation still keeps
+the target invisible. The policy evaluation endpoint reports
+`allowed: false`, `enforced: true`, and reason `artifact_quarantined` even when
+the target policy itself is disabled. Release permits a later request or retry,
+subject to all other admission checks.
+
+A replication plan that encounters Quarantine in a worker is parked without
+publishing metadata or consuming another retry. Release does not create a new
+plan: replay the exact replication request with the same `Idempotency-Key` to
+requeue and return the original plan ID.
+
+For PyPI, one `project@version` distribution unit can contain several files.
+Quarantining any visible file digest blocks promotion and replication of the
+whole version. The evaluation endpoint, request-time admission, and both
+worker-time checks use the same aggregate digest set. At the final publication
+boundary, the worker holds the version distribution lock, re-lists the complete
+visible `project@version`, and evaluates every current file digest. The original
+job payload or replication checkpoint snapshot is not treated as the complete
+set, so a file added and quarantined after enqueue still blocks publication.
+If current PyPI membership differs from a replication plan's checkpoints but
+none of the current files is quarantined, the worker parks the plan with
+`replication_snapshot_changed` instead of publishing a partial version. Exact
+same-key replay atomically replaces the parked plan's checkpoints with the
+current complete file set and requeues the original plan ID.
+
+Quarantine is evaluated before `Idempotency-Key` replay. If an accepted request
+is replayed after its source identity becomes quarantined, the replay returns
+`403 artifact_quarantined` instead of the earlier `202`. Releasing the identity
+restores the original idempotent `202` response without creating a second job.
+For a parked replication plan, that exact replay also requeues the original
+plan rather than creating a second plan.
+
+Current replication plans persist coordinate and digest together. Historical
+plans may have both fields empty because the columns were added with backward-
+compatible defaults; a new worker fails a non-terminal empty-identity plan
+closed instead of publishing without a Quarantine check. Follow the drain and
+worker-stop sequence in [release-readiness.md](release-readiness.md) before a
+rolling upgrade so an old worker cannot bypass this invariant.
+
+Quarantine does not make Maven, OCI, Raw, npm, PyPI, Conan, Go, or APT reads
+return `404`; only lifecycle/tombstone state controls protocol visibility. A
+future read-enforcement policy must be introduced as a separate compatibility
+change.
 
 For a gradual rollout, keep the policy disabled while scanners begin writing
 artifact intelligence, use the evaluation endpoint from CI, then enable the

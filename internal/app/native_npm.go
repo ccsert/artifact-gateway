@@ -363,11 +363,12 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 			return resolved, cacheErr
 		}
 	}
-	release, err := h.store.LockNPMProxy(r.Context(), "metadata:"+repo.ID+":"+packageName)
+	lockedCtx, release, err := repository.LockNPMProxyWithContext(r.Context(), h.store, "metadata:"+repo.ID+":"+packageName)
 	if err != nil {
 		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata cache is unavailable"}
 	}
 	defer release()
+	r = r.WithContext(lockedCtx)
 	pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 	now = time.Now().UTC()
 	if err == nil {
@@ -711,13 +712,14 @@ func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.R
 		h.tarballWithAudit(w, r, repo, packageName, tarballName, actor, "hit", target)
 		return
 	}
-	release, err := h.store.LockNPMProxy(r.Context(), "tarball:"+repo.ID+":"+packageName+":"+version.Version)
+	lockedCtx, release, err := repository.LockNPMProxyWithContext(r.Context(), h.store, "tarball:"+repo.ID+":"+packageName+":"+version.Version)
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "package tarball cache is unavailable")
 		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
 		return
 	}
 	defer release()
+	r = r.WithContext(lockedCtx)
 	version, err = h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 	if err != nil {
 		h.writeError(w, http.StatusNotFound, "package tarball not found")

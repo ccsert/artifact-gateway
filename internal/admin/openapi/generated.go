@@ -82,6 +82,42 @@ func (e ArtifactIntelligenceSummaryVulnerabilityStatus) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactQuarantineState.
+const (
+	ArtifactQuarantineStateQuarantined ArtifactQuarantineState = "quarantined"
+	ArtifactQuarantineStateReleased    ArtifactQuarantineState = "released"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactQuarantineState enum.
+func (e ArtifactQuarantineState) Valid() bool {
+	switch e {
+	case ArtifactQuarantineStateQuarantined:
+		return true
+	case ArtifactQuarantineStateReleased:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactQuarantineUpdateState.
+const (
+	ArtifactQuarantineUpdateStateQuarantined ArtifactQuarantineUpdateState = "quarantined"
+	ArtifactQuarantineUpdateStateReleased    ArtifactQuarantineUpdateState = "released"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactQuarantineUpdateState enum.
+func (e ArtifactQuarantineUpdateState) Valid() bool {
+	switch e {
+	case ArtifactQuarantineUpdateStateQuarantined:
+		return true
+	case ArtifactQuarantineUpdateStateReleased:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactScanStatusState.
 const (
 	ArtifactScanStatusStateCancelled ArtifactScanStatusState = "cancelled"
@@ -946,12 +982,14 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 // Defines values for ProblemCode.
 const (
 	AccessDenied         ProblemCode = "access_denied"
+	ArtifactQuarantined  ProblemCode = "artifact_quarantined"
 	CoordinateExists     ProblemCode = "coordinate_exists"
 	DigestMismatch       ProblemCode = "digest_mismatch"
 	IdempotencyConflict  ProblemCode = "idempotency_conflict"
 	InternalError        ProblemCode = "internal_error"
 	InvalidPageToken     ProblemCode = "invalid_page_token"
 	InvalidRequest       ProblemCode = "invalid_request"
+	InvalidState         ProblemCode = "invalid_state"
 	NotFound             ProblemCode = "not_found"
 	RetentionProtected   ProblemCode = "retention_protected"
 	SecurityPolicyDenied ProblemCode = "security_policy_denied"
@@ -964,6 +1002,8 @@ func (e ProblemCode) Valid() bool {
 	switch e {
 	case AccessDenied:
 		return true
+	case ArtifactQuarantined:
+		return true
 	case CoordinateExists:
 		return true
 	case DigestMismatch:
@@ -975,6 +1015,8 @@ func (e ProblemCode) Valid() bool {
 	case InvalidPageToken:
 		return true
 	case InvalidRequest:
+		return true
+	case InvalidState:
 		return true
 	case NotFound:
 		return true
@@ -1848,6 +1890,36 @@ type ArtifactProvenance struct {
 	SourceRepository string     `json:"sourceRepository"`
 	StartedAt        *time.Time `json:"startedAt,omitempty"`
 }
+
+// ArtifactQuarantine defines model for ArtifactQuarantine.
+type ArtifactQuarantine struct {
+	// Coordinate Immutable distribution coordinate; Conan uses the recipe revision, never an individual package revision.
+	Coordinate string `json:"coordinate"`
+
+	// Digest Immutable distribution digest; Conan uses the recipe revision digest.
+	Digest        string                  `json:"digest"`
+	Format        Format                  `json:"format"`
+	QuarantinedAt *time.Time              `json:"quarantinedAt,omitempty"`
+	Reason        string                  `json:"reason"`
+	ReleasedAt    *time.Time              `json:"releasedAt,omitempty"`
+	RepositoryId  openapi_types.UUID      `json:"repositoryId"`
+	State         ArtifactQuarantineState `json:"state"`
+	UpdatedAt     time.Time               `json:"updatedAt"`
+	UpdatedBy     string                  `json:"updatedBy"`
+	Version       string                  `json:"version"`
+}
+
+// ArtifactQuarantineState defines model for ArtifactQuarantine.State.
+type ArtifactQuarantineState string
+
+// ArtifactQuarantineUpdate defines model for ArtifactQuarantineUpdate.
+type ArtifactQuarantineUpdate struct {
+	Reason string                        `json:"reason"`
+	State  ArtifactQuarantineUpdateState `json:"state"`
+}
+
+// ArtifactQuarantineUpdateState defines model for ArtifactQuarantineUpdate.State.
+type ArtifactQuarantineUpdateState string
 
 // ArtifactSBOM defines model for ArtifactSBOM.
 type ArtifactSBOM struct {
@@ -2892,10 +2964,18 @@ type ReplicationCheckpointProgressState string
 
 // ReplicationPlan defines model for ReplicationPlan.
 type ReplicationPlan struct {
-	CompletedAt        *time.Time           `json:"completedAt,omitempty"`
-	CreatedAt          time.Time            `json:"createdAt"`
-	Format             Format               `json:"format"`
-	Id                 openapi_types.UUID   `json:"id"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+
+	// Coordinate Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted.
+	Coordinate *string   `json:"coordinate,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// Digest Immutable artifact digest. Omitted together with coordinate for legacy plans created before artifact identity was persisted.
+	Digest *string            `json:"digest,omitempty"`
+	Format Format             `json:"format"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// LastError Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons.
 	LastError          *string              `json:"lastError,omitempty"`
 	SourceRepositoryId openapi_types.UUID   `json:"sourceRepositoryId"`
 	StartedAt          *time.Time           `json:"startedAt,omitempty"`
@@ -2908,16 +2988,24 @@ type ReplicationPlanState string
 
 // ReplicationPlanDetail defines model for ReplicationPlanDetail.
 type ReplicationPlanDetail struct {
-	Checkpoints        []ReplicationCheckpointProgress `json:"checkpoints"`
-	CompletedAt        *time.Time                      `json:"completedAt,omitempty"`
-	CreatedAt          time.Time                       `json:"createdAt"`
-	Format             Format                          `json:"format"`
-	Id                 openapi_types.UUID              `json:"id"`
-	LastError          *string                         `json:"lastError,omitempty"`
-	SourceRepositoryId openapi_types.UUID              `json:"sourceRepositoryId"`
-	StartedAt          *time.Time                      `json:"startedAt,omitempty"`
-	State              ReplicationPlanDetailState      `json:"state"`
-	TargetRepositoryId openapi_types.UUID              `json:"targetRepositoryId"`
+	Checkpoints []ReplicationCheckpointProgress `json:"checkpoints"`
+	CompletedAt *time.Time                      `json:"completedAt,omitempty"`
+
+	// Coordinate Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted.
+	Coordinate *string   `json:"coordinate,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// Digest Immutable artifact digest. Omitted together with coordinate for legacy plans created before artifact identity was persisted.
+	Digest *string            `json:"digest,omitempty"`
+	Format Format             `json:"format"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// LastError Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons.
+	LastError          *string                    `json:"lastError,omitempty"`
+	SourceRepositoryId openapi_types.UUID         `json:"sourceRepositoryId"`
+	StartedAt          *time.Time                 `json:"startedAt,omitempty"`
+	State              ReplicationPlanDetailState `json:"state"`
+	TargetRepositoryId openapi_types.UUID         `json:"targetRepositoryId"`
 }
 
 // ReplicationPlanDetailState defines model for ReplicationPlanDetail.State.
@@ -3620,6 +3708,33 @@ type ReplaceArtifactIntelligenceParams struct {
 	IfMatch    *OptionalIfMatch `json:"If-Match,omitempty"`
 }
 
+// GetArtifactQuarantineParams defines parameters for GetArtifactQuarantine.
+type GetArtifactQuarantineParams struct {
+	// Coordinate Immutable format-specific distribution coordinate. For Conan this must
+	// be a recipe revision (`reference#recipeRevision`); package revisions are
+	// scanned independently but are distributed with their parent recipe and
+	// cannot be quarantined independently.
+	Coordinate string `form:"coordinate" json:"coordinate"`
+
+	// Digest SHA-256 digest that completes the immutable distribution identity. For
+	// Conan this is the recipe revision digest.
+	Digest string `form:"digest" json:"digest"`
+}
+
+// ReplaceArtifactQuarantineParams defines parameters for ReplaceArtifactQuarantine.
+type ReplaceArtifactQuarantineParams struct {
+	// Coordinate Immutable format-specific distribution coordinate. For Conan this must
+	// be a recipe revision (`reference#recipeRevision`); package revisions are
+	// scanned independently but are distributed with their parent recipe and
+	// cannot be quarantined independently.
+	Coordinate string `form:"coordinate" json:"coordinate"`
+
+	// Digest SHA-256 digest that completes the immutable distribution identity. For
+	// Conan this is the recipe revision digest.
+	Digest  string  `form:"digest" json:"digest"`
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // GetRepositoryArtifactScanStatusParams defines parameters for GetRepositoryArtifactScanStatus.
 type GetRepositoryArtifactScanStatusParams struct {
 	Coordinate string `form:"coordinate" json:"coordinate"`
@@ -3881,6 +3996,9 @@ type UpdateRepositoryJSONRequestBody = UpdateRepository
 // ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
 type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
 
+// ReplaceArtifactQuarantineJSONRequestBody defines body for ReplaceArtifactQuarantine for application/json ContentType.
+type ReplaceArtifactQuarantineJSONRequestBody = ArtifactQuarantineUpdate
+
 // CreateRepositoryArtifactScanJSONRequestBody defines body for CreateRepositoryArtifactScan for application/json ContentType.
 type CreateRepositoryArtifactScanJSONRequestBody = ArtifactScanRequest
 
@@ -4123,6 +4241,12 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactIntelligenceParams)
+	// GetArtifactQuarantine Get the quarantine state for one immutable distribution anchor
+	// (GET /repositories/{repositoryId}/artifact-quarantine)
+	GetArtifactQuarantine(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetArtifactQuarantineParams)
+	// ReplaceArtifactQuarantine Quarantine or release one immutable distribution anchor
+	// (PUT /repositories/{repositoryId}/artifact-quarantine)
+	ReplaceArtifactQuarantine(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactQuarantineParams)
 	// GetRepositoryArtifactScanStatus Get the latest durable scan status for one immutable artifact
 	// (GET /repositories/{repositoryId}/artifact-scans)
 	GetRepositoryArtifactScanStatus(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetRepositoryArtifactScanStatusParams)
@@ -4228,7 +4352,7 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/replications)
 	ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
-
+	// CreateRepositoryReplication Create or replay an immutable artifact replication plan
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateRepositoryReplicationParams)
 	// DeleteRepositoryReplication Cancel a pending or failed replication plan
@@ -6087,6 +6211,141 @@ func (siw *ServerInterfaceWrapper) ReplaceArtifactIntelligence(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceArtifactIntelligence(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactQuarantine operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactQuarantine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactQuarantineParams
+
+	// ------------- Required query parameter "coordinate" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "coordinate", r.URL.Query(), &params.Coordinate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "coordinate"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "coordinate", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "digest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "digest", r.URL.Query(), &params.Digest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digest", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactQuarantine(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceArtifactQuarantine operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceArtifactQuarantine(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceArtifactQuarantineParams
+
+	// ------------- Required query parameter "coordinate" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "coordinate", r.URL.Query(), &params.Coordinate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "coordinate"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "coordinate", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "digest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "digest", r.URL.Query(), &params.Digest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digest", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceArtifactQuarantine(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9210,6 +9469,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-quarantine", wrapper.GetArtifactQuarantine)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-quarantine", wrapper.ReplaceArtifactQuarantine)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.GetRepositoryArtifactScanStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.CreateRepositoryArtifactScan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans:reconcile", wrapper.ReconcileRepositoryArtifactScans)
@@ -9302,6 +9563,15 @@ type ArtifactIntelligenceJSONResponse struct {
 }
 
 type ArtifactListJSONResponse ArtifactPage
+
+type ArtifactQuarantineResponseHeaders struct {
+	ETag string
+}
+type ArtifactQuarantineJSONResponse struct {
+	Body ArtifactQuarantine
+
+	Headers ArtifactQuarantineResponseHeaders
+}
 
 type ArtifactSummaryListJSONResponse ArtifactSummaryPage
 
@@ -11602,6 +11872,199 @@ func (response ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type GetArtifactQuarantineRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       GetArtifactQuarantineParams
+}
+
+type GetArtifactQuarantineResponseObject interface {
+	VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactQuarantine200JSONResponse struct{ ArtifactQuarantineJSONResponse }
+
+func (response GetArtifactQuarantine200JSONResponse) VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactQuarantine400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactQuarantine400ApplicationProblemPlusJSONResponse) VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactQuarantine401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactQuarantine401ApplicationProblemPlusJSONResponse) VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactQuarantine403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactQuarantine403ApplicationProblemPlusJSONResponse) VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactQuarantine404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactQuarantine404ApplicationProblemPlusJSONResponse) VisitGetArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantineRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceArtifactQuarantineParams
+	Body         *ReplaceArtifactQuarantineJSONRequestBody
+}
+
+type ReplaceArtifactQuarantineResponseObject interface {
+	VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error
+}
+
+type ReplaceArtifactQuarantine200JSONResponse struct{ ArtifactQuarantineJSONResponse }
+
+func (response ReplaceArtifactQuarantine200JSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceArtifactQuarantine400ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactQuarantine401ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactQuarantine403ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactQuarantine404ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactQuarantine409ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactQuarantine412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactQuarantine412ApplicationProblemPlusJSONResponse) VisitReplaceArtifactQuarantineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRepositoryArtifactScanStatusRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       GetRepositoryArtifactScanStatusParams
@@ -13333,6 +13796,78 @@ func (response CreateRepositoryPromotion202JSONResponse) VisitCreateRepositoryPr
 	return err
 }
 
+type CreateRepositoryPromotion400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepositoryPromotion400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryPromotion401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryPromotion401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryPromotion403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryPromotion403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryPromotion404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryPromotion404ApplicationProblemPlusJSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryPromotion409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryPromotion409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetProxyHealthRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -13503,6 +14038,20 @@ func (response CreateRepositoryReplication400ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type CreateRepositoryReplication401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryReplication401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRepositoryReplication403ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateRepositoryReplication403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
@@ -13513,6 +14062,20 @@ func (response CreateRepositoryReplication403ApplicationProblemPlusJSONResponse)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryReplication404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryReplication404ApplicationProblemPlusJSONResponse) VisitCreateRepositoryReplicationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -15488,6 +16051,12 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/artifact-intelligence)
 	ReplaceArtifactIntelligence(ctx context.Context, request ReplaceArtifactIntelligenceRequestObject) (ReplaceArtifactIntelligenceResponseObject, error)
+	// GetArtifactQuarantine Get the quarantine state for one immutable distribution anchor
+	// (GET /repositories/{repositoryId}/artifact-quarantine)
+	GetArtifactQuarantine(ctx context.Context, request GetArtifactQuarantineRequestObject) (GetArtifactQuarantineResponseObject, error)
+	// ReplaceArtifactQuarantine Quarantine or release one immutable distribution anchor
+	// (PUT /repositories/{repositoryId}/artifact-quarantine)
+	ReplaceArtifactQuarantine(ctx context.Context, request ReplaceArtifactQuarantineRequestObject) (ReplaceArtifactQuarantineResponseObject, error)
 	// GetRepositoryArtifactScanStatus Get the latest durable scan status for one immutable artifact
 	// (GET /repositories/{repositoryId}/artifact-scans)
 	GetRepositoryArtifactScanStatus(ctx context.Context, request GetRepositoryArtifactScanStatusRequestObject) (GetRepositoryArtifactScanStatusResponseObject, error)
@@ -15593,7 +16162,7 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/replications)
 	ListRepositoryReplications(ctx context.Context, request ListRepositoryReplicationsRequestObject) (ListRepositoryReplicationsResponseObject, error)
-
+	// CreateRepositoryReplication Create or replay an immutable artifact replication plan
 	// (POST /repositories/{repositoryId}/replications)
 	CreateRepositoryReplication(ctx context.Context, request CreateRepositoryReplicationRequestObject) (CreateRepositoryReplicationResponseObject, error)
 	// DeleteRepositoryReplication Cancel a pending or failed replication plan
@@ -17068,6 +17637,67 @@ func (sh *strictHandler) ReplaceArtifactIntelligence(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceArtifactIntelligenceResponseObject); ok {
 		if err := validResponse.VisitReplaceArtifactIntelligenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactQuarantine operation middleware
+func (sh *strictHandler) GetArtifactQuarantine(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetArtifactQuarantineParams) {
+	var request GetArtifactQuarantineRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactQuarantine(ctx, request.(GetArtifactQuarantineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactQuarantine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactQuarantineResponseObject); ok {
+		if err := validResponse.VisitGetArtifactQuarantineResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceArtifactQuarantine operation middleware
+func (sh *strictHandler) ReplaceArtifactQuarantine(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceArtifactQuarantineParams) {
+	var request ReplaceArtifactQuarantineRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceArtifactQuarantineJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceArtifactQuarantine(ctx, request.(ReplaceArtifactQuarantineRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceArtifactQuarantine")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceArtifactQuarantineResponseObject); ok {
+		if err := validResponse.VisitReplaceArtifactQuarantineResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

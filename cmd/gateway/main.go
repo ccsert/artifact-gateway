@@ -93,7 +93,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = notificationPool.Close() }()
-	store, err := repository.NewPostgresStoreWithPools(databasePool, notificationPool)
+	artifactLockPool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabaseArtifactLockPool)
+	if err != nil {
+		slog.Error("open PostgreSQL artifact lock pool", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = artifactLockPool.Close() }()
+	store, err := repository.NewPostgresStoreWithPools(databasePool, notificationPool, artifactLockPool)
 	if err != nil {
 		slog.Error("open repository store", "error", err)
 		os.Exit(1)
@@ -144,6 +150,7 @@ func main() {
 	maintenance := app.NewCacheMaintenanceWithRaw(cacheStore, ociCache, rawCache).WithConan(conanCache)
 	metrics := (&app.Metrics{}).
 		WithDatabaseStats(databasePool.Stats).
+		WithDatabasePoolStats("artifact-locks", artifactLockPool.Stats).
 		WithDatabasePoolStats("coordinator", coordinatorPool.Stats).
 		WithDatabasePoolStats("notifications", notificationPool.Stats).
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))

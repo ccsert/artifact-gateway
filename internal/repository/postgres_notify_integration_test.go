@@ -26,7 +26,12 @@ func TestPostgresNotifierMultiplexesChannelsOnOneConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = notifications.Close() }()
-	store, err := NewPostgresStoreWithPools(primary, notifications)
+	locks, err := database.OpenPostgres(databaseURL, database.DefaultCoordinatorPoolConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = locks.Close() }()
+	store, err := NewPostgresStoreWithPools(primary, notifications, locks)
 	if err != nil {
 		t.Fatal(err)
 	}

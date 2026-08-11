@@ -236,6 +236,7 @@ type generatedRepositoryAPIAdapter struct {
 	mavenProxy          mavenProxyOperationsHandler
 	searchProjection    repository.ArtifactSearchStore
 	intelligence        repository.ArtifactIntelligenceStore
+	quarantine          repository.ArtifactQuarantineStore
 	runtimeNodes        repository.RuntimeNodeStore
 	scheduledTasks      repository.ScheduledTaskStore
 	queueStats          repository.BackgroundOperationQueueStore

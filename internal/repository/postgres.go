@@ -10,9 +10,11 @@ import (
 )
 
 type PostgresStore struct {
-	db       *sql.DB
-	ownsDB   bool
-	notifier *postgresNotifier
+	db         *sql.DB
+	lockDB     *sql.DB
+	ownsDB     bool
+	ownsLockDB bool
+	notifier   *postgresNotifier
 }
 
 func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
@@ -25,14 +27,20 @@ func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("open postgres notification pool: %w", err)
 	}
-	return &PostgresStore{db: db, ownsDB: true, notifier: newPostgresNotifier(listenerDB, true)}, nil
+	lockDB, err := database.OpenPostgres(databaseURL, database.DefaultArtifactLockPoolConfig())
+	if err != nil {
+		_ = listenerDB.Close()
+		_ = db.Close()
+		return nil, fmt.Errorf("open postgres artifact lock pool: %w", err)
+	}
+	return &PostgresStore{db: db, lockDB: lockDB, ownsDB: true, ownsLockDB: true, notifier: newPostgresNotifier(listenerDB, true)}, nil
 }
 
-func NewPostgresStoreWithPools(db, listenerDB *sql.DB) (*PostgresStore, error) {
-	if db == nil || listenerDB == nil {
-		return nil, errors.New("postgres store requires database and notification pools")
+func NewPostgresStoreWithPools(db, listenerDB, lockDB *sql.DB) (*PostgresStore, error) {
+	if db == nil || listenerDB == nil || lockDB == nil {
+		return nil, errors.New("postgres store requires database, notification, and artifact lock pools")
 	}
-	return &PostgresStore{db: db, notifier: newPostgresNotifier(listenerDB, false)}, nil
+	return &PostgresStore{db: db, lockDB: lockDB, notifier: newPostgresNotifier(listenerDB, false)}, nil
 }
 
 func (s *PostgresStore) Close() error {
@@ -40,10 +48,14 @@ func (s *PostgresStore) Close() error {
 	if s.notifier != nil {
 		notifyErr = s.notifier.Close()
 	}
-	if s.ownsDB {
-		return errors.Join(notifyErr, s.db.Close())
+	var lockErr error
+	if s.ownsLockDB && s.lockDB != nil {
+		lockErr = s.lockDB.Close()
 	}
-	return notifyErr
+	if s.ownsDB {
+		return errors.Join(notifyErr, lockErr, s.db.Close())
+	}
+	return errors.Join(notifyErr, lockErr)
 }
 
 func isUnique(err error) bool {

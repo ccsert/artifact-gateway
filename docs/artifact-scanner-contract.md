@@ -253,8 +253,13 @@ so a temporary scanner outage does not take repository reads and writes down.
   bounded per-vulnerability findings. They cannot replace publisher signatures
   or provenance.
 
-Malicious-component quarantine and repository-read blocking remain future
-work.
+Administrators can place the scanned immutable distribution anchor into the
+independent, versioned quarantine workflow, which blocks Promotion and
+Replication without changing scanner-owned evidence. For Conan, the recipe
+revision is the atomic promotion/replication unit and the only valid quarantine
+anchor. Package revision scans and Artifact Intelligence remain independently
+addressable, but a package revision cannot be quarantined on its own. Automatic
+scanner-triggered quarantine and repository-read blocking remain future work.
 
 ## Durable status and reconciliation
 

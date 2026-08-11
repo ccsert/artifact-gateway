@@ -41,7 +41,7 @@ func TestConanReplicationCopiesRecipeAndPackageToTargetOwnedKeys(t *testing.T) {
 	if err != nil || len(checks) != 2 || checks[0].SourceObjectKey == checks[0].ObjectKey {
 		t.Fatalf("checkpoints=%#v err=%v", checks, err)
 	}
-	plan := repository.ReplicationPlan{ID: "conan-copy", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatConan, IdempotencyKey: "copy"}
+	plan := repository.ReplicationPlan{ID: "conan-copy", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatConan, Coordinate: reference + "#" + revision, Digest: recipeDigest, IdempotencyKey: "copy"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, checks); err != nil {
 		t.Fatal(err)
 	}

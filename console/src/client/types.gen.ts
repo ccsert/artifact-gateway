@@ -319,10 +319,21 @@ export type ReplicationPlan = {
   sourceRepositoryId: string;
   targetRepositoryId: string;
   format: Format;
+  /**
+   * Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted.
+   */
+  coordinate?: string;
+  /**
+   * Immutable artifact digest. Omitted together with coordinate for legacy plans created before artifact identity was persisted.
+   */
+  digest?: string;
   state: "pending" | "running" | "completed" | "failed" | "cancelled";
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  /**
+   * Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons.
+   */
   lastError?: string;
 };
 
@@ -547,6 +558,7 @@ export type Problem = {
   status: number;
   code:
     | "invalid_request"
+    | "invalid_state"
     | "invalid_page_token"
     | "access_denied"
     | "not_found"
@@ -557,6 +569,7 @@ export type Problem = {
     | "digest_mismatch"
     | "retention_protected"
     | "security_policy_denied"
+    | "artifact_quarantined"
     | "internal_error";
   message: string;
   requestId: string;
@@ -1375,6 +1388,31 @@ export type ArtifactIntelligenceWritable = {
   provenance?: ArtifactProvenance;
   licenses: Array<ArtifactLicense>;
   vulnerability?: ArtifactVulnerabilitySummary;
+};
+
+export type ArtifactQuarantine = {
+  repositoryId: string;
+  format: Format;
+  /**
+   * Immutable distribution coordinate; Conan uses the recipe revision, never an individual package revision.
+   */
+  coordinate: string;
+  /**
+   * Immutable distribution digest; Conan uses the recipe revision digest.
+   */
+  digest: string;
+  state: "quarantined" | "released";
+  reason: string;
+  version: string;
+  updatedBy: string;
+  updatedAt: string;
+  quarantinedAt?: string;
+  releasedAt?: string;
+};
+
+export type ArtifactQuarantineUpdate = {
+  state: "quarantined" | "released";
+  reason: string;
 };
 
 export type OciManifestSummary = {
@@ -3868,9 +3906,35 @@ export type CreateRepositoryPromotionData = {
   url: "/repositories/{repositoryId}/promotions";
 };
 
+export type CreateRepositoryPromotionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateRepositoryPromotionError =
+  CreateRepositoryPromotionErrors[keyof CreateRepositoryPromotionErrors];
+
 export type CreateRepositoryPromotionResponses = {
   /**
-   * Immutable Maven or OCI promotion job accepted
+   * Immutable artifact promotion job accepted
    */
   202: LifecycleJob;
 };
@@ -3899,7 +3963,10 @@ export type ListRepositoryReplicationsError =
 
 export type ListRepositoryReplicationsResponses = {
   /**
-   * Replication plans involving this repository
+   * Replication plans involving this repository. Coordinate and digest
+   * are both present for current plans and both absent only on historical
+   * plans created before immutable identity persistence was introduced.
+   *
    */
   200: Array<ReplicationPlan>;
 };
@@ -3927,7 +3994,15 @@ export type CreateRepositoryReplicationErrors = {
   /**
    * Problem response
    */
+  401: Problem;
+  /**
+   * Problem response
+   */
   403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
   /**
    * Problem response
    */
@@ -4011,7 +4086,12 @@ export type GetRepositoryReplicationError =
 
 export type GetRepositoryReplicationResponses = {
   /**
-   * Replication plan and checkpoint progress for this repository
+   * Replication plan and checkpoint progress for this repository.
+   * Coordinate and digest are both present for current plans and both
+   * absent only on historical plans created before immutable identity
+   * persistence was introduced. A new worker fails closed rather than
+   * publishing a non-terminal historical plan with both fields absent.
+   *
    */
   200: ReplicationPlanDetail;
 };
@@ -4892,6 +4972,129 @@ export type ReplaceArtifactIntelligenceResponses = {
 
 export type ReplaceArtifactIntelligenceResponse =
   ReplaceArtifactIntelligenceResponses[keyof ReplaceArtifactIntelligenceResponses];
+
+export type GetArtifactQuarantineData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    /**
+     * Immutable format-specific distribution coordinate. For Conan this must
+     * be a recipe revision (`reference#recipeRevision`); package revisions are
+     * scanned independently but are distributed with their parent recipe and
+     * cannot be quarantined independently.
+     *
+     */
+    coordinate: string;
+    /**
+     * SHA-256 digest that completes the immutable distribution identity. For
+     * Conan this is the recipe revision digest.
+     *
+     */
+    digest: string;
+  };
+  url: "/repositories/{repositoryId}/artifact-quarantine";
+};
+
+export type GetArtifactQuarantineErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetArtifactQuarantineError =
+  GetArtifactQuarantineErrors[keyof GetArtifactQuarantineErrors];
+
+export type GetArtifactQuarantineResponses = {
+  /**
+   * Versioned quarantine state for one immutable distribution anchor; Conan uses the recipe revision and its package closure.
+   */
+  200: ArtifactQuarantine;
+};
+
+export type GetArtifactQuarantineResponse =
+  GetArtifactQuarantineResponses[keyof GetArtifactQuarantineResponses];
+
+export type ReplaceArtifactQuarantineData = {
+  body: ArtifactQuarantineUpdate;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    /**
+     * Immutable format-specific distribution coordinate. For Conan this must
+     * be a recipe revision (`reference#recipeRevision`); package revisions are
+     * scanned independently but are distributed with their parent recipe and
+     * cannot be quarantined independently.
+     *
+     */
+    coordinate: string;
+    /**
+     * SHA-256 digest that completes the immutable distribution identity. For
+     * Conan this is the recipe revision digest.
+     *
+     */
+    digest: string;
+  };
+  url: "/repositories/{repositoryId}/artifact-quarantine";
+};
+
+export type ReplaceArtifactQuarantineErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceArtifactQuarantineError =
+  ReplaceArtifactQuarantineErrors[keyof ReplaceArtifactQuarantineErrors];
+
+export type ReplaceArtifactQuarantineResponses = {
+  /**
+   * Versioned quarantine state for one immutable distribution anchor; Conan uses the recipe revision and its package closure.
+   */
+  200: ArtifactQuarantine;
+};
+
+export type ReplaceArtifactQuarantineResponse =
+  ReplaceArtifactQuarantineResponses[keyof ReplaceArtifactQuarantineResponses];
 
 export type ListOciImagesData = {
   body?: never;

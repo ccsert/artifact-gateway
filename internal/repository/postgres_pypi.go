@@ -4,23 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
+	"sort"
 	"time"
 )
 
 func (s *PostgresStore) LockPyPIObject(ctx context.Context, objectKey string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	lockKey := "native-pypi-object:" + objectKey
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.LockArtifactObjectKeys(ctx, FormatPyPI, []string{objectKey})
+	return release, err
 }
 
 type pypiRowScanner interface {
@@ -55,6 +46,11 @@ func pypiNullableTime(value time.Time) any {
 }
 
 func (s *PostgresStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyPIFile, error) {
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, file.RepositoryID, FormatPyPI, []string{file.Project + "@" + file.Version})
+	if err != nil {
+		return PyPIFile{}, err
+	}
+	defer releaseDistribution()
 	if file.CreatedAt.IsZero() {
 		file.CreatedAt = time.Now().UTC()
 	}
@@ -65,7 +61,7 @@ func (s *PostgresStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyP
 		file.State = "visible"
 	}
 	var stored PyPIFile
-	err := scanPyPIFile(s.db.QueryRowContext(ctx, `
+	err = scanPyPIFile(s.db.QueryRowContext(ctx, `
 		INSERT INTO native_pypi_files
 		(repository_id,project,version,filename,file_type,python_version,requires_python,digest,object_key,size,publisher,source_url,state,cached_at,created_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
@@ -91,6 +87,11 @@ func (s *PostgresStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile
 	if len(files) == 0 {
 		return nil, ErrNotFound
 	}
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, files[0].RepositoryID, FormatPyPI, []string{files[0].Project + "@" + files[0].Version})
+	if err != nil {
+		return nil, err
+	}
+	defer releaseDistribution()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -139,6 +140,15 @@ func (s *PostgresStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile
 }
 
 func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, project string, files []PyPIFile) error {
+	coordinates := make([]string, 0, len(files))
+	for _, file := range files {
+		coordinates = append(coordinates, project+"@"+file.Version)
+	}
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, repositoryID, FormatPyPI, coordinates)
+	if err != nil {
+		return err
+	}
+	defer releaseDistribution()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -297,6 +307,11 @@ func (s *PostgresStore) ListPyPIProjects(ctx context.Context, repositoryID, pref
 }
 
 func (s *PostgresStore) TombstonePyPIVersion(ctx context.Context, repositoryID, project, version string) ([]PyPIFile, error) {
+	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, repositoryID, FormatPyPI, []string{project + "@" + version})
+	if err != nil {
+		return nil, err
+	}
+	defer releaseDistribution()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -335,11 +350,40 @@ func (s *PostgresStore) TombstonePyPIVersion(ctx context.Context, repositoryID, 
 }
 
 func (s *PostgresStore) RestorePyPIVersion(ctx context.Context, repositoryID, project, version string) ([]PyPIFile, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		objectKeys, found, collected, err := s.deletedPyPIObjectKeys(ctx, repositoryID, project, version)
+		if err != nil {
+			return nil, err
+		}
+		if !found || collected {
+			return nil, ErrDisabled
+		}
+		objectCtx, releaseObjects, err := LockObjectKeys(ctx, objectKeys, s, FormatPyPI, s.LockPyPIObject)
+		if err != nil {
+			return nil, err
+		}
+		releaseDistribution, err := lockArtifactDistributionCoordinates(objectCtx, s, repositoryID, FormatPyPI, []string{project + "@" + version})
+		if err != nil {
+			releaseObjects()
+			return nil, err
+		}
+		files, membershipChanged, restoreErr := s.restorePyPIVersionLocked(objectCtx, repositoryID, project, version, objectKeys)
+		releaseDistribution()
+		releaseObjects()
+		if membershipChanged {
+			continue
+		}
+		return files, restoreErr
+	}
+	return nil, ErrUpstreamChanged
+}
+
+func (s *PostgresStore) deletedPyPIObjectKeys(ctx context.Context, repositoryID, project, version string) ([]string, bool, bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT object_key,collected_at IS NOT NULL
 		FROM native_pypi_files WHERE repository_id::text=$1 AND project=$2 AND version=$3 AND state='deleted'
 		ORDER BY object_key`, repositoryID, project, version)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	objectKeys := make([]string, 0)
 	seen := make(map[string]bool)
@@ -349,7 +393,7 @@ func (s *PostgresStore) RestorePyPIVersion(ctx context.Context, repositoryID, pr
 		var isCollected bool
 		if err = rows.Scan(&objectKey, &isCollected); err != nil {
 			_ = rows.Close()
-			return nil, err
+			return nil, false, false, err
 		}
 		found = true
 		collected = collected || isCollected
@@ -359,71 +403,77 @@ func (s *PostgresStore) RestorePyPIVersion(ctx context.Context, repositoryID, pr
 		}
 	}
 	if err = rows.Close(); err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
-	if !found || collected {
-		return nil, ErrDisabled
-	}
-	release, err := LockObjectKeys(ctx, objectKeys, s.LockPyPIObject)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
+	return objectKeys, found, collected, nil
+}
 
+func (s *PostgresStore) restorePyPIVersionLocked(ctx context.Context, repositoryID, project, version string, expectedObjectKeys []string) ([]PyPIFile, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err = tx.QueryContext(ctx, `SELECT collected_at IS NOT NULL FROM native_pypi_files
+	rows, err := tx.QueryContext(ctx, `SELECT object_key,collected_at IS NOT NULL FROM native_pypi_files
 		WHERE repository_id::text=$1 AND project=$2 AND version=$3 AND state='deleted' FOR UPDATE`, repositoryID, project, version)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	found, collected = false, false
+	currentObjectKeys := make([]string, 0)
+	seen := make(map[string]bool)
+	found, collected := false, false
 	for rows.Next() {
+		var objectKey string
 		var isCollected bool
-		if err = rows.Scan(&isCollected); err != nil {
+		if err = rows.Scan(&objectKey, &isCollected); err != nil {
 			_ = rows.Close()
-			return nil, err
+			return nil, false, err
 		}
 		found = true
 		collected = collected || isCollected
+		if objectKey != "" && !seen[objectKey] {
+			seen[objectKey] = true
+			currentObjectKeys = append(currentObjectKeys, objectKey)
+		}
 	}
 	if err = rows.Close(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !found || collected {
-		return nil, ErrDisabled
+		return nil, false, ErrDisabled
+	}
+	sort.Strings(currentObjectKeys)
+	if !slices.Equal(expectedObjectKeys, currentObjectKeys) {
+		return nil, true, nil
 	}
 	rows, err = tx.QueryContext(ctx, `UPDATE native_pypi_files SET state='visible',deleted_at=NULL
 		WHERE repository_id::text=$1 AND project=$2 AND version=$3 AND state='deleted' AND collected_at IS NULL
 		RETURNING `+pypiFileColumns, repositoryID, project, version)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	files := make([]PyPIFile, 0)
 	for rows.Next() {
 		var file PyPIFile
 		if err = scanPyPIFile(rows, &file); err != nil {
 			_ = rows.Close()
-			return nil, err
+			return nil, false, err
 		}
 		files = append(files, file)
 	}
 	if err = rows.Close(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(files) == 0 {
-		return nil, ErrDisabled
+		return nil, false, ErrDisabled
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='pypi' AND coordinate=$2`, repositoryID, project+"@"+version); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err = tx.Commit(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return files, nil
+	return files, false, nil
 }
 
 func (s *PostgresStore) ListReclaimablePyPIObjects(ctx context.Context, before time.Time, limit int) ([]PyPIObject, error) {

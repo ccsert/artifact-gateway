@@ -16,11 +16,11 @@ func (s *PostgresStore) CreateReplicationPlan(ctx context.Context, plan Replicat
 	defer func() { _ = tx.Rollback() }()
 
 	err = scanReplicationPlan(tx.QueryRowContext(ctx, `
-		INSERT INTO replication_plans (id, source_repository_id, target_repository_id, format, idempotency_key, state, next_attempt_at, max_attempts)
-		VALUES ($1,$2,$3,$4,$5,'pending',now(),LEAST(GREATEST(COALESCE(NULLIF($6, 0), 3), 1), 10))
+		INSERT INTO replication_plans (id, source_repository_id, target_repository_id, format, coordinate, digest, idempotency_key, state, next_attempt_at, max_attempts)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',now(),LEAST(GREATEST(COALESCE(NULLIF($8, 0), 3), 1), 10))
 		ON CONFLICT (target_repository_id, idempotency_key) DO NOTHING
-		RETURNING id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts`,
-		plan.ID, plan.SourceRepositoryID, plan.TargetRepositoryID, plan.Format, plan.IdempotencyKey, plan.MaxAttempts), &plan)
+		RETURNING id::text,source_repository_id::text,target_repository_id::text,format,coordinate,digest,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts`,
+		plan.ID, plan.SourceRepositoryID, plan.TargetRepositoryID, plan.Format, plan.Coordinate, plan.Digest, plan.IdempotencyKey, plan.MaxAttempts), &plan)
 	if err == nil {
 		for _, checkpoint := range checkpoints {
 			sourceObjectKey := checkpoint.SourceObjectKey
@@ -41,15 +41,43 @@ func (s *PostgresStore) CreateReplicationPlan(ctx context.Context, plan Replicat
 	}
 
 	var existing ReplicationPlan
-	if err = scanReplicationPlan(tx.QueryRowContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE target_repository_id::text=$1 AND idempotency_key=$2 FOR UPDATE`, plan.TargetRepositoryID, plan.IdempotencyKey), &existing); err != nil {
+	if err = scanReplicationPlan(tx.QueryRowContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,coordinate,digest,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE target_repository_id::text=$1 AND idempotency_key=$2 FOR UPDATE`, plan.TargetRepositoryID, plan.IdempotencyKey), &existing); err != nil {
 		return ReplicationPlan{}, false, err
 	}
 	existingChecks, err := listReplicationCheckpoints(ctx, tx, existing.ID)
 	if err != nil {
 		return ReplicationPlan{}, false, err
 	}
-	if existing.SourceRepositoryID != plan.SourceRepositoryID || existing.TargetRepositoryID != plan.TargetRepositoryID || existing.Format != plan.Format || !equivalentReplicationCheckpoints(existingChecks, checkpoints) {
+	samePlan := existing.SourceRepositoryID == plan.SourceRepositoryID && existing.TargetRepositoryID == plan.TargetRepositoryID && existing.Format == plan.Format && existing.Coordinate == plan.Coordinate && existing.Digest == plan.Digest
+	replayablePark := existing.State == "failed" && (existing.LastError == ArtifactQuarantinedReason || (existing.Format == FormatPyPI && existing.LastError == ReplicationSnapshotChangedReason)) && existing.NextAttemptAt.IsZero() && existing.Attempts < existing.MaxAttempts
+	refreshablePyPIReplay := samePlan && existing.Format == FormatPyPI && replayablePark
+	if !samePlan || (!refreshablePyPIReplay && !equivalentReplicationCheckpoints(existingChecks, checkpoints)) {
 		return ReplicationPlan{}, false, ErrIdempotencyConflict
+	}
+	if replayablePark {
+		if refreshablePyPIReplay {
+			if _, err = tx.ExecContext(ctx, `DELETE FROM replication_checkpoints WHERE plan_id::text=$1`, existing.ID); err != nil {
+				return ReplicationPlan{}, false, err
+			}
+			for _, checkpoint := range checkpoints {
+				sourceObjectKey := checkpoint.SourceObjectKey
+				if sourceObjectKey == "" {
+					sourceObjectKey = checkpoint.ObjectKey
+				}
+				if _, err = tx.ExecContext(ctx, `INSERT INTO replication_checkpoints (plan_id,source_object_key,object_key,digest,size,byte_offset,state,attempts,last_error,verified_at,updated_at) VALUES ($1,$2,$3,$4,$5,0,'pending',0,'',NULL,now())`, existing.ID, sourceObjectKey, checkpoint.ObjectKey, checkpoint.Digest, checkpoint.Size); err != nil {
+					return ReplicationPlan{}, false, err
+				}
+			}
+		}
+		var requeued ReplicationPlan
+		if err = scanReplicationPlan(tx.QueryRowContext(ctx, `
+			UPDATE replication_plans
+			SET state='pending',started_at=NULL,completed_at=NULL,last_error='',next_attempt_at=now(),lease_expires_at=NULL,lease_token=NULL
+			WHERE id::text=$1 AND state='failed' AND last_error=$2 AND next_attempt_at IS NULL AND attempts < max_attempts
+			RETURNING id::text,source_repository_id::text,target_repository_id::text,format,coordinate,digest,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts`, existing.ID, existing.LastError), &requeued); err != nil {
+			return ReplicationPlan{}, false, err
+		}
+		existing = requeued
 	}
 	if err = tx.Commit(); err != nil {
 		return ReplicationPlan{}, false, err
@@ -74,11 +102,11 @@ func (s *PostgresStore) claimReplicationPlans(ctx context.Context, format Format
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		WITH candidates AS (
-			SELECT id FROM replication_plans WHERE state IN ('pending','failed') AND attempts < CASE WHEN max_attempts < 1 THEN 3 ELSE max_attempts END AND (next_attempt_at IS NULL OR next_attempt_at <= now()) AND ($1='' OR format=$1) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $2
+			SELECT id FROM replication_plans WHERE ((state='pending' AND (next_attempt_at IS NULL OR next_attempt_at <= now())) OR (state='failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= now())) AND attempts < CASE WHEN max_attempts < 1 THEN 3 ELSE max_attempts END AND ($1='' OR format=$1) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $2
 		)
 		UPDATE replication_plans p SET state='running',started_at=now(),completed_at=NULL,last_error='',next_attempt_at=NULL,lease_expires_at=now()+interval '10 minutes',lease_token=md5(random()::text || clock_timestamp()::text || p.id::text),attempts=attempts+1,max_attempts=CASE WHEN max_attempts < 1 THEN 3 ELSE max_attempts END
 		FROM candidates WHERE p.id=candidates.id
-		RETURNING p.id::text,p.source_repository_id::text,p.target_repository_id::text,p.format,p.idempotency_key,p.state,p.created_at,p.started_at,p.completed_at,p.last_error,p.next_attempt_at,p.lease_expires_at,p.lease_token,p.attempts,p.max_attempts`, format, limit)
+		RETURNING p.id::text,p.source_repository_id::text,p.target_repository_id::text,p.format,p.coordinate,p.digest,p.idempotency_key,p.state,p.created_at,p.started_at,p.completed_at,p.last_error,p.next_attempt_at,p.lease_expires_at,p.lease_token,p.attempts,p.max_attempts`, format, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +126,7 @@ func (s *PostgresStore) ListReplicationPlans(ctx context.Context, repositoryID s
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE source_repository_id::text=$1 OR target_repository_id::text=$1 ORDER BY created_at DESC LIMIT $2`, repositoryID, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,coordinate,digest,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE source_repository_id::text=$1 OR target_repository_id::text=$1 ORDER BY created_at DESC LIMIT $2`, repositoryID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +144,7 @@ func (s *PostgresStore) ListReplicationPlans(ctx context.Context, repositoryID s
 
 func (s *PostgresStore) GetReplicationPlan(ctx context.Context, repositoryID, id string) (ReplicationPlan, error) {
 	var plan ReplicationPlan
-	err := scanReplicationPlan(s.db.QueryRowContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE id::text=$1 AND (source_repository_id::text=$2 OR target_repository_id::text=$2)`, id, repositoryID), &plan)
+	err := scanReplicationPlan(s.db.QueryRowContext(ctx, `SELECT id::text,source_repository_id::text,target_repository_id::text,format,coordinate,digest,idempotency_key,state,created_at,started_at,completed_at,last_error,next_attempt_at,lease_expires_at,lease_token,attempts,max_attempts FROM replication_plans WHERE id::text=$1 AND (source_repository_id::text=$2 OR target_repository_id::text=$2)`, id, repositoryID), &plan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ReplicationPlan{}, ErrNotFound
 	}
@@ -160,6 +188,17 @@ func (s *PostgresStore) CompleteReplicationPlanWithLease(ctx context.Context, id
 
 func (s *PostgresStore) FailReplicationPlanWithLease(ctx context.Context, id, message, leaseToken string) error {
 	return s.finishReplicationPlan(ctx, id, "failed", message, leaseToken)
+}
+
+func (s *PostgresStore) ParkReplicationPlanWithLease(ctx context.Context, id, message, leaseToken string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE replication_plans SET state='failed',completed_at=now(),last_error=$3,lease_expires_at=NULL,lease_token=NULL,next_attempt_at=NULL,attempts=GREATEST(attempts-1,0) WHERE id::text=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>now()`, id, leaseToken, message)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) finishReplicationPlan(ctx context.Context, id, state, message, leaseToken string) error {
@@ -212,7 +251,7 @@ type replicationPlanScanner interface{ Scan(...any) error }
 func scanReplicationPlan(scanner replicationPlanScanner, plan *ReplicationPlan) error {
 	var startedAt, completedAt, nextAttemptAt, leaseExpiresAt sql.NullTime
 	var leaseToken sql.NullString
-	if err := scanner.Scan(&plan.ID, &plan.SourceRepositoryID, &plan.TargetRepositoryID, &plan.Format, &plan.IdempotencyKey, &plan.State, &plan.CreatedAt, &startedAt, &completedAt, &plan.LastError, &nextAttemptAt, &leaseExpiresAt, &leaseToken, &plan.Attempts, &plan.MaxAttempts); err != nil {
+	if err := scanner.Scan(&plan.ID, &plan.SourceRepositoryID, &plan.TargetRepositoryID, &plan.Format, &plan.Coordinate, &plan.Digest, &plan.IdempotencyKey, &plan.State, &plan.CreatedAt, &startedAt, &completedAt, &plan.LastError, &nextAttemptAt, &leaseExpiresAt, &leaseToken, &plan.Attempts, &plan.MaxAttempts); err != nil {
 		return err
 	}
 	if startedAt.Valid {

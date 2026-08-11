@@ -12,10 +12,10 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	digest := "sha256:" + strings.Repeat("a", 64)
-	plan := ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "replicate-widget"}
+	plan := ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, Coordinate: "releases/widget.bin", Digest: digest, IdempotencyKey: "replicate-widget"}
 	checks := []ReplicationCheckpoint{{ObjectKey: "native/raw/widget", Digest: digest, Size: 12}}
 	created, replayed, err := store.CreateReplicationPlan(ctx, plan, checks)
-	if err != nil || replayed || created.State != "pending" {
+	if err != nil || replayed || created.State != "pending" || created.Coordinate != plan.Coordinate || created.Digest != plan.Digest {
 		t.Fatalf("created=%#v replayed=%t err=%v", created, replayed, err)
 	}
 	if replay, replayed, err := store.CreateReplicationPlan(ctx, plan, checks); err != nil || !replayed || replay.ID != plan.ID {
@@ -24,8 +24,18 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "native/raw/other", Digest: digest, Size: 12}}); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("conflicting replay err=%v", err)
 	}
+	changedCoordinate := plan
+	changedCoordinate.Coordinate = "releases/other.bin"
+	if _, _, err := store.CreateReplicationPlan(ctx, changedCoordinate, checks); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("coordinate replay err=%v", err)
+	}
+	changedDigest := plan
+	changedDigest.Digest = "sha256:" + strings.Repeat("f", 64)
+	if _, _, err := store.CreateReplicationPlan(ctx, changedDigest, checks); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("digest replay err=%v", err)
+	}
 	claimed, err := store.ClaimReplicationPlans(ctx, 1)
-	if err != nil || len(claimed) != 1 || claimed[0].State != "running" {
+	if err != nil || len(claimed) != 1 || claimed[0].State != "running" || claimed[0].Coordinate != plan.Coordinate || claimed[0].Digest != plan.Digest {
 		t.Fatalf("claimed=%#v err=%v", claimed, err)
 	}
 	checkpoint := ReplicationCheckpoint{PlanID: plan.ID, ObjectKey: checks[0].ObjectKey, Digest: digest, Size: 12, ByteOffset: 12, State: "verified", Attempts: 1, VerifiedAt: time.Now()}
@@ -36,10 +46,10 @@ func TestMemoryReplicationPlanIsIdempotentAndResumable(t *testing.T) {
 		t.Fatal(err)
 	}
 	plans, err := store.ListReplicationPlans(ctx, "target", 10)
-	if err != nil || len(plans) != 1 || plans[0].ID != plan.ID || plans[0].State != "completed" {
+	if err != nil || len(plans) != 1 || plans[0].ID != plan.ID || plans[0].State != "completed" || plans[0].Coordinate != plan.Coordinate || plans[0].Digest != plan.Digest {
 		t.Fatalf("plans=%#v err=%v", plans, err)
 	}
-	if got, err := store.GetReplicationPlan(ctx, "target", plan.ID); err != nil || got.ID != plan.ID {
+	if got, err := store.GetReplicationPlan(ctx, "target", plan.ID); err != nil || got.ID != plan.ID || got.Coordinate != plan.Coordinate || got.Digest != plan.Digest {
 		t.Fatalf("scoped plan=%#v err=%v", got, err)
 	}
 	if _, err := store.GetReplicationPlan(ctx, "other", plan.ID); !errors.Is(err, ErrNotFound) {
@@ -83,7 +93,7 @@ func TestMemoryReplicationLeaseRecoveryFencesStaleWorker(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	digest := "sha256:" + strings.Repeat("b", 64)
-	plan := ReplicationPlan{ID: "lease-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "lease"}
+	plan := ReplicationPlan{ID: "lease-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, Coordinate: "releases/lease.bin", Digest: digest, IdempotencyKey: "lease"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "object", Digest: digest, Size: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -120,8 +130,8 @@ func TestMemoryReplicationLeaseRecoveryFencesStaleWorker(t *testing.T) {
 func TestMemoryReplicationPlanStopsAfterMaximumAttempts(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	plan := ReplicationPlan{ID: "bounded-retry-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, IdempotencyKey: "bounded-retry", MaxAttempts: 2}
 	checkpoint := ReplicationCheckpoint{ObjectKey: "object", Digest: "sha256:" + strings.Repeat("c", 64), Size: 1}
+	plan := ReplicationPlan{ID: "bounded-retry-plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatRaw, Coordinate: "releases/retry.bin", Digest: checkpoint.Digest, IdempotencyKey: "bounded-retry", MaxAttempts: 2}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{checkpoint}); err != nil {
 		t.Fatal(err)
 	}
@@ -130,12 +140,160 @@ func TestMemoryReplicationPlanStopsAfterMaximumAttempts(t *testing.T) {
 		if err != nil || len(claimed) != 1 || claimed[0].Attempts != attempt {
 			t.Fatalf("attempt %d claim=%#v err=%v", attempt, claimed, err)
 		}
-		if err = store.FailReplicationPlanWithLease(ctx, plan.ID, "temporary failure", claimed[0].LeaseToken); err != nil {
+		// Fail keeps scheduled retry semantics regardless of the error text;
+		// only Park creates a replayable quarantine hold.
+		if err = store.FailReplicationPlanWithLease(ctx, plan.ID, ArtifactQuarantinedReason, claimed[0].LeaseToken); err != nil {
 			t.Fatal(err)
 		}
+		if attempt == 1 {
+			replayed, wasReplay, replayErr := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{checkpoint})
+			if replayErr != nil || !wasReplay || replayed.State != "failed" || replayed.LastError != ArtifactQuarantinedReason || replayed.Attempts != attempt || replayed.NextAttemptAt.IsZero() {
+				t.Fatalf("ordinary failed replay=%#v replayed=%t err=%v", replayed, wasReplay, replayErr)
+			}
+		}
+	}
+	if replayed, wasReplay, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{checkpoint}); err != nil || !wasReplay || replayed.State != "failed" || replayed.Attempts != plan.MaxAttempts || !replayed.NextAttemptAt.IsZero() {
+		t.Fatalf("exhausted replay=%#v replayed=%t err=%v", replayed, wasReplay, err)
 	}
 	if claimed, err := store.ClaimReplicationPlans(ctx, 1); err != nil || len(claimed) != 0 {
 		t.Fatalf("exhausted claim=%#v err=%v", claimed, err)
+	}
+}
+
+func TestMemoryReplicationQuarantineParksWithoutConsumingAttemptAndReplayRequeues(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("d", 64)
+	plan := ReplicationPlan{
+		ID: "quarantine-park-plan", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: FormatRaw, Coordinate: "releases/quarantined.bin", Digest: digest,
+		IdempotencyKey: "quarantine-park", MaxAttempts: 2,
+	}
+	checkpoints := []ReplicationCheckpoint{{ObjectKey: "native/raw/quarantined", Digest: digest, Size: 12}}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, checkpoints); err != nil {
+		t.Fatal(err)
+	}
+
+	claimed, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].Attempts != 1 {
+		t.Fatalf("initial claim=%#v err=%v", claimed, err)
+	}
+	if err = store.ParkReplicationPlanWithLease(ctx, plan.ID, ArtifactQuarantinedReason, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	parked, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parked.State != "failed" || parked.LastError != ArtifactQuarantinedReason || parked.Attempts != 0 || !parked.NextAttemptAt.IsZero() || parked.LeaseToken != "" || !parked.LeaseExpiresAt.IsZero() {
+		t.Fatalf("parked=%#v", parked)
+	}
+	if got, err := store.ClaimReplicationPlans(ctx, 1); err != nil || len(got) != 0 {
+		t.Fatalf("parked claim=%#v err=%v", got, err)
+	}
+	changedCheckpoints := []ReplicationCheckpoint{{ObjectKey: "native/raw/changed", Digest: digest, Size: 12}}
+	if _, _, err = store.CreateReplicationPlan(ctx, plan, changedCheckpoints); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("non-PyPI parked replay with changed checkpoints err=%v", err)
+	}
+
+	requeued, replayed, err := store.CreateReplicationPlan(ctx, plan, checkpoints)
+	if err != nil || !replayed || requeued.State != "pending" || requeued.LastError != "" || requeued.Attempts != 0 || requeued.NextAttemptAt.IsZero() || !requeued.StartedAt.IsZero() || !requeued.CompletedAt.IsZero() {
+		t.Fatalf("requeued=%#v replayed=%t err=%v", requeued, replayed, err)
+	}
+	claimed, err = store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != plan.ID || claimed[0].Attempts != 1 {
+		t.Fatalf("requeued claim=%#v err=%v", claimed, err)
+	}
+	if err = store.ParkReplicationPlanWithLease(ctx, plan.ID, "manual hold", claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	held, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || held.State != "failed" || held.LastError != "manual hold" || held.Attempts != 0 || !held.NextAttemptAt.IsZero() {
+		t.Fatalf("held=%#v err=%v", held, err)
+	}
+	if got, err := store.ClaimReplicationPlans(ctx, 1); err != nil || len(got) != 0 {
+		t.Fatalf("held claim=%#v err=%v", got, err)
+	}
+	if replay, replayed, err := store.CreateReplicationPlan(ctx, plan, checkpoints); err != nil || !replayed || replay.State != "failed" || replay.LastError != "manual hold" {
+		t.Fatalf("held replay=%#v replayed=%t err=%v", replay, replayed, err)
+	}
+}
+
+func TestMemoryParkedPyPIReplicationReplayRefreshesCheckpoints(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	digestA := "sha256:" + strings.Repeat("a", 64)
+	digestB := "sha256:" + strings.Repeat("b", 64)
+	plan := ReplicationPlan{
+		ID: "pypi-checkpoint-refresh", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: FormatPyPI, Coordinate: "widget@1.0.0", Digest: digestA,
+		IdempotencyKey: "pypi-checkpoint-refresh", MaxAttempts: 2,
+	}
+	initial := []ReplicationCheckpoint{{
+		SourceObjectKey: "native/pypi/sha256/a", ObjectKey: "replication/target/widget-a.whl", Digest: digestA, Size: 12,
+	}}
+	if _, replayed, err := store.CreateReplicationPlan(ctx, plan, initial); err != nil || replayed {
+		t.Fatalf("create replayed=%t err=%v", replayed, err)
+	}
+	claimed, err := store.ClaimReplicationPlansByFormat(ctx, FormatPyPI, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim=%#v err=%v", claimed, err)
+	}
+	completedA := initial[0]
+	completedA.PlanID = plan.ID
+	completedA.ByteOffset = completedA.Size
+	completedA.State = "verified"
+	completedA.Attempts = 1
+	completedA.VerifiedAt = time.Now().UTC()
+	if err = store.UpdateReplicationCheckpointWithLease(ctx, completedA, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.ParkReplicationPlanWithLease(ctx, plan.ID, ArtifactQuarantinedReason, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshed := []ReplicationCheckpoint{
+		initial[0],
+		{SourceObjectKey: "native/pypi/sha256/b", ObjectKey: "replication/target/widget-b.tar.gz", Digest: digestB, Size: 34},
+	}
+	replayRequest := plan
+	replayRequest.ID = "new-request-id-is-ignored"
+	requeued, replayed, err := store.CreateReplicationPlan(ctx, replayRequest, refreshed)
+	if err != nil || !replayed || requeued.ID != plan.ID || requeued.State != "pending" {
+		t.Fatalf("requeued=%#v replayed=%t err=%v", requeued, replayed, err)
+	}
+	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 2 {
+		t.Fatalf("refreshed checkpoints=%#v err=%v", checks, err)
+	}
+	for index, checkpoint := range checks {
+		if checkpoint.PlanID != plan.ID || checkpoint.State != "pending" || checkpoint.ByteOffset != 0 || checkpoint.Attempts != 0 || checkpoint.LastError != "" || !checkpoint.VerifiedAt.IsZero() || checkpoint.UpdatedAt.IsZero() {
+			t.Fatalf("checkpoint[%d]=%#v", index, checkpoint)
+		}
+	}
+	if checks[0].ObjectKey != refreshed[0].ObjectKey || checks[1].ObjectKey != refreshed[1].ObjectKey {
+		t.Fatalf("refreshed checkpoints=%#v", checks)
+	}
+
+	claimed, err = store.ClaimReplicationPlansByFormat(ctx, FormatPyPI, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].ID != plan.ID {
+		t.Fatalf("refreshed claim=%#v err=%v", claimed, err)
+	}
+	if err = store.ParkReplicationPlanWithLease(ctx, plan.ID, ReplicationSnapshotChangedReason, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	digestC := "sha256:" + strings.Repeat("c", 64)
+	refreshedAgain := append(append([]ReplicationCheckpoint(nil), refreshed...), ReplicationCheckpoint{
+		SourceObjectKey: "native/pypi/sha256/c", ObjectKey: "replication/target/widget-c.whl", Digest: digestC, Size: 56,
+	})
+	replayRequest.ID = "another-request-id"
+	requeued, replayed, err = store.CreateReplicationPlan(ctx, replayRequest, refreshedAgain)
+	if err != nil || !replayed || requeued.ID != plan.ID || requeued.State != "pending" {
+		t.Fatalf("snapshot requeue=%#v replayed=%t err=%v", requeued, replayed, err)
+	}
+	checks, err = store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 3 || checks[2].ObjectKey != refreshedAgain[2].ObjectKey {
+		t.Fatalf("snapshot-refreshed checkpoints=%#v err=%v", checks, err)
 	}
 }
 

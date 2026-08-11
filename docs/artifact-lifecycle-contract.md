@@ -16,6 +16,16 @@ protocol reference may be repointed only to a different immutable visible
 Artifact. Tombstoning removes a visible coordinate/reference and records its
 former identity; it never synchronously removes its byte object.
 
+Quarantine is not a fourth lifecycle state. It is a Repository-local,
+versioned governance record over the immutable repository/format/coordinate/
+digest identity. A quarantined Artifact remains readable when it is otherwise
+visible, may still be tombstoned or reclaimed normally, and remains
+quarantined after restore. Quarantine only blocks Promotion and Replication;
+Release changes that governance decision without changing lifecycle state.
+For Conan, the quarantine identity is the recipe revision because the recipe
+and its visible package revisions are promoted and replicated atomically;
+package revisions remain independent lifecycle and scanner identities.
+
 ## Shared Persistence
 
 Migration `000032_artifact_lifecycle.sql` adds two additive records:

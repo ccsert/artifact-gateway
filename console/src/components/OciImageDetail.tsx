@@ -13,6 +13,7 @@ import { ociUsage, type UsageSnippet } from "../lib/usage";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
+import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 
 interface OciDescriptor {
   mediaType: string;
@@ -146,12 +147,14 @@ export function OciImageDetail({
   image,
   initialReference,
   onDeleted,
+  canQuarantine = false,
 }: {
   repositoryId: string;
   repository: string;
   image: string;
   initialReference?: string;
   onDeleted?: () => void;
+  canQuarantine?: boolean;
 }) {
   const { token } = useAuth();
   const { locale, text } = usePreferences();
@@ -404,6 +407,14 @@ export function OciImageDetail({
             <Badge tone="amber">无标签</Badge>
           )}
         </div>
+      )}
+      {selectedVersion && (
+        <ArtifactQuarantinePanel
+          repositoryId={repositoryId}
+          coordinate={image}
+          digest={selectedVersion.digest}
+          canManage={canQuarantine}
+        />
       )}
       {selectedVersion && (
         <ArtifactScanStatus

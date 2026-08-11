@@ -62,35 +62,17 @@ func (s *PostgresStore) PublishNPMVersion(ctx context.Context, version NPMVersio
 }
 
 func (s *PostgresStore) LockNPMProxy(ctx context.Context, key string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	lockKey := "native-npm-proxy:" + key
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.LockNPMProxyWithContext(ctx, key)
+	return release, err
+}
+
+func (s *PostgresStore) LockNPMProxyWithContext(ctx context.Context, key string) (context.Context, func(), error) {
+	return s.lockPostgresAdvisoryKeys(ctx, []string{"native-npm-proxy:" + key})
 }
 
 func (s *PostgresStore) LockNPMObject(ctx context.Context, objectKey string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	lockKey := "native-npm-object:" + objectKey
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.LockArtifactObjectKeys(ctx, FormatNPM, []string{objectKey})
+	return release, err
 }
 
 func (s *PostgresStore) SyncNPMProxyPackage(ctx context.Context, incoming NPMPackage) (NPMPackage, error) {

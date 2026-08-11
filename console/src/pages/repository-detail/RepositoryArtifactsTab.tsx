@@ -740,6 +740,7 @@ function ProxyMavenCacheDetail({
 export function RepositoryArtifactsTab({
   repo,
   canWrite,
+  canQuarantine = false,
   artifactTarget = "",
   buildTarget,
   referenceTarget,
@@ -748,6 +749,7 @@ export function RepositoryArtifactsTab({
 }: {
   repo: Repository;
   canWrite: boolean;
+  canQuarantine?: boolean;
   artifactTarget?: string;
   buildTarget?: number;
   referenceTarget?: string;
@@ -1279,6 +1281,7 @@ export function RepositoryArtifactsTab({
           repository={repo.name}
           image={r.coordinate}
           initialReference={referenceTarget}
+          canQuarantine={canQuarantine}
           onDeleted={() => void load(q)}
         />
       );
@@ -1288,6 +1291,7 @@ export function RepositoryArtifactsTab({
         <MavenArtifactDetail
           repoId={repo.id}
           repoName={repo.name}
+          canQuarantine={canQuarantine}
           onDeleted={() => void load(q)}
           meta={{
             coordinate: r.coordinate,
@@ -1314,6 +1318,7 @@ export function RepositoryArtifactsTab({
           }
           size={r.size}
           publisher={r.publisher}
+          canQuarantine={canQuarantine}
           onVersionChange={(version) =>
             onVersionChange?.(r.coordinate, version)
           }
@@ -1331,6 +1336,7 @@ export function RepositoryArtifactsTab({
           }
           size={r.size}
           publisher={r.publisher}
+          canQuarantine={canQuarantine}
           onVersionChange={(version) =>
             onVersionChange?.(r.coordinate, version)
           }
@@ -1348,6 +1354,7 @@ export function RepositoryArtifactsTab({
           }
           size={r.size}
           publisher={r.publisher}
+          canQuarantine={canQuarantine}
           onVersionChange={(version) =>
             onVersionChange?.(r.coordinate, version)
           }
@@ -1361,6 +1368,7 @@ export function RepositoryArtifactsTab({
           repoName={repo.name}
           managed={repo.type !== "proxy"}
           canDelete={repo.type !== "proxy" && canWrite}
+          canQuarantine={canQuarantine}
           onDeleted={() => void load(q)}
           meta={{ coordinate: r.coordinate, publisher: r.publisher }}
         />
@@ -1369,7 +1377,9 @@ export function RepositoryArtifactsTab({
     if (format === "apt") {
       return (
         <APTAssetDetail
+          repositoryId={repo.id}
           repoName={repo.name}
+          canQuarantine={canQuarantine}
           meta={{
             coordinate: r.coordinate,
             digest: r.digest,
@@ -1386,6 +1396,7 @@ export function RepositoryArtifactsTab({
       <RawArtifactDetail
         repositoryId={repo.id}
         repoName={repo.name}
+        canQuarantine={canQuarantine}
         onDeleted={() => void load(q)}
         meta={{
           coordinate: r.coordinate,

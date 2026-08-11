@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -31,13 +32,16 @@ func TestMemoryBackgroundOperationQueueStatsReportPendingPromotion(t *testing.T)
 func TestMemoryBackgroundOperationQueueStatsReportPendingReplication(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("a", 64)
 	created, _, err := store.CreateReplicationPlan(ctx, ReplicationPlan{
 		ID:                 "replication",
 		SourceRepositoryID: "source",
 		TargetRepositoryID: "target",
 		Format:             FormatMaven,
+		Coordinate:         "org.example:widget:1.0.0",
+		Digest:             digest,
 		IdempotencyKey:     "replicate-widget",
-	}, []ReplicationCheckpoint{{ObjectKey: "widget", Digest: "sha256:digest", Size: 1}})
+	}, []ReplicationCheckpoint{{ObjectKey: "widget", Digest: digest, Size: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +58,9 @@ func TestMemoryBackgroundOperationQueueStatsReportPendingReplication(t *testing.
 func TestMemoryBackgroundOperationQueueStatsNormalizeRetryableReplicationFailure(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	plan := ReplicationPlan{ID: "retrying", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatOCI, IdempotencyKey: "retrying", MaxAttempts: 2}
-	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "widget", Digest: "sha256:digest", Size: 1}}); err != nil {
+	digest := "sha256:" + strings.Repeat("b", 64)
+	plan := ReplicationPlan{ID: "retrying", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: FormatOCI, Coordinate: "library/widget", Digest: digest, IdempotencyKey: "retrying", MaxAttempts: 2}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{ObjectKey: "widget", Digest: digest, Size: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	claimed, err := store.ClaimReplicationPlans(ctx, 1)

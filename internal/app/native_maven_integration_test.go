@@ -136,7 +136,7 @@ func TestPostgresMinIOMavenReplicationPublishesTargetOwnedCheckpoints(t *testing
 	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: assetPath, ObjectKey: sourceKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, IdempotencyKey: "postgres-minio-maven"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, Coordinate: coordinate, Digest: digest, IdempotencyKey: "postgres-minio-maven"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}

@@ -27,7 +27,7 @@ func TestOCIReplicationCopiesManifestToTargetOwnedKey(t *testing.T) {
 	if _, err := store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: "source", Name: "team/widget", Digest: digest, ObjectKey: sourceKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(body))}, digest); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatOCI, IdempotencyKey: "replicate"}
+	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatOCI, Coordinate: "team/widget", Digest: digest, IdempotencyKey: "replicate"}
 	checkpoint := repository.ReplicationCheckpoint{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{checkpoint}); err != nil {
 		t.Fatal(err)

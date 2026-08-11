@@ -40,7 +40,7 @@ the Console described in `console/src/app/router.tsx`.
 | User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control, reusable authorization roles and repository Grants pages; LDAP/SAML and soft deletion remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
-| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, and Gateway-enforced vulnerability database freshness; malicious-component blocking remains future work | Medium |
+| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, Gateway-enforced vulnerability database freshness, and versioned quarantine that blocks promotion/replication; protocol-read blocking remains future work | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls, lifecycle Jobs view, and repository-level intelligence reconciliation; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | None | Low |
@@ -142,8 +142,10 @@ license identifiers, and vulnerability summaries behind a separate
 require that evidence before promotion, and the promotion worker propagates
 immutable evidence to the target without overwriting target-owned records.
 External vulnerability database health and freshness enforcement plus bounded
-per-finding evidence are delivered. Malicious-component blocking, compliance
-reports, and component popularity/download metadata remain future work.
+per-finding evidence are delivered. Repository-local quarantine now blocks
+promotion and replication at both request and publication boundaries without
+changing ordinary reads. Protocol-read blocking, compliance reports, and
+component popularity/download metadata remain future work.
 
 ### Shared Format Depth
 
@@ -404,8 +406,8 @@ independently deliverable.
    asset resolution, automatic scan evidence persistence, and repository-level
    scan reconciliation, automatic scanner execution, sanitized scanner health,
    Gateway-enforced vulnerability database freshness, and bounded
-   per-finding vulnerability detail are delivered; quarantine and
-   malicious-component read blocking remain future work.
+   per-finding vulnerability detail and versioned distribution quarantine are
+   delivered; malicious-component read blocking remains future work.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository
    grant prefixes, retaining effective-access simulation as the preview and

@@ -19,8 +19,39 @@ func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan
 	key := p.TargetRepositoryID + "\x00" + p.IdempotencyKey
 	if id := s.replicationKeys[key]; id != "" {
 		existing := s.replicationPlans[id]
-		if existing.SourceRepositoryID != p.SourceRepositoryID || existing.TargetRepositoryID != p.TargetRepositoryID || existing.Format != p.Format || !equivalentReplicationCheckpoints(replicationCheckpointValues(s.replicationChecks[id]), checks) {
+		samePlan := existing.SourceRepositoryID == p.SourceRepositoryID && existing.TargetRepositoryID == p.TargetRepositoryID && existing.Format == p.Format && existing.Coordinate == p.Coordinate && existing.Digest == p.Digest
+		replayablePark := existing.State == "failed" && (existing.LastError == ArtifactQuarantinedReason || (existing.Format == FormatPyPI && existing.LastError == ReplicationSnapshotChangedReason)) && existing.NextAttemptAt.IsZero() && existing.Attempts < existing.MaxAttempts
+		refreshablePyPIReplay := samePlan && existing.Format == FormatPyPI && replayablePark
+		if !samePlan || (!refreshablePyPIReplay && !equivalentReplicationCheckpoints(replicationCheckpointValues(s.replicationChecks[id]), checks)) {
 			return ReplicationPlan{}, false, ErrIdempotencyConflict
+		}
+		if replayablePark {
+			now := time.Now().UTC()
+			if refreshablePyPIReplay {
+				refreshed := make(map[string]ReplicationCheckpoint, len(checks))
+				for _, checkpoint := range checks {
+					checkpoint.PlanID = id
+					if checkpoint.SourceObjectKey == "" {
+						checkpoint.SourceObjectKey = checkpoint.ObjectKey
+					}
+					checkpoint.State = "pending"
+					checkpoint.ByteOffset = 0
+					checkpoint.Attempts = 0
+					checkpoint.LastError = ""
+					checkpoint.VerifiedAt = time.Time{}
+					checkpoint.UpdatedAt = now
+					refreshed[checkpoint.ObjectKey] = checkpoint
+				}
+				s.replicationChecks[id] = refreshed
+			}
+			existing.State = "pending"
+			existing.LastError = ""
+			existing.StartedAt = time.Time{}
+			existing.CompletedAt = time.Time{}
+			existing.NextAttemptAt = now
+			existing.LeaseToken = ""
+			existing.LeaseExpiresAt = time.Time{}
+			s.replicationPlans[id] = existing
 		}
 		return existing, true, nil
 	}
@@ -73,7 +104,9 @@ func (s *MemoryStore) claimReplicationPlans(limit int, format Format) ([]Replica
 		if len(out) == limit {
 			break
 		}
-		if (format == "" || p.Format == format) && (p.State == "pending" || p.State == "failed") && p.Attempts < p.MaxAttempts && (p.NextAttemptAt.IsZero() || !now.Before(p.NextAttemptAt)) {
+		nextAttemptDue := !p.NextAttemptAt.IsZero() && !now.Before(p.NextAttemptAt)
+		claimable := (p.State == "pending" && (p.NextAttemptAt.IsZero() || nextAttemptDue)) || (p.State == "failed" && nextAttemptDue)
+		if (format == "" || p.Format == format) && claimable && p.Attempts < p.MaxAttempts {
 			p.State = "running"
 			p.StartedAt = now
 			p.CompletedAt = time.Time{}
@@ -199,6 +232,25 @@ func (s *MemoryStore) FailReplicationPlanWithLease(_ context.Context, id, msg, l
 		p.NextAttemptAt = time.Time{}
 	} else {
 		p.NextAttemptAt = now
+	}
+	s.replicationPlans[id] = p
+	return nil
+}
+func (s *MemoryStore) ParkReplicationPlanWithLease(_ context.Context, id, msg, leaseToken string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.replicationPlans[id]
+	if !ok || p.State != "running" || p.LeaseToken == "" || p.LeaseToken != leaseToken || (!p.LeaseExpiresAt.IsZero() && !time.Now().UTC().Before(p.LeaseExpiresAt)) {
+		return ErrNotFound
+	}
+	p.State = "failed"
+	p.LastError = msg
+	p.CompletedAt = time.Now().UTC()
+	p.NextAttemptAt = time.Time{}
+	p.LeaseToken = ""
+	p.LeaseExpiresAt = time.Time{}
+	if p.Attempts > 0 {
+		p.Attempts--
 	}
 	s.replicationPlans[id] = p
 	return nil

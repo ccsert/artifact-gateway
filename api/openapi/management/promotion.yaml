@@ -14,8 +14,13 @@ repositories_repositoryId_promotions:
             "$ref": "../components/schemas.yaml#/PromotionRequest"
     responses:
       '202':
-        description: Immutable Maven or OCI promotion job accepted
+        description: Immutable artifact promotion job accepted
         content:
           application/json:
             schema:
               "$ref": "../components/schemas.yaml#/LifecycleJob"
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}

@@ -98,13 +98,24 @@ storage credentials, or unredacted upstream URLs in that record.
       volumes and verifies the persisted OCI Group can still be read. V2
       migrations are additive: a rollback binary must not need V2 rows to
       serve existing OCI Groups.
+- [ ] Before rolling out migration `000095`, stop accepting new replication
+      requests, drain every pre-upgrade replication plan to a terminal state,
+      and stop all old replication workers. Apply the migration and start only
+      new workers before reopening replication traffic or allowing Quarantine
+      transitions. Old and new replication workers must not overlap after
+      Quarantine is enabled because the old worker does not enforce it. Verify
+      every current plan has both coordinate and digest, never only one. A new
+      worker intentionally fails a non-terminal legacy plan with both fields
+      empty instead of publishing it; resolve such a plan explicitly rather
+      than bypassing that fail-closed result.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
       against isolated volumes. It creates OCI, Maven, Raw, and Conan source
       Artifacts through HTTP, creates and replays promotion jobs and replication
       plans for each format, then verifies all saved instructions and their
       management audit records after restore. It also verifies restored Raw
-      cache content, Conan Group state, Repository grant version/content, and
-      the Native Raw authorization denial/allow behavior. Run `make backup-drill`
+      cache content, artifact quarantine state and reason, Conan Group state,
+      Repository grant version/content, and the Native Raw authorization
+      denial/allow behavior. Run `make backup-drill`
       against the release environment only after the isolated rehearsal passes.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
       allowlists, Repository grant sets, quotas, and OIDC issuer/audience. For

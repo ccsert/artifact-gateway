@@ -39,11 +39,11 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "replication-" + uuid.NewString()}
 	checks := []repository.ReplicationCheckpoint{
 		{ObjectKey: "native/raw/a", Digest: "sha256:" + strings.Repeat("a", 64), Size: 3},
 		{ObjectKey: "native/raw/b", Digest: "sha256:" + strings.Repeat("b", 64), Size: 5},
 	}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, Coordinate: "releases/a.bin", Digest: checks[0].Digest, IdempotencyKey: "replication-" + uuid.NewString()}
 	created, replayed, err := store.CreateReplicationPlan(ctx, plan, checks)
 	if err != nil || replayed || created.State != "pending" {
 		t.Fatalf("created=%#v replayed=%t err=%v", created, replayed, err)
@@ -90,7 +90,7 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 		t.Fatalf("unrelated scoped plan err=%v", err)
 	}
 
-	exhausted := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "exhausted-" + uuid.NewString(), MaxAttempts: 1}
+	exhausted := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, Coordinate: "releases/exhausted.bin", Digest: checks[0].Digest, IdempotencyKey: "exhausted-" + uuid.NewString(), MaxAttempts: 1}
 	if _, _, err = store.CreateReplicationPlan(ctx, exhausted, checks[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 	if err = sourceObjects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, IdempotencyKey: "minio-" + uuid.NewString()}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, Coordinate: "releases/cross-bucket.bin", Digest: digest, IdempotencyKey: "minio-" + uuid.NewString()}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestPostgresMinIORawReplicationPublishesTargetAsset(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, IdempotencyKey: "raw-runtime-" + uuid.NewString()}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatRaw, Coordinate: asset.Path, Digest: digest, IdempotencyKey: "raw-runtime-" + uuid.NewString()}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: digest, Size: asset.Size}}); err != nil {
 		t.Fatal(err)
 	}

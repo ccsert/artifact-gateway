@@ -213,6 +213,17 @@ ArtifactIntelligence:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/ArtifactIntelligence"
+ArtifactQuarantine:
+  description: Versioned quarantine state for one immutable distribution anchor; Conan uses the recipe revision and its package closure.
+  headers:
+    ETag:
+      description: Current quarantine version. Supply this value in If-Match when replacing the state.
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactQuarantine"
 RetentionPolicy:
   description: Retention policy
   content:

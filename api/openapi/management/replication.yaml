@@ -4,6 +4,18 @@ repositories_repositoryId_replications:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   post:
     operationId: createRepositoryReplication
+    summary: Create or replay an immutable artifact replication plan
+    description: |
+      Newly accepted plans persist both the immutable source coordinate and
+      digest; neither field may be present without the other. A request-time
+      quarantine denial returns 403 without creating a plan. If the final
+      worker check instead observes quarantine, it parks the existing plan
+      without publishing target metadata. After release, replaying the exact
+      request with the same Idempotency-Key requeues and returns that plan; it
+      does not create a second plan. A PyPI source version whose file membership
+      changes after enqueue is likewise parked with
+      `replication_snapshot_changed`; exact replay atomically refreshes that
+      plan's checkpoints before requeueing the same plan ID.
     parameters:
     - "$ref": "../components/parameters.yaml#/IdempotencyKey"
     requestBody:
@@ -20,13 +32,18 @@ repositories_repositoryId_replications:
             schema:
               "$ref": "../components/schemas.yaml#/ReplicationPlan"
       '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
       '403': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
       '409': {"$ref": "../components/responses.yaml#/Problem"}
   get:
     operationId: listRepositoryReplications
     responses:
       '200':
-        description: Replication plans involving this repository
+        description: |
+          Replication plans involving this repository. Coordinate and digest
+          are both present for current plans and both absent only on historical
+          plans created before immutable identity persistence was introduced.
         content:
           application/json:
             schema:
@@ -42,7 +59,12 @@ repositories_repositoryId_replications_replicationPlanId:
     operationId: getRepositoryReplication
     responses:
       '200':
-        description: Replication plan and checkpoint progress for this repository
+        description: |
+          Replication plan and checkpoint progress for this repository.
+          Coordinate and digest are both present for current plans and both
+          absent only on historical plans created before immutable identity
+          persistence was introduced. A new worker fails closed rather than
+          publishing a non-terminal historical plan with both fields absent.
         content:
           application/json:
             schema:

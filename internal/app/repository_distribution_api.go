@@ -26,14 +26,17 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || request.Digest == "" || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !strings.Contains(request.Coordinate, "#")) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
 			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
-			if err != nil || target.Format != source.Format || target.State != repository.RepositoryActive {
+			if err != nil || target.ID == source.ID || target.Format != source.Format || target.State != repository.RepositoryActive {
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+				return
+			}
+			if h.rejectQuarantinedDistribution(w, r, principal, source, target, request.Coordinate, request.Digest, "promote") {
 				return
 			}
 			policy, policyErr := h.securityPolicies.GetRepositorySecurityPolicy(r.Context(), target.ID)
@@ -100,8 +103,11 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
 			target, err := h.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
-			if err != nil || target.Format != source.Format || target.State != repository.RepositoryActive {
+			if err != nil || target.ID == source.ID || target.Format != source.Format || target.State != repository.RepositoryActive {
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+				return
+			}
+			if h.rejectQuarantinedDistribution(w, r, principal, source, target, request.Coordinate, request.Digest, "replicate") {
 				return
 			}
 			format := source.Format
@@ -205,7 +211,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					return
 				}
 			}
-			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
+			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, Coordinate: request.Coordinate, Digest: request.Digest, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing replication plan")
 				return
@@ -218,6 +224,34 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 			writeNativeMavenJSON(w, http.StatusAccepted, toOpenAPIReplicationPlan(plan))
 		})
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) rejectQuarantinedDistribution(w http.ResponseWriter, r *http.Request, principal Principal, source, target repository.HostedRepository, coordinate, digest, operation string) bool {
+	digests, err := h.artifactDistributionDigests(r.Context(), source, coordinate, digest)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "evaluate distribution artifact identities failed")
+		return true
+	}
+	allowed, err := repository.ArtifactDistributionAllowedForDigests(r.Context(), h.quarantine, source.ID, source.Format, coordinate, digests)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "evaluate artifact quarantine failed")
+		return true
+	}
+	if allowed {
+		return false
+	}
+	if h.audit != nil {
+		_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+			GroupName: target.Name, Repository: target.Name, Actor: principal.Actor,
+			Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+			Format: string(source.Format), Resource: coordinate, Representation: digest,
+			Operation: operation + ".quarantine", Status: http.StatusForbidden,
+			AuthorizationReason: repository.ArtifactQuarantinedReason,
+			CacheDisposition:    "bypass",
+		})
+	}
+	writeHostedProblem(w, http.StatusForbidden, repository.ArtifactQuarantinedReason, "artifact is quarantined and cannot be distributed")
+	return true
 }
 
 func validConanReplicationCoordinate(value string) bool {
@@ -322,6 +356,10 @@ func parseOCIRestoreCoordinate(value string) (name, digest string, ok bool) {
 
 func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.ReplicationPlan {
 	item := adminopenapi.ReplicationPlan{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanState(plan.State), CreatedAt: plan.CreatedAt}
+	if plan.Coordinate != "" && plan.Digest != "" {
+		item.Coordinate = &plan.Coordinate
+		item.Digest = &plan.Digest
+	}
 	if !plan.StartedAt.IsZero() {
 		item.StartedAt = &plan.StartedAt
 	}
@@ -336,6 +374,10 @@ func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.Repl
 
 func toOpenAPIReplicationPlanDetail(plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) adminopenapi.ReplicationPlanDetail {
 	item := adminopenapi.ReplicationPlanDetail{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanDetailState(plan.State), CreatedAt: plan.CreatedAt, Checkpoints: make([]adminopenapi.ReplicationCheckpointProgress, 0, len(checkpoints))}
+	if plan.Coordinate != "" && plan.Digest != "" {
+		item.Coordinate = &plan.Coordinate
+		item.Digest = &plan.Digest
+	}
 	if !plan.StartedAt.IsZero() {
 		item.StartedAt = &plan.StartedAt
 	}

@@ -26,7 +26,7 @@ func TestRawReplicationPublishesVerifiedTargetAsset(t *testing.T) {
 	if _, err := store.PutRawAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, IdempotencyKey: "key"}
+	plan := repository.ReplicationPlan{ID: "plan", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatRaw, Coordinate: asset.Path, Digest: digest, IdempotencyKey: "key"}
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestReplicationStartsQueuedPlansImmediately(t *testing.T) {
 			if err := objects.PutVerifiedReader(ctx, sourceKey, bytes.NewReader(body), int64(len(body)), digest); err != nil {
 				t.Fatal(err)
 			}
-			plan := repository.ReplicationPlan{ID: test.name, SourceRepositoryID: "source", TargetRepositoryID: "target", Format: test.format, IdempotencyKey: test.name}
+			plan := repository.ReplicationPlan{ID: test.name, SourceRepositoryID: "source", TargetRepositoryID: "target", Format: test.format, Coordinate: "queued/" + test.name, Digest: digest, IdempotencyKey: test.name}
 			if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 				t.Fatal(err)
 			}
