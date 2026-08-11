@@ -61,6 +61,8 @@ goal. It intentionally excludes frontend work.
 - [x] Metrics for lifecycle jobs, tombstones, promotion, and replication.
 - [x] Durable artifact scan jobs with immutable identity status lookup,
   publication idempotency, and repository-level missing-scan reconciliation.
+- [x] Sanitized scanner health and Gateway-enforced vulnerability database
+  freshness in administrator diagnostics.
 - [x] Backup/restore coverage for promotion and replication state.
 - [x] Release preflight and evidence coverage for lifecycle operations.
 - [x] Black-box protocol tests for publish, resolve, delete, retain, and
@@ -68,6 +70,6 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Run the release gates and record their output in the release record. Scanner
-health probes, vulnerability database freshness, and quarantine workflows are
-the next security-specific slice.
+Run the release gates and record their output in the release record. Detailed
+vulnerability findings and quarantine workflows are the next security-specific
+slice.

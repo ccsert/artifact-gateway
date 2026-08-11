@@ -21,15 +21,20 @@ optional:
 | `GATEWAY_SCANNER_NAME` | `artifact-scanner` | Bounded scanner identity recorded with vulnerability summaries. |
 | `GATEWAY_SCANNER_TOKEN` | empty | Bearer token sent to the configured endpoint. |
 | `GATEWAY_SCANNER_TIMEOUT` | `2m` | Per-scan request deadline, between `1s` and `30m`. |
+| `GATEWAY_SCANNER_HEALTH_ENDPOINT` | empty | Optional read-only scanner health and vulnerability database metadata endpoint. |
+| `GATEWAY_SCANNER_HEALTH_TIMEOUT` | `2s` | Health request deadline, between `1s` and `30s`. |
+| `GATEWAY_SCANNER_DATABASE_MAX_AGE` | `24h` | Maximum accepted vulnerability database age, between `1m` and `720h`. |
 | `GATEWAY_SCANNER_MAX_RESPONSE_BYTES` | `524288` | Maximum JSON response, between 1 KiB and 8 MiB. |
 | `GATEWAY_SCANNER_MAX_ARTIFACT_BYTES` | `21474836480` | Maximum streamed logical artifact, up to 1 TiB. |
 | `GATEWAY_SCANNER_FORMATS` | all scanner-supported formats | Comma-separated format allowlist. |
 
-The endpoint must be HTTPS outside localhost/loopback and cannot contain
-credentials, query parameters, or fragments. Scanner settings without an
+Both endpoints must be HTTPS outside localhost/loopback and cannot contain
+credentials, query parameters, or fragments. Scanner settings without a scan
 endpoint are rejected so a misspelled deployment does not silently look
-enabled. Startup logs and preflight diagnostics expose only enabled state,
-name, and format count; the endpoint and token remain private.
+enabled. Omitting only the health endpoint keeps scanning available but marks
+scanner health and database freshness as unknown. Startup logs and diagnostics
+expose only sanitized status, identity, versions, timestamps, and formats; the
+endpoints and token remain private.
 
 ## Durable execution
 
@@ -168,6 +173,38 @@ collections, non-JSON responses, and trailing JSON values are rejected. The
 Gateway records the configured adapter name and its own completion time rather
 than trusting scanner-supplied identity or timestamps.
 
+## Health and vulnerability database freshness
+
+When `GATEWAY_SCANNER_HEALTH_ENDPOINT` is set, the Gateway sends a bounded
+`GET` request with the same Bearer credential, `Accept: application/json`, and
+`X-Artifact-Scanner-Schema: v1`. The endpoint returns:
+
+```json
+{
+  "schemaVersion": "v1",
+  "status": "healthy",
+  "version": "0.61.0",
+  "database": {
+    "version": "2026-08-10",
+    "updatedAt": "2026-08-10T06:00:00Z"
+  }
+}
+```
+
+`status` is `healthy`, `degraded`, or `unhealthy`. Scanner and database
+versions are optional; when `database` is present, `updatedAt` is required.
+The response is limited to 64 KiB, rejects unknown fields and timestamps more
+than five minutes in the future, and follows the same no-redirect and no-error-
+body policy as scanning.
+
+The Gateway assigns `checkedAt` locally and compares `database.updatedAt` with
+`GATEWAY_SCANNER_DATABASE_MAX_AGE`. A healthy scanner with an older database is
+reported as degraded. `GET /api/v2/diagnostics` exposes this sanitized status,
+the configured format coverage, scanner/database versions, and freshness to
+administrators; the Console presents it inside the existing dependency panel.
+Scanner health is operational evidence rather than a process readiness gate,
+so a temporary scanner outage does not take repository reads and writes down.
+
 ## Transport policy
 
 - HTTPS is mandatory outside loopback development endpoints.
@@ -180,8 +217,8 @@ than trusting scanner-supplied identity or timestamps.
 - Reports can contain SBOM references, licenses, and vulnerability summaries.
   They cannot replace publisher signatures or provenance.
 
-Scanner health probes, vulnerability database
-freshness, and malicious-component quarantine remain future work.
+Per-vulnerability finding detail and malicious-component quarantine remain
+future work.
 
 ## Durable status and reconciliation
 
