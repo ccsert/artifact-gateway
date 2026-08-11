@@ -132,7 +132,35 @@ func TestArtifactIntelligenceRejectsUnknownArtifact(t *testing.T) {
 	}
 }
 
-func TestArtifactIntelligencePayloadValidation(t *testing.T) {
+func TestArtifactIntelligenceManagementHTTPRejectsInvalidPayloads(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "66666666-6666-6666-6666-666666666666", Name: "validation-oci", Format: repository.FormatOCI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("e", 64)
+	if _, err := store.PutOCIManifest(context.Background(), repository.OCIManifest{
+		RepositoryID: repo.ID, Name: "library/validation", Digest: digest,
+		ObjectKey: "oci/library/validation", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 128,
+	}, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	path := "/api/v2/repositories/" + repo.ID + "/artifact-intelligence?coordinate=library/validation&digest=" + digest
+	request := func(payload adminopenapi.ArtifactIntelligenceWritable) *httptest.ResponseRecorder {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		httpRequest := httptest.NewRequest(http.MethodPut, path, strings.NewReader(string(body)))
+		authorize(httpRequest, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httpRequest)
+		return response
+	}
+
 	source := "nvd"
 	findingURL := "https://security.example.test/CVE-2026-1234"
 	score := 9.8
@@ -148,9 +176,6 @@ func TestArtifactIntelligencePayloadValidation(t *testing.T) {
 		Vulnerability: &adminopenapi.ArtifactVulnerabilitySummary{
 			Scanner: "grype", Status: adminopenapi.ArtifactVulnerabilitySummaryStatusAffected, Critical: 1, Findings: &findings,
 		},
-	}
-	if !validArtifactIntelligencePayload(valid) {
-		t.Fatal("expected valid intelligence payload")
 	}
 	cases := []struct {
 		name   string
@@ -203,9 +228,13 @@ func TestArtifactIntelligencePayloadValidation(t *testing.T) {
 				candidate.Vulnerability = &vulnerability
 			}
 			testCase.mutate(&candidate)
-			if validArtifactIntelligencePayload(candidate) {
-				t.Fatal("expected payload to be rejected")
+			response := request(candidate)
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
 		})
+	}
+	if response := request(valid); response.Code != http.StatusOK {
+		t.Fatalf("valid status=%d body=%s", response.Code, response.Body.String())
 	}
 }
