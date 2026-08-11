@@ -182,3 +182,26 @@ than trusting scanner-supplied identity or timestamps.
 
 Scanner health probes, vulnerability database
 freshness, and malicious-component quarantine remain future work.
+
+## Durable status and reconciliation
+
+Every queued scan is a `scan` lifecycle job. Its payload stores the immutable
+`format`, `coordinate`, and `sha256` digest, so the lifecycle job is the
+authoritative status rather than a second status table. Administrators can
+query `GET /api/v2/repositories/{repositoryId}/artifact-scans` for one identity;
+`never` means no job exists yet. The same identity can be manually queued with
+`POST` and a new idempotency key after a previous job is terminal; active jobs
+are returned instead of duplicated. The Console polls pending, running, and
+retrying jobs.
+
+`POST /api/v2/repositories/{repositoryId}/artifact-scans:reconcile` enumerates
+visible immutable publications and compares them with the newest scan job. It
+uses the stable `publish-scan:<sha256>` key for missing jobs, retries failed or
+cancelled jobs, and leaves active or completed jobs unchanged. Actionable
+identities are ordered ahead of active and completed scans, so repeated bounded
+calls progress through repositories larger than one batch. Candidate coordinates
+include Maven builds, OCI manifests, Raw paths, npm/PyPI versions, and both Conan
+recipe and package revisions. Reconciliation does not require automatic
+publication scanning to be enabled; this permits explicit historical backfills.
+The operation is bounded by a caller-supplied limit and is protected by the
+repository `repositories:intelligence` permission.

@@ -401,8 +401,9 @@ independently deliverable.
    format-aware detail views. A bounded, streaming HTTP scanner adapter now
    defines the multi-object scanner contract, verifies every streamed asset,
    and validates summary responses. Durable scan scheduling, format-specific
-   asset resolution, vulnerability databases, automatic evidence persistence,
-   and per-finding vulnerability detail remain future work.
+   asset resolution, automatic scan evidence persistence, and repository-level
+   scan reconciliation and automatic scanner execution are delivered; scanner health, vulnerability database
+   freshness, and per-finding vulnerability detail remain future work.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository
    grant prefixes, retaining effective-access simulation as the preview and
