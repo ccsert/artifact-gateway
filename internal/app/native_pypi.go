@@ -577,7 +577,7 @@ func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.
 	allowed := files[:0]
 	for _, file := range files {
 		target, parseErr := url.Parse(file.SourceURL)
-		if parseErr == nil && npmUpstreamURLAllowed(repo, target) {
+		if parseErr == nil && proxyUpstreamURLAllowed(repo, target) {
 			allowed = append(allowed, file)
 		}
 	}

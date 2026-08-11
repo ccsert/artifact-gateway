@@ -1,7 +1,7 @@
 # Artifact Gateway
 
 Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, and PyPI Hosted
-repositories plus Go Module Proxy repositories, using PostgreSQL for lifecycle
+repositories plus Go Module and APT Proxy repositories, using PostgreSQL for lifecycle
 metadata and MinIO-compatible object storage for verified bytes. Legacy Groups
 remain available for allowlisted external Proxy reads, while V2 Groups resolve
 managed members.
@@ -14,9 +14,9 @@ managed members.
 Artifact Gateway is intended to be a complete repository manager for the six
 Hosted-capable formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
-promotion, and replication. Go is admitted under the protocol-only format rule:
-it declares Proxy and Group capabilities because the ecosystem has no standard
-repository upload protocol. It is not a transparent rewrite proxy, a generic
+promotion, and replication. Go and APT are admitted under the protocol-only
+format rule: they declare Proxy and Group capabilities until a standard or
+trusted publication workflow exists. It is not a transparent rewrite proxy, a generic
 object browser, or a vulnerability scanner.
 
 ## Local development
@@ -79,6 +79,7 @@ make native-maven-e2e
 make native-npm-e2e
 make native-pypi-e2e
 make native-go-e2e
+make native-apt-e2e
 make conan-e2e
 ```
 
@@ -146,14 +147,16 @@ docker compose ps gateway
 
 Administrators create repositories through `POST /api/v2/repositories` with an
 idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`,
-`pypi`, or `go`. Go repositories may only use the Proxy type. OCI
+`pypi`, `go`, or `apt`. Go and APT repositories may only use the Proxy type. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
 Conan 2 uses `/conan/v2/<repository>/...`; npm uses
 `/npm/<repository>/<package>`; PyPI exposes twine uploads at
 `/pypi/<repository>/legacy/` and the pip Simple API at
 `/pypi/<repository>/simple/`; Go uses
-`/go/<repository>/<escaped-module>/@v/...` as its `GOPROXY` root.
+`/go/<repository>/<escaped-module>/@v/...` as its `GOPROXY` root; APT uses
+`/apt/<repository>/dists/...` and `/apt/<repository>/pool/...` without rewriting
+signed upstream metadata.
 Twine authenticates with any non-empty username and the configured resolver
 token as its Basic-auth password. Anonymous-enabled repositories expose the
 Simple API without credentials.
@@ -167,6 +170,8 @@ files with Hosted-first conflict resolution, and keep cached Proxy files
 installable while the upstream is unavailable.
 Go Groups merge member version lists and resolve `.info`, `.mod`, and `.zip`
 assets by member priority while preserving offline reads from verified cache.
+APT Groups resolve signed metadata and packages from Proxy members in configured
+order and keep cached bytes available when an upstream is unavailable.
 
 OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
@@ -195,6 +200,9 @@ hosts it may use.
 Each Go Proxy repository likewise requires an endpoint and `allowedHosts`; it
 supports `@v/list`, `@latest`, `.info`, `.mod`, and `.zip` with immutable
 SHA-256 cache validation.
+Each APT Proxy repository requires an endpoint and `allowedHosts`; see
+[`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
+security rules.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

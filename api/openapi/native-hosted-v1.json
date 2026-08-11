@@ -1899,6 +1899,188 @@
         }
       }
     },
+    "/apt/{repository}/{path}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "name": "path",
+          "in": "path",
+          "required": true,
+          "allowReserved": true,
+          "description": "Canonical APT catch-all path containing one or more slash-separated segments below dists/ or pool/. Empty, dot, dot-dot, and percent-encoded traversal segments are rejected.",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getAptAsset",
+        "summary": "Read an APT repository asset",
+        "parameters": [
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "description": "Optional single byte range used to resume package downloads.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Modified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "http-date"
+            }
+          }
+        ],
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Verbatim upstream APT metadata or package bytes",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "*/*": {}
+            }
+          },
+          "206": {
+            "description": "Requested byte range from a cached APT asset",
+            "headers": {
+              "Content-Range": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Accept-Ranges": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "*/*": {}
+            }
+          },
+          "304": {
+            "description": "Asset has not changed"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Authenticated principal lacks repository or resource-prefix access"
+          },
+          "404": {
+            "description": "Asset not found"
+          },
+          "416": {
+            "description": "Requested byte range is invalid or unsatisfiable"
+          },
+          "502": {
+            "description": "Upstream unavailable"
+          },
+          "507": {
+            "description": "Repository capacity quota exceeded while caching the asset"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headAptAsset",
+        "summary": "Inspect an APT repository asset",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Modified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "http-date"
+            }
+          }
+        ],
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset metadata"
+          },
+          "304": {
+            "description": "Asset has not changed"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Authenticated principal lacks repository or resource-prefix access"
+          },
+          "404": {
+            "description": "Asset not found"
+          },
+          "502": {
+            "description": "Upstream unavailable"
+          },
+          "507": {
+            "description": "Repository capacity quota exceeded while caching the asset"
+          }
+        }
+      },
+      "x-gateway-catchAll": "path",
+      "x-gateway-visibility": "cached_proxy_assets"
+    },
     "/v2/{name}/blobs/uploads/": {
       "servers": [
         {
@@ -2543,7 +2725,8 @@
           "conan",
           "npm",
           "pypi",
-          "go"
+          "go",
+          "apt"
         ]
       },
       "FormatProfile": {
@@ -3791,6 +3974,16 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "cachedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent successful cache fill or metadata revalidation time."
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Exact upstream URL persisted when this proxy asset was cached."
           },
           "buildNumber": {
             "type": "integer",
@@ -5216,7 +5409,7 @@
         }
       },
       "BasicUnauthorized": {
-        "description": "Raw or Maven Basic authentication required when anonymous read policy is disabled",
+        "description": "Native protocol Basic authentication required when anonymous read policy is disabled",
         "headers": {
           "WWW-Authenticate": {
             "required": true,

@@ -76,7 +76,7 @@ func (p *npmProxyProtection) success(ctx context.Context, endpoint string) {
 
 func (c UpstreamClient) FetchNPM(ctx context.Context, method string, repo repository.HostedRepository, target string, headers http.Header) (*http.Response, error) {
 	targetURL, err := url.Parse(target)
-	if err != nil || !npmUpstreamURLAllowed(repo, targetURL) {
+	if err != nil || !proxyUpstreamURLAllowed(repo, targetURL) {
 		return nil, fmt.Errorf("npm upstream target is not allowed")
 	}
 	request, err := http.NewRequestWithContext(ctx, method, targetURL.String(), nil)
@@ -109,7 +109,7 @@ func (c UpstreamClient) FetchNPM(ctx context.Context, method string, repo reposi
 		}
 	}
 	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
-		if !npmUpstreamURLAllowed(repo, next.URL) {
+		if !proxyUpstreamURLAllowed(repo, next.URL) {
 			return fmt.Errorf("npm upstream redirect is not allowed")
 		}
 		return nil
@@ -121,7 +121,7 @@ func (c UpstreamClient) FetchNPM(ctx context.Context, method string, repo reposi
 	return response, nil
 }
 
-func npmUpstreamURLAllowed(repo repository.HostedRepository, target *url.URL) bool {
+func proxyUpstreamURLAllowed(repo repository.HostedRepository, target *url.URL) bool {
 	endpoint, err := url.Parse(repo.Endpoint)
 	if err != nil || endpoint.Hostname() == "" || target == nil || target.User != nil || target.Hostname() == "" {
 		return false

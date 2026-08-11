@@ -45,11 +45,12 @@ import {
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
+import { APTAssetDetail } from "../components/APTAssetDetail";
 
 interface PublicRepository {
   id: string;
   name: string;
-  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go";
+  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
   type?: string;
 }
 
@@ -280,6 +281,23 @@ function repositoryUsage(
       {
         label: text("临时使用", "One-off usage"),
         code: `GOPROXY=${proxy} go mod download`,
+      },
+    ];
+  }
+  if (format === "apt") {
+    const source = `${origin}/apt/${repoName}`;
+    return [
+      {
+        label: text("APT 源地址", "APT source URL"),
+        code: source,
+      },
+      {
+        label: "sources.list",
+        code: `deb ${source} <suite> <component>`,
+      },
+      {
+        label: text("下载制品", "Download an artifact"),
+        code: `curl -fsSL ${source}/pool/<component>/<path>/<package>.deb -o package.deb`,
       },
     ];
   }
@@ -1478,7 +1496,9 @@ export function PublicBrowsePage() {
               ? text("注册 PyPI 仓库源", "Register a PyPI repository")
               : selectedRepository?.format === "go"
                 ? text("注册 Go Module Proxy", "Register a Go module proxy")
-                : text("注册 Raw 源地址", "Register a Raw source");
+                : selectedRepository?.format === "apt"
+                  ? text("注册 APT 软件源", "Register an APT source")
+                  : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -1592,7 +1612,9 @@ export function PublicBrowsePage() {
       title:
         selectedRepository?.format === "oci"
           ? text("镜像", "Image")
-          : text("制品坐标", "Artifact coordinate"),
+          : selectedRepository?.format === "apt"
+            ? text("APT 路径", "APT path")
+            : text("制品坐标", "Artifact coordinate"),
       key: "coordinate",
       width: 320,
       render: (_, row) => (
@@ -1675,8 +1697,25 @@ export function PublicBrowsePage() {
               </span>
             ),
           },
+          ...(selectedRepository?.format === "apt"
+            ? [
+                {
+                  title: text("内容类型", "Content type"),
+                  key: "contentType",
+                  width: 220,
+                  render: (_: unknown, row: PublicArtifactTableRow) => (
+                    <span className="block max-w-[210px] truncate font-mono text-xs text-zinc-500">
+                      {row.item.contentType ?? "—"}
+                    </span>
+                  ),
+                },
+              ]
+            : []),
           {
-            title: text("创建时间", "Created"),
+            title:
+              selectedRepository?.format === "apt"
+                ? text("首次缓存", "First cached")
+                : text("创建时间", "Created"),
             key: "createdAt",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -1828,6 +1867,22 @@ export function PublicBrowsePage() {
               version,
             )
           }
+        />
+      );
+    }
+    if (selectedRepository?.format === "apt") {
+      return (
+        <APTAssetDetail
+          repoName={selectedRepository.name}
+          meta={{
+            coordinate: row.item.coordinate,
+            digest: row.item.digest,
+            size: row.item.size,
+            contentType: row.item.contentType,
+            createdAt: row.item.createdAt,
+            cachedAt: row.item.cachedAt,
+            sourceUrl: row.item.sourceUrl,
+          }}
         />
       );
     }

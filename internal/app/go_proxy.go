@@ -19,7 +19,7 @@ type GoClient interface {
 
 func (c UpstreamClient) FetchGo(ctx context.Context, method string, repo repository.HostedRepository, target string, headers http.Header) (*http.Response, error) {
 	targetURL, err := url.Parse(target)
-	if err != nil || !npmUpstreamURLAllowed(repo, targetURL) {
+	if err != nil || !proxyUpstreamURLAllowed(repo, targetURL) {
 		return nil, fmt.Errorf("go upstream target is not allowed")
 	}
 	request, err := http.NewRequestWithContext(ctx, method, targetURL.String(), nil)
@@ -47,7 +47,7 @@ func (c UpstreamClient) FetchGo(ctx context.Context, method string, repo reposit
 		}
 	}
 	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
-		if !npmUpstreamURLAllowed(repo, next.URL) {
+		if !proxyUpstreamURLAllowed(repo, next.URL) {
 			return fmt.Errorf("go upstream redirect is not allowed")
 		}
 		return nil

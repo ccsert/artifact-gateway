@@ -38,6 +38,9 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_go_assets GROUP BY repository_id
+	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
+	FROM native_apt_assets GROUP BY repository_id
 ), totals AS (
 	SELECT repository_id,SUM(used_bytes)::bigint AS used_bytes,SUM(object_count)::bigint AS object_count
 	FROM usage GROUP BY repository_id
@@ -74,6 +77,7 @@ func (s *PostgresStore) GetRepositoryCapacity(ctx context.Context, id string) (R
 		FormatNPM:   `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_npm_versions WHERE repository_id::text=$1 AND object_key<>''`,
 		FormatPyPI:  `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_pypi_files WHERE repository_id::text=$1 AND object_key<>'' AND state='visible'`,
 		FormatGo:    `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_go_assets WHERE repository_id::text=$1`,
+		FormatAPT:   `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_apt_assets WHERE repository_id::text=$1`,
 	}[capacity.Format]
 	if err = s.db.QueryRowContext(ctx, query, id).Scan(&capacity.UsedBytes, &capacity.ObjectCount); err != nil {
 		return RepositoryCapacity{}, err

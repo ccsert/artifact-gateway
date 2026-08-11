@@ -4,8 +4,8 @@ import "testing"
 
 func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 	profiles := SupportedFormatProfiles()
-	if len(profiles) != 7 {
-		t.Fatalf("profiles=%d want=7", len(profiles))
+	if len(profiles) != 8 {
+		t.Fatalf("profiles=%d want=8", len(profiles))
 	}
 	seen := make(map[Format]bool, len(profiles))
 	for _, profile := range profiles {
@@ -16,7 +16,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 		if !profile.AnonymousRead {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
-		if profile.Format == FormatGo {
+		if profile.Format == FormatGo || profile.Format == FormatAPT {
 			if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || !profile.GroupSupported {
 				t.Errorf("go must expose only Proxy and Group: %#v", profile)
 			}
@@ -73,7 +73,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			}
 		}
 	}
-	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI, FormatGo} {
+	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI, FormatGo, FormatAPT} {
 		if !seen[format] || !IsSupportedFormat(format) {
 			t.Errorf("format %q is missing", format)
 		}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  aptRepositoryURL,
+  aptUsage,
   goProxyURL,
   goUsage,
   npmRegistryURL,
@@ -8,6 +10,24 @@ import {
   pypiUsage,
   usageFor,
 } from "./usage";
+
+describe("APT usage", () => {
+  it("builds repository registration and exact asset download snippets", () => {
+    const path = "pool/main/h/hello/hello_2.10_amd64.deb";
+    const snippets = aptUsage("debian", path);
+
+    expect(snippets[0].code).toBe(
+      `deb ${window.location.origin}/apt/debian <suite> <component>`,
+    );
+    expect(snippets[1].code).toBe(
+      `curl -fsSL ${window.location.origin}/apt/debian/${path} -o package`,
+    );
+    expect(usageFor("apt", "debian", path)).toEqual(snippets);
+    expect(aptRepositoryURL("debian")).toBe(
+      `${window.location.origin}/apt/debian`,
+    );
+  });
+});
 
 describe("Go usage", () => {
   it("builds GOPROXY and exact module-version snippets", () => {

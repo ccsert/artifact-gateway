@@ -183,9 +183,15 @@ func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
 		"proxy without endpoint":           `{"name":"proxy-no-endpoint","format":"raw","type":"proxy"}`,
 		"proxy with http endpoint":         `{"name":"proxy-http","format":"raw","type":"proxy","endpoint":"http://upstream.example","allowedHosts":["upstream.example"]}`,
 		"proxy with malformed endpoint":    `{"name":"proxy-bad-url","format":"raw","type":"proxy","endpoint":"not a url","allowedHosts":["upstream.example"]}`,
+		"proxy endpoint with query":        `{"name":"proxy-query","format":"apt","type":"proxy","endpoint":"https://upstream.example/debian?suite=stable","allowedHosts":["upstream.example"]}`,
+		"proxy endpoint with fragment":     `{"name":"proxy-fragment","format":"apt","type":"proxy","endpoint":"https://upstream.example/debian#stable","allowedHosts":["upstream.example"]}`,
 		"raw proxy without allowedHosts":   `{"name":"proxy-no-hosts","format":"raw","type":"proxy","endpoint":"https://upstream.example"}`,
 		"conan proxy without allowedHosts": `{"name":"proxy-conan-no-hosts","format":"conan","type":"proxy","endpoint":"https://upstream.example"}`,
 		"npm proxy without allowedHosts":   `{"name":"proxy-npm-no-hosts","format":"npm","type":"proxy","endpoint":"https://registry.npmjs.org"}`,
+		"apt proxy without allowedHosts":   `{"name":"proxy-apt-no-hosts","format":"apt","type":"proxy","endpoint":"https://upstream.example"}`,
+		"proxy with blank allowedHost":     `{"name":"proxy-blank-host","format":"apt","type":"proxy","endpoint":"https://upstream.example","allowedHosts":[""]}`,
+		"proxy with path allowedHost":      `{"name":"proxy-path-host","format":"apt","type":"proxy","endpoint":"https://upstream.example","allowedHosts":["cdn.example/path"]}`,
+		"proxy with port allowedHost":      `{"name":"proxy-port-host","format":"apt","type":"proxy","endpoint":"https://upstream.example","allowedHosts":["cdn.example:443"]}`,
 		"hosted with endpoint":             `{"name":"hosted-endpoint","format":"raw","endpoint":"https://upstream.example"}`,
 		"hosted with allowedHosts":         `{"name":"hosted-hosts","format":"raw","allowedHosts":["upstream.example"]}`,
 		"unknown type":                     `{"name":"unknown-type","format":"raw","type":"virtual"}`,
@@ -1083,6 +1089,9 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 	}
 	if missingHosts := patch("2", `{"endpoint":"https://cdn.example","allowedHosts":[]}`); missingHosts.Code != http.StatusBadRequest {
 		t.Fatalf("missing hosts=%d body=%s", missingHosts.Code, missingHosts.Body.String())
+	}
+	if invalidHost := patch("2", `{"endpoint":"https://cdn.example","allowedHosts":[""]}`); invalidHost.Code != http.StatusBadRequest {
+		t.Fatalf("invalid host=%d body=%s", invalidHost.Code, invalidHost.Body.String())
 	}
 
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "raw-hosted", Format: repository.FormatRaw})

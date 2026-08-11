@@ -31,7 +31,7 @@ import type {
   AuthorizationTemplateGrant,
   Repository,
 } from "../client";
-import { ErrorBanner, Loading } from "./Feedback";
+import { EmptyState, ErrorBanner, Loading } from "./Feedback";
 import { Card, CardHeader } from "./Layout";
 import { usePreferences } from "../lib/preferences";
 
@@ -323,6 +323,14 @@ export function AuthorizationTemplatesPanel({ repositories }: Props) {
         </div>
       ) : !templates ? (
         <Loading />
+      ) : templates.length === 0 ? (
+        <EmptyState
+          title={text("尚未创建授权模板", "No authorization templates yet")}
+          hint={text(
+            "模板适合复用一组主体、权限和资源前缀规则。",
+            "Templates reuse a set of principal, scope, and resource-prefix rules.",
+          )}
+        />
       ) : (
         <Table<AuthorizationTemplate>
           className="ag-console-table"

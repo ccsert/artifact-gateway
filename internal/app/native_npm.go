@@ -526,7 +526,7 @@ func npmProxyPackage(repo repository.HostedRepository, packageName string, body 
 			return repository.NPMPackage{}, errors.New("npm upstream version metadata is invalid")
 		}
 		tarballURL, parseErr := url.Parse(identity.Dist.Tarball)
-		if parseErr != nil || !npmUpstreamURLAllowed(repo, tarballURL) {
+		if parseErr != nil || !proxyUpstreamURLAllowed(repo, tarballURL) {
 			return repository.NPMPackage{}, errors.New("npm upstream tarball URL is not allowed")
 		}
 		createdAt := now

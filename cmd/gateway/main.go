@@ -61,6 +61,7 @@ func main() {
 	dependencies.NativeNPMObjectStore = objectStore
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
+	dependencies.NativeAPTObjectStore = objectStore
 	if cfg.ScannerEnabled() {
 		artifactScanner, scannerErr := scanning.NewHTTPScanner(scanning.HTTPOptions{
 			Name: cfg.ScannerName, Endpoint: cfg.ScannerEndpoint, Token: cfg.ScannerToken,

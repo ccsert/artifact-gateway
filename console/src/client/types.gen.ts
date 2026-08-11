@@ -4,7 +4,8 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
-export type Format = "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go";
+export type Format =
+  "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "apt";
 
 export type FormatProfile = {
   format: Format;
@@ -499,6 +500,14 @@ export type ArtifactSummary = {
   size?: number;
   contentType?: string;
   createdAt?: string;
+  /**
+   * Most recent successful cache fill or metadata revalidation time.
+   */
+  cachedAt?: string;
+  /**
+   * Exact upstream URL persisted when this proxy asset was cached.
+   */
+  sourceUrl?: string;
   /**
    * Snapshot build number; zero for release coordinates.
    */

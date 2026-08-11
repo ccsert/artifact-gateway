@@ -86,6 +86,8 @@ func nativeRepositoryName(format repository.Format, path string) string {
 		prefix = "/maven/"
 	case repository.FormatNPM:
 		prefix = "/npm/"
+	case repository.FormatAPT:
+		prefix = "/apt/"
 	default:
 		return ""
 	}

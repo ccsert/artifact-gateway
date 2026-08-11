@@ -495,6 +495,7 @@ func (e EgressProxyTestResultEgressMode) Valid() bool {
 
 // Defines values for Format.
 const (
+	FormatApt   Format = "apt"
 	FormatConan Format = "conan"
 	FormatGo    Format = "go"
 	FormatMaven Format = "maven"
@@ -507,6 +508,8 @@ const (
 // Valid indicates whether the value is a known member of the Format enum.
 func (e Format) Valid() bool {
 	switch e {
+	case FormatApt:
+		return true
 	case FormatConan:
 		return true
 	case FormatGo:
@@ -1710,7 +1713,10 @@ type ArtifactSignature struct {
 // ArtifactSummary defines model for ArtifactSummary.
 type ArtifactSummary struct {
 	// BuildNumber Snapshot build number; zero for release coordinates.
-	BuildNumber  *int32                       `json:"buildNumber,omitempty"`
+	BuildNumber *int32 `json:"buildNumber,omitempty"`
+
+	// CachedAt Most recent successful cache fill or metadata revalidation time.
+	CachedAt     *time.Time                   `json:"cachedAt,omitempty"`
 	ContentType  *string                      `json:"contentType,omitempty"`
 	Coordinate   string                       `json:"coordinate"`
 	CreatedAt    *time.Time                   `json:"createdAt,omitempty"`
@@ -1720,6 +1726,9 @@ type ArtifactSummary struct {
 	// Publisher Publisher actor when the format records it.
 	Publisher *string `json:"publisher,omitempty"`
 	Size      *int64  `json:"size,omitempty"`
+
+	// SourceUrl Exact upstream URL persisted when this proxy asset was cached.
+	SourceUrl *string `json:"sourceUrl,omitempty"`
 
 	// Version Exact package version when the format exposes one independently from the coordinate.
 	Version *string `json:"version,omitempty"`
@@ -2200,7 +2209,10 @@ type FormatProfileList struct {
 // GlobalArtifactSearchHit defines model for GlobalArtifactSearchHit.
 type GlobalArtifactSearchHit struct {
 	// BuildNumber Snapshot build number; zero for release coordinates.
-	BuildNumber  *int32                       `json:"buildNumber,omitempty"`
+	BuildNumber *int32 `json:"buildNumber,omitempty"`
+
+	// CachedAt Most recent successful cache fill or metadata revalidation time.
+	CachedAt     *time.Time                   `json:"cachedAt,omitempty"`
 	ContentType  *string                      `json:"contentType,omitempty"`
 	Coordinate   string                       `json:"coordinate"`
 	CreatedAt    *time.Time                   `json:"createdAt,omitempty"`
@@ -2216,6 +2228,9 @@ type GlobalArtifactSearchHit struct {
 	RepositoryId   openapi_types.UUID `json:"repositoryId"`
 	RepositoryName string             `json:"repositoryName"`
 	Size           *int64             `json:"size,omitempty"`
+
+	// SourceUrl Exact upstream URL persisted when this proxy asset was cached.
+	SourceUrl *string `json:"sourceUrl,omitempty"`
 
 	// Version Exact package version when the format exposes one independently from the coordinate.
 	Version *string `json:"version,omitempty"`

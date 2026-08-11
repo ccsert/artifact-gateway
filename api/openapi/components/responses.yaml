@@ -108,7 +108,7 @@ OCIError:
       schema:
         "$ref": "../components/schemas.yaml#/OCIError"
 BasicUnauthorized:
-  description: Raw or Maven Basic authentication required when anonymous read policy
+  description: Native protocol Basic authentication required when anonymous read policy
     is disabled
   headers:
     WWW-Authenticate:

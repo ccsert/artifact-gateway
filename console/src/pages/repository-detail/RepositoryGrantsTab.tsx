@@ -85,6 +85,11 @@ function resourcePrefixHint(
         "例如 github.com/company（Go 模块路径前缀）",
         "For example: github.com/company (Go module path prefix)",
       );
+    case "apt":
+      return text(
+        "例如 dists/bookworm 或 pool/main（APT 路径前缀）",
+        "For example: dists/bookworm or pool/main (APT path prefix)",
+      );
   }
 }
 

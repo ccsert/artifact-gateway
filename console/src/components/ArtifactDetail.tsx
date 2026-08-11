@@ -57,6 +57,8 @@ export interface ArtifactMeta {
   size?: number;
   contentType?: string;
   createdAt?: string;
+  cachedAt?: string;
+  sourceUrl?: string;
   publisher?: string;
   buildNumber?: number;
   state?: string;
@@ -69,6 +71,8 @@ export function ArtifactDetailView({
   repoName,
   meta,
   tag,
+  timestampLabel,
+  extra,
   versions,
 }: {
   format: string;
@@ -76,6 +80,8 @@ export function ArtifactDetailView({
   repoName: string;
   meta: ArtifactMeta;
   tag?: string;
+  timestampLabel?: string;
+  extra?: React.ReactNode;
   versions?: React.ReactNode;
 }) {
   const { locale, text } = usePreferences();
@@ -117,10 +123,23 @@ export function ArtifactDetailView({
         {meta.createdAt && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              {text("发布时间", "Published")}
+              {timestampLabel ?? text("发布时间", "Published")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
               {formatDate(meta.createdAt, locale)}
+            </div>
+          </div>
+        )}
+        {meta.contentType && (
+          <div className="rounded-lg border border-zinc-800 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              {text("内容类型", "Content type")}
+            </div>
+            <div
+              className="mt-0.5 truncate font-mono text-xs text-zinc-100"
+              title={meta.contentType}
+            >
+              {meta.contentType}
             </div>
           </div>
         )}
@@ -151,6 +170,8 @@ export function ArtifactDetailView({
           </div>
         </div>
       )}
+
+      {extra}
 
       {/* 使用方法 */}
       {snippets.length > 0 && (

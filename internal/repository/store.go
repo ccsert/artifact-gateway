@@ -309,6 +309,15 @@ type NativeGoStore interface {
 	LockGoObject(context.Context, string) (func(), error)
 }
 
+// NativeAPTStore owns the immutable metadata for APT Proxy cache entries.
+// APT is protocol-only for now: there is no Hosted publication surface.
+type NativeAPTStore interface {
+	GetAPTAsset(context.Context, string, string) (APTAsset, error)
+	CacheAPTAsset(context.Context, APTAsset) (APTAsset, error)
+	LockAPTObject(context.Context, string) (func(), error)
+	ListAPTAssets(context.Context, string, string, int, string) ([]APTAsset, error)
+}
+
 type Store interface {
 	CreateGroup(context.Context, Group) (Group, error)
 	GetGroup(context.Context, string) (Group, error)

@@ -15,6 +15,10 @@ const (
 	FormatNPM   Format = "npm"
 	FormatPyPI  Format = "pypi"
 	FormatGo    Format = "go"
+	// FormatAPT is a protocol-only Debian repository proxy. APT publication
+	// requires trusted Release metadata and signing, so Hosted is intentionally
+	// not admitted until that workflow is implemented.
+	FormatAPT Format = "apt"
 	// FormatConan is a managed authorization target with native Hosted, Proxy,
 	// and Group protocol routes.
 	FormatConan Format = "conan"
@@ -368,6 +372,30 @@ type GoModuleAsset struct {
 	SourceURL    string
 	CachedAt     time.Time
 	CreatedAt    time.Time
+}
+
+// APTAsset is an immutable byte representation cached from a Debian
+// repository. The path is the protocol identity (for example
+// dists/bookworm/InRelease or pool/main/h/hello/hello_2.10_amd64.deb).
+type APTAsset struct {
+	RepositoryID     string
+	Path             string
+	Digest           string
+	ObjectKey        string
+	Size             int64
+	ContentType      string
+	SourceURL        string
+	UpstreamETag     string
+	UpstreamModified string
+	CachedAt         time.Time
+	CreatedAt        time.Time
+}
+
+// APTAssetMutable reports whether an upstream path may legitimately change in
+// place. Content-addressed by-hash metadata and pool package objects are
+// immutable even though they live below otherwise mutable repository trees.
+func APTAssetMutable(path string) bool {
+	return strings.HasPrefix(path, "dists/") && !strings.Contains(path, "/by-hash/")
 }
 
 type NPMPackageSummary struct {

@@ -97,6 +97,8 @@ paths:
     "$ref": "./protocols/raw.yaml#/raw_repository_path"
   "/raw/{repository}/":
     "$ref": "./protocols/raw.yaml#/raw_repository_root_directory"
+  "/apt/{repository}/{path}":
+    "$ref": "./protocols/apt.yaml#/apt_repository_path"
   "/v2/{name}/blobs/uploads/":
     "$ref": "./protocols/oci.yaml#/v2_name_blobs_uploads"
   "/v2/{name}/blobs/uploads/{uuid}":

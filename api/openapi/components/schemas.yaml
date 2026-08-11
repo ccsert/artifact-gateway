@@ -9,6 +9,7 @@ Format:
   - npm
   - pypi
   - go
+  - apt
 RepositoryOperation:
   type: string
   enum:
@@ -1718,6 +1719,14 @@ ArtifactSummary:
     createdAt:
       type: string
       format: date-time
+    cachedAt:
+      type: string
+      format: date-time
+      description: Most recent successful cache fill or metadata revalidation time.
+    sourceUrl:
+      type: string
+      format: uri
+      description: Exact upstream URL persisted when this proxy asset was cached.
     buildNumber:
       type: integer
       format: int32

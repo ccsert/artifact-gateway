@@ -36,6 +36,7 @@ type Dependencies struct {
 	NativeNPMObjectStore   OCIObjectStore
 	NativePyPIObjectStore  OCIObjectStore
 	NativeGoObjectStore    OCIObjectStore
+	NativeAPTObjectStore   OCIObjectStore
 	NPMMetadataTTL         time.Duration
 	NPMNegativeTTL         time.Duration
 	NPMBreakerTTL          time.Duration

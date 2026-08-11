@@ -85,6 +85,16 @@ var supportedFormatProfiles = []FormatProfile{
 			RepositoryOperationBrowse,
 		},
 	},
+	{
+		Format:          FormatAPT,
+		RepositoryTypes: []RepositoryType{RepositoryTypeProxy},
+		GroupSupported:  true,
+		AnonymousRead:   true,
+		ProxyOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationBrowse,
+		},
+	},
 }
 
 func formatProfile(format Format) FormatProfile {

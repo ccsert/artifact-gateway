@@ -1489,6 +1489,21 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			if len(items) > 0 {
 				lastCoordinate = items[len(items)-1].Coordinate
 			}
+		case repository.FormatAPT:
+			assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
+				return
+			}
+			hasMore = len(assets) > pageSize
+			if hasMore {
+				assets = assets[:pageSize]
+			}
+			for _, asset := range assets {
+				d, size, created, cached, sourceURL := asset.Digest, asset.Size, asset.CreatedAt, asset.CachedAt, asset.SourceURL
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &d, Size: &size, CreatedAt: &created, CachedAt: &cached, SourceUrl: &sourceURL, ContentType: optionalString(asset.ContentType)})
+				lastCoordinate = asset.Path
+			}
 		}
 		var next *string
 		if hasMore {
@@ -4312,6 +4327,8 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return validPyPIProjectSearchPrefix(query)
 	case repository.FormatGo:
 		return validGoModuleSearchPrefix(query)
+	case repository.FormatAPT:
+		return validAPTPathPrefix(query)
 	default:
 		return false
 	}
@@ -4515,8 +4532,8 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		if request.AllowedHosts != nil {
 			updatedRepo.AllowedHosts = request.AllowedHosts
 		}
-		if !validProxyUpdate(repo.Format, updatedRepo.Endpoint, updatedRepo.AllowedHosts) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and allowedHosts must be present for raw, conan, npm, and PyPI proxies")
+		if !validProxyConfiguration(repo.Format, updatedRepo.Endpoint, updatedRepo.AllowedHosts) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "endpoint must be a valid https URL and required allowedHosts must be valid hostnames")
 			return
 		}
 		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)
@@ -4575,15 +4592,7 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 		// egress allow-list would be meaningless and likely a client mistake.
 		return request.Endpoint == "" && len(request.AllowedHosts) == 0
 	case repository.RepositoryTypeProxy:
-		if !validProxyEndpoint(request.Endpoint) {
-			return false
-		}
-		// Raw, Conan, and npm proxies resolve upstream assets by host, so they must
-		// declare which hosts they may egress to.
-		if (request.Format == repository.FormatRaw || request.Format == repository.FormatConan || request.Format == repository.FormatNPM || request.Format == repository.FormatPyPI || request.Format == repository.FormatGo) && len(request.AllowedHosts) == 0 {
-			return false
-		}
-		return true
+		return validProxyConfiguration(request.Format, request.Endpoint, request.AllowedHosts)
 	default:
 		return false
 	}
@@ -4591,17 +4600,32 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 
 func validProxyEndpoint(endpoint string) bool {
 	parsed, err := url.Parse(endpoint)
-	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
+	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
-func validProxyUpdate(format repository.Format, endpoint string, allowedHosts []string) bool {
+func validProxyConfiguration(format repository.Format, endpoint string, allowedHosts []string) bool {
 	if !validProxyEndpoint(endpoint) {
 		return false
 	}
-	if (format == repository.FormatRaw || format == repository.FormatConan || format == repository.FormatNPM || format == repository.FormatPyPI || format == repository.FormatGo) && len(allowedHosts) == 0 {
+	if proxyAllowedHostsRequired(format) && len(allowedHosts) == 0 {
 		return false
 	}
+	for _, allowedHost := range allowedHosts {
+		parsed, err := url.Parse("//" + strings.TrimSpace(allowedHost))
+		if err != nil || allowedHost != strings.TrimSpace(allowedHost) || parsed.Hostname() == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Port() != "" {
+			return false
+		}
+	}
 	return true
+}
+
+func proxyAllowedHostsRequired(format repository.Format) bool {
+	switch format {
+	case repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatAPT:
+		return true
+	default:
+		return false
+	}
 }
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {

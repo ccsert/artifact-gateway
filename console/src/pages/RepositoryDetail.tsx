@@ -420,7 +420,8 @@ function RepositorySettingsTab({
     repo.format === "conan" ||
     repo.format === "npm" ||
     repo.format === "pypi" ||
-    repo.format === "go";
+    repo.format === "go" ||
+    repo.format === "apt";
 
   const resetForm = () => {
     setEndpoint(repo.endpoint ?? "");

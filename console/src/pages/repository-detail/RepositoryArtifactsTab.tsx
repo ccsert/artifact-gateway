@@ -35,6 +35,7 @@ import {
 import { NpmPackageDetail } from "../../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../../components/GoModuleDetail";
+import { APTAssetDetail } from "../../components/APTAssetDetail";
 import { RawUploadDialog } from "../../components/RawUploadDialog";
 import { useAuth } from "../../lib/auth";
 import {
@@ -61,6 +62,8 @@ interface ArtifactRow {
   size?: number;
   contentType?: string;
   publisher?: string;
+  cachedAt?: string;
+  sourceUrl?: string;
   intelligence?: ArtifactIntelligenceSummary;
   buildNumber?: number;
   // maven 聚合：同 group:artifact 的版本数与最新版本
@@ -769,6 +772,7 @@ export function RepositoryArtifactsTab({
   const proxyNpm = format === "npm" && repo.type === "proxy";
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
   const proxyGo = format === "go" && repo.type === "proxy";
+  const proxyAPT = format === "apt" && repo.type === "proxy";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
 
   const load = useCallback(
@@ -934,8 +938,7 @@ export function RepositoryArtifactsTab({
             publisher: x.publisher,
           }));
         next = r.data?.nextPageToken;
-      } else {
-        // raw：通用搜索端点
+      } else if (format === "raw" || format === "apt") {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
           query: { q: query || undefined, ...page },
@@ -948,6 +951,8 @@ export function RepositoryArtifactsTab({
           createdAt: x.createdAt,
           size: x.size,
           contentType: x.contentType,
+          cachedAt: x.cachedAt,
+          sourceUrl: x.sourceUrl,
           intelligence: x.intelligence,
         }));
         next = r.data?.nextPageToken;
@@ -992,6 +997,10 @@ export function RepositoryArtifactsTab({
     npm: text("按包名前缀过滤…", "Filter by package name prefix…"),
     pypi: text("按项目名前缀过滤…", "Filter by project name prefix…"),
     go: text("按模块路径前缀过滤…", "Filter by module path prefix…"),
+    apt: text(
+      "按 dists/ 或 pool/ 路径过滤…",
+      "Filter by dists/ or pool/ path…",
+    ),
     raw: text("搜索路径…", "Search paths…"),
   };
 
@@ -1078,24 +1087,14 @@ export function RepositoryArtifactsTab({
               ),
             },
           ]
-        : format === "maven" ||
-            format === "npm" ||
-            format === "pypi" ||
-            format === "go"
+        : format === "apt"
           ? [
               {
-                title:
-                  format === "npm"
-                    ? text("包", "Package")
-                    : format === "pypi"
-                      ? text("项目", "Project")
-                      : format === "go"
-                        ? text("模块", "Module")
-                        : text("制品", "Artifact"),
+                title: text("APT 路径", "APT path"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
-                render: (value: string, record) => (
+                render: (value: string, record: ArtifactRow) => (
                   <span
                     className="font-mono text-xs text-zinc-200"
                     title={record.coordinate}
@@ -1105,56 +1104,23 @@ export function RepositoryArtifactsTab({
                 ),
               },
               {
-                title: text("版本", "Versions"),
-                key: "versionCount",
+                title: text("内容类型", "Content type"),
+                dataIndex: "contentType",
+                key: "contentType",
+                width: 220,
+                ellipsis: true,
+                render: (value: string | undefined) => (
+                  <span className="text-xs text-zinc-500">{value ?? "—"}</span>
+                ),
+              },
+              {
+                title: text("大小", "Size"),
+                dataIndex: "size",
+                key: "size",
                 width: 120,
-                render: (_, record) => (
-                  <Badge tone="zinc">
-                    {record.versionCount !== undefined
-                      ? text(
-                          `${record.versionCount} 个版本`,
-                          `${record.versionCount} versions`,
-                        )
-                      : text("展开查看", "Open to inspect")}
-                  </Badge>
-                ),
-              },
-              {
-                title: text("最新版本", "Latest version"),
-                dataIndex: "latestVersion",
-                key: "latestVersion",
-                width: 160,
-                render: (value: string | undefined) => (
-                  <span className="font-mono text-xs text-cyan-300">
-                    {value ?? "—"}
-                  </span>
-                ),
-              },
-              {
-                title: text("更新时间", "Updated"),
-                dataIndex: "createdAt",
-                key: "createdAt",
-                width: 180,
-                render: (value: string | undefined) => (
-                  <span className="whitespace-nowrap text-xs text-zinc-500">
-                    {formatDate(value)}
-                  </span>
-                ),
-              },
-              ...(showSecurityColumn ? [securityColumn] : []),
-            ]
-          : [
-              {
-                title: text("坐标", "Coordinate"),
-                dataIndex: "coordinate",
-                key: "coordinate",
-                ellipsis: true,
-                render: (value: string, record) => (
-                  <span
-                    className="font-mono text-xs text-zinc-200"
-                    title={record.coordinate}
-                  >
-                    {value}
+                render: (value: number | undefined) => (
+                  <span className="text-xs text-zinc-400">
+                    {formatBytes(value)}
                   </span>
                 ),
               },
@@ -1174,18 +1140,7 @@ export function RepositoryArtifactsTab({
                 ),
               },
               {
-                title: text("大小", "Size"),
-                dataIndex: "size",
-                key: "size",
-                width: 120,
-                render: (value: number | undefined) => (
-                  <span className="text-xs text-zinc-400">
-                    {formatBytes(value)}
-                  </span>
-                ),
-              },
-              {
-                title: text("最后更新时间", "Last updated"),
+                title: text("首次缓存", "First cached"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -1195,8 +1150,126 @@ export function RepositoryArtifactsTab({
                   </span>
                 ),
               },
-              ...(showSecurityColumn ? [securityColumn] : []),
-            ];
+            ]
+          : format === "maven" ||
+              format === "npm" ||
+              format === "pypi" ||
+              format === "go"
+            ? [
+                {
+                  title:
+                    format === "npm"
+                      ? text("包", "Package")
+                      : format === "pypi"
+                        ? text("项目", "Project")
+                        : format === "go"
+                          ? text("模块", "Module")
+                          : text("制品", "Artifact"),
+                  dataIndex: "coordinate",
+                  key: "coordinate",
+                  ellipsis: true,
+                  render: (value: string, record) => (
+                    <span
+                      className="font-mono text-xs text-zinc-200"
+                      title={record.coordinate}
+                    >
+                      {value}
+                    </span>
+                  ),
+                },
+                {
+                  title: text("版本", "Versions"),
+                  key: "versionCount",
+                  width: 120,
+                  render: (_, record) => (
+                    <Badge tone="zinc">
+                      {record.versionCount !== undefined
+                        ? text(
+                            `${record.versionCount} 个版本`,
+                            `${record.versionCount} versions`,
+                          )
+                        : text("展开查看", "Open to inspect")}
+                    </Badge>
+                  ),
+                },
+                {
+                  title: text("最新版本", "Latest version"),
+                  dataIndex: "latestVersion",
+                  key: "latestVersion",
+                  width: 160,
+                  render: (value: string | undefined) => (
+                    <span className="font-mono text-xs text-cyan-300">
+                      {value ?? "—"}
+                    </span>
+                  ),
+                },
+                {
+                  title: text("更新时间", "Updated"),
+                  dataIndex: "createdAt",
+                  key: "createdAt",
+                  width: 180,
+                  render: (value: string | undefined) => (
+                    <span className="whitespace-nowrap text-xs text-zinc-500">
+                      {formatDate(value)}
+                    </span>
+                  ),
+                },
+                ...(showSecurityColumn ? [securityColumn] : []),
+              ]
+            : [
+                {
+                  title: text("坐标", "Coordinate"),
+                  dataIndex: "coordinate",
+                  key: "coordinate",
+                  ellipsis: true,
+                  render: (value: string, record) => (
+                    <span
+                      className="font-mono text-xs text-zinc-200"
+                      title={record.coordinate}
+                    >
+                      {value}
+                    </span>
+                  ),
+                },
+                {
+                  title: text("摘要", "Digest"),
+                  dataIndex: "digest",
+                  key: "digest",
+                  width: 180,
+                  ellipsis: true,
+                  render: (value: string | undefined) => (
+                    <span
+                      className="font-mono text-xs text-zinc-500"
+                      title={value}
+                    >
+                      {shortDigest(value)}
+                    </span>
+                  ),
+                },
+                {
+                  title: text("大小", "Size"),
+                  dataIndex: "size",
+                  key: "size",
+                  width: 120,
+                  render: (value: number | undefined) => (
+                    <span className="text-xs text-zinc-400">
+                      {formatBytes(value)}
+                    </span>
+                  ),
+                },
+                {
+                  title: text("最后更新时间", "Last updated"),
+                  dataIndex: "createdAt",
+                  key: "createdAt",
+                  width: 180,
+                  render: (value: string | undefined) => (
+                    <span className="whitespace-nowrap text-xs text-zinc-500">
+                      {formatDate(value)}
+                    </span>
+                  ),
+                },
+                ...(showSecurityColumn ? [securityColumn] : []),
+              ];
 
   const expandedRowRender = (r: ArtifactRow) => {
     if (format === "oci") {
@@ -1290,6 +1363,22 @@ export function RepositoryArtifactsTab({
           canDelete={repo.type !== "proxy" && canWrite}
           onDeleted={() => void load(q)}
           meta={{ coordinate: r.coordinate, publisher: r.publisher }}
+        />
+      );
+    }
+    if (format === "apt") {
+      return (
+        <APTAssetDetail
+          repoName={repo.name}
+          meta={{
+            coordinate: r.coordinate,
+            digest: r.digest,
+            size: r.size,
+            contentType: r.contentType,
+            createdAt: r.createdAt,
+            cachedAt: r.cachedAt,
+            sourceUrl: r.sourceUrl,
+          }}
         />
       );
     }
@@ -1421,10 +1510,15 @@ export function RepositoryArtifactsTab({
                             "通过 go mod download 拉取模块后会显示上游版本与缓存资产",
                             "Upstream versions and cached assets appear after go mod download retrieves a module.",
                           )
-                        : text(
-                            `通过 ${format} 客户端推送制品后会显示在这里`,
-                            "Push artifacts with the matching client to display them here.",
-                          )
+                        : proxyAPT
+                          ? text(
+                              "通过 apt update、apt install 或直接请求 APT 路径后会显示代理缓存",
+                              "The proxy cache appears after apt update, apt install, or a direct APT path request.",
+                            )
+                          : text(
+                              `通过 ${format} 客户端推送制品后会显示在这里`,
+                              "Push artifacts with the matching client to display them here.",
+                            )
             }
           />
         </>

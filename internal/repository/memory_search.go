@@ -166,6 +166,14 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 			}
 			items = append(items, item)
 		}
+	case FormatAPT:
+		for _, asset := range s.aptAssets {
+			if asset.RepositoryID != repositoryID {
+				continue
+			}
+			createdAt, size := asset.CreatedAt, asset.Size
+			items = append(items, ArtifactSearchItem{Coordinate: asset.Path, Digest: asset.Digest, CreatedAt: &createdAt, Size: &size, ContentType: asset.ContentType})
+		}
 	}
 	return items
 }

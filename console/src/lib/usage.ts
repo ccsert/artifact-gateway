@@ -26,6 +26,21 @@ export function goProxyURL(repoName: string): string {
   return `${gatewayBase()}/go/${repoName}`;
 }
 
+export function aptRepositoryURL(repoName: string): string {
+  return `${gatewayBase()}/apt/${repoName}`;
+}
+
+export function aptUsage(
+  repoName: string,
+  coordinate = "<path>",
+): UsageSnippet[] {
+  const source = aptRepositoryURL(repoName);
+  return [
+    { label: "APT source", code: `deb ${source} <suite> <component>` },
+    { label: "curl", code: `curl -fsSL ${source}/${coordinate} -o package` },
+  ];
+}
+
 // Maven GAV 坐标 → 各用法
 export interface MavenUsageOptions {
   buildNumber?: number;
@@ -229,6 +244,8 @@ export function usageFor(
       return pypiUsage(repoName, coordinate, tag ?? "latest");
     case "go":
       return goUsage(repoName, coordinate, tag ?? "latest");
+    case "apt":
+      return aptUsage(repoName, coordinate);
     default:
       return [];
   }
