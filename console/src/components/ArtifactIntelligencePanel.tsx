@@ -67,19 +67,34 @@ export function ArtifactIntelligencePanel({
   }
   if (!metadata) return null;
   const vulnerability = metadata.vulnerability;
-  const vulnerabilityTotal = vulnerability
-    ? vulnerability.critical +
-      vulnerability.high +
-      vulnerability.medium +
-      vulnerability.low +
-      vulnerability.unknown
-    : 0;
   const vulnerabilityTone =
     vulnerability?.status === "affected"
       ? "red"
       : vulnerability?.status === "clean"
         ? "green"
-        : "default";
+        : vulnerability?.status === "error"
+          ? "orange"
+          : "default";
+  const vulnerabilityLabel = vulnerability
+    ? {
+        affected: text("受影响", "Affected"),
+        clean: text("未发现", "Clean"),
+        error: text("扫描失败", "Scan failed"),
+        not_scanned: text("未扫描", "Not scanned"),
+      }[vulnerability.status]
+    : "";
+  const vulnerabilitySummary = vulnerability
+    ? vulnerability.status === "affected"
+      ? `${vulnerability.critical} C · ${vulnerability.high} H · ${vulnerability.medium} M · ${vulnerability.low} L · ${vulnerability.unknown} U`
+      : vulnerability.status === "clean"
+        ? text("未发现已知漏洞", "No known vulnerabilities")
+        : vulnerability.status === "error"
+          ? text(
+              "扫描未成功，请检查任务详情",
+              "Scan did not complete; check the job details",
+            )
+          : text("尚无扫描结果", "No scan result yet")
+    : "";
   return (
     <Card
       size="small"
@@ -165,11 +180,9 @@ export function ArtifactIntelligencePanel({
           </div>
           {vulnerability ? (
             <>
-              <Tag color={vulnerabilityTone}>{vulnerability.status}</Tag>
+              <Tag color={vulnerabilityTone}>{vulnerabilityLabel}</Tag>
               <div className="mt-2 text-sm text-zinc-200">
-                {vulnerabilityTotal === 0
-                  ? text("未发现问题", "No findings")
-                  : `${vulnerability.critical} C · ${vulnerability.high} H · ${vulnerability.medium} M · ${vulnerability.low} L`}
+                {vulnerabilitySummary}
               </div>
               {vulnerability.scannedAt && (
                 <div className="mt-1 text-xs text-zinc-500">
