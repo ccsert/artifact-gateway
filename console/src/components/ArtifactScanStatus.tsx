@@ -63,6 +63,9 @@ export function ArtifactScanStatus({
     setStatus(null);
     void load();
     return () => {
+      // This monotonic generation ref invalidates any response that resolves
+      // after an identity change or unmount; it is not a rendered-node ref.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       requestSequence.current++;
     };
   }, [load]);
