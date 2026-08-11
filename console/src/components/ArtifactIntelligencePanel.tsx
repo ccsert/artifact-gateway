@@ -5,6 +5,7 @@ import type { ArtifactIntelligence } from "../client";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { isNotFound } from "./Feedback";
+import { ArtifactVulnerabilityFindings } from "./ArtifactVulnerabilityFindings";
 
 export function ArtifactIntelligencePanel({
   repositoryId,
@@ -183,6 +184,9 @@ export function ArtifactIntelligencePanel({
           )}
         </div>
       </div>
+      {vulnerability?.findings && vulnerability.findings.length > 0 && (
+        <ArtifactVulnerabilityFindings findings={vulnerability.findings} />
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3 text-xs text-zinc-500">
         <span>{text("许可证", "Licenses")}:</span>
         {metadata.licenses.length > 0 ? (
