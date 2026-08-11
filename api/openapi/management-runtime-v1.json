@@ -6533,6 +6533,70 @@
           }
         }
       },
+      "DiagnosticScanner": {
+        "type": "object",
+        "description": "Sanitized scanner reachability and vulnerability database freshness.",
+        "required": [
+          "name",
+          "formats",
+          "status",
+          "detail",
+          "checkedAt",
+          "databaseFreshness",
+          "databaseMaxAgeSeconds"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Format"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy",
+              "unreachable",
+              "unknown",
+              "not_configured"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          },
+          "databaseFreshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "unknown"
+            ]
+          },
+          "databaseVersion": {
+            "type": "string"
+          },
+          "databaseUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "databaseMaxAgeSeconds": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "DiagnosticQueueStat": {
         "type": "object",
         "required": [
@@ -6598,6 +6662,9 @@
             "items": {
               "$ref": "#/components/schemas/DiagnosticDependency"
             }
+          },
+          "scanner": {
+            "$ref": "#/components/schemas/DiagnosticScanner"
           },
           "queues": {
             "type": "array",

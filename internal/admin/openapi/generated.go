@@ -450,19 +450,19 @@ func (e DeletionState) Valid() bool {
 
 // Defines values for DiagnosticDependencyStatus.
 const (
-	NotConfigured DiagnosticDependencyStatus = "not_configured"
-	Reachable     DiagnosticDependencyStatus = "reachable"
-	Unreachable   DiagnosticDependencyStatus = "unreachable"
+	DiagnosticDependencyStatusNotConfigured DiagnosticDependencyStatus = "not_configured"
+	DiagnosticDependencyStatusReachable     DiagnosticDependencyStatus = "reachable"
+	DiagnosticDependencyStatusUnreachable   DiagnosticDependencyStatus = "unreachable"
 )
 
 // Valid indicates whether the value is a known member of the DiagnosticDependencyStatus enum.
 func (e DiagnosticDependencyStatus) Valid() bool {
 	switch e {
-	case NotConfigured:
+	case DiagnosticDependencyStatusNotConfigured:
 		return true
-	case Reachable:
+	case DiagnosticDependencyStatusReachable:
 		return true
-	case Unreachable:
+	case DiagnosticDependencyStatusUnreachable:
 		return true
 	default:
 		return false
@@ -508,6 +508,57 @@ func (e DiagnosticQueueStatState) Valid() bool {
 	case DiagnosticQueueStatStateRetrying:
 		return true
 	case DiagnosticQueueStatStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticScannerDatabaseFreshness.
+const (
+	DiagnosticScannerDatabaseFreshnessFresh   DiagnosticScannerDatabaseFreshness = "fresh"
+	DiagnosticScannerDatabaseFreshnessStale   DiagnosticScannerDatabaseFreshness = "stale"
+	DiagnosticScannerDatabaseFreshnessUnknown DiagnosticScannerDatabaseFreshness = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticScannerDatabaseFreshness enum.
+func (e DiagnosticScannerDatabaseFreshness) Valid() bool {
+	switch e {
+	case DiagnosticScannerDatabaseFreshnessFresh:
+		return true
+	case DiagnosticScannerDatabaseFreshnessStale:
+		return true
+	case DiagnosticScannerDatabaseFreshnessUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticScannerStatus.
+const (
+	DiagnosticScannerStatusDegraded      DiagnosticScannerStatus = "degraded"
+	DiagnosticScannerStatusHealthy       DiagnosticScannerStatus = "healthy"
+	DiagnosticScannerStatusNotConfigured DiagnosticScannerStatus = "not_configured"
+	DiagnosticScannerStatusUnhealthy     DiagnosticScannerStatus = "unhealthy"
+	DiagnosticScannerStatusUnknown       DiagnosticScannerStatus = "unknown"
+	DiagnosticScannerStatusUnreachable   DiagnosticScannerStatus = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticScannerStatus enum.
+func (e DiagnosticScannerStatus) Valid() bool {
+	switch e {
+	case DiagnosticScannerStatusDegraded:
+		return true
+	case DiagnosticScannerStatusHealthy:
+		return true
+	case DiagnosticScannerStatusNotConfigured:
+		return true
+	case DiagnosticScannerStatusUnhealthy:
+		return true
+	case DiagnosticScannerStatusUnknown:
+		return true
+	case DiagnosticScannerStatusUnreachable:
 		return true
 	default:
 		return false
@@ -1263,19 +1314,19 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 
 // Defines values for RuntimeNodeStatus.
 const (
-	Offline RuntimeNodeStatus = "offline"
-	Online  RuntimeNodeStatus = "online"
-	Stale   RuntimeNodeStatus = "stale"
+	RuntimeNodeStatusOffline RuntimeNodeStatus = "offline"
+	RuntimeNodeStatusOnline  RuntimeNodeStatus = "online"
+	RuntimeNodeStatusStale   RuntimeNodeStatus = "stale"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeNodeStatus enum.
 func (e RuntimeNodeStatus) Valid() bool {
 	switch e {
-	case Offline:
+	case RuntimeNodeStatusOffline:
 		return true
-	case Online:
+	case RuntimeNodeStatusOnline:
 		return true
-	case Stale:
+	case RuntimeNodeStatusStale:
 		return true
 	default:
 		return false
@@ -2232,6 +2283,26 @@ type DiagnosticRuntime struct {
 	WorkerKinds   []string `json:"workerKinds"`
 }
 
+// DiagnosticScanner Sanitized scanner reachability and vulnerability database freshness.
+type DiagnosticScanner struct {
+	CheckedAt             time.Time                          `json:"checkedAt"`
+	DatabaseFreshness     DiagnosticScannerDatabaseFreshness `json:"databaseFreshness"`
+	DatabaseMaxAgeSeconds int                                `json:"databaseMaxAgeSeconds"`
+	DatabaseUpdatedAt     *time.Time                         `json:"databaseUpdatedAt,omitempty"`
+	DatabaseVersion       *string                            `json:"databaseVersion,omitempty"`
+	Detail                string                             `json:"detail"`
+	Formats               []Format                           `json:"formats"`
+	Name                  string                             `json:"name"`
+	Status                DiagnosticScannerStatus            `json:"status"`
+	Version               *string                            `json:"version,omitempty"`
+}
+
+// DiagnosticScannerDatabaseFreshness defines model for DiagnosticScanner.DatabaseFreshness.
+type DiagnosticScannerDatabaseFreshness string
+
+// DiagnosticScannerStatus defines model for DiagnosticScanner.Status.
+type DiagnosticScannerStatus string
+
 // Diagnostics defines model for Diagnostics.
 type Diagnostics struct {
 	Build        DiagnosticBuild        `json:"build"`
@@ -2240,6 +2311,9 @@ type Diagnostics struct {
 	Nodes        RuntimeNodeHealth      `json:"nodes"`
 	Queues       []DiagnosticQueueStat  `json:"queues"`
 	Runtime      DiagnosticRuntime      `json:"runtime"`
+
+	// Scanner Sanitized scanner reachability and vulnerability database freshness.
+	Scanner *DiagnosticScanner `json:"scanner,omitempty"`
 }
 
 // EffectiveAccessDecision defines model for EffectiveAccessDecision.

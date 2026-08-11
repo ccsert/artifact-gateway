@@ -907,6 +907,28 @@ export type DiagnosticDependency = {
   detail?: string;
 };
 
+/**
+ * Sanitized scanner reachability and vulnerability database freshness.
+ */
+export type DiagnosticScanner = {
+  name: string;
+  formats: Array<Format>;
+  status:
+    | "healthy"
+    | "degraded"
+    | "unhealthy"
+    | "unreachable"
+    | "unknown"
+    | "not_configured";
+  detail: string;
+  checkedAt: string;
+  version?: string;
+  databaseFreshness: "fresh" | "stale" | "unknown";
+  databaseVersion?: string;
+  databaseUpdatedAt?: string;
+  databaseMaxAgeSeconds: number;
+};
+
 export type DiagnosticQueueStat = {
   kind: "lifecycle" | "promotion" | "replication";
   format: Format;
@@ -920,6 +942,7 @@ export type Diagnostics = {
   build: DiagnosticBuild;
   runtime: DiagnosticRuntime;
   dependencies: Array<DiagnosticDependency>;
+  scanner?: DiagnosticScanner;
   queues: Array<DiagnosticQueueStat>;
   nodes: RuntimeNodeHealth;
 };

@@ -16,12 +16,12 @@ const (
 func runtimeNodeStatus(now, lastSeen time.Time) adminopenapi.RuntimeNodeStatus {
 	age := now.Sub(lastSeen)
 	if age < 0 || age < runtimeNodeStaleAfter {
-		return adminopenapi.Online
+		return adminopenapi.RuntimeNodeStatusOnline
 	}
 	if age <= runtimeNodeOfflineAfter {
-		return adminopenapi.Stale
+		return adminopenapi.RuntimeNodeStatusStale
 	}
-	return adminopenapi.Offline
+	return adminopenapi.RuntimeNodeStatusOffline
 }
 
 func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNodeHealth {
@@ -30,18 +30,18 @@ func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNod
 	hasAPI, hasScheduler, hasWorker := false, false, false
 	for _, node := range items {
 		switch node.Status {
-		case adminopenapi.Online:
+		case adminopenapi.RuntimeNodeStatusOnline:
 			health.Online++
-		case adminopenapi.Stale:
+		case adminopenapi.RuntimeNodeStatusStale:
 			health.Stale++
-		case adminopenapi.Offline:
+		case adminopenapi.RuntimeNodeStatusOffline:
 			health.Offline++
 		}
-		if node.Status == adminopenapi.Offline {
+		if node.Status == adminopenapi.RuntimeNodeStatusOffline {
 			continue
 		}
 		activeInstanceIDs[node.InstanceId]++
-		if node.Status != adminopenapi.Online {
+		if node.Status != adminopenapi.RuntimeNodeStatusOnline {
 			continue
 		}
 		for _, role := range node.Roles {
@@ -120,7 +120,7 @@ func runtimeNodeResponses(nodes []repository.RuntimeNode, now time.Time) []admin
 		}
 		status := runtimeNodeStatus(now, node.LastSeenAt)
 		if !node.StoppedAt.IsZero() {
-			status = adminopenapi.Offline
+			status = adminopenapi.RuntimeNodeStatusOffline
 		}
 		item := adminopenapi.RuntimeNode{
 			InstanceId:    node.InstanceID,

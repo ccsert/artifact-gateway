@@ -12,6 +12,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 )
 
 func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T) {
@@ -36,6 +37,10 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 			return errors.New("postgres://gateway:top-secret@database/gateway")
 		})},
 		BuildVersion: "v1.2.3", BuildRevision: "abc123", BuildGoVersion: "go1.test",
+		ArtifactScanner:     diagnosticsHealthScanner{err: errors.New("scanner-token-that-must-not-leak")},
+		ArtifactScannerName: "trivy", ArtifactScannerHealthTimeout: time.Second,
+		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
+		ArtifactScannerFormats:        []repository.Format{repository.FormatMaven},
 		Runtime: DiagnosticRuntime{
 			InstanceID: "gateway-01", Roles: []string{"standalone"},
 			WorkerFormats: []repository.Format{repository.FormatMaven}, WorkerKinds: []string{"retention"},
@@ -58,7 +63,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 	}
-	if strings.Contains(response.Body.String(), "top-secret") || strings.Contains(response.Body.String(), "postgres://") {
+	if strings.Contains(response.Body.String(), "top-secret") || strings.Contains(response.Body.String(), "postgres://") || strings.Contains(response.Body.String(), "scanner-token") {
 		t.Fatalf("diagnostics leaked dependency error: %s", response.Body.String())
 	}
 	var diagnostics adminopenapi.Diagnostics
@@ -68,7 +73,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	if diagnostics.Build.Version != "v1.2.3" || diagnostics.Build.Revision != "abc123" || diagnostics.Runtime.InstanceId != "gateway-01" {
 		t.Fatalf("identity = %#v %#v", diagnostics.Build, diagnostics.Runtime)
 	}
-	if len(diagnostics.Dependencies) != 1 || diagnostics.Dependencies[0].Status != adminopenapi.Unreachable || diagnostics.Dependencies[0].Detail == nil || *diagnostics.Dependencies[0].Detail != "health check failed" {
+	if len(diagnostics.Dependencies) != 1 || diagnostics.Dependencies[0].Status != adminopenapi.DiagnosticDependencyStatusUnreachable || diagnostics.Dependencies[0].Detail == nil || *diagnostics.Dependencies[0].Detail != "health check failed" {
 		t.Fatalf("dependencies = %#v", diagnostics.Dependencies)
 	}
 	if len(diagnostics.Queues) != 1 || diagnostics.Queues[0].Kind != adminopenapi.DiagnosticQueueStatKindPromotion || diagnostics.Queues[0].Format != adminopenapi.Format(repository.FormatMaven) || diagnostics.Queues[0].Count != 1 {
@@ -76,6 +81,9 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	}
 	if diagnostics.Nodes.Status != adminopenapi.RuntimeNodeHealthStatusHealthy || diagnostics.Nodes.Online != 1 {
 		t.Fatalf("nodes = %#v", diagnostics.Nodes)
+	}
+	if diagnostics.Scanner.Name != "trivy" || diagnostics.Scanner.Status != adminopenapi.DiagnosticScannerStatusUnreachable || diagnostics.Scanner.Detail != "scanner health check failed" || len(diagnostics.Scanner.Formats) != 1 {
+		t.Fatalf("scanner = %#v", diagnostics.Scanner)
 	}
 }
 
@@ -88,4 +96,62 @@ func TestDiagnosticsReportsMissingDependencyConfiguration(t *testing.T) {
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"not_configured"`) {
 		t.Fatalf("response = %d body=%s", response.Code, response.Body.String())
 	}
+}
+
+func TestDiagnosticScannerAppliesGatewayDatabaseFreshnessPolicy(t *testing.T) {
+	now := time.Date(2026, 8, 10, 8, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		scanner    scanning.Scanner
+		wantStatus adminopenapi.DiagnosticScannerStatus
+		wantFresh  adminopenapi.DiagnosticScannerDatabaseFreshness
+	}{
+		{
+			name: "fresh database",
+			scanner: diagnosticsHealthScanner{health: scanning.Health{
+				Status: scanning.HealthHealthy, CheckedAt: now,
+				Database: &scanning.DatabaseHealth{Version: "2026-08-10", UpdatedAt: now.Add(-2 * time.Hour)},
+			}},
+			wantStatus: adminopenapi.DiagnosticScannerStatusHealthy,
+			wantFresh:  adminopenapi.DiagnosticScannerDatabaseFreshnessFresh,
+		},
+		{
+			name: "stale database degrades healthy scanner",
+			scanner: diagnosticsHealthScanner{health: scanning.Health{
+				Status: scanning.HealthHealthy, CheckedAt: now,
+				Database: &scanning.DatabaseHealth{UpdatedAt: now.Add(-25 * time.Hour)},
+			}},
+			wantStatus: adminopenapi.DiagnosticScannerStatusDegraded,
+			wantFresh:  adminopenapi.DiagnosticScannerDatabaseFreshnessStale,
+		},
+		{
+			name: "scanner without health capability",
+			scanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
+				return scanning.Report{}, nil
+			}),
+			wantStatus: adminopenapi.DiagnosticScannerStatusUnknown,
+			wantFresh:  adminopenapi.DiagnosticScannerDatabaseFreshnessUnknown,
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := diagnosticScanner(context.Background(), testCase.scanner, "trivy", []repository.Format{repository.FormatOCI}, time.Second, 24*time.Hour, now)
+			if result.Status != testCase.wantStatus || result.DatabaseFreshness != testCase.wantFresh || result.DatabaseMaxAgeSeconds != 86400 {
+				t.Fatalf("result=%#v", result)
+			}
+		})
+	}
+}
+
+type diagnosticsHealthScanner struct {
+	health scanning.Health
+	err    error
+}
+
+func (d diagnosticsHealthScanner) Scan(context.Context, scanning.Artifact) (scanning.Report, error) {
+	return scanning.Report{}, nil
+}
+
+func (d diagnosticsHealthScanner) Health(context.Context) (scanning.Health, error) {
+	return d.health, d.err
 }

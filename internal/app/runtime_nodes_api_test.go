@@ -45,7 +45,7 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 	for _, node := range body.Items {
 		byID[node.InstanceId] = node
 	}
-	if byID["api-01"].Status != adminopenapi.Online || byID["worker-01"].Status != adminopenapi.Stale || byID["scheduler-01"].Status != adminopenapi.Offline {
+	if byID["api-01"].Status != adminopenapi.RuntimeNodeStatusOnline || byID["worker-01"].Status != adminopenapi.RuntimeNodeStatusStale || byID["scheduler-01"].Status != adminopenapi.RuntimeNodeStatusOffline {
 		t.Fatalf("runtime node statuses=%#v", byID)
 	}
 	if body.Health.Status != adminopenapi.RuntimeNodeHealthStatusDegraded || body.Health.Online != 1 || body.Health.Stale != 1 || body.Health.Offline != 1 {
@@ -59,9 +59,9 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 
 func TestRuntimeNodeHealthReportsDuplicateSessionsAndMissingRoles(t *testing.T) {
 	health := runtimeNodeHealth([]adminopenapi.RuntimeNode{
-		{InstanceId: "api-01", SessionId: "api-session", Roles: []string{"api"}, Status: adminopenapi.Online},
-		{InstanceId: "worker-01", SessionId: "worker-session-1", Roles: []string{"worker"}, Status: adminopenapi.Online},
-		{InstanceId: "worker-01", SessionId: "worker-session-2", Roles: []string{"worker"}, Status: adminopenapi.Online},
+		{InstanceId: "api-01", SessionId: "api-session", Roles: []string{"api"}, Status: adminopenapi.RuntimeNodeStatusOnline},
+		{InstanceId: "worker-01", SessionId: "worker-session-1", Roles: []string{"worker"}, Status: adminopenapi.RuntimeNodeStatusOnline},
+		{InstanceId: "worker-01", SessionId: "worker-session-2", Roles: []string{"worker"}, Status: adminopenapi.RuntimeNodeStatusOnline},
 	})
 	if health.Status != adminopenapi.RuntimeNodeHealthStatusDegraded {
 		t.Fatalf("health status=%q", health.Status)
@@ -79,10 +79,10 @@ func TestRuntimeNodeHealthReportsDuplicateSessionsAndMissingRoles(t *testing.T) 
 
 func TestRuntimeNodeStatusMarksThirtySecondsAsStale(t *testing.T) {
 	now := time.Date(2026, 8, 8, 8, 0, 0, 0, time.UTC)
-	if got := runtimeNodeStatus(now, now.Add(-30*time.Second)); got != adminopenapi.Stale {
+	if got := runtimeNodeStatus(now, now.Add(-30*time.Second)); got != adminopenapi.RuntimeNodeStatusStale {
 		t.Fatalf("status at stale boundary=%q", got)
 	}
-	if got := runtimeNodeStatus(now, now.Add(-29*time.Second)); got != adminopenapi.Online {
+	if got := runtimeNodeStatus(now, now.Add(-29*time.Second)); got != adminopenapi.RuntimeNodeStatusOnline {
 		t.Fatalf("status before stale boundary=%q", got)
 	}
 }
