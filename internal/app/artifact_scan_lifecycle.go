@@ -95,7 +95,7 @@ func (w ArtifactScanWorker) mergeReport(ctx context.Context, artifact scanning.A
 	merged.RepositoryID, merged.Format, merged.Coordinate, merged.Digest = artifact.RepositoryID, artifact.Format, artifact.Coordinate, artifact.Digest
 	merged.SBOMs = append([]repository.ArtifactSBOM(nil), report.SBOMs...)
 	merged.Licenses = append([]repository.ArtifactLicense(nil), report.Licenses...)
-	merged.Vulnerability = cloneVulnerability(report.Vulnerability)
+	merged.Vulnerability = repository.CloneArtifactVulnerabilitySummary(report.Vulnerability)
 	merged.UpdatedBy = scannerActor(report)
 	if _, err = w.Store.ReplaceArtifactIntelligence(ctx, merged, expected); err == nil {
 		return nil
@@ -110,18 +110,10 @@ func (w ArtifactScanWorker) mergeReport(ctx context.Context, artifact scanning.A
 	}
 	latest.SBOMs = append([]repository.ArtifactSBOM(nil), report.SBOMs...)
 	latest.Licenses = append([]repository.ArtifactLicense(nil), report.Licenses...)
-	latest.Vulnerability = cloneVulnerability(report.Vulnerability)
+	latest.Vulnerability = repository.CloneArtifactVulnerabilitySummary(report.Vulnerability)
 	latest.UpdatedBy = scannerActor(report)
 	_, err = w.Store.ReplaceArtifactIntelligence(ctx, latest, latest.Version)
 	return err
-}
-
-func cloneVulnerability(value *repository.ArtifactVulnerabilitySummary) *repository.ArtifactVulnerabilitySummary {
-	if value == nil {
-		return nil
-	}
-	copy := *value
-	return &copy
 }
 
 func scannerActor(report scanning.Report) string {

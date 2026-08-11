@@ -1311,6 +1311,21 @@ export type ArtifactLicense = {
   source?: string;
 };
 
+export type ArtifactVulnerabilityFinding = {
+  id: string;
+  source?: string;
+  severity: "critical" | "high" | "medium" | "low" | "unknown";
+  component: string;
+  version?: string;
+  fixedVersion?: string;
+  location?: string;
+  title?: string;
+  description?: string;
+  url?: string;
+  cvssScore?: number;
+  cvssVector?: string;
+};
+
 export type ArtifactVulnerabilitySummary = {
   scanner: string;
   scannedAt?: string;
@@ -1320,6 +1335,7 @@ export type ArtifactVulnerabilitySummary = {
   medium: number;
   low: number;
   unknown: number;
+  findings?: Array<ArtifactVulnerabilityFinding>;
 };
 
 export type ArtifactIntelligence = {

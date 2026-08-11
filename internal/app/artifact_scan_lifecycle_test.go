@@ -74,10 +74,14 @@ func TestArtifactScanWorkerMergesScannerFieldsAndPreservesTrustEvidence(t *testi
 			if received.Digest != digest {
 				t.Fatalf("scan artifact=%+v", received)
 			}
+			score := 8.1
 			return scanning.Report{
-				SBOMs:         []repository.ArtifactSBOM{{MediaType: "application/vnd.cyclonedx+json", Digest: testScanDigest("new-sbom")}},
-				Licenses:      []repository.ArtifactLicense{{SPDXID: "Apache-2.0", Name: "Apache License 2.0"}},
-				Vulnerability: &repository.ArtifactVulnerabilitySummary{Scanner: "trivy", ScannedAt: time.Now().UTC(), Status: "affected", High: 2},
+				SBOMs:    []repository.ArtifactSBOM{{MediaType: "application/vnd.cyclonedx+json", Digest: testScanDigest("new-sbom")}},
+				Licenses: []repository.ArtifactLicense{{SPDXID: "Apache-2.0", Name: "Apache License 2.0"}},
+				Vulnerability: &repository.ArtifactVulnerabilitySummary{
+					Scanner: "trivy", ScannedAt: time.Now().UTC(), Status: "affected", High: 1,
+					Findings: []repository.ArtifactVulnerabilityFinding{{ID: "CVE-2026-1234", Severity: repository.ArtifactVulnerabilitySeverityHigh, Component: "pkg:generic/widget@1", FixedVersion: "1.1", CVSSScore: &score}},
+				},
 			}, nil
 		}),
 		WorkerFormats: []repository.Format{repository.FormatRaw},
@@ -89,7 +93,7 @@ func TestArtifactScanWorkerMergesScannerFieldsAndPreservesTrustEvidence(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stored.Signatures) != 1 || stored.Provenance == nil || stored.Provenance.BuildID != "build-1" || len(stored.SBOMs) != 1 || len(stored.Licenses) != 1 || stored.Vulnerability == nil || stored.Vulnerability.High != 2 || stored.UpdatedBy != "scanner:trivy" {
+	if len(stored.Signatures) != 1 || stored.Provenance == nil || stored.Provenance.BuildID != "build-1" || len(stored.SBOMs) != 1 || len(stored.Licenses) != 1 || stored.Vulnerability == nil || stored.Vulnerability.High != 1 || len(stored.Vulnerability.Findings) != 1 || stored.Vulnerability.Findings[0].FixedVersion != "1.1" || stored.UpdatedBy != "scanner:trivy" {
 		t.Fatalf("merged intelligence=%+v", stored)
 	}
 	completed, err := store.GetLifecycleJob(ctx, "repo", job.ID)

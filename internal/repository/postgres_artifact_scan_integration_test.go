@@ -78,6 +78,36 @@ func TestPostgresArtifactScanCandidatesPrioritizeMissingScans(t *testing.T) {
 	}
 }
 
+func TestPostgresArtifactIntelligencePersistsVulnerabilityFindings(t *testing.T) {
+	fixture := newPostgresArtifactScanFixture(t)
+	score := 9.8
+	coordinate := "releases/widget.bin"
+	digest := "sha256:" + strings.Repeat("e", 64)
+	created, err := fixture.store.ReplaceArtifactIntelligence(fixture.ctx, ArtifactIntelligence{
+		RepositoryID: fixture.repo.ID, Format: FormatRaw, Coordinate: coordinate, Digest: digest,
+		Vulnerability: &ArtifactVulnerabilitySummary{
+			Scanner: "grype", Status: "affected", Critical: 1,
+			Findings: []ArtifactVulnerabilityFinding{{
+				ID: "CVE-2026-1234", Source: "nvd", Severity: ArtifactVulnerabilitySeverityCritical,
+				Component: "pkg:generic/widget@1.0.0", Version: "1.0.0", FixedVersion: "1.0.1",
+				Location: "widget.bin", CVSSScore: &score, CVSSVector: "CVSS:3.1/AV:N/AC:L",
+			}},
+		},
+		UpdatedBy: "scanner:grype",
+	}, "")
+	if err != nil || created.Version != "1" {
+		t.Fatalf("created=%#v err=%v", created, err)
+	}
+
+	loaded, err := fixture.store.GetArtifactIntelligence(fixture.ctx, fixture.repo.ID, FormatRaw, coordinate, digest)
+	if err != nil || loaded.Vulnerability == nil || len(loaded.Vulnerability.Findings) != 1 {
+		t.Fatalf("loaded=%#v err=%v", loaded, err)
+	}
+	if finding := loaded.Vulnerability.Findings[0]; finding.ID != "CVE-2026-1234" || finding.FixedVersion != "1.0.1" || finding.CVSSScore == nil || *finding.CVSSScore != 9.8 {
+		t.Fatalf("finding=%#v", finding)
+	}
+}
+
 func TestPostgresLatestArtifactScanJobUsesImmutableIdentity(t *testing.T) {
 	fixture := newPostgresArtifactScanFixture(t)
 	payload := ArtifactScanPayload{

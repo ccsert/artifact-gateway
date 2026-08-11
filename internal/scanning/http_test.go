@@ -59,7 +59,7 @@ func TestHTTPScannerStreamsVerifiedArtifactAndReturnsBoundedReport(t *testing.T)
 			t.Fatalf("multipart trailing part error=%v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"schemaVersion":"v1","sboms":[{"mediaType":"application/spdx+json","digest":"`+digestOf([]byte("sbom"))+`","url":"https://scanner.example.test/sboms/1","size":4}],"licenses":[{"spdxId":"Apache-2.0","name":"Apache License 2.0","source":"manifest"}],"vulnerability":{"status":"affected","critical":1,"high":2,"medium":3,"low":4,"unknown":5}}`)
+		_, _ = io.WriteString(w, `{"schemaVersion":"v1","sboms":[{"mediaType":"application/spdx+json","digest":"`+digestOf([]byte("sbom"))+`","url":"https://scanner.example.test/sboms/1","size":4}],"licenses":[{"spdxId":"Apache-2.0","name":"Apache License 2.0","source":"manifest"}],"vulnerability":{"status":"affected","critical":1,"high":0,"medium":0,"low":0,"unknown":0,"findings":[{"id":"CVE-2026-1234","source":"nvd","severity":"critical","component":"pkg:maven/org.example/widget","version":"1.2.3","fixedVersion":"1.2.4","location":"widget-1.2.3.jar","title":"Example remote code execution","description":"A crafted payload can execute code.","url":"https://scanner.example.test/vulnerabilities/CVE-2026-1234","cvssScore":9.8,"cvssVector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}}`)
 	}))
 	defer server.Close()
 
@@ -76,8 +76,15 @@ func TestHTTPScannerStreamsVerifiedArtifactAndReturnsBoundedReport(t *testing.T)
 	if len(report.SBOMs) != 1 || report.SBOMs[0].Size != 4 || len(report.Licenses) != 1 || report.Licenses[0].SPDXID != "Apache-2.0" {
 		t.Fatalf("report=%#v", report)
 	}
-	if report.Vulnerability == nil || report.Vulnerability.Scanner != "trivy" || report.Vulnerability.ScannedAt != fixedTime || report.Vulnerability.Critical != 1 || report.Vulnerability.Unknown != 5 {
+	if report.Vulnerability == nil || report.Vulnerability.Scanner != "trivy" || report.Vulnerability.ScannedAt != fixedTime || report.Vulnerability.Critical != 1 || report.Vulnerability.Unknown != 0 {
 		t.Fatalf("vulnerability=%#v", report.Vulnerability)
+	}
+	if len(report.Vulnerability.Findings) != 1 {
+		t.Fatalf("findings=%#v", report.Vulnerability.Findings)
+	}
+	finding := report.Vulnerability.Findings[0]
+	if finding.ID != "CVE-2026-1234" || finding.Severity != "critical" || finding.Component != "pkg:maven/org.example/widget" || finding.FixedVersion != "1.2.4" || finding.CVSSScore == nil || *finding.CVSSScore != 9.8 {
+		t.Fatalf("finding=%#v", finding)
 	}
 }
 
@@ -129,6 +136,13 @@ func TestHTTPScannerRejectsOversizedOrMalformedResponse(t *testing.T) {
 		{name: "missing required arrays", body: `{"schemaVersion":"v1"}`},
 		{name: "unknown field", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"unexpected":true}`},
 		{name: "negative vulnerability count", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":-1}}`},
+		{name: "affected without findings or counts", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":0,"high":0,"medium":0,"low":0,"unknown":0}}`},
+		{name: "affected with empty findings", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":0,"high":1,"medium":0,"low":0,"unknown":0,"findings":[]}}`},
+		{name: "clean with count", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"clean","critical":0,"high":0,"medium":0,"low":1,"unknown":0}}`},
+		{name: "finding count mismatch", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":0,"high":1,"medium":0,"low":0,"unknown":0,"findings":[{"id":"CVE-2026-1234","severity":"critical","component":"pkg:generic/widget@1"}]}}`},
+		{name: "invalid finding severity", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":0,"high":0,"medium":0,"low":0,"unknown":1,"findings":[{"id":"CVE-2026-1234","severity":"important","component":"pkg:generic/widget@1"}]}}`},
+		{name: "invalid finding URL", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":1,"high":0,"medium":0,"low":0,"unknown":0,"findings":[{"id":"CVE-2026-1234","severity":"critical","component":"pkg:generic/widget@1","url":"file:///tmp/report"}]}}`},
+		{name: "invalid CVSS score", body: `{"schemaVersion":"v1","sboms":[],"licenses":[],"vulnerability":{"status":"affected","critical":1,"high":0,"medium":0,"low":0,"unknown":0,"findings":[{"id":"CVE-2026-1234","severity":"critical","component":"pkg:generic/widget@1","cvssScore":10.1}]}}`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

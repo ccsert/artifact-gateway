@@ -18,10 +18,7 @@ func cloneArtifactIntelligence(value ArtifactIntelligence) ArtifactIntelligence 
 		copy := *value.Provenance
 		value.Provenance = &copy
 	}
-	if value.Vulnerability != nil {
-		copy := *value.Vulnerability
-		value.Vulnerability = &copy
-	}
+	value.Vulnerability = CloneArtifactVulnerabilitySummary(value.Vulnerability)
 	return value
 }
 

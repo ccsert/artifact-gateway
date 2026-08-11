@@ -9,7 +9,10 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
-const maxAssets = 256
+const (
+	maxAssets                = 256
+	maxVulnerabilityFindings = 1000
+)
 
 func validateArtifact(artifact Artifact, maxBytes int64) error {
 	if !validText(artifact.RepositoryID, 128) || !repository.IsSupportedFormat(artifact.Format) || !validText(artifact.Coordinate, 1024) || !validDigest(artifact.Digest) || len(artifact.Assets) == 0 || len(artifact.Assets) > maxAssets {
@@ -75,7 +78,40 @@ func validReport(report Report) bool {
 			return false
 		}
 	}
-	return true
+	if len(vulnerability.Findings) > maxVulnerabilityFindings {
+		return false
+	}
+	for _, finding := range vulnerability.Findings {
+		if !validVulnerabilityFinding(finding) {
+			return false
+		}
+	}
+	return repository.ArtifactVulnerabilitySummaryIsConsistent(*vulnerability)
+}
+
+func validVulnerabilityFinding(finding repository.ArtifactVulnerabilityFinding) bool {
+	if !validText(finding.ID, 128) || !repository.ValidArtifactVulnerabilitySeverity(finding.Severity) || !validText(finding.Component, 512) {
+		return false
+	}
+	for _, optional := range []struct {
+		value string
+		max   int
+	}{
+		{finding.Source, 128}, {finding.Version, 256}, {finding.FixedVersion, 256},
+		{finding.Location, 2048}, {finding.Title, 512}, {finding.CVSSVector, 256},
+	} {
+		if !validOptionalText(optional.value, optional.max) {
+			return false
+		}
+	}
+	if !validDescription(finding.Description, 4096) || !validReportURL(finding.URL) {
+		return false
+	}
+	return finding.CVSSScore == nil || *finding.CVSSScore >= 0 && *finding.CVSSScore <= 10
+}
+
+func validDescription(value string, maximum int) bool {
+	return value == "" || strings.TrimSpace(value) != "" && len(value) <= maximum && !strings.ContainsRune(value, '\x00')
 }
 
 func validReportURL(value string) bool {

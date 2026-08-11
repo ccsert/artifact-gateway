@@ -236,12 +236,28 @@ type wireLicense struct {
 }
 
 type wireVulnerability struct {
-	Status   string `json:"status"`
-	Critical int    `json:"critical"`
-	High     int    `json:"high"`
-	Medium   int    `json:"medium"`
-	Low      int    `json:"low"`
-	Unknown  int    `json:"unknown"`
+	Status   string                     `json:"status"`
+	Critical int                        `json:"critical"`
+	High     int                        `json:"high"`
+	Medium   int                        `json:"medium"`
+	Low      int                        `json:"low"`
+	Unknown  int                        `json:"unknown"`
+	Findings []wireVulnerabilityFinding `json:"findings,omitempty"`
+}
+
+type wireVulnerabilityFinding struct {
+	ID           string   `json:"id"`
+	Source       string   `json:"source,omitempty"`
+	Severity     string   `json:"severity"`
+	Component    string   `json:"component"`
+	Version      string   `json:"version,omitempty"`
+	FixedVersion string   `json:"fixedVersion,omitempty"`
+	Location     string   `json:"location,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	CVSSScore    *float64 `json:"cvssScore,omitempty"`
+	CVSSVector   string   `json:"cvssVector,omitempty"`
 }
 
 type wireHealthResponse struct {
@@ -315,6 +331,17 @@ func (s *HTTPScanner) decodeReport(body []byte) (Report, error) {
 			Critical: response.Vulnerability.Critical, High: response.Vulnerability.High,
 			Medium: response.Vulnerability.Medium, Low: response.Vulnerability.Low,
 			Unknown: response.Vulnerability.Unknown,
+		}
+		if response.Vulnerability.Findings != nil {
+			report.Vulnerability.Findings = make([]repository.ArtifactVulnerabilityFinding, 0, len(response.Vulnerability.Findings))
+			for _, value := range response.Vulnerability.Findings {
+				report.Vulnerability.Findings = append(report.Vulnerability.Findings, repository.ArtifactVulnerabilityFinding{
+					ID: value.ID, Source: value.Source, Severity: value.Severity, Component: value.Component,
+					Version: value.Version, FixedVersion: value.FixedVersion, Location: value.Location,
+					Title: value.Title, Description: value.Description, URL: value.URL,
+					CVSSScore: value.CVSSScore, CVSSVector: value.CVSSVector,
+				})
+			}
 		}
 	}
 	if !validReport(report) {

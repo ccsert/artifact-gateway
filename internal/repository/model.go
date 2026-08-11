@@ -543,14 +543,33 @@ type ArtifactLicense struct {
 }
 
 type ArtifactVulnerabilitySummary struct {
-	Scanner   string    `json:"scanner"`
-	ScannedAt time.Time `json:"scannedAt,omitempty"`
-	Status    string    `json:"status"`
-	Critical  int       `json:"critical"`
-	High      int       `json:"high"`
-	Medium    int       `json:"medium"`
-	Low       int       `json:"low"`
-	Unknown   int       `json:"unknown"`
+	Scanner   string                         `json:"scanner"`
+	ScannedAt time.Time                      `json:"scannedAt,omitempty"`
+	Status    string                         `json:"status"`
+	Critical  int                            `json:"critical"`
+	High      int                            `json:"high"`
+	Medium    int                            `json:"medium"`
+	Low       int                            `json:"low"`
+	Unknown   int                            `json:"unknown"`
+	Findings  []ArtifactVulnerabilityFinding `json:"findings,omitempty"`
+}
+
+// ArtifactVulnerabilityFinding identifies one affected component reported by
+// the scanner. Summary counts remain available for bounded list projections;
+// findings carry the evidence required to investigate and remediate a result.
+type ArtifactVulnerabilityFinding struct {
+	ID           string   `json:"id"`
+	Source       string   `json:"source,omitempty"`
+	Severity     string   `json:"severity"`
+	Component    string   `json:"component"`
+	Version      string   `json:"version,omitempty"`
+	FixedVersion string   `json:"fixedVersion,omitempty"`
+	Location     string   `json:"location,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	CVSSScore    *float64 `json:"cvssScore,omitempty"`
+	CVSSVector   string   `json:"cvssVector,omitempty"`
 }
 
 type LifecycleJobKind string

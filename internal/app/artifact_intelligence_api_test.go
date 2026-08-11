@@ -43,12 +43,12 @@ func TestArtifactIntelligenceManagementHTTP(t *testing.T) {
 		return w
 	}
 	path := "/api/v2/repositories/" + repo.ID + "/artifact-intelligence?coordinate=library/widget&digest=" + digest
-	created := request(http.MethodPut, path, `{"signatures":[],"sboms":[],"licenses":[{"spdxId":"MIT","name":"MIT License"}],"vulnerability":{"scanner":"grype","status":"clean","critical":0,"high":0,"medium":0,"low":0,"unknown":0}}`, "admin-secret", "")
+	created := request(http.MethodPut, path, `{"signatures":[],"sboms":[],"licenses":[{"spdxId":"MIT","name":"MIT License"}],"vulnerability":{"scanner":"grype","status":"affected","critical":1,"high":0,"medium":0,"low":0,"unknown":0,"findings":[{"id":"CVE-2026-1234","source":"nvd","severity":"critical","component":"pkg:oci/library/widget","version":"1.0.0","fixedVersion":"1.0.1","location":"usr/lib/widget.so","title":"Example remote code execution","description":"A crafted payload can execute code.","url":"https://security.example.test/CVE-2026-1234","cvssScore":9.8,"cvssVector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}}`, "admin-secret", "")
 	if created.Code != http.StatusOK || created.Header().Get("ETag") != "1" {
 		t.Fatalf("create=%d etag=%q body=%s", created.Code, created.Header().Get("ETag"), created.Body.String())
 	}
 	read := request(http.MethodGet, path, "", "", "")
-	if read.Code != http.StatusOK || !strings.Contains(read.Body.String(), "MIT License") {
+	if read.Code != http.StatusOK || !strings.Contains(read.Body.String(), "MIT License") || !strings.Contains(read.Body.String(), "CVE-2026-1234") || !strings.Contains(read.Body.String(), `"fixedVersion":"1.0.1"`) {
 		t.Fatalf("anonymous read=%d body=%s", read.Code, read.Body.String())
 	}
 	var response map[string]any
@@ -133,13 +133,20 @@ func TestArtifactIntelligenceRejectsUnknownArtifact(t *testing.T) {
 }
 
 func TestArtifactIntelligencePayloadValidation(t *testing.T) {
+	source := "nvd"
+	findingURL := "https://security.example.test/CVE-2026-1234"
+	score := 9.8
+	findings := []adminopenapi.ArtifactVulnerabilityFinding{{
+		Id: "CVE-2026-1234", Source: &source, Severity: adminopenapi.ArtifactVulnerabilityFindingSeverityCritical,
+		Component: "pkg:oci/library/widget@1.0.0", Url: &findingURL, CvssScore: &score,
+	}}
 	valid := adminopenapi.ArtifactIntelligenceWritable{
 		Signatures: []adminopenapi.ArtifactSignature{{KeyId: "key-1", Algorithm: "cosign", Identity: "ci@example.test", Signature: "signature", Verified: true}},
 		Sboms:      []adminopenapi.ArtifactSBOM{{MediaType: "application/spdx+json", Digest: "sha256:" + strings.Repeat("a", 64)}},
 		Provenance: &adminopenapi.ArtifactProvenance{Builder: "github-actions", BuildType: "https://slsa.dev/provenance/v1", SourceRepository: "https://github.com/example/project", SourceCommit: strings.Repeat("b", 40), BuildId: "run-42"},
 		Licenses:   []adminopenapi.ArtifactLicense{{SpdxId: "MIT", Name: "MIT License"}},
 		Vulnerability: &adminopenapi.ArtifactVulnerabilitySummary{
-			Scanner: "grype", Status: adminopenapi.ArtifactVulnerabilitySummaryStatusClean,
+			Scanner: "grype", Status: adminopenapi.ArtifactVulnerabilitySummaryStatusAffected, Critical: 1, Findings: &findings,
 		},
 	}
 	if !validArtifactIntelligencePayload(valid) {
@@ -157,6 +164,25 @@ func TestArtifactIntelligencePayloadValidation(t *testing.T) {
 		{name: "malformed sbom url", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) { url := "not a url"; value.Sboms[0].Url = &url }},
 		{name: "empty provenance builder", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) { value.Provenance.Builder = "" }},
 		{name: "empty scanner", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) { value.Vulnerability.Scanner = "" }},
+		{name: "finding count mismatch", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) { value.Vulnerability.High = 1 }},
+		{name: "affected with empty findings", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) {
+			empty := []adminopenapi.ArtifactVulnerabilityFinding{}
+			value.Vulnerability.Findings = &empty
+		}},
+		{name: "blank finding component", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) {
+			(*value.Vulnerability.Findings)[0].Component = " "
+		}},
+		{name: "newline finding id", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) {
+			(*value.Vulnerability.Findings)[0].Id = "CVE-2026-1234\nforged"
+		}},
+		{name: "invalid finding url", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) {
+			invalid := "file:///tmp/report"
+			(*value.Vulnerability.Findings)[0].Url = &invalid
+		}},
+		{name: "invalid cvss score", mutate: func(value *adminopenapi.ArtifactIntelligenceWritable) {
+			invalid := 10.1
+			(*value.Vulnerability.Findings)[0].CvssScore = &invalid
+		}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -170,6 +196,10 @@ func TestArtifactIntelligencePayloadValidation(t *testing.T) {
 			}
 			if valid.Vulnerability != nil {
 				vulnerability := *valid.Vulnerability
+				if valid.Vulnerability.Findings != nil {
+					findings := append([]adminopenapi.ArtifactVulnerabilityFinding(nil), (*valid.Vulnerability.Findings)...)
+					vulnerability.Findings = &findings
+				}
 				candidate.Vulnerability = &vulnerability
 			}
 			testCase.mutate(&candidate)

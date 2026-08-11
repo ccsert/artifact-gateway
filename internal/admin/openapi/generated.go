@@ -115,6 +115,33 @@ func (e ArtifactScanStatusState) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactVulnerabilityFindingSeverity.
+const (
+	ArtifactVulnerabilityFindingSeverityCritical ArtifactVulnerabilityFindingSeverity = "critical"
+	ArtifactVulnerabilityFindingSeverityHigh     ArtifactVulnerabilityFindingSeverity = "high"
+	ArtifactVulnerabilityFindingSeverityLow      ArtifactVulnerabilityFindingSeverity = "low"
+	ArtifactVulnerabilityFindingSeverityMedium   ArtifactVulnerabilityFindingSeverity = "medium"
+	ArtifactVulnerabilityFindingSeverityUnknown  ArtifactVulnerabilityFindingSeverity = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactVulnerabilityFindingSeverity enum.
+func (e ArtifactVulnerabilityFindingSeverity) Valid() bool {
+	switch e {
+	case ArtifactVulnerabilityFindingSeverityCritical:
+		return true
+	case ArtifactVulnerabilityFindingSeverityHigh:
+		return true
+	case ArtifactVulnerabilityFindingSeverityLow:
+		return true
+	case ArtifactVulnerabilityFindingSeverityMedium:
+		return true
+	case ArtifactVulnerabilityFindingSeverityUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactVulnerabilitySummaryStatus.
 const (
 	ArtifactVulnerabilitySummaryStatusAffected   ArtifactVulnerabilitySummaryStatus = "affected"
@@ -1909,9 +1936,29 @@ type ArtifactTombstonePage struct {
 	NextPageToken *string             `json:"nextPageToken,omitempty"`
 }
 
+// ArtifactVulnerabilityFinding defines model for ArtifactVulnerabilityFinding.
+type ArtifactVulnerabilityFinding struct {
+	Component    string                               `json:"component"`
+	CvssScore    *float64                             `json:"cvssScore,omitempty"`
+	CvssVector   *string                              `json:"cvssVector,omitempty"`
+	Description  *string                              `json:"description,omitempty"`
+	FixedVersion *string                              `json:"fixedVersion,omitempty"`
+	Id           string                               `json:"id"`
+	Location     *string                              `json:"location,omitempty"`
+	Severity     ArtifactVulnerabilityFindingSeverity `json:"severity"`
+	Source       *string                              `json:"source,omitempty"`
+	Title        *string                              `json:"title,omitempty"`
+	Url          *string                              `json:"url,omitempty"`
+	Version      *string                              `json:"version,omitempty"`
+}
+
+// ArtifactVulnerabilityFindingSeverity defines model for ArtifactVulnerabilityFinding.Severity.
+type ArtifactVulnerabilityFindingSeverity string
+
 // ArtifactVulnerabilitySummary defines model for ArtifactVulnerabilitySummary.
 type ArtifactVulnerabilitySummary struct {
 	Critical  int                                `json:"critical"`
+	Findings  *[]ArtifactVulnerabilityFinding    `json:"findings,omitempty"`
 	High      int                                `json:"high"`
 	Low       int                                `json:"low"`
 	Medium    int                                `json:"medium"`

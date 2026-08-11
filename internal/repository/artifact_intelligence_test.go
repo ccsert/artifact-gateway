@@ -25,6 +25,32 @@ func TestMemoryArtifactIntelligenceReplaceUsesOptimisticVersion(t *testing.T) {
 	}
 }
 
+func TestMemoryArtifactIntelligenceReturnsIndependentVulnerabilityFindings(t *testing.T) {
+	store := NewMemoryStore()
+	score := 9.8
+	value := ArtifactIntelligence{
+		RepositoryID: "repo", Format: FormatOCI, Coordinate: "library/widget", Digest: "sha256:" + repeatHex("b"),
+		Vulnerability: &ArtifactVulnerabilitySummary{
+			Scanner: "grype", Status: "affected", Critical: 1,
+			Findings: []ArtifactVulnerabilityFinding{{ID: "CVE-2026-1234", Severity: ArtifactVulnerabilitySeverityCritical, Component: "pkg:oci/library/widget", CVSSScore: &score}},
+		},
+	}
+	created, err := store.ReplaceArtifactIntelligence(context.Background(), value, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created.Vulnerability.Findings[0].ID = "mutated"
+	*created.Vulnerability.Findings[0].CVSSScore = 0
+
+	stored, err := store.GetArtifactIntelligence(context.Background(), value.RepositoryID, value.Format, value.Coordinate, value.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finding := stored.Vulnerability.Findings[0]; finding.ID != "CVE-2026-1234" || finding.CVSSScore == nil || *finding.CVSSScore != 9.8 {
+		t.Fatalf("finding=%#v", finding)
+	}
+}
+
 func repeatHex(value string) string {
 	return value + value + value + value + value + value + value + value
 }

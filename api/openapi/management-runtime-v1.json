@@ -7836,6 +7836,76 @@
           }
         }
       },
+      "ArtifactVulnerabilityFinding": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "component"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ]
+          },
+          "component": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "fixedVersion": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "cvssScore": {
+            "type": "number",
+            "format": "double",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "cvssVector": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
       "ArtifactVulnerabilitySummary": {
         "type": "object",
         "required": [
@@ -7869,23 +7939,35 @@
           },
           "critical": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 1000000000
           },
           "high": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 1000000000
           },
           "medium": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 1000000000
           },
           "low": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 1000000000
           },
           "unknown": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "findings": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/ArtifactVulnerabilityFinding"
+            }
           }
         }
       },

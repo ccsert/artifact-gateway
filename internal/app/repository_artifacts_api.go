@@ -149,6 +149,50 @@ func validArtifactText(value string, max int) bool {
 	return strings.TrimSpace(value) != "" && len(value) <= max && !strings.ContainsRune(value, '\x00')
 }
 
+func validArtifactFindingText(value string, max int) bool {
+	return validArtifactText(value, max) && !strings.ContainsAny(value, "\r\n")
+}
+
+func validOptionalArtifactText(value *string, max int) bool {
+	return value == nil || *value == "" || validArtifactFindingText(*value, max)
+}
+
+func validArtifactDescription(value *string, max int) bool {
+	return value == nil || *value == "" || strings.TrimSpace(*value) != "" && len(*value) <= max && !strings.ContainsRune(*value, '\x00')
+}
+
+func validArtifactFindingURL(value *string) bool {
+	if value == nil || *value == "" {
+		return true
+	}
+	if len(*value) > 2048 || strings.ContainsRune(*value, '\x00') {
+		return false
+	}
+	parsed, err := url.Parse(*value)
+	return err == nil && parsed.User == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+func validArtifactVulnerabilityFinding(finding adminopenapi.ArtifactVulnerabilityFinding) bool {
+	if !validArtifactFindingText(finding.Id, 128) || !repository.ValidArtifactVulnerabilitySeverity(string(finding.Severity)) || !validArtifactFindingText(finding.Component, 512) {
+		return false
+	}
+	for _, optional := range []struct {
+		value *string
+		max   int
+	}{
+		{finding.Source, 128}, {finding.Version, 256}, {finding.FixedVersion, 256},
+		{finding.Location, 2048}, {finding.Title, 512}, {finding.CvssVector, 256},
+	} {
+		if !validOptionalArtifactText(optional.value, optional.max) {
+			return false
+		}
+	}
+	if !validArtifactDescription(finding.Description, 4096) || !validArtifactFindingURL(finding.Url) {
+		return false
+	}
+	return finding.CvssScore == nil || *finding.CvssScore >= 0 && *finding.CvssScore <= 10
+}
+
 func validArtifactIntelligencePayload(input adminopenapi.ArtifactIntelligenceWritable) bool {
 	if input.Signatures == nil || input.Sboms == nil || input.Licenses == nil || len(input.Signatures) > 20 || len(input.Sboms) > 20 || len(input.Licenses) > 100 {
 		return false
@@ -194,7 +238,27 @@ func validArtifactIntelligencePayload(input adminopenapi.ArtifactIntelligenceWri
 		default:
 			return false
 		}
-		if input.Vulnerability.Critical < 0 || input.Vulnerability.High < 0 || input.Vulnerability.Medium < 0 || input.Vulnerability.Low < 0 || input.Vulnerability.Unknown < 0 {
+		for _, count := range []int{input.Vulnerability.Critical, input.Vulnerability.High, input.Vulnerability.Medium, input.Vulnerability.Low, input.Vulnerability.Unknown} {
+			if count < 0 || count > 1_000_000_000 {
+				return false
+			}
+		}
+		if input.Vulnerability.Findings != nil {
+			if len(*input.Vulnerability.Findings) > 1000 {
+				return false
+			}
+			for _, finding := range *input.Vulnerability.Findings {
+				if !validArtifactVulnerabilityFinding(finding) {
+					return false
+				}
+			}
+		}
+		payload, err := json.Marshal(input.Vulnerability)
+		if err != nil {
+			return false
+		}
+		var vulnerability repository.ArtifactVulnerabilitySummary
+		if err := json.Unmarshal(payload, &vulnerability); err != nil || !repository.ArtifactVulnerabilitySummaryIsConsistent(vulnerability) {
 			return false
 		}
 	}
