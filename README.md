@@ -24,19 +24,26 @@ object browser, or a vulnerability scanner.
 ```sh
 cp .env.example .env
 # Replace local-only credential placeholders.
-make up
+make dev
 ```
 
-`make up` starts Gateway, PostgreSQL, and MinIO. `GET /livez` reports process
-liveness; `GET /readyz` verifies PostgreSQL and object storage. `make down`
-preserves local volumes.
+`make dev` builds and starts Gateway, PostgreSQL, and MinIO, then starts the
+Vite Console under a checkout-specific local supervisor. It waits for both
+Gateway readiness and the Console before printing their configured addresses.
+Use `make dev-status` as a repeatable health check.
 
-Start the Console separately and open `http://127.0.0.1:4173`:
+Open the Console at `http://127.0.0.1:4173` by default. The checked-in example
+uses `GATEWAY_HTTP_PORT=8080` and `GATEWAY_CONSOLE_PORT=4173`; local `.env`
+overrides are reflected in the status output.
 
 ```sh
-npm --prefix console ci
-npm --prefix console run dev -- --host 127.0.0.1
+make dev-status
+make dev-down
 ```
+
+`make dev-down` stops only the Console managed for this checkout; Gateway and
+its data volumes remain running. `make down` stops the Compose services while
+preserving local volumes.
 
 Use the `GATEWAY_ADMIN_TOKEN` from the local `.env` file to sign in. Anonymous
 browse remains available at `/browse` when the global policy and repository

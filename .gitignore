@@ -6,6 +6,7 @@
 .multica/
 *.log
 .release-validation.env
+.local-dev/
 scripts/__pycache__/
 **/target/
 console/node_modules/
