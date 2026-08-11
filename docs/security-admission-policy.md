@@ -13,6 +13,7 @@ concurrency control.
 | Field | Meaning |
 | --- | --- |
 | `enabled` | Enable admission checks for promotions into this repository. |
+| `autoScanOnPublish` | Enqueue a durable asynchronous scan after each new Hosted publication. |
 | `requireSignature` | Require at least one signature. |
 | `requireVerifiedSignature` | Require at least one signature with `verified: true`. |
 | `requireSbom` | Require at least one SBOM reference. |
@@ -88,7 +89,10 @@ documented in [artifact-scanner-contract.md](artifact-scanner-contract.md).
 Administrators or CI can enqueue a durable scan through
 `POST /api/v2/repositories/{repositoryId}/artifact-scans`; the worker merges
 scanner-owned fields into artifact intelligence while preserving signatures
-and provenance. Scan-on-publication remains opt-in future work.
+and provenance. Hosted repositories can set `autoScanOnPublish` to schedule the
+same scan automatically after a Maven, OCI, Raw, npm, PyPI, or Conan
+publication becomes visible. Scheduling failures are audited but do not roll
+back a successful publication.
 
 After a promotion publishes the target artifact, the source repository's
 artifact intelligence is copied by immutable identity. Existing equivalent

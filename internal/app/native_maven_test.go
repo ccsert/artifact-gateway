@@ -94,14 +94,16 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	enablePublicationScan(t, store, repo.ID)
 	objects := NewMemoryOCIObjectStore()
-	h := newNativeMavenHandler(store, objects, testAuthenticator())
+	h := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeMavenObjectStore: objects}, repository.FormatMaven), store, TestAdapter{}, testAuthenticator())
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project>")
 	sum := sha256.Sum256(pom)
+	pomDigest := "sha256:" + hex.EncodeToString(sum[:])
 	// The exact request body length is derived below to avoid coupling the test
 	// to the illustrative POM text above.
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewBufferString(""))
-	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(pom))}}})
+	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: pomDigest, Size: int64(len(pom))}}})
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	authorize(request, "admin-secret")
 	request.Header.Set("Idempotency-Key", "native-maven-invisible")
@@ -135,12 +137,17 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	if committed.Code != http.StatusOK {
 		t.Fatalf("commit=%d %s", committed.Code, committed.Body.String())
 	}
+	requirePublicationScan(t, store, repo.ID, repository.FormatMaven, "org.example:widget:1.0.0", pomDigest)
 	served := httptest.NewRecorder()
 	h.ServeHTTP(served, read)
 	if served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), pom) {
 		t.Fatalf("read=%d %q", served.Code, served.Body.String())
 	}
-	if served.Header().Get("ETag") == "" || len(store.Audits) != 1 || store.Audits[0].Outcome != repository.AuditResolved {
+	foundReadAudit := false
+	for _, audit := range store.Audits {
+		foundReadAudit = foundReadAudit || audit.Operation == "get" && audit.Resource == "org/example/widget/1.0.0/widget-1.0.0.pom" && audit.Outcome == repository.AuditResolved
+	}
+	if served.Header().Get("ETag") == "" || !foundReadAudit {
 		t.Fatalf("headers=%v audits=%#v", served.Header(), store.Audits)
 	}
 	checksumRead := httptest.NewRequest(http.MethodGet, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.pom.sha256", nil)

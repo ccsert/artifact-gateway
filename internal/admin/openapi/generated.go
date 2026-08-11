@@ -2773,9 +2773,14 @@ type RepositoryType string
 
 // RepositoryCapabilities defines model for RepositoryCapabilities.
 type RepositoryCapabilities struct {
-	Format     Format                     `json:"format"`
-	Operations []RepositoryOperation      `json:"operations"`
-	Type       RepositoryCapabilitiesType `json:"type"`
+	// ArtifactScanning True when a scanner is configured for this repository format and its assets can be resolved.
+	ArtifactScanning bool                  `json:"artifactScanning"`
+	Format           Format                `json:"format"`
+	Operations       []RepositoryOperation `json:"operations"`
+
+	// PublicationScanning True when new publications in this repository can automatically enqueue scanner jobs.
+	PublicationScanning bool                       `json:"publicationScanning"`
+	Type                RepositoryCapabilitiesType `json:"type"`
 }
 
 // RepositoryCapabilitiesType defines model for RepositoryCapabilities.Type.
@@ -3051,6 +3056,9 @@ type ScheduledTaskRunTrigger string
 // SecurityPolicy defines model for SecurityPolicy.
 type SecurityPolicy struct {
 	AllowedLicenses *[]string `json:"allowedLicenses,omitempty"`
+
+	// AutoScanOnPublish Enqueue an asynchronous intelligence scan after a new artifact publication.
+	AutoScanOnPublish *bool `json:"autoScanOnPublish,omitempty"`
 
 	// Enabled Enforce for promotions into this repository.
 	Enabled                  *bool                             `json:"enabled,omitempty"`

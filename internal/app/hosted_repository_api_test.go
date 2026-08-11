@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
 )
 
@@ -66,11 +67,27 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	goHosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-go", Format: repository.FormatGo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	npmProxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "capabilities-npm-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: "https://registry.npmjs.org", AllowedHosts: []string{"registry.npmjs.org"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticator := testAuthenticator()
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), conan.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := NewGatewayHandler(Dependencies{
+		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
+			return scanning.Report{}, nil
+		}),
+		ArtifactScannerFormats: []repository.Format{repository.FormatOCI, repository.FormatConan, repository.FormatMaven, repository.FormatRaw, repository.FormatGo, repository.FormatNPM},
+	}, store, TestAdapter{}, authenticator)
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conan.ID+"/capabilities", nil)
 	authorize(request, authenticator.IssueToken("reader"))
 	response := httptest.NewRecorder()
@@ -96,8 +113,22 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	authorize(rawRequest, "admin-secret")
 	rawResponse := httptest.NewRecorder()
 	handler.ServeHTTP(rawResponse, rawRequest)
-	if rawResponse.Code != http.StatusOK || !strings.Contains(rawResponse.Body.String(), `"restore"`) || !strings.Contains(rawResponse.Body.String(), `"retain"`) || !strings.Contains(rawResponse.Body.String(), `"promote"`) || !strings.Contains(rawResponse.Body.String(), `"replicate"`) {
+	if rawResponse.Code != http.StatusOK || !strings.Contains(rawResponse.Body.String(), `"restore"`) || !strings.Contains(rawResponse.Body.String(), `"retain"`) || !strings.Contains(rawResponse.Body.String(), `"promote"`) || !strings.Contains(rawResponse.Body.String(), `"replicate"`) || !strings.Contains(rawResponse.Body.String(), `"artifactScanning":true`) || !strings.Contains(rawResponse.Body.String(), `"publicationScanning":true`) {
 		t.Fatalf("Raw capabilities=%d %s", rawResponse.Code, rawResponse.Body.String())
+	}
+	goRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+goHosted.ID+"/capabilities", nil)
+	authorize(goRequest, "admin-secret")
+	goResponse := httptest.NewRecorder()
+	handler.ServeHTTP(goResponse, goRequest)
+	if goResponse.Code != http.StatusOK || !strings.Contains(goResponse.Body.String(), `"artifactScanning":true`) || !strings.Contains(goResponse.Body.String(), `"publicationScanning":false`) {
+		t.Fatalf("Go capabilities=%d %s", goResponse.Code, goResponse.Body.String())
+	}
+	npmProxyRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+npmProxy.ID+"/capabilities", nil)
+	authorize(npmProxyRequest, "admin-secret")
+	npmProxyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(npmProxyResponse, npmProxyRequest)
+	if npmProxyResponse.Code != http.StatusOK || !strings.Contains(npmProxyResponse.Body.String(), `"artifactScanning":true`) || !strings.Contains(npmProxyResponse.Body.String(), `"publicationScanning":false`) {
+		t.Fatalf("npm Proxy capabilities=%d %s", npmProxyResponse.Code, npmProxyResponse.Body.String())
 	}
 }
 

@@ -24,19 +24,25 @@ import (
 // nativeRawHandler serves V3 Raw repositories directly from the object store.
 // Unlike Raw Groups, it never consults an upstream member or cache index.
 type nativeRawHandler struct {
-	store       repository.NativeRawStore
-	repos       repository.HostedRepositoryStore
-	objects     OCIObjectStore
-	auth        Authenticator
-	authorizer  RepositoryAuthorizer
-	audit       repository.Store
-	metrics     *Metrics
-	proxyClient RawClient
-	proxyCache  *RawCache
+	store              repository.NativeRawStore
+	repos              repository.HostedRepositoryStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	audit              repository.Store
+	metrics            *Metrics
+	proxyClient        RawClient
+	proxyCache         *RawCache
+	publicationScanner *publicationScanScheduler
 }
 
 func (h nativeRawHandler) withMetrics(metrics *Metrics) nativeRawHandler {
 	h.metrics = metrics
+	return h
+}
+
+func (h nativeRawHandler) withPublicationScanner(scanner publicationScanScheduler) nativeRawHandler {
+	h.publicationScanner = &scanner
 	return h
 }
 
@@ -111,7 +117,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		return true
 	}
 	if id := r.URL.Query().Get("uploadId"); id != "" {
-		h.upload(w, r, repo, path, id)
+		h.upload(w, r, repo, path, id, principal.Actor)
 		return true
 	}
 	if r.Method == http.MethodPost && r.URL.Query().Get("resumable") == "1" {
@@ -184,6 +190,9 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 		w.Header().Set("ETag", `"`+digest+`"`)
 		w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(spool.DigestBytes()))
+		if h.publicationScanner != nil {
+			_ = h.publicationScanner.Schedule(r.Context(), repo, path, digest, principal.Actor)
+		}
 		w.WriteHeader(http.StatusCreated)
 	case http.MethodDelete:
 		if err := h.store.DeleteRawAsset(r.Context(), repo.ID, path); err != nil {
@@ -208,7 +217,7 @@ func (h nativeRawHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, id string) {
+func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, id, actor string) {
 	release, err := h.store.LockRawUpload(r.Context(), id)
 	if err != nil {
 		http.Error(w, "raw upload coordination is unavailable", http.StatusServiceUnavailable)
@@ -287,6 +296,9 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
 		w.Header().Set("ETag", `"`+asset.Digest+`"`)
 		w.Header().Set("Digest", expected)
+		if h.publicationScanner != nil {
+			_ = h.publicationScanner.Schedule(r.Context(), repo, asset.Path, asset.Digest, actor)
+		}
 		w.WriteHeader(http.StatusCreated)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

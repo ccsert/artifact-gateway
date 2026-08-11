@@ -48,9 +48,9 @@ func TestRepositorySecurityPolicyManagementAndEvaluationHTTP(t *testing.T) {
 	if initial.Code != http.StatusOK || initial.Header().Get("ETag") != "1" || !strings.Contains(initial.Body.String(), `"version":"1"`) || !strings.Contains(initial.Body.String(), `"enabled":false`) {
 		t.Fatalf("initial=%d body=%s", initial.Code, initial.Body.String())
 	}
-	body := `{"version":"1","enabled":true,"requireSbom":true,"maxAllowedSeverity":"high","failOnScanError":true,"allowedLicenses":[" MIT ","mit"]}`
+	body := `{"version":"1","enabled":true,"autoScanOnPublish":true,"requireSbom":true,"maxAllowedSeverity":"high","failOnScanError":true,"allowedLicenses":[" MIT ","mit"]}`
 	updated := request(http.MethodPut, policyPath, body, "1", "admin-secret")
-	if updated.Code != http.StatusOK || updated.Header().Get("ETag") != "2" || !strings.Contains(updated.Body.String(), `"version":"2"`) || !strings.Contains(updated.Body.String(), `"allowedLicenses":["MIT"]`) {
+	if updated.Code != http.StatusOK || updated.Header().Get("ETag") != "2" || !strings.Contains(updated.Body.String(), `"version":"2"`) || !strings.Contains(updated.Body.String(), `"autoScanOnPublish":true`) || !strings.Contains(updated.Body.String(), `"allowedLicenses":["MIT"]`) {
 		t.Fatalf("updated=%d body=%s", updated.Code, updated.Body.String())
 	}
 	if stale := request(http.MethodPut, policyPath, body, "1", "admin-secret"); stale.Code != http.StatusPreconditionFailed {

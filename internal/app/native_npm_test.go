@@ -31,11 +31,12 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	enablePublicationScan(t, store, repo.ID)
 	if _, err = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
 	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeNPMObjectStore: objects}, repository.FormatNPM), store, TestAdapter{}, testAuthenticator())
 	tarball := npmFixtureTarball(t, "@scope/widget", "1.2.3")
 	publishBody := npmFixturePublishDocument(t, "@scope/widget", "1.2.3", "@scope/widget-1.2.3.tgz", tarball)
 
@@ -46,6 +47,7 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if published.Code != http.StatusCreated {
 		t.Fatalf("publish=%d %s", published.Code, published.Body.String())
 	}
+	requirePublicationScan(t, store, repo.ID, repository.FormatNPM, "@scope/widget@1.2.3", testScanDigest(string(tarball)))
 
 	duplicate := httptest.NewRequest(http.MethodPut, "/npm/npm-releases/@scope%2Fwidget", strings.NewReader(publishBody))
 	duplicate.Header.Set("Authorization", "Bearer resolver-secret")

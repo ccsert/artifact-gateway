@@ -292,7 +292,9 @@ func (h generatedRepositoryAPIAdapter) UpdateRepository(w http.ResponseWriter, r
 
 func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
-		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format, repo.Type))
+		artifactScanning := h.artifactScanner != nil && scanFormatEnabled(h.artifactScanFormats, repo.Format) && scanRepositoryAssetsAvailable(repo)
+		publicationScanning := artifactScanning && publicationScanSupported(repo)
+		writeNativeMavenJSON(w, http.StatusOK, repositoryCapabilities(repo.Format, repo.Type, artifactScanning, publicationScanning))
 	})
 }
 

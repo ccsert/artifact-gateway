@@ -979,6 +979,7 @@ SecurityPolicy:
   properties:
     version: {type: string}
     enabled: {type: boolean, default: false, description: Enforce for promotions into this repository.}
+    autoScanOnPublish: {type: boolean, default: false, description: Enqueue an asynchronous intelligence scan after a new artifact publication.}
     requireSignature: {type: boolean, default: false}
     requireVerifiedSignature: {type: boolean, default: false}
     requireSbom: {type: boolean, default: false}
@@ -1583,6 +1584,8 @@ RepositoryCapabilities:
   - format
   - type
   - operations
+  - artifactScanning
+  - publicationScanning
   properties:
     format:
       "$ref": "#/Format"
@@ -1596,6 +1599,12 @@ RepositoryCapabilities:
       uniqueItems: true
       items:
         "$ref": "#/RepositoryOperation"
+    artifactScanning:
+      type: boolean
+      description: True when a scanner is configured for this repository format and its assets can be resolved.
+    publicationScanning:
+      type: boolean
+      description: True when new publications in this repository can automatically enqueue scanner jobs.
 GroupCapacity:
   type: object
   required: [groupId, format, members]

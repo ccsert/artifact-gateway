@@ -7,8 +7,9 @@ and does not allow a scanner to mutate repository state directly.
 The adapter is enabled at process startup with `GATEWAY_SCANNER_ENDPOINT`.
 Administrators can enqueue a scan for an immutable artifact; a `scan` worker
 resolves protocol-owned assets, streams them to the adapter, and optimistically
-merges scanner-owned fields into stored artifact intelligence. Publication does
-not yet enqueue scans automatically.
+merges scanner-owned fields into stored artifact intelligence. Hosted
+repositories can also opt in to asynchronous scan scheduling after each new
+publication.
 
 ## Configuration
 
@@ -46,6 +47,19 @@ Content-Type: application/json
 The API returns `202` with the lifecycle job. Repeating the same key and body
 returns the existing job; reusing the key for another identity returns `409`.
 The repository format must be present in `GATEWAY_SCANNER_FORMATS`.
+Capability discovery reports this manual-scan path as `artifactScanning` and
+reports publication-hook availability separately as `publicationScanning`, so
+Proxy caches and formats without a native publish hook never expose a
+non-functional automatic-scan control.
+
+Set `autoScanOnPublish: true` through the repository security policy to enqueue
+the same durable scan automatically after a new Maven, OCI, Raw, npm, PyPI, or
+Conan Hosted publication becomes visible. The setting only affects future
+publications. Scheduling is best effort and does not roll back a successful
+publication when the lifecycle queue or policy store is unavailable. Each
+repository, format, coordinate, and digest identity receives a stable
+`publish-scan:` idempotency key, so protocol retries do not create duplicate
+scan jobs. Enqueue successes and failures are recorded in the audit log.
 
 Worker nodes must include `worker` in `GATEWAY_NODE_ROLES`, allow `scan` in
 `GATEWAY_WORKER_KINDS`, and use the same scanner configuration. Jobs use the
@@ -166,5 +180,5 @@ than trusting scanner-supplied identity or timestamps.
 - Reports can contain SBOM references, licenses, and vulnerability summaries.
   They cannot replace publisher signatures or provenance.
 
-Automatic scan-on-publication, scanner health probes, vulnerability database
+Scanner health probes, vulnerability database
 freshness, and malicious-component quarantine remain future work.

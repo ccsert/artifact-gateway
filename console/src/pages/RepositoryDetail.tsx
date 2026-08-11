@@ -971,7 +971,12 @@ export function RepositoryDetailPage() {
             </>
           )}
           {tab === "retention" && <RepositoryRetentionTab repo={repo} />}
-          {tab === "security" && <RepositorySecurityTab repo={repo} />}
+          {tab === "security" && (
+            <RepositorySecurityTab
+              repo={repo}
+              publicationScanning={caps?.publicationScanning ?? false}
+            />
+          )}
           {tab === "capacity" && <RepositoryCapacityTab repo={repo} />}
           {tab === "distribute" && <RepositoryDistributionTab repo={repo} />}
           {tab === "jobs" && <RepositoryJobsTab repo={repo} />}

@@ -40,14 +40,15 @@ var (
 )
 
 type nativePyPIHandler struct {
-	store      repository.NativePyPIStore
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	metrics    *Metrics
-	proxy      PyPIClient
+	store              repository.NativePyPIStore
+	repos              repository.HostedRepositoryStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	audit              repository.Store
+	metrics            *Metrics
+	proxy              PyPIClient
+	publicationScanner *publicationScanScheduler
 }
 
 type pypiRoute struct {
@@ -73,6 +74,11 @@ func newNativePyPIHandler(store GatewayStore, objects OCIObjectStore, auth Authe
 			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
 		}},
 	}
+}
+
+func (h nativePyPIHandler) withPublicationScanner(scanner publicationScanScheduler) nativePyPIHandler {
+	h.publicationScanner = &scanner
+	return h
 }
 
 func (h nativePyPIHandler) withProxy(client PyPIClient) nativePyPIHandler {
@@ -307,6 +313,9 @@ func (h nativePyPIHandler) upload(w http.ResponseWriter, r *http.Request, repo r
 		return
 	}
 	w.Header().Set("Location", "/pypi/"+url.PathEscape(repo.Name)+"/packages/"+url.PathEscape(published.Filename))
+	if h.publicationScanner != nil {
+		_ = h.publicationScanner.Schedule(r.Context(), repo, project+"@"+version, published.Digest, publisher)
+	}
 	w.WriteHeader(http.StatusCreated)
 	h.recordAudit(r, repo, project+"@"+version, "distribution", publisher, repository.AuditResolved, http.StatusCreated, published.Size, "bypass")
 }

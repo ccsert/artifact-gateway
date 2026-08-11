@@ -64,10 +64,11 @@ func TestMemoryRepositorySecurityPolicyUsesOptimisticVersion(t *testing.T) {
 		t.Fatalf("initial=%#v err=%v", initial, err)
 	}
 	initial.Enabled = true
+	initial.AutoScanOnPublish = true
 	initial.RequireSBOM = true
 	initial.AllowedLicenses = []string{"MIT"}
 	updated, err := store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, initial, "1")
-	if err != nil || updated.Version != "2" || !updated.RequireSBOM {
+	if err != nil || updated.Version != "2" || !updated.AutoScanOnPublish || !updated.RequireSBOM {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}
 	updated.AllowedLicenses[0] = "changed"

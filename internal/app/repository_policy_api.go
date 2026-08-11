@@ -97,6 +97,7 @@ func normalizeAndValidateSecurityPolicy(policy *repository.RepositorySecurityPol
 
 func securityPolicyResponse(policy repository.RepositorySecurityPolicy) adminopenapi.SecurityPolicy {
 	enabled := policy.Enabled
+	autoScanOnPublish := policy.AutoScanOnPublish
 	requireSignature := policy.RequireSignature
 	requireVerifiedSignature := policy.RequireVerifiedSignature
 	requireSBOM := policy.RequireSBOM
@@ -108,6 +109,7 @@ func securityPolicyResponse(policy repository.RepositorySecurityPolicy) adminope
 	return adminopenapi.SecurityPolicy{
 		Version:                  policy.Version,
 		Enabled:                  &enabled,
+		AutoScanOnPublish:        &autoScanOnPublish,
 		RequireSignature:         &requireSignature,
 		RequireVerifiedSignature: &requireVerifiedSignature,
 		RequireSbom:              &requireSBOM,
@@ -124,6 +126,9 @@ func repositorySecurityPolicyFromRequest(input adminopenapi.SecurityPolicy) (rep
 	policy.Version = strings.TrimSpace(input.Version)
 	if input.Enabled != nil {
 		policy.Enabled = *input.Enabled
+	}
+	if input.AutoScanOnPublish != nil {
+		policy.AutoScanOnPublish = *input.AutoScanOnPublish
 	}
 	if input.RequireSignature != nil {
 		policy.RequireSignature = *input.RequireSignature

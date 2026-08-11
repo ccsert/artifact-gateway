@@ -40,6 +40,9 @@ a dated version heading without rewriting their meaning.
 - Configurable external artifact scanning with durable, idempotent management
   jobs; isolated workers; native Raw, Maven, OCI, npm, PyPI, Go, and Conan asset
   resolution; and optimistic security-intelligence merging.
+- Per-repository scan-on-publication policies for Maven, OCI, Raw, npm, PyPI,
+  and Conan Hosted repositories, with idempotent lifecycle jobs, audit records,
+  and capability-aware Console controls.
 - Local-user governance with profile metadata, case-insensitive identities,
   failed-sign-in lockout, last-sign-in and password-change timestamps,
   mandatory password changes, administrator password resets, revocable

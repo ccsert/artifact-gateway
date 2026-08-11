@@ -18,12 +18,13 @@ import (
 
 func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
 	}
+	enablePublicationScan(t, store, repo.ID)
 	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeOCIObjectStore: objects}, repository.FormatOCI), store, TestAdapter{}, testAuthenticator())
 	auth := func(r *http.Request) { authorize(r, "resolver-secret") }
 
 	start := httptest.NewRecorder()
@@ -83,6 +84,7 @@ func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 		t.Fatalf("publish=%d %s", published.Code, published.Body.String())
 	}
 	manifestDigest := published.Header().Get("Docker-Content-Digest")
+	requirePublicationScan(t, store, repo.ID, repository.FormatOCI, "app", manifestDigest)
 	read := httptest.NewRequest(http.MethodHead, "/v2/team/app/manifests/latest", nil)
 	auth(read)
 	readResponse := httptest.NewRecorder()

@@ -27,6 +27,7 @@ func TestNativePyPIHostedUploadAndSimpleRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	enablePublicationScan(t, store, repo.ID)
 	wheel := pypiFixtureWheel(t, "gateway_widget", "1.2.3")
 	sum := sha256.Sum256(wheel)
 	digest := hex.EncodeToString(sum[:])
@@ -47,7 +48,7 @@ func TestNativePyPIHostedUploadAndSimpleRead(t *testing.T) {
 	if err = writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativePyPIObjectStore: objects}, repository.FormatPyPI), store, TestAdapter{}, testAuthenticator())
 	upload := httptest.NewRequest(http.MethodPost, "/pypi/"+repo.Name+"/legacy/", body)
 	upload.Header.Set("Content-Type", writer.FormDataContentType())
 	authorize(upload, "resolver-secret")
@@ -56,6 +57,7 @@ func TestNativePyPIHostedUploadAndSimpleRead(t *testing.T) {
 	if uploaded.Code != http.StatusCreated {
 		t.Fatalf("upload=%d body=%s", uploaded.Code, uploaded.Body.String())
 	}
+	requirePublicationScan(t, store, repo.ID, repository.FormatPyPI, "gateway-widget@1.2.3", "sha256:"+digest)
 	simpleRequest := httptest.NewRequest(http.MethodGet, "/pypi/"+repo.Name+"/simple/gateway-widget/", nil)
 	authorize(simpleRequest, "resolver-secret")
 	simple := httptest.NewRecorder()

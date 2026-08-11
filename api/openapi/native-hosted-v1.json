@@ -4733,7 +4733,9 @@
         "required": [
           "format",
           "type",
-          "operations"
+          "operations",
+          "artifactScanning",
+          "publicationScanning"
         ],
         "properties": {
           "format": {
@@ -4752,6 +4754,14 @@
             "items": {
               "$ref": "#/components/schemas/RepositoryOperation"
             }
+          },
+          "artifactScanning": {
+            "type": "boolean",
+            "description": "True when a scanner is configured for this repository format and its assets can be resolved."
+          },
+          "publicationScanning": {
+            "type": "boolean",
+            "description": "True when new publications in this repository can automatically enqueue scanner jobs."
           }
         }
       },

@@ -235,6 +235,7 @@ type RepositoryRetentionPolicy struct {
 type RepositorySecurityPolicy struct {
 	Version                  string   `json:"version"`
 	Enabled                  bool     `json:"enabled"`
+	AutoScanOnPublish        bool     `json:"autoScanOnPublish"`
 	RequireSignature         bool     `json:"requireSignature"`
 	RequireVerifiedSignature bool     `json:"requireVerifiedSignature"`
 	RequireSBOM              bool     `json:"requireSbom"`

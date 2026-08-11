@@ -196,7 +196,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 	})
 }
 
-func repositoryCapabilities(format repository.Format, repoType repository.RepositoryType) adminopenapi.RepositoryCapabilities {
+func repositoryCapabilities(format repository.Format, repoType repository.RepositoryType, artifactScanning, publicationScanning bool) adminopenapi.RepositoryCapabilities {
 	profile, _ := repository.FormatProfileFor(format)
 	operations := profile.HostedOperations
 	if repoType == repository.RepositoryTypeProxy {
@@ -206,7 +206,13 @@ func repositoryCapabilities(format repository.Format, repoType repository.Reposi
 	for _, operation := range operations {
 		responseOperations = append(responseOperations, adminopenapi.RepositoryOperation(operation))
 	}
-	return adminopenapi.RepositoryCapabilities{Format: adminopenapi.Format(format), Type: adminopenapi.RepositoryCapabilitiesType(repoType), Operations: responseOperations}
+	return adminopenapi.RepositoryCapabilities{
+		Format:              adminopenapi.Format(format),
+		Type:                adminopenapi.RepositoryCapabilitiesType(repoType),
+		Operations:          responseOperations,
+		ArtifactScanning:    artifactScanning,
+		PublicationScanning: publicationScanning,
+	}
 }
 
 func formatProfileResponse(profile repository.FormatProfile) adminopenapi.FormatProfile {

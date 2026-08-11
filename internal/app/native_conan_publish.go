@@ -15,10 +15,11 @@ import (
 )
 
 type nativeConanPublishHandler struct {
-	store      GatewayStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
+	store              GatewayStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	publicationScanner *publicationScanScheduler
 }
 
 type nativeConanPublishRequest struct {
@@ -31,6 +32,11 @@ func newNativeConanPublishHandler(store GatewayStore, objects OCIObjectStore, au
 		objects = NewMemoryOCIObjectStore()
 	}
 	return nativeConanPublishHandler{store: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}}
+}
+
+func (h nativeConanPublishHandler) withPublicationScanner(scanner publicationScanScheduler) nativeConanPublishHandler {
+	h.publicationScanner = &scanner
+	return h
 }
 
 func (h nativeConanPublishHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +187,13 @@ func (h nativeConanPublishHandler) commit(w http.ResponseWriter, r *http.Request
 	if err = h.store.CommitConanPublishSession(r.Context(), session.ID); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "mark Conan publish session committed failed")
 		return
+	}
+	if h.publicationScanner != nil {
+		coordinate := session.Reference + "#" + session.RecipeRevision
+		if session.Kind == "package" {
+			coordinate += "/" + session.PackageID + "#" + session.PackageRevision
+		}
+		_ = h.publicationScanner.ScheduleRepository(r.Context(), session.RepositoryID, repository.FormatConan, coordinate, digest, session.Publisher)
 	}
 	writeNativeMavenJSON(w, http.StatusOK, map[string]string{"state": "visible", "revision": session.RecipeRevision})
 }

@@ -23,18 +23,24 @@ import (
 // nativeMavenHandler implements the V3 Maven session API. Its metadata store
 // only gains asset rows at commit, making incomplete uploads unaddressable.
 type nativeMavenHandler struct {
-	store         GatewayStore
-	objects       OCIObjectStore
-	authenticator Authenticator
-	authorizer    RepositoryAuthorizer
-	management    hostedRepositoryAPIHandler
-	metrics       *Metrics
-	proxyClient   MavenClient
-	proxyCache    *MavenCache
+	store              GatewayStore
+	objects            OCIObjectStore
+	authenticator      Authenticator
+	authorizer         RepositoryAuthorizer
+	management         hostedRepositoryAPIHandler
+	metrics            *Metrics
+	proxyClient        MavenClient
+	proxyCache         *MavenCache
+	publicationScanner *publicationScanScheduler
 }
 
 func (h nativeMavenHandler) withMetrics(metrics *Metrics) nativeMavenHandler {
 	h.metrics = metrics
+	return h
+}
+
+func (h nativeMavenHandler) withPublicationScanner(scanner publicationScanScheduler) nativeMavenHandler {
+	h.publicationScanner = &scanner
 	return h
 }
 
@@ -384,11 +390,18 @@ func (h nativeMavenHandler) promoteWithIdempotency(ctx context.Context, s reposi
 			assets = append(assets, repository.MavenAsset{RepositoryID: s.RepositoryID, Path: base + "/" + o.Name + checksum.extension, ObjectKey: key, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
 		}
 	}
+	var artifact repository.MavenArtifact
+	var replayed bool
+	var err error
 	if key == "" {
-		artifact, err := h.store.CommitMavenPublishSession(ctx, s.ID, assets)
-		return artifact, false, err
+		artifact, err = h.store.CommitMavenPublishSession(ctx, s.ID, assets)
+	} else {
+		artifact, replayed, err = h.store.CommitMavenPublishSessionIdempotently(ctx, s.ID, key, payload, assets)
 	}
-	return h.store.CommitMavenPublishSessionIdempotently(ctx, s.ID, key, payload, assets)
+	if err == nil && h.publicationScanner != nil {
+		_ = h.publicationScanner.ScheduleRepository(ctx, s.RepositoryID, repository.FormatMaven, artifact.Coordinate, artifact.Digest, s.Publisher)
+	}
+	return artifact, replayed, err
 }
 func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {

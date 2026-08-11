@@ -164,6 +164,10 @@ export type SecurityPolicy = {
    * Enforce for promotions into this repository.
    */
   enabled?: boolean;
+  /**
+   * Enqueue an asynchronous intelligence scan after a new artifact publication.
+   */
+  autoScanOnPublish?: boolean;
   requireSignature?: boolean;
   requireVerifiedSignature?: boolean;
   requireSbom?: boolean;
@@ -352,6 +356,14 @@ export type RepositoryCapabilities = {
   format: Format;
   type: "hosted" | "proxy";
   operations: Array<RepositoryOperation>;
+  /**
+   * True when a scanner is configured for this repository format and its assets can be resolved.
+   */
+  artifactScanning: boolean;
+  /**
+   * True when new publications in this repository can automatically enqueue scanner jobs.
+   */
+  publicationScanning: boolean;
 };
 
 export type ApiKey = {

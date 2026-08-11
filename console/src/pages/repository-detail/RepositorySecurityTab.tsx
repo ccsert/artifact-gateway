@@ -11,6 +11,7 @@ type SecurityPolicyDraft = Required<
   Pick<
     SecurityPolicy,
     | "enabled"
+    | "autoScanOnPublish"
     | "requireSignature"
     | "requireVerifiedSignature"
     | "requireSbom"
@@ -24,6 +25,7 @@ type SecurityPolicyDraft = Required<
 
 const DEFAULT_DRAFT: SecurityPolicyDraft = {
   enabled: false,
+  autoScanOnPublish: false,
   requireSignature: false,
   requireVerifiedSignature: false,
   requireSbom: false,
@@ -37,6 +39,7 @@ const DEFAULT_DRAFT: SecurityPolicyDraft = {
 function draftFromPolicy(policy: SecurityPolicy): SecurityPolicyDraft {
   return {
     enabled: policy.enabled ?? false,
+    autoScanOnPublish: policy.autoScanOnPublish ?? false,
     requireSignature: policy.requireSignature ?? false,
     requireVerifiedSignature: policy.requireVerifiedSignature ?? false,
     requireSbom: policy.requireSbom ?? false,
@@ -48,7 +51,13 @@ function draftFromPolicy(policy: SecurityPolicy): SecurityPolicyDraft {
   };
 }
 
-export function RepositorySecurityTab({ repo }: { repo: Repository }) {
+export function RepositorySecurityTab({
+  repo,
+  publicationScanning,
+}: {
+  repo: Repository;
+  publicationScanning: boolean;
+}) {
   const { text } = usePreferences();
   const [policy, setPolicy] = useState<SecurityPolicy | null>(null);
   const [draft, setDraft] = useState<SecurityPolicyDraft>(DEFAULT_DRAFT);
@@ -98,7 +107,7 @@ export function RepositorySecurityTab({ repo }: { repo: Repository }) {
       setSaveError(err);
       return;
     }
-    setNotice(text("安全准入策略已保存", "Security admission policy saved"));
+    setNotice(text("仓库安全策略已保存", "Repository security policy saved"));
     if (data) {
       setPolicy(data);
       setDraft(draftFromPolicy(data));
@@ -131,16 +140,47 @@ export function RepositorySecurityTab({ repo }: { repo: Repository }) {
       <Alert
         type="info"
         showIcon
-        title={text("安全准入策略", "Security admission policy")}
+        title={text("制品安全策略", "Artifact security policy")}
         description={text(
-          "策略只在制品晋升到当前仓库前执行，不影响源仓库写入或普通读取。关闭策略时，所有晋升都会被允许。",
-          "This policy is evaluated before an artifact is promoted into this repository. It does not affect writes or reads in the source repository. Disabled policies allow every promotion.",
+          "自动扫描在新制品发布后生成安全情报；准入规则在制品晋升到当前仓库前使用这些情报。两者都不影响普通读取。",
+          "Automatic scans produce security intelligence after new publications. Admission rules consume that intelligence before promotion into this repository. Neither affects ordinary reads.",
         )}
       />
       {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && <Alert type="success" showIcon title={notice} />}
 
-      <div className="flex items-center justify-between gap-6 border-b border-zinc-800 pb-4">
+      <div className="flex max-w-5xl items-center justify-between gap-8 border-b border-zinc-800 pb-5">
+        <div>
+          <div className="text-sm font-medium text-zinc-200">
+            {text("发布后自动扫描", "Scan after publication")}
+          </div>
+          <div className="mt-1 text-xs leading-5 text-zinc-500">
+            {text(
+              "仅对保存策略后新发布的制品生效。扫描异步执行，完成后的安全情报可在制品详情中查看。",
+              "Applies only to artifacts published after this policy is saved. Scans run asynchronously; completed security intelligence appears in artifact details.",
+            )}
+          </div>
+        </div>
+        <Switch
+          aria-label={text("发布后自动扫描", "Scan after publication")}
+          checked={draft.autoScanOnPublish}
+          disabled={!publicationScanning}
+          onChange={(value) => update("autoScanOnPublish", value)}
+        />
+      </div>
+
+      {!publicationScanning && (
+        <Alert
+          type="warning"
+          showIcon
+          title={text(
+            "当前仓库类型或格式未启用发布后自动扫描。",
+            "Scan after publication is not available for this repository type or format.",
+          )}
+        />
+      )}
+
+      <div className="flex max-w-5xl items-center justify-between gap-8 border-b border-zinc-800 pb-5">
         <div>
           <div className="text-sm font-medium text-zinc-200">
             {text("启用准入检查", "Enforce admission checks")}
@@ -153,6 +193,7 @@ export function RepositorySecurityTab({ repo }: { repo: Repository }) {
           </div>
         </div>
         <Switch
+          aria-label={text("启用准入检查", "Enforce admission checks")}
           checked={draft.enabled}
           checkedChildren={text("已启用", "On")}
           unCheckedChildren={text("已停用", "Off")}
@@ -160,7 +201,7 @@ export function RepositorySecurityTab({ repo }: { repo: Repository }) {
         />
       </div>
 
-      <div className="grid max-w-5xl grid-cols-2 gap-x-8 gap-y-5">
+      <div className="grid max-w-5xl grid-cols-2 gap-x-8">
         <PolicySwitch
           label={text("要求签名", "Require a signature")}
           hint={text(
@@ -286,12 +327,12 @@ function PolicySwitch({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-5 rounded-md border border-zinc-800/80 px-4 py-3">
+    <div className="flex min-h-24 items-start justify-between gap-5 border-b border-zinc-800/80 py-4">
       <div className="min-w-0">
         <div className="text-sm font-medium text-zinc-200">{label}</div>
         <div className="mt-1 text-xs leading-5 text-zinc-500">{hint}</div>
       </div>
-      <Switch checked={checked} onChange={onChange} />
+      <Switch aria-label={label} checked={checked} onChange={onChange} />
     </div>
   );
 }

@@ -187,8 +187,9 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		goClient = client
 	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
-	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci)
-	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache)
+	publicationScanner := newPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
+	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
+	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -205,19 +206,19 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if nativeObjects == nil {
 		nativeObjects = NewMemoryOCIObjectStore()
 	}
-	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics).withProxy(mavenClient, mavenCache)
+	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics).withProxy(mavenClient, mavenCache).withPublicationScanner(publicationScanner)
 	mavenProxyOperations := mavenProxyOperationsHandler{store: store, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, client: mavenClient, cache: mavenCache, maintenance: maintenance}
 	proxyCacheBrowse := proxyCacheBrowseHandler{store: store, entriesStore: store, audit: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
 	nativeConanObjects := dependencies.NativeConanObjectStore
 	if nativeConanObjects == nil {
 		nativeConanObjects = NewMemoryOCIObjectStore()
 	}
-	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator)
+	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
 	nativeNPMObjects := dependencies.NativeNPMObjectStore
 	if nativeNPMObjects == nil {
 		nativeNPMObjects = NewMemoryOCIObjectStore()
 	}
-	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient)
+	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient).withPublicationScanner(publicationScanner)
 	if dependencies.NPMMetadataTTL > 0 {
 		nativeNPM.metadataTTL = dependencies.NPMMetadataTTL
 	}
@@ -229,7 +230,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if nativePyPIObjects == nil {
 		nativePyPIObjects = NewMemoryOCIObjectStore()
 	}
-	nativePyPI := newNativePyPIHandler(store, nativePyPIObjects, authenticator).withMetrics(metrics).withProxy(pypiClient)
+	nativePyPI := newNativePyPIHandler(store, nativePyPIObjects, authenticator).withMetrics(metrics).withProxy(pypiClient).withPublicationScanner(publicationScanner)
 	nativeGoObjects := dependencies.NativeGoObjectStore
 	if nativeGoObjects == nil {
 		nativeGoObjects = NewMemoryOCIObjectStore()

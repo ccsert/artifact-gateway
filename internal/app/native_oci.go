@@ -24,18 +24,24 @@ import (
 // claims paths whose first component is a V3 OCI hosted repository; all other
 // V2 paths retain the legacy group/proxy behaviour while it is being removed.
 type nativeOCIHandler struct {
-	store      repository.NativeOCIStore
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	metrics    *Metrics
-	proxy      *OCIHandler
+	store              repository.NativeOCIStore
+	repos              repository.HostedRepositoryStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	audit              repository.Store
+	metrics            *Metrics
+	proxy              *OCIHandler
+	publicationScanner *publicationScanScheduler
 }
 
 func (h nativeOCIHandler) withMetrics(metrics *Metrics) nativeOCIHandler {
 	h.metrics = metrics
+	return h
+}
+
+func (h nativeOCIHandler) withPublicationScanner(scanner publicationScanScheduler) nativeOCIHandler {
+	h.publicationScanner = &scanner
 	return h
 }
 
@@ -111,7 +117,7 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	case "uploads":
 		h.startUpload(w, r, repo, imageName)
 	case "manifest":
-		h.manifest(w, r, repo, imageName, reference)
+		h.manifest(w, r, repo, imageName, reference, p.Actor)
 	case "tags":
 		h.tags(w, r, repo, imageName)
 	case "referrers":
@@ -512,7 +518,7 @@ func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repo
 	serveCachedOCIContent(w, r, digest, ociprotocol.NewStoredContent(blob.Digest, "application/octet-stream", blob.ObjectKey, blob.Size, h.objects))
 }
 
-func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, reference string) {
+func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, reference, actor string) {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
 		manifest, err := h.store.GetOCIManifest(r.Context(), repo.ID, name, reference)
@@ -586,6 +592,9 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 		}
 		w.Header().Set("Docker-Content-Digest", manifest.Digest)
 		w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/manifests/"+reference)
+		if h.publicationScanner != nil {
+			_ = h.publicationScanner.Schedule(r.Context(), repo, name, manifest.Digest, actor)
+		}
 		w.WriteHeader(http.StatusCreated)
 	case http.MethodDelete:
 		if !validOCIDigest(reference) {

@@ -229,8 +229,12 @@ func TestNativeRawHostedGeneratesAndValidatesChecksumSidecars(t *testing.T) {
 
 func TestNativeRawHostedResumableUploadIsAtomic(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enablePublicationScan(t, store, repo.ID)
+	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, repository.FormatRaw), store, TestAdapter{}, testAuthenticator())
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
 		authorize(r, "resolver-secret")
@@ -278,6 +282,7 @@ func TestNativeRawHostedResumableUploadIsAtomic(t *testing.T) {
 	if completed.Code != http.StatusCreated {
 		t.Fatalf("complete=%d %s", completed.Code, completed.Body.String())
 	}
+	requirePublicationScan(t, store, repo.ID, repository.FormatRaw, "releases/app.bin", "sha256:"+hex.EncodeToString(sum[:]))
 	read := request(http.MethodGet, "/raw/downloads/releases/app.bin", nil)
 	if read.Code != http.StatusOK || read.Body.String() != "hello world" {
 		t.Fatalf("read=%d %q", read.Code, read.Body.String())
