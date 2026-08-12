@@ -10,6 +10,12 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- A hardened Kustomize base and one-command local Kubernetes deployment with
+  Gateway, Console, PostgreSQL, MinIO, idempotent migrations, persistent local
+  volumes, health checks, manifest validation, and same-origin protocol routes.
+- A staged APT Hosted roadmap covering native publication, atomic signed
+  repository snapshots, external signing, lifecycle, scanning, quarantine,
+  promotion, replication, and real APT client acceptance gates.
 - One-command local development lifecycle targets for starting the complete
   stack, checking the Console and Gateway paths, and stopping only the
   checkout-managed Console.
@@ -72,6 +78,9 @@ a dated version heading without rewriting their meaning.
 
 ### Changed
 
+- Routed APT requests through both the Vite development proxy and the
+  production Console container so direct package-client paths cannot fall
+  through to the SPA.
 - Replaced default coordinate-and-digest entry in repository scanning,
   promotion, and replication workflows with a shared searchable immutable-
   artifact picker backed by protocol-owned canonical identity queries, including

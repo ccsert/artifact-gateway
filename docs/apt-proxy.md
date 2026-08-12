@@ -10,6 +10,8 @@ APT is currently a protocol-only format. Proxy repositories and ordered Groups
 are supported; Hosted publication and lifecycle operations are intentionally
 not advertised because generating and signing `Release`, `InRelease`, and
 `Packages` metadata requires a separate trusted publication workflow.
+The ordered implementation milestones and acceptance gates are tracked in the
+[APT Hosted roadmap](apt-hosted-roadmap.md).
 
 ## Configure a source
 

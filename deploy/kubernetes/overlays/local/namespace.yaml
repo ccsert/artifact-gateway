@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: artifact-gateway-local
+  labels:
+    app.kubernetes.io/name: artifact-gateway
+    app.kubernetes.io/part-of: artifact-gateway-local

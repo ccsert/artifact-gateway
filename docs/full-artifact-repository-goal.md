@@ -71,3 +71,21 @@ record the results before approving a deployment.
 - No compatibility break is introduced in `/api/v1`, `/api/v2`, or existing
   protocol response semantics; incompatible management behavior uses a new
   versioned surface.
+
+## Next Planned Format: APT Hosted
+
+APT Proxy and ordered Group reads have passed format admission for their current
+protocol-only scope. The next format expansion is APT Hosted, delivered through
+four explicit milestones rather than by widening the format enum prematurely:
+
+1. publication contract, Debian package identity, persistence, and signing
+   boundary;
+2. atomic `Packages` and `Release` snapshot generation with real APT client
+   tests;
+3. trusted signing, key rotation, backup, and operational recovery;
+4. lifecycle, `.deb` scanning, quarantine, promotion, and replication parity.
+
+The format capability API continues to advertise APT as Proxy-only until the
+minimum Hosted and production-signing gates are complete. See the
+[APT Hosted Roadmap](apt-hosted-roadmap.md) for the ordered contract and
+acceptance criteria.

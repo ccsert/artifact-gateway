@@ -7,10 +7,10 @@ CONSOLE_DIR := console
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help dev dev-status dev-down local-dev-test reference-scanner-smoke openapi-dependency-test openapi-tools-ready console-codegen-ready raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check docs-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help dev dev-status dev-down local-dev-test kubernetes-local-check kubernetes-local-up kubernetes-local-status kubernetes-local-verify kubernetes-local-down reference-scanner-smoke openapi-dependency-test openapi-tools-ready console-codegen-ready raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check docs-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build console-docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: dev, dev-status, dev-down, reference-scanner-smoke, up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, native-apt-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, docs-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: dev, dev-status, dev-down, kubernetes-local-check, kubernetes-local-up, kubernetes-local-status, kubernetes-local-verify, kubernetes-local-down, reference-scanner-smoke, up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, console-docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, native-apt-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, docs-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
 
 dev:
 	@./scripts/local-dev.sh start
@@ -23,6 +23,22 @@ dev-down:
 
 local-dev-test:
 	@./scripts/local-dev-test.sh
+
+kubernetes-local-check:
+	@./scripts/kubernetes-local-manifest-test.sh
+	@./scripts/kubernetes-local-test.sh
+
+kubernetes-local-up:
+	@./scripts/kubernetes-local.sh up
+
+kubernetes-local-status:
+	@./scripts/kubernetes-local.sh status
+
+kubernetes-local-verify:
+	@./scripts/kubernetes-local.sh verify
+
+kubernetes-local-down:
+	@./scripts/kubernetes-local.sh down
 
 reference-scanner-smoke:
 	@./scripts/reference-scanner-smoke.sh
@@ -122,6 +138,9 @@ build:
 
 docker-build:
 	@docker build -t artifact-gateway:dev .
+
+console-docker-build:
+	@docker build -f Dockerfile.console -t artifact-gateway-console:dev .
 
 migrate:
 	@docker compose --env-file .env -f compose.yml run --rm migrate

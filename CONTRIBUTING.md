@@ -8,6 +8,8 @@ contribution.
 ## Development prerequisites
 
 - Docker with Compose support
+- `kubectl`, `jq`, and a local Kubernetes cluster when changing deployment
+  resources
 - Go at the version declared in `go.mod`
 - Node.js 24 and npm
 - GNU Make
@@ -87,6 +89,21 @@ make native-raw-e2e
 make native-maven-e2e
 make conan-e2e
 ```
+
+For Kubernetes manifests, Console container routing, or local deployment
+helpers, run the offline render gate before using a live cluster:
+
+```sh
+make kubernetes-local-check
+make console-docker-build
+```
+
+When Docker Desktop Kubernetes is available, also run
+`make kubernetes-local-up`, `make kubernetes-local-status`, and
+`make kubernetes-local-verify`. The verification publishes a unique Raw object,
+restarts Gateway, and reads both its PostgreSQL Repository record and object
+bytes back. Record the live evidence and use `make kubernetes-local-down` only
+when deleting the namespace and its local PVC data is intended.
 
 Run `make test` before submitting a change that affects shared backend behavior.
 The CI workflow is the final source of truth for the complete required matrix.

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: artifact-gateway-local
+resources:
+  - namespace.yaml
+  - ../../base
+  - config.yaml
+  - infrastructure.yaml
+patches:
+  - path: gateway-patch.yaml
+  - path: console-patch.yaml
+images:
+  - name: artifact-gateway
+    newName: artifact-gateway
+    newTag: k8s-local
+  - name: artifact-gateway-console
+    newName: artifact-gateway-console
+    newTag: k8s-local

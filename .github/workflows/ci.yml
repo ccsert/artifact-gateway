@@ -40,6 +40,8 @@ jobs:
         run: make api-change-check
       - name: Run tests
         run: make test
+      - name: Validate Kubernetes manifests
+        run: make kubernetes-local-check
       - name: Run Native OCI E2E
         run: make native-oci-e2e
       - name: Run Native Raw E2E
@@ -110,6 +112,8 @@ jobs:
         run: make console-test
       - name: Build console
         run: make console-build
+      - name: Build Console deployment image
+        run: make console-docker-build
       - name: Install browser
         run: npx playwright install --with-deps chromium
         working-directory: console

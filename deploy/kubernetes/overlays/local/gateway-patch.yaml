@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-gateway
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: migrate
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/migrations/run-migrations.sh"]
+          env:
+            - name: PGHOST
+              value: postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: gateway
+            - name: PGUSER
+              value: gateway
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: artifact-gateway-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: artifact-gateway-migrations
+            defaultMode: 0555

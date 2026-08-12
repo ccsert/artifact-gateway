@@ -45,9 +45,30 @@ make dev-down
 its data volumes remain running. `make down` stops the Compose services while
 preserving local volumes.
 
-Use the `GATEWAY_ADMIN_TOKEN` from the local `.env` file to sign in. Anonymous
-browse remains available at `/browse` when the global policy and repository
-policy both permit it.
+### Local Kubernetes
+
+The repository also includes an executable Kustomize baseline for a local
+Kubernetes cluster:
+
+```sh
+make kubernetes-local-check
+make kubernetes-local-up
+make kubernetes-local-status
+make kubernetes-local-verify
+```
+
+It exposes the Console and same-origin protocol/API proxy at
+`http://127.0.0.1:18081`. The overlay provisions single-node PostgreSQL and
+MinIO storage for local validation and is intentionally not a production
+topology. See the [Kubernetes deployment guide](docs/kubernetes-deployment.md)
+for credential overrides, data deletion behavior, architecture, and the
+remaining production deployment work.
+
+For the Compose workflow, use `GATEWAY_ADMIN_TOKEN` from the local `.env` file.
+The Kubernetes helper prints its effective local administrator token after
+startup and uses `local-gateway-admin-token` only as a disposable default.
+Anonymous browse remains available at `/browse` when the global policy and
+repository policy both permit it.
 
 ### 单机与集群运行模式
 
@@ -216,7 +237,9 @@ supports `@v/list`, `@latest`, `.info`, `.mod`, and `.zip` with immutable
 SHA-256 cache validation.
 Each APT Proxy repository requires an endpoint and `allowedHosts`; see
 [`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
-security rules.
+security rules. Hosted publication is scheduled through the staged
+[APT Hosted roadmap](docs/apt-hosted-roadmap.md); it remains unadvertised until
+the signed-snapshot acceptance gates pass.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

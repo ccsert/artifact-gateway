@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => {
         "/npm": gateway,
         "/pypi": gateway,
         "/go": gateway,
+        "/apt": gateway,
       },
     },
   };
