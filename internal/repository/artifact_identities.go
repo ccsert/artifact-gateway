@@ -116,7 +116,11 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 		}
 	case FormatConan:
 		for _, revision := range s.conanRecipes {
-			if revision.RepositoryID == repositoryID && revision.State == "visible" && s.hasResolvableConanAssetLocked(repositoryID, revision.Reference, revision.Revision, "", "") {
+			resolvable := s.hasResolvableConanAssetLocked(repositoryID, revision.Reference, revision.Revision, "", "")
+			if purpose == ArtifactIdentityDistribution {
+				resolvable = resolvable && s.hasResolvableConanDistributionLocked(repositoryID, revision.Reference, revision.Revision)
+			}
+			if revision.RepositoryID == repositoryID && revision.State == "visible" && resolvable {
 				appendIdentity(protocolidentity.ConanRecipe(revision.Reference, revision.Revision), revision.Digest, nil, revision.CreatedAt)
 			}
 		}
@@ -146,6 +150,15 @@ func (s *MemoryStore) hasResolvableConanAssetLocked(repositoryID, reference, rec
 		}
 	}
 	return false
+}
+
+func (s *MemoryStore) hasResolvableConanDistributionLocked(repositoryID, reference, recipeRevision string) bool {
+	for _, revision := range s.conanPackages {
+		if revision.RepositoryID == repositoryID && revision.Reference == reference && revision.RecipeRevision == recipeRevision && revision.State == "visible" && !s.hasResolvableConanAssetLocked(repositoryID, reference, recipeRevision, revision.PackageID, revision.Revision) {
+			return false
+		}
+	}
+	return true
 }
 
 func artifactIdentityLimit(limit int) int {

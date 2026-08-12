@@ -207,4 +207,8 @@ func TestPostgresArtifactIdentitiesUseResolvableRawAndConanAssets(t *testing.T) 
 	if err != nil || len(conanIdentities) != 2 {
 		t.Fatalf("conan identities=%#v err=%v", conanIdentities, err)
 	}
+	distributionIdentities, err := store.ListArtifactIdentities(ctx, conanRepo.ID, FormatConan, ArtifactIdentityDistribution, "", 50)
+	if err != nil || len(distributionIdentities) != 0 {
+		t.Fatalf("Conan distribution identities with incomplete package closure=%#v err=%v", distributionIdentities, err)
+	}
 }

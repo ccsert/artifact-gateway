@@ -109,7 +109,14 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 			              WHERE a.repository_id=r.repository_id AND a.reference=r.reference AND a.recipe_revision=r.revision
 			                AND a.package_id='' AND a.package_revision='' AND i.collected_at IS NULL)`
 		if purpose == ArtifactIdentityDistribution {
-			return recipes, nil
+			return recipes + `
+			  AND NOT EXISTS (
+			    SELECT 1 FROM native_conan_package_revisions p
+			    WHERE p.repository_id=r.repository_id AND p.reference=r.reference AND p.recipe_revision=r.revision AND p.state='visible'
+			      AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key
+			                      WHERE a.repository_id=p.repository_id AND a.reference=p.reference AND a.recipe_revision=p.recipe_revision
+			                        AND a.package_id=p.package_id AND a.package_revision=p.revision AND i.collected_at IS NULL)
+			  )`, nil
 		}
 		return recipes + ` UNION ALL
 			SELECT ` + protocolidentity.PostgreSQLConanPackage("p.reference", "p.recipe_revision", "p.package_id", "p.revision") + ` AS coordinate,

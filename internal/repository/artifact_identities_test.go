@@ -71,7 +71,7 @@ func TestMemoryArtifactIdentitiesExcludeConanRevisionsWithoutResolvableAssets(t 
 		t.Fatalf("scan identities=%#v err=%v", scan, err)
 	}
 	distribution, err := store.ListArtifactIdentities(ctx, "repo", FormatConan, ArtifactIdentityDistribution, "", 50)
-	if err != nil || len(distribution) != 1 || distribution[0].Coordinate != "ready/1.0#rrev" {
+	if err != nil || len(distribution) != 0 {
 		t.Fatalf("distribution identities=%#v err=%v", distribution, err)
 	}
 }
