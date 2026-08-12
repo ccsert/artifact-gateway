@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Select, Space, Switch } from "antd";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Alert, Button, Select, Switch, Tag } from "antd";
 import {
   getQuarantineReadPolicy,
   getSecurityPolicy,
@@ -12,7 +12,7 @@ import type {
   SecurityPolicy,
 } from "../../client";
 import { ErrorBanner, Loading, isNotFound } from "../../components/Feedback";
-import { Field } from "../../components/Layout";
+import { Card, Field } from "../../components/Layout";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 
@@ -121,7 +121,15 @@ export function RepositorySecurityTab({
     key: K,
     value: SecurityPolicyDraft[K],
   ) => {
+    setNotice("");
+    setSaveError(null);
     setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateReadEnabled = (enabled: boolean) => {
+    setReadNotice("");
+    setReadError(null);
+    setReadEnabled(enabled);
   };
 
   const save = async () => {
@@ -190,242 +198,464 @@ export function RepositorySecurityTab({
     { value: "high", label: text("最多高危", "Up to high") },
     { value: "critical", label: text("允许严重等级", "Allow critical") },
   ];
+  const readDirty = readPolicy ? readPolicy.enabled !== readEnabled : false;
+  const policyDirty =
+    JSON.stringify(draft) !== JSON.stringify(draftFromPolicy(policy));
+  const readScope = quarantineReadScope(repo.format, text);
+  const scanUnavailableLabel = [
+    "maven",
+    "oci",
+    "raw",
+    "conan",
+    "npm",
+    "pypi",
+  ].includes(repo.format)
+    ? text("未配置可用扫描器", "No scanner configured")
+    : text("当前格式不可用", "Unavailable for this format");
 
   return (
-    <div className="space-y-5">
-      <Alert
-        type="info"
-        showIcon
-        title={text("制品安全策略", "Artifact security policy")}
-        description={text(
-          "自动扫描在新制品发布后生成安全情报；准入规则在制品晋升到当前仓库前使用这些情报。两者都不影响普通读取。",
-          "Automatic scans produce security intelligence after new publications. Admission rules consume that intelligence before promotion into this repository. Neither affects ordinary reads.",
-        )}
-      />
-      {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
-
-      <div className="max-w-5xl space-y-4 rounded-lg border border-amber-900/60 bg-amber-950/20 p-5">
-        <Alert
-          type={readEnabled ? "warning" : "info"}
-          showIcon
-          title={text("隔离制品读取策略", "Quarantined artifact reads")}
-          description={text(
-            "这是独立于晋升准入的强制策略。启用后，协议 GET/HEAD 会拒绝隔离制品；npm 与 PyPI 按整版本阻断，Conan 按 recipe revision 闭包阻断，Group 不会回退到低优先级成员。解除隔离后读取立即恢复。",
-            "This policy is independent from promotion admission. When enabled, protocol GET/HEAD requests reject quarantined artifacts. npm and PyPI block whole versions, Conan blocks the recipe revision closure, and Groups do not fall through to lower-priority members. Reads resume immediately after release.",
+    <div className="flex max-w-6xl flex-col gap-6">
+      <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 px-6 py-5">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-500">
+          {text("仓库安全防线", "Repository guardrails")}
+        </div>
+        <h2 className="mt-2 text-lg font-semibold tracking-tight text-zinc-100">
+          {text("安全准入与隔离读取", "Admission and quarantined reads")}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
+          {text(
+            "这里有两条彼此独立的防线：读取策略决定已隔离制品能否被下载；晋升准入决定制品能否进入当前仓库。",
+            "Two independent guardrails live here: the read policy decides whether quarantined artifacts can be downloaded, while admission decides whether artifacts may enter this repository.",
           )}
-        />
-        {readError !== null && (
-          <ErrorBanner error={readError} onRetry={loadReadPolicy} />
+        </p>
+      </div>
+
+      <PolicyCard
+        eyebrow={text("读取防线", "Read guardrail")}
+        title={text("隔离制品读取", "Quarantined artifact reads")}
+        description={text(
+          "控制客户端是否仍能通过仓库协议读取已经隔离的制品；解除隔离后会立即恢复读取。",
+          "Controls whether clients may continue reading quarantined artifacts through repository protocols. Reads resume immediately after release.",
         )}
-        {readPolicy && (
+        status={
           <>
-            {readNotice && <Alert type="success" showIcon title={readNotice} />}
-            <div className="flex items-center justify-between gap-8">
-              <div>
-                <div className="text-sm font-medium text-zinc-200">
-                  {text("阻断隔离制品读取", "Block quarantined artifact reads")}
-                </div>
-                <div className="mt-1 text-xs leading-5 text-zinc-500">
-                  {text(
-                    "默认关闭以保持升级兼容；建议在确认现有隔离记录后为受保护仓库开启。",
-                    "Disabled by default for upgrade compatibility. Enable it for protected repositories after reviewing existing quarantine records.",
-                  )}
-                </div>
-              </div>
+            {readPolicy ? (
+              <Tag color={readEnabled ? "warning" : "default"}>
+                {readEnabled
+                  ? text("阻断读取", "Reads blocked")
+                  : text("允许读取", "Reads allowed")}
+              </Tag>
+            ) : (
+              <Tag color="error">{text("状态不可用", "Unavailable")}</Tag>
+            )}
+            {readDirty && (
+              <Tag color="processing">
+                {text("有未保存更改", "Unsaved changes")}
+              </Tag>
+            )}
+            {readPolicy && (
               <Switch
                 aria-label={text(
                   "阻断隔离制品读取",
                   "Block quarantined artifact reads",
                 )}
                 checked={readEnabled}
-                checkedChildren={text("已启用", "On")}
-                unCheckedChildren={text("已停用", "Off")}
-                onChange={setReadEnabled}
+                onChange={updateReadEnabled}
+              />
+            )}
+          </>
+        }
+      >
+        {readError !== null && (
+          <ErrorBanner error={readError} onRetry={loadReadPolicy} />
+        )}
+        {readPolicy && (
+          <>
+            {readNotice && <Alert type="success" showIcon title={readNotice} />}
+            <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+              <ScopeFact
+                label={text("影响请求", "Affected requests")}
+                value="GET / HEAD"
+              />
+              <ScopeFact
+                label={text("当前格式的阻断粒度", "Current format boundary")}
+                value={readScope.boundary}
+              />
+              <ScopeFact
+                label={text("发现元数据", "Discovery metadata")}
+                value={readScope.metadata}
+              />
+              <ScopeFact
+                label={text("作为 Group 成员", "When used by a Group")}
+                value={text("不降级回退", "No lower-priority fallback")}
               />
             </div>
-            <Space>
-              <Button
-                type="primary"
-                danger={readEnabled}
-                loading={readSaving}
-                onClick={saveReadPolicy}
-              >
-                {text("保存读取策略", "Save read policy")}
-              </Button>
-              <span className="text-xs text-zinc-600">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800/70 pt-4">
+              <p className="max-w-2xl text-xs leading-5 text-zinc-500">
                 {text(
-                  `读取策略当前版本 ${readPolicy.version}`,
-                  `Read policy version ${readPolicy.version}`,
+                  "默认允许读取以保持升级兼容。启用阻断前，请先检查当前仓库已有的隔离记录。",
+                  "Reads remain allowed by default for upgrade compatibility. Review existing quarantine records before enabling enforcement.",
                 )}
-              </span>
-            </Space>
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-600">
+                  {text(
+                    `读取策略当前版本 ${readPolicy.version}`,
+                    `Read policy version ${readPolicy.version}`,
+                  )}
+                </span>
+                <Button
+                  type="primary"
+                  danger={readEnabled}
+                  loading={readSaving}
+                  disabled={!readDirty}
+                  onClick={saveReadPolicy}
+                >
+                  {text("保存读取策略", "Save read policy")}
+                </Button>
+              </div>
+            </div>
           </>
         )}
-      </div>
+      </PolicyCard>
 
-      <div className="flex max-w-5xl items-center justify-between gap-8 border-b border-zinc-800 pb-5">
-        <div>
-          <div className="text-sm font-medium text-zinc-200">
-            {text("发布后自动扫描", "Scan after publication")}
-          </div>
-          <div className="mt-1 text-xs leading-5 text-zinc-500">
-            {text(
-              "仅对保存策略后新发布的制品生效。扫描异步执行，完成后的安全情报可在制品详情中查看。",
-              "Applies only to artifacts published after this policy is saved. Scans run asynchronously; completed security intelligence appears in artifact details.",
+      <PolicyCard
+        eyebrow={text("晋升防线", "Promotion guardrail")}
+        title={text("晋升准入", "Promotion admission")}
+        description={text(
+          "在创建晋升任务前评估签名、SBOM、构建来源和漏洞情报；不会改变普通协议读取。",
+          "Evaluates signatures, SBOMs, provenance, and vulnerability intelligence before a promotion job is created. Ordinary reads are unchanged.",
+        )}
+        status={
+          <>
+            <Tag color={draft.enabled ? "success" : "default"}>
+              {draft.enabled
+                ? text("正在执行", "Enforced")
+                : text("尚未执行", "Not enforced")}
+            </Tag>
+            {policyDirty && (
+              <Tag color="processing">
+                {text("有未保存更改", "Unsaved changes")}
+              </Tag>
             )}
-          </div>
-        </div>
-        <Switch
-          aria-label={text("发布后自动扫描", "Scan after publication")}
-          checked={draft.autoScanOnPublish}
-          disabled={!publicationScanning}
-          onChange={(value) => update("autoScanOnPublish", value)}
-        />
-      </div>
+            <Switch
+              aria-label={text("启用准入检查", "Enforce admission checks")}
+              checked={draft.enabled}
+              onChange={(value) => update("enabled", value)}
+            />
+          </>
+        }
+      >
+        {saveError !== null && <ErrorBanner error={saveError} />}
+        {notice && <Alert type="success" showIcon title={notice} />}
 
-      {!publicationScanning && (
-        <Alert
-          type="warning"
-          showIcon
-          title={text(
-            "当前仓库类型或格式未启用发布后自动扫描。",
-            "Scan after publication is not available for this repository type or format.",
+        <PolicySectionHeader
+          title={text("安全情报", "Security intelligence")}
+          description={text(
+            "决定新发布制品是否自动生成后续准入所需的情报。",
+            "Controls whether newly published artifacts automatically produce intelligence used by admission.",
           )}
         />
-      )}
+        <SettingRow
+          label={text("发布后自动扫描", "Scan after publication")}
+          hint={text(
+            "仅对保存策略后新发布的制品生效；扫描异步执行，结果可在制品详情中查看。",
+            "Applies only to artifacts published after this policy is saved. Scans run asynchronously and results appear in artifact details.",
+          )}
+          meta={
+            !publicationScanning && (
+              <Tag color="warning">{scanUnavailableLabel}</Tag>
+            )
+          }
+        >
+          <Switch
+            aria-label={text("发布后自动扫描", "Scan after publication")}
+            checked={draft.autoScanOnPublish}
+            disabled={!publicationScanning}
+            onChange={(value) => update("autoScanOnPublish", value)}
+          />
+        </SettingRow>
 
-      <div className="flex max-w-5xl items-center justify-between gap-8 border-b border-zinc-800 pb-5">
-        <div>
-          <div className="text-sm font-medium text-zinc-200">
-            {text("启用准入检查", "Enforce admission checks")}
-          </div>
-          <div className="mt-1 text-xs leading-5 text-zinc-500">
-            {text(
-              "启用后，晋升接口会在创建任务前检查制品情报。",
-              "When enabled, promotion requests are checked before a job is created.",
+        <PolicySectionHeader
+          title={text("证据要求", "Evidence requirements")}
+          description={
+            draft.enabled
+              ? text(
+                  "已选择的条件会在每次晋升前执行。",
+                  "Selected requirements run before every promotion.",
+                )
+              : text(
+                  "可提前配置条件；只有启用晋升准入后才会执行。",
+                  "Requirements may be configured in advance and take effect only after admission is enabled.",
+                )
+          }
+        />
+        <div className="grid gap-3 md:grid-cols-2">
+          <PolicySwitch
+            label={text("要求签名", "Require a signature")}
+            hint={text(
+              "没有任何签名证据的制品不能晋升。",
+              "Reject artifacts without signature evidence.",
             )}
-          </div>
+            checked={draft.requireSignature}
+            onChange={(value) => update("requireSignature", value)}
+          />
+          <PolicySwitch
+            label={text("要求已验证签名", "Require a verified signature")}
+            hint={text(
+              "至少一个签名必须通过验证；适合受保护的发布仓库。",
+              "At least one signature must be verified; useful for protected release repositories.",
+            )}
+            checked={draft.requireVerifiedSignature}
+            onChange={(value) => update("requireVerifiedSignature", value)}
+          />
+          <PolicySwitch
+            label={text("要求 SBOM", "Require an SBOM")}
+            hint={text(
+              "没有软件物料清单的制品不能晋升。",
+              "Reject artifacts without a software bill of materials.",
+            )}
+            checked={draft.requireSbom}
+            onChange={(value) => update("requireSbom", value)}
+          />
+          <PolicySwitch
+            label={text("要求 provenance", "Require provenance")}
+            hint={text(
+              "要求构建来源、构建器和提交信息完整。",
+              "Require build source, builder, and commit provenance.",
+            )}
+            checked={draft.requireProvenance}
+            onChange={(value) => update("requireProvenance", value)}
+          />
+          <PolicySwitch
+            label={text("要求漏洞扫描", "Require vulnerability scanning")}
+            hint={text(
+              "未扫描或扫描状态异常的制品不能绕过检查。",
+              "Do not admit artifacts that have not been scanned.",
+            )}
+            checked={draft.requireVulnerabilityScan}
+            onChange={(value) => update("requireVulnerabilityScan", value)}
+          />
+          <PolicySwitch
+            label={text("扫描错误时阻断", "Block on scan errors")}
+            hint={text(
+              "扫描器返回 error 时阻断晋升；关闭可允许故障降级。",
+              "Block when a scanner reports an error; disable for a fail-open fallback.",
+            )}
+            checked={draft.failOnScanError}
+            onChange={(value) => update("failOnScanError", value)}
+          />
         </div>
-        <Switch
-          aria-label={text("启用准入检查", "Enforce admission checks")}
-          checked={draft.enabled}
-          checkedChildren={text("已启用", "On")}
-          unCheckedChildren={text("已停用", "Off")}
-          onChange={(value) => update("enabled", value)}
-        />
-      </div>
 
-      <div className="grid max-w-5xl grid-cols-2 gap-x-8">
-        <PolicySwitch
-          label={text("要求签名", "Require a signature")}
-          hint={text(
-            "没有任何签名证据的制品不能晋升。",
-            "Reject artifacts without signature evidence.",
+        <PolicySectionHeader
+          title={text("风险门槛", "Risk thresholds")}
+          description={text(
+            "进一步限制允许通过的漏洞等级与许可证集合。",
+            "Further restrict the vulnerability severity and license set allowed through admission.",
           )}
-          checked={draft.requireSignature}
-          onChange={(value) => update("requireSignature", value)}
         />
-        <PolicySwitch
-          label={text("要求已验证签名", "Require a verified signature")}
-          hint={text(
-            "至少一个签名必须通过验证；适合受保护的发布仓库。",
-            "At least one signature must be verified; useful for protected release repositories.",
-          )}
-          checked={draft.requireVerifiedSignature}
-          onChange={(value) => update("requireVerifiedSignature", value)}
-        />
-        <PolicySwitch
-          label={text("要求 SBOM", "Require an SBOM")}
-          hint={text(
-            "没有软件物料清单的制品不能晋升。",
-            "Reject artifacts without a software bill of materials.",
-          )}
-          checked={draft.requireSbom}
-          onChange={(value) => update("requireSbom", value)}
-        />
-        <PolicySwitch
-          label={text("要求 provenance", "Require provenance")}
-          hint={text(
-            "要求构建来源、构建器和提交信息完整。",
-            "Require build source, builder, and commit provenance.",
-          )}
-          checked={draft.requireProvenance}
-          onChange={(value) => update("requireProvenance", value)}
-        />
-        <PolicySwitch
-          label={text("要求漏洞扫描", "Require vulnerability scanning")}
-          hint={text(
-            "未扫描或扫描状态异常的制品不能绕过检查。",
-            "Do not admit artifacts that have not been scanned.",
-          )}
-          checked={draft.requireVulnerabilityScan}
-          onChange={(value) => update("requireVulnerabilityScan", value)}
-        />
-        <PolicySwitch
-          label={text("扫描错误时阻断", "Block on scan errors")}
-          hint={text(
-            "扫描器返回 error 时阻断晋升；关闭可允许故障降级。",
-            "Block when a scanner reports an error; disable for a fail-open fallback.",
-          )}
-          checked={draft.failOnScanError}
-          onChange={(value) => update("failOnScanError", value)}
-        />
-      </div>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field
+            label={text(
+              "最大允许漏洞等级",
+              "Maximum allowed vulnerability severity",
+            )}
+            hint={text(
+              "超过此等级的 affected 结果会拒绝晋升；unknown 始终视为最高风险。",
+              "Affected results above this level are rejected. Unknown findings are always treated as highest risk.",
+            )}
+          >
+            <Select
+              className="w-full"
+              value={draft.maxAllowedSeverity}
+              options={severityOptions}
+              onChange={(value) => update("maxAllowedSeverity", value)}
+            />
+          </Field>
+          <Field
+            label={text("允许的 SPDX 许可证", "Allowed SPDX licenses")}
+            hint={text(
+              "留空表示不限制；填写后制品必须只包含列表中的 SPDX ID。",
+              "Leave empty for no restriction. When set, every license must be in this SPDX ID list.",
+            )}
+          >
+            <Select
+              mode="tags"
+              showSearch
+              className="w-full font-mono text-xs"
+              value={draft.allowedLicenses}
+              options={draft.allowedLicenses.map((license) => ({
+                value: license,
+                label: license,
+              }))}
+              tokenSeparators={[",", " "]}
+              maxTagCount="responsive"
+              placeholder={text("如 Apache-2.0、MIT", "e.g. Apache-2.0, MIT")}
+              onChange={(value) => update("allowedLicenses", value)}
+            />
+          </Field>
+        </div>
 
-      <div className="grid max-w-5xl grid-cols-2 gap-5 border-t border-zinc-800 pt-5">
-        <Field
-          label={text(
-            "最大允许漏洞等级",
-            "Maximum allowed vulnerability severity",
-          )}
-          hint={text(
-            "超过此等级的 affected 结果会拒绝晋升；unknown 始终视为最高风险。",
-            "Affected results above this level are rejected. Unknown findings are always treated as highest risk.",
-          )}
-        >
-          <Select
-            className="w-full"
-            value={draft.maxAllowedSeverity}
-            options={severityOptions}
-            onChange={(value) => update("maxAllowedSeverity", value)}
-          />
-        </Field>
-        <Field
-          label={text("允许的 SPDX 许可证", "Allowed SPDX licenses")}
-          hint={text(
-            "留空表示不限制；填写后制品必须只包含列表中的 SPDX ID。",
-            "Leave empty for no restriction. When set, every license must be in this SPDX ID list.",
-          )}
-        >
-          <Select
-            mode="tags"
-            showSearch
-            className="w-full font-mono text-xs"
-            value={draft.allowedLicenses}
-            options={draft.allowedLicenses.map((license) => ({
-              value: license,
-              label: license,
-            }))}
-            tokenSeparators={[",", " "]}
-            maxTagCount="responsive"
-            placeholder={text("如 Apache-2.0、MIT", "e.g. Apache-2.0, MIT")}
-            onChange={(value) => update("allowedLicenses", value)}
-          />
-        </Field>
-      </div>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800/70 pt-4">
+          <span className="text-xs text-zinc-600">
+            {text(
+              `当前版本 ${policy.version}`,
+              `Current version ${policy.version}`,
+            )}
+          </span>
+          <Button
+            type="primary"
+            onClick={save}
+            loading={saving}
+            disabled={!policyDirty}
+          >
+            {text("保存策略", "Save policy")}
+          </Button>
+        </div>
+      </PolicyCard>
+    </div>
+  );
+}
 
-      <Space>
-        <Button type="primary" onClick={save} loading={saving}>
-          {text("保存策略", "Save policy")}
-        </Button>
-        <span className="text-xs text-zinc-600">
-          {text(
-            `当前版本 ${policy.version}`,
-            `Current version ${policy.version}`,
-          )}
-        </span>
-      </Space>
+function quarantineReadScope(
+  format: Repository["format"],
+  text: (zh: string, en: string) => string,
+): { boundary: string; metadata: string } {
+  switch (format) {
+    case "raw":
+      return {
+        boundary: text("路径及校验 sidecar", "Path and checksum sidecars"),
+        metadata: text("从目录列表隐藏", "Hidden from directory listings"),
+      };
+    case "maven":
+      return {
+        boundary: text("坐标内的制品资产", "Assets within the coordinate"),
+        metadata: text("从生成元数据隐藏", "Hidden from generated metadata"),
+      };
+    case "oci":
+      return {
+        boundary: text(
+          "manifest 与描述符闭包",
+          "Manifest and descriptor closure",
+        ),
+        metadata: text(
+          "从 tag、catalog、referrer 隐藏",
+          "Hidden from tags, catalog, and referrers",
+        ),
+      };
+    case "npm":
+      return {
+        boundary: "package@version",
+        metadata: text(
+          "从 packument 与 dist-tag 隐藏",
+          "Hidden from packuments and dist-tags",
+        ),
+      };
+    case "pypi":
+      return {
+        boundary: "project@version",
+        metadata: text("从 Simple 元数据隐藏", "Hidden from Simple metadata"),
+      };
+    case "conan":
+      return {
+        boundary: text("recipe revision 闭包", "Recipe revision closure"),
+        metadata: text(
+          "从 revision 元数据隐藏",
+          "Hidden from revision metadata",
+        ),
+      };
+    default:
+      return {
+        boundary: text("制品身份", "Artifact identity"),
+        metadata: text("从发现元数据隐藏", "Hidden from discovery metadata"),
+      };
+  }
+}
+
+function PolicyCard({
+  eyebrow,
+  title,
+  description,
+  status,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  status: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800/70 px-6 py-5">
+        <div className="min-w-0 max-w-3xl">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+            {eyebrow}
+          </div>
+          <h3 className="mt-1.5 text-base font-semibold text-zinc-100">
+            {title}
+          </h3>
+          <p className="mt-1.5 text-sm leading-6 text-zinc-500">
+            {description}
+          </p>
+        </div>
+        <div className="flex min-h-8 shrink-0 items-center gap-2">{status}</div>
+      </div>
+      <div className="space-y-5 px-6 py-5">{children}</div>
+    </Card>
+  );
+}
+
+function ScopeFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 bg-[var(--ag-table-header)] px-4 py-3">
+      <div className="text-[11px] font-medium text-zinc-600">{label}</div>
+      <div
+        className="mt-1 truncate text-xs font-medium text-zinc-300"
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PolicySectionHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="border-t border-zinc-800/70 pt-5 first:border-t-0 first:pt-0">
+      <h4 className="text-sm font-semibold text-zinc-200">{title}</h4>
+      <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>
+    </div>
+  );
+}
+
+function SettingRow({
+  label,
+  hint,
+  meta,
+  children,
+}: {
+  label: string;
+  hint: string;
+  meta?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800/80 bg-[var(--ag-table-header)] px-4 py-3.5">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-zinc-200">{label}</span>
+          {meta}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">{hint}</p>
+      </div>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
@@ -442,7 +672,13 @@ function PolicySwitch({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex min-h-24 items-start justify-between gap-5 border-b border-zinc-800/80 py-4">
+    <div
+      className={`flex min-h-24 items-start justify-between gap-5 rounded-lg border px-4 py-3.5 transition-colors ${
+        checked
+          ? "border-cyan-700/50 bg-[var(--ag-brand-soft)]"
+          : "border-zinc-800/80 bg-[var(--ag-table-header)]"
+      }`}
+    >
       <div className="min-w-0">
         <div className="text-sm font-medium text-zinc-200">{label}</div>
         <div className="mt-1 text-xs leading-5 text-zinc-500">{hint}</div>

@@ -68,6 +68,9 @@ a dated version heading without rewriting their meaning.
 
 ### Changed
 
+- Reorganized the repository security tab into separate quarantine-read and
+  promotion-admission guardrails with format-aware scope, explicit saved and
+  unsaved states, and contextual scanner availability.
 - Unified scan and promotion-intelligence lifecycle execution around shared
   claim, lease, metrics, terminal-state, polling, and PostgreSQL notification
   semantics, so queued work starts promptly without sacrificing polling-based

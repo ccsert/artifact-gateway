@@ -84,9 +84,13 @@ describe("RepositorySecurityTab", () => {
     );
 
     expect(await screen.findByText("当前版本 3")).toBeInTheDocument();
+    const saveButton = screen.getByRole("button", { name: "保存策略" });
+    expect(saveButton).toBeDisabled();
     await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
     await user.click(screen.getByRole("switch", { name: "启用准入检查" }));
-    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    expect(screen.getByText("有未保存更改")).toBeInTheDocument();
+    expect(saveButton).toBeEnabled();
+    await user.click(saveButton);
 
     await waitFor(() => expect(mockReplaceSecurityPolicy).toHaveBeenCalled());
     expect(mockReplaceSecurityPolicy).toHaveBeenCalledWith(
@@ -105,9 +109,10 @@ describe("RepositorySecurityTab", () => {
     );
     expect(await screen.findByText("当前版本 4")).toBeInTheDocument();
     expect(screen.getByText("仓库安全策略已保存")).toBeInTheDocument();
+    expect(saveButton).toBeDisabled();
   });
 
-  it("disables automatic scans when the repository format has no scanner", async () => {
+  it("shows automatic scanning as unavailable when no scanner is configured", async () => {
     mockGetSecurityPolicy.mockResolvedValue({
       data: { version: "1", autoScanOnPublish: false },
     } as never);
@@ -121,9 +126,7 @@ describe("RepositorySecurityTab", () => {
     expect(
       await screen.findByRole("switch", { name: "发布后自动扫描" }),
     ).toBeDisabled();
-    expect(
-      screen.getByText(/当前仓库类型或格式未启用发布后自动扫描/),
-    ).toBeInTheDocument();
+    expect(screen.getByText("未配置可用扫描器")).toBeInTheDocument();
   });
 
   it("loads and saves the independent quarantine read policy", async () => {
@@ -147,8 +150,14 @@ describe("RepositorySecurityTab", () => {
     const readSwitch = await screen.findByRole("switch", {
       name: "阻断隔离制品读取",
     });
+    const readSaveButton = screen.getByRole("button", {
+      name: "保存读取策略",
+    });
+    expect(readSaveButton).toBeDisabled();
     await user.click(readSwitch);
-    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    expect(screen.getByText("有未保存更改")).toBeInTheDocument();
+    expect(readSaveButton).toBeEnabled();
+    await user.click(readSaveButton);
 
     await waitFor(() =>
       expect(mockReplaceQuarantineReadPolicy).toHaveBeenCalledWith({
@@ -159,6 +168,7 @@ describe("RepositorySecurityTab", () => {
     );
     expect(await screen.findByText("读取策略当前版本 8")).toBeInTheDocument();
     expect(screen.getByText("隔离读取策略已保存")).toBeInTheDocument();
+    expect(readSaveButton).toBeDisabled();
   });
 
   it("keeps the security policy usable when the read policy request fails", async () => {
@@ -183,5 +193,7 @@ describe("RepositorySecurityTab", () => {
     expect(
       screen.queryByRole("button", { name: "保存读取策略" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("状态不可用")).toBeInTheDocument();
+    expect(screen.queryByText("有未保存更改")).not.toBeInTheDocument();
   });
 });
