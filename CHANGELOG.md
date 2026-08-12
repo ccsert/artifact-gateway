@@ -68,6 +68,9 @@ a dated version heading without rewriting their meaning.
 
 ### Changed
 
+- Added a discoverable repository Scanning workspace for manual immutable-
+  artifact scans, capability and configuration guidance, historical backfill,
+  and recent job status.
 - Updated retention controls to use Maven, OCI, Conan, Raw, npm, and PyPI
   cleanup-unit terminology instead of Maven fallback copy.
 - Reorganized the repository security tab into separate quarantine-read and

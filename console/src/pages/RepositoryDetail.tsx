@@ -74,6 +74,10 @@ const RepositoryRetentionTab = lazy(async () => ({
   default: (await import("./repository-detail/RepositoryRetentionTab"))
     .RepositoryRetentionTab,
 }));
+const RepositoryScanningTab = lazy(async () => ({
+  default: (await import("./repository-detail/RepositoryScanningTab"))
+    .RepositoryScanningTab,
+}));
 const RepositorySecurityTab = lazy(async () => ({
   default: (await import("./repository-detail/RepositorySecurityTab"))
     .RepositorySecurityTab,
@@ -84,6 +88,7 @@ type Tab =
   | "publish"
   | "grants"
   | "retention"
+  | "scanning"
   | "security"
   | "capacity"
   | "distribute"
@@ -112,6 +117,11 @@ const TABS: {
     labelEn: "Retention",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi"],
     hostedOnly: true,
+  },
+  {
+    key: "scanning",
+    label: "制品扫描",
+    labelEn: "Scanning",
   },
   {
     key: "security",
@@ -825,6 +835,8 @@ export function RepositoryDetailPage() {
       : undefined;
   const [repo, setRepo] = useState<Repository | null>(null);
   const [caps, setCaps] = useState<RepositoryCapabilities | null>(null);
+  const [capsLoading, setCapsLoading] = useState(true);
+  const [capsError, setCapsError] = useState<unknown>(null);
   const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
   const [effectiveAccess, setEffectiveAccess] =
     useState<RepositoryEffectiveAccess | null>(null);
@@ -851,10 +863,13 @@ export function RepositoryDetailPage() {
 
   const load = useCallback(async () => {
     setError(null);
+    setCapsLoading(true);
+    setCapsError(null);
     const { data, error: err } = await getRepository({
       path: { repositoryId },
     });
     if (err) {
+      setCapsLoading(false);
       setError(err);
       return;
     }
@@ -864,7 +879,9 @@ export function RepositoryDetailPage() {
       getRepositoryEffectiveAccess({ path: { repositoryId } }),
       getRepositoryCapacity({ path: { repositoryId } }),
     ]);
-    if (!capsRes.error) setCaps(capsRes.data ?? null);
+    if (capsRes.error) setCapsError(capsRes.error);
+    else setCaps(capsRes.data ?? null);
+    setCapsLoading(false);
     if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
     if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
   }, [repositoryId]);
@@ -974,6 +991,18 @@ export function RepositoryDetailPage() {
             </>
           )}
           {tab === "retention" && <RepositoryRetentionTab repo={repo} />}
+          {tab === "scanning" && (
+            <RepositoryScanningTab
+              repo={repo}
+              capabilities={caps}
+              capabilitiesLoading={capsLoading}
+              capabilitiesError={capsError}
+              canManage={
+                effectiveAccess?.permissions.intelligence.allowed === true
+              }
+              canViewJobs={effectiveAccess?.permissions.admin.allowed === true}
+            />
+          )}
           {tab === "security" && (
             <RepositorySecurityTab
               repo={repo}

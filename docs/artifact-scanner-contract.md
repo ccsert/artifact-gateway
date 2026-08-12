@@ -283,3 +283,21 @@ recipe and package revisions. Reconciliation does not require automatic
 publication scanning to be enabled; this permits explicit historical backfills.
 The operation is bounded by a caller-supplied limit and is protected by the
 repository `repositories:intelligence` permission.
+
+The Console exposes these operations on the repository detail **Scanning** tab.
+It reports manual-scan and scan-on-publication availability separately, accepts
+one canonical coordinate and SHA-256 digest for an explicit scan, lists recent
+scan lifecycle jobs, and provides the bounded historical reconciliation action
+when the repository has a publication-scan resolver. When capability discovery
+reports no scanner, the tab stays visible but disables mutation and points the
+operator to `GATEWAY_SCANNER_ENDPOINT`, `GATEWAY_SCANNER_FORMATS`, and Worker
+`scan`-kind deployment configuration. Scanner endpoints and tokens remain
+deployment secrets and are never returned to the browser.
+
+This repository does not yet bundle a scanner implementation or a Compose
+scanner service; operators must provide a contract-compatible external HTTP
+scanner. Scan scheduling remains asynchronous and best effort, so a scan or
+enqueue failure never rolls back a successful publication. Results do not
+automatically quarantine an artifact or change repository-read behavior.
+Bundled reference-scanner delivery, governed runtime configuration, and
+finding-driven automatic quarantine remain separate follow-up slices.
