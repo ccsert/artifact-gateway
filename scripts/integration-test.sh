@@ -13,8 +13,9 @@ trap cleanup EXIT
 docker volume create artifact-gateway-go-mod >/dev/null
 docker volume create artifact-gateway-go-build >/dev/null
 cleanup
-"${compose[@]}" up -d --wait postgres rustfs
+"${compose[@]}" up -d --wait postgres rustfs minio
 "${compose[@]}" run --rm --no-deps rustfs-ready
+"${compose[@]}" run --rm --no-deps minio-ready
 "${compose[@]}" run --rm --no-deps migrate
 ./scripts/migration-runner-check.sh
 "${compose[@]}" run --rm --no-deps test

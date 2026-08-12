@@ -27,6 +27,7 @@ var (
 	ErrInvalidUserSession            = errors.New("user session is invalid")
 	ErrWebhookSubscriptionNameExists = errors.New("webhook subscription name already exists")
 	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
+	ErrAPTPackageConflict            = errors.New("APT package identity already has different immutable bytes")
 )
 
 type HostedRepositoryStore interface {
@@ -391,6 +392,21 @@ type NativeAPTStore interface {
 	CacheAPTAsset(context.Context, APTAsset) (APTAsset, error)
 	LockAPTObject(context.Context, string) (func(), error)
 	ListAPTAssets(context.Context, string, string, int, string) ([]APTAsset, error)
+}
+
+// NativeAPTPublicationStore is the pre-visibility APT Hosted boundary. A
+// staged package is deliberately absent from NativeAPTStore protocol assets;
+// only a later signed snapshot publication may make it readable.
+type NativeAPTPublicationStore interface {
+	CreateAPTPublicationSessionIdempotently(context.Context, APTPublicationSession, string, string, string, string) (APTPublicationSession, bool, error)
+	GetAPTPublicationSession(context.Context, string) (APTPublicationSession, error)
+	BeginAPTPackageUpload(context.Context, string, string) error
+	CompleteAPTPackageUpload(context.Context, string, APTPackageRevision) (APTPackageRevision, error)
+	GetAPTPackageRevisionForSession(context.Context, string) (APTPackageRevision, error)
+	ExpireAPTPublicationSessions(context.Context, time.Time, int) ([]APTAbandonedUpload, error)
+	APTObjectHasPackageReference(context.Context, string) (bool, error)
+	CreateAPTRepositorySnapshot(context.Context, APTRepositorySnapshot, []APTSnapshotPackage) (APTRepositorySnapshot, error)
+	GetVisibleAPTRepositorySnapshot(context.Context, string, string) (APTRepositorySnapshot, error)
 }
 
 type Store interface {

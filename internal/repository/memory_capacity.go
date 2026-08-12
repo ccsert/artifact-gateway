@@ -80,6 +80,12 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 				capacity.ObjectCount++
 			}
 		}
+		for _, revision := range s.aptPackageRevisions {
+			if revision.RepositoryID == id {
+				capacity.UsedBytes += revision.Size
+				capacity.ObjectCount++
+			}
+		}
 	}
 	return capacity, nil
 }

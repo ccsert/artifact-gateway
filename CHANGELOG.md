@@ -18,9 +18,16 @@ a dated version heading without rewriting their meaning.
   promotion, replication, and real APT client acceptance gates.
 - Streaming Debian binary metadata parsing for gzip, xz, zstd, and uncompressed
   control archives, with server-derived package/version/architecture identity.
+- The APT Hosted H1 persistence foundation: idempotent quota-reserving
+  publication sessions, content-addressed staged package revisions, explicit
+  suite/component/architecture membership, abandoned-upload cleanup candidates,
+  immutable repository-snapshot records, and a private-key-free signer port.
 - A pinned RustFS S3 baseline for Compose, integration tests, and Kubernetes,
   including object-contract coverage and a copy/verify/cutover/rollback migration
   runbook that explicitly rejects MinIO data-volume reuse.
+- A repository-native streaming MinIO-to-RustFS migration command that preserves
+  durable HTTP and S3 user metadata, emits a byte-level verified manifest, and
+  supports explicit frozen-write exact mirroring for rollback.
 - One-command local development lifecycle targets for starting the complete
   stack, checking the Console and Gateway paths, and stopping only the
   checkout-managed Console.

@@ -18,6 +18,15 @@ and [`apt-secure(8)`](https://manpages.debian.org/unstable/apt/apt-secure.8.en.h
 
 ## APT-H1: publication contract and domain model
 
+Current implementation status: the streaming `.deb` parser, quota-reserving
+idempotent session model, content-addressed staged revision, interrupted-upload
+candidate detection, explicit building-snapshot model, Memory/PostgreSQL conformance, and
+narrow signer interface are implemented. Staged revisions and building
+snapshots remain intentionally absent from APT protocol reads. The management
+HTTP/OpenAPI publication surface, orphan-object cleanup scheduling, and audit
+wiring remain before H1 can pass its
+acceptance gate; APT therefore continues to advertise Proxy-only capability.
+
 - Define an APT publication session that accepts a `.deb` plus an explicit
   suite and component. Do not expose generic object PUT as package publication.
 - Parse and validate the Debian control archive while streaming the object;

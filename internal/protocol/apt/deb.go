@@ -47,7 +47,7 @@ type DebianBinaryMetadata struct {
 // It validates the complete stream without materializing the data archive.
 func ParseDebianBinary(reader io.Reader, size int64) (DebianBinaryMetadata, error) {
 	if reader == nil || size <= 0 {
-		return DebianBinaryMetadata{}, errors.New("Debian binary archive is empty")
+		return DebianBinaryMetadata{}, errors.New("debian binary archive is empty")
 	}
 	limited := &io.LimitedReader{R: reader, N: size}
 	magic := make([]byte, 8)
@@ -67,7 +67,7 @@ func ParseDebianBinary(reader io.Reader, size int64) (DebianBinaryMetadata, erro
 			return DebianBinaryMetadata{}, err
 		}
 		if memberIndex == 0 && name != "debian-binary" {
-			return DebianBinaryMetadata{}, errors.New("Debian format marker must be the first archive member")
+			return DebianBinaryMetadata{}, errors.New("debian format marker must be the first archive member")
 		}
 		memberIndex++
 		member := &io.LimitedReader{R: limited, N: memberSize}
@@ -83,13 +83,13 @@ func ParseDebianBinary(reader io.Reader, size int64) (DebianBinaryMetadata, erro
 			formatMarker = true
 		case "control.tar", "control.tar.gz", "control.tar.xz", "control.tar.zst":
 			if !formatMarker {
-				return DebianBinaryMetadata{}, errors.New("Debian format marker must precede control metadata")
+				return DebianBinaryMetadata{}, errors.New("debian format marker must precede control metadata")
 			}
 			if metadata != nil {
 				return DebianBinaryMetadata{}, errors.New("duplicate Debian control archive")
 			}
 			if memberSize > maxControlArchiveBytes {
-				return DebianBinaryMetadata{}, errors.New("Debian control archive is too large")
+				return DebianBinaryMetadata{}, errors.New("debian control archive is too large")
 			}
 			compressed, readErr := io.ReadAll(member)
 			if readErr != nil {
@@ -103,7 +103,7 @@ func ParseDebianBinary(reader io.Reader, size int64) (DebianBinaryMetadata, erro
 		default:
 			if validDataArchiveName(name) {
 				if metadata == nil {
-					return DebianBinaryMetadata{}, errors.New("Debian control metadata must precede the data archive")
+					return DebianBinaryMetadata{}, errors.New("debian control metadata must precede the data archive")
 				}
 				if dataArchive {
 					return DebianBinaryMetadata{}, errors.New("duplicate Debian data archive")
@@ -128,10 +128,10 @@ func ParseDebianBinary(reader io.Reader, size int64) (DebianBinaryMetadata, erro
 		}
 	}
 	if metadata == nil {
-		return DebianBinaryMetadata{}, errors.New("Debian control archive is missing")
+		return DebianBinaryMetadata{}, errors.New("debian control archive is missing")
 	}
 	if !dataArchive {
-		return DebianBinaryMetadata{}, errors.New("Debian data archive is missing")
+		return DebianBinaryMetadata{}, errors.New("debian data archive is missing")
 	}
 	return *metadata, nil
 }
@@ -189,7 +189,7 @@ func readARHeader(reader io.Reader) (string, int64, error) {
 }
 
 func parseControlArchive(reader io.Reader, name string) (DebianBinaryMetadata, error) {
-	var archiveReader io.Reader = reader
+	archiveReader := reader
 	var closeArchive func()
 	switch name {
 	case "control.tar.gz":
@@ -244,7 +244,7 @@ func parseControlArchive(reader io.Reader, name string) (DebianBinaryMetadata, e
 		}
 		body, err := io.ReadAll(io.LimitReader(tarReader, maxControlBytes+1))
 		if err != nil || len(body) > maxControlBytes {
-			return DebianBinaryMetadata{}, errors.New("Debian control file is too large")
+			return DebianBinaryMetadata{}, errors.New("debian control file is too large")
 		}
 		parsed, parseErr := parseControlFields(body)
 		if parseErr != nil {
@@ -259,7 +259,7 @@ func parseControlArchive(reader io.Reader, name string) (DebianBinaryMetadata, e
 		return DebianBinaryMetadata{}, errors.New("expanded Debian control archive is too large")
 	}
 	if metadata == nil {
-		return DebianBinaryMetadata{}, errors.New("Debian control file is missing")
+		return DebianBinaryMetadata{}, errors.New("debian control file is missing")
 	}
 	return *metadata, nil
 }

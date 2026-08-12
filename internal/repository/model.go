@@ -413,6 +413,93 @@ type APTAsset struct {
 	CreatedAt        time.Time
 }
 
+type APTPublicationSessionState string
+
+const (
+	APTPublicationSessionOpen      APTPublicationSessionState = "open"
+	APTPublicationSessionUploading APTPublicationSessionState = "uploading"
+	APTPublicationSessionStaged    APTPublicationSessionState = "staged"
+	APTPublicationSessionAborted   APTPublicationSessionState = "aborted"
+)
+
+// APTPublicationSession reserves one immutable .deb upload for a target suite
+// and component. Canonical package identity is not accepted as authority: it
+// is populated only after parsing the uploaded Debian control file.
+type APTPublicationSession struct {
+	ID                string
+	RepositoryID      string
+	Suite             string
+	Component         string
+	Publisher         string
+	ObjectName        string
+	DeclaredDigest    string
+	DeclaredSize      int64
+	ExpectedIdentity  string
+	ObjectKey         string
+	PackageRevisionID string
+	State             APTPublicationSessionState
+	ExpiresAt         time.Time
+	CreatedAt         time.Time
+}
+
+// APTPackageRevision is immutable package metadata derived from the .deb
+// bytes. It is management-visible but not protocol-visible until referenced by
+// a signed, atomically published repository snapshot.
+type APTPackageRevision struct {
+	ID                string
+	RepositoryID      string
+	Package           string
+	Version           string
+	Architecture      string
+	CanonicalIdentity string
+	Digest            string
+	ObjectKey         string
+	Size              int64
+	ObjectName        string
+	Publisher         string
+	CreatedAt         time.Time
+}
+
+type APTRepositorySnapshotState string
+
+const (
+	APTRepositorySnapshotBuilding APTRepositorySnapshotState = "building"
+	APTRepositorySnapshotSigned   APTRepositorySnapshotState = "signed"
+	APTRepositorySnapshotVisible  APTRepositorySnapshotState = "visible"
+	APTRepositorySnapshotRetired  APTRepositorySnapshotState = "retired"
+	APTRepositorySnapshotFailed   APTRepositorySnapshotState = "failed"
+)
+
+// APTRepositorySnapshot is the future single visibility switch. H1 permits
+// only building snapshots; H2 will attach generated indices and signer
+// evidence before transitioning one snapshot to visible.
+type APTRepositorySnapshot struct {
+	ID              string
+	RepositoryID    string
+	Suite           string
+	Sequence        int64
+	State           APTRepositorySnapshotState
+	ReleaseDigest   string
+	InReleaseDigest string
+	SignerIdentity  string
+	KeyFingerprint  string
+	CreatedAt       time.Time
+	PublishedAt     time.Time
+}
+
+type APTSnapshotPackage struct {
+	SnapshotID           string
+	PublicationSessionID string
+	PackageRevisionID    string
+	Component            string
+	Architecture         string
+}
+
+type APTAbandonedUpload struct {
+	SessionID string
+	ObjectKey string
+}
+
 // APTAssetMutable reports whether an upstream path may legitimately change in
 // place. Content-addressed by-hash metadata and pool package objects are
 // immutable even though they live below otherwise mutable repository trees.

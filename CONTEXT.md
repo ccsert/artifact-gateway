@@ -46,6 +46,18 @@ _Avoid_: Artifact file, blob
 The atomic transition that makes a verified staged Artifact visible to readers.
 _Avoid_: Upload, commit
 
+**APT Publication Session**:
+A quota-reserving, idempotent pre-visibility workflow for exactly one `.deb`,
+one target suite, and one component. The package identity is derived from the
+uploaded control file; a staged session is never an APT client read surface.
+_Avoid_: Generic upload, visible package
+
+**APT Repository Snapshot**:
+An immutable suite view that will own generated package indices, Release
+metadata, signatures, and the single visibility switch. A `building` snapshot
+is explicitly not client-visible.
+_Avoid_: Mutable index, cached upstream Release
+
 **Tombstone**:
 The durable record that makes a previously visible Artifact non-resolvable while
 allowing deferred reclamation of its bytes.
