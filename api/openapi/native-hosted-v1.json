@@ -491,6 +491,56 @@
         }
       }
     },
+    "/repositories/{repositoryId}/quarantine-read-policy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getQuarantineReadPolicy",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/QuarantineReadPolicy"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceQuarantineReadPolicy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuarantineReadPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/QuarantineReadPolicy"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/capacity": {
       "parameters": [
         {
@@ -4579,6 +4629,24 @@
           }
         }
       },
+      "QuarantineReadPolicy": {
+        "type": "object",
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "additionalProperties": false,
+        "description": "Hosted repository policy controlling protocol reads of quarantined artifacts. It is disabled by default.",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
       "RetentionReasonCounts": {
         "type": "object",
         "required": [
@@ -5714,6 +5782,24 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/EgressProxyTestResult"
+            }
+          }
+        }
+      },
+      "QuarantineReadPolicy": {
+        "description": "Repository quarantine read policy",
+        "headers": {
+          "ETag": {
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuarantineReadPolicy"
             }
           }
         }

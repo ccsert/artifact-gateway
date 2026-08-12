@@ -53,6 +53,10 @@ a dated version heading without rewriting their meaning.
 - Versioned per-artifact quarantine and release controls with optimistic
   concurrency, audit evidence, admission-time enforcement, and worker-time
   protection against queued promotion or replication publication.
+- Versioned Hosted quarantine-read policies, disabled by default, with
+  protocol-level GET/HEAD denial, aggregate npm/PyPI and Conan closure
+  semantics, metadata filtering, Group anti-bypass behavior, PostgreSQL
+  persistence, OpenAPI clients, and Console controls.
 - Local-user governance with profile metadata, case-insensitive identities,
   failed-sign-in lockout, last-sign-in and password-change timestamps,
   mandatory password changes, administrator password resets, revocable

@@ -36,6 +36,7 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 		"/api/v2/repositories/" + repo.ID,
 		"/api/v2/repositories/" + repo.ID + "/capabilities",
 		"/api/v2/repositories/" + repo.ID + "/capacity",
+		"/api/v2/repositories/" + repo.ID + "/quarantine-read-policy",
 		"/api/v2/repositories/" + repo.ID + "/conan/references?pageSize=10",
 		"/api/v2/repositories/" + repo.ID + "/conan/recipe-revisions?reference=hello%2F1.0%2Fdemo%2Fstable",
 	} {
@@ -48,6 +49,33 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, req)
+			input := &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route}
+			options := &openapi3filter.Options{IncludeResponseStatus: true}
+			if err := openapi3filter.ValidateResponse(req.Context(), (&openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Options: options}).SetBodyBytes(response.Body.Bytes())); err != nil {
+				t.Fatalf("status=%d does not conform: %v; body=%s", response.Code, err, response.Body.String())
+			}
+		})
+	}
+	for _, test := range []struct {
+		name, ifMatch string
+		wantStatus    int
+	}{
+		{name: "replace quarantine read policy", ifMatch: "1", wantStatus: http.StatusOK},
+		{name: "stale quarantine read policy", ifMatch: "1", wantStatus: http.StatusPreconditionFailed},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/quarantine-read-policy", strings.NewReader(`{"version":"1","enabled":true}`))
+			authorize(req, "admin-secret")
+			req.Header.Set("If-Match", test.ifMatch)
+			route, params, routeErr := router.FindRoute(req)
+			if routeErr != nil {
+				t.Fatal(routeErr)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
 			input := &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route}
 			options := &openapi3filter.Options{IncludeResponseStatus: true}
 			if err := openapi3filter.ValidateResponse(req.Context(), (&openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Options: options}).SetBodyBytes(response.Body.Bytes())); err != nil {

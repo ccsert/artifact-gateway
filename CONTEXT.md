@@ -82,6 +82,13 @@ For aggregate PyPI versions, changed source-file membership parks the plan as
 before any complete-version publication.
 _Avoid_: Backup, cache
 
+**Quarantine Read Policy**:
+A versioned Hosted Repository policy that controls whether protocol reads of a
+quarantined Artifact remain backward-compatible or fail closed. It is disabled
+by default and independent from promotion admission. Enabled Groups do not
+fall through past a quarantined higher-priority identity.
+_Avoid_: Tombstone, security admission policy
+
 **Retention Policy**:
 A versioned rule that determines when visible Artifacts become tombstoned.
 _Avoid_: Garbage collection

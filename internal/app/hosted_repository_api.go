@@ -210,39 +210,40 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 // binding for the active repository-management surface.
 type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
-	sessions            nativeMavenHandler
-	groups              repository.HostedGroupStore
-	grants              repository.RepositoryGrantStore
-	templates           repository.AuthorizationTemplateStore
-	authorizationRoles  repository.AuthorizationRoleStore
-	retentionPolicies   repository.RepositoryRetentionPolicyStore
-	securityPolicies    repository.RepositorySecurityPolicyStore
-	capacities          repository.RepositoryCapacityStore
-	tombstones          repository.ArtifactTombstoneStore
-	lifecycleJobs       repository.LifecycleJobStore
-	auditRetention      repository.AuditRetentionStore
-	anonymousAccess     repository.AnonymousAccessPolicyStore
-	oidcRuntime         *OIDCRuntime
-	replication         repository.ReplicationStore
-	oci                 repository.NativeOCIStore
-	conan               repository.NativeConanStore
-	apiKeys             repository.APIKeyStore
-	users               userManagementStore
-	authorizer          RepositoryAuthorizer
-	audit               repository.Store
-	metrics             *Metrics
-	maintenance         *CacheMaintenance
-	proxyCache          proxyCacheBrowseHandler
-	mavenProxy          mavenProxyOperationsHandler
-	searchProjection    repository.ArtifactSearchStore
-	intelligence        repository.ArtifactIntelligenceStore
-	quarantine          repository.ArtifactQuarantineStore
-	runtimeNodes        repository.RuntimeNodeStore
-	scheduledTasks      repository.ScheduledTaskStore
-	queueStats          repository.BackgroundOperationQueueStore
-	diagnostics         Dependencies
-	artifactScanner     scanning.Scanner
-	artifactScanFormats []repository.Format
+	sessions               nativeMavenHandler
+	groups                 repository.HostedGroupStore
+	grants                 repository.RepositoryGrantStore
+	templates              repository.AuthorizationTemplateStore
+	authorizationRoles     repository.AuthorizationRoleStore
+	retentionPolicies      repository.RepositoryRetentionPolicyStore
+	securityPolicies       repository.RepositorySecurityPolicyStore
+	quarantineReadPolicies repository.RepositoryQuarantineReadPolicyStore
+	capacities             repository.RepositoryCapacityStore
+	tombstones             repository.ArtifactTombstoneStore
+	lifecycleJobs          repository.LifecycleJobStore
+	auditRetention         repository.AuditRetentionStore
+	anonymousAccess        repository.AnonymousAccessPolicyStore
+	oidcRuntime            *OIDCRuntime
+	replication            repository.ReplicationStore
+	oci                    repository.NativeOCIStore
+	conan                  repository.NativeConanStore
+	apiKeys                repository.APIKeyStore
+	users                  userManagementStore
+	authorizer             RepositoryAuthorizer
+	audit                  repository.Store
+	metrics                *Metrics
+	maintenance            *CacheMaintenance
+	proxyCache             proxyCacheBrowseHandler
+	mavenProxy             mavenProxyOperationsHandler
+	searchProjection       repository.ArtifactSearchStore
+	intelligence           repository.ArtifactIntelligenceStore
+	quarantine             repository.ArtifactQuarantineStore
+	runtimeNodes           repository.RuntimeNodeStore
+	scheduledTasks         repository.ScheduledTaskStore
+	queueStats             repository.BackgroundOperationQueueStore
+	diagnostics            Dependencies
+	artifactScanner        scanning.Scanner
+	artifactScanFormats    []repository.Format
 }
 
 type userManagementStore interface {

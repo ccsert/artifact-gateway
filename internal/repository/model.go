@@ -246,6 +246,14 @@ type RepositorySecurityPolicy struct {
 	AllowedLicenses          []string `json:"allowedLicenses"`
 }
 
+// RepositoryQuarantineReadPolicy controls protocol-read enforcement for
+// quarantined artifacts in one Hosted repository. It is independent from
+// promotion admission and defaults disabled for compatibility.
+type RepositoryQuarantineReadPolicy struct {
+	Version string `json:"version"`
+	Enabled bool   `json:"enabled"`
+}
+
 // SecurityPolicyEvaluation is the stable result returned by dry-run checks
 // and used by promotion admission. Reasons are machine-readable codes.
 type SecurityPolicyEvaluation struct {

@@ -461,6 +461,9 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if h.blockQuarantinedRead(w, r, repo, assetPath, user) {
+		return
+	}
 	body, err := h.objects.Get(r.Context(), asset.ObjectKey)
 	if err != nil {
 		http.Error(w, "artifact unavailable", http.StatusServiceUnavailable)
@@ -476,6 +479,35 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		audit.AuthorizationSource, audit.AuthorizationReason = anonymousAuthorizationSource, anonymousAuthorizationReason
 	}
 	_ = h.store.RecordAudit(r.Context(), audit)
+}
+
+func (h nativeMavenHandler) blockQuarantinedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, assetPath, actor string) bool {
+	coordinate := mavenResourceFromPath(assetPath)
+	if len(strings.Split(coordinate, ":")) < 3 {
+		return false
+	}
+	artifacts, err := h.store.ListMavenArtifacts(r.Context(), repo.ID)
+	if err != nil {
+		http.Error(w, "evaluate artifact quarantine failed", http.StatusInternalServerError)
+		return true
+	}
+	digests := make([]string, 0, 1)
+	for _, artifact := range artifacts {
+		if artifact.Coordinate == coordinate {
+			digests = append(digests, artifact.Digest)
+		}
+	}
+	blocked, err := repository.QuarantinedArtifactReadBlocked(r.Context(), h.store, h.store, repo.ID, repository.FormatMaven, coordinate, digests...)
+	if err != nil {
+		http.Error(w, "evaluate artifact quarantine failed", http.StatusInternalServerError)
+		return true
+	}
+	if !blocked {
+		return false
+	}
+	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatMaven), Resource: assetPath, Representation: strings.Join(digests, ","), Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason})
+	http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
+	return true
 }
 
 func nativeMavenReadPath(path string) (string, string, bool) {
@@ -830,6 +862,26 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	visibleItems := make([]repository.MavenArtifact, 0, len(items))
+	digestsByCoordinate := make(map[string][]string)
+	for _, item := range items {
+		digestsByCoordinate[item.Coordinate] = append(digestsByCoordinate[item.Coordinate], item.Digest)
+	}
+	blockedCoordinates := make(map[string]bool)
+	for coordinate, digests := range digestsByCoordinate {
+		blocked, blockErr := repository.QuarantinedArtifactReadBlocked(r.Context(), h.store, h.store, repo.ID, repository.FormatMaven, coordinate, digests...)
+		if blockErr != nil {
+			http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		blockedCoordinates[coordinate] = blocked
+	}
+	for _, item := range items {
+		if !blockedCoordinates[item.Coordinate] {
+			visibleItems = append(visibleItems, item)
+		}
+	}
+	items = visibleItems
 	prefix := strings.TrimSuffix(path, "/maven-metadata.xml")
 	parts := strings.Split(prefix, "/")
 	// Maven asks for a distinct version-level metadata document when resolving

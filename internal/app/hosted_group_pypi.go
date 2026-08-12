@@ -81,6 +81,14 @@ func (h v2GroupPyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, r
 			continue
 		}
 		for _, project := range projects {
+			files, listErr := h.native.store.ListPyPIProjectFiles(r.Context(), repo.ID, project.Project)
+			if listErr != nil {
+				continue
+			}
+			files, _, listErr = h.native.filterQuarantinedPyPIFiles(r.Context(), repo, files)
+			if listErr != nil || len(files) == 0 {
+				continue
+			}
 			if _, ok := seen[project.Project]; !ok {
 				seen[project.Project] = project
 			}
@@ -99,6 +107,7 @@ func (h v2GroupPyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, r
 func (h v2GroupPyPIHandler) simpleProject(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, project, actor string) {
 	merged := make([]repository.PyPIFile, 0)
 	seen := make(map[string]bool)
+	blockedCoordinates := make(map[string]bool)
 	stale := false
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
@@ -131,8 +140,19 @@ func (h v2GroupPyPIHandler) simpleProject(w http.ResponseWriter, r *http.Request
 				continue
 			}
 		}
+		files, memberBlocked, filterErr := h.native.filterQuarantinedPyPIFiles(r.Context(), repo, files)
+		if filterErr != nil {
+			h.native.recordAuditForTarget(r, repo, target, project, "project", actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+			continue
+		}
+		for coordinate := range memberBlocked {
+			blockedCoordinates[coordinate] = true
+		}
 		h.native.recordAuditForTarget(r, repo, target, project, "project", actor, repository.AuditResolved, http.StatusOK, 0, disposition)
 		for _, file := range files {
+			if blockedCoordinates[file.Project+"@"+file.Version] {
+				continue
+			}
 			if seen[file.Filename] {
 				continue
 			}
@@ -153,16 +173,53 @@ func (h v2GroupPyPIHandler) simpleProject(w http.ResponseWriter, r *http.Request
 }
 
 func (h v2GroupPyPIHandler) download(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, filename, actor string) {
+	higherPriority := make([]repository.HostedRepository, 0, len(members))
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			continue
 		}
-		if _, err = h.native.store.GetPyPIFile(r.Context(), repo.ID, filename); errors.Is(err, repository.ErrNotFound) {
+		file, err := h.native.store.GetPyPIFile(r.Context(), repo.ID, filename)
+		if errors.Is(err, repository.ErrNotFound) {
+			higherPriority = append(higherPriority, repo)
 			continue
 		}
 		if err != nil {
 			h.native.writeError(w, http.StatusServiceUnavailable, "distribution unavailable")
+			return
+		}
+		for _, higher := range higherPriority {
+			files, lookupErr := h.native.store.ListPyPIProjectFiles(r.Context(), higher.ID, file.Project)
+			if errors.Is(lookupErr, repository.ErrNotFound) {
+				continue
+			}
+			if lookupErr != nil {
+				h.native.writeError(w, http.StatusServiceUnavailable, "distribution unavailable")
+				return
+			}
+			for _, higherFile := range files {
+				if higherFile.Version != file.Version {
+					continue
+				}
+				blocked, blockErr := h.native.pypiVersionReadBlocked(r.Context(), higher, higherFile)
+				if blockErr != nil {
+					h.native.writeError(w, http.StatusServiceUnavailable, "distribution unavailable")
+					return
+				}
+				if blocked {
+					h.native.writePyPIQuarantineDenied(w, r, higher, higherFile, actor, "bypass", pypiAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: higher.Name})
+					return
+				}
+				break
+			}
+		}
+		blocked, err := h.native.pypiVersionReadBlocked(r.Context(), repo, file)
+		if err != nil {
+			h.native.writeError(w, http.StatusServiceUnavailable, "distribution unavailable")
+			return
+		}
+		if blocked {
+			h.native.writePyPIQuarantineDenied(w, r, repo, file, actor, "bypass", pypiAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name})
 			return
 		}
 		h.native.downloadForTarget(w, r, repo, filename, actor, pypiAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name})

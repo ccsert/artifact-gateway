@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -98,11 +99,17 @@ func (h ConanHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, gr
 		return false
 	}
 	content, ok, err := h.nativeConanContent(r.Context(), repo, path, file)
+	if errors.Is(err, errConanArtifactQuarantined) {
+		decision := AuthorizationDecision{Source: "quarantine_read_policy", Reason: repository.ArtifactQuarantinedReason}
+		h.audit(withConanAuditAuthorization(withConanAuditStatus(r.Context(), http.StatusForbidden), decision), groupName, path, repo.Name, principal.Actor, repository.AuditAccessDenied)
+		http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
+		return true
+	}
 	if err != nil {
 		http.Error(w, "unable to read native Conan artifact", http.StatusInternalServerError)
 		return true
 	}
-	if !ok || conanContentIsEmptyListing(path, file, content) {
+	if !ok || conanContentIsEmptyListing(path, file, content) && !content.policyFiltered {
 		return false
 	}
 	w.Header().Set("Content-Type", content.contentType)

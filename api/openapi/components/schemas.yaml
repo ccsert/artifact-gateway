@@ -1045,6 +1045,14 @@ SecurityPolicy:
       maxItems: 100
       uniqueItems: true
       items: {type: string, minLength: 1, maxLength: 128}
+QuarantineReadPolicy:
+  type: object
+  required: [version, enabled]
+  additionalProperties: false
+  description: Hosted repository policy controlling protocol reads of quarantined artifacts. It is disabled by default.
+  properties:
+    version: {type: string}
+    enabled: {type: boolean, default: false}
 SecurityPolicyEvaluationRequest:
   type: object
   required: [sourceRepositoryId, coordinate, digest]

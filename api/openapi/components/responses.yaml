@@ -240,6 +240,16 @@ SecurityPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/SecurityPolicy"
+QuarantineReadPolicy:
+  description: Repository quarantine read policy
+  headers:
+    ETag:
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/QuarantineReadPolicy"
 SecurityPolicyEvaluation:
   description: Security admission evaluation for an immutable artifact
   content:

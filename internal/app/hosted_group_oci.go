@@ -86,9 +86,13 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			if err != nil {
 				continue
 			}
-			served, status := h.native.serveHostedRead(w, r, repo, imageName, resource, reference)
+			served, status := h.native.serveHostedRead(w, r, repo, imageName, resource, reference, principal.Actor)
 			if served {
-				resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditResolved, status)
+				if status == http.StatusForbidden {
+					_ = resolver.auditGroupPolicyDenied(r.Context(), group.Name, repository.FormatOCI, r.URL.Path, repo.Name, principal.Actor, strings.ToLower(r.Method))
+				} else {
+					resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditResolved, status)
+				}
 				return
 			}
 			continue
@@ -111,17 +115,57 @@ func (h v2GroupOCIHandler) tags(w http.ResponseWriter, r *http.Request, resolver
 		limit = parsed
 	}
 	seen := make(map[string]struct{})
+	claimed := make(map[string]struct{})
 	for _, member := range members {
 		if member.Type != repository.MemberHosted {
 			continue
 		}
-		tags, err := h.native.store.ListOCITags(r.Context(), member.RepositoryID, imageName, limit+1, r.URL.Query().Get("last"))
+		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+		if err != nil {
+			continue
+		}
+		blockedDigests, err := h.native.ociQuarantinedDigestClosure(r.Context(), repo, imageName)
 		if err != nil {
 			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list group tags")
 			return
 		}
-		for _, tag := range tags {
-			seen[tag] = struct{}{}
+		memberVisible := 0
+		cursor := r.URL.Query().Get("last")
+		for memberVisible < limit+1 {
+			batch, listErr := h.native.store.ListOCITags(r.Context(), member.RepositoryID, imageName, limit+1, cursor)
+			if listErr != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list group tags")
+				return
+			}
+			if len(batch) == 0 {
+				break
+			}
+			for _, tag := range batch {
+				if _, exists := claimed[tag]; exists {
+					continue
+				}
+				claimed[tag] = struct{}{}
+				manifest, lookupErr := h.native.store.GetOCIManifest(r.Context(), repo.ID, imageName, tag)
+				if lookupErr != nil {
+					continue
+				}
+				if _, blocked := blockedDigests[manifest.Digest]; blocked {
+					continue
+				}
+				seen[tag] = struct{}{}
+				memberVisible++
+				if memberVisible == limit+1 {
+					break
+				}
+			}
+			if memberVisible == limit+1 || len(batch) < limit+1 {
+				break
+			}
+			next := batch[len(batch)-1]
+			if next == cursor {
+				break
+			}
+			cursor = next
 		}
 	}
 	tags := make([]string, 0, len(seen))
@@ -148,12 +192,21 @@ func (h v2GroupOCIHandler) tags(w http.ResponseWriter, r *http.Request, resolver
 // writing a response when the content is absent, so the caller can fall
 // through to the next group member. It reports whether the request was served
 // and the status that was written.
-func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, imageName, resource, reference string) (bool, int) {
+func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) (bool, int) {
 	switch resource {
 	case "blob":
 		if !validOCIDigest(reference) {
 			writeOCIError(w, http.StatusBadRequest, "DIGEST_INVALID", "valid sha256 digest is required")
 			return true, http.StatusBadRequest
+		}
+		blocked, err := h.ociDigestReadBlocked(r.Context(), repo, imageName, reference)
+		if err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to evaluate artifact quarantine")
+			return true, http.StatusInternalServerError
+		}
+		if blocked {
+			writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
+			return true, http.StatusForbidden
 		}
 		blob, err := h.store.GetOCIBlob(r.Context(), repo.ID, reference)
 		if errors.Is(err, repository.ErrNotFound) {
@@ -166,6 +219,17 @@ func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 		serveCachedOCIContent(w, r, reference, ociprotocol.NewStoredContent(blob.Digest, "application/octet-stream", blob.ObjectKey, blob.Size, h.objects))
 		return true, http.StatusOK
 	case "manifest":
+		if validOCIDigest(reference) {
+			blocked, blockErr := h.ociDigestReadBlocked(r.Context(), repo, imageName, reference)
+			if blockErr != nil {
+				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to evaluate artifact quarantine")
+				return true, http.StatusInternalServerError
+			}
+			if blocked {
+				writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
+				return true, http.StatusForbidden
+			}
+		}
 		manifest, err := h.store.GetOCIManifest(r.Context(), repo.ID, imageName, reference)
 		if errors.Is(err, repository.ErrNotFound) {
 			return false, 0
@@ -173,6 +237,15 @@ func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to read manifest")
 			return true, http.StatusInternalServerError
+		}
+		blocked, blockErr := h.ociManifestReadBlocked(r.Context(), repo, manifest)
+		if blockErr != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to evaluate artifact quarantine")
+			return true, http.StatusInternalServerError
+		}
+		if blocked {
+			writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
+			return true, http.StatusForbidden
 		}
 		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
 			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")

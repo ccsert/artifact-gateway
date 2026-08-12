@@ -93,6 +93,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_security_policy"
   "/repositories/{repositoryId}/security-policy:evaluate":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_security_policy_evaluate"
+  "/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_quarantine_read_policy"
   "/repositories/{repositoryId}/capacity":
     "$ref": "./management/capacity.yaml#/repositories_repositoryId_capacity"
   "/repositories/{repositoryId}/retention:dry-run":

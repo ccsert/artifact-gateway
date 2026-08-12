@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -42,6 +43,8 @@ var (
 type nativePyPIHandler struct {
 	store              repository.NativePyPIStore
 	repos              repository.HostedRepositoryStore
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
 	objects            OCIObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
@@ -69,7 +72,7 @@ func newNativePyPIHandler(store GatewayStore, objects OCIObjectStore, auth Authe
 		objects = NewMemoryOCIObjectStore()
 	}
 	return nativePyPIHandler{
-		store: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
+		store: store, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
 			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
 		}},
@@ -420,6 +423,26 @@ func (h nativePyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, re
 		h.recordAudit(r, repo, "", "index", actor, repository.AuditStorageError, http.StatusInternalServerError, 0, "bypass")
 		return
 	}
+	visibleProjects := projects[:0]
+	for _, project := range projects {
+		files, listErr := h.store.ListPyPIProjectFiles(r.Context(), repo.ID, project.Project)
+		if listErr != nil {
+			if errors.Is(listErr, repository.ErrNotFound) {
+				continue
+			}
+			h.writeError(w, http.StatusInternalServerError, "list projects failed")
+			return
+		}
+		files, _, listErr = h.filterQuarantinedPyPIFiles(r.Context(), repo, files)
+		if listErr != nil {
+			h.writeError(w, http.StatusInternalServerError, "list projects failed")
+			return
+		}
+		if len(files) > 0 {
+			visibleProjects = append(visibleProjects, project)
+		}
+	}
+	projects = visibleProjects
 	h.simpleRootFromProjects(w, r, repo, projects)
 	h.recordAudit(r, repo, "", "index", actor, repository.AuditResolved, http.StatusOK, 0, "bypass")
 }
@@ -452,6 +475,16 @@ func (h nativePyPIHandler) simpleProject(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "list project files failed")
 		h.recordAudit(r, repo, project, "project", actor, repository.AuditStorageError, http.StatusInternalServerError, 0, "bypass")
+		return
+	}
+	files, _, err = h.filterQuarantinedPyPIFiles(r.Context(), repo, files)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "list project files failed")
+		return
+	}
+	if len(files) == 0 {
+		http.NotFound(w, r)
+		h.recordAudit(r, repo, project, "project", actor, repository.AuditNotFound, http.StatusNotFound, 0, "bypass")
 		return
 	}
 	h.writeSimpleProject(w, r, project, files)
@@ -512,6 +545,15 @@ func (h nativePyPIHandler) downloadForTarget(w http.ResponseWriter, r *http.Requ
 		h.recordAuditForTarget(r, repo, target, filename, "distribution", actor, repository.AuditStorageError, http.StatusInternalServerError, 0, disposition)
 		return
 	}
+	blocked, err := h.pypiVersionReadBlocked(r.Context(), repo, file)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "read distribution failed")
+		return
+	}
+	if blocked {
+		h.writePyPIQuarantineDenied(w, r, repo, file, actor, disposition, target)
+		return
+	}
 	if file.ObjectKey == "" {
 		disposition = "miss"
 		if repo.Type != repository.RepositoryTypeProxy {
@@ -547,6 +589,66 @@ func (h nativePyPIHandler) downloadForTarget(w http.ResponseWriter, r *http.Requ
 		_, _ = io.Copy(w, reader)
 	}
 	h.recordAuditForTarget(r, repo, target, file.Project+"@"+file.Version, "distribution", actor, repository.AuditResolved, http.StatusOK, size, disposition)
+}
+
+func (h nativePyPIHandler) writePyPIQuarantineDenied(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, file repository.PyPIFile, actor, disposition string, target pypiAuditTarget) {
+	h.writeError(w, http.StatusForbidden, repository.ArtifactQuarantinedReason)
+	h.recordQuarantineAuditForTarget(r, repo, target, file.Project+"@"+file.Version, "distribution", actor, disposition)
+}
+
+func (h nativePyPIHandler) recordQuarantineAuditForTarget(r *http.Request, repo repository.HostedRepository, target pypiAuditTarget, resource, representation, actor, disposition string) {
+	if h.audit == nil {
+		return
+	}
+	if actor == "" {
+		actor = anonymousActor
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: target.GroupName, Repository: target.Repository, MemberName: target.MemberName,
+		Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatPyPI),
+		Resource: resource, Representation: representation, MemberType: string(repo.Type), Operation: strings.ToLower(r.Method),
+		Status: http.StatusForbidden, CacheDisposition: disposition, AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason,
+	})
+}
+
+func (h nativePyPIHandler) filterQuarantinedPyPIFiles(ctx context.Context, repo repository.HostedRepository, files []repository.PyPIFile) ([]repository.PyPIFile, map[string]bool, error) {
+	digestsByCoordinate := make(map[string][]string)
+	for _, file := range files {
+		coordinate := file.Project + "@" + file.Version
+		digestsByCoordinate[coordinate] = append(digestsByCoordinate[coordinate], file.Digest)
+	}
+	blockedCoordinates := make(map[string]bool)
+	for coordinate, digests := range digestsByCoordinate {
+		blocked, err := repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatPyPI, coordinate, digests...)
+		if err != nil {
+			return nil, nil, err
+		}
+		if blocked {
+			blockedCoordinates[coordinate] = true
+		}
+	}
+	visible := make([]repository.PyPIFile, 0, len(files))
+	for _, file := range files {
+		if !blockedCoordinates[file.Project+"@"+file.Version] {
+			visible = append(visible, file)
+		}
+	}
+	return visible, blockedCoordinates, nil
+}
+
+func (h nativePyPIHandler) pypiVersionReadBlocked(ctx context.Context, repo repository.HostedRepository, file repository.PyPIFile) (bool, error) {
+	files, err := h.store.ListPyPIProjectFiles(ctx, repo.ID, file.Project)
+	if err != nil {
+		return false, err
+	}
+	coordinate := file.Project + "@" + file.Version
+	digests := make([]string, 0, len(files))
+	for _, candidate := range files {
+		if candidate.Version == file.Version {
+			digests = append(digests, candidate.Digest)
+		}
+	}
+	return repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatPyPI, coordinate, digests...)
 }
 
 func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.HostedRepository, project string) ([]repository.PyPIFile, string, error) {

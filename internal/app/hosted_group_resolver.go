@@ -70,6 +70,13 @@ func (r v2GroupResolver) auditGroupAuthorizationDenied(ctx context.Context, grou
 	return r.audit.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: groupName, Actor: actor, MemberName: member, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(format), Resource: resource, Operation: "get", Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 }
 
+func (r v2GroupResolver) auditGroupPolicyDenied(ctx context.Context, groupName string, format repository.Format, resource, member, actor, operation string) error {
+	if r.audit == nil {
+		return nil
+	}
+	return r.audit.RecordAudit(ctx, repository.AuditRecord{GroupName: groupName, Repository: groupName, Actor: actor, MemberName: member, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(format), Resource: resource, Operation: operation, Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason})
+}
+
 // v2GroupName extracts the first path segment after the format's protocol
 // prefix, which is where a V2 group name can appear.
 func v2GroupName(format repository.Format, path string) string {

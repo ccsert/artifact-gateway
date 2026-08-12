@@ -34,6 +34,8 @@ type nativeRawHandler struct {
 	proxyClient        RawClient
 	proxyCache         *RawCache
 	publicationScanner *publicationScanScheduler
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
 }
 
 func (h nativeRawHandler) withMetrics(metrics *Metrics) nativeRawHandler {
@@ -58,7 +60,7 @@ func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, authorizer: RepositoryAuthorizer{
+	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, readPolicies: store, quarantine: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,
 		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
@@ -127,7 +129,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	if rawChecksumExtension(path) != "" {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
-			h.checksum(w, r, repo, path)
+			h.checksum(w, r, repo, path, principal)
 		case http.MethodPut:
 			h.verifyChecksumUpload(w, r, repo, path)
 		case http.MethodDelete:
@@ -142,6 +144,9 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		asset, err := h.store.GetRawAsset(r.Context(), repo.ID, path)
 		if err != nil {
 			http.NotFound(w, r)
+			return true
+		}
+		if h.blockQuarantinedRead(w, r, repo, asset, principal) {
 			return true
 		}
 		serveNativeRawObject(w, r, path, asset, h.objects)
@@ -341,7 +346,7 @@ func rawChecksumSourcePath(path string) string {
 	return strings.TrimSuffix(path, rawChecksumExtension(path))
 }
 
-func (h nativeRawHandler) checksum(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {
+func (h nativeRawHandler) checksum(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) {
 	source := rawChecksumSourcePath(path)
 	if rawChecksumExtension(source) != "" {
 		http.NotFound(w, r)
@@ -350,6 +355,9 @@ func (h nativeRawHandler) checksum(w http.ResponseWriter, r *http.Request, repo 
 	asset, err := h.store.GetRawAsset(r.Context(), repo.ID, source)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	if h.blockQuarantinedRead(w, r, repo, asset, principal) {
 		return
 	}
 	body, err := h.rawChecksum(r.Context(), asset, rawChecksumExtension(path))
@@ -445,10 +453,34 @@ func (h nativeRawHandler) list(w http.ResponseWriter, r *http.Request, repo repo
 		http.Error(w, "list cursor is invalid", http.StatusBadRequest)
 		return
 	}
-	assets, err := h.store.ListRawAssets(r.Context(), repo.ID, prefix, limit+1, after)
-	if err != nil {
-		http.Error(w, "list raw objects failed", http.StatusInternalServerError)
-		return
+	assets := make([]repository.RawAsset, 0, limit+1)
+	cursor := after
+	for len(assets) < limit+1 {
+		batch, err := h.store.ListRawAssets(r.Context(), repo.ID, prefix, limit+1, cursor)
+		if err != nil {
+			http.Error(w, "list raw objects failed", http.StatusInternalServerError)
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, asset := range batch {
+			blocked, blockErr := repository.QuarantinedArtifactReadBlocked(r.Context(), h.readPolicies, h.quarantine, repo.ID, repository.FormatRaw, asset.Path, asset.Digest)
+			if blockErr != nil {
+				http.Error(w, "list raw objects failed", http.StatusInternalServerError)
+				return
+			}
+			if !blocked {
+				assets = append(assets, asset)
+				if len(assets) == limit+1 {
+					break
+				}
+			}
+		}
+		cursor = batch[len(batch)-1].Path
+		if len(batch) < limit+1 {
+			break
+		}
 	}
 	if len(assets) > limit {
 		assets = assets[:limit]

@@ -18,10 +18,13 @@ former identity; it never synchronously removes its byte object.
 
 Quarantine is not a fourth lifecycle state. It is a Repository-local,
 versioned governance record over the immutable repository/format/coordinate/
-digest identity. A quarantined Artifact remains readable when it is otherwise
-visible, may still be tombstoned or reclaimed normally, and remains
-quarantined after restore. Quarantine only blocks Promotion and Replication;
-Release changes that governance decision without changing lifecycle state.
+digest identity. A quarantined Artifact remains lifecycle-visible, may still
+be tombstoned or reclaimed normally, and remains quarantined after restore.
+Quarantine always blocks Promotion and Replication. Protocol reads remain
+compatible while the Repository's independent quarantine-read policy is
+disabled; when that versioned policy is enabled, GET/HEAD is denied and
+protocol metadata hides the quarantined distribution without changing its
+lifecycle state. Release changes the governance decision and restores reads.
 For Conan, the quarantine identity is the recipe revision because the recipe
 and its visible package revisions are promoted and replicated atomically;
 package revisions remain independent lifecycle and scanner identities.

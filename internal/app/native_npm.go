@@ -31,6 +31,8 @@ const (
 type nativeNPMHandler struct {
 	store              repository.NativeNPMStore
 	repos              repository.HostedRepositoryStore
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
 	objects            OCIObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
@@ -99,7 +101,7 @@ func newNativeNPMHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 		objects = NewMemoryOCIObjectStore()
 	}
 	return nativeNPMHandler{
-		store: store, repos: store, objects: objects, auth: auth, audit: store,
+		store: store, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store,
 		proxy: UpstreamClient{}, protection: newNPMProxyProtection(nil, 0), metadataTTL: npmMetadataTTL, negativeTTL: 10 * time.Minute,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
 			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
@@ -594,7 +596,68 @@ func (h nativeNPMHandler) packumentWithDisposition(w http.ResponseWriter, r *htt
 		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
 		return
 	}
+	pkg, _, err = h.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		return
+	}
+	if len(pkg.Versions) == 0 {
+		h.writeError(w, http.StatusNotFound, "package not found")
+		return
+	}
 	h.writePackument(w, r, repo, repo.Name, pkg, actor, disposition)
+}
+
+func (h nativeNPMHandler) filterQuarantinedNPMVersions(ctx context.Context, repo repository.HostedRepository, pkg repository.NPMPackage) (repository.NPMPackage, map[string]bool, error) {
+	blockedVersions := make(map[string]bool)
+	visible := make([]repository.NPMVersion, 0, len(pkg.Versions))
+	for _, version := range pkg.Versions {
+		blocked, err := repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatNPM, pkg.Name+"@"+version.Version, version.Digest)
+		if err != nil {
+			return repository.NPMPackage{}, nil, err
+		}
+		if blocked {
+			blockedVersions[version.Version] = true
+			continue
+		}
+		visible = append(visible, version)
+	}
+	pkg.Versions = visible
+	pkg.DistTags = cloneNPMStringMap(pkg.DistTags)
+	for tag, version := range pkg.DistTags {
+		if blockedVersions[version] {
+			delete(pkg.DistTags, tag)
+		}
+	}
+	return pkg, blockedVersions, nil
+}
+
+func cloneNPMStringMap(source map[string]string) map[string]string {
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func (h nativeNPMHandler) npmVersionReadBlocked(ctx context.Context, repo repository.HostedRepository, version repository.NPMVersion) (bool, error) {
+	return repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatNPM, version.PackageName+"@"+version.Version, version.Digest)
+}
+
+func (h nativeNPMHandler) writeNPMQuarantineDenied(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, version repository.NPMVersion, actor, disposition string, target npmAuditTarget) {
+	h.writeError(w, http.StatusForbidden, repository.ArtifactQuarantinedReason)
+	if h.audit == nil {
+		return
+	}
+	if actor == "" {
+		actor = anonymousActor
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: target.GroupName, Repository: target.Repository, MemberName: target.MemberName,
+		Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatNPM),
+		Resource: version.PackageName + "@" + version.Version, Representation: "package", MemberType: string(repo.Type), Operation: strings.ToLower(r.Method),
+		Status: http.StatusForbidden, CacheDisposition: disposition, AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason,
+	})
 }
 
 func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, pkg repository.NPMPackage, actor, disposition string) {
@@ -677,6 +740,15 @@ func (h nativeNPMHandler) tarballWithAudit(w http.ResponseWriter, r *http.Reques
 		h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
 		return
 	}
+	blocked, err := h.npmVersionReadBlocked(r.Context(), repo, version)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+		return
+	}
+	if blocked {
+		h.writeNPMQuarantineDenied(w, r, repo, version, actor, disposition, target)
+		return
+	}
 	result := serveNativeRawObject(w, r, tarballName, repository.RawAsset{
 		Digest: version.Digest, ObjectKey: version.ObjectKey, Size: version.Size,
 		ContentType: "application/octet-stream",
@@ -702,6 +774,15 @@ func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.R
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
 		h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
+		return
+	}
+	blocked, err := h.npmVersionReadBlocked(r.Context(), repo, version)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+		return
+	}
+	if blocked {
+		h.writeNPMQuarantineDenied(w, r, repo, version, actor, "bypass", target)
 		return
 	}
 	if version.ObjectKey != "" {

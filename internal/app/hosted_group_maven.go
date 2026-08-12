@@ -73,7 +73,7 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 			if err != nil {
 				continue
 			}
-			if h.native.serveHostedRead(w, r, repo, assetPath) {
+			if h.native.serveHostedRead(w, r, repo, assetPath, principal.Actor) {
 				return
 			}
 			continue
@@ -88,7 +88,13 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 // serveHostedRead attempts a read against a native hosted Maven repository
 // without writing a response when the asset is absent, so the caller can fall
 // through to the next group member. It reports whether the request was served.
-func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, assetPath string) bool {
+func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, assetPath, actor string) bool {
+	// The coordinate is the Group conflict boundary. A quarantined higher
+	// priority coordinate must claim every classifier/extension even when that
+	// exact asset name only exists in a lower member.
+	if !strings.HasSuffix(assetPath, "maven-metadata.xml") && h.blockQuarantinedRead(w, r, repo, assetPath, actor) {
+		return true
+	}
 	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, assetPath)
 	if err != nil {
 		if snapshotAsset, found := h.snapshotAsset(r.Context(), repo.ID, assetPath); found {

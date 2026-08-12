@@ -57,6 +57,7 @@ type conanCacheEntry struct {
 	contentType, member, endpoint string
 	cacheDisposition              string
 	status                        int
+	policyFiltered                bool
 }
 
 type ConanHandler struct {
@@ -69,7 +70,11 @@ type ConanHandler struct {
 	Cache         *ConanCache
 	NativeObjects OCIObjectStore
 	Metrics       *Metrics
+	ReadPolicies  repository.RepositoryQuarantineReadPolicyStore
+	Quarantine    repository.ArtifactQuarantineStore
 }
+
+var errConanArtifactQuarantined = errors.New(repository.ArtifactQuarantinedReason)
 
 func (h ConanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(withRawAuditCorrelation(r.Context(), r.Header.Get("X-Request-ID")))
@@ -343,6 +348,12 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 		return true
 	}
 	content, ok, err := h.nativeConanContent(r.Context(), repo, path, file)
+	if errors.Is(err, errConanArtifactQuarantined) {
+		decision := AuthorizationDecision{Source: "quarantine_read_policy", Reason: repository.ArtifactQuarantinedReason}
+		h.audit(withConanAuditAuthorization(withConanAuditStatus(r.Context(), http.StatusForbidden), decision), name, path, "native", principal.Actor, repository.AuditAccessDenied)
+		http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
+		return true
+	}
 	if err != nil {
 		h.audit(r.Context(), name, path, "native", principal.Actor, repository.AuditUpstreamError)
 		http.Error(w, "unable to read native Conan artifact", http.StatusInternalServerError)
@@ -390,16 +401,36 @@ func (h ConanHandler) nativeConanContent(ctx context.Context, repo repository.Ho
 		if err != nil {
 			return conanCacheEntry{}, false, err
 		}
+		visible := make([]repository.ConanRecipeRevision, 0, len(revisions))
+		policyFiltered := false
+		for _, revision := range revisions {
+			blocked, blockErr := h.conanRecipeReadBlocked(ctx, repo, reference, revision.Revision, revision.Digest)
+			if blockErr != nil {
+				return conanCacheEntry{}, false, blockErr
+			}
+			if blocked {
+				policyFiltered = true
+				continue
+			}
+			visible = append(visible, revision)
+		}
 		body, _ := json.Marshal(struct {
 			Revisions []conanRevisionJSON `json:"revisions"`
-		}{Revisions: conanRecipeRevisionJSON(revisions)})
-		return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass"}, true, nil
+		}{Revisions: conanRecipeRevisionJSON(visible)})
+		return conanCacheEntry{body: body, contentType: "application/json", member: "native", endpoint: repo.Name, status: http.StatusOK, cacheDisposition: "bypass", policyFiltered: policyFiltered}, true, nil
 	}
 	if len(parts) >= 7 && parts[4] == "revisions" {
 		recipeRevision := parts[5]
 		visibleRecipe, err := h.nativeConanVisibleRecipe(ctx, repo.ID, reference, recipeRevision)
 		if err != nil || !visibleRecipe {
 			return conanCacheEntry{}, visibleRecipe, err
+		}
+		blocked, err := h.conanRecipeReadBlocked(ctx, repo, reference, recipeRevision, "")
+		if err != nil {
+			return conanCacheEntry{}, false, err
+		}
+		if blocked {
+			return conanCacheEntry{}, true, errConanArtifactQuarantined
 		}
 		if len(parts) == 7 && parts[6] == "files" {
 			assets, err := h.NativeStore.ListConanRecipeAssets(ctx, repo.ID, reference, recipeRevision)
@@ -459,6 +490,20 @@ func (h ConanHandler) nativeConanContent(ctx context.Context, repo repository.Ho
 		}
 	}
 	return conanCacheEntry{}, false, nil
+}
+
+func (h ConanHandler) conanRecipeReadBlocked(ctx context.Context, repo repository.HostedRepository, reference, revision, digest string) (bool, error) {
+	if h.ReadPolicies == nil || h.Quarantine == nil {
+		return false, nil
+	}
+	if digest == "" {
+		recipe, err := h.NativeStore.GetConanRecipeRevision(ctx, repo.ID, reference, revision)
+		if err != nil {
+			return false, err
+		}
+		digest = recipe.Digest
+	}
+	return repository.QuarantinedArtifactReadBlocked(ctx, h.ReadPolicies, h.Quarantine, repo.ID, repository.FormatConan, reference+"#"+revision, digest)
 }
 
 func (h ConanHandler) nativeConanVisibleRecipe(ctx context.Context, repositoryID, reference, revision string) (bool, error) {

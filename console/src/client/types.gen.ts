@@ -1188,6 +1188,14 @@ export type EgressProxyTestResult = {
   checkedAt: string;
 };
 
+/**
+ * Hosted repository policy controlling protocol reads of quarantined artifacts. It is disabled by default.
+ */
+export type QuarantineReadPolicy = {
+  version: string;
+  enabled: boolean;
+};
+
 export type RetentionReasonCounts = {
   age: number;
   maximumVersions: number;
@@ -3745,6 +3753,75 @@ export type EvaluateSecurityPolicyResponses = {
 
 export type EvaluateSecurityPolicyResponse =
   EvaluateSecurityPolicyResponses[keyof EvaluateSecurityPolicyResponses];
+
+export type GetQuarantineReadPolicyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type GetQuarantineReadPolicyErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetQuarantineReadPolicyError =
+  GetQuarantineReadPolicyErrors[keyof GetQuarantineReadPolicyErrors];
+
+export type GetQuarantineReadPolicyResponses = {
+  /**
+   * Repository quarantine read policy
+   */
+  200: QuarantineReadPolicy;
+};
+
+export type GetQuarantineReadPolicyResponse =
+  GetQuarantineReadPolicyResponses[keyof GetQuarantineReadPolicyResponses];
+
+export type ReplaceQuarantineReadPolicyData = {
+  body: QuarantineReadPolicy;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type ReplaceQuarantineReadPolicyErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceQuarantineReadPolicyError =
+  ReplaceQuarantineReadPolicyErrors[keyof ReplaceQuarantineReadPolicyErrors];
+
+export type ReplaceQuarantineReadPolicyResponses = {
+  /**
+   * Repository quarantine read policy
+   */
+  200: QuarantineReadPolicy;
+};
+
+export type ReplaceQuarantineReadPolicyResponse =
+  ReplaceQuarantineReadPolicyResponses[keyof ReplaceQuarantineReadPolicyResponses];
 
 export type GetRepositoryCapacityData = {
   body?: never;

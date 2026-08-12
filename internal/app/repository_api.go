@@ -91,6 +91,7 @@ type GatewayStore interface {
 	repository.AuthorizationRoleStore
 	repository.RepositoryRetentionPolicyStore
 	repository.RepositorySecurityPolicyStore
+	repository.RepositoryQuarantineReadPolicyStore
 	repository.RepositoryCapacityStore
 	repository.ArtifactTombstoneStore
 	repository.ArtifactIntelligenceStore
@@ -252,7 +253,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -326,7 +327,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		apt:        &v2GroupAPTHandler{native: &nativeAPT},
 		next:       nativeAPT}
 	mux.Handle("/apt/", aptGroupRouter)
-	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects}
+	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects, ReadPolicies: store, Quarantine: store}
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},
 		next:  conan}

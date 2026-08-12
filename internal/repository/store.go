@@ -115,6 +115,11 @@ type RepositorySecurityPolicyStore interface {
 	ReplaceRepositorySecurityPolicy(context.Context, string, RepositorySecurityPolicy, string) (RepositorySecurityPolicy, error)
 }
 
+type RepositoryQuarantineReadPolicyStore interface {
+	GetRepositoryQuarantineReadPolicy(context.Context, string) (RepositoryQuarantineReadPolicy, error)
+	ReplaceRepositoryQuarantineReadPolicy(context.Context, string, RepositoryQuarantineReadPolicy, string) (RepositoryQuarantineReadPolicy, error)
+}
+
 type RepositoryCapacityStore interface {
 	GetRepositoryCapacity(context.Context, string) (RepositoryCapacity, error)
 	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (RepositoryCapacity, error)

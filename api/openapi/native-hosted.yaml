@@ -35,6 +35,8 @@ paths:
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_grants"
   "/repositories/{repositoryId}/retention-policy":
     "$ref": "./management/repositories.yaml#/repositories_repositoryId_retention_policy"
+  "/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/repositories.yaml#/repositories_repositoryId_quarantine_read_policy"
   "/repositories/{repositoryId}/capacity":
     "$ref": "./management/capacity.yaml#/repositories_repositoryId_capacity"
   "/repositories/{repositoryId}/retention:dry-run":

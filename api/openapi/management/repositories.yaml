@@ -333,3 +333,32 @@ repositories_repositoryId_security_policy_evaluate:
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_quarantine_read_policy:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getQuarantineReadPolicy
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/QuarantineReadPolicy"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: replaceQuarantineReadPolicy
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/QuarantineReadPolicy"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/QuarantineReadPolicy"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"

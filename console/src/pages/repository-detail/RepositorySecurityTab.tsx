@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Select, Space, Switch } from "antd";
-import { getSecurityPolicy, replaceSecurityPolicy } from "../../client";
-import type { Repository, SecurityPolicy } from "../../client";
+import {
+  getQuarantineReadPolicy,
+  getSecurityPolicy,
+  replaceQuarantineReadPolicy,
+  replaceSecurityPolicy,
+} from "../../client";
+import type {
+  QuarantineReadPolicy,
+  Repository,
+  SecurityPolicy,
+} from "../../client";
 import { ErrorBanner, Loading, isNotFound } from "../../components/Feedback";
 import { Field } from "../../components/Layout";
 import { usePreferences } from "../../lib/preferences";
@@ -60,11 +69,18 @@ export function RepositorySecurityTab({
 }) {
   const { text } = usePreferences();
   const [policy, setPolicy] = useState<SecurityPolicy | null>(null);
+  const [readPolicy, setReadPolicy] = useState<QuarantineReadPolicy | null>(
+    null,
+  );
+  const [readEnabled, setReadEnabled] = useState(false);
   const [draft, setDraft] = useState<SecurityPolicyDraft>(DEFAULT_DRAFT);
   const [error, setError] = useState<unknown>(null);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [readError, setReadError] = useState<unknown>(null);
+  const [readSaving, setReadSaving] = useState(false);
+  const [readNotice, setReadNotice] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -81,9 +97,25 @@ export function RepositorySecurityTab({
     }
   }, [repo.id]);
 
+  const loadReadPolicy = useCallback(async () => {
+    setReadError(null);
+    const { data, error: err } = await getQuarantineReadPolicy({
+      path: { repositoryId: repo.id },
+    });
+    if (err) {
+      setReadError(err);
+      return;
+    }
+    if (data) {
+      setReadPolicy(data);
+      setReadEnabled(data.enabled);
+    }
+  }, [repo.id]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadReadPolicy();
+  }, [load, loadReadPolicy]);
 
   const update = <K extends keyof SecurityPolicyDraft>(
     key: K,
@@ -116,6 +148,30 @@ export function RepositorySecurityTab({
     }
   };
 
+  const saveReadPolicy = async () => {
+    if (!readPolicy) return;
+    setReadSaving(true);
+    setReadError(null);
+    setReadNotice("");
+    const { data, error: err } = await replaceQuarantineReadPolicy({
+      path: { repositoryId: repo.id },
+      headers: { "If-Match": readPolicy.version },
+      body: { version: readPolicy.version, enabled: readEnabled },
+    });
+    setReadSaving(false);
+    if (err) {
+      setReadError(err);
+      return;
+    }
+    setReadNotice(text("隔离读取策略已保存", "Quarantine read policy saved"));
+    if (data) {
+      setReadPolicy(data);
+      setReadEnabled(data.enabled);
+    } else {
+      void loadReadPolicy();
+    }
+  };
+
   if (error !== null) {
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
@@ -125,7 +181,7 @@ export function RepositorySecurityTab({
       <ErrorBanner error={error} onRetry={load} />
     );
   }
-  if (!policy) return <Loading />;
+  if (!policy || (!readPolicy && readError === null)) return <Loading />;
 
   const severityOptions = [
     { value: "none", label: text("不允许漏洞", "No vulnerabilities") },
@@ -148,6 +204,65 @@ export function RepositorySecurityTab({
       />
       {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && <Alert type="success" showIcon title={notice} />}
+
+      <div className="max-w-5xl space-y-4 rounded-lg border border-amber-900/60 bg-amber-950/20 p-5">
+        <Alert
+          type={readEnabled ? "warning" : "info"}
+          showIcon
+          title={text("隔离制品读取策略", "Quarantined artifact reads")}
+          description={text(
+            "这是独立于晋升准入的强制策略。启用后，协议 GET/HEAD 会拒绝隔离制品；npm 与 PyPI 按整版本阻断，Conan 按 recipe revision 闭包阻断，Group 不会回退到低优先级成员。解除隔离后读取立即恢复。",
+            "This policy is independent from promotion admission. When enabled, protocol GET/HEAD requests reject quarantined artifacts. npm and PyPI block whole versions, Conan blocks the recipe revision closure, and Groups do not fall through to lower-priority members. Reads resume immediately after release.",
+          )}
+        />
+        {readError !== null && (
+          <ErrorBanner error={readError} onRetry={loadReadPolicy} />
+        )}
+        {readPolicy && (
+          <>
+            {readNotice && <Alert type="success" showIcon title={readNotice} />}
+            <div className="flex items-center justify-between gap-8">
+              <div>
+                <div className="text-sm font-medium text-zinc-200">
+                  {text("阻断隔离制品读取", "Block quarantined artifact reads")}
+                </div>
+                <div className="mt-1 text-xs leading-5 text-zinc-500">
+                  {text(
+                    "默认关闭以保持升级兼容；建议在确认现有隔离记录后为受保护仓库开启。",
+                    "Disabled by default for upgrade compatibility. Enable it for protected repositories after reviewing existing quarantine records.",
+                  )}
+                </div>
+              </div>
+              <Switch
+                aria-label={text(
+                  "阻断隔离制品读取",
+                  "Block quarantined artifact reads",
+                )}
+                checked={readEnabled}
+                checkedChildren={text("已启用", "On")}
+                unCheckedChildren={text("已停用", "Off")}
+                onChange={setReadEnabled}
+              />
+            </div>
+            <Space>
+              <Button
+                type="primary"
+                danger={readEnabled}
+                loading={readSaving}
+                onClick={saveReadPolicy}
+              >
+                {text("保存读取策略", "Save read policy")}
+              </Button>
+              <span className="text-xs text-zinc-600">
+                {text(
+                  `读取策略当前版本 ${readPolicy.version}`,
+                  `Read policy version ${readPolicy.version}`,
+                )}
+              </span>
+            </Space>
+          </>
+        )}
+      </div>
 
       <div className="flex max-w-5xl items-center justify-between gap-8 border-b border-zinc-800 pb-5">
         <div>

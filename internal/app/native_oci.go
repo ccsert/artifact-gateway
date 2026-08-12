@@ -33,6 +33,8 @@ type nativeOCIHandler struct {
 	metrics            *Metrics
 	proxy              *OCIHandler
 	publicationScanner *publicationScanScheduler
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
 }
 
 func (h nativeOCIHandler) withMetrics(metrics *Metrics) nativeOCIHandler {
@@ -56,7 +58,7 @@ func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, authorizer: RepositoryAuthorizer{
+	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, readPolicies: store, quarantine: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,
 		LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
@@ -111,7 +113,7 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	switch resource {
 	case "blob":
-		h.blob(w, r, repo, imageName, reference)
+		h.blob(w, r, repo, imageName, reference, p.Actor)
 	case "upload":
 		h.upload(w, r, repo, imageName, uploadID)
 	case "uploads":
@@ -164,17 +166,44 @@ func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
 			if !include {
 				continue
 			}
-			items, err := h.store.ListOCIManifestNames(r.Context(), repo.ID, limit+1, localAfter)
-			if err != nil {
-				writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list catalog")
-				return
-			}
-			for _, item := range items {
-				decision, managed := h.authorizer.ManagedResourceDecision(r.Context(), p, repo, RepositoryRead, item)
-				if !managed || !decision.Allowed {
-					continue
+			visibleForRepository := 0
+			cursor := localAfter
+			for visibleForRepository < limit+1 {
+				items, listErr := h.store.ListOCIManifestNames(r.Context(), repo.ID, limit+1, cursor)
+				if listErr != nil {
+					writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list catalog")
+					return
 				}
-				names = append(names, repo.Name+"/"+item)
+				if len(items) == 0 {
+					break
+				}
+				for _, item := range items {
+					decision, managed := h.authorizer.ManagedResourceDecision(r.Context(), p, repo, RepositoryRead, item)
+					if !managed || !decision.Allowed {
+						continue
+					}
+					visible, visibilityErr := h.ociImageHasVisibleManifest(r.Context(), repo, item)
+					if visibilityErr != nil {
+						writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list catalog")
+						return
+					}
+					if !visible {
+						continue
+					}
+					names = append(names, repo.Name+"/"+item)
+					visibleForRepository++
+					if visibleForRepository == limit+1 {
+						break
+					}
+				}
+				if visibleForRepository == limit+1 || len(items) < limit+1 {
+					break
+				}
+				nextItem := items[len(items)-1]
+				if nextItem == cursor {
+					break
+				}
+				cursor = nextItem
 			}
 		}
 		if next == "" {
@@ -310,10 +339,18 @@ func (h nativeOCIHandler) referrers(w http.ResponseWriter, r *http.Request, repo
 		}
 		limit = n
 	}
-	items, err := h.store.ListOCIReferrers(r.Context(), repo.ID, name, subject, limit+1, r.URL.Query().Get("last"))
+	blockedDigests, err := h.ociQuarantinedDigestClosure(r.Context(), repo, name)
 	if err != nil {
-		writeOCIError(w, 500, "UNKNOWN", "unable to list referrers")
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list referrers")
 		return
+	}
+	var items []repository.OCIManifest
+	if _, blocked := blockedDigests[subject]; !blocked {
+		items, err = h.visibleOCIReferrers(r.Context(), repo, name, subject, limit+1, r.URL.Query().Get("last"), blockedDigests)
+		if err != nil {
+			writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list referrers")
+			return
+		}
 	}
 	if len(items) > limit {
 		items = items[:limit]
@@ -335,6 +372,37 @@ func (h nativeOCIHandler) referrers(w http.ResponseWriter, r *http.Request, repo
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"schemaVersion": 2, "manifests": out})
+}
+
+func (h nativeOCIHandler) visibleOCIReferrers(ctx context.Context, repo repository.HostedRepository, name, subject string, desired int, after string, blockedDigests map[string]struct{}) ([]repository.OCIManifest, error) {
+	items := make([]repository.OCIManifest, 0, desired)
+	cursor := after
+	for len(items) < desired {
+		batch, err := h.store.ListOCIReferrers(ctx, repo.ID, name, subject, desired, cursor)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, item := range batch {
+			if _, blocked := blockedDigests[item.Digest]; !blocked {
+				items = append(items, item)
+				if len(items) == desired {
+					break
+				}
+			}
+		}
+		if len(items) == desired || len(batch) < desired {
+			break
+		}
+		next := batch[len(batch)-1].Digest
+		if next == cursor {
+			break
+		}
+		cursor = next
+	}
+	return items, nil
 }
 
 func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
@@ -501,7 +569,7 @@ func (h nativeOCIHandler) uploadHeaders(w http.ResponseWriter, root, name string
 	}
 }
 
-func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, _ string, digest string) {
+func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, digest, actor string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -515,7 +583,179 @@ func (h nativeOCIHandler) blob(w http.ResponseWriter, r *http.Request, repo repo
 		writeOCIError(w, 404, "BLOB_UNKNOWN", "blob unknown to registry")
 		return
 	}
+	blocked, err := h.ociBlobReadBlocked(r.Context(), repo, name, digest)
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to evaluate artifact quarantine")
+		return
+	}
+	if blocked {
+		if h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatOCI), Resource: name, Representation: digest, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason})
+		}
+		writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
+		return
+	}
 	serveCachedOCIContent(w, r, digest, ociprotocol.NewStoredContent(blob.Digest, "application/octet-stream", blob.ObjectKey, blob.Size, h.objects))
+}
+
+func (h nativeOCIHandler) ociManifestReadBlocked(ctx context.Context, repo repository.HostedRepository, manifest repository.OCIManifest) (bool, error) {
+	return h.ociDigestReadBlocked(ctx, repo, manifest.Name, manifest.Digest)
+}
+
+func (h nativeOCIHandler) ociImageHasVisibleManifest(ctx context.Context, repo repository.HostedRepository, name string) (bool, error) {
+	blockedDigests, err := h.ociQuarantinedDigestClosure(ctx, repo, name)
+	if err != nil {
+		return false, err
+	}
+	after := ""
+	for {
+		manifests, err := h.store.ListOCIManifests(ctx, repo.ID, name, 1000, after)
+		if err != nil {
+			return false, err
+		}
+		for _, manifest := range manifests {
+			if _, blocked := blockedDigests[manifest.Digest]; !blocked {
+				return true, nil
+			}
+		}
+		if len(manifests) < 1000 {
+			return false, nil
+		}
+		after = manifests[len(manifests)-1].Digest
+	}
+}
+
+func (h nativeOCIHandler) ociBlobReadBlocked(ctx context.Context, repo repository.HostedRepository, name, digest string) (bool, error) {
+	return h.ociDigestReadBlocked(ctx, repo, name, digest)
+}
+
+// ociDigestReadBlocked computes the transitive descriptor closure rooted at
+// every quarantined manifest in one image. Indexes may reference child
+// manifests which in turn reference config/layer blobs, so a one-level scan
+// would allow clients to bypass quarantine by requesting a descendant digest.
+func (h nativeOCIHandler) ociDigestReadBlocked(ctx context.Context, repo repository.HostedRepository, name, digest string) (bool, error) {
+	blockedDigests, err := h.ociQuarantinedDigestClosure(ctx, repo, name)
+	if err != nil {
+		return false, err
+	}
+	_, blocked := blockedDigests[digest]
+	return blocked, nil
+}
+
+// ociQuarantinedDigestClosure computes the transitive descriptor closure once
+// for a repository image. List endpoints reuse the returned set for every
+// candidate instead of walking all manifests once per tag or referrer.
+func (h nativeOCIHandler) ociQuarantinedDigestClosure(ctx context.Context, repo repository.HostedRepository, name string) (map[string]struct{}, error) {
+	policy, err := h.readPolicies.GetRepositoryQuarantineReadPolicy(ctx, repo.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !policy.Enabled {
+		return map[string]struct{}{}, nil
+	}
+
+	queue := make([]repository.OCIManifest, 0)
+	after := ""
+	for {
+		manifests, err := h.store.ListOCIManifests(ctx, repo.ID, name, 1000, after)
+		if err != nil {
+			return nil, err
+		}
+		for _, manifest := range manifests {
+			quarantine, quarantineErr := h.quarantine.GetArtifactQuarantine(ctx, repo.ID, repository.FormatOCI, name, manifest.Digest)
+			if errors.Is(quarantineErr, repository.ErrNotFound) {
+				continue
+			}
+			if quarantineErr != nil {
+				return nil, quarantineErr
+			}
+			if quarantine.State == repository.ArtifactQuarantineStateQuarantined {
+				queue = append(queue, manifest)
+			}
+		}
+		if len(manifests) < 1000 {
+			break
+		}
+		after = manifests[len(manifests)-1].Digest
+	}
+
+	blockedDigests := make(map[string]struct{}, len(queue))
+	expandedManifests := make(map[string]struct{}, len(queue))
+	for len(queue) > 0 {
+		if len(blockedDigests) >= 10000 {
+			return nil, errors.New("OCI quarantine descriptor closure exceeds limit")
+		}
+		manifest := queue[0]
+		queue = queue[1:]
+		blockedDigests[manifest.Digest] = struct{}{}
+		if _, ok := expandedManifests[manifest.Digest]; ok {
+			continue
+		}
+		expandedManifests[manifest.Digest] = struct{}{}
+		descriptors, descriptorErr := h.ociManifestDescriptorDigests(ctx, manifest)
+		if descriptorErr != nil {
+			return nil, descriptorErr
+		}
+		for _, descriptor := range descriptors {
+			if _, known := blockedDigests[descriptor]; !known && len(blockedDigests) >= 10000 {
+				return nil, errors.New("OCI quarantine descriptor closure exceeds limit")
+			}
+			blockedDigests[descriptor] = struct{}{}
+			if _, expanded := expandedManifests[descriptor]; expanded {
+				continue
+			}
+			child, lookupErr := h.store.GetOCIManifest(ctx, repo.ID, name, descriptor)
+			if errors.Is(lookupErr, repository.ErrNotFound) {
+				continue
+			}
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			queue = append(queue, child)
+		}
+	}
+	return blockedDigests, nil
+}
+
+func (h nativeOCIHandler) ociManifestDescriptorDigests(ctx context.Context, manifest repository.OCIManifest) ([]string, error) {
+	reader, _, err := h.objects.Open(ctx, manifest.ObjectKey)
+	if err != nil {
+		return nil, err
+	}
+	body, readErr := io.ReadAll(io.LimitReader(reader, (16<<20)+1))
+	_ = reader.Close()
+	if readErr != nil || len(body) > 16<<20 {
+		return nil, errors.New("read OCI manifest descriptors")
+	}
+	var document struct {
+		Config struct {
+			Digest string `json:"digest"`
+		} `json:"config"`
+		Layers []struct {
+			Digest string `json:"digest"`
+		} `json:"layers"`
+		Manifests []struct {
+			Digest string `json:"digest"`
+		} `json:"manifests"`
+	}
+	if json.Unmarshal(body, &document) != nil {
+		return nil, errors.New("decode OCI manifest descriptors")
+	}
+	digests := make([]string, 0, 1+len(document.Layers)+len(document.Manifests))
+	if document.Config.Digest != "" {
+		digests = append(digests, document.Config.Digest)
+	}
+	for _, descriptor := range document.Layers {
+		if descriptor.Digest != "" {
+			digests = append(digests, descriptor.Digest)
+		}
+	}
+	for _, descriptor := range document.Manifests {
+		if descriptor.Digest != "" {
+			digests = append(digests, descriptor.Digest)
+		}
+	}
+	return digests, nil
 }
 
 func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, reference, actor string) {
@@ -524,6 +764,9 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 		manifest, err := h.store.GetOCIManifest(r.Context(), repo.ID, name, reference)
 		if err != nil {
 			writeOCIError(w, 404, "MANIFEST_UNKNOWN", "manifest unknown to registry")
+			return
+		}
+		if h.blockQuarantinedManifestRead(w, r, repo, manifest, actor) {
 			return
 		}
 		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
@@ -615,6 +858,22 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 	}
 }
 
+func (h nativeOCIHandler) blockQuarantinedManifestRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, manifest repository.OCIManifest, actor string) bool {
+	blocked, err := h.ociManifestReadBlocked(r.Context(), repo, manifest)
+	if err != nil {
+		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to evaluate artifact quarantine")
+		return true
+	}
+	if !blocked {
+		return false
+	}
+	if h.audit != nil {
+		_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatOCI), Resource: manifest.Name, Representation: manifest.Digest, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason})
+	}
+	writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
+	return true
+}
+
 func (h nativeOCIHandler) tags(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -629,7 +888,7 @@ func (h nativeOCIHandler) tags(w http.ResponseWriter, r *http.Request, repo repo
 		}
 		limit = parsed
 	}
-	tags, err := h.store.ListOCITags(r.Context(), repo.ID, name, limit+1, r.URL.Query().Get("last"))
+	tags, err := h.visibleOCITags(r.Context(), repo, name, limit+1, r.URL.Query().Get("last"))
 	if err != nil {
 		writeOCIError(w, http.StatusInternalServerError, "UNKNOWN", "unable to list tags")
 		return
@@ -649,6 +908,45 @@ func (h nativeOCIHandler) tags(w http.ResponseWriter, r *http.Request, repo repo
 		tags = []string{}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"name": repo.Name + "/" + name, "tags": tags})
+}
+
+func (h nativeOCIHandler) visibleOCITags(ctx context.Context, repo repository.HostedRepository, name string, desired int, after string) ([]string, error) {
+	blockedDigests, err := h.ociQuarantinedDigestClosure(ctx, repo, name)
+	if err != nil {
+		return nil, err
+	}
+	tags := make([]string, 0, desired)
+	cursor := after
+	for len(tags) < desired {
+		batch, err := h.store.ListOCITags(ctx, repo.ID, name, desired, cursor)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, tag := range batch {
+			manifest, lookupErr := h.store.GetOCIManifest(ctx, repo.ID, name, tag)
+			if lookupErr != nil {
+				continue
+			}
+			if _, blocked := blockedDigests[manifest.Digest]; !blocked {
+				tags = append(tags, tag)
+				if len(tags) == desired {
+					break
+				}
+			}
+		}
+		if len(tags) == desired || len(batch) < desired {
+			break
+		}
+		next := batch[len(batch)-1]
+		if next == cursor {
+			break
+		}
+		cursor = next
+	}
+	return tags, nil
 }
 
 func validOCIDigest(value string) bool {

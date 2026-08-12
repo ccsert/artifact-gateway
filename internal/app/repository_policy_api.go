@@ -329,6 +329,80 @@ func (h generatedRepositoryAPIAdapter) GetSecurityPolicy(w http.ResponseWriter, 
 	})
 }
 
+func quarantineReadPolicyResponse(policy repository.RepositoryQuarantineReadPolicy) adminopenapi.QuarantineReadPolicy {
+	return adminopenapi.QuarantineReadPolicy{Version: policy.Version, Enabled: policy.Enabled}
+}
+
+func supportsQuarantineReadPolicy(repo repository.HostedRepository) bool {
+	if repo.Type != repository.RepositoryTypeHosted {
+		return false
+	}
+	switch repo.Format {
+	case repository.FormatRaw, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatConan:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h generatedRepositoryAPIAdapter) GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if !supportsQuarantineReadPolicy(repo) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "hosted repository not found")
+			return
+		}
+		policy, err := h.quarantineReadPolicies.GetRepositoryQuarantineReadPolicy(r.Context(), repo.ID)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get quarantine read policy failed")
+			return
+		}
+		w.Header().Set("ETag", policy.Version)
+		writeNativeMavenJSON(w, http.StatusOK, quarantineReadPolicyResponse(policy))
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) ReplaceQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceQuarantineReadPolicyParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		if !supportsQuarantineReadPolicy(repo) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "hosted repository not found")
+			return
+		}
+		var input adminopenapi.QuarantineReadPolicy
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || strings.TrimSpace(input.Version) == "" {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "quarantine read policy payload is invalid")
+			return
+		}
+		updated, err := h.quarantineReadPolicies.ReplaceRepositoryQuarantineReadPolicy(r.Context(), repo.ID, repository.RepositoryQuarantineReadPolicy{Version: strings.TrimSpace(input.Version), Enabled: input.Enabled}, string(params.IfMatch))
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current quarantine read policy version")
+			return
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace quarantine read policy failed")
+			return
+		}
+		if h.audit != nil {
+			state := "disabled"
+			if updated.Enabled {
+				state = "enabled"
+			}
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "management", Resource: "repositories/" + repo.ID + "/quarantine-read-policy", Operation: "quarantine_read_policy.replace", Status: http.StatusOK, CacheDisposition: "bypass", AuthorizationSource: "repository_admin", AuthorizationReason: state})
+		}
+		w.Header().Set("ETag", updated.Version)
+		writeNativeMavenJSON(w, http.StatusOK, quarantineReadPolicyResponse(updated))
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) ReplaceSecurityPolicy(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceSecurityPolicyParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
 		var input adminopenapi.SecurityPolicy

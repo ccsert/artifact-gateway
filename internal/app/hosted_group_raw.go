@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -72,7 +73,7 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			if err != nil {
 				continue
 			}
-			if h.native.serveHostedRead(w, r, repo, path) {
+			if h.native.serveHostedRead(w, r, repo, path, principal) {
 				return
 			}
 			continue
@@ -91,7 +92,7 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 // serveHostedRead attempts a read against a native hosted Raw repository
 // without writing a response when the asset is absent, so the caller can fall
 // through to the next group member. It reports whether the request was served.
-func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) bool {
+func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) bool {
 	if rawChecksumExtension(path) != "" {
 		source := rawChecksumSourcePath(path)
 		if rawChecksumExtension(source) != "" {
@@ -100,6 +101,9 @@ func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 		asset, err := h.store.GetRawAsset(r.Context(), repo.ID, source)
 		if err != nil {
 			return false
+		}
+		if h.blockQuarantinedRead(w, r, repo, asset, principal) {
+			return true
 		}
 		body, err := h.rawChecksum(r.Context(), asset, rawChecksumExtension(path))
 		if err != nil {
@@ -113,6 +117,25 @@ func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return false
 	}
+	if h.blockQuarantinedRead(w, r, repo, asset, principal) {
+		return true
+	}
 	serveNativeRawObject(w, r, path, asset, h.objects)
+	return true
+}
+
+func (h nativeRawHandler) blockQuarantinedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, asset repository.RawAsset, principal Principal) bool {
+	blocked, err := repository.QuarantinedArtifactReadBlocked(r.Context(), h.readPolicies, h.quarantine, repo.ID, repository.FormatRaw, asset.Path, asset.Digest)
+	if err != nil {
+		http.Error(w, "evaluate artifact quarantine failed", http.StatusInternalServerError)
+		return true
+	}
+	if !blocked {
+		return false
+	}
+	if h.audit != nil {
+		_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: string(repository.FormatRaw), Resource: asset.Path, Representation: asset.Digest, Operation: strings.ToLower(r.Method), Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason})
+	}
+	http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
 	return true
 }

@@ -131,7 +131,26 @@ func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, res
 				continue
 			}
 		}
+		pkg, blockedVersions, filterErr := h.native.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
+		if filterErr != nil {
+			if firstError == nil {
+				firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable"}
+			}
+			continue
+		}
+		for version := range blockedVersions {
+			seenVersions[version] = true
+		}
 		mergeNPMGroupPackage(&merged, pkg, seenVersions)
+	}
+	visibleVersions := make(map[string]bool, len(merged.Versions))
+	for _, version := range merged.Versions {
+		visibleVersions[version.Version] = true
+	}
+	for tag, version := range merged.DistTags {
+		if !visibleVersions[version] {
+			delete(merged.DistTags, tag)
+		}
 	}
 
 	if len(merged.Versions) == 0 {
@@ -173,17 +192,49 @@ func mergeNPMGroupPackage(merged *repository.NPMPackage, incoming repository.NPM
 }
 
 func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, tarballName, actor string) {
+	higherPriority := make([]repository.HostedRepository, 0, len(members))
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			continue
 		}
-		_, err = h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+		version, err := h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 		if errors.Is(err, repository.ErrNotFound) {
+			higherPriority = append(higherPriority, repo)
 			continue
 		}
 		if err != nil {
 			h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+			return
+		}
+		for _, higher := range higherPriority {
+			higherVersion, lookupErr := h.native.store.GetNPMVersion(r.Context(), higher.ID, packageName, version.Version)
+			if errors.Is(lookupErr, repository.ErrNotFound) {
+				continue
+			}
+			if lookupErr != nil {
+				h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+				return
+			}
+			blocked, blockErr := h.native.npmVersionReadBlocked(r.Context(), higher, higherVersion)
+			if blockErr != nil {
+				h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+				return
+			}
+			if blocked {
+				target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: higher.Name}
+				h.native.writeNPMQuarantineDenied(w, r, higher, higherVersion, actor, "bypass", target)
+				return
+			}
+		}
+		blocked, err := h.native.npmVersionReadBlocked(r.Context(), repo, version)
+		if err != nil {
+			h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+			return
+		}
+		if blocked {
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+			h.native.writeNPMQuarantineDenied(w, r, repo, version, actor, "bypass", target)
 			return
 		}
 		auditTarget := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}

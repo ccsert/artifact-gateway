@@ -2947,6 +2947,12 @@ type PublishSession struct {
 // PublishSessionState defines model for PublishSession.State.
 type PublishSessionState string
 
+// QuarantineReadPolicy Hosted repository policy controlling protocol reads of quarantined artifacts. It is disabled by default.
+type QuarantineReadPolicy struct {
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
+}
+
 // ReplicationCheckpointProgress defines model for ReplicationCheckpointProgress.
 type ReplicationCheckpointProgress struct {
 	Attempts   int                                `json:"attempts"`
@@ -3871,6 +3877,11 @@ type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// ReplaceQuarantineReadPolicyParams defines parameters for ReplaceQuarantineReadPolicy.
+type ReplaceQuarantineReadPolicyParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // CreateRepositoryReplicationParams defines parameters for CreateRepositoryReplication.
 type CreateRepositoryReplicationParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -4022,6 +4033,9 @@ type CreateRepositoryPromotionJSONRequestBody = PromotionRequest
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
+
+// ReplaceQuarantineReadPolicyJSONRequestBody defines body for ReplaceQuarantineReadPolicy for application/json ContentType.
+type ReplaceQuarantineReadPolicyJSONRequestBody = QuarantineReadPolicy
 
 // CreateRepositoryReplicationJSONRequestBody defines body for CreateRepositoryReplication for application/json ContentType.
 type CreateRepositoryReplicationJSONRequestBody = ReplicationRequest
@@ -4349,6 +4363,12 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
+
+	// (GET /repositories/{repositoryId}/quarantine-read-policy)
+	GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /repositories/{repositoryId}/quarantine-read-policy)
+	ReplaceQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceQuarantineReadPolicyParams)
 
 	// (GET /repositories/{repositoryId}/replications)
 	ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -7983,6 +8003,86 @@ func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetQuarantineReadPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetQuarantineReadPolicy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceQuarantineReadPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceQuarantineReadPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceQuarantineReadPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceQuarantineReadPolicy(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryReplications operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryReplications(w http.ResponseWriter, r *http.Request) {
 
@@ -9505,6 +9605,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/proxy/health", wrapper.GetProxyHealth)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/quarantine-read-policy", wrapper.GetQuarantineReadPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/quarantine-read-policy", wrapper.ReplaceQuarantineReadPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.CreateRepositoryReplication)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/replications/{replicationPlanId}", wrapper.DeleteRepositoryReplication)
@@ -9657,6 +9759,15 @@ type ProxyCacheInvalidateResultJSONResponse ProxyCacheInvalidateResult
 type ProxyCacheNegativeClearResultJSONResponse ProxyCacheNegativeClearResult
 
 type PublishSessionJSONResponse PublishSession
+
+type QuarantineReadPolicyResponseHeaders struct {
+	ETag string
+}
+type QuarantineReadPolicyJSONResponse struct {
+	Body QuarantineReadPolicy
+
+	Headers QuarantineReadPolicyResponseHeaders
+}
 
 type RepositoryJSONResponse Repository
 
@@ -13960,6 +14071,118 @@ func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type GetQuarantineReadPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetQuarantineReadPolicyResponseObject interface {
+	VisitGetQuarantineReadPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetQuarantineReadPolicy200JSONResponse struct {
+	QuarantineReadPolicyJSONResponse
+}
+
+func (response GetQuarantineReadPolicy200JSONResponse) VisitGetQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQuarantineReadPolicy404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetQuarantineReadPolicy404ApplicationProblemPlusJSONResponse) VisitGetQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceQuarantineReadPolicyRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ReplaceQuarantineReadPolicyParams
+	Body         *ReplaceQuarantineReadPolicyJSONRequestBody
+}
+
+type ReplaceQuarantineReadPolicyResponseObject interface {
+	VisitReplaceQuarantineReadPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceQuarantineReadPolicy200JSONResponse struct {
+	QuarantineReadPolicyJSONResponse
+}
+
+func (response ReplaceQuarantineReadPolicy200JSONResponse) VisitReplaceQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceQuarantineReadPolicy400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceQuarantineReadPolicy400ApplicationProblemPlusJSONResponse) VisitReplaceQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceQuarantineReadPolicy404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceQuarantineReadPolicy404ApplicationProblemPlusJSONResponse) VisitReplaceQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceQuarantineReadPolicy412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceQuarantineReadPolicy412ApplicationProblemPlusJSONResponse) VisitReplaceQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryReplicationsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -16159,6 +16382,12 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/quarantine-read-policy)
+	GetQuarantineReadPolicy(ctx context.Context, request GetQuarantineReadPolicyRequestObject) (GetQuarantineReadPolicyResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/quarantine-read-policy)
+	ReplaceQuarantineReadPolicy(ctx context.Context, request ReplaceQuarantineReadPolicyRequestObject) (ReplaceQuarantineReadPolicyResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/replications)
 	ListRepositoryReplications(ctx context.Context, request ListRepositoryReplicationsRequestObject) (ListRepositoryReplicationsResponseObject, error)
@@ -18666,6 +18895,66 @@ func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
 		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetQuarantineReadPolicy operation middleware
+func (sh *strictHandler) GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetQuarantineReadPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetQuarantineReadPolicy(ctx, request.(GetQuarantineReadPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetQuarantineReadPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetQuarantineReadPolicyResponseObject); ok {
+		if err := validResponse.VisitGetQuarantineReadPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceQuarantineReadPolicy operation middleware
+func (sh *strictHandler) ReplaceQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceQuarantineReadPolicyParams) {
+	var request ReplaceQuarantineReadPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ReplaceQuarantineReadPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceQuarantineReadPolicy(ctx, request.(ReplaceQuarantineReadPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceQuarantineReadPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceQuarantineReadPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceQuarantineReadPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
