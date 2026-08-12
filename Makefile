@@ -3,10 +3,11 @@
 GO_IMAGE := golang:1.26.5-alpine
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 OPENAPI_TOOLS := tools/openapi
+CONSOLE_DIR := console
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help dev dev-status dev-down local-dev-test raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check docs-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
+.PHONY: help dev dev-status dev-down local-dev-test openapi-dependency-test openapi-tools-ready console-codegen-ready raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e readiness-e2e resolver-rotation-e2e oci-performance-e2e cache-operations-e2e backup-restore-readiness upgrade-readiness release-readiness-check docs-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt build docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e openapi-bundle openapi-generate-admin openapi-check
 
 help:
 	@printf '%s\n' 'Targets: dev, dev-status, dev-down, up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, build, docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, native-apt-e2e, readiness-e2e, resolver-rotation-e2e, oci-performance-e2e, cache-operations-e2e, backup-restore-readiness, upgrade-readiness, release-readiness-check, docs-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, openapi-bundle, openapi-generate-admin, openapi-check'
@@ -23,17 +24,24 @@ dev-down:
 local-dev-test:
 	@./scripts/local-dev-test.sh
 
-openapi-bundle:
-	@npm --prefix $(OPENAPI_TOOLS) ci --ignore-scripts --no-audit --no-fund
+openapi-dependency-test:
+	@bash ./scripts/openapi-dependency-test.sh
+
+openapi-tools-ready:
+	@bash ./scripts/check-node-dependencies.sh $(OPENAPI_TOOLS) redocly
+
+console-codegen-ready:
+	@bash ./scripts/check-node-dependencies.sh $(CONSOLE_DIR) openapi-ts prettier
+
+openapi-bundle: openapi-tools-ready
 	@$(OPENAPI_TOOLS)/node_modules/.bin/redocly bundle $(OPENAPI_SOURCE) --output $(OPENAPI_BUNDLE) --ext json
 
 openapi-generate-admin: openapi-bundle
 	@$(OPENAPI_TOOLS)/node_modules/.bin/redocly bundle api/openapi/management-runtime.yaml --output api/openapi/management-runtime-v1.json --ext json
 	@./scripts/generate-admin-openapi.sh
 
-openapi-check: openapi-generate-admin
-	@npm --prefix console ci --ignore-scripts --no-audit --no-fund
-	@npm --prefix console run check:api
+openapi-check: openapi-generate-admin console-codegen-ready
+	@npm --prefix $(CONSOLE_DIR) run check:api
 	@go test ./contracts
 	@git diff --exit-code -- $(OPENAPI_BUNDLE) api/openapi/management-runtime-v1.json console/src/client internal/admin/openapi/generated.go
 
@@ -64,6 +72,7 @@ down:
 
 test:
 	@./scripts/local-dev-test.sh
+	@bash ./scripts/openapi-dependency-test.sh
 	@./scripts/release-readiness-check.sh
 	@./scripts/docs-capability-check.sh
 	@python3 -m unittest scripts/maven_proxy_fixture_test.py

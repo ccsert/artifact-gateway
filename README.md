@@ -132,6 +132,8 @@ protocol overlays live in its sibling YAML directories. Do not edit
 `internal/admin/openapi/generated.go` by hand: they are generated artifacts.
 
 ```sh
+npm --prefix tools/openapi ci --ignore-scripts --no-audit --no-fund
+npm --prefix console ci --ignore-scripts --no-audit --no-fund
 make openapi-bundle
 make openapi-generate-admin
 make openapi-check
@@ -140,6 +142,11 @@ make openapi-check
 `make openapi-check` rebuilds the public JSON bundle, the generated Console
 client, and the generated repository-management Go contract; it then fails if
 any generated artifact differs from the worktree.
+
+The check validates but does not reinstall Node.js dependencies. When a lockfile
+changes, stop a running local Console with `make dev-down`, run the two pinned
+install commands above, and restart with `make dev`. This keeps Vite's optimized
+dependency cache consistent with `node_modules`.
 
 After a Gateway route or generated management contract changes, rebuild the
 running development service before testing the Console. Vite reloads the

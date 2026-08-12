@@ -88,6 +88,10 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Prevented OpenAPI contract checks from reinstalling dependencies underneath
+  a running Vite Console, and replaced the default lazy-route exception page
+  with a bilingual recovery screen.
+
 - Resolved public artifact deep links even when the target coordinate is beyond
   the first browse page.
 - Fixed PostgreSQL OCI upload expiry scans so scheduled reclaim jobs are

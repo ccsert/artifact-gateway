@@ -38,6 +38,18 @@ Generated files must not be edited by hand. The editable OpenAPI root is
 `api/openapi/native-hosted.yaml`; `make openapi-check` regenerates and verifies
 the JSON bundle, Console client, and Go management contract.
 
+Install the pinned generators before running the contract check:
+
+```sh
+npm --prefix tools/openapi ci --ignore-scripts --no-audit --no-fund
+npm --prefix console ci --ignore-scripts --no-audit --no-fund
+```
+
+Do not reinstall Console dependencies while `make dev` is serving Vite. Stop
+the managed Console with `make dev-down`, install dependencies, then restart it
+with `make dev`; replacing `node_modules` under a live Vite process invalidates
+its optimized dependency URLs.
+
 ## Required checks
 
 For a backend-only change:

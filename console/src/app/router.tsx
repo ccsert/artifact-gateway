@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { usePreferences } from "../lib/preferences";
+import { RouteErrorPage } from "./RouteErrorPage";
 
 function RouteFallback() {
   const { t } = usePreferences();
@@ -13,6 +14,7 @@ function RouteFallback() {
 export const router = createBrowserRouter([
   {
     path: "/login",
+    errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({
       Component: (await import("../pages/Login")).LoginPage,
@@ -20,12 +22,14 @@ export const router = createBrowserRouter([
   },
   {
     path: "/browse",
+    errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({
       Component: (await import("../pages/PublicBrowse")).PublicBrowsePage,
     }),
   },
   {
+    errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({ Component: (await import("./Layout")).AppLayout }),
     children: [
