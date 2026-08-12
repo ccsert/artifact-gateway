@@ -36,6 +36,87 @@ scanner health and database freshness as unknown. Startup logs and diagnostics
 expose only sanitized status, identity, versions, timestamps, and formats; the
 endpoints and token remain private.
 
+### Bundled Trivy reference adapter
+
+The optional Compose `scanner` profile builds `Dockerfile.scanner` and runs the
+bundled `reference-scanner` HTTP adapter with Trivy. The Trivy runtime is pinned
+to the official `aquasec/trivy:0.72.0` multi-architecture manifest digest. The
+adapter is a non-root sidecar with no Linux capabilities. It shares the Gateway
+network namespace, listens only on `127.0.0.1:18082`, and is not published on a
+host or Docker-network port. This preserves the loopback-only HTTP development
+exception without weakening the HTTPS rule for external scanners.
+
+To enable it, copy these values into `.env` and run `make dev` (or the normal
+Compose `up` command):
+
+```dotenv
+COMPOSE_PROFILES=scanner
+GATEWAY_SCANNER_ENDPOINT=http://127.0.0.1:18082/v1/scan
+GATEWAY_SCANNER_HEALTH_ENDPOINT=http://127.0.0.1:18082/v1/health
+GATEWAY_SCANNER_NAME=trivy-reference
+GATEWAY_SCANNER_FORMATS=maven,raw,npm,pypi,go,conan
+GATEWAY_SCANNER_TOKEN=replace-with-a-local-scanner-token
+GATEWAY_SCANNER_TIMEOUT=10m
+GATEWAY_SCANNER_MAX_ARTIFACT_BYTES=1073741824
+```
+
+The sidecar accepts no command flags from a request. It materializes each asset
+under a private temporary root after rechecking its declared size and SHA-256,
+runs fixed `trivy filesystem` vulnerability/license analysis, and converts the
+same native report to CycloneDX. The CycloneDX document is content-addressed,
+persisted in the capacity-bounded `gateway-scanner-sboms` volume, and available
+to Gateway-side consumers from the Bearer-protected internal SBOM URL recorded
+by the Gateway. The adapter does not expose SBOM bytes on a host port. The
+Gateway also receives bounded license evidence and a
+vulnerability summary plus up to 200 detailed findings. A result that would
+exceed the Gateway's default response bound automatically falls back to the
+complete severity summary. Trivy's database cache is kept in the
+`gateway-trivy-cache` volume so routine restarts do not redownload it. Database
+downloads use the configured `GATEWAY_EGRESS_PROXY` when present. The 10-minute
+Gateway timeout shown above also covers the first database download; later
+scans normally reuse the cache.
+
+License evidence is aggregated by SPDX ID rather than component source, so a
+frequently repeated allowed license cannot hide a later disallowed license.
+More than 100 unique license IDs fails the scan explicitly instead of returning
+an incomplete set that could make admission policy appear satisfied.
+
+This filesystem reference adapter intentionally supports Maven, Raw, npm,
+PyPI, Go, and Conan assets. It rejects OCI input because a set of manifest and
+layer blobs is not equivalent to an OCI root filesystem with layer and whiteout
+semantics applied. Gateway's scanner contract and OCI resolver remain available
+for a format-aware external OCI scanner; the reference adapter does not claim
+results it cannot derive correctly.
+
+Reference-adapter settings are deployment-only and are not returned to the
+Console:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `REFERENCE_SCANNER_LISTEN_ADDRESS` | `127.0.0.1:18082` | Loopback listener; non-loopback addresses are rejected. |
+| `REFERENCE_SCANNER_TOKEN` | empty | Optional Bearer token; Compose maps `GATEWAY_SCANNER_TOKEN`. |
+| `REFERENCE_SCANNER_TRIVY_BINARY` | `trivy` | Operator-controlled Trivy executable path. |
+| `REFERENCE_SCANNER_SCAN_TIMEOUT` | `10m` | Fixed-command scan deadline, between `1s` and `30m`. |
+| `REFERENCE_SCANNER_HEALTH_TIMEOUT` | `10s` | Version/database probe deadline, between `1s` and `30s`. |
+| `REFERENCE_SCANNER_MAX_ARTIFACT_BYTES` | `1073741824` in Compose | Multipart artifact bound; the local profile also uses a bounded temporary filesystem. |
+| `REFERENCE_SCANNER_MAX_OUTPUT_BYTES` | `67108864` | Per native Trivy/CycloneDX file bound, up to 512 MiB. |
+| `REFERENCE_SCANNER_MAX_CONCURRENT` | `1` | Process-wide scan concurrency, between 1 and 32. |
+| `REFERENCE_SCANNER_SBOM_DIR` | `/var/lib/reference-scanner/sboms` | Private content-addressed CycloneDX store. |
+| `REFERENCE_SCANNER_BASE_URL` | `http://127.0.0.1:18082` | URL prefix recorded for protected SBOM retrieval. |
+| `REFERENCE_SCANNER_MAX_SBOM_BYTES` | `2147483648` | Total SBOM-store capacity; a full store fails new scans instead of breaking existing references. |
+
+The Compose profile additionally limits the sidecar to one scan at a time, 256
+processes, two CPUs, 4 GiB of memory, and a 1.5 GiB temporary filesystem. The
+image root is read-only. Raising artifact size or concurrency requires an
+explicit matching review of those container limits.
+
+With the base stack already running, `make reference-scanner-smoke` starts the
+actual Compose-profile sidecar, proves its UID, read-only root, CPU/memory/PID,
+tmpfs, volume, and shared-network constraints, performs a real Trivy filesystem
+and CycloneDX conversion, and checks container health. It removes only the
+scanner sidecar afterward. Run it when changing the adapter, Trivy pin, image,
+or Compose profile.
+
 ## Durable execution
 
 Queue a scan through the management API with a caller-owned idempotency key:
@@ -294,10 +375,9 @@ operator to `GATEWAY_SCANNER_ENDPOINT`, `GATEWAY_SCANNER_FORMATS`, and Worker
 `scan`-kind deployment configuration. Scanner endpoints and tokens remain
 deployment secrets and are never returned to the browser.
 
-This repository does not yet bundle a scanner implementation or a Compose
-scanner service; operators must provide a contract-compatible external HTTP
-scanner. Scan scheduling remains asynchronous and best effort, so a scan or
-enqueue failure never rolls back a successful publication. Results do not
-automatically quarantine an artifact or change repository-read behavior.
-Bundled reference-scanner delivery, governed runtime configuration, and
-finding-driven automatic quarantine remain separate follow-up slices.
+Operators can use the bundled Trivy reference adapter or provide another
+contract-compatible HTTPS scanner. Scan scheduling remains asynchronous and
+best effort, so a scan or enqueue failure never rolls back a successful
+publication. Results do not automatically quarantine an artifact or change
+repository-read behavior. Governed runtime scanner configuration and finding-
+driven automatic quarantine remain separate follow-up slices.

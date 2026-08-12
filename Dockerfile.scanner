@@ -1,0 +1,32 @@
+# Trivy is pinned by both release and multi-architecture manifest digest. The
+# digest was resolved from the official aquasec/trivy 0.72.0 image.
+ARG TRIVY_IMAGE=aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+
+FROM golang:1.26.5-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    go mod download
+COPY . .
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    go test ./cmd/reference-scanner ./cmd/reference-scanner-healthcheck ./internal/refscanner
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-scanner ./cmd/reference-scanner
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-scanner-healthcheck ./cmd/reference-scanner-healthcheck
+
+FROM ${TRIVY_IMAGE}
+USER root
+COPY --from=build /reference-scanner /usr/local/bin/reference-scanner
+COPY --from=build /reference-scanner-healthcheck /usr/local/bin/reference-scanner-healthcheck
+RUN mkdir -p /var/cache/trivy /var/lib/reference-scanner/sboms && \
+    chown -R 65532:65532 /var/cache/trivy /var/lib/reference-scanner
+USER 65532:65532
+ENV TRIVY_CACHE_DIR=/var/cache/trivy
+VOLUME ["/var/cache/trivy", "/var/lib/reference-scanner/sboms"]
+EXPOSE 18082
+HEALTHCHECK --interval=10s --timeout=3s --retries=6 CMD ["/usr/local/bin/reference-scanner-healthcheck"]
+ENTRYPOINT ["/usr/local/bin/reference-scanner"]

@@ -41,8 +41,10 @@ because the project has not started a public support program.
   Gateway nodes schema-owner credentials.
 - Restrict Proxy upstream hosts and outbound network access. Per-repository
   custom proxy passwords require `GATEWAY_EGRESS_PROXY_KEY`.
-- Treat uploaded packages and metadata as untrusted input. Artifact Gateway does
-  not currently provide malware or vulnerability scanning.
+- Treat uploaded packages and metadata as untrusted input. Artifact Gateway
+  does not provide malware scanning. Vulnerability, license, and SBOM analysis
+  is available only when an operator explicitly enables the bundled reference
+  scanner or a contract-compatible external scanner.
 - Expose operational and management routes only to intended networks and
   identities. Worker-only and scheduler-only nodes intentionally expose only
   liveness, readiness, and metrics endpoints.

@@ -90,6 +90,50 @@ services:
       timeout: 3s
       retries: 10
 
+  reference-scanner:
+    profiles: ["scanner"]
+    build:
+      context: .
+      dockerfile: Dockerfile.scanner
+    depends_on:
+      gateway:
+        condition: service_healthy
+    # The sidecar shares only Gateway's network namespace and binds loopback.
+    # Artifact bytes and an optional bearer token never traverse a Docker network.
+    network_mode: "service:gateway"
+    environment:
+      REFERENCE_SCANNER_LISTEN_ADDRESS: 127.0.0.1:18082
+      REFERENCE_SCANNER_TOKEN: ${GATEWAY_SCANNER_TOKEN:-}
+      REFERENCE_SCANNER_SCAN_TIMEOUT: ${GATEWAY_SCANNER_TIMEOUT:-10m}
+      REFERENCE_SCANNER_HEALTH_TIMEOUT: ${GATEWAY_SCANNER_HEALTH_TIMEOUT:-10s}
+      REFERENCE_SCANNER_MAX_ARTIFACT_BYTES: ${REFERENCE_SCANNER_MAX_ARTIFACT_BYTES:-1073741824}
+      REFERENCE_SCANNER_MAX_OUTPUT_BYTES: ${REFERENCE_SCANNER_MAX_OUTPUT_BYTES:-67108864}
+      REFERENCE_SCANNER_MAX_CONCURRENT: ${REFERENCE_SCANNER_MAX_CONCURRENT:-1}
+      REFERENCE_SCANNER_SBOM_DIR: /var/lib/reference-scanner/sboms
+      REFERENCE_SCANNER_BASE_URL: http://127.0.0.1:18082
+      REFERENCE_SCANNER_MAX_SBOM_BYTES: ${REFERENCE_SCANNER_MAX_SBOM_BYTES:-2147483648}
+      HTTP_PROXY: ${GATEWAY_EGRESS_PROXY:-}
+      HTTPS_PROXY: ${GATEWAY_EGRESS_PROXY:-}
+      NO_PROXY: 127.0.0.1,localhost
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    pids_limit: 256
+    mem_limit: 4g
+    cpus: 2.0
+    tmpfs:
+      - /tmp:size=1610612736,mode=1777
+    volumes:
+      - gateway-trivy-cache:/var/cache/trivy
+      - gateway-scanner-sboms:/var/lib/reference-scanner/sboms
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/reference-scanner-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
   postgres:
     image: postgres:16-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
@@ -142,3 +186,5 @@ services:
 volumes:
   gateway-postgres:
   gateway-minio:
+  gateway-trivy-cache:
+  gateway-scanner-sboms:
