@@ -25,6 +25,10 @@ import {
 } from "../../components/Feedback";
 import { Field } from "../../components/Layout";
 import { Modal } from "../../components/Modal";
+import {
+  RepositoryArtifactSelect,
+  type RepositoryArtifactIdentity,
+} from "../../components/RepositoryArtifactSelect";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 
@@ -77,6 +81,9 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const [targetId, setTargetId] = useState("");
   const [coordinate, setCoordinate] = useState("");
   const [digest, setDigest] = useState("");
+  const [selectedArtifact, setSelectedArtifact] =
+    useState<RepositoryArtifactIdentity | null>(null);
+  const [manualIdentity, setManualIdentity] = useState(false);
   const [plans, setPlans] = useState<ReplicationPlan[] | null>(null);
   const [detail, setDetail] = useState<ReplicationPlanDetail | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -89,7 +96,11 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const [evaluating, setEvaluating] = useState(false);
 
   const targets = repos.filter(
-    (r) => r.id !== repo.id && r.format === repo.format && r.state === "active",
+    (r) =>
+      r.id !== repo.id &&
+      r.type === "hosted" &&
+      r.format === repo.format &&
+      r.state === "active",
   );
   const coordinatePlaceholder: Record<string, string> = {
     maven: "org.example:gateway-widget:1.2.3",
@@ -177,6 +188,9 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
     );
     setCoordinate("");
     setDigest("");
+    setSelectedArtifact(null);
+    setManualIdentity(false);
+    setEvaluation(null);
     void load();
   };
 
@@ -217,6 +231,30 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const promotionBlocked = evaluation?.allowed === false;
   const artifactQuarantined =
     evaluation?.reasons.includes("artifact_quarantined") ?? false;
+
+  const chooseArtifact = (artifact: RepositoryArtifactIdentity | null) => {
+    setSelectedArtifact(artifact);
+    setManualIdentity(false);
+    setEvaluation(null);
+    setCoordinate(artifact?.coordinate ?? "");
+    setDigest(artifact?.digest ?? "");
+  };
+
+  const toggleManualIdentity = () => {
+    setManualIdentity((current) => {
+      const next = !current;
+      if (!next && !selectedArtifact) {
+        setCoordinate("");
+        setDigest("");
+      }
+      if (!next && selectedArtifact) {
+        setCoordinate(selectedArtifact.coordinate);
+        setDigest(selectedArtifact.digest);
+      }
+      setEvaluation(null);
+      return next;
+    });
+  };
 
   if (error !== null) return <ErrorBanner error={error} onRetry={load} />;
 
@@ -375,12 +413,43 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
 
       {/* 发起表单 */}
       <div className="rounded-lg border border-zinc-800 p-4">
-        <div className="mb-3 text-sm font-medium text-zinc-200">
-          {text("发起晋升 / 复制", "Start promotion / replication")}
+        <div className="mb-4">
+          <div className="text-sm font-medium text-zinc-200">
+            {text("发起晋升 / 复制", "Start promotion / replication")}
+          </div>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
+            {text(
+              "先从当前仓库选择一个不可变制品，再选择同格式的目标 Hosted 仓库。坐标和摘要会自动锁定。",
+              "Select an immutable artifact from this repository, then choose a target Hosted repository with the same format. Its coordinate and digest are locked automatically.",
+            )}
+          </p>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(170px,1fr)_minmax(220px,1.2fr)_minmax(200px,1.1fr)_max-content]">
-          <Field label={text("目标仓库", "Target repository")}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(280px,1.6fr)_minmax(220px,1fr)]">
+          <Field
+            group
+            label={text("源制品", "Source artifact")}
+            hint={text(
+              "最多显示 50 条；输入包名、路径或坐标前缀可缩小范围。",
+              "Up to 50 items are shown. Type a package, path, or coordinate prefix to narrow the results.",
+            )}
+          >
+            <RepositoryArtifactSelect
+              repo={repo}
+              value={selectedArtifact}
+              onChange={chooseArtifact}
+              disabled={busy !== null}
+              ariaLabel={text(
+                "搜索并选择源制品",
+                "Search and select a source artifact",
+              )}
+            />
+          </Field>
+          <Field
+            group
+            label={text("目标 Hosted 仓库", "Target Hosted repository")}
+          >
             <Select
+              aria-label={text("选择目标仓库", "Select target repository")}
               className="w-full"
               showSearch={{ optionFilterProp: "label" }}
               value={targetId || undefined}
@@ -389,41 +458,88 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
                 "Select a repository with the same format…",
               )}
               options={targets.map((r) => ({ value: r.id, label: r.name }))}
+              notFoundContent={text(
+                "没有可用的同格式 Hosted 仓库",
+                "No compatible Hosted repository is available",
+              )}
+              disabled={busy !== null}
               onChange={(value) => {
                 setTargetId(value);
                 setEvaluation(null);
               }}
             />
           </Field>
-          <Field
-            label={text("制品坐标", "Artifact coordinate")}
-            hint={text(
-              `${repo.format} 生命周期使用的不可变版本标识`,
-              `Immutable version identity used by ${repo.format} lifecycle operations`,
-            )}
+        </div>
+
+        <div className="mt-2 flex justify-end">
+          <Button
+            type="link"
+            size="small"
+            className="h-auto px-0 py-0 text-xs"
+            onClick={toggleManualIdentity}
           >
-            <Input
-              className="font-mono"
-              placeholder={coordinatePlaceholder[repo.format] ?? "coordinate"}
-              value={coordinate}
-              onChange={(e) => {
-                setCoordinate(e.target.value);
-                setEvaluation(null);
-              }}
-            />
-          </Field>
-          <Field label={text("摘要 digest", "Digest")}>
-            <Input
-              className="font-mono"
-              placeholder="sha256:…"
-              value={digest}
-              onChange={(e) => {
-                setDigest(e.target.value);
-                setEvaluation(null);
-              }}
-            />
-          </Field>
-          <div className="flex flex-wrap items-end gap-2">
+            {manualIdentity
+              ? text("收起高级手动输入", "Hide advanced manual input")
+              : text("高级手动输入", "Advanced manual input")}
+          </Button>
+        </div>
+
+        {selectedArtifact && !manualIdentity && (
+          <div className="mt-3 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5">
+            <p className="truncate font-mono text-xs text-zinc-200">
+              {selectedArtifact.coordinate}
+            </p>
+            <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-500">
+              {selectedArtifact.digest}
+            </p>
+          </div>
+        )}
+
+        {manualIdentity && (
+          <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field
+              label={text("制品坐标", "Artifact coordinate")}
+              hint={text(
+                `${repo.format} 生命周期使用的不可变版本标识`,
+                `Immutable version identity used by ${repo.format} lifecycle operations`,
+              )}
+            >
+              <Input
+                aria-label={text("制品坐标", "Artifact coordinate")}
+                className="font-mono"
+                placeholder={coordinatePlaceholder[repo.format] ?? "coordinate"}
+                value={coordinate}
+                onChange={(event) => {
+                  setSelectedArtifact(null);
+                  setCoordinate(event.target.value);
+                  setEvaluation(null);
+                }}
+              />
+            </Field>
+            <Field label={text("摘要 digest", "Digest")}>
+              <Input
+                aria-label={text("摘要 digest", "Digest")}
+                className="font-mono"
+                placeholder="sha256:…"
+                value={digest}
+                onChange={(event) => {
+                  setSelectedArtifact(null);
+                  setDigest(event.target.value);
+                  setEvaluation(null);
+                }}
+              />
+            </Field>
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-3 border-t border-zinc-800/70 pt-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <p className="max-w-3xl text-xs leading-5 text-zinc-500">
+            {text(
+              "晋升用于环境或成熟度流转：目标仓安全准入通过后发布可见副本；复制用于镜像或分发：创建可续传计划，但不代表通过普通安全策略。",
+              "Promotion advances an artifact between environments or maturity stages and publishes a visible copy after target admission. Replication creates a resumable mirror or distribution plan and does not represent ordinary security-policy approval.",
+            )}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               loading={evaluating}
               onClick={() => void evaluate()}
@@ -466,12 +582,6 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             </Button>
           </div>
         </div>
-        <p className="mt-2 text-xs text-zinc-600">
-          {text(
-            "晋升：在目标仓库创建同一制品的可见副本（审计追踪）；复制：异步、带断点地拷贝制品字节到目标仓库。",
-            "Promotion creates a visible copy of the artifact in the target repository with an audit trail. Replication copies artifact bytes asynchronously with checkpoints.",
-          )}
-        </p>
         {evaluation && (
           <Alert
             className="mt-4"

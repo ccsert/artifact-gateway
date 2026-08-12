@@ -5,18 +5,82 @@ const repositoryId = "repo-layout";
 
 async function mockRepositoryDetail(
   page: Page,
-  { scannerEnabled = false }: { scannerEnabled?: boolean } = {},
+  {
+    scannerEnabled = false,
+    distributionEnabled = false,
+  }: { scannerEnabled?: boolean; distributionEnabled?: boolean } = {},
 ) {
   await authenticateAsAdmin(page);
 
   await page.route("**/api/v2/repositories?**", (route) =>
-    route.fulfill({ json: { items: [] } }),
+    route.fulfill({
+      json: {
+        items: distributionEnabled
+          ? [
+              {
+                id: repositoryId,
+                name: "release-files",
+                format: "raw",
+                type: "hosted",
+                anonymousRead: true,
+                state: "active",
+                version: "1",
+              },
+              {
+                id: "repo-production",
+                name: "production-files",
+                format: "raw",
+                type: "hosted",
+                anonymousRead: false,
+                state: "active",
+                version: "1",
+              },
+              {
+                id: "repo-proxy",
+                name: "upstream-proxy",
+                format: "raw",
+                type: "proxy",
+                anonymousRead: false,
+                state: "active",
+                version: "1",
+              },
+            ]
+          : [],
+      },
+    }),
   );
 
   await page.route(`**/api/v2/repositories/${repositoryId}**`, (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
 
+    if (path.endsWith("/promotions") && request.method() === "POST") {
+      const body = request.postDataJSON() as {
+        coordinate: string;
+        digest: string;
+      };
+      return route.fulfill({
+        status: 202,
+        json: {
+          id: "promotion-job-layout",
+          kind: "promotion",
+          state: "pending",
+          createdAt: "2026-08-12T08:00:00Z",
+          attempts: 0,
+          maxAttempts: 3,
+          progressCurrent: 0,
+          progressTotal: 0,
+          details: {
+            format: "raw",
+            coordinate: body.coordinate,
+            digest: body.digest,
+          },
+        },
+      });
+    }
+    if (path.endsWith("/replications") && request.method() === "GET") {
+      return route.fulfill({ json: [] });
+    }
     if (path.endsWith("/artifact-scans") && request.method() === "POST") {
       const body = request.postDataJSON() as {
         coordinate: string;
@@ -408,6 +472,66 @@ test("scanning selects a searchable immutable artifact before queuing", async ({
 
   expect((await scanRequest).postDataJSON()).toEqual({ coordinate, digest });
   await expect(page.getByText("扫描任务已提交")).toBeVisible();
+});
+
+test("promotion selects a source artifact and a compatible Hosted target", async ({
+  page,
+}, testInfo) => {
+  const coordinate = "releases/example-1.zip";
+  const digest = `sha256:${"0".repeat(64)}`;
+  await mockRepositoryDetail(page, { distributionEnabled: true });
+  const promotionRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname.endsWith(
+        `/repositories/${repositoryId}/promotions`,
+      ),
+  );
+
+  await page.goto(`/repositories/${repositoryId}?tab=distribute`);
+  const sourcePicker = page.getByRole("combobox", {
+    name: "搜索并选择源制品",
+  });
+  await sourcePicker.click();
+  const artifactOption = page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: coordinate })
+    .first();
+  await expect(artifactOption).toBeVisible();
+  await artifactOption.click();
+
+  const targetPicker = page.getByRole("combobox", { name: "选择目标仓库" });
+  await targetPicker.click();
+  await expect(
+    page.locator(".ant-select-item-option").filter({
+      hasText: "production-files",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".ant-select-item-option").filter({
+      hasText: "upstream-proxy",
+    }),
+  ).toHaveCount(0);
+  await page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: "production-files" })
+    .click();
+  await page.getByRole("button", { name: /晋\s*升/ }).click();
+
+  expect((await promotionRequest).postDataJSON()).toEqual({
+    targetRepositoryId: "repo-production",
+    coordinate,
+    digest,
+  });
+  await expect(
+    page.getByText("晋升任务已提交，请在「生命周期任务」查看进度"),
+  ).toBeVisible();
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-promotion.png"),
+      fullPage: true,
+    });
+  }
 });
 
 test("security guardrails use independent desktop columns", async ({

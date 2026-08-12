@@ -1,10 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createRepositoryPromotion,
   evaluateSecurityPolicy,
   listRepositories,
   listRepositoryReplications,
+  searchRepositoryArtifacts,
 } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -18,11 +20,17 @@ vi.mock("../../client", () => ({
   getRepositoryReplication: vi.fn(),
   listRepositories: vi.fn(),
   listRepositoryReplications: vi.fn(),
+  searchRepositoryArtifacts: vi.fn(),
 }));
 
+const mockCreatePromotion = vi.mocked(createRepositoryPromotion);
 const mockEvaluateSecurityPolicy = vi.mocked(evaluateSecurityPolicy);
 const mockListRepositories = vi.mocked(listRepositories);
 const mockListRepositoryReplications = vi.mocked(listRepositoryReplications);
+const mockSearchArtifacts = vi.mocked(searchRepositoryArtifacts);
+const digestA = `sha256:${"a".repeat(64)}`;
+const digestB = `sha256:${"b".repeat(64)}`;
+const coordinate = "org.example:widget:1.2.3";
 
 const source: Repository = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -39,6 +47,20 @@ const target: Repository = {
   id: "22222222-2222-4222-8222-222222222222",
   name: "releases",
 };
+const proxyTarget: Repository = {
+  ...target,
+  id: "33333333-3333-4333-8333-333333333333",
+  name: "central-proxy",
+  type: "proxy",
+};
+
+beforeEach(() => {
+  mockSearchArtifacts.mockResolvedValue({
+    data: {
+      items: [{ coordinate, digest: digestA, size: 2048 }],
+    },
+  } as never);
+});
 
 afterEach(() => {
   cleanup();
@@ -69,15 +91,17 @@ describe("RepositoryDistributionTab", () => {
     );
 
     await screen.findByText("暂无复制计划");
-    await user.click(screen.getByRole("combobox"));
-    await user.click(await screen.findByText("releases"));
+    await user.click(screen.getByRole("button", { name: "高级手动输入" }));
     await user.type(
-      screen.getByPlaceholderText("org.example:gateway-widget:1.2.3"),
-      "org.example:widget:1.2.3",
+      screen.getByRole("textbox", { name: "制品坐标" }),
+      coordinate,
     );
-    const digest =
-      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    await user.type(screen.getByPlaceholderText("sha256:…"), digest);
+    await user.type(
+      screen.getByRole("textbox", { name: "摘要 digest" }),
+      digestA,
+    );
+    await user.click(screen.getByRole("combobox", { name: "选择目标仓库" }));
+    await user.click(await screen.findByText("releases"));
     await user.click(screen.getByRole("button", { name: "评估准入" }));
 
     await waitFor(() => expect(mockEvaluateSecurityPolicy).toHaveBeenCalled());
@@ -85,12 +109,56 @@ describe("RepositoryDistributionTab", () => {
       path: { repositoryId: target.id },
       body: {
         sourceRepositoryId: source.id,
-        coordinate: "org.example:widget:1.2.3",
-        digest,
+        coordinate,
+        digest: digestA,
       },
     });
     expect(await screen.findByText("安全策略允许晋升")).toBeInTheDocument();
     expect(screen.getByText("策略版本: 3")).toBeInTheDocument();
+  });
+
+  it("promotes a selected artifact without exposing incompatible targets", async () => {
+    const user = userEvent.setup();
+    mockListRepositories.mockResolvedValue({
+      data: { items: [source, target, proxyTarget], nextPageToken: "" },
+    } as never);
+    mockListRepositoryReplications.mockResolvedValue({ data: [] } as never);
+    mockCreatePromotion.mockResolvedValue({ data: {} } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryDistributionTab repo={source} />
+      </PreferencesProvider>,
+    );
+
+    await screen.findByText("暂无复制计划");
+    await user.click(
+      screen.getByRole("combobox", { name: "搜索并选择源制品" }),
+    );
+    await user.click(
+      await screen.findByText(coordinate, {
+        selector: ".ant-select-item-option-content *",
+      }),
+    );
+    await user.click(screen.getByRole("combobox", { name: "选择目标仓库" }));
+    expect(await screen.findByText("releases")).toBeInTheDocument();
+    expect(screen.queryByText("central-proxy")).not.toBeInTheDocument();
+    await user.click(screen.getByText("releases"));
+    await user.click(screen.getByRole("button", { name: /晋\s*升/ }));
+
+    await waitFor(() => expect(mockCreatePromotion).toHaveBeenCalledTimes(1));
+    expect(mockCreatePromotion).toHaveBeenCalledWith({
+      path: { repositoryId: source.id },
+      body: {
+        targetRepositoryId: target.id,
+        coordinate,
+        digest: digestA,
+      },
+      headers: { "Idempotency-Key": expect.any(String) },
+    });
+    expect(
+      await screen.findByText("晋升任务已提交，请在「生命周期任务」查看进度"),
+    ).toBeInTheDocument();
   });
 
   it("blocks promotion and replication when the artifact is quarantined", async () => {
@@ -116,16 +184,16 @@ describe("RepositoryDistributionTab", () => {
     );
 
     await screen.findByText("暂无复制计划");
-    await user.click(screen.getByRole("combobox"));
+    await user.click(
+      screen.getByRole("combobox", { name: "搜索并选择源制品" }),
+    );
+    await user.click(
+      await screen.findByText(coordinate, {
+        selector: ".ant-select-item-option-content *",
+      }),
+    );
+    await user.click(screen.getByRole("combobox", { name: "选择目标仓库" }));
     await user.click(await screen.findByText("releases"));
-    await user.type(
-      screen.getByPlaceholderText("org.example:gateway-widget:1.2.3"),
-      "org.example:widget:1.2.3",
-    );
-    await user.type(
-      screen.getByPlaceholderText("sha256:…"),
-      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    );
     await user.click(screen.getByRole("button", { name: "评估准入" }));
 
     expect(
@@ -154,6 +222,9 @@ describe("RepositoryDistributionTab", () => {
         reasons: ["verified_signature_required"],
       },
     } as never);
+    mockSearchArtifacts.mockResolvedValue({
+      data: { items: [{ coordinate, digest: digestB, size: 2048 }] },
+    } as never);
 
     render(
       <PreferencesProvider>
@@ -162,16 +233,16 @@ describe("RepositoryDistributionTab", () => {
     );
 
     await screen.findByText("暂无复制计划");
-    await user.click(screen.getByRole("combobox"));
+    await user.click(
+      screen.getByRole("combobox", { name: "搜索并选择源制品" }),
+    );
+    await user.click(
+      await screen.findByText(coordinate, {
+        selector: ".ant-select-item-option-content *",
+      }),
+    );
+    await user.click(screen.getByRole("combobox", { name: "选择目标仓库" }));
     await user.click(await screen.findByText("releases"));
-    await user.type(
-      screen.getByPlaceholderText("org.example:gateway-widget:1.2.3"),
-      "org.example:widget:1.2.3",
-    );
-    await user.type(
-      screen.getByPlaceholderText("sha256:…"),
-      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    );
     await user.click(screen.getByRole("button", { name: "评估准入" }));
 
     expect(await screen.findByText("安全策略阻止晋升")).toBeInTheDocument();

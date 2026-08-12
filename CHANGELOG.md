@@ -72,6 +72,10 @@ a dated version heading without rewriting their meaning.
 
 ### Changed
 
+- Replaced default coordinate-and-digest entry in repository scanning,
+  promotion, and replication workflows with a shared searchable immutable-
+  artifact picker while retaining advanced exact-identity input for older
+  versions and revision-specific formats.
 - Added a discoverable repository Scanning workspace for manual immutable-
   artifact scans, capability and configuration guidance, historical backfill,
   and recent job status.
