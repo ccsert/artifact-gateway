@@ -25,11 +25,11 @@ and verifies the Console and authenticated format API.
 
 `make kubernetes-local-verify` creates a unique Raw Hosted Repository, writes an
 object, restarts the Gateway Deployment, and reads the Repository record and
-exact object bytes back. This proves PostgreSQL and MinIO persistence across a
+exact object bytes back. This proves PostgreSQL and RustFS persistence across a
 real Pod replacement rather than only checking that PVC objects exist. When
 an environment override is omitted on a later command, the helper reuses every
 credential and encryption key already stored in the namespace Secret. Repeating
-`up` or `verify` therefore does not silently rotate PostgreSQL, MinIO, Resolver,
+`up` or `verify` therefore does not silently rotate PostgreSQL, RustFS, Resolver,
 administrator, or settings-encryption secrets back to local defaults.
 
 The default administrator token is `local-gateway-admin-token`. These defaults
@@ -38,8 +38,9 @@ installation:
 
 ```sh
 K8S_LOCAL_POSTGRES_PASSWORD='replace-me' \
-K8S_LOCAL_MINIO_USER='replace-me' \
-K8S_LOCAL_MINIO_PASSWORD='replace-me' \
+K8S_LOCAL_RUSTFS_ACCESS_KEY='replace-me' \
+K8S_LOCAL_RUSTFS_SECRET_KEY='replace-me' \
+K8S_LOCAL_RUSTFS_RPC_SECRET='independent-rpc-secret-replace-me' \
 K8S_LOCAL_ADMIN_TOKEN='replace-me' \
 K8S_LOCAL_RESOLVER_TOKEN='replace-me' \
 K8S_LOCAL_SETTINGS_ENCRYPTION_KEY='0123456789abcdef0123456789abcdef' \
@@ -59,7 +60,12 @@ make kubernetes-local-down
 ```
 
 This deletes the `artifact-gateway-local` namespace, including its PostgreSQL
-and MinIO PersistentVolumeClaims and all local data.
+and RustFS PersistentVolumeClaims and all local data. An existing MinIO-based
+local namespace or orphaned MinIO data PVC is not changed in place: the helper
+refuses startup and points to the
+[RustFS migration procedure](rustfs-migration.md). Only after retaining the
+frozen-copy and metadata-verification evidence should an operator set
+`K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1`.
 
 ## Local topology
 
@@ -73,12 +79,12 @@ Console nginx (SPA + same-origin reverse proxy)
 Artifact Gateway (standalone API + scheduler + worker)
        |                         |
        v                         v
-PostgreSQL PVC                 MinIO PVC
+PostgreSQL PVC                 RustFS PVC
 ```
 
 The Console and Gateway run as non-root users with read-only root filesystems,
 dropped Linux capabilities, disabled service-account token mounting, resource
-requests and limits, and HTTP health probes. PostgreSQL and MinIO are pinned
+requests and limits, and HTTP health probes. PostgreSQL and RustFS are pinned
 single-replica local dependencies. A bounded ephemeral `/tmp` volume supports
 Gateway's streamed upload spool without making its root filesystem writable.
 The Gateway migration init container uses

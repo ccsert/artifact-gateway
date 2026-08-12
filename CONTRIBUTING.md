@@ -24,7 +24,7 @@ make dev
 
 `make dev-status` verifies the Console, its API proxy, and Gateway health.
 `make dev-down` stops only the checkout-managed Console; `make down` stops the
-Compose stack without deleting its PostgreSQL and MinIO volumes.
+Compose stack without deleting its PostgreSQL and RustFS volumes.
 
 ## Change workflow
 

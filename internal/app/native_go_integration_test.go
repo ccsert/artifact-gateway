@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIOGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
+func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")

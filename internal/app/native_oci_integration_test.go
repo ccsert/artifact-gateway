@@ -23,7 +23,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIOOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
+func TestPostgresRustFSOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -82,7 +82,7 @@ func TestPostgresMinIOOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
 	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest, ObjectKey: manifestKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(manifestBody))}, manifestDigest); err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := (ociprotocol.NativePromotion{Store: store, Objects: objects}).Enqueue(ctx, target.ID, "postgres-minio-oci-promotion", ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest})
+	job, _, err := (ociprotocol.NativePromotion{Store: store, Objects: objects}).Enqueue(ctx, target.ID, "postgres-rustfs-oci-promotion", ociprotocol.PromotionPayload{SourceRepositoryID: source.ID, Name: "team/widget", Digest: manifestDigest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestPostgresMinIOOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
 	}
 }
 
-func TestPostgresMinIOOCIReplicationPublishesTargetOwnedManifest(t *testing.T) {
+func TestPostgresRustFSOCIReplicationPublishesTargetOwnedManifest(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -165,7 +165,7 @@ func TestPostgresMinIOOCIReplicationPublishesTargetOwnedManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	targetKey := ociReplicationTargetObjectKey(target.ID, "team/widget", manifestDigest)
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatOCI, Coordinate: "team/widget", Digest: manifestDigest, IdempotencyKey: "postgres-minio-oci-replication"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatOCI, Coordinate: "team/widget", Digest: manifestDigest, IdempotencyKey: "postgres-rustfs-oci-replication"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: manifestDigest, Size: int64(len(manifestBody))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestPostgresLifecycleJobsAreIdempotentAndClaimedOnce(t *testing.T) {
 	}
 }
 
-func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+func TestNativeOCIHostedHTTPAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -435,7 +435,7 @@ func TestNativeOCIHostedHTTPAcrossPostgresAndMinIOGatewayInstances(t *testing.T)
 	}
 }
 
-func TestNativeOCIReferrersAndCatalogAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+func TestNativeOCIReferrersAndCatalogAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")

@@ -11,11 +11,16 @@ a dated version heading without rewriting their meaning.
 ### Added
 
 - A hardened Kustomize base and one-command local Kubernetes deployment with
-  Gateway, Console, PostgreSQL, MinIO, idempotent migrations, persistent local
+  Gateway, Console, PostgreSQL, RustFS, idempotent migrations, persistent local
   volumes, health checks, manifest validation, and same-origin protocol routes.
 - A staged APT Hosted roadmap covering native publication, atomic signed
   repository snapshots, external signing, lifecycle, scanning, quarantine,
   promotion, replication, and real APT client acceptance gates.
+- Streaming Debian binary metadata parsing for gzip, xz, zstd, and uncompressed
+  control archives, with server-derived package/version/architecture identity.
+- A pinned RustFS S3 baseline for Compose, integration tests, and Kubernetes,
+  including object-contract coverage and a copy/verify/cutover/rollback migration
+  runbook that explicitly rejects MinIO data-volume reuse.
 - One-command local development lifecycle targets for starting the complete
   stack, checking the Console and Gateway paths, and stopping only the
   checkout-managed Console.

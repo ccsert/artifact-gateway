@@ -1,6 +1,6 @@
 # 分布式部署
 
-Artifact Gateway 使用 PostgreSQL 保存元数据和后台任务，使用共享的 S3/MinIO
+Artifact Gateway 使用 PostgreSQL 保存元数据和后台任务，使用共享的 S3 兼容对象存储
 保存 Asset 字节。Gateway 进程本身不保存必须由其他实例读取的制品状态，因此可以
 横向扩展。
 
@@ -40,7 +40,7 @@ Worker 隔离部署。`webhook` 从 PostgreSQL durable outbox 领取全局投递
 
 ## 部署约束
 
-1. 所有节点必须使用同一个 PostgreSQL 数据库和同一个 S3/MinIO bucket。
+1. 所有节点必须使用同一个 PostgreSQL 数据库和同一个 S3 bucket。当前自带部署基线使用 RustFS。
 2. 迁移必须由独立的 migration job 在启动副本前完成，Gateway 进程不负责竞争执行迁移。
 3. 每个实例设置稳定的 `GATEWAY_INSTANCE_ID`，用于日志和故障定位；Gateway 会为每次
    进程启动生成独立会话 ID，因此重复配置实例 ID 也不会覆盖节点会话。

@@ -19,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
+func TestPostgresRustFSConanPromotionSharesVisibleRevision(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -48,7 +48,7 @@ func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("Conan promotion backed by MinIO")
+	body := []byte("Conan promotion backed by RustFS")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	key := "native/conan/objects/" + hex.EncodeToString(sum[:])
@@ -62,7 +62,7 @@ func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
 	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest}, []repository.ConanAsset{{RepositoryID: source.ID, Reference: reference, RecipeRevision: revision, Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := (conanprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "postgres-minio-conan-promotion", conanprotocol.PromotionPayload{SourceRepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest})
+	job, _, err := (conanprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "postgres-rustfs-conan-promotion", conanprotocol.PromotionPayload{SourceRepositoryID: source.ID, Reference: reference, Revision: revision, Digest: digest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,11 @@ func TestPostgresMinIOConanPromotionSharesVisibleRevision(t *testing.T) {
 		t.Fatalf("target revision=%#v err=%v", targetRevision, err)
 	}
 	if info, err := objects.Stat(ctx, key); err != nil || info.Digest != digest || info.Size != int64(len(body)) {
-		t.Fatalf("MinIO object=%#v err=%v", info, err)
+		t.Fatalf("RustFS object=%#v err=%v", info, err)
 	}
 }
 
-func TestPostgresMinIOConanReplicationPublishesTargetOwnedRevision(t *testing.T) {
+func TestPostgresRustFSConanReplicationPublishesTargetOwnedRevision(t *testing.T) {
 	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
 	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
@@ -109,7 +109,7 @@ func TestPostgresMinIOConanReplicationPublishesTargetOwnedRevision(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("Conan replication backed by PostgreSQL and MinIO")
+	body := []byte("Conan replication backed by PostgreSQL and RustFS")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	key := "native/conan/source/" + hex.EncodeToString(sum[:])
@@ -127,7 +127,7 @@ func TestPostgresMinIOConanReplicationPublishesTargetOwnedRevision(t *testing.T)
 	if err != nil || len(checks) != 1 {
 		t.Fatalf("checkpoints=%#v err=%v", checks, err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatConan, Coordinate: reference + "#" + revision, Digest: digest, IdempotencyKey: "postgres-minio-conan-replication"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatConan, Coordinate: reference + "#" + revision, Digest: digest, IdempotencyKey: "postgres-rustfs-conan-replication"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, checks); err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestPostgresConanReferenceSearchProjection(t *testing.T) {
 	}
 }
 
-func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
+func TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -360,7 +360,7 @@ func TestPostgresAndMinIOConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 		t.Fatalf("completed reclaim jobs=%#v err=%v", jobs, err)
 	}
 	if _, err = objects.Get(ctx, key); err == nil {
-		t.Fatal("MinIO object remains after reclaim")
+		t.Fatal("RustFS object remains after reclaim")
 	}
 	if response := restore(); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore_unavailable") {
 		t.Fatalf("restore collected revision=%d body=%s", response.Code, response.Body.String())

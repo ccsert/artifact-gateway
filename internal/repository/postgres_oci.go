@@ -39,7 +39,7 @@ func (s *PostgresStore) StageOCIObjectIntent(ctx context.Context, intent OCIObje
 }
 
 // LockOCIUpload holds a PostgreSQL session advisory lock, rather than a
-// transaction lock, because the protected operation also includes MinIO I/O.
+// transaction lock, because the protected operation also includes S3 I/O.
 // The caller must invoke the returned release function exactly once.
 func (s *PostgresStore) LockOCIUpload(ctx context.Context, id string) (func(), error) {
 	conn, err := s.db.Conn(ctx)

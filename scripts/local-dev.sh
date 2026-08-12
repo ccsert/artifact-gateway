@@ -52,6 +52,25 @@ check_endpoint() {
   [[ "$code" == "$expected" ]]
 }
 
+refuse_legacy_minio_in_place() {
+  local project=${COMPOSE_PROJECT_NAME:-artifact-gateway}
+  local old_volume="${project}_gateway-minio"
+  local legacy_container migration_confirmed
+  migration_confirmed=${GATEWAY_RUSTFS_MIGRATION_CONFIRMED:-$(awk -F= '$1 == "GATEWAY_RUSTFS_MIGRATION_CONFIRMED" { print substr($0, index($0, "=") + 1); exit }' "$environment_file")}
+  legacy_container=$(docker ps -aq \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter 'label=com.docker.compose.service=minio')
+  if [[ -z "$legacy_container" ]] && ! docker volume inspect "$old_volume" >/dev/null 2>&1; then
+    return
+  fi
+  if [[ "$migration_confirmed" == 1 ]]; then
+    return
+  fi
+  printf '%s\n' 'Legacy MinIO data was detected; refusing to start Gateway against RustFS without verified cutover evidence.' >&2
+  printf '%s\n' 'Follow docs/rustfs-migration.md, then set GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1 only after the frozen final copy and metadata verification.' >&2
+  return 1
+}
+
 console_is_managed() {
   if [[ $(uname -s) == Darwin ]]; then
     launchctl print "gui/$(id -u)/$console_label" >/dev/null 2>&1
@@ -143,6 +162,7 @@ start() {
     printf 'Missing %s; copy .env.example and configure local credentials first.\n' "$environment_file" >&2
     return 1
   }
+  refuse_legacy_minio_in_place
 
   docker compose --env-file "$environment_file" -f "$repo_root/compose.yml" up -d --build --wait --remove-orphans
   local console_code
@@ -196,11 +216,18 @@ stop() {
 }
 
 case ${1:-} in
+  guard)
+    [[ -f "$environment_file" ]] || {
+      printf 'Missing %s; cannot validate the RustFS cutover boundary.\n' "$environment_file" >&2
+      exit 1
+    }
+    refuse_legacy_minio_in_place
+    ;;
   start) start ;;
   status) status ;;
   stop) stop ;;
   *)
-    printf 'usage: %s {start|status|stop}\n' "${0##*/}" >&2
+    printf 'usage: %s {guard|start|status|stop}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

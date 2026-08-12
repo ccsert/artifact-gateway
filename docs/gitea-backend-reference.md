@@ -19,7 +19,7 @@ copyright notices when required, and must not be copied wholesale.
 Artifact Gateway already has the core runtime needed for OCI, Maven, Raw, and
 Conan reads:
 
-- PostgreSQL metadata and MinIO-compatible object storage;
+- PostgreSQL metadata and S3-compatible object storage (RustFS in the bundled baseline);
 - protocol-owned cache and maintenance behavior, composed in `internal/app`;
 - configured proxy allowlists, quotas, OIDC validation, repository grants,
   audit records, metrics, readiness, and asynchronous cache collection;

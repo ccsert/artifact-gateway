@@ -2,7 +2,8 @@
 
 Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, and PyPI Hosted
 repositories plus Go Module and APT Proxy repositories, using PostgreSQL for lifecycle
-metadata and MinIO-compatible object storage for verified bytes. Legacy Groups
+metadata and S3-compatible object storage for verified bytes. The bundled local
+stack uses RustFS. Legacy Groups
 remain available for allowlisted external Proxy reads, while V2 Groups resolve
 managed members.
 
@@ -27,7 +28,7 @@ cp .env.example .env
 make dev
 ```
 
-`make dev` builds and starts Gateway, PostgreSQL, and MinIO, then starts the
+`make dev` builds and starts Gateway, PostgreSQL, and RustFS, then starts the
 Vite Console under a checkout-specific local supervisor. It waits for both
 Gateway readiness and the Console before printing their configured addresses.
 Use `make dev-status` as a repeatable health check.
@@ -59,7 +60,7 @@ make kubernetes-local-verify
 
 It exposes the Console and same-origin protocol/API proxy at
 `http://127.0.0.1:18081`. The overlay provisions single-node PostgreSQL and
-MinIO storage for local validation and is intentionally not a production
+RustFS storage for local validation and is intentionally not a production
 topology. See the [Kubernetes deployment guide](docs/kubernetes-deployment.md)
 for credential overrides, data deletion behavior, architecture, and the
 remaining production deployment work.
@@ -81,7 +82,7 @@ GATEWAY_NODE_ROLES=scheduler
 GATEWAY_NODE_ROLES=worker GATEWAY_WORKER_FORMATS=oci
 ```
 
-所有节点共享 PostgreSQL 和 S3/MinIO；任务领取由数据库租约保证幂等。worker
+所有节点共享 PostgreSQL 和 S3 兼容对象存储；任务领取由数据库租约保证幂等。worker
 可以用 `GATEWAY_WORKER_FORMATS` 和 `GATEWAY_WORKER_KINDS` 限制格式与任务类型，
 例如只部署 OCI 的 `reclaim,replication` worker，或将 `scan` 交给配置了外部
 扫描器的隔离 worker；`webhook` 是不受格式过滤器影响的全局投递任务。非 API 节点仅暴露
@@ -91,7 +92,7 @@ GATEWAY_NODE_ROLES=worker GATEWAY_WORKER_FORMATS=oci
 PostgreSQL 的 `max_connections`。
 
 Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean
-checkout. `make integration-test` creates isolated PostgreSQL and MinIO
+checkout. `make integration-test` creates isolated PostgreSQL and RustFS
 containers, applies every migration, verifies a second migration run is a
 no-op, and runs the persistent-store tests. Applied migration filenames and
 SHA-256 checksums are recorded in `artifact_gateway_schema_migrations`; edit
@@ -212,7 +213,7 @@ OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
 GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
 single byte ranges, and DELETE. Clients authenticate using the normal resolver
 Bearer token flow. Metadata and coordination are stored in PostgreSQL, while
-MinIO stores only content-addressed object bytes.
+RustFS stores only content-addressed object bytes through the S3 contract.
 
 `GATEWAY_REPOSITORY_READERS` configures read grants in the form
 `actor=repository-pattern|repository-pattern`. `GATEWAY_REPOSITORY_CACHE_QUOTAS`

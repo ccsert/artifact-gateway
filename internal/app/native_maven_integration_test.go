@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testing.T) {
+func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	s3AccessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -50,7 +50,7 @@ func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("promoted from PostgreSQL and MinIO")
+	body := []byte("promoted from PostgreSQL and RustFS")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
 	objectKey := "native/maven/sha256/" + fmt.Sprintf("%x", sum[:])
@@ -70,7 +70,7 @@ func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testi
 		t.Fatal(err)
 	}
 	worker := mavenprotocol.NativePromotion{Store: store}
-	job, _, err := worker.Enqueue(ctx, target.ID, "postgres-minio-promotion", mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: coordinate, Digest: digest, PromotionID: uuid.NewString()})
+	job, _, err := worker.Enqueue(ctx, target.ID, "postgres-rustfs-promotion", mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: coordinate, Digest: digest, PromotionID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,11 +86,11 @@ func TestPostgresMinIOMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testi
 		t.Fatalf("promoted asset=%#v err=%v", asset, err)
 	}
 	if _, err = objects.Stat(ctx, objectKey); err != nil {
-		t.Fatalf("promotion must retain the shared MinIO object: %v", err)
+		t.Fatalf("promotion must retain the shared RustFS object: %v", err)
 	}
 }
 
-func TestPostgresMinIOMavenReplicationPublishesTargetOwnedCheckpoints(t *testing.T) {
+func TestPostgresRustFSMavenReplicationPublishesTargetOwnedCheckpoints(t *testing.T) {
 	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
 	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
@@ -117,7 +117,7 @@ func TestPostgresMinIOMavenReplicationPublishesTargetOwnedCheckpoints(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("replicated through PostgreSQL and MinIO")
+	body := []byte("replicated through PostgreSQL and RustFS")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
 	sourceKey := "native/maven/sha256/" + fmt.Sprintf("%x", sum[:])
@@ -136,7 +136,7 @@ func TestPostgresMinIOMavenReplicationPublishesTargetOwnedCheckpoints(t *testing
 	if _, err = store.CommitMavenPublishSession(ctx, session.ID, []repository.MavenAsset{{RepositoryID: source.ID, Path: assetPath, ObjectKey: sourceKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, Coordinate: coordinate, Digest: digest, IdempotencyKey: "postgres-minio-maven"}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: repository.FormatMaven, Coordinate: coordinate, Digest: digest, IdempotencyKey: "postgres-rustfs-maven"}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{SourceObjectKey: sourceKey, ObjectKey: targetKey, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}

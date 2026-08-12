@@ -18,6 +18,10 @@ func PyPIVersion(project, version string) string { return project + "@" + versio
 
 func GoVersion(module, version string) string { return module + "@" + version }
 
+func APTVersion(packageName, version, architecture string) string {
+	return packageName + "@" + version + "#" + architecture
+}
+
 func ConanRecipe(reference, recipeRevision string) string {
 	return reference + "#" + recipeRevision
 }

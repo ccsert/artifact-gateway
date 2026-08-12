@@ -2,7 +2,7 @@
 
 `scripts/oidc-keycloak-k8s-e2e.sh` starts an isolated, real Keycloak fixture
 in the current Kubernetes context. It also deploys a transient PostgreSQL,
-MinIO, and Gateway instance, runs every migration, forwards Gateway and
+RustFS, and Gateway instance, runs every migration, forwards Gateway and
 Keycloak locally, starts the Console, and executes the browser SSO test.
 
 ```sh

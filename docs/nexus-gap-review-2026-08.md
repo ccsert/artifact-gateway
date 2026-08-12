@@ -24,7 +24,7 @@
 
 - 全局搜索目前由 Console 并发调用每个仓库的搜索接口；大仓库、多租户和匿名公开目录应由后端索引统一分页、排序和权限过滤。
 - 任务中心目前能汇总已有生命周期任务，但还没有通用 scheduler、重试/暂停/取消操作、队列深度和 worker 健康指标。
-- Proxy 还缺少可配置缓存 TTL、负缓存策略、路由规则和凭据轮换；Blob store 只有单一 S3/MinIO 后端，没有 compaction/容量趋势的服务端时序。
+- Proxy 还缺少可配置缓存 TTL、负缓存策略、路由规则和凭据轮换；Blob store 只有单一 S3/RustFS 后端，没有 compaction/容量趋势的服务端时序。
 - 备份/恢复已有 rehearsal，但缺少 Console 里的备份策略、最近一次成功备份、恢复演练结果和下载 support bundle。
 
 ### P2：制品供应链与体验

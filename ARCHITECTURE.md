@@ -17,7 +17,7 @@ native clients and Console
    API nodes / standalone
       |             |
       v             v
- PostgreSQL      S3 / MinIO
+ PostgreSQL      S3 / RustFS
       ^             ^
       |             |
  scheduler ----> worker pools
@@ -25,7 +25,7 @@ native clients and Console
 
 PostgreSQL is the source of truth for repositories, authorization, artifact
 metadata, lifecycle state, audit records, idempotency, and background leases.
-S3/MinIO stores verified object bytes addressed by digest. Gateway processes do
+S3/RustFS stores verified object bytes addressed by digest. Gateway processes do
 not keep durable artifact state on local disk.
 
 ## Runtime roles
@@ -113,7 +113,7 @@ exact client and server impact of a contract change.
   unreferenced bytes only after a grace period and a reference recheck.
 - Background work is at-least-once. Lease tokens fence stale workers and
   handlers must be idempotent.
-- S3/MinIO and PostgreSQL are shared cluster dependencies; a worker cannot rely
+- S3-compatible storage and PostgreSQL are shared cluster dependencies; a worker cannot rely
   on another node's memory or filesystem.
 - Readiness checks dependencies required by the configured role, while
   liveness only reports process health.

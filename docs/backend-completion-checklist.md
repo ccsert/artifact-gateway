@@ -44,10 +44,10 @@ goal. It intentionally excludes frontend work.
 
 ## Distribution
 
-- [x] Maven immutable promotion API and worker, including HTTP retry and PostgreSQL/MinIO evidence.
+- [x] Maven immutable promotion API and worker, including HTTP retry and PostgreSQL/RustFS evidence.
 - [x] OCI, Raw, and Conan immutable promotion API and worker, including
   authorization, idempotency, audit records, retry behavior, HTTP black-box,
-  and PostgreSQL/MinIO evidence.
+  and PostgreSQL/RustFS evidence.
 - [x] Replication planning model.
 - [x] Checkpointed replication worker with persisted checkpoints, retry, resume,
   and SHA-256 integrity checks.

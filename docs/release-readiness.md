@@ -46,7 +46,7 @@ storage credentials, or unredacted upstream URLs in that record.
 	  `make native-pypi-e2e`, `make native-go-e2e`,
       and `make conan-e2e`
       pass.
-- [ ] `make integration-test` includes PostgreSQL and MinIO worker evidence for
+- [ ] `make integration-test` includes PostgreSQL and RustFS worker evidence for
       promotion and checkpointed replication of OCI, Maven, Raw, and Conan
       Artifacts. It verifies verified-object publication, retry/resume, and
       SHA-256 verification. It also runs migrations twice to prove the tracked
@@ -70,7 +70,7 @@ storage credentials, or unredacted upstream URLs in that record.
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
       handshake, revisioned recipe/package downloads, cache, checksum failure,
       anonymous policy, and Proxy allowlist denial.
-- [ ] `make readiness-e2e` verifies `/readyz` returns `503` while MinIO or
+- [ ] `make readiness-e2e` verifies `/readyz` returns `503` while RustFS or
       PostgreSQL is stopped and `204` after each is restored.
 - [ ] `make cache-operations-e2e` verifies cache collection is administrator-only,
       succeeds for an administrator, and increases the successful-run count.
@@ -94,11 +94,14 @@ storage credentials, or unredacted upstream URLs in that record.
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
 - [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
       `0d1d3f8`) into fresh isolated volumes, migrates it to the current
-      checkout, verifies the persisted OCI/Maven Groups, creates current
+      checkout while retaining the same legacy S3 service, verifies persisted
+      Maven object bytes and OCI/Maven Groups, creates current
       Raw/Conan Group state, then starts the prior revision against those
       volumes and verifies the persisted OCI Group can still be read. V2
       migrations are additive: a rollback binary must not need V2 rows to
-      serve existing OCI Groups.
+      serve existing OCI Groups. This is an application/schema upgrade gate,
+      not a MinIO-to-RustFS data migration; run the copied-cutover procedure in
+      `docs/rustfs-migration.md` separately.
 - [ ] Before rolling out migration `000095`, stop accepting new replication
       requests, drain every pre-upgrade replication plan to a terminal state,
       and stop all old replication workers. Apply the migration and start only
@@ -109,7 +112,7 @@ storage credentials, or unredacted upstream URLs in that record.
       worker intentionally fails a non-terminal legacy plan with both fields
       empty instead of publishing it; resolve such a plan explicitly rather
       than bypassing that fail-closed result.
-- [ ] `make backup-restore-readiness` runs PostgreSQL and MinIO backup/restore
+- [ ] `make backup-restore-readiness` runs PostgreSQL and RustFS backup/restore
       against isolated volumes. It creates OCI, Maven, Raw, and Conan source
       Artifacts through HTTP, creates and replays promotion jobs and replication
       plans for each format, then verifies all saved instructions and their
@@ -146,16 +149,16 @@ storage credentials, or unredacted upstream URLs in that record.
 
 | Area | MVP default |
 | --- | --- |
-| Hosted source | Native PostgreSQL metadata and MinIO-compatible object bytes |
+| Hosted source | Native PostgreSQL metadata and RustFS S3-compatible object bytes |
 | External Proxy | Disabled unless the exact upstream host is in the protocol allowlist |
 | Authentication | Static resolver/admin tokens for local break-glass; HTTPS RS256 OIDC for production identity |
 | Authorization | Deny unmatched repository readers when `GATEWAY_REPOSITORY_READERS` is configured |
 | OCI cache | Read-through, content-addressed S3 storage; cleanup every five minutes after TTL grace period |
 | Maven cache | Component files: 15 minutes; metadata and negative results: one minute |
-| Backup target | PostgreSQL metadata plus MinIO object data; 24-hour RPO, 30-minute RTO drill target |
+| Backup target | PostgreSQL metadata plus RustFS object data; 24-hour RPO, 30-minute RTO drill target |
 | OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
 | Cache operations gate | Resolver denied; administrator collection increases successful-run count |
-| Upgrade gate | Previous revision `0d1d3f8`, isolated PostgreSQL/MinIO volumes, current migration, protocol regression, binary rollback |
+| Upgrade gate | Previous revision `0d1d3f8`, isolated object-store volumes, current migration, protocol regression, binary rollback |
 
 ## Architecture
 
@@ -199,7 +202,7 @@ flowchart LR
 3. Wait for `/readyz` to return `204`, then perform an authenticated OCI and
    Maven read against a known artifact.
 4. If metadata or cache state is implicated, follow the restore drill in
-   [the recovery runbook](recovery-runbook.md), restoring PostgreSQL and MinIO
+   [the recovery runbook](recovery-runbook.md), restoring PostgreSQL and RustFS
    together from the same backup set. Confirm an OCI/Maven read and, where V2
    state was affected, a Raw GET and Conan 2 revision read before reopening
    traffic. For a managed Repository, confirm a known granted principal can

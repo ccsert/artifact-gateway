@@ -25,7 +25,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIONPMPublicationIsVisibleAcrossGatewayInstances(t *testing.T) {
+func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -187,7 +187,7 @@ func TestPostgresMinIONPMPublicationIsVisibleAcrossGatewayInstances(t *testing.T
 	}
 }
 
-func TestPostgresMinIONPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
+func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")

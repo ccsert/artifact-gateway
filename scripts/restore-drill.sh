@@ -8,13 +8,16 @@ compose=(docker compose --env-file "$environment_file" -f compose.yml)
 source "$environment_file"
 shasum -a 256 --check "$backup_dir/SHA256SUMS"
 
-"${compose[@]}" stop gateway
+"${compose[@]}" stop gateway rustfs
 "${compose[@]}" exec -T postgres \
   pg_restore -U gateway -d gateway --clean --if-exists <"$backup_dir/gateway.dump"
-minio_container=$("${compose[@]}" ps -q minio)
-test -n "$minio_container"
-"${compose[@]}" exec -T minio sh -ec 'rm -rf /data/*'
-docker cp - "$minio_container:/data" <"$backup_dir/minio-data.tar"
+rustfs_container=$("${compose[@]}" ps -aq rustfs)
+test -n "$rustfs_container"
+"${compose[@]}" run --rm --no-deps --entrypoint sh rustfs \
+  -ec 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
+docker cp - "$rustfs_container:/data" <"$backup_dir/rustfs-data.tar"
+docker start "$rustfs_container" >/dev/null
+"${compose[@]}" run --rm --no-deps rustfs-ready
 # Starting through Compose re-evaluates the completed migrate dependency on
 # some Compose releases. The restored dump already contains its schema, so
 # restart only the existing Gateway container.

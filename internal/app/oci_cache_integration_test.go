@@ -26,6 +26,19 @@ type countingDeleteObjectStore struct {
 	deletes map[string]int
 }
 
+type failingLegacyIndexStore struct {
+	OCIObjectStore
+	key string
+	err error
+}
+
+func (s failingLegacyIndexStore) Get(ctx context.Context, key string) ([]byte, error) {
+	if key == s.key {
+		return nil, s.err
+	}
+	return s.OCIObjectStore.Get(ctx, key)
+}
+
 func (s *countingDeleteObjectStore) Delete(ctx context.Context, key string) error {
 	s.mu.Lock()
 	if s.deletes == nil {
@@ -195,6 +208,80 @@ func TestPostgresCacheControlStoreKeepsAllFormatIndexesOutOfS3(t *testing.T) {
 	}
 	if objects, err := objects.List(context.Background(), "oci/objects/"); err != nil || len(objects) != 1 {
 		t.Fatalf("S3 artifact objects = %#v, %v; want one", objects, err)
+	}
+}
+
+func TestPostgresCacheControlStoreReadsAndMigratesLegacyS3IndexesWithoutDeletingThem(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
+	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+
+	ctx := context.Background()
+	bucket := fmt.Sprintf("legacy-cache-control-%d", time.Now().UnixNano())
+	objects, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	control, err := NewPostgresCacheControlStore(objects, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer control.Close()
+
+	prefix := fmt.Sprintf("maven/index/legacy-%d-", time.Now().UnixNano())
+	keys := []string{prefix + "a.json", prefix + "b.json"}
+	values := [][]byte{[]byte(`{"object":"maven/objects/a"}`), []byte(`{"object":"maven/objects/b"}`)}
+	for index, key := range keys {
+		if err := objects.Put(ctx, key, values[index]); err != nil {
+			t.Fatalf("store legacy S3 index %s: %v", key, err)
+		}
+	}
+
+	loaded, err := control.Get(ctx, keys[0])
+	if err != nil || string(loaded) != string(values[0]) {
+		t.Fatalf("load legacy S3 index = %q, %v", loaded, err)
+	}
+	var migrated string
+	if err := control.db.QueryRowContext(ctx, `SELECT value::text FROM cache_control_entries WHERE key=$1`, keys[0]).Scan(&migrated); err != nil {
+		t.Fatalf("legacy index was not lazily migrated to PostgreSQL: %v", err)
+	}
+	if _, err := objects.Get(ctx, keys[0]); err != nil {
+		t.Fatalf("legacy S3 index must remain available for binary rollback: %v", err)
+	}
+
+	listed, err := control.List(ctx, prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 2 || listed[0] != keys[0] || listed[1] != keys[1] {
+		t.Fatalf("legacy and migrated cache indexes = %#v; want %#v", listed, keys)
+	}
+	if err := control.Delete(ctx, keys[0]); err != nil {
+		t.Fatalf("delete migrated legacy index: %v", err)
+	}
+	if _, err := control.Get(ctx, keys[0]); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("deleted legacy index was resurrected: %v", err)
+	}
+	if _, err := objects.Get(ctx, keys[0]); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("legacy S3 index remained visible to rollback binary: %v", err)
+	}
+	listed, err = control.List(ctx, prefix)
+	if err != nil || len(listed) != 1 || listed[0] != keys[1] {
+		t.Fatalf("indexes after deletion = %#v, %v; want %#v", listed, err, keys[1:])
+	}
+
+	infrastructureErr := errors.New("RustFS authorization failed")
+	failingKey := prefix + "infrastructure-error.json"
+	control.objects = failingLegacyIndexStore{OCIObjectStore: objects, key: failingKey, err: infrastructureErr}
+	if _, err := control.Get(ctx, failingKey); !errors.Is(err, infrastructureErr) {
+		t.Fatalf("legacy S3 infrastructure error was reduced to a cache miss: %v", err)
 	}
 }
 

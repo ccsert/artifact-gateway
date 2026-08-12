@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
@@ -58,13 +59,26 @@ func (s *PostgresCacheControlStore) Get(ctx context.Context, key string) ([]byte
 	}
 	var value string
 	err := s.db.QueryRowContext(ctx, `SELECT value::text FROM cache_control_entries WHERE key=$1`, key).Scan(&value)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, errOCICacheMiss
+	if err == nil {
+		return []byte(value), nil
 	}
-	if err != nil {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	return []byte(value), nil
+
+	// Before cache control moved to PostgreSQL, protocol indexes lived beside
+	// immutable bytes in S3. Read them as a compatibility path and copy them
+	// into PostgreSQL without deleting the original: an old binary must still
+	// be able to read the same cache after an application rollback.
+	legacy, legacyErr := s.objects.Get(ctx, key)
+	if legacyErr != nil {
+		if errors.Is(legacyErr, errOCICacheMiss) {
+			return nil, errOCICacheMiss
+		}
+		return nil, legacyErr
+	}
+	_, _ = s.db.ExecContext(ctx, `INSERT INTO cache_control_entries (key, value, updated_at) VALUES ($1, $2::jsonb, now()) ON CONFLICT (key) DO NOTHING`, key, string(legacy))
+	return legacy, nil
 }
 
 func (s *PostgresCacheControlStore) Put(ctx context.Context, key string, value []byte) error {
@@ -78,6 +92,13 @@ func (s *PostgresCacheControlStore) Put(ctx context.Context, key string, value [
 func (s *PostgresCacheControlStore) Delete(ctx context.Context, key string) error {
 	if !isCacheControlKey(key) {
 		return s.objects.Delete(ctx, key)
+	}
+	// A legacy binary may have written this control record to S3. Delete that
+	// copy first so the compatibility fallback cannot resurrect an explicitly
+	// invalidated, evicted, or collected entry. Removing it is also the correct
+	// rollback behavior: old binaries must observe the same invalidation.
+	if err := s.objects.Delete(ctx, key); err != nil {
+		return err
 	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM cache_control_entries WHERE key=$1`, key)
 	return err
@@ -100,7 +121,26 @@ func (s *PostgresCacheControlStore) List(ctx context.Context, prefix string) ([]
 		}
 		keys = append(keys, key)
 	}
-	return keys, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	legacyKeys, err := s.objects.List(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(keys)+len(legacyKeys))
+	for _, key := range keys {
+		seen[key] = struct{}{}
+	}
+	for _, key := range legacyKeys {
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 func (s *PostgresCacheControlStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {

@@ -43,6 +43,20 @@ grep -Fq 'compose --env-file' "$workdir/state/docker.log" || fail 'start did not
 grep -Fq 'VITE_GATEWAY_PROXY_TARGET=http://127.0.0.1:18081' "$workdir/state/launchctl.log" || fail 'start did not configure the Console API proxy'
 grep -Fq -- '--strictPort' "$workdir/state/launchctl.log" || fail 'start allowed Vite to drift to another port'
 
+reset_state
+export LOCAL_DEV_TEST_MODE=legacy-minio
+if output=$($subject start 2>&1); then
+  fail 'start replaced legacy MinIO data with an empty RustFS volume'
+fi
+assert_contains "$output" 'Legacy MinIO data was detected'
+if grep -Fq ' up -d ' "$workdir/state/docker.log"; then
+  fail 'start invoked Compose after detecting legacy MinIO data'
+fi
+
+GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1 $subject guard
+
+export LOCAL_DEV_TEST_MODE=managed
+$subject start >/dev/null
 output=$($subject status)
 assert_contains "$output" 'Console API'
 assert_contains "$output" 'HTTP 200'

@@ -43,8 +43,9 @@ case "$command_name" in
     elif [[ " $* " == *" get secret artifact-gateway-secrets "* ]]; then
       case "$*" in
         *POSTGRES_PASSWORD*) value=${FAKE_K8S_POSTGRES_PASSWORD:-} ;;
-        *MINIO_ROOT_USER*) value=${FAKE_K8S_MINIO_USER:-} ;;
-        *MINIO_ROOT_PASSWORD*) value=${FAKE_K8S_MINIO_PASSWORD:-} ;;
+        *RUSTFS_ACCESS_KEY*) value=${FAKE_K8S_RUSTFS_ACCESS_KEY:-} ;;
+        *RUSTFS_SECRET_KEY*) value=${FAKE_K8S_RUSTFS_SECRET_KEY:-} ;;
+        *RUSTFS_RPC_SECRET*) value=${FAKE_K8S_RUSTFS_RPC_SECRET:-} ;;
         *GATEWAY_ADMIN_TOKEN*) value=${FAKE_K8S_ADMIN_TOKEN:-} ;;
         *GATEWAY_RESOLVER_TOKEN*) value=${FAKE_K8S_RESOLVER_TOKEN:-} ;;
         *GATEWAY_SETTINGS_ENCRYPTION_KEY*) value=${FAKE_K8S_SETTINGS_KEY:-} ;;
@@ -53,6 +54,10 @@ case "$command_name" in
       if [[ -n "$value" ]]; then
         printf '%s' "$value" | base64
       fi
+    elif [[ " $* " == *" get statefulset minio "* ]]; then
+      [[ "${FAKE_K8S_LEGACY_MINIO:-0}" == "1" ]]
+    elif [[ " $* " == *" get persistentvolumeclaim data-minio-0 "* ]]; then
+      [[ "${FAKE_K8S_LEGACY_MINIO_PVC:-0}" == "1" ]]
     elif [[ " $* " == *" get service artifact-gateway-console "* ]]; then
       exit 1
     else

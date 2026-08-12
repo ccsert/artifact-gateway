@@ -82,7 +82,7 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 	}
 }
 
-func TestNativeRawListingAcrossPostgresAndMinIOGatewayInstances(t *testing.T) {
+func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")

@@ -1,5 +1,5 @@
 // native-oci-fixture starts a self-contained Registry V2 endpoint for the
-// protocol E2E fixture. Deployment uses PostgreSQL and MinIO; this process
+// protocol E2E fixture. Deployment uses PostgreSQL and S3-compatible storage; this process
 // exists solely to exercise client-visible HTTP behaviour without an external
 // package service.
 package main

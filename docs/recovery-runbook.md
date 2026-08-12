@@ -13,7 +13,7 @@ the local stack started by `make up`. The scripts keep backups under
 ## Drill
 
 1. Record the UTC start time and run `scripts/backup-drill.sh`.
-2. Confirm the PostgreSQL dump and MinIO tar archive pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
+2. Confirm the PostgreSQL dump and RustFS tar archive pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
 3. Make a reversible test change by creating a disposable Group or by fetching a
    Proxy artifact, then record the expected audit entry and cached object. For
    V2 validation, record the Raw canonical path or Conan revision coordinate,
@@ -38,7 +38,9 @@ the local stack started by `make up`. The scripts keep backups under
 
 ## Safety
 
-`restore-drill.sh` overwrites the running PostgreSQL database and MinIO data.
+`restore-drill.sh` overwrites the running PostgreSQL database and RustFS data.
 Run it only against an isolated drill environment after preserving any data that
 must be retained. It stops Gateway while the two stores are restored to avoid
-new metadata pointing to objects from the interrupted state.
+new metadata pointing to objects from the interrupted state. The object archive
+is valid only for the pinned RustFS baseline; use the
+[S3 migration procedure](rustfs-migration.md) when moving from MinIO.

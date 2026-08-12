@@ -17,6 +17,7 @@ func TestCanonicalCoordinates(t *testing.T) {
 		{name: "npm scoped", got: NPMVersion("@team/widget", "1.0.0"), want: "@team/widget@1.0.0"},
 		{name: "pypi", got: PyPIVersion("widget", "1.0"), want: "widget@1.0"},
 		{name: "go", got: GoVersion("example.com/team/widget", "v1.0.0"), want: "example.com/team/widget@v1.0.0"},
+		{name: "apt", got: APTVersion("artifact-gateway", "1:2.3.4-5", "arm64"), want: "artifact-gateway@1:2.3.4-5#arm64"},
 		{name: "conan recipe", got: ConanRecipe("widget/1.0@team/stable", "rrev"), want: "widget/1.0@team/stable#rrev"},
 		{name: "conan package", got: ConanPackage("widget/1.0@team/stable", "rrev", "pkg", "prev"), want: "widget/1.0@team/stable#rrev/pkg#prev"},
 	}

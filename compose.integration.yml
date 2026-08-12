@@ -31,34 +31,40 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      minio-ready:
+      rustfs-ready:
         condition: service_completed_successfully
     environment:
       TEST_DATABASE_URL: postgres://gateway:integration-password@postgres:5432/gateway?sslmode=disable
-      TEST_S3_ENDPOINT: http://minio:9000
-      TEST_S3_ACCESS_KEY: integration-minio
+      TEST_S3_ENDPOINT: http://rustfs:9000
+      TEST_S3_ACCESS_KEY: integration-rustfs
       TEST_S3_SECRET_KEY: integration-password
     working_dir: /src
-    command: ["go", "test", "-p", "1", "-tags=integration", "./internal/app", "./internal/repository"]
+    command: ["go", "test", "-p", "1", "-tags=integration", "./internal/app", "./internal/repository", "./internal/objectstore"]
     volumes:
       - ./:/src:ro
       - artifact-gateway-go-mod:/go/pkg/mod
       - artifact-gateway-go-build:/root/.cache/go-build
 
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data
+  rustfs:
+    image: rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21
+    entrypoint: ["/bin/sh", "/usr/local/bin/run-rustfs"]
     environment:
-      MINIO_ROOT_USER: integration-minio
-      MINIO_ROOT_PASSWORD: integration-password
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: integration-rustfs
+      RUSTFS_SECRET_KEY: integration-password
+      RUSTFS_RPC_SECRET: integration-rustfs-independent-rpc-secret
+    volumes:
+      - ./scripts/run-rustfs.sh:/usr/local/bin/run-rustfs:ro
 
-  minio-ready:
+  rustfs-ready:
     image: curlimages/curl:8.14.1
     depends_on:
-      minio:
+      rustfs:
         condition: service_started
     entrypoint: ["/bin/sh", "-ec"]
-    command: ["until curl --fail --silent http://minio:9000/minio/health/live > /dev/null; do sleep 1; done"]
+    command: ["until curl --fail --silent http://rustfs:9000/health > /dev/null; do sleep 1; done"]
 
 volumes:
   artifact-gateway-go-mod:

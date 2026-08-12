@@ -84,6 +84,7 @@ console-e2e:
 	@./scripts/console-e2e.sh
 
 up:
+	@./scripts/local-dev.sh guard
 	@docker compose --env-file .env -f compose.yml up --build --wait --remove-orphans
 
 down:
@@ -91,6 +92,7 @@ down:
 
 test:
 	@./scripts/local-dev-test.sh
+	@./scripts/run-rustfs-test.sh
 	@bash ./scripts/openapi-dependency-test.sh
 	@./scripts/release-readiness-check.sh
 	@./scripts/docs-capability-check.sh

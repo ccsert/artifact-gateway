@@ -39,7 +39,7 @@ the Console described in `console/src/app/router.tsx`.
 | Repository editing | Rename, change endpoint, convert type | Proxy endpoint/allowlist editing with optimistic concurrency; name/format/type remain immutable | Low |
 | User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control, reusable authorization roles and repository Grants pages; LDAP/SAML and soft deletion remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
-| Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single MinIO/S3 store; no compaction UI | Medium |
+| Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single RustFS/S3 store; no compaction UI | Medium |
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, Gateway-enforced vulnerability database freshness, versioned quarantine that blocks promotion/replication, and a default-disabled per-Hosted policy that blocks quarantined reads across six native formats | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls, lifecycle Jobs view, and repository-level intelligence reconciliation; general scheduler remains future work | Low |
@@ -114,7 +114,7 @@ The remaining gaps are integration surfaces Nexus provides:
 
 Nexus supports multiple concurrent blob stores (file, S3, Azure Blob), blob
 store groups, and an admin-managed compaction task. Artifact Gateway stores
-bytes in a single MinIO-compatible (S3) object store. Reclamation is performed
+bytes in a single S3-compatible RustFS object store. Reclamation is performed
 by the Orphan Collector after a grace period and reference recheck, which is a
 more rigorous lifecycle model than Nexus trash, but there is no operator UI to
 inspect blob stores, run compaction, or attach a second store.

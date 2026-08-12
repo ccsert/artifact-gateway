@@ -64,7 +64,7 @@ kubectl kustomize "$root/deploy/oidc-test" \
   | kubectl apply -f -
 
 kubectl -n "$namespace" rollout status deployment/postgres --timeout=180s
-kubectl -n "$namespace" rollout status deployment/minio --timeout=180s
+kubectl -n "$namespace" rollout status deployment/rustfs --timeout=180s
 kubectl -n "$namespace" rollout status deployment/gateway --timeout=300s
 
 kubectl -n "$namespace" port-forward service/gateway "$gateway_port":8080 >"$work_dir/gateway-port-forward.log" 2>&1 &

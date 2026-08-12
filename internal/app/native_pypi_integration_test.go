@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresMinIOPyPIPublicationLifecycleAcrossGatewayInstances(t *testing.T) {
+func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")

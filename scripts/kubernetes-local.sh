@@ -10,8 +10,9 @@ console_port=18081
 console_url="http://127.0.0.1:${console_port}"
 
 postgres_password=${K8S_LOCAL_POSTGRES_PASSWORD:-}
-minio_user=${K8S_LOCAL_MINIO_USER:-}
-minio_password=${K8S_LOCAL_MINIO_PASSWORD:-}
+rustfs_access_key=${K8S_LOCAL_RUSTFS_ACCESS_KEY:-}
+rustfs_secret_key=${K8S_LOCAL_RUSTFS_SECRET_KEY:-}
+rustfs_rpc_secret=${K8S_LOCAL_RUSTFS_RPC_SECRET:-}
 admin_token=${K8S_LOCAL_ADMIN_TOKEN:-}
 resolver_token=${K8S_LOCAL_RESOLVER_TOKEN:-}
 settings_key=${K8S_LOCAL_SETTINGS_ENCRYPTION_KEY:-}
@@ -62,11 +63,15 @@ require_local_context() {
 }
 
 validate_settings() {
-  local configured_postgres_password configured_settings_key
+  local configured_postgres_password configured_settings_key configured_rustfs_secret_key configured_rustfs_rpc_secret
   configured_postgres_password=$(effective_secret_value \
     "$postgres_password" POSTGRES_PASSWORD local-postgres-password)
   configured_settings_key=$(effective_secret_value \
     "$settings_key" GATEWAY_SETTINGS_ENCRYPTION_KEY 0123456789abcdef0123456789abcdef)
+  configured_rustfs_secret_key=$(effective_secret_value \
+    "$rustfs_secret_key" RUSTFS_SECRET_KEY local-rustfs-password)
+  configured_rustfs_rpc_secret=$(effective_secret_value \
+    "$rustfs_rpc_secret" RUSTFS_RPC_SECRET local-rustfs-rpc-secret-0123456789)
   if [[ ! "$configured_postgres_password" =~ ^[A-Za-z0-9._~-]+$ ]]; then
     printf 'K8S_LOCAL_POSTGRES_PASSWORD must contain only URL-safe unreserved characters\n' >&2
     exit 1
@@ -75,6 +80,29 @@ validate_settings() {
     printf 'K8S_LOCAL_SETTINGS_ENCRYPTION_KEY must be exactly 32 characters\n' >&2
     exit 1
   fi
+  if [[ ${#configured_rustfs_secret_key} -lt 8 ]]; then
+    printf 'K8S_LOCAL_RUSTFS_SECRET_KEY must be at least 8 characters\n' >&2
+    exit 1
+  fi
+  if [[ ${#configured_rustfs_rpc_secret} -lt 32 ]]; then
+    printf 'K8S_LOCAL_RUSTFS_RPC_SECRET must be at least 32 characters\n' >&2
+    exit 1
+  fi
+  if [[ "$configured_rustfs_secret_key" == "$configured_rustfs_rpc_secret" ]]; then
+    printf 'K8S_LOCAL_RUSTFS_RPC_SECRET must differ from K8S_LOCAL_RUSTFS_SECRET_KEY\n' >&2
+    exit 1
+  fi
+}
+
+refuse_legacy_minio_in_place() {
+  local legacy=0
+  kubectl -n "$namespace" get statefulset minio >/dev/null 2>&1 && legacy=1
+  kubectl -n "$namespace" get persistentvolumeclaim data-minio-0 >/dev/null 2>&1 && legacy=1
+  [[ "$legacy" == 0 ]] && return
+  [[ "${K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED:-0}" == 1 ]] && return
+  printf '%s\n' 'legacy MinIO StatefulSet or data PVC detected; do not apply RustFS without verified cutover evidence' >&2
+  printf '%s\n' 'use docs/rustfs-migration.md, then set K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 only after the frozen final copy and metadata verification' >&2
+  exit 1
 }
 
 require_console_port() {
@@ -100,14 +128,16 @@ build_images() {
 }
 
 apply_runtime_inputs() {
-  local configured_postgres_password configured_minio_user configured_minio_password
+  local configured_postgres_password configured_rustfs_access_key configured_rustfs_secret_key configured_rustfs_rpc_secret
   local configured_admin_token configured_resolver_token configured_settings_key
   configured_postgres_password=$(effective_secret_value \
     "$postgres_password" POSTGRES_PASSWORD local-postgres-password)
-  configured_minio_user=$(effective_secret_value \
-    "$minio_user" MINIO_ROOT_USER local-minio-user)
-  configured_minio_password=$(effective_secret_value \
-    "$minio_password" MINIO_ROOT_PASSWORD local-minio-password)
+  configured_rustfs_access_key=$(effective_secret_value \
+    "$rustfs_access_key" RUSTFS_ACCESS_KEY local-rustfs-user)
+  configured_rustfs_secret_key=$(effective_secret_value \
+    "$rustfs_secret_key" RUSTFS_SECRET_KEY local-rustfs-password)
+  configured_rustfs_rpc_secret=$(effective_secret_value \
+    "$rustfs_rpc_secret" RUSTFS_RPC_SECRET local-rustfs-rpc-secret-0123456789)
   configured_admin_token=$(effective_admin_token)
   configured_resolver_token=$(effective_secret_value \
     "$resolver_token" GATEWAY_RESOLVER_TOKEN local-gateway-resolver-token)
@@ -116,11 +146,12 @@ apply_runtime_inputs() {
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n "$namespace" create secret generic artifact-gateway-secrets \
     --from-literal=POSTGRES_PASSWORD="$configured_postgres_password" \
-    --from-literal=MINIO_ROOT_USER="$configured_minio_user" \
-    --from-literal=MINIO_ROOT_PASSWORD="$configured_minio_password" \
+    --from-literal=RUSTFS_ACCESS_KEY="$configured_rustfs_access_key" \
+    --from-literal=RUSTFS_SECRET_KEY="$configured_rustfs_secret_key" \
+    --from-literal=RUSTFS_RPC_SECRET="$configured_rustfs_rpc_secret" \
     --from-literal=GATEWAY_DATABASE_URL="postgres://gateway:${configured_postgres_password}@postgres:5432/gateway?sslmode=disable" \
-    --from-literal=GATEWAY_S3_ACCESS_KEY="$configured_minio_user" \
-    --from-literal=GATEWAY_S3_SECRET_KEY="$configured_minio_password" \
+    --from-literal=GATEWAY_S3_ACCESS_KEY="$configured_rustfs_access_key" \
+    --from-literal=GATEWAY_S3_SECRET_KEY="$configured_rustfs_secret_key" \
     --from-literal=GATEWAY_ADMIN_TOKEN="$configured_admin_token" \
     --from-literal=GATEWAY_RESOLVER_TOKEN="$configured_resolver_token" \
     --from-literal=GATEWAY_SETTINGS_ENCRYPTION_KEY="$configured_settings_key" \
@@ -150,6 +181,7 @@ up() {
   require_command kubectl
   require_command curl
   require_local_context
+  refuse_legacy_minio_in_place
   validate_settings
   require_console_port
   render_check
@@ -157,7 +189,7 @@ up() {
   apply_runtime_inputs
   kubectl apply -k "$overlay"
   kubectl -n "$namespace" rollout status statefulset/postgres --timeout=180s
-  kubectl -n "$namespace" rollout status statefulset/minio --timeout=180s
+  kubectl -n "$namespace" rollout status statefulset/rustfs --timeout=180s
   kubectl -n "$namespace" rollout status deployment/artifact-gateway --timeout=300s
   kubectl -n "$namespace" rollout status deployment/artifact-gateway-console --timeout=180s
   wait_for_http "$console_url/readyz"

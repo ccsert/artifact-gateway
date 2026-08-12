@@ -24,9 +24,9 @@ assert_json() {
 assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-gateway")) | length == 1' 'Gateway Deployment'
 assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-gateway-console")) | length == 1' 'Console Deployment'
 assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "postgres")) | length == 1' 'PostgreSQL StatefulSet'
-assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "minio")) | length == 1' 'MinIO StatefulSet'
+assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "rustfs")) | length == 1' 'RustFS StatefulSet'
 assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "postgres" and .spec.volumeClaimTemplates[0].spec.resources.requests.storage == "2Gi")) | length == 1' 'PostgreSQL 2Gi persistent volume claim'
-assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "minio" and .spec.volumeClaimTemplates[0].spec.resources.requests.storage == "5Gi")) | length == 1' 'MinIO 5Gi persistent volume claim'
+assert_json 'map(select(.kind == "StatefulSet" and .metadata.name == "rustfs" and .spec.volumeClaimTemplates[0].spec.resources.requests.storage == "5Gi" and .spec.template.spec.containers[0].readinessProbe.httpGet.path == "/health" and .spec.template.spec.containers[0].securityContext.runAsUser == 10001)) | length == 1' 'hardened RustFS StatefulSet with 5Gi persistent volume claim'
 assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-gateway" and .spec.template.spec.securityContext.runAsNonRoot == true and .spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem == true and .spec.template.spec.containers[0].readinessProbe.httpGet.path == "/readyz" and .spec.template.spec.containers[0].livenessProbe.httpGet.path == "/livez" and any(.spec.template.spec.containers[0].volumeMounts[]; .name == "temporary" and .mountPath == "/tmp") and any(.spec.template.spec.volumes[]; .name == "temporary" and .emptyDir.sizeLimit == "1Gi"))) | length == 1' 'hardened Gateway container, bounded upload spool, and health probes'
 assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-gateway-console" and .spec.template.spec.securityContext.runAsNonRoot == true and .spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem == true and .spec.template.spec.containers[0].readinessProbe.httpGet.path == "/console-healthz" and .spec.template.spec.containers[0].livenessProbe.httpGet.path == "/console-healthz")) | length == 1' 'hardened Console container and health probes'
 assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-gateway" and .spec.template.spec.initContainers[0].name == "migrate" and .spec.template.spec.initContainers[0].securityContext.runAsNonRoot == true and .spec.template.spec.initContainers[0].securityContext.readOnlyRootFilesystem == true)) | length == 1' 'hardened database migration init container'
@@ -34,7 +34,7 @@ assert_json 'map(select(.kind == "Deployment" and .metadata.name == "artifact-ga
 assert_json 'map(select(.kind == "Deployment" and (.metadata.name == "artifact-gateway" or .metadata.name == "artifact-gateway-console") and .spec.template.spec.automountServiceAccountToken == false)) | length == 2' 'disabled service-account token mounting for both Deployments'
 assert_json 'map(select(.kind == "Service" and .metadata.name == "artifact-gateway-console" and .spec.type == "LoadBalancer" and .spec.ports[0].port == 18081)) | length == 1' 'fixed local Console service endpoint'
 
-if grep -Eq 'local-(gateway|postgres|minio).*(password|token)' "$rendered"; then
+if grep -Eq 'local-(gateway|postgres|rustfs).*(password|token)' "$rendered"; then
   printf 'rendered Kubernetes manifest contains a local credential literal\n' >&2
   exit 1
 fi

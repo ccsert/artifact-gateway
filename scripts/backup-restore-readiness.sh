@@ -14,8 +14,8 @@ free_port() {
 }
 
 gateway_port=$(free_port)
-minio_api_port=$(free_port)
-minio_console_port=$(free_port)
+rustfs_api_port=$(free_port)
+rustfs_console_port=$(free_port)
 project="artifact-gateway-backup-${RANDOM}-${RANDOM}"
 isolated_environment=$(mktemp)
 grant_headers=$(mktemp)
@@ -24,8 +24,8 @@ oci_headers=$(mktemp)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
 
-awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "MINIO_API_PORT" && $1 != "MINIO_CONSOLE_PORT" { print }' "$environment_file" >"$isolated_environment"
-printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nMINIO_API_PORT=%s\nMINIO_CONSOLE_PORT=%s\n' "$gateway_port" "$(free_port)" "$minio_api_port" "$minio_console_port" >>"$isolated_environment"
+awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" { print }' "$environment_file" >"$isolated_environment"
+printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\n' "$gateway_port" "$(free_port)" "$rustfs_api_port" "$rustfs_console_port" >>"$isolated_environment"
 
 compose() {
   COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$isolated_environment" -f compose.yml "$@"
@@ -334,4 +334,4 @@ grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%
 [[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
 [[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and MinIO restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, artifact quarantine, Raw cache, Conan state, Repository grants, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and RustFS restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, artifact quarantine, Raw cache, Conan state, Repository grants, and authorization audits.'

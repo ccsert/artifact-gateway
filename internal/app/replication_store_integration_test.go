@@ -106,7 +106,7 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	}
 }
 
-func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
+func TestPostgresRustFSReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -120,11 +120,11 @@ func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	sourceRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-minio-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	sourceRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-rustfs-source-" + uuid.NewString(), Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-minio-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	targetRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-rustfs-target-" + uuid.NewString(), Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestPostgresMinIOReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 	if err = sourceObjects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
 		t.Fatal(err)
 	}
-	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, Coordinate: "releases/cross-bucket.bin", Digest: digest, IdempotencyKey: "minio-" + uuid.NewString()}
+	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, Coordinate: "releases/cross-bucket.bin", Digest: digest, IdempotencyKey: "rustfs-" + uuid.NewString()}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	}
 }
 
-func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
+func TestPostgresRustFSRawPromotionRetainsSharedObject(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -260,7 +260,7 @@ func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("Raw promotion backed by MinIO")
+	body := []byte("Raw promotion backed by RustFS")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", ObjectKey: "native/raw/sha256/" + hex.EncodeToString(sum[:]), Digest: digest, Size: int64(len(body)), ContentType: "text/plain"}
@@ -270,7 +270,7 @@ func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := (rawprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "minio-raw-promotion", rawprotocol.PromotionPayload{SourceRepositoryID: source.ID, Path: asset.Path, Digest: asset.Digest})
+	job, _, err := (rawprotocol.NativePromotion{Store: store}).Enqueue(ctx, target.ID, "rustfs-raw-promotion", rawprotocol.PromotionPayload{SourceRepositoryID: source.ID, Path: asset.Path, Digest: asset.Digest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,11 +286,11 @@ func TestPostgresMinIORawPromotionRetainsSharedObject(t *testing.T) {
 		t.Fatalf("target asset=%#v err=%v", targetAsset, err)
 	}
 	if info, err := objects.Stat(ctx, asset.ObjectKey); err != nil || info.Size != asset.Size || info.Digest != asset.Digest {
-		t.Fatalf("promoted MinIO object=%#v err=%v", info, err)
+		t.Fatalf("promoted RustFS object=%#v err=%v", info, err)
 	}
 }
 
-func TestPostgresMinIORawReplicationPublishesTargetAsset(t *testing.T) {
+func TestPostgresRustFSRawReplicationPublishesTargetAsset(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_S3_ENDPOINT")
 	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
@@ -319,7 +319,7 @@ func TestPostgresMinIORawReplicationPublishesTargetAsset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("Raw replication published after MinIO verification")
+	body := []byte("Raw replication published after RustFS verification")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", ObjectKey: "native/raw/sha256/" + hex.EncodeToString(sum[:]), Digest: digest, Size: int64(len(body)), ContentType: "text/plain"}

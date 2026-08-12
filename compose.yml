@@ -10,7 +10,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio-ready:
+      rustfs-ready:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
@@ -39,10 +39,10 @@ services:
       GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS: ${GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS:-1}
       GATEWAY_DATABASE_CONN_MAX_LIFETIME: ${GATEWAY_DATABASE_CONN_MAX_LIFETIME:-30m}
       GATEWAY_DATABASE_CONN_MAX_IDLE_TIME: ${GATEWAY_DATABASE_CONN_MAX_IDLE_TIME:-5m}
-      GATEWAY_S3_ENDPOINT: http://minio:9000
+      GATEWAY_S3_ENDPOINT: http://rustfs:9000
       GATEWAY_S3_BUCKET: gateway-cache
-      GATEWAY_S3_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
-      GATEWAY_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      GATEWAY_S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
+      GATEWAY_S3_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
       GATEWAY_OCI_PROXY_ALLOWED_HOSTS: ${GATEWAY_OCI_PROXY_ALLOWED_HOSTS:-}
       GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS: ${GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS:-}
       GATEWAY_RAW_PROXY_ALLOWED_HOSTS: ${GATEWAY_RAW_PROXY_ALLOWED_HOSTS:-}
@@ -79,7 +79,7 @@ services:
       # 出网代理：让 proxy 仓库的上游请求走宿主机代理（容器经 host-gateway 访问）
       HTTP_PROXY: ${GATEWAY_EGRESS_PROXY:-}
       HTTPS_PROXY: ${GATEWAY_EGRESS_PROXY:-}
-      NO_PROXY: postgres,minio,host.docker.internal,127.0.0.1,localhost
+      NO_PROXY: postgres,rustfs,host.docker.internal,127.0.0.1,localhost
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
     extra_hosts:
@@ -163,28 +163,33 @@ services:
       - ./migrations:/migrations:ro
       - ./scripts/run-migrations.sh:/usr/local/bin/run-migrations:ro
 
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address :9001
+  rustfs:
+    image: rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21
+    entrypoint: ["/bin/sh", "/usr/local/bin/run-rustfs"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
+      RUSTFS_RPC_SECRET: ${RUSTFS_RPC_SECRET:?set RUSTFS_RPC_SECRET in .env}
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${RUSTFS_API_PORT:-9000}:9000"
+      - "127.0.0.1:${RUSTFS_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - gateway-minio:/data
+      - gateway-rustfs:/data
+      - ./scripts/run-rustfs.sh:/usr/local/bin/run-rustfs:ro
 
-  minio-ready:
+  rustfs-ready:
     image: curlimages/curl:8.14.1
     depends_on:
-      minio:
+      rustfs:
         condition: service_started
     entrypoint: ["/bin/sh", "-ec"]
-    command: ["until curl --fail --silent http://minio:9000/minio/health/live > /dev/null; do sleep 1; done"]
+    command: ["until curl --fail --silent http://rustfs:9000/health > /dev/null; do sleep 1; done"]
 
 volumes:
   gateway-postgres:
-  gateway-minio:
+  gateway-rustfs:
   gateway-trivy-cache:
   gateway-scanner-sboms:

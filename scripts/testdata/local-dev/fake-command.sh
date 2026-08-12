@@ -35,6 +35,15 @@ case "$command_name" in
     printf '%s\n' "$*" >>"$state/docker.log"
     if [[ "$*" == *' config'* ]]; then
       printf '%s\n' 'x-local-dev:' '  gateway-port: "18081"' '  console-port: "4174"'
+    elif [[ "$*" == ps\ -aq\ * ]]; then
+      if [[ "$mode" == legacy-minio ]]; then
+        printf 'legacy-minio-container\n'
+      fi
+    elif [[ "$*" == 'volume inspect '* ]]; then
+      if [[ "$mode" == legacy-minio && "$*" == *gateway-minio ]]; then
+        exit 0
+      fi
+      exit 1
     fi
     ;;
   id)
