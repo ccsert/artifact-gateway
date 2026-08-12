@@ -981,52 +981,55 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	AccessDenied         ProblemCode = "access_denied"
-	ArtifactQuarantined  ProblemCode = "artifact_quarantined"
-	CoordinateExists     ProblemCode = "coordinate_exists"
-	DigestMismatch       ProblemCode = "digest_mismatch"
-	IdempotencyConflict  ProblemCode = "idempotency_conflict"
-	InternalError        ProblemCode = "internal_error"
-	InvalidPageToken     ProblemCode = "invalid_page_token"
-	InvalidRequest       ProblemCode = "invalid_request"
-	InvalidState         ProblemCode = "invalid_state"
-	NotFound             ProblemCode = "not_found"
-	RetentionProtected   ProblemCode = "retention_protected"
-	SecurityPolicyDenied ProblemCode = "security_policy_denied"
-	SessionClosed        ProblemCode = "session_closed"
-	VersionConflict      ProblemCode = "version_conflict"
+	ProblemCodeAccessDenied         ProblemCode = "access_denied"
+	ProblemCodeArtifactQuarantined  ProblemCode = "artifact_quarantined"
+	ProblemCodeCoordinateExists     ProblemCode = "coordinate_exists"
+	ProblemCodeDigestMismatch       ProblemCode = "digest_mismatch"
+	ProblemCodeIdempotencyConflict  ProblemCode = "idempotency_conflict"
+	ProblemCodeInternalError        ProblemCode = "internal_error"
+	ProblemCodeInvalidPageToken     ProblemCode = "invalid_page_token"
+	ProblemCodeInvalidRequest       ProblemCode = "invalid_request"
+	ProblemCodeInvalidState         ProblemCode = "invalid_state"
+	ProblemCodeNameExists           ProblemCode = "name_exists"
+	ProblemCodeNotFound             ProblemCode = "not_found"
+	ProblemCodeRetentionProtected   ProblemCode = "retention_protected"
+	ProblemCodeSecurityPolicyDenied ProblemCode = "security_policy_denied"
+	ProblemCodeSessionClosed        ProblemCode = "session_closed"
+	ProblemCodeVersionConflict      ProblemCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
 func (e ProblemCode) Valid() bool {
 	switch e {
-	case AccessDenied:
+	case ProblemCodeAccessDenied:
 		return true
-	case ArtifactQuarantined:
+	case ProblemCodeArtifactQuarantined:
 		return true
-	case CoordinateExists:
+	case ProblemCodeCoordinateExists:
 		return true
-	case DigestMismatch:
+	case ProblemCodeDigestMismatch:
 		return true
-	case IdempotencyConflict:
+	case ProblemCodeIdempotencyConflict:
 		return true
-	case InternalError:
+	case ProblemCodeInternalError:
 		return true
-	case InvalidPageToken:
+	case ProblemCodeInvalidPageToken:
 		return true
-	case InvalidRequest:
+	case ProblemCodeInvalidRequest:
 		return true
-	case InvalidState:
+	case ProblemCodeInvalidState:
 		return true
-	case NotFound:
+	case ProblemCodeNameExists:
 		return true
-	case RetentionProtected:
+	case ProblemCodeNotFound:
 		return true
-	case SecurityPolicyDenied:
+	case ProblemCodeRetentionProtected:
 		return true
-	case SessionClosed:
+	case ProblemCodeSecurityPolicyDenied:
 		return true
-	case VersionConflict:
+	case ProblemCodeSessionClosed:
+		return true
+	case ProblemCodeVersionConflict:
 		return true
 	default:
 		return false
@@ -1663,6 +1666,51 @@ func (e UserSessionKind) Valid() bool {
 	case UserSessionKindLocalSession:
 		return true
 	case UserSessionKindOidc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebhookDeliveryState.
+const (
+	WebhookDeliveryStateDead       WebhookDeliveryState = "dead"
+	WebhookDeliveryStateDelivering WebhookDeliveryState = "delivering"
+	WebhookDeliveryStatePending    WebhookDeliveryState = "pending"
+	WebhookDeliveryStateRetrying   WebhookDeliveryState = "retrying"
+	WebhookDeliveryStateSucceeded  WebhookDeliveryState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the WebhookDeliveryState enum.
+func (e WebhookDeliveryState) Valid() bool {
+	switch e {
+	case WebhookDeliveryStateDead:
+		return true
+	case WebhookDeliveryStateDelivering:
+		return true
+	case WebhookDeliveryStatePending:
+		return true
+	case WebhookDeliveryStateRetrying:
+		return true
+	case WebhookDeliveryStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebhookEventType.
+const (
+	WebhookEventTypeArtifactQuarantined WebhookEventType = "artifact.quarantined"
+	WebhookEventTypeArtifactReleased    WebhookEventType = "artifact.released"
+)
+
+// Valid indicates whether the value is a known member of the WebhookEventType enum.
+func (e WebhookEventType) Valid() bool {
+	switch e {
+	case WebhookEventTypeArtifactQuarantined:
+		return true
+	case WebhookEventTypeArtifactReleased:
 		return true
 	default:
 		return false
@@ -2322,6 +2370,15 @@ type CreateUserRole string
 type CreateUserIdentity struct {
 	Issuer  string `json:"issuer"`
 	Subject string `json:"subject"`
+}
+
+// CreateWebhookSubscription defines model for CreateWebhookSubscription.
+type CreateWebhookSubscription struct {
+	Enabled     bool               `json:"enabled"`
+	EndpointUrl string             `json:"endpointUrl"`
+	EventTypes  []WebhookEventType `json:"eventTypes"`
+	Name        string             `json:"name"`
+	Secret      *string            `json:"secret,omitempty"`
 }
 
 // CreatedAPIKey defines model for CreatedAPIKey.
@@ -3403,6 +3460,15 @@ type UpdateUserRole string
 // UpdateUserState defines model for UpdateUser.State.
 type UpdateUserState string
 
+// UpdateWebhookSubscription defines model for UpdateWebhookSubscription.
+type UpdateWebhookSubscription struct {
+	Enabled     bool               `json:"enabled"`
+	EndpointUrl string             `json:"endpointUrl"`
+	EventTypes  []WebhookEventType `json:"eventTypes"`
+	Name        string             `json:"name"`
+	Secret      *string            `json:"secret,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	CreatedAt            time.Time          `json:"createdAt"`
@@ -3482,6 +3548,47 @@ type UserSessionKind string
 type UserSessionList struct {
 	Items []UserSession `json:"items"`
 }
+
+// WebhookDelivery defines model for WebhookDelivery.
+type WebhookDelivery struct {
+	Attempts       int                  `json:"attempts"`
+	CreatedAt      time.Time            `json:"createdAt"`
+	DeliveredAt    *time.Time           `json:"deliveredAt,omitempty"`
+	EventId        openapi_types.UUID   `json:"eventId"`
+	EventType      WebhookEventType     `json:"eventType"`
+	Id             openapi_types.UUID   `json:"id"`
+	LastError      *string              `json:"lastError,omitempty"`
+	LastStatus     *int                 `json:"lastStatus,omitempty"`
+	NextAttemptAt  *time.Time           `json:"nextAttemptAt,omitempty"`
+	State          WebhookDeliveryState `json:"state"`
+	SubscriptionId openapi_types.UUID   `json:"subscriptionId"`
+	UpdatedAt      time.Time            `json:"updatedAt"`
+}
+
+// WebhookDeliveryList defines model for WebhookDeliveryList.
+type WebhookDeliveryList = []WebhookDelivery
+
+// WebhookDeliveryState defines model for WebhookDeliveryState.
+type WebhookDeliveryState string
+
+// WebhookEventType defines model for WebhookEventType.
+type WebhookEventType string
+
+// WebhookSubscription defines model for WebhookSubscription.
+type WebhookSubscription struct {
+	CreatedAt        time.Time          `json:"createdAt"`
+	Enabled          bool               `json:"enabled"`
+	EndpointUrl      string             `json:"endpointUrl"`
+	EventTypes       []WebhookEventType `json:"eventTypes"`
+	Id               openapi_types.UUID `json:"id"`
+	Name             string             `json:"name"`
+	SecretConfigured bool               `json:"secretConfigured"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+	Version          string             `json:"version"`
+}
+
+// WebhookSubscriptionList defines model for WebhookSubscriptionList.
+type WebhookSubscriptionList = []WebhookSubscription
 
 // AuthorizationRoleId defines model for AuthorizationRoleId.
 type AuthorizationRoleId = openapi_types.UUID
@@ -3962,6 +4069,18 @@ type RevokeUserSessionsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ListWebhookDeliveriesParams defines parameters for ListWebhookDeliveries.
+type ListWebhookDeliveriesParams struct {
+	SubscriptionId *openapi_types.UUID   `form:"subscriptionId,omitempty" json:"subscriptionId,omitempty"`
+	State          *WebhookDeliveryState `form:"state,omitempty" json:"state,omitempty"`
+	Limit          *int                  `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UpdateWebhookSubscriptionParams defines parameters for UpdateWebhookSubscription.
+type UpdateWebhookSubscriptionParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ReplaceAnonymousAccessPolicyJSONRequestBody defines body for ReplaceAnonymousAccessPolicy for application/json ContentType.
 type ReplaceAnonymousAccessPolicyJSONRequestBody = AnonymousAccessPolicy
 
@@ -4072,6 +4191,12 @@ type CreateUserIdentityJSONRequestBody = CreateUserIdentity
 
 // ResetUserPasswordJSONRequestBody defines body for ResetUserPassword for application/json ContentType.
 type ResetUserPasswordJSONRequestBody = ResetUserPassword
+
+// CreateWebhookSubscriptionJSONRequestBody defines body for CreateWebhookSubscription for application/json ContentType.
+type CreateWebhookSubscriptionJSONRequestBody = CreateWebhookSubscription
+
+// UpdateWebhookSubscriptionJSONRequestBody defines body for UpdateWebhookSubscription for application/json ContentType.
+type UpdateWebhookSubscriptionJSONRequestBody = UpdateWebhookSubscription
 
 // AsCreateMavenPublishSession returns the union data inside the CreatePublishSession as a CreateMavenPublishSession
 func (t CreatePublishSession) AsCreateMavenPublishSession() (CreateMavenPublishSession, error) {
@@ -4477,6 +4602,27 @@ type ServerInterface interface {
 
 	// (POST /users/{userId}/sessions:revoke)
 	RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId string, params RevokeUserSessionsParams)
+
+	// (GET /webhook-deliveries)
+	ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, params ListWebhookDeliveriesParams)
+
+	// (GET /webhook-deliveries/{deliveryId})
+	GetWebhookDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID)
+
+	// (POST /webhook-deliveries/{deliveryId}:replay)
+	ReplayWebhookDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID)
+
+	// (GET /webhook-subscriptions)
+	ListWebhookSubscriptions(w http.ResponseWriter, r *http.Request)
+
+	// (POST /webhook-subscriptions)
+	CreateWebhookSubscription(w http.ResponseWriter, r *http.Request)
+
+	// (GET /webhook-subscriptions/{subscriptionId})
+	GetWebhookSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID)
+
+	// (PUT /webhook-subscriptions/{subscriptionId})
+	UpdateWebhookSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID, params UpdateWebhookSubscriptionParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -9401,6 +9547,225 @@ func (siw *ServerInterfaceWrapper) RevokeUserSessions(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListWebhookDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWebhookDeliveriesParams
+
+	// ------------- Optional query parameter "subscriptionId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subscriptionId", r.URL.Query(), &params.SubscriptionId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subscriptionId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subscriptionId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhookDeliveries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWebhookDelivery operation middleware
+func (siw *ServerInterfaceWrapper) GetWebhookDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWebhookDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplayWebhookDelivery operation middleware
+func (siw *ServerInterfaceWrapper) ReplayWebhookDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplayWebhookDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWebhookSubscriptions operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhookSubscriptions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhookSubscriptions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWebhookSubscription operation middleware
+func (siw *ServerInterfaceWrapper) CreateWebhookSubscription(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWebhookSubscription(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWebhookSubscription operation middleware
+func (siw *ServerInterfaceWrapper) GetWebhookSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "subscriptionId" -------------
+	var subscriptionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subscriptionId", r.PathValue("subscriptionId"), &subscriptionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subscriptionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWebhookSubscription(w, r, subscriptionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWebhookSubscription operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWebhookSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "subscriptionId" -------------
+	var subscriptionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subscriptionId", r.PathValue("subscriptionId"), &subscriptionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subscriptionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWebhookSubscriptionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWebhookSubscription(w, r, subscriptionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -9643,6 +10008,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{userId}/sessions", wrapper.ListUserSessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}/sessions/{sessionId}", wrapper.RevokeUserSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{userId}/sessions:revoke", wrapper.RevokeUserSessions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/webhook-deliveries", wrapper.ListWebhookDeliveries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/webhook-deliveries/{deliveryId}", wrapper.GetWebhookDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/webhook-deliveries/{deliveryId}:replay", wrapper.ReplayWebhookDelivery)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/webhook-subscriptions", wrapper.ListWebhookSubscriptions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/webhook-subscriptions", wrapper.CreateWebhookSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/webhook-subscriptions/{subscriptionId}", wrapper.GetWebhookSubscription)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/webhook-subscriptions/{subscriptionId}", wrapper.UpdateWebhookSubscription)
 
 	return m
 }
@@ -9818,6 +10190,21 @@ type UserListJSONResponse UserList
 type UserSessionJSONResponse UserSession
 
 type UserSessionListJSONResponse UserSessionList
+
+type WebhookDeliveryJSONResponse WebhookDelivery
+
+type WebhookDeliveryListJSONResponse WebhookDeliveryList
+
+type WebhookSubscriptionResponseHeaders struct {
+	ETag string
+}
+type WebhookSubscriptionJSONResponse struct {
+	Body WebhookSubscription
+
+	Headers WebhookSubscriptionResponseHeaders
+}
+
+type WebhookSubscriptionListJSONResponse WebhookSubscriptionList
 
 type GetAnonymousAccessPolicyRequestObject struct {
 }
@@ -16128,6 +16515,608 @@ func (response RevokeUserSessions412ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListWebhookDeliveriesRequestObject struct {
+	Params ListWebhookDeliveriesParams
+}
+
+type ListWebhookDeliveriesResponseObject interface {
+	VisitListWebhookDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListWebhookDeliveries200JSONResponse struct {
+	WebhookDeliveryListJSONResponse
+}
+
+func (response ListWebhookDeliveries200JSONResponse) VisitListWebhookDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookDeliveries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListWebhookDeliveries400ApplicationProblemPlusJSONResponse) VisitListWebhookDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListWebhookDeliveries401ApplicationProblemPlusJSONResponse) VisitListWebhookDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookDeliveries403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListWebhookDeliveries403ApplicationProblemPlusJSONResponse) VisitListWebhookDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookDeliveryRequestObject struct {
+	DeliveryId openapi_types.UUID `json:"deliveryId"`
+}
+
+type GetWebhookDeliveryResponseObject interface {
+	VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error
+}
+
+type GetWebhookDelivery200JSONResponse struct{ WebhookDeliveryJSONResponse }
+
+func (response GetWebhookDelivery200JSONResponse) VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookDelivery400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetWebhookDelivery400ApplicationProblemPlusJSONResponse) VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookDelivery401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookDelivery401ApplicationProblemPlusJSONResponse) VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookDelivery403ApplicationProblemPlusJSONResponse) VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookDelivery404ApplicationProblemPlusJSONResponse) VisitGetWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDeliveryRequestObject struct {
+	DeliveryId openapi_types.UUID `json:"deliveryId"`
+}
+
+type ReplayWebhookDeliveryResponseObject interface {
+	VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error
+}
+
+type ReplayWebhookDelivery200JSONResponse struct{ WebhookDeliveryJSONResponse }
+
+func (response ReplayWebhookDelivery200JSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDelivery400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplayWebhookDelivery400ApplicationProblemPlusJSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDelivery401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayWebhookDelivery401ApplicationProblemPlusJSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayWebhookDelivery403ApplicationProblemPlusJSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayWebhookDelivery404ApplicationProblemPlusJSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayWebhookDelivery409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayWebhookDelivery409ApplicationProblemPlusJSONResponse) VisitReplayWebhookDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookSubscriptionsRequestObject struct {
+}
+
+type ListWebhookSubscriptionsResponseObject interface {
+	VisitListWebhookSubscriptionsResponse(w http.ResponseWriter) error
+}
+
+type ListWebhookSubscriptions200JSONResponse struct {
+	WebhookSubscriptionListJSONResponse
+}
+
+func (response ListWebhookSubscriptions200JSONResponse) VisitListWebhookSubscriptionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookSubscriptions401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListWebhookSubscriptions401ApplicationProblemPlusJSONResponse) VisitListWebhookSubscriptionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWebhookSubscriptions403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListWebhookSubscriptions403ApplicationProblemPlusJSONResponse) VisitListWebhookSubscriptionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscriptionRequestObject struct {
+	Body *CreateWebhookSubscriptionJSONRequestBody
+}
+
+type CreateWebhookSubscriptionResponseObject interface {
+	VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error
+}
+
+type CreateWebhookSubscription201JSONResponse struct {
+	WebhookSubscriptionJSONResponse
+}
+
+func (response CreateWebhookSubscription201JSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscription400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateWebhookSubscription400ApplicationProblemPlusJSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscription401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateWebhookSubscription401ApplicationProblemPlusJSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscription403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateWebhookSubscription403ApplicationProblemPlusJSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscription409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateWebhookSubscription409ApplicationProblemPlusJSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWebhookSubscription503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateWebhookSubscription503ApplicationProblemPlusJSONResponse) VisitCreateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookSubscriptionRequestObject struct {
+	SubscriptionId openapi_types.UUID `json:"subscriptionId"`
+}
+
+type GetWebhookSubscriptionResponseObject interface {
+	VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error
+}
+
+type GetWebhookSubscription200JSONResponse struct {
+	WebhookSubscriptionJSONResponse
+}
+
+func (response GetWebhookSubscription200JSONResponse) VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookSubscription400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetWebhookSubscription400ApplicationProblemPlusJSONResponse) VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookSubscription401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookSubscription401ApplicationProblemPlusJSONResponse) VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookSubscription403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookSubscription403ApplicationProblemPlusJSONResponse) VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWebhookSubscription404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetWebhookSubscription404ApplicationProblemPlusJSONResponse) VisitGetWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscriptionRequestObject struct {
+	SubscriptionId openapi_types.UUID `json:"subscriptionId"`
+	Params         UpdateWebhookSubscriptionParams
+	Body           *UpdateWebhookSubscriptionJSONRequestBody
+}
+
+type UpdateWebhookSubscriptionResponseObject interface {
+	VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error
+}
+
+type UpdateWebhookSubscription200JSONResponse struct {
+	WebhookSubscriptionJSONResponse
+}
+
+func (response UpdateWebhookSubscription200JSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateWebhookSubscription400ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription401ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription403ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription404ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription409ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription412ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateWebhookSubscription503ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateWebhookSubscription503ApplicationProblemPlusJSONResponse) VisitUpdateWebhookSubscriptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -16496,6 +17485,27 @@ type StrictServerInterface interface {
 
 	// (POST /users/{userId}/sessions:revoke)
 	RevokeUserSessions(ctx context.Context, request RevokeUserSessionsRequestObject) (RevokeUserSessionsResponseObject, error)
+
+	// (GET /webhook-deliveries)
+	ListWebhookDeliveries(ctx context.Context, request ListWebhookDeliveriesRequestObject) (ListWebhookDeliveriesResponseObject, error)
+
+	// (GET /webhook-deliveries/{deliveryId})
+	GetWebhookDelivery(ctx context.Context, request GetWebhookDeliveryRequestObject) (GetWebhookDeliveryResponseObject, error)
+
+	// (POST /webhook-deliveries/{deliveryId}:replay)
+	ReplayWebhookDelivery(ctx context.Context, request ReplayWebhookDeliveryRequestObject) (ReplayWebhookDeliveryResponseObject, error)
+
+	// (GET /webhook-subscriptions)
+	ListWebhookSubscriptions(ctx context.Context, request ListWebhookSubscriptionsRequestObject) (ListWebhookSubscriptionsResponseObject, error)
+
+	// (POST /webhook-subscriptions)
+	CreateWebhookSubscription(ctx context.Context, request CreateWebhookSubscriptionRequestObject) (CreateWebhookSubscriptionResponseObject, error)
+
+	// (GET /webhook-subscriptions/{subscriptionId})
+	GetWebhookSubscription(ctx context.Context, request GetWebhookSubscriptionRequestObject) (GetWebhookSubscriptionResponseObject, error)
+
+	// (PUT /webhook-subscriptions/{subscriptionId})
+	UpdateWebhookSubscription(ctx context.Context, request UpdateWebhookSubscriptionRequestObject) (UpdateWebhookSubscriptionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -19979,6 +20989,199 @@ func (sh *strictHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeUserSessionsResponseObject); ok {
 		if err := validResponse.VisitRevokeUserSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWebhookDeliveries operation middleware
+func (sh *strictHandler) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, params ListWebhookDeliveriesParams) {
+	var request ListWebhookDeliveriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWebhookDeliveries(ctx, request.(ListWebhookDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWebhookDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWebhookDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListWebhookDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWebhookDelivery operation middleware
+func (sh *strictHandler) GetWebhookDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID) {
+	var request GetWebhookDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWebhookDelivery(ctx, request.(GetWebhookDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWebhookDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWebhookDeliveryResponseObject); ok {
+		if err := validResponse.VisitGetWebhookDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplayWebhookDelivery operation middleware
+func (sh *strictHandler) ReplayWebhookDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID) {
+	var request ReplayWebhookDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplayWebhookDelivery(ctx, request.(ReplayWebhookDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplayWebhookDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplayWebhookDeliveryResponseObject); ok {
+		if err := validResponse.VisitReplayWebhookDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWebhookSubscriptions operation middleware
+func (sh *strictHandler) ListWebhookSubscriptions(w http.ResponseWriter, r *http.Request) {
+	var request ListWebhookSubscriptionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWebhookSubscriptions(ctx, request.(ListWebhookSubscriptionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWebhookSubscriptions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWebhookSubscriptionsResponseObject); ok {
+		if err := validResponse.VisitListWebhookSubscriptionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWebhookSubscription operation middleware
+func (sh *strictHandler) CreateWebhookSubscription(w http.ResponseWriter, r *http.Request) {
+	var request CreateWebhookSubscriptionRequestObject
+
+	var body CreateWebhookSubscriptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWebhookSubscription(ctx, request.(CreateWebhookSubscriptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWebhookSubscription")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWebhookSubscriptionResponseObject); ok {
+		if err := validResponse.VisitCreateWebhookSubscriptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWebhookSubscription operation middleware
+func (sh *strictHandler) GetWebhookSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID) {
+	var request GetWebhookSubscriptionRequestObject
+
+	request.SubscriptionId = subscriptionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWebhookSubscription(ctx, request.(GetWebhookSubscriptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWebhookSubscription")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWebhookSubscriptionResponseObject); ok {
+		if err := validResponse.VisitGetWebhookSubscriptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWebhookSubscription operation middleware
+func (sh *strictHandler) UpdateWebhookSubscription(w http.ResponseWriter, r *http.Request, subscriptionId openapi_types.UUID, params UpdateWebhookSubscriptionParams) {
+	var request UpdateWebhookSubscriptionRequestObject
+
+	request.SubscriptionId = subscriptionId
+	request.Params = params
+
+	var body UpdateWebhookSubscriptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWebhookSubscription(ctx, request.(UpdateWebhookSubscriptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWebhookSubscription")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWebhookSubscriptionResponseObject); ok {
+		if err := validResponse.VisitUpdateWebhookSubscriptionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

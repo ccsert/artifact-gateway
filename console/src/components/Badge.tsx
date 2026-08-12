@@ -34,6 +34,7 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   visible: "green",
   pending: "amber",
   retrying: "amber",
+  delivering: "blue",
   running: "blue",
   completed: "green",
   failed: "red",
@@ -58,6 +59,8 @@ const stateTone: Record<string, keyof typeof toneClasses> = {
   degraded: "amber",
   critical: "red",
   submitted: "green",
+  succeeded: "green",
+  dead: "red",
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {
@@ -69,6 +72,7 @@ export function StateBadge({ state }: { state: string | undefined }) {
     deleted: ["已删除", "Deleted"],
     pending: ["待处理", "Pending"],
     retrying: ["重试中", "Retrying"],
+    delivering: ["投递中", "Delivering"],
     running: ["运行中", "Running"],
     completed: ["已完成", "Completed"],
     failed: ["失败", "Failed"],
@@ -85,6 +89,8 @@ export function StateBadge({ state }: { state: string | undefined }) {
     critical: ["严重", "Critical"],
     denied: ["拒绝", "Denied"],
     submitted: ["已投递", "Submitted"],
+    succeeded: ["已送达", "Succeeded"],
+    dead: ["已停止", "Dead"],
     never: ["未扫描", "Not scanned"],
   };
   const label = labels[value];

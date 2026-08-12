@@ -250,6 +250,30 @@ QuarantineReadPolicy:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/QuarantineReadPolicy"
+WebhookSubscription:
+  description: Webhook subscription with signing secret redacted
+  headers:
+    ETag:
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/WebhookSubscription"}
+WebhookSubscriptionList:
+  description: Webhook subscriptions
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/WebhookSubscriptionList"}
+WebhookDelivery:
+  description: Durable webhook delivery state
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/WebhookDelivery"}
+WebhookDeliveryList:
+  description: Recent webhook deliveries
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/WebhookDeliveryList"}
 SecurityPolicyEvaluation:
   description: Security admission evaluation for an immutable artifact
   content:

@@ -560,6 +560,7 @@ export type Problem = {
     | "invalid_request"
     | "invalid_state"
     | "invalid_page_token"
+    | "name_exists"
     | "access_denied"
     | "not_found"
     | "version_conflict"
@@ -868,6 +869,56 @@ export type GlobalArtifactSearchPage = {
   searchedRepositories: number;
   nextPageToken?: string;
 };
+
+export type WebhookEventType = "artifact.quarantined" | "artifact.released";
+
+export type WebhookSubscription = {
+  id: string;
+  name: string;
+  endpointUrl: string;
+  eventTypes: Array<WebhookEventType>;
+  enabled: boolean;
+  version: string;
+  secretConfigured: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookSubscriptionList = Array<WebhookSubscription>;
+
+export type CreateWebhookSubscription = {
+  name: string;
+  endpointUrl: string;
+  eventTypes: Array<WebhookEventType>;
+  enabled: boolean;
+};
+
+export type UpdateWebhookSubscription = {
+  name: string;
+  endpointUrl: string;
+  eventTypes: Array<WebhookEventType>;
+  enabled: boolean;
+};
+
+export type WebhookDeliveryState =
+  "pending" | "delivering" | "retrying" | "succeeded" | "dead";
+
+export type WebhookDelivery = {
+  id: string;
+  eventId: string;
+  eventType: WebhookEventType;
+  subscriptionId: string;
+  state: WebhookDeliveryState;
+  attempts: number;
+  nextAttemptAt?: string;
+  lastStatus?: number;
+  lastError?: string;
+  deliveredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookDeliveryList = Array<WebhookDelivery>;
 
 export type RuntimeNode = {
   instanceId: string;
@@ -1527,6 +1578,22 @@ export type OidcSettingsUpdateWritable = {
   jitDefaultRole: "admin" | "writer" | "reader";
 };
 
+export type CreateWebhookSubscriptionWritable = {
+  name: string;
+  endpointUrl: string;
+  secret: string;
+  eventTypes: Array<WebhookEventType>;
+  enabled: boolean;
+};
+
+export type UpdateWebhookSubscriptionWritable = {
+  name: string;
+  endpointUrl: string;
+  secret?: string;
+  eventTypes: Array<WebhookEventType>;
+  enabled: boolean;
+};
+
 /**
  * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
@@ -1899,6 +1966,302 @@ export type TestOidcSettingsResponses = {
 
 export type TestOidcSettingsResponse =
   TestOidcSettingsResponses[keyof TestOidcSettingsResponses];
+
+export type ListWebhookSubscriptionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/webhook-subscriptions";
+};
+
+export type ListWebhookSubscriptionsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type ListWebhookSubscriptionsError =
+  ListWebhookSubscriptionsErrors[keyof ListWebhookSubscriptionsErrors];
+
+export type ListWebhookSubscriptionsResponses = {
+  /**
+   * Webhook subscriptions
+   */
+  200: WebhookSubscriptionList;
+};
+
+export type ListWebhookSubscriptionsResponse =
+  ListWebhookSubscriptionsResponses[keyof ListWebhookSubscriptionsResponses];
+
+export type CreateWebhookSubscriptionData = {
+  body: CreateWebhookSubscriptionWritable;
+  path?: never;
+  query?: never;
+  url: "/webhook-subscriptions";
+};
+
+export type CreateWebhookSubscriptionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CreateWebhookSubscriptionError =
+  CreateWebhookSubscriptionErrors[keyof CreateWebhookSubscriptionErrors];
+
+export type CreateWebhookSubscriptionResponses = {
+  /**
+   * Webhook subscription with signing secret redacted
+   */
+  201: WebhookSubscription;
+};
+
+export type CreateWebhookSubscriptionResponse =
+  CreateWebhookSubscriptionResponses[keyof CreateWebhookSubscriptionResponses];
+
+export type GetWebhookSubscriptionData = {
+  body?: never;
+  path: {
+    subscriptionId: string;
+  };
+  query?: never;
+  url: "/webhook-subscriptions/{subscriptionId}";
+};
+
+export type GetWebhookSubscriptionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetWebhookSubscriptionError =
+  GetWebhookSubscriptionErrors[keyof GetWebhookSubscriptionErrors];
+
+export type GetWebhookSubscriptionResponses = {
+  /**
+   * Webhook subscription with signing secret redacted
+   */
+  200: WebhookSubscription;
+};
+
+export type GetWebhookSubscriptionResponse =
+  GetWebhookSubscriptionResponses[keyof GetWebhookSubscriptionResponses];
+
+export type UpdateWebhookSubscriptionData = {
+  body: UpdateWebhookSubscriptionWritable;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    subscriptionId: string;
+  };
+  query?: never;
+  url: "/webhook-subscriptions/{subscriptionId}";
+};
+
+export type UpdateWebhookSubscriptionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type UpdateWebhookSubscriptionError =
+  UpdateWebhookSubscriptionErrors[keyof UpdateWebhookSubscriptionErrors];
+
+export type UpdateWebhookSubscriptionResponses = {
+  /**
+   * Webhook subscription with signing secret redacted
+   */
+  200: WebhookSubscription;
+};
+
+export type UpdateWebhookSubscriptionResponse =
+  UpdateWebhookSubscriptionResponses[keyof UpdateWebhookSubscriptionResponses];
+
+export type ListWebhookDeliveriesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    subscriptionId?: string;
+    state?: WebhookDeliveryState;
+    limit?: number;
+  };
+  url: "/webhook-deliveries";
+};
+
+export type ListWebhookDeliveriesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type ListWebhookDeliveriesError =
+  ListWebhookDeliveriesErrors[keyof ListWebhookDeliveriesErrors];
+
+export type ListWebhookDeliveriesResponses = {
+  /**
+   * Recent webhook deliveries
+   */
+  200: WebhookDeliveryList;
+};
+
+export type ListWebhookDeliveriesResponse =
+  ListWebhookDeliveriesResponses[keyof ListWebhookDeliveriesResponses];
+
+export type GetWebhookDeliveryData = {
+  body?: never;
+  path: {
+    deliveryId: string;
+  };
+  query?: never;
+  url: "/webhook-deliveries/{deliveryId}";
+};
+
+export type GetWebhookDeliveryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetWebhookDeliveryError =
+  GetWebhookDeliveryErrors[keyof GetWebhookDeliveryErrors];
+
+export type GetWebhookDeliveryResponses = {
+  /**
+   * Durable webhook delivery state
+   */
+  200: WebhookDelivery;
+};
+
+export type GetWebhookDeliveryResponse =
+  GetWebhookDeliveryResponses[keyof GetWebhookDeliveryResponses];
+
+export type ReplayWebhookDeliveryData = {
+  body?: never;
+  path: {
+    deliveryId: string;
+  };
+  query?: never;
+  url: "/webhook-deliveries/{deliveryId}:replay";
+};
+
+export type ReplayWebhookDeliveryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type ReplayWebhookDeliveryError =
+  ReplayWebhookDeliveryErrors[keyof ReplayWebhookDeliveryErrors];
+
+export type ReplayWebhookDeliveryResponses = {
+  /**
+   * Durable webhook delivery state
+   */
+  200: WebhookDelivery;
+};
+
+export type ReplayWebhookDeliveryResponse =
+  ReplayWebhookDeliveryResponses[keyof ReplayWebhookDeliveryResponses];
 
 export type ListRuntimeNodesData = {
   body?: never;

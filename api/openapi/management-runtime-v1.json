@@ -203,6 +203,247 @@
         }
       }
     },
+    "/webhook-subscriptions": {
+      "get": {
+        "operationId": "listWebhookSubscriptions",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookSubscriptionList"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWebhookSubscription",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/WebhookSubscription"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/webhook-subscriptions/{subscriptionId}": {
+      "parameters": [
+        {
+          "name": "subscriptionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getWebhookSubscription",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookSubscription"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateWebhookSubscription",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookSubscription"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/webhook-deliveries": {
+      "get": {
+        "operationId": "listWebhookDeliveries",
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/WebhookDeliveryState"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookDeliveryList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/webhook-deliveries/{deliveryId}": {
+      "parameters": [
+        {
+          "name": "deliveryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getWebhookDelivery",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookDelivery"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/webhook-deliveries/{deliveryId}:replay": {
+      "parameters": [
+        {
+          "name": "deliveryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "replayWebhookDelivery",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebhookDelivery"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/runtime/nodes": {
       "get": {
         "operationId": "listRuntimeNodes",
@@ -5424,6 +5665,7 @@
               "invalid_request",
               "invalid_state",
               "invalid_page_token",
+              "name_exists",
               "access_denied",
               "not_found",
               "version_conflict",
@@ -6496,6 +6738,230 @@
           "nextPageToken": {
             "type": "string"
           }
+        }
+      },
+      "WebhookEventType": {
+        "type": "string",
+        "enum": [
+          "artifact.quarantined",
+          "artifact.released"
+        ]
+      },
+      "WebhookSubscription": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpointUrl",
+          "eventTypes",
+          "enabled",
+          "version",
+          "secretConfigured",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "endpointUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "eventTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          },
+          "secretConfigured": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookSubscriptionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WebhookSubscription"
+        }
+      },
+      "CreateWebhookSubscription": {
+        "type": "object",
+        "required": [
+          "name",
+          "endpointUrl",
+          "secret",
+          "eventTypes",
+          "enabled"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "endpointUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "secret": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256,
+            "writeOnly": true
+          },
+          "eventTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateWebhookSubscription": {
+        "type": "object",
+        "required": [
+          "name",
+          "endpointUrl",
+          "eventTypes",
+          "enabled"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "endpointUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "secret": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256,
+            "writeOnly": true
+          },
+          "eventTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WebhookDeliveryState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "delivering",
+          "retrying",
+          "succeeded",
+          "dead"
+        ]
+      },
+      "WebhookDelivery": {
+        "type": "object",
+        "required": [
+          "id",
+          "eventId",
+          "eventType",
+          "subscriptionId",
+          "state",
+          "attempts",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/WebhookEventType"
+          },
+          "subscriptionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WebhookDeliveryState"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastStatus": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookDeliveryList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WebhookDelivery"
         }
       },
       "RuntimeNode": {
@@ -9284,6 +9750,54 @@
               "items": {
                 "$ref": "#/components/schemas/AuditCleanupJob"
               }
+            }
+          }
+        }
+      },
+      "WebhookSubscriptionList": {
+        "description": "Webhook subscriptions",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WebhookSubscriptionList"
+            }
+          }
+        }
+      },
+      "WebhookSubscription": {
+        "description": "Webhook subscription with signing secret redacted",
+        "headers": {
+          "ETag": {
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WebhookSubscription"
+            }
+          }
+        }
+      },
+      "WebhookDeliveryList": {
+        "description": "Recent webhook deliveries",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WebhookDeliveryList"
+            }
+          }
+        }
+      },
+      "WebhookDelivery": {
+        "description": "Durable webhook delivery state",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WebhookDelivery"
             }
           }
         }

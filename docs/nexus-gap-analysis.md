@@ -43,7 +43,7 @@ the Console described in `console/src/app/router.tsx`.
 | Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, Gateway-enforced vulnerability database freshness, versioned quarantine that blocks promotion/replication, and a default-disabled per-Hosted policy that blocks quarantined reads across six native formats | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls, lifecycle Jobs view, and repository-level intelligence reconciliation; general scheduler remains future work | Low |
-| Notifications | Webhooks, email/SMTP | None | Low |
+| Notifications | Webhooks, email/SMTP | Durable HMAC-signed quarantine/release Webhooks with retry, dead-letter replay, and Console visibility; email/SMTP and broader event types remain future work | Low |
 | API key governance | Scoped roles, expiry, last-used | Optional global role, repository-scoped `repositories:intelligence` writer scope for CI/scanners, 90-day default and 365-day maximum expiry, revocation, last-used tracking | Low |
 
 ## Functional Gaps
@@ -103,7 +103,8 @@ replication persists checkpoints, retries, resumes, and SHA-256-verifies bytes.
 The remaining gaps are integration surfaces Nexus provides:
 
 - No staging workflow (Nexus Maven Staging Suite equivalent).
-- No webhooks or event publication.
+- Webhook publication currently covers Artifact quarantine and release; broader
+  lifecycle, scan, promotion, and replication event types remain future work.
 - No email or SMTP notification configuration.
 - No routing rules (per-path allow/deny beyond the Proxy host allowlist).
 - No external blob destination for replication; replication targets are other
@@ -255,8 +256,9 @@ are not exposed, while cron scheduling remains a future capability.
 
 ### Notifications And Feedback
 
-There is no toast system, no global job-status indicator, and no webhook or
-email configuration. The Jobs tab auto-refreshes only while open, every ten
+There is no toast system, no global job-status indicator, or email
+configuration. Webhook subscriptions and recent delivery failures are managed
+from Operations, but do not yet surface in-page job completion. The Jobs tab auto-refreshes only while open, every ten
 seconds (`console/src/pages/RepositoryDetail.tsx` Jobs tab), so job completion
 is invisible once the user navigates away.
 
@@ -419,8 +421,9 @@ independently deliverable.
 4. **P2 Server-side dashboard trends.** Add time-series metrics, throughput,
    cache-hit rate, and storage-growth visualization.
 5. **P2 Broaden scheduled task types, blob store management, and system settings pages.**
-6. **P3 Notifications and ecosystem breadth.** Add webhooks/email and additional
-   package formats; tombstone hard-purge remains intentionally out of scope.
+6. **P3 Notifications and ecosystem breadth.** Expand the delivered quarantine
+   Webhooks to lifecycle and scan events, add email, and add package formats;
+   tombstone hard-purge remains intentionally out of scope.
 
 This backlog is advisory. The authoritative delivery objective and completion
 criteria remain [the full repository goal](full-artifact-repository-goal.md);

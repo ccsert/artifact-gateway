@@ -19,6 +19,16 @@ paths:
     "$ref": "./management/authentication.yaml#/oidc_settings"
   "/authentication/oidc:test":
     "$ref": "./management/authentication.yaml#/oidc_settings_test"
+  "/webhook-subscriptions":
+    "$ref": "./management/webhooks.yaml#/webhook_subscriptions"
+  "/webhook-subscriptions/{subscriptionId}":
+    "$ref": "./management/webhooks.yaml#/webhook_subscriptions_subscriptionId"
+  "/webhook-deliveries":
+    "$ref": "./management/webhooks.yaml#/webhook_deliveries"
+  "/webhook-deliveries/{deliveryId}":
+    "$ref": "./management/webhooks.yaml#/webhook_deliveries_deliveryId"
+  "/webhook-deliveries/{deliveryId}:replay":
+    "$ref": "./management/webhooks.yaml#/webhook_deliveries_deliveryId_replay"
   "/repositories":
     "$ref": "./management/repositories.yaml#/repositories"
   "/repository-grants":

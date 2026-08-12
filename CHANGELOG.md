@@ -57,6 +57,10 @@ a dated version heading without rewriting their meaning.
   protocol-level GET/HEAD denial, aggregate npm/PyPI and Conan closure
   semantics, metadata filtering, Group anti-bypass behavior, PostgreSQL
   persistence, OpenAPI clients, and Console controls.
+- Durable administrator-managed Webhook subscriptions for Artifact quarantine
+  and release events, with transactional outbox persistence, encrypted HMAC
+  secrets, SSRF-safe HTTPS delivery, bounded retry/dead-letter replay, cluster
+  leases, OpenAPI clients, audits, and Console operations visibility.
 - Local-user governance with profile metadata, case-insensitive identities,
   failed-sign-in lockout, last-sign-in and password-change timestamps,
   mandatory password changes, administrator password resets, revocable

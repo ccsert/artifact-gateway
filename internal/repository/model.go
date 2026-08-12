@@ -1079,3 +1079,80 @@ type AuditCleanupJob struct {
 	CompletedAt    time.Time
 	LastError      string
 }
+
+// WebhookEventType is a stable consumer-facing operational event name.
+type WebhookEventType string
+
+const (
+	WebhookEventArtifactQuarantined WebhookEventType = "artifact.quarantined"
+	WebhookEventArtifactReleased    WebhookEventType = "artifact.released"
+)
+
+type WebhookSubscription struct {
+	ID               string
+	Name             string
+	EndpointURL      string
+	SecretCiphertext string `json:"-"`
+	EventTypes       []WebhookEventType
+	Enabled          bool
+	Version          string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type WebhookEvent struct {
+	ID         string
+	Type       WebhookEventType
+	OccurredAt time.Time
+	Data       []byte
+}
+
+type WebhookDeliveryState string
+
+const (
+	WebhookDeliveryPending    WebhookDeliveryState = "pending"
+	WebhookDeliveryDelivering WebhookDeliveryState = "delivering"
+	WebhookDeliveryRetrying   WebhookDeliveryState = "retrying"
+	WebhookDeliverySucceeded  WebhookDeliveryState = "succeeded"
+	WebhookDeliveryDead       WebhookDeliveryState = "dead"
+)
+
+type WebhookDelivery struct {
+	ID             string
+	EventID        string
+	EventType      WebhookEventType
+	SubscriptionID string
+	State          WebhookDeliveryState
+	Attempts       int
+	NextAttemptAt  time.Time
+	LeaseOwner     string
+	LeaseExpiresAt time.Time
+	LastStatus     int
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeliveredAt    time.Time
+}
+
+type WebhookDeliveryClaim struct {
+	Delivery     WebhookDelivery
+	Event        WebhookEvent
+	Subscription WebhookSubscription
+}
+
+type WebhookDeliveryQuery struct {
+	SubscriptionID string
+	State          WebhookDeliveryState
+	Limit          int
+}
+
+type ArtifactQuarantineWebhookData struct {
+	RepositoryID string                  `json:"repositoryId"`
+	Format       Format                  `json:"format"`
+	Coordinate   string                  `json:"coordinate"`
+	Digest       string                  `json:"digest"`
+	State        ArtifactQuarantineState `json:"state"`
+	Reason       string                  `json:"reason"`
+	Actor        string                  `json:"actor"`
+	Version      string                  `json:"version"`
+}

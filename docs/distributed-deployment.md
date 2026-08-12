@@ -28,10 +28,11 @@ GATEWAY_WORKER_KINDS=reclaim,replication
 
 `GATEWAY_WORKER_FORMATS` 支持 `maven`、`oci`、`raw`、`conan`、`npm`、`pypi`；任务类型支持
 `promotion`、`replication`、`retention`、`reclaim`、`intelligence`、`deletion`、
-`scan`、`recovery`、`cache`、`audit`。`intelligence` 负责处理晋升成功后被延迟的
+`scan`、`recovery`、`cache`、`audit`、`webhook`。`intelligence` 负责处理晋升成功后被延迟的
 制品情报复制；`scan` 只在该节点配置了 `GATEWAY_SCANNER_ENDPOINT` 时启动，其格式
 由独立的 `GATEWAY_SCANNER_FORMATS` 控制（包含仅代理的 `go`），可以与普通生命周期
-Worker 隔离部署。未设置过滤器时，worker 处理全部适用格式和任务类型。
+Worker 隔离部署。`webhook` 从 PostgreSQL durable outbox 领取全局投递，不受
+`GATEWAY_WORKER_FORMATS` 限制。未设置过滤器时，worker 处理全部适用格式和任务类型。
 
 格式和任务过滤器只限制 Worker，Scheduler 始终为全部格式发现工作。缓存回收任务
 按 OCI、Raw、Conan 分开领取；Maven 缓存条目在读取时执行过期判断，因此没有

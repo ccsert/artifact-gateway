@@ -117,6 +117,21 @@ func TestLoadSupportsDedicatedIntelligenceWorker(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsDedicatedWebhookWorker(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_NODE_ROLES", "worker")
+	t.Setenv("GATEWAY_WORKER_FORMATS", "oci")
+	t.Setenv("GATEWAY_WORKER_KINDS", "webhook")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.HasRole(NodeRoleWorker) || !cfg.WorkerKindEnabled("webhook") || cfg.WorkerKindEnabled("replication") {
+		t.Fatalf("dedicated webhook worker roles=%#v formats=%#v kinds=%#v", cfg.NodeRoles, cfg.WorkerFormats, cfg.WorkerKinds)
+	}
+}
+
 func TestLoadConfiguresArtifactScanner(t *testing.T) {
 	setCompleteConfiguration(t)
 	t.Setenv("GATEWAY_SCANNER_ENDPOINT", "http://127.0.0.1:18082/v1/scan")

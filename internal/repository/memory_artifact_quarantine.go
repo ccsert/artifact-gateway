@@ -36,6 +36,7 @@ func (s *MemoryStore) ReplaceArtifactQuarantine(_ context.Context, value Artifac
 		value.ReleasedAt = time.Time{}
 		value.UpdatedAt = now
 		s.artifactQuarantines[key] = value
+		s.enqueueWebhookEventLocked(artifactQuarantineWebhookEvent(value))
 		return value, nil
 	}
 	if current.Version != expectedVersion {
@@ -54,5 +55,6 @@ func (s *MemoryStore) ReplaceArtifactQuarantine(_ context.Context, value Artifac
 	}
 	value.UpdatedAt = time.Now().UTC()
 	s.artifactQuarantines[key] = value
+	s.enqueueWebhookEventLocked(artifactQuarantineWebhookEvent(value))
 	return value, nil
 }

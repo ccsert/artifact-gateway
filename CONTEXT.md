@@ -82,6 +82,24 @@ For aggregate PyPI versions, changed source-file membership parks the plan as
 before any complete-version publication.
 _Avoid_: Backup, cache
 
+**Operational Event**:
+An immutable fact emitted in the same transaction as the governed state
+transition that caused it. The first event set records Artifact quarantine and
+release; it is not reconstructed from Audit records.
+_Avoid_: Audit poll result, notification attempt
+
+**Webhook Subscription**:
+An administrator-managed HTTPS destination, encrypted HMAC secret, enabled
+flag, and event-type filter. Disabling it stops creation of new deliveries but
+does not erase existing delivery history.
+_Avoid_: Callback job, proxy endpoint
+
+**Webhook Delivery**:
+The durable, at-least-once attempt state for one Operational Event and one
+Webhook Subscription. It has a lease, bounded retries, terminal `dead` state,
+and explicit replay while preserving the event identity.
+_Avoid_: Operational Event, best-effort callback
+
 **Quarantine Read Policy**:
 A versioned Hosted Repository policy that controls whether protocol reads of a
 quarantined Artifact remain backward-compatible or fail closed. It is disabled

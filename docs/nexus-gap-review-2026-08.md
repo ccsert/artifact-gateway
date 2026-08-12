@@ -31,7 +31,8 @@
 
 - 制品详情还应统一展示 checksum、签名、SBOM、provenance、许可证和漏洞扫描结果，并提供下载/复制依赖坐标/OCI pull 命令。
 - OCI、Conan、Raw 的发布入口还不如 Maven 完整；建议抽象共享的分片上传/校验/提交组件。
-- 缺少 webhook、邮件通知、stage/release 工作流、收藏/标签/下载热度和保存搜索。
+- Webhook 首切片已覆盖隔离/解除隔离事件；仍缺少更广事件类型、邮件通知、
+  stage/release 工作流、收藏/标签/下载热度和保存搜索。
 - 审计现在支持服务端仓库、分组、结果、格式、操作和主体筛选；下一步应支持时间范围、分页 token、保存查询和服务端 CSV 导出。
 
 ## 本次已落地
@@ -54,6 +55,7 @@
 
 1. 先做 API key expiry/last-used、OIDC role mapping 和权限解释接口，这三项直接降低生产运维风险。
 2. 再做后端统一搜索索引与真正的游标分页，替换 Console 的逐仓库 fan-out。
-3. 最后接入 webhook/邮件、SBOM/扫描结果和通用任务调度器，形成 Nexus Firewall/IQ/Task Scheduler 对应能力。
+3. 最后扩展已交付的 Webhook 事件目录，并接入邮件、SBOM/扫描结果和更广任务类型，
+   形成 Nexus Firewall/IQ/Task Scheduler 对应能力。
 
 以上缺口按风险和投入排序；不建议为了“看起来像 Nexus”引入与现有生命周期模型冲突的硬删除或无审计的后台操作。

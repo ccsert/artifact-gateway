@@ -63,7 +63,7 @@ GATEWAY_NODE_ROLES=worker GATEWAY_WORKER_FORMATS=oci
 所有节点共享 PostgreSQL 和 S3/MinIO；任务领取由数据库租约保证幂等。worker
 可以用 `GATEWAY_WORKER_FORMATS` 和 `GATEWAY_WORKER_KINDS` 限制格式与任务类型，
 例如只部署 OCI 的 `reclaim,replication` worker，或将 `scan` 交给配置了外部
-扫描器的隔离 worker。非 API 节点仅暴露
+扫描器的隔离 worker；`webhook` 是不受格式过滤器影响的全局投递任务。非 API 节点仅暴露
 `/livez`、`/readyz` 和 `/metrics`，不会暴露制品协议或管理接口。
 
 拆分部署时应按副本数降低每个节点的数据库连接池上限，避免连接总数超过

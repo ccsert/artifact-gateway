@@ -157,11 +157,12 @@ func main() {
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge)
+	runtimeSessionID := uuid.NewString()
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{
 			InstanceID:    cfg.InstanceID,
-			SessionID:     uuid.NewString(),
+			SessionID:     runtimeSessionID,
 			Roles:         nodeRoleStrings(cfg.NodeRoles),
 			WorkerFormats: append([]string(nil), cfg.WorkerFormats...),
 			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
@@ -173,7 +174,8 @@ func main() {
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
-		scannerFormats: dependencies.ArtifactScannerFormats,
+		scannerFormats:  dependencies.ArtifactScannerFormats,
+		workerSessionID: runtimeSessionID,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {

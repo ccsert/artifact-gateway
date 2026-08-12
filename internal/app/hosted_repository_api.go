@@ -240,6 +240,7 @@ type generatedRepositoryAPIAdapter struct {
 	quarantine             repository.ArtifactQuarantineStore
 	runtimeNodes           repository.RuntimeNodeStore
 	scheduledTasks         repository.ScheduledTaskStore
+	webhooks               repository.WebhookStore
 	queueStats             repository.BackgroundOperationQueueStore
 	diagnostics            Dependencies
 	artifactScanner        scanning.Scanner

@@ -1,0 +1,140 @@
+webhook_subscriptions:
+  get:
+    operationId: listWebhookSubscriptions
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookSubscriptionList"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createWebhookSubscription
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateWebhookSubscription"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/WebhookSubscription"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+webhook_subscriptions_subscriptionId:
+  parameters:
+  - name: subscriptionId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  get:
+    operationId: getWebhookSubscription
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookSubscription"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: updateWebhookSubscription
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/UpdateWebhookSubscription"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookSubscription"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+webhook_deliveries:
+  get:
+    operationId: listWebhookDeliveries
+    parameters:
+    - name: subscriptionId
+      in: query
+      schema: {type: string, format: uuid}
+    - name: state
+      in: query
+      schema:
+        "$ref": "../components/schemas.yaml#/WebhookDeliveryState"
+    - name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookDeliveryList"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+webhook_deliveries_deliveryId:
+  parameters:
+  - name: deliveryId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  get:
+    operationId: getWebhookDelivery
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookDelivery"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+webhook_deliveries_deliveryId_replay:
+  parameters:
+  - name: deliveryId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  post:
+    operationId: replayWebhookDelivery
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/WebhookDelivery"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"

@@ -33,6 +33,7 @@ import { formatDate } from "../lib/format";
 import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
 import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
 import { SystemDiagnosticsPanel } from "../components/SystemDiagnosticsPanel";
+import { WebhookDeliveriesPanel } from "../components/WebhookDeliveriesPanel";
 import { LifecycleJobDetails } from "../components/LifecycleJobDetails";
 import {
   FilterBar,
@@ -431,6 +432,11 @@ export function OperationsPage() {
             key: "schedules",
             label: text("计划任务", "Scheduled tasks"),
             children: <ScheduledTasksPanel />,
+          },
+          {
+            key: "webhooks",
+            label: text("Webhook 投递", "Webhook delivery"),
+            children: <WebhookDeliveriesPanel />,
           },
           {
             key: "jobs",

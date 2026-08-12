@@ -13,8 +13,9 @@ type Adapter interface {
 	Available(context.Context, repository.Member, string) bool
 }
 
-// openAPIServeMux bridges OpenAPI's `{sessionId}:commit` template to the
-// standard library router, whose wildcard path segment must end with `}`.
+// openAPIServeMux bridges OpenAPI action templates such as
+// `{sessionId}:commit` to the standard library router, whose wildcard path
+// segment must end with `}`.
 type openAPIServeMux struct {
 	mux       *http.ServeMux
 	authorize func(http.ResponseWriter, *http.Request) (Principal, bool)
@@ -50,21 +51,34 @@ func isManagementObjectUpload(r *http.Request) bool {
 }
 
 func (m openAPIServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	const commitPatternSuffix = "/publish-sessions/{sessionId}:commit"
-	if strings.HasSuffix(pattern, commitPatternSuffix) {
-		prefix := strings.TrimSuffix(pattern, "{sessionId}:commit")
-		m.mux.HandleFunc(prefix, m.guarded(func(w http.ResponseWriter, r *http.Request) {
-			sessionID := strings.TrimPrefix(r.URL.Path, strings.TrimPrefix(prefix, http.MethodPost+" "))
-			if sessionID == "" || strings.Contains(sessionID, "/") || !strings.HasSuffix(sessionID, ":commit") {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			r.SetPathValue("sessionId", strings.TrimSuffix(sessionID, ":commit"))
-			handler(w, r)
-		}))
+	if m.handlePathParameterAction(pattern, "sessionId", "commit", handler) || m.handlePathParameterAction(pattern, "deliveryId", "replay", handler) {
 		return
 	}
 	m.mux.HandleFunc(pattern, m.guarded(handler))
+}
+
+func (m openAPIServeMux) handlePathParameterAction(pattern, parameter, action string, handler func(http.ResponseWriter, *http.Request)) bool {
+	template := "{" + parameter + "}:" + action
+	if !strings.HasSuffix(pattern, template) {
+		return false
+	}
+	method, _, ok := strings.Cut(pattern, " ")
+	if !ok {
+		return false
+	}
+	prefix := strings.TrimSuffix(pattern, template)
+	pathPrefix := strings.TrimPrefix(prefix, method+" ")
+	m.mux.HandleFunc(prefix, m.guarded(func(w http.ResponseWriter, r *http.Request) {
+		value := strings.TrimPrefix(r.URL.Path, pathPrefix)
+		suffix := ":" + action
+		if value == "" || strings.Contains(value, "/") || !strings.HasSuffix(value, suffix) {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		r.SetPathValue(parameter, strings.TrimSuffix(value, suffix))
+		handler(w, r)
+	}))
+	return true
 }
 
 func (m openAPIServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +127,7 @@ type GatewayStore interface {
 	repository.UserSessionStore
 	repository.RuntimeNodeStore
 	repository.ScheduledTaskStore
+	repository.WebhookStore
 	repository.BackgroundOperationQueueStore
 }
 
@@ -253,7 +268,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

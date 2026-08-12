@@ -7,24 +7,26 @@ import (
 )
 
 var (
-	ErrNotFound                     = errors.New("group not found")
-	ErrDisabled                     = errors.New("group is disabled")
-	ErrNameExists                   = errors.New("group name already exists")
-	ErrIdempotencyConflict          = errors.New("idempotency key conflicts with request")
-	ErrVersionConflict              = errors.New("resource version conflicts with current state")
-	ErrLastActiveAdmin              = errors.New("last active administrator cannot be removed")
-	ErrQuotaExceeded                = errors.New("repository capacity quota exceeded")
-	ErrUpstreamChanged              = errors.New("upstream immutable artifact metadata changed")
-	ErrInvalidRuntimeNode           = errors.New("runtime node identity is invalid")
-	ErrTemplateNameExists           = errors.New("authorization template name already exists")
-	ErrAuthorizationRoleNameExists  = errors.New("authorization role name already exists")
-	ErrInvalidArtifactIntelligence  = errors.New("artifact intelligence is invalid")
-	ErrInvalidArtifactQuarantine    = errors.New("artifact quarantine is invalid")
-	ErrArtifactIntelligenceConflict = errors.New("target artifact intelligence conflicts with source")
-	ErrArtifactIntelligenceDeferred = errors.New("artifact intelligence copy was deferred")
-	ErrIdentityExists               = errors.New("user identity already exists")
-	ErrIdentityAmbiguous            = errors.New("user identity matches multiple accounts")
-	ErrInvalidUserSession           = errors.New("user session is invalid")
+	ErrNotFound                      = errors.New("group not found")
+	ErrDisabled                      = errors.New("group is disabled")
+	ErrNameExists                    = errors.New("group name already exists")
+	ErrIdempotencyConflict           = errors.New("idempotency key conflicts with request")
+	ErrVersionConflict               = errors.New("resource version conflicts with current state")
+	ErrLastActiveAdmin               = errors.New("last active administrator cannot be removed")
+	ErrQuotaExceeded                 = errors.New("repository capacity quota exceeded")
+	ErrUpstreamChanged               = errors.New("upstream immutable artifact metadata changed")
+	ErrInvalidRuntimeNode            = errors.New("runtime node identity is invalid")
+	ErrTemplateNameExists            = errors.New("authorization template name already exists")
+	ErrAuthorizationRoleNameExists   = errors.New("authorization role name already exists")
+	ErrInvalidArtifactIntelligence   = errors.New("artifact intelligence is invalid")
+	ErrInvalidArtifactQuarantine     = errors.New("artifact quarantine is invalid")
+	ErrArtifactIntelligenceConflict  = errors.New("target artifact intelligence conflicts with source")
+	ErrArtifactIntelligenceDeferred  = errors.New("artifact intelligence copy was deferred")
+	ErrIdentityExists                = errors.New("user identity already exists")
+	ErrIdentityAmbiguous             = errors.New("user identity matches multiple accounts")
+	ErrInvalidUserSession            = errors.New("user session is invalid")
+	ErrWebhookSubscriptionNameExists = errors.New("webhook subscription name already exists")
+	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
 )
 
 type HostedRepositoryStore interface {
@@ -46,6 +48,20 @@ type AnonymousAccessPolicyStore interface {
 type OIDCSettingsStore interface {
 	GetOIDCSettings(context.Context) (OIDCSettings, error)
 	ReplaceOIDCSettings(context.Context, OIDCSettings, string) (OIDCSettings, error)
+}
+
+type WebhookStore interface {
+	CreateWebhookSubscription(context.Context, WebhookSubscription) (WebhookSubscription, error)
+	ListWebhookSubscriptions(context.Context) ([]WebhookSubscription, error)
+	GetWebhookSubscription(context.Context, string) (WebhookSubscription, error)
+	UpdateWebhookSubscription(context.Context, WebhookSubscription, string) (WebhookSubscription, error)
+	EnqueueWebhookEvent(context.Context, WebhookEvent) (WebhookEvent, error)
+	ListWebhookDeliveries(context.Context, WebhookDeliveryQuery) ([]WebhookDelivery, error)
+	GetWebhookDelivery(context.Context, string) (WebhookDelivery, error)
+	ClaimWebhookDeliveries(context.Context, string, time.Time, time.Duration, int) ([]WebhookDeliveryClaim, error)
+	CompleteWebhookDelivery(context.Context, string, string, int, time.Time) error
+	FailWebhookDelivery(context.Context, string, string, time.Time, int, string, bool) error
+	ReplayWebhookDelivery(context.Context, string, time.Time) (WebhookDelivery, error)
 }
 
 // UserIdentityStore links provider credentials to a local account. The

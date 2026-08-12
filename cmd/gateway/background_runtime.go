@@ -15,14 +15,15 @@ import (
 )
 
 type backgroundRuntime struct {
-	store          *repository.PostgresStore
-	objects        app.OCIObjectStore
-	taskQueue      *app.PostgresCacheTaskQueue
-	maintenance    *app.CacheMaintenance
-	metrics        *app.Metrics
-	scanner        scanning.Scanner
-	scanResolver   app.ArtifactScanResolver
-	scannerFormats []repository.Format
+	store           *repository.PostgresStore
+	objects         app.OCIObjectStore
+	taskQueue       *app.PostgresCacheTaskQueue
+	maintenance     *app.CacheMaintenance
+	metrics         *app.Metrics
+	scanner         scanning.Scanner
+	scanResolver    app.ArtifactScanResolver
+	scannerFormats  []repository.Format
+	workerSessionID string
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -69,6 +70,10 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	}
 	if cfg.WorkerKindEnabled("scan") && r.scanner != nil && r.scanResolver != nil {
 		app.ArtifactScanWorker{Store: r.store, Scanner: r.scanner, Resolver: r.scanResolver, WorkerFormats: r.scannerFormats, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerKindEnabled("webhook") {
+		owner := cfg.InstanceID + "/" + r.workerSessionID
+		app.WebhookDeliveryWorker{Store: r.store, InstanceID: owner}.Start(ctx, 5*time.Second)
 	}
 	r.startMavenWorkers(ctx, cfg)
 	r.startOCIWorkers(ctx, cfg)

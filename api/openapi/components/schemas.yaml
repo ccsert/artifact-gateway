@@ -2427,6 +2427,79 @@ Deletion:
     state:
       type: string
       const: pending
+WebhookEventType:
+  type: string
+  enum:
+  - artifact.quarantined
+  - artifact.released
+WebhookSubscription:
+  type: object
+  required: [id, name, endpointUrl, eventTypes, enabled, version, secretConfigured, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string, minLength: 1, maxLength: 128}
+    endpointUrl: {type: string, format: uri, maxLength: 2048}
+    eventTypes:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: {"$ref": "#/WebhookEventType"}
+    enabled: {type: boolean}
+    version: {type: string}
+    secretConfigured: {type: boolean}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+CreateWebhookSubscription:
+  type: object
+  required: [name, endpointUrl, secret, eventTypes, enabled]
+  properties:
+    name: {type: string, minLength: 1, maxLength: 128}
+    endpointUrl: {type: string, format: uri, maxLength: 2048}
+    secret: {type: string, minLength: 32, maxLength: 256, writeOnly: true}
+    eventTypes:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: {"$ref": "#/WebhookEventType"}
+    enabled: {type: boolean}
+UpdateWebhookSubscription:
+  type: object
+  required: [name, endpointUrl, eventTypes, enabled]
+  properties:
+    name: {type: string, minLength: 1, maxLength: 128}
+    endpointUrl: {type: string, format: uri, maxLength: 2048}
+    secret: {type: string, minLength: 32, maxLength: 256, writeOnly: true}
+    eventTypes:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: {"$ref": "#/WebhookEventType"}
+    enabled: {type: boolean}
+WebhookSubscriptionList:
+  type: array
+  items: {"$ref": "#/WebhookSubscription"}
+WebhookDeliveryState:
+  type: string
+  enum: [pending, delivering, retrying, succeeded, dead]
+WebhookDelivery:
+  type: object
+  required: [id, eventId, eventType, subscriptionId, state, attempts, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    eventId: {type: string, format: uuid}
+    eventType: {"$ref": "#/WebhookEventType"}
+    subscriptionId: {type: string, format: uuid}
+    state: {"$ref": "#/WebhookDeliveryState"}
+    attempts: {type: integer, minimum: 0, maximum: 8}
+    nextAttemptAt: {type: string, format: date-time}
+    lastStatus: {type: integer, minimum: 100, maximum: 599}
+    lastError: {type: string, maxLength: 1024}
+    deliveredAt: {type: string, format: date-time}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+WebhookDeliveryList:
+  type: array
+  items: {"$ref": "#/WebhookDelivery"}
 Problem:
   type: object
   required:
@@ -2450,6 +2523,7 @@ Problem:
       - invalid_request
       - invalid_state
       - invalid_page_token
+      - name_exists
       - access_denied
       - not_found
       - version_conflict

@@ -63,6 +63,9 @@ goal. It intentionally excludes frontend work.
   publication idempotency, and repository-level missing-scan reconciliation.
 - [x] Sanitized scanner health and Gateway-enforced vulnerability database
   freshness in administrator diagnostics.
+- [x] Transactional operational events and durable HMAC-signed Webhook
+  delivery for Artifact quarantine and release, including lease recovery,
+  bounded retry, dead-letter replay, and administrator visibility.
 - [x] Backup/restore coverage for promotion and replication state.
 - [x] Release preflight and evidence coverage for lifecycle operations.
 - [x] Black-box protocol tests for publish, resolve, delete, retain, and
@@ -71,7 +74,8 @@ goal. It intentionally excludes frontend work.
 ## Current Next Slice
 
 Run the release gates and record their output in the release record. Detailed
-vulnerability findings, versioned quarantine workflows, and the separately
-versioned, default-disabled quarantine read policy are delivered. The next
-product slice should be selected from operational event delivery and native
-format expansion after protocol compatibility evidence is recorded.
+vulnerability findings, versioned quarantine workflows, the separately
+versioned default-disabled quarantine read policy, and the first operational
+event delivery slice are delivered. The next product slice should expand the
+event catalog or native formats after protocol compatibility evidence is
+recorded.

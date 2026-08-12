@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	openapirouters "github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/legacy"
 	"github.com/google/uuid"
 )
@@ -83,6 +86,77 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWebhookRuntimeResponsesConformToOpenAPI(t *testing.T) {
+	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
+	loader := openapi3.NewLoader()
+	spec, err := loader.LoadFromFile(filepath.Join("..", "..", "api", "openapi", "management-runtime-v1.json"))
+	if err != nil || spec.Validate(loader.Context) != nil {
+		t.Fatalf("load runtime contract: %v", err)
+	}
+	router, err := legacy.NewRouter(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(method, path, body, ifMatch string, wantStatus int) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, "https://gateway.example.com"+path, strings.NewReader(body))
+		authorize(req, "admin-secret")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		route, params, routeErr := router.FindRoute(req)
+		if routeErr != nil && strings.HasSuffix(path, ":replay") {
+			// kin-openapi's legacy router does not match a path-parameter suffix,
+			// although OpenAPI and the generated server both support this shape.
+			pathItem := spec.Paths.Value("/webhook-deliveries/{deliveryId}:replay")
+			route = &openapirouters.Route{Spec: spec, Server: spec.Servers[0], Path: "/webhook-deliveries/{deliveryId}:replay", PathItem: pathItem, Method: http.MethodPost, Operation: pathItem.Post}
+			params = map[string]string{"deliveryId": strings.TrimSuffix(strings.TrimPrefix(path, "/api/v2/webhook-deliveries/"), ":replay")}
+			routeErr = nil
+		}
+		if routeErr != nil {
+			t.Fatal(routeErr)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != wantStatus {
+			t.Fatalf("%s %s status=%d body=%s", method, path, response.Code, response.Body.String())
+		}
+		input := &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route}
+		options := &openapi3filter.Options{IncludeResponseStatus: true}
+		if validateErr := openapi3filter.ValidateResponse(req.Context(), (&openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Options: options}).SetBodyBytes(response.Body.Bytes())); validateErr != nil {
+			t.Fatalf("%s %s status=%d does not conform: %v; body=%s", method, path, response.Code, validateErr, response.Body.String())
+		}
+		return response
+	}
+
+	request(http.MethodPost, "/api/v2/webhook-subscriptions", `{"name":"contract-webhook","endpointUrl":"https://events.example.test/artifacts","secret":"0123456789abcdef0123456789abcdef","eventTypes":["artifact.quarantined"],"enabled":true}`, "", http.StatusCreated)
+	subscriptions, err := store.ListWebhookSubscriptions(ctx)
+	if err != nil || len(subscriptions) != 1 {
+		t.Fatalf("subscriptions=%#v err=%v", subscriptions, err)
+	}
+	request(http.MethodPut, "/api/v2/webhook-subscriptions/"+subscriptions[0].ID, `{"name":"contract-webhook","endpointUrl":"https://events.example.test/artifacts","eventTypes":["artifact.quarantined"],"enabled":true}`, "0", http.StatusPreconditionFailed)
+	request(http.MethodGet, "/api/v2/webhook-subscriptions", "", "", http.StatusOK)
+
+	event, err := store.EnqueueWebhookEvent(ctx, repository.WebhookEvent{ID: uuid.NewString(), Type: repository.WebhookEventArtifactQuarantined, OccurredAt: time.Now().UTC(), Data: []byte(`{"repositoryId":"contract"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := store.ClaimWebhookDeliveries(ctx, "contract-worker", event.OccurredAt.Add(time.Second), time.Minute, 1)
+	if err != nil || len(claims) != 1 {
+		t.Fatalf("claims=%#v err=%v", claims, err)
+	}
+	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, "contract-worker", time.Time{}, http.StatusServiceUnavailable, "webhook returned HTTP 503", true); err != nil {
+		t.Fatal(err)
+	}
+	deliveryPath := "/api/v2/webhook-deliveries/" + claims[0].Delivery.ID
+	request(http.MethodGet, deliveryPath, "", "", http.StatusOK)
+	request(http.MethodPost, deliveryPath+":replay", "", "", http.StatusOK)
+	request(http.MethodGet, "/api/v2/webhook-deliveries?state=pending&limit=10", "", "", http.StatusOK)
 }
 
 func TestArtifactQuarantineRuntimeResponsesConformToOpenAPI(t *testing.T) {
@@ -209,6 +283,8 @@ func inventoryPath(path, repositoryID string) string {
 		"{repositoryId}":      repositoryID,
 		"{revision}":          "rrev1",
 		"{sessionId}":         uuid.NewString(),
+		"{subscriptionId}":    uuid.NewString(),
+		"{deliveryId}":        uuid.NewString(),
 		"{userId}":            "inventory-user",
 	}
 	for placeholder, value := range replacements {
