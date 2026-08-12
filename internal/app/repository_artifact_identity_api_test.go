@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -77,15 +78,23 @@ func TestRepositoryArtifactIdentitiesApplyConanPurposeBoundary(t *testing.T) {
 	reference, recipeRevision := "widget/1.0@team/stable", "recipe-revision"
 	recipeDigest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	packageDigest := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	recipeObjectKey := "conan/recipe-object"
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: recipeObjectKey, Digest: recipeDigest, Size: 10}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{
 		RepositoryID: repo.ID, Reference: reference, Revision: recipeRevision, Digest: recipeDigest,
-	}, nil); err != nil {
+	}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, Path: "conanfile.py", ObjectKey: recipeObjectKey, Digest: recipeDigest, Size: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	packageObjectKey := "conan/package-object"
+	if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: packageObjectKey, Digest: packageDigest, Size: 20}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = store.PutConanPackageRevision(ctx, repository.ConanPackageRevision{
 		RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision,
 		PackageID: "package-id", Revision: "package-revision", Digest: packageDigest,
-	}, nil); err != nil {
+	}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, PackageID: "package-id", PackageRevision: "package-revision", Path: "package.tgz", ObjectKey: packageObjectKey, Digest: packageDigest, Size: 20}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -181,12 +190,14 @@ func TestRepositoryArtifactIdentitiesRejectOverlongQuery(t *testing.T) {
 	}
 	authenticator := testAuthenticator()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
-	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-identities?purpose=scan&q="+strings.Repeat("x", 256), nil)
-	authorize(request, authenticator.IssueToken("reader"))
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_request") {
-		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	for _, query := range []string{strings.Repeat("x", 256), strings.Repeat(" ", 256), strings.Repeat("x", 255) + " "} {
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-identities?purpose=scan&q="+url.QueryEscape(query), nil)
+		authorize(request, authenticator.IssueToken("reader"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_request") {
+			t.Fatalf("query length=%d status=%d body=%s", len(query), response.Code, response.Body.String())
+		}
 	}
 }
 
@@ -209,7 +220,7 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 		}
 	}
 	npmVersion := repository.NPMVersion{Version: "1.0.0", UpstreamTarball: "https://registry.example/widget.tgz", TarballName: "widget.tgz", Manifest: []byte(`{"name":"widget","version":"1.0.0"}`)}
-	if _, err := store.SyncNPMProxyPackage(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", Versions: []repository.NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
+	if _, err := store.SyncNPMProxyPackage(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", SourceEndpoint: repositories[0].Endpoint, Versions: []repository.NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
 		t.Fatal(err)
 	}
 	pypiFile := repository.PyPIFile{Version: "1.0", Filename: "widget-1.0.whl", Digest: digest, SourceURL: "https://pypi.example/widget.whl"}
@@ -250,5 +261,11 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 	}
 	if count := list(repositories[1].ID); count != 1 {
 		t.Fatalf("cached PyPI identities=%d", count)
+	}
+	if err := store.StoreNPMProxyNegative(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", SourceEndpoint: repositories[0].Endpoint, NegativeExpiresAt: time.Now().UTC().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if count := list(repositories[0].ID); count != 0 {
+		t.Fatalf("negative-cached npm identities=%d", count)
 	}
 }

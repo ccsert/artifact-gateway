@@ -14,10 +14,16 @@ func TestMemoryArtifactScanCandidatesIncludeConanRecipesAndPackages(t *testing.T
 	}
 	recipeDigest := "sha256:" + strings.Repeat("a", 64)
 	packageDigest := "sha256:" + strings.Repeat("b", 64)
-	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: "widget/1.0@team/stable", Revision: "rrev", Digest: recipeDigest}, nil); err != nil {
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "recipe", Digest: recipeDigest, Size: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: "widget/1.0@team/stable", RecipeRevision: "rrev", PackageID: "pkg", Revision: "prev", Digest: packageDigest}, nil); err != nil {
+	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: "widget/1.0@team/stable", Revision: "rrev", Digest: recipeDigest}, []ConanAsset{{RepositoryID: "repo", Reference: "widget/1.0@team/stable", RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: "recipe", Digest: recipeDigest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "package", Digest: packageDigest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: "widget/1.0@team/stable", RecipeRevision: "rrev", PackageID: "pkg", Revision: "prev", Digest: packageDigest}, []ConanAsset{{RepositoryID: "repo", Reference: "widget/1.0@team/stable", RecipeRevision: "rrev", PackageID: "pkg", PackageRevision: "prev", Path: "package.tgz", ObjectKey: "package", Digest: packageDigest, Size: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	candidates, err := store.ListArtifactScanCandidates(ctx, "repo", FormatConan, 10)

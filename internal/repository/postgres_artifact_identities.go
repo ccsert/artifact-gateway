@@ -80,7 +80,7 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 			FROM native_oci_manifests WHERE repository_id::text=$1 AND object_key<>'' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatRaw:
 		return `SELECT a.path AS coordinate,a.digest,o.size,a.updated_at AS published_at
-			FROM native_raw_assets a JOIN native_raw_objects o ON o.repository_id=a.repository_id AND o.digest=a.digest
+			FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest
 			WHERE a.repository_id::text=$1 AND o.object_key<>'' AND a.digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatNPM:
 		return `SELECT ` + protocolidentity.PostgreSQLNPMVersion("v.package_name", "v.version") + ` AS coordinate,v.digest,v.size,v.created_at AS published_at
@@ -103,7 +103,11 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 			WHERE v.repository_id::text=$1`, nil
 	case FormatConan:
 		recipes := `SELECT ` + protocolidentity.PostgreSQLConanRecipe("reference", "revision") + ` AS coordinate,digest,NULL::bigint AS size,created_at AS published_at
-			FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND digest ~ '^sha256:[a-f0-9]{64}$'`
+			FROM native_conan_recipe_revisions r
+			WHERE repository_id::text=$1 AND state='visible' AND digest ~ '^sha256:[a-f0-9]{64}$'
+			  AND EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key
+			              WHERE a.repository_id=r.repository_id AND a.reference=r.reference AND a.recipe_revision=r.revision
+			                AND a.package_id='' AND a.package_revision='' AND i.collected_at IS NULL)`
 		if purpose == ArtifactIdentityDistribution {
 			return recipes, nil
 		}
@@ -112,7 +116,10 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 			       p.digest,NULL::bigint AS size,p.created_at AS published_at
 			FROM native_conan_package_revisions p
 			JOIN native_conan_recipe_revisions r ON r.repository_id=p.repository_id AND r.reference=p.reference AND r.revision=p.recipe_revision AND r.state='visible'
-			WHERE p.repository_id::text=$1 AND p.state='visible' AND p.digest ~ '^sha256:[a-f0-9]{64}$'`, nil
+			WHERE p.repository_id::text=$1 AND p.state='visible' AND p.digest ~ '^sha256:[a-f0-9]{64}$'
+			  AND EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key
+			              WHERE a.repository_id=p.repository_id AND a.reference=p.reference AND a.recipe_revision=p.recipe_revision
+			                AND a.package_id=p.package_id AND a.package_revision=p.revision AND i.collected_at IS NULL)`, nil
 	default:
 		return "", fmt.Errorf("format %q does not support artifact identities", format)
 	}

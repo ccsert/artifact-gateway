@@ -31,11 +31,11 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactIdentities(w http.R
 		}
 		query := ""
 		if params.Q != nil {
-			query = strings.TrimSpace(*params.Q)
-			if utf8.RuneCountInString(query) > 255 || strings.ContainsRune(query, '\x00') {
+			if utf8.RuneCountInString(*params.Q) > 255 || strings.ContainsRune(*params.Q, '\x00') {
 				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be at most 255 characters")
 				return
 			}
+			query = strings.TrimSpace(*params.Q)
 		}
 		pageSize := 50
 		if params.PageSize != nil {

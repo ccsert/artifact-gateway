@@ -38,3 +38,40 @@ func TestArtifactIdentityPurposeRejectsUnsupportedValues(t *testing.T) {
 		t.Fatal("expected unsupported purpose error")
 	}
 }
+
+func TestMemoryArtifactIdentitiesExcludeConanRevisionsWithoutResolvableAssets(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "repo", Name: "conan", Format: FormatConan}); err != nil {
+		t.Fatal(err)
+	}
+	recipeDigest := "sha256:" + strings.Repeat("c", 64)
+	packageDigest := "sha256:" + strings.Repeat("d", 64)
+	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: "empty/1.0", Revision: "rrev", Digest: recipeDigest}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "recipe-object", Digest: recipeDigest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanRecipeRevision(ctx, ConanRecipeRevision{RepositoryID: "repo", Reference: "ready/1.0", Revision: "rrev", Digest: recipeDigest}, []ConanAsset{{RepositoryID: "repo", Reference: "ready/1.0", RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: "recipe-object", Digest: recipeDigest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: "ready/1.0", RecipeRevision: "rrev", PackageID: "empty", Revision: "prev", Digest: packageDigest}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "package-object", Digest: packageDigest, Size: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PutConanPackageRevision(ctx, ConanPackageRevision{RepositoryID: "repo", Reference: "ready/1.0", RecipeRevision: "rrev", PackageID: "ready", Revision: "prev", Digest: packageDigest}, []ConanAsset{{RepositoryID: "repo", Reference: "ready/1.0", RecipeRevision: "rrev", PackageID: "ready", PackageRevision: "prev", Path: "package.tgz", ObjectKey: "package-object", Digest: packageDigest, Size: 1}}); err != nil {
+		t.Fatal(err)
+	}
+
+	scan, err := store.ListArtifactIdentities(ctx, "repo", FormatConan, ArtifactIdentityScan, "", 50)
+	if err != nil || len(scan) != 2 || scan[0].Coordinate != "ready/1.0#rrev/ready#prev" && scan[1].Coordinate != "ready/1.0#rrev/ready#prev" {
+		t.Fatalf("scan identities=%#v err=%v", scan, err)
+	}
+	distribution, err := store.ListArtifactIdentities(ctx, "repo", FormatConan, ArtifactIdentityDistribution, "", 50)
+	if err != nil || len(distribution) != 1 || distribution[0].Coordinate != "ready/1.0#rrev" {
+		t.Fatalf("distribution identities=%#v err=%v", distribution, err)
+	}
+}
