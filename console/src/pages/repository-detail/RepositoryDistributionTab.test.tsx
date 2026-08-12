@@ -75,6 +75,34 @@ afterEach(() => {
 });
 
 describe("RepositoryDistributionTab", () => {
+  it.each([
+    ["oci", "library/nginx"],
+    ["conan", "zlib/1.3.1@company/stable#recipe-revision"],
+  ] as const)(
+    "shows a valid %s canonical-coordinate example in advanced input",
+    async (format, placeholder) => {
+      const user = userEvent.setup();
+      const repository = { ...source, format };
+      mockListRepositories.mockResolvedValue({
+        data: { items: [repository], nextPageToken: "" },
+      } as never);
+      mockListRepositoryReplications.mockResolvedValue({ data: [] } as never);
+
+      render(
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={repository} />
+        </PreferencesProvider>,
+      );
+
+      await screen.findByText("暂无复制计划");
+      await user.click(screen.getByRole("button", { name: "高级手动输入" }));
+      expect(screen.getByRole("textbox", { name: "制品坐标" })).toHaveAttribute(
+        "placeholder",
+        placeholder,
+      );
+    },
+  );
+
   it("previews target security admission before promotion", async () => {
     const user = userEvent.setup();
     mockListRepositories.mockResolvedValue({

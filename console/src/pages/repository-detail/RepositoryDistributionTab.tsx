@@ -104,8 +104,8 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   );
   const coordinatePlaceholder: Record<string, string> = {
     maven: "org.example:gateway-widget:1.2.3",
-    oci: "library/nginx:1.27",
-    conan: "zlib/1.3.1@company/stable",
+    oci: "library/nginx",
+    conan: "zlib/1.3.1@company/stable#recipe-revision",
     raw: "releases/gateway-widget-1.2.3.zip",
     npm: "@company/gateway-widget@1.2.3",
     pypi: "gateway-widget@1.2.3",
