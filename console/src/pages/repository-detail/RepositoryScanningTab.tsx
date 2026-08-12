@@ -339,81 +339,93 @@ export function RepositoryScanningTab({
             "Scan an immutable artifact manually",
           )}
         />
-        <Form<ScanForm>
-          form={form}
-          layout="vertical"
-          className="grid gap-x-4 px-5 py-4 md:grid-cols-2"
-          onFinish={(values) => void submitScan(values)}
-          requiredMark={false}
-        >
-          <Form.Item
-            name="coordinate"
-            label={text("制品坐标", "Artifact coordinate")}
-            rules={[
-              {
-                required: true,
-                whitespace: true,
-                message: text("请输入制品坐标", "Enter an artifact coordinate"),
-              },
-              {
-                max: 1024,
-                message: text(
-                  "制品坐标过长",
-                  "Artifact coordinate is too long",
-                ),
-              },
-            ]}
+        <div className="px-5 py-4">
+          <Form<ScanForm>
+            form={form}
+            layout="vertical"
+            className="grid gap-4 md:grid-cols-2 md:gap-x-5"
+            onFinish={(values) => void submitScan(values)}
+            requiredMark={false}
           >
-            <Input
-              disabled={!artifactScanning || !canManage}
-              placeholder={coordinatePlaceholder(repo.format)}
-              autoComplete="off"
-            />
-          </Form.Item>
-          <Form.Item
-            name="digest"
-            label={text("SHA-256 摘要", "SHA-256 digest")}
-            rules={[
-              {
-                required: true,
-                whitespace: true,
-                message: text("请输入 SHA-256 摘要", "Enter a SHA-256 digest"),
-              },
-              {
-                pattern: /^sha256:[0-9a-f]{64}$/,
-                message: text(
-                  "请输入 sha256: 开头的 64 位小写十六进制摘要",
-                  "Enter sha256: followed by 64 lowercase hexadecimal characters",
-                ),
-              },
-            ]}
-          >
-            <Input
-              disabled={!artifactScanning || !canManage}
-              placeholder="sha256:…"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </Form.Item>
-          <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-2xl text-xs leading-5 text-zinc-600">
-              {text(
-                "坐标和摘要必须与仓库中已存在的不可变制品完全一致；扫描任务不会拉取或修改上游内容。",
-                "The coordinate and digest must exactly match an immutable artifact already in this repository. Scans never fetch or modify upstream content.",
-              )}
-            </p>
-            <Button
-              type="primary"
-              htmlType="submit"
-              aria-label={text("提交扫描", "Queue scan")}
-              icon={<ScanOutlined />}
-              loading={submitting}
-              disabled={!artifactScanning || !canManage}
+            <Form.Item
+              name="coordinate"
+              label={text("制品坐标", "Artifact coordinate")}
+              style={{ marginBottom: 0 }}
+              rules={[
+                {
+                  required: true,
+                  whitespace: true,
+                  message: text(
+                    "请输入制品坐标",
+                    "Enter an artifact coordinate",
+                  ),
+                },
+                {
+                  max: 1024,
+                  message: text(
+                    "制品坐标过长",
+                    "Artifact coordinate is too long",
+                  ),
+                },
+              ]}
             >
-              {text("提交扫描", "Queue scan")}
-            </Button>
-          </div>
-        </Form>
+              <Input
+                disabled={!artifactScanning || !canManage}
+                placeholder={coordinatePlaceholder(repo.format)}
+                autoComplete="off"
+              />
+            </Form.Item>
+            <Form.Item
+              name="digest"
+              label={text("SHA-256 摘要", "SHA-256 digest")}
+              style={{ marginBottom: 0 }}
+              rules={[
+                {
+                  required: true,
+                  whitespace: true,
+                  message: text(
+                    "请输入 SHA-256 摘要",
+                    "Enter a SHA-256 digest",
+                  ),
+                },
+                {
+                  pattern: /^sha256:[0-9a-f]{64}$/,
+                  message: text(
+                    "请输入 sha256: 开头的 64 位小写十六进制摘要",
+                    "Enter sha256: followed by 64 lowercase hexadecimal characters",
+                  ),
+                },
+              ]}
+            >
+              <Input
+                className="font-mono"
+                disabled={!artifactScanning || !canManage}
+                placeholder="sha256:…"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Form.Item>
+            <div className="grid gap-3 border-t border-zinc-800/70 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:col-span-2">
+              <p className="max-w-2xl text-xs leading-5 text-zinc-500">
+                {text(
+                  "坐标和摘要必须与仓库中已存在的不可变制品完全一致；扫描任务不会拉取或修改上游内容。",
+                  "The coordinate and digest must exactly match an immutable artifact already in this repository. Scans never fetch or modify upstream content.",
+                )}
+              </p>
+              <Button
+                className="w-full sm:w-auto"
+                type="primary"
+                htmlType="submit"
+                aria-label={text("提交扫描", "Queue scan")}
+                icon={<ScanOutlined />}
+                loading={submitting}
+                disabled={!artifactScanning || !canManage}
+              >
+                {text("提交扫描", "Queue scan")}
+              </Button>
+            </div>
+          </Form>
+        </div>
       </Card>
 
       {reconcileNotice && (

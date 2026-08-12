@@ -95,6 +95,7 @@ export function EmptyState({
   return (
     <Empty
       className={`ag-feedback-enter ${compact ? "py-5" : "py-12"}`}
+      style={compact ? { marginBlock: 0, marginInline: 0 } : undefined}
       image={Empty.PRESENTED_IMAGE_SIMPLE}
       description={
         <div className="space-y-1 text-center">

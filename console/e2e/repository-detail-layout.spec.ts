@@ -215,7 +215,9 @@ test("repository settings live in a tab and keep the update workflow", async ({
   }
 });
 
-test("scanning uses a frameless responsive workspace", async ({ page }) => {
+test("scanning uses a frameless responsive workspace", async ({
+  page,
+}, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
 
@@ -242,6 +244,83 @@ test("scanning uses a frameless responsive workspace", async ({ page }) => {
   expect(noticeBox?.x ?? 0).toBeGreaterThan(
     (warningBox?.x ?? 0) + (warningBox?.width ?? 0),
   );
+
+  const manualScanHeading = page.getByRole("heading", {
+    name: "手动扫描不可变制品",
+    exact: true,
+  });
+  const manualScanCard = page
+    .locator(".ag-card")
+    .filter({ has: manualScanHeading });
+  const coordinateInput = page.getByRole("textbox", { name: "制品坐标" });
+  const digestInput = page.getByRole("textbox", { name: "SHA-256 摘要" });
+  const scanHint = manualScanCard.getByText(
+    "坐标和摘要必须与仓库中已存在的不可变制品完全一致；扫描任务不会拉取或修改上游内容。",
+    { exact: true },
+  );
+  const submitScan = manualScanCard.getByRole("button", { name: "提交扫描" });
+  const [manualCardBox, coordinateBox, digestBox, hintBox, submitBox] =
+    await Promise.all([
+      manualScanCard.boundingBox(),
+      coordinateInput.boundingBox(),
+      digestInput.boundingBox(),
+      scanHint.boundingBox(),
+      submitScan.boundingBox(),
+    ]);
+  expect(manualCardBox).not.toBeNull();
+  expect(coordinateBox).not.toBeNull();
+  expect(digestBox).not.toBeNull();
+  expect(hintBox).not.toBeNull();
+  expect(submitBox).not.toBeNull();
+
+  const cardLeft = manualCardBox?.x ?? 0;
+  const cardRight = cardLeft + (manualCardBox?.width ?? 0);
+  const cardBottom = (manualCardBox?.y ?? 0) + (manualCardBox?.height ?? 0);
+  expect((coordinateBox?.x ?? 0) - cardLeft).toBeGreaterThanOrEqual(20);
+  expect(
+    cardRight - ((digestBox?.x ?? 0) + (digestBox?.width ?? 0)),
+  ).toBeGreaterThanOrEqual(20);
+  expect((hintBox?.x ?? 0) - cardLeft).toBeGreaterThanOrEqual(20);
+  expect(
+    cardRight - ((submitBox?.x ?? 0) + (submitBox?.width ?? 0)),
+  ).toBeGreaterThanOrEqual(20);
+  expect(
+    cardBottom - ((submitBox?.y ?? 0) + (submitBox?.height ?? 0)),
+  ).toBeGreaterThanOrEqual(16);
+
+  const recentJobsHeading = page.getByRole("heading", {
+    name: "最近扫描任务",
+    exact: true,
+  });
+  const recentJobsCard = page
+    .locator(".ag-card")
+    .filter({ has: recentJobsHeading });
+  const recentHeader = recentJobsHeading.locator("..");
+  const recentEmpty = recentJobsCard.locator(".ant-empty");
+  const [recentCardBox, recentHeaderBox, recentEmptyBox] = await Promise.all([
+    recentJobsCard.boundingBox(),
+    recentHeader.boundingBox(),
+    recentEmpty.boundingBox(),
+  ]);
+  expect(recentCardBox).not.toBeNull();
+  expect(recentHeaderBox).not.toBeNull();
+  expect(recentEmptyBox).not.toBeNull();
+  expect(
+    (recentEmptyBox?.y ?? 0) -
+      ((recentHeaderBox?.y ?? 0) + (recentHeaderBox?.height ?? 0)),
+  ).toBeLessThanOrEqual(20);
+  expect(
+    (recentCardBox?.y ?? 0) +
+      (recentCardBox?.height ?? 0) -
+      ((recentEmptyBox?.y ?? 0) + (recentEmptyBox?.height ?? 0)),
+  ).toBeLessThanOrEqual(20);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-scanning.png"),
+      fullPage: true,
+    });
+  }
 
   await page.setViewportSize({ width: 1024, height: 900 });
   const [narrowWarningBox, narrowNoticeBox] = await Promise.all([
