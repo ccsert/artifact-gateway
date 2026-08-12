@@ -25,6 +25,21 @@ type blockingParkReplicationStore struct {
 	continuePark chan struct{}
 }
 
+type replicationMetrics struct {
+	events   []string
+	inFlight []int64
+}
+
+func (m *replicationMetrics) RecordBackgroundOperation(kind string, format repository.Format, outcome string) {
+	m.events = append(m.events, kind+":"+string(format)+":"+outcome)
+}
+
+func (m *replicationMetrics) AddBackgroundOperationInFlight(kind string, format repository.Format, delta int64) {
+	if kind == "replication" && format == repository.FormatRaw {
+		m.inFlight = append(m.inFlight, delta)
+	}
+}
+
 func (s *blockingParkReplicationStore) ParkReplicationPlanWithLease(ctx context.Context, id, message, leaseToken string) error {
 	close(s.parkStarted)
 	select {
@@ -86,6 +101,106 @@ func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
 	}
 	if len(locked) != 4 || len(released) != 4 || locked[0] != "objects/source-widget" || locked[1] != "objects/widget" {
 		t.Fatalf("object coordination locked=%v released=%v", locked, released)
+	}
+}
+
+func TestWorkerPublishesVerifiedCheckpointAndRecordsMetrics(t *testing.T) {
+	ctx := context.Background()
+	source := objectstore.NewMemoryStore()
+	destination := objectstore.NewMemoryStore()
+	body := []byte("verified replication publication")
+	digest := sha256Digest(body)
+	if err := source.Put(ctx, "source/widget", body); err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	plan := repository.ReplicationPlan{
+		ID: "publish", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: "releases/widget.bin", Digest: digest,
+		IdempotencyKey: "publish",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/widget", ObjectKey: "target/widget", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	metrics := &replicationMetrics{}
+	published := false
+	worker := Worker{
+		Store: store, Source: source, Destination: destination, Format: repository.FormatRaw, Metrics: metrics,
+		Publish: func(_ context.Context, claimed repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) error {
+			published = true
+			if claimed.ID != plan.ID || len(checkpoints) != 1 || checkpoints[0].State != "verified" {
+				t.Fatalf("publish plan=%#v checkpoints=%#v", claimed, checkpoints)
+			}
+			return nil
+		},
+	}
+	if err := worker.Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if !published {
+		t.Fatal("verified replication did not publish metadata")
+	}
+	completed, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || completed.State != "completed" {
+		t.Fatalf("completed plan=%#v err=%v", completed, err)
+	}
+	got, err := destination.Get(ctx, "target/widget")
+	if err != nil || string(got) != string(body) {
+		t.Fatalf("destination=%q err=%v", got, err)
+	}
+	if strings.Join(metrics.events, ",") != "replication:raw:started,replication:raw:completed" {
+		t.Fatalf("metric events=%v", metrics.events)
+	}
+	if len(metrics.inFlight) != 2 || metrics.inFlight[0] != 1 || metrics.inFlight[1] != -1 {
+		t.Fatalf("in-flight metrics=%v", metrics.inFlight)
+	}
+}
+
+func TestWorkerParksWhenAggregateSnapshotChangesBeforePublication(t *testing.T) {
+	ctx := context.Background()
+	source := objectstore.NewMemoryStore()
+	body := []byte("original aggregate snapshot")
+	digest := sha256Digest(body)
+	if err := source.Put(ctx, "source/project", body); err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	plan := repository.ReplicationPlan{
+		ID: "snapshot-changed", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatPyPI, Coordinate: "widget@1.0.0", Digest: digest,
+		IdempotencyKey: "snapshot-changed", MaxAttempts: 3,
+	}
+	checkpoints := []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/project", ObjectKey: "target/project", Digest: digest, Size: int64(len(body)),
+	}}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, checkpoints); err != nil {
+		t.Fatal(err)
+	}
+	published := false
+	worker := Worker{
+		Store: store, Source: source, Destination: objectstore.NewMemoryStore(), Format: repository.FormatPyPI,
+		AdmissionSnapshot: func(_ context.Context, claimed repository.ReplicationPlan, verified []repository.ReplicationCheckpoint) ([]string, bool, error) {
+			if claimed.ID != plan.ID || len(verified) != 1 || verified[0].State != "verified" {
+				t.Fatalf("snapshot plan=%#v checkpoints=%#v", claimed, verified)
+			}
+			return []string{digest}, false, nil
+		},
+		Publish: func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error {
+			published = true
+			return nil
+		},
+	}
+	if err := worker.Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if published {
+		t.Fatal("changed aggregate snapshot reached publication")
+	}
+	parked, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || parked.State != "failed" || parked.LastError != repository.ReplicationSnapshotChangedReason || parked.Attempts != 0 || !parked.NextAttemptAt.IsZero() {
+		t.Fatalf("parked plan=%#v err=%v", parked, err)
 	}
 }
 

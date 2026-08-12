@@ -1,9 +1,12 @@
 # Artifact Gateway Architecture
 
-Artifact Gateway is a repository manager for OCI, Maven, Raw, and Conan 2. It
-separates durable metadata, immutable artifact bytes, protocol handling, and
-background lifecycle work so the same binary can run as a compact single node
-or as role-specific cluster nodes.
+Artifact Gateway is a repository manager for OCI, Raw, Maven, Conan 2, npm,
+PyPI, Go modules, and APT. Hosted lifecycle is available for the first six
+formats; Go and APT intentionally remain Proxy/Group-only while no standard or
+trusted publication workflow exists. The system separates durable metadata,
+immutable artifact bytes, protocol handling, and background lifecycle work so
+the same binary can run as a compact single node or as role-specific cluster
+nodes.
 
 ## System context
 
@@ -57,7 +60,7 @@ Deployment constraints and topology examples live in
 | `cmd/gateway` | Process composition, runtime roles, lifecycle start/stop |
 | `internal/app` | HTTP composition and application use cases |
 | `internal/authorization` | Authentication and authorization policy |
-| `internal/protocol` | Native OCI, Maven, Raw, and Conan behavior |
+| `internal/protocol` | Native package protocol parsing and wire compatibility |
 | `internal/repository` | Domain records plus memory/PostgreSQL persistence |
 | `internal/objectstore` | Content-addressed object storage |
 | `internal/lifecycle` | Durable job state and shared lifecycle semantics |

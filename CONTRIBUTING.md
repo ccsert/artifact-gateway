@@ -70,6 +70,13 @@ make console-test
 make console-build
 ```
 
+`make coverage` enforces both the repository-wide Go baseline and stricter
+floors for stable security, lifecycle, replication, and scanning packages.
+`make console-test` measures all hand-written Console TypeScript and TSX while
+excluding only the generated API client and test setup. Coverage floors are
+non-regression guards: raise them with meaningful public-boundary tests and do
+not lower them to make a change pass.
+
 For contract, persistence, or protocol changes, also run the matching checks:
 
 ```sh
@@ -92,6 +99,8 @@ The CI workflow is the final source of truth for the complete required matrix.
 - Add a regression test before fixing a defect when a stable public boundary is
   available.
 - Do not couple tests to private helper calls merely to increase coverage.
+- Do not narrow coverage collection to a small allowlist of well-tested files;
+  exclusions must be generated code, fixtures, or test infrastructure.
 - Use integration tests for PostgreSQL transaction, migration, locking, and
   object-store behavior that the in-memory stores cannot prove.
 

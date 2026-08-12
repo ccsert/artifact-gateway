@@ -10,17 +10,41 @@ export default defineConfig({
     exclude: ["e2e/**", "node_modules/**"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      include: [
-        "src/lib/publicBrowseModel.ts",
-        "src/components/PublicBrowsePrimitives.tsx",
-        "src/components/RuntimeNodesPanel.tsx",
-      ],
+      reporter: ["text-summary", "json-summary"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/client/**", "src/test/**"],
       thresholds: {
-        lines: 70,
-        functions: 70,
-        statements: 70,
-        branches: 60,
+        // Track the whole hand-written Console instead of reporting a high
+        // percentage for a small allowlist. Raise these non-regression floors
+        // as public-boundary tests cover more pages and workflows.
+        lines: 40,
+        functions: 53,
+        statements: 40,
+        branches: 65,
+        "src/app/Layout.tsx": {
+          lines: 90,
+          functions: 60,
+          statements: 90,
+          branches: 80,
+        },
+        "src/lib/publicBrowseModel.ts": {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 60,
+        },
+        "src/components/PublicBrowsePrimitives.tsx": {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 60,
+        },
+        "src/components/RuntimeNodesPanel.tsx": {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 60,
+        },
       },
     },
   },

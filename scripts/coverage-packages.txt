@@ -3,4 +3,6 @@
 ./internal/app 69.0
 ./internal/authorization 38.0
 ./internal/lifecycle 99.0
-./internal/replication 59.0
+./internal/refscanner 72.0
+./internal/replication 70.0
+./internal/scanning 82.0

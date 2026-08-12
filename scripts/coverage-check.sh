@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 
-minimum=${GATEWAY_MIN_COVERAGE:-38.0}
+minimum=${GATEWAY_MIN_COVERAGE:-40.0}
 profile=$(mktemp)
 trap 'rm -f "$profile"' EXIT
 packages=$(go list ./... | grep -v '/console/node_modules/')
