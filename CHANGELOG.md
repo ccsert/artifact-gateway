@@ -75,8 +75,8 @@ a dated version heading without rewriting their meaning.
 - Replaced default coordinate-and-digest entry in repository scanning,
   promotion, and replication workflows with a shared searchable immutable-
   artifact picker backed by protocol-owned canonical identity queries, including
-  historical npm/PyPI versions and Conan revisions, while retaining advanced
-  exact-identity input as a recovery path.
+  historical npm/PyPI versions, locally cached Proxy assets, and Conan revisions,
+  while retaining advanced exact-identity input as a recovery path.
 - Added a discoverable repository Scanning workspace for manual immutable-
   artifact scans, capability and configuration guidance, historical backfill,
   and recent job status.

@@ -31,9 +31,10 @@ _Avoid_: File, package
 
 **Artifact Identity**:
 The protocol-owned canonical coordinate and SHA-256 digest pair for one visible
-immutable Artifact. Management clients obtain identities from the Repository
-for a declared operation purpose; they do not reconstruct format-specific
-coordinates from browse projections.
+immutable, locally resolvable Artifact. Management clients obtain identities
+from the Repository for a declared operation purpose; they do not reconstruct
+format-specific coordinates from browse projections. Proxy metadata without
+cached bytes is not an Artifact Identity eligible for scanning or distribution.
 _Avoid_: Search result, latest version, client-built coordinate
 
 **Asset**:

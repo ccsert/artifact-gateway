@@ -1310,7 +1310,7 @@ export const searchRepositoryArtifacts = <ThrowOnError extends boolean = false>(
 /**
  * List canonical immutable artifact identities
  *
- * Returns visible canonical coordinate and digest pairs that can be submitted directly to scanning or distribution operations. The protocol layer owns coordinate construction. Conan scan results include recipe and package revisions, while distribution results include recipe revisions only.
+ * Returns visible, locally resolvable canonical coordinate and digest pairs that can be submitted directly to scanning or distribution operations. Uncached Proxy metadata is excluded. The protocol layer owns coordinate construction. Conan scan results include recipe and package revisions, while distribution results include recipe revisions only.
  */
 export const listRepositoryArtifactIdentities = <ThrowOnError extends boolean = false>(options: Options<ListRepositoryArtifactIdentitiesData, ThrowOnError>): RequestResult<ListRepositoryArtifactIdentitiesResponses, ListRepositoryArtifactIdentitiesErrors, ThrowOnError> => (options.client ?? client).get<ListRepositoryArtifactIdentitiesResponses, ListRepositoryArtifactIdentitiesErrors, ThrowOnError>({
     security: [{

@@ -77,15 +77,7 @@ func (s publicationScanScheduler) ScheduleRepository(ctx context.Context, reposi
 }
 
 func publicationScanSupported(repo repository.HostedRepository) bool {
-	if repo.Type == repository.RepositoryTypeProxy {
-		return false
-	}
-	switch repo.Format {
-	case repository.FormatMaven, repository.FormatOCI, repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI:
-		return true
-	default:
-		return false
-	}
+	return repository.FormatSupportsPublicationScanning(repo.Format, repo.Type)
 }
 
 func (s publicationScanScheduler) recordFailure(ctx context.Context, repo repository.HostedRepository, coordinate, digest, actor string, cause error) error {

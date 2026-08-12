@@ -16,7 +16,7 @@ func (s *MemoryStore) ListArtifactScanCandidates(_ context.Context, repositoryID
 	limit = artifactScanCandidateLimit(limit)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if !formatSupportsPublicationScanReconciliation(format) {
+	if !FormatSupportsPublicationScanning(format, RepositoryTypeHosted) {
 		return nil, fmt.Errorf("format %q does not support publication scan reconciliation", format)
 	}
 	identities, err := s.artifactIdentitiesLocked(repositoryID, format, ArtifactIdentityScan, "")
@@ -54,15 +54,6 @@ func (s *MemoryStore) ListArtifactScanCandidates(_ context.Context, repositoryID
 		return 1
 	}
 	return sortAndLimitArtifactScanCandidates(candidates, limit, priority), nil
-}
-
-func formatSupportsPublicationScanReconciliation(format Format) bool {
-	switch format {
-	case FormatMaven, FormatOCI, FormatRaw, FormatNPM, FormatPyPI, FormatConan:
-		return true
-	default:
-		return false
-	}
 }
 
 func sortAndLimitArtifactScanCandidates(candidates []ArtifactScanCandidate, limit int, priority func(ArtifactScanCandidate) int) []ArtifactScanCandidate {

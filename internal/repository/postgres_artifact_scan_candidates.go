@@ -7,7 +7,7 @@ import (
 
 func (s *PostgresStore) ListArtifactScanCandidates(ctx context.Context, repositoryID string, format Format, limit int) ([]ArtifactScanCandidate, error) {
 	limit = artifactScanCandidateLimit(limit)
-	if !formatSupportsPublicationScanReconciliation(format) {
+	if !FormatSupportsPublicationScanning(format, RepositoryTypeHosted) {
 		return nil, fmt.Errorf("format %q does not support publication scan reconciliation", format)
 	}
 	query, err := postgresArtifactIdentityQuery(format, ArtifactIdentityScan)

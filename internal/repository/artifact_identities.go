@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	protocolidentity "github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
 )
 
 func (s *MemoryStore) ListArtifactIdentities(_ context.Context, repositoryID string, format Format, purpose ArtifactIdentityPurpose, query string, limit int) ([]ArtifactIdentity, error) {
@@ -42,7 +44,7 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 	identities := make([]ArtifactIdentity, 0, 64)
 	identityIndexes := make(map[string]int, 64)
 	appendIdentity := func(coordinate, digest string, size *int64, publishedAt time.Time) {
-		if coordinate == "" || digest == "" || query != "" && !strings.Contains(strings.ToLower(coordinate), query) && strings.ToLower(digest) != query {
+		if coordinate == "" || !protocolidentity.IsSHA256Digest(digest) || query != "" && !strings.Contains(strings.ToLower(coordinate), query) && strings.ToLower(digest) != query {
 			return
 		}
 		identity := ArtifactIdentity{Coordinate: coordinate, Digest: digest, Size: size, PublishedAt: publishedAt}
@@ -68,31 +70,31 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 	case FormatMaven:
 		for _, artifact := range s.mavenArtifacts {
 			if artifact.RepositoryID == repositoryID && artifact.State == "visible" {
-				appendIdentity(artifact.Coordinate, artifact.Digest, nil, artifact.CreatedAt)
+				appendIdentity(protocolidentity.Maven(artifact.Coordinate), artifact.Digest, nil, artifact.CreatedAt)
 			}
 		}
 	case FormatOCI:
 		for _, manifest := range s.ociManifests {
-			if manifest.RepositoryID == repositoryID {
-				appendIdentity(manifest.Name, manifest.Digest, sizeOf(manifest.Size), manifest.CreatedAt)
+			if manifest.RepositoryID == repositoryID && manifest.ObjectKey != "" {
+				appendIdentity(protocolidentity.OCI(manifest.Name), manifest.Digest, sizeOf(manifest.Size), manifest.CreatedAt)
 			}
 		}
 	case FormatRaw:
 		for _, asset := range s.rawAssets {
-			if asset.RepositoryID == repositoryID {
-				appendIdentity(asset.Path, asset.Digest, sizeOf(asset.Size), asset.UpdatedAt)
+			if asset.RepositoryID == repositoryID && asset.ObjectKey != "" {
+				appendIdentity(protocolidentity.Raw(asset.Path), asset.Digest, sizeOf(asset.Size), asset.UpdatedAt)
 			}
 		}
 	case FormatNPM:
 		for _, version := range s.npmVersions {
-			if version.RepositoryID == repositoryID && version.State == "visible" {
-				appendIdentity(version.PackageName+"@"+version.Version, version.Digest, sizeOf(version.Size), version.CreatedAt)
+			if version.RepositoryID == repositoryID && version.State == "visible" && version.ObjectKey != "" {
+				appendIdentity(protocolidentity.NPMVersion(version.PackageName, version.Version), version.Digest, sizeOf(version.Size), version.CreatedAt)
 			}
 		}
 	case FormatPyPI:
 		for _, file := range s.pypiFiles {
-			if file.RepositoryID == repositoryID && file.State == "visible" {
-				appendIdentity(file.Project+"@"+file.Version, file.Digest, sizeOf(file.Size), file.CreatedAt)
+			if file.RepositoryID == repositoryID && file.State == "visible" && file.ObjectKey != "" {
+				appendIdentity(protocolidentity.PyPIVersion(file.Project, file.Version), file.Digest, sizeOf(file.Size), file.CreatedAt)
 			}
 		}
 	case FormatGo:
@@ -105,8 +107,8 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 			}
 			for _, kind := range []string{"zip", "mod", "info"} {
 				asset, ok := s.goAssets[goAssetKey(repositoryID, version.Module, version.Version, kind)]
-				if ok {
-					appendIdentity(version.Module+"@"+version.Version, asset.Digest, sizeOf(asset.Size), version.CreatedAt)
+				if ok && asset.ObjectKey != "" {
+					appendIdentity(protocolidentity.GoVersion(version.Module, version.Version), asset.Digest, sizeOf(asset.Size), version.CreatedAt)
 					break
 				}
 			}
@@ -114,14 +116,14 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 	case FormatConan:
 		for _, revision := range s.conanRecipes {
 			if revision.RepositoryID == repositoryID && revision.State == "visible" {
-				appendIdentity(revision.Reference+"#"+revision.Revision, revision.Digest, nil, revision.CreatedAt)
+				appendIdentity(protocolidentity.ConanRecipe(revision.Reference, revision.Revision), revision.Digest, nil, revision.CreatedAt)
 			}
 		}
 		if purpose == ArtifactIdentityScan {
 			for _, revision := range s.conanPackages {
 				recipe, recipeExists := s.conanRecipes[conanRecipeKey(repositoryID, revision.Reference, revision.RecipeRevision)]
 				if revision.RepositoryID == repositoryID && revision.State == "visible" && recipeExists && recipe.State == "visible" {
-					appendIdentity(revision.Reference+"#"+revision.RecipeRevision+"/"+revision.PackageID+"#"+revision.Revision, revision.Digest, nil, revision.CreatedAt)
+					appendIdentity(protocolidentity.ConanPackage(revision.Reference, revision.RecipeRevision, revision.PackageID, revision.Revision), revision.Digest, nil, revision.CreatedAt)
 				}
 			}
 		}

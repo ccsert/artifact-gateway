@@ -19,12 +19,13 @@ const (
 // Protocol routing and persistence remain format-owned; this profile controls
 // admission and capability discovery across management surfaces.
 type FormatProfile struct {
-	Format           Format
-	RepositoryTypes  []RepositoryType
-	GroupSupported   bool
-	AnonymousRead    bool
-	HostedOperations []RepositoryOperation
-	ProxyOperations  []RepositoryOperation
+	Format              Format
+	RepositoryTypes     []RepositoryType
+	GroupSupported      bool
+	AnonymousRead       bool
+	PublicationScanning bool
+	HostedOperations    []RepositoryOperation
+	ProxyOperations     []RepositoryOperation
 }
 
 var supportedFormatProfiles = []FormatProfile{
@@ -33,10 +34,11 @@ var supportedFormatProfiles = []FormatProfile{
 	formatProfile(FormatConan),
 	formatProfile(FormatRaw),
 	{
-		Format:          FormatNPM,
-		RepositoryTypes: []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
-		GroupSupported:  true,
-		AnonymousRead:   true,
+		Format:              FormatNPM,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
 		HostedOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
@@ -54,10 +56,11 @@ var supportedFormatProfiles = []FormatProfile{
 		},
 	},
 	{
-		Format:          FormatPyPI,
-		RepositoryTypes: []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
-		GroupSupported:  true,
-		AnonymousRead:   true,
+		Format:              FormatPyPI,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
 		HostedOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
@@ -99,10 +102,11 @@ var supportedFormatProfiles = []FormatProfile{
 
 func formatProfile(format Format) FormatProfile {
 	return FormatProfile{
-		Format:          format,
-		RepositoryTypes: []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
-		GroupSupported:  true,
-		AnonymousRead:   true,
+		Format:              format,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
 		HostedOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
@@ -207,6 +211,13 @@ func FormatSupportsOperation(format Format, repositoryType RepositoryType, opera
 		}
 	}
 	return false
+}
+
+// FormatSupportsPublicationScanning reports whether a Hosted publication has a
+// native immutable-asset resolver and can participate in scan reconciliation.
+func FormatSupportsPublicationScanning(format Format, repositoryType RepositoryType) bool {
+	profile, ok := FormatProfileFor(format)
+	return ok && repositoryType == RepositoryTypeHosted && profile.PublicationScanning
 }
 
 func cloneFormatProfile(profile FormatProfile) FormatProfile {

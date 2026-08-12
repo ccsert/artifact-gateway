@@ -72,3 +72,61 @@ func TestPostgresArtifactIdentitiesReturnCanonicalNPMVersions(t *testing.T) {
 		t.Fatalf("historical identity=%#v", identities[1])
 	}
 }
+
+func TestPostgresArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	repositories := make([]HostedRepository, 0, 2)
+	for _, format := range []Format{FormatNPM, FormatPyPI} {
+		repo, createErr := store.CreateHostedRepository(ctx, HostedRepository{
+			ID: uuid.NewString(), Name: "identity-proxy-" + string(format) + "-" + uuid.NewString()[:8], Format: format, Type: RepositoryTypeProxy, Endpoint: "https://proxy.example",
+		})
+		if createErr != nil {
+			_ = store.Close()
+			t.Fatal(createErr)
+		}
+		repositories = append(repositories, repo)
+	}
+	t.Cleanup(func() {
+		for _, repo := range repositories {
+			_, _ = store.db.ExecContext(context.Background(), `DELETE FROM hosted_repositories WHERE id=$1`, repo.ID)
+		}
+		_ = store.Close()
+	})
+
+	digest := "sha256:" + strings.Repeat("c", 64)
+	npmVersion := NPMVersion{Version: "1.0.0", UpstreamTarball: "https://registry.example/widget.tgz", TarballName: "widget.tgz", Manifest: []byte(`{"name":"widget","version":"1.0.0"}`)}
+	if _, err = store.SyncNPMProxyPackage(ctx, NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", Versions: []NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
+		t.Fatal(err)
+	}
+	pypiFile := PyPIFile{Version: "1.0", Filename: "widget-1.0.whl", Digest: digest, SourceURL: "https://pypi.example/widget.whl"}
+	if err = store.SyncPyPIProxyFiles(ctx, repositories[1].ID, "widget", []PyPIFile{pypiFile}); err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range repositories {
+		identities, listErr := store.ListArtifactIdentities(ctx, repo.ID, repo.Format, ArtifactIdentityScan, "", 50)
+		if listErr != nil || len(identities) != 0 {
+			t.Fatalf("uncached %s identities=%#v err=%v", repo.Format, identities, listErr)
+		}
+	}
+
+	if _, err = store.CacheNPMProxyTarball(ctx, NPMVersion{RepositoryID: repositories[0].ID, PackageName: "widget", Version: "1.0.0", Digest: digest, ObjectKey: "npm/widget", Size: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CachePyPIProxyFile(ctx, PyPIFile{RepositoryID: repositories[1].ID, Filename: pypiFile.Filename, Digest: digest, SourceURL: pypiFile.SourceURL, ObjectKey: "pypi/widget", Size: 20}); err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range repositories {
+		identities, listErr := store.ListArtifactIdentities(ctx, repo.ID, repo.Format, ArtifactIdentityScan, "", 50)
+		if listErr != nil || len(identities) != 1 || identities[0].Coordinate != "widget@1.0.0" && identities[0].Coordinate != "widget@1.0" {
+			t.Fatalf("cached %s identities=%#v err=%v", repo.Format, identities, listErr)
+		}
+	}
+}

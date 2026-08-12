@@ -1700,7 +1700,7 @@
       "get": {
         "operationId": "listRepositoryArtifactIdentities",
         "summary": "List canonical immutable artifact identities",
-        "description": "Returns visible canonical coordinate and digest pairs that can be submitted directly to scanning or distribution operations. The protocol layer owns coordinate construction. Conan scan results include recipe and package revisions, while distribution results include recipe revisions only.",
+        "description": "Returns visible, locally resolvable canonical coordinate and digest pairs that can be submitted directly to scanning or distribution operations. Uncached Proxy metadata is excluded. The protocol layer owns coordinate construction. Conan scan results include recipe and package revisions, while distribution results include recipe revisions only.",
         "parameters": [
           {
             "name": "purpose",

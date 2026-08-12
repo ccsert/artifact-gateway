@@ -17,6 +17,9 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
 		if profile.Format == FormatGo || profile.Format == FormatAPT {
+			if profile.PublicationScanning || FormatSupportsPublicationScanning(profile.Format, RepositoryTypeProxy) {
+				t.Errorf("protocol-only format advertises publication scanning: %#v", profile)
+			}
 			if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || !profile.GroupSupported {
 				t.Errorf("go must expose only Proxy and Group: %#v", profile)
 			}
@@ -27,6 +30,9 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 		}
 		if !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) {
 			t.Errorf("format %q repository types=%v", profile.Format, profile.RepositoryTypes)
+		}
+		if !profile.PublicationScanning || !FormatSupportsPublicationScanning(profile.Format, RepositoryTypeHosted) || FormatSupportsPublicationScanning(profile.Format, RepositoryTypeProxy) {
+			t.Errorf("format %q publication scanning capability is inconsistent: %#v", profile.Format, profile)
 		}
 		if profile.Format == FormatNPM {
 			if !profile.GroupSupported || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) {
@@ -96,7 +102,7 @@ func TestSupportedFormatProfilesReturnDefensiveCopies(t *testing.T) {
 }
 
 func TestUnknownFormatHasNoCapabilities(t *testing.T) {
-	if IsSupportedFormat("rubygems") || FormatSupportsRepositoryType("rubygems", RepositoryTypeHosted) || FormatSupportsOperation("rubygems", RepositoryTypeHosted, RepositoryOperationRead) {
+	if IsSupportedFormat("rubygems") || FormatSupportsRepositoryType("rubygems", RepositoryTypeHosted) || FormatSupportsOperation("rubygems", RepositoryTypeHosted, RepositoryOperationRead) || FormatSupportsPublicationScanning("rubygems", RepositoryTypeHosted) {
 		t.Fatal("unknown format was admitted")
 	}
 }

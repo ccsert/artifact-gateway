@@ -43,6 +43,10 @@ is executable in the same revision.
   Group format.
 - `AnonymousRead` means the protocol can honor the global and repository/Group
   anonymous policy. It does not enable anonymous access by default.
+- `PublicationScanning` means Hosted publications expose canonical immutable
+  assets to automatic scanning and bounded scan reconciliation. It does not
+  enable scanning by itself; scanner configuration and repository policy still
+  apply.
 - `HostedOperations` and `ProxyOperations` must match executable management and
   protocol behavior. `GET /repositories/{id}/capabilities` is derived from the
   same profile and must not maintain a separate list.

@@ -17,7 +17,7 @@ func TestMemoryArtifactIdentitiesDeduplicateCanonicalPyPIPairs(t *testing.T) {
 	for index, filename := range []string{"widget-1.0-py3-none-any.whl", "widget-1.0.tar.gz"} {
 		if _, err := store.PublishPyPIFile(ctx, PyPIFile{
 			RepositoryID: "repo", Project: "widget", Version: "1.0", Filename: filename,
-			Digest: digest, Size: 42, CreatedAt: time.Date(2026, 8, 10+index, 0, 0, 0, 0, time.UTC),
+			Digest: digest, ObjectKey: "pypi/" + filename, Size: 42, CreatedAt: time.Date(2026, 8, 10+index, 0, 0, 0, 0, time.UTC),
 		}); err != nil {
 			t.Fatal(err)
 		}

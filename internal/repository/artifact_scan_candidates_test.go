@@ -41,10 +41,10 @@ func TestMemoryArtifactScanCandidatesPrioritizeMissingScans(t *testing.T) {
 	}
 	missingDigest := "sha256:" + strings.Repeat("c", 64)
 	activeDigest := "sha256:" + strings.Repeat("d", 64)
-	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "repo", Path: "older-missing.bin", Digest: missingDigest}); err != nil {
+	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "repo", Path: "older-missing.bin", Digest: missingDigest, ObjectKey: "raw/repo/older-missing.bin"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "repo", Path: "newer-active.bin", Digest: activeDigest}); err != nil {
+	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: "repo", Path: "newer-active.bin", Digest: activeDigest, ObjectKey: "raw/repo/newer-active.bin"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := EnqueueArtifactScanJob(ctx, store, "repo", "active", ArtifactScanPayload{

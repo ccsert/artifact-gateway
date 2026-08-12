@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	protocolidentity "github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
 )
 
 func (s *PostgresStore) ListArtifactIdentities(ctx context.Context, repositoryID string, format Format, purpose ArtifactIdentityPurpose, query string, limit int) ([]ArtifactIdentity, error) {
@@ -72,45 +74,45 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 	switch format {
 	case FormatMaven:
 		return `SELECT coordinate,digest,NULL::bigint AS size,created_at AS published_at
-			FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible'`, nil
+			FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatOCI:
 		return `SELECT name AS coordinate,digest,size,created_at AS published_at
-			FROM native_oci_manifests WHERE repository_id::text=$1`, nil
+			FROM native_oci_manifests WHERE repository_id::text=$1 AND object_key<>'' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatRaw:
 		return `SELECT a.path AS coordinate,a.digest,o.size,a.updated_at AS published_at
 			FROM native_raw_assets a JOIN native_raw_objects o ON o.repository_id=a.repository_id AND o.digest=a.digest
-			WHERE a.repository_id::text=$1`, nil
+			WHERE a.repository_id::text=$1 AND o.object_key<>'' AND a.digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatNPM:
-		return `SELECT v.package_name || '@' || v.version AS coordinate,v.digest,v.size,v.created_at AS published_at
+		return `SELECT ` + protocolidentity.PostgreSQLNPMVersion("v.package_name", "v.version") + ` AS coordinate,v.digest,v.size,v.created_at AS published_at
 			FROM native_npm_versions v JOIN native_npm_packages p ON p.repository_id=v.repository_id AND p.name=v.package_name
-			WHERE v.repository_id::text=$1 AND v.state='visible' AND NOT p.negative`, nil
+			WHERE v.repository_id::text=$1 AND v.state='visible' AND v.object_key<>'' AND v.digest ~ '^sha256:[a-f0-9]{64}$' AND NOT p.negative`, nil
 	case FormatPyPI:
-		return `SELECT project || '@' || version AS coordinate,digest,size,created_at AS published_at
-			FROM native_pypi_files WHERE repository_id::text=$1 AND state='visible'`, nil
+		return `SELECT ` + protocolidentity.PostgreSQLPyPIVersion("project", "version") + ` AS coordinate,digest,size,created_at AS published_at
+			FROM native_pypi_files WHERE repository_id::text=$1 AND state='visible' AND object_key<>'' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatGo:
 		if purpose != ArtifactIdentityScan {
 			return "", fmt.Errorf("format %q does not support distribution identities", format)
 		}
-		return `SELECT v.module_path || '@' || v.version AS coordinate,a.digest,a.size,v.created_at AS published_at
+		return `SELECT ` + protocolidentity.PostgreSQLGoVersion("v.module_path", "v.version") + ` AS coordinate,a.digest,a.size,v.created_at AS published_at
 			FROM native_go_versions v
 			JOIN LATERAL (
 				SELECT digest,size FROM native_go_assets a
-				WHERE a.repository_id=v.repository_id AND a.module_path=v.module_path AND a.version=v.version
+				WHERE a.repository_id=v.repository_id AND a.module_path=v.module_path AND a.version=v.version AND a.object_key<>'' AND a.digest ~ '^sha256:[a-f0-9]{64}$'
 				ORDER BY CASE a.kind WHEN 'zip' THEN 0 WHEN 'mod' THEN 1 ELSE 2 END LIMIT 1
 			) a ON true
 			WHERE v.repository_id::text=$1`, nil
 	case FormatConan:
-		recipes := `SELECT reference || '#' || revision AS coordinate,digest,NULL::bigint AS size,created_at AS published_at
-			FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible'`
+		recipes := `SELECT ` + protocolidentity.PostgreSQLConanRecipe("reference", "revision") + ` AS coordinate,digest,NULL::bigint AS size,created_at AS published_at
+			FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND digest ~ '^sha256:[a-f0-9]{64}$'`
 		if purpose == ArtifactIdentityDistribution {
 			return recipes, nil
 		}
 		return recipes + ` UNION ALL
-			SELECT p.reference || '#' || p.recipe_revision || '/' || p.package_id || '#' || p.revision AS coordinate,
+			SELECT ` + protocolidentity.PostgreSQLConanPackage("p.reference", "p.recipe_revision", "p.package_id", "p.revision") + ` AS coordinate,
 			       p.digest,NULL::bigint AS size,p.created_at AS published_at
 			FROM native_conan_package_revisions p
 			JOIN native_conan_recipe_revisions r ON r.repository_id=p.repository_id AND r.reference=p.reference AND r.revision=p.recipe_revision AND r.state='visible'
-			WHERE p.repository_id::text=$1 AND p.state='visible'`, nil
+			WHERE p.repository_id::text=$1 AND p.state='visible' AND p.digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	default:
 		return "", fmt.Errorf("format %q does not support artifact identities", format)
 	}

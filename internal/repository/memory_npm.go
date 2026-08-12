@@ -116,6 +116,9 @@ func (s *MemoryStore) SyncNPMProxyPackage(_ context.Context, incoming NPMPackage
 		}
 		version.RepositoryID = incoming.RepositoryID
 		version.PackageName = incoming.Name
+		if version.State == "" {
+			version.State = "visible"
+		}
 		version.Manifest = append([]byte(nil), version.Manifest...)
 		if version.CreatedAt.IsZero() {
 			version.CreatedAt = now

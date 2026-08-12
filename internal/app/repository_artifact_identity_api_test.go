@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,5 +166,89 @@ func TestRepositoryArtifactIdentitiesRequireRepositoryRead(t *testing.T) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
 		})
+	}
+}
+
+func TestRepositoryArtifactIdentitiesRejectOverlongQuery(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "query-limit", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-identities?purpose=scan&q="+strings.Repeat("x", 256), nil)
+	authorize(request, authenticator.IssueToken("reader"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_request") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("c", 64)
+	repositories := []repository.HostedRepository{
+		{ID: uuid.NewString(), Name: "npm-proxy-identities", Format: repository.FormatNPM, Type: repository.RepositoryTypeProxy, Endpoint: "https://registry.example"},
+		{ID: uuid.NewString(), Name: "pypi-proxy-identities", Format: repository.FormatPyPI, Type: repository.RepositoryTypeProxy, Endpoint: "https://pypi.example"},
+	}
+	for index := range repositories {
+		var err error
+		repositories[index], err = store.CreateHostedRepository(ctx, repositories[index])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.ReplaceRepositoryGrants(ctx, repositories[index].ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	npmVersion := repository.NPMVersion{Version: "1.0.0", UpstreamTarball: "https://registry.example/widget.tgz", TarballName: "widget.tgz", Manifest: []byte(`{"name":"widget","version":"1.0.0"}`)}
+	if _, err := store.SyncNPMProxyPackage(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", Versions: []repository.NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
+		t.Fatal(err)
+	}
+	pypiFile := repository.PyPIFile{Version: "1.0", Filename: "widget-1.0.whl", Digest: digest, SourceURL: "https://pypi.example/widget.whl"}
+	if err := store.SyncPyPIProxyFiles(ctx, repositories[1].ID, "widget", []repository.PyPIFile{pypiFile}); err != nil {
+		t.Fatal(err)
+	}
+
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	list := func(repositoryID string) int {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repositoryID+"/artifact-identities?purpose=scan", nil)
+		authorize(request, authenticator.IssueToken("reader"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		var page struct {
+			Items []json.RawMessage `json:"items"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		return len(page.Items)
+	}
+	if count := list(repositories[0].ID); count != 0 {
+		t.Fatalf("uncached npm identities=%d", count)
+	}
+	if count := list(repositories[1].ID); count != 0 {
+		t.Fatalf("uncached PyPI identities=%d", count)
+	}
+	if _, err := store.CacheNPMProxyTarball(ctx, repository.NPMVersion{RepositoryID: repositories[0].ID, PackageName: "widget", Version: "1.0.0", Digest: digest, ObjectKey: "npm/widget", Size: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CachePyPIProxyFile(ctx, repository.PyPIFile{RepositoryID: repositories[1].ID, Filename: pypiFile.Filename, Digest: digest, SourceURL: pypiFile.SourceURL, ObjectKey: "pypi/widget", Size: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if count := list(repositories[0].ID); count != 1 {
+		t.Fatalf("cached npm identities=%d", count)
+	}
+	if count := list(repositories[1].ID); count != 1 {
+		t.Fatalf("cached PyPI identities=%d", count)
 	}
 }

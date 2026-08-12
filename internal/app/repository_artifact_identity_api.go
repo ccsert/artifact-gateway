@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -31,6 +32,10 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactIdentities(w http.R
 		query := ""
 		if params.Q != nil {
 			query = strings.TrimSpace(*params.Q)
+			if utf8.RuneCountInString(query) > 255 || strings.ContainsRune(query, '\x00') {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must be at most 255 characters")
+				return
+			}
 		}
 		pageSize := 50
 		if params.PageSize != nil {
