@@ -89,3 +89,11 @@ The format capability API continues to advertise APT as Proxy-only until the
 minimum Hosted and production-signing gates are complete. See the
 [APT Hosted Roadmap](apt-hosted-roadmap.md) for the ordered contract and
 acceptance criteria.
+
+## Subsequent Planned Format: NuGet
+
+After the APT Hosted milestones, NuGet is the next new ecosystem. The first
+byte-contract slice validates `.nupkg` archives and derives a normalized,
+case-insensitive identity from the embedded `.nuspec`, but does not admit a
+public format prematurely. See the [NuGet Repository Roadmap](nuget-roadmap.md)
+for publication, V3 restore, Proxy/Group, and lifecycle acceptance gates.

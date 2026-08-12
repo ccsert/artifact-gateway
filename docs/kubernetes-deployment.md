@@ -17,16 +17,23 @@ make kubernetes-local-status
 make kubernetes-local-verify
 ```
 
-The Console and all same-origin API and artifact routes are exposed at
-`http://127.0.0.1:18081`. The start command builds the Gateway and Console
-images, creates runtime Secrets without checking credential values into the
-rendered manifests, applies every database migration, waits for all workloads,
-and verifies the Console and authenticated format API.
+The Console and all same-origin API and artifact routes are exposed through the
+dedicated `artifact-gateway-local` IngressClass at
+`http://artifact-gateway.localhost`. The `.localhost` special-use domain resolves
+to the loopback interface without editing `/etc/hosts`; the direct Console
+fallback remains `http://127.0.0.1:18081`. The start command builds the Gateway
+and Console images, creates runtime Secrets without checking credential values
+into the rendered manifests, applies every database migration, waits for all
+workloads, and verifies the Console and authenticated format API through the
+Ingress.
 
 `make kubernetes-local-verify` creates a unique Raw Hosted Repository, writes an
-object, restarts the Gateway Deployment, and reads the Repository record and
-exact object bytes back. This proves PostgreSQL and RustFS persistence across a
-real Pod replacement rather than only checking that PVC objects exist. When
+encoded-path object, restarts the Gateway Deployment, and reads the Repository
+record and exact object bytes back. It also verifies Raw `HEAD`/`Range`, scoped
+npm encoded-slash routing, OCI `/v2/`, APT routing, and rejection of encoded
+backslash and NUL through Traefik and Console nginx. This proves PostgreSQL and
+RustFS persistence across a real Pod replacement and exercises the proxy
+boundary instead of only checking that PVC objects exist. When
 an environment override is omitted on a later command, the helper reuses every
 credential and encryption key already stored in the namespace Secret. Repeating
 `up` or `verify` therefore does not silently rotate PostgreSQL, RustFS, Resolver,
@@ -59,18 +66,24 @@ To remove the stack:
 make kubernetes-local-down
 ```
 
-This deletes the `artifact-gateway-local` namespace, including its PostgreSQL
-and RustFS PersistentVolumeClaims and all local data. An existing MinIO-based
+This deletes the `artifact-gateway-local` namespace, its dedicated IngressClass
+and read-only cluster RBAC, including its PostgreSQL and RustFS
+PersistentVolumeClaims and all local data. An existing MinIO-based
 local namespace or orphaned MinIO data PVC is not changed in place: the helper
 refuses startup and points to the
 [RustFS migration procedure](rustfs-migration.md). Only after retaining the
-frozen-copy and metadata-verification evidence should an operator set
-`K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1`.
+frozen-copy and metadata-verification evidence should an operator set both
+`K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1` and
+`K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=sha256:<64 lowercase hex>`. A bare
+boolean cannot authorize switching an existing namespace to an empty RustFS.
 
 ## Local topology
 
 ```text
-localhost:18081
+artifact-gateway.localhost:80
+       |
+       v
+Traefik local Ingress
        |
        v
 Console nginx (SPA + same-origin reverse proxy)
@@ -82,11 +95,17 @@ Artifact Gateway (standalone API + scheduler + worker)
 PostgreSQL PVC                 RustFS PVC
 ```
 
-The Console and Gateway run as non-root users with read-only root filesystems,
-dropped Linux capabilities, disabled service-account token mounting, resource
-requests and limits, and HTTP health probes. PostgreSQL and RustFS are pinned
-single-replica local dependencies. A bounded ephemeral `/tmp` volume supports
-Gateway's streamed upload spool without making its root filesystem writable.
+The Console, Gateway, and digest-pinned Traefik 3.7.10 controller run as
+non-root users with read-only root filesystems, dropped Linux capabilities,
+resource requests and limits, and HTTP health probes. Console and Gateway
+disable service-account token mounting; Traefik uses its token only with the
+namespaced Role and read-only cluster discovery RBAC declared by this overlay.
+PostgreSQL and RustFS are pinned single-replica local dependencies. A bounded
+ephemeral `/tmp` volume supports Gateway's streamed upload spool without making
+its root filesystem writable.
+The Ingress explicitly allows the encoded slash required by npm scoped package
+metadata and the canonical Raw filename encodings already validated by Gateway,
+while rejecting encoded backslash and NUL at the edge.
 The Gateway migration init container uses
 the same append-only migration files as Compose and safely skips migrations
 whose recorded checksums already match.
@@ -108,12 +127,13 @@ make kubernetes-local-check
 ```
 
 The check renders and parses the full overlay offline, verifies every named
-workload's persistence, migration, probe, and container-hardening invariants,
-and checks that both the production Console reverse proxy and Vite development
-proxy expose the APT route. It also runs the local CLI against command fakes to
-cover context rejection, credential validation, port conflicts, exact namespace
-deletion, startup, status, and persistence-verification dispatch without
-mutating a cluster.
+workload's persistence, migration, Ingress/RBAC, probe, and container-hardening
+invariants, and checks that both the production Console reverse proxy and Vite
+development proxy expose the APT route. The live verification adds
+encoded-path, `HEAD`/`Range`, npm, OCI, and APT black-box probes. It also runs
+the local CLI against command fakes to cover context rejection, credential
+validation, port conflicts, exact namespace deletion, startup, status, and
+persistence-verification dispatch without mutating a cluster.
 
 ## Production deployment path
 

@@ -73,9 +73,13 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-Run the release gates and record their output in the release record. Detailed
-vulnerability findings, versioned quarantine workflows, the separately
-versioned default-disabled quarantine read policy, and the first operational
-event delivery slice are delivered. The next product slice should expand the
-event catalog or native formats after protocol compatibility evidence is
-recorded.
+1. Finish APT H1's management/OpenAPI publication surface, orphan cleanup, and
+   audit wiring without advertising Hosted before its signed-snapshot gates.
+2. Continue NuGet N1 from the implemented bounded `.nupkg`/`.nuspec` identity
+   parser into idempotent publication persistence, cross-checking normalized
+   versions against official `NuGet.Versioning` vectors.
+3. Add the optional scanner workload to the Kubernetes overlay only after its
+   network policy, persistent SBOM storage, resource limits, and real scan
+   smoke test are part of the same slice.
+4. Run the release gates and retain their output in the release record before
+   any public capability expansion.

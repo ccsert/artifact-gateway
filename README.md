@@ -33,6 +33,13 @@ Vite Console under a checkout-specific local supervisor. It waits for both
 Gateway readiness and the Console before printing their configured addresses.
 Use `make dev-status` as a repeatable health check.
 
+For an existing MinIO-era `.env`, first run
+`./scripts/local-dev.sh migrate-rustfs-env`. It adds independent local RustFS
+credentials without printing them and retains a timestamped rollback copy.
+Existing MinIO data is never mounted in place or discarded; follow the
+[S3 cutover procedure](docs/rustfs-migration.md), then record the verified
+manifest with `./scripts/local-dev.sh confirm-rustfs-migration sha256:...`.
+
 Open the Console at `http://127.0.0.1:4173` by default. The checked-in example
 uses `GATEWAY_HTTP_PORT=8080` and `GATEWAY_CONSOLE_PORT=4173`; local `.env`
 overrides are reflected in the status output.
@@ -58,8 +65,9 @@ make kubernetes-local-status
 make kubernetes-local-verify
 ```
 
-It exposes the Console and same-origin protocol/API proxy at
-`http://127.0.0.1:18081`. The overlay provisions single-node PostgreSQL and
+It exposes the Console and every same-origin protocol/API route through a local
+Ingress at `http://artifact-gateway.localhost`; `http://127.0.0.1:18081`
+remains a direct Console fallback. The overlay provisions single-node PostgreSQL and
 RustFS storage for local validation and is intentionally not a production
 topology. See the [Kubernetes deployment guide](docs/kubernetes-deployment.md)
 for credential overrides, data deletion behavior, architecture, and the

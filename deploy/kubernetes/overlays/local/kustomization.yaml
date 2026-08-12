@@ -6,6 +6,7 @@ resources:
   - ../../base
   - config.yaml
   - infrastructure.yaml
+  - ingress.yaml
 patches:
   - path: gateway-patch.yaml
   - path: console-patch.yaml

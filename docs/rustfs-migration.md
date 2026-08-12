@@ -75,10 +75,23 @@ and [upstream releases](https://github.com/rustfs/rustfs/releases).
 7. **Record cutover confirmation.** Retain the frozen-copy command output,
    source/destination object count and byte totals, user-metadata sample, and
    rollback owner in the release record. Only after those checks pass, set
-   `GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1` for Compose or
-   `K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1` for the local Kubernetes helper.
+   `GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1` for Compose. For the local Kubernetes
+   helper, retain the same frozen-copy fingerprint and set both
+   `K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1` and
+   `K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=sha256:<64 lowercase hex>`.
    These flags acknowledge retained evidence; they are not copy tools and are
    not substitutes for `s3-migrate verify`.
+
+   For the local Compose workflow, record the verified manifest atomically
+   without exposing credentials:
+
+   ```sh
+   ./scripts/local-dev.sh confirm-rustfs-migration sha256:<verified-manifest>
+   ```
+
+   Existing MinIO-era `.env` files can first obtain independent RustFS
+   credentials with `./scripts/local-dev.sh migrate-rustfs-env`; that command
+   retains a timestamped rollback copy and is idempotent.
 8. **Switch.** Change only `GATEWAY_S3_ENDPOINT`, `GATEWAY_S3_ACCESS_KEY`, and
    `GATEWAY_S3_SECRET_KEY`, then start Gateway against RustFS. Keep the bucket
    name unchanged unless the completed copy used a deliberately different name.
@@ -117,8 +130,9 @@ before reopening traffic.
 ## Local Kubernetes upgrade
 
 The local helper refuses to apply the RustFS overlay when it detects the legacy
-`minio` StatefulSet or its `data-minio-0` PVC unless the verified-cutover
-confirmation above is present. For a disposable stack, `make kubernetes-local-down`
+`minio` StatefulSet or its `data-minio-0` PVC unless both the verified-cutover
+confirmation and a syntactically valid frozen-copy manifest fingerprint are
+present. For a disposable stack, `make kubernetes-local-down`
 deletes the namespace and all local data; a subsequent
 `make kubernetes-local-up` creates RustFS. For data that must survive, deploy
 RustFS side by side and use the staged S3 copy above instead of deleting the

@@ -65,6 +65,12 @@ case "$command_name" in
   node | npm)
     printf '%s %s\n' "$command_name" "$*" >>"$state/runtime.log"
     ;;
+  stat)
+    if [[ "$mode" == env-write-fails ]]; then
+      exit 1
+    fi
+    printf '600\n'
+    ;;
   uname)
     printf '%s\n' "${LOCAL_DEV_TEST_OS:-Darwin}"
     ;;

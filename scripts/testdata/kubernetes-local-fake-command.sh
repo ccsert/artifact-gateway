@@ -17,7 +17,14 @@ case "$command_name" in
     ;;
   curl)
     url=${!#}
-    if [[ "$url" == */api/v2/repositories ]]; then
+    if [[ " $* " == *" --write-out "* ]]; then
+      case "$url" in
+        *%5C* | *%00*) printf '400' ;;
+        */v2/) printf '401' ;;
+        */npm/* | */apt/*) printf '404' ;;
+        *) printf '200' ;;
+      esac
+    elif [[ "$url" == */api/v2/repositories ]]; then
       printf '{"id":"fake-repository-id"}\n'
     elif [[ "$url" == */raw/* ]]; then
       if [[ " $* " == *" -X PUT "* ]]; then
@@ -29,7 +36,11 @@ case "$command_name" in
           fi
         done
       elif [[ -f "$FAKE_K8S_STATE_DIR/raw-body" ]]; then
-        cat "$FAKE_K8S_STATE_DIR/raw-body"
+        if [[ " $* " == *" --range 0-9 "* ]]; then
+          printf 'Kubernetes'
+        else
+          cat "$FAKE_K8S_STATE_DIR/raw-body"
+        fi
       fi
     fi
     ;;
@@ -58,7 +69,7 @@ case "$command_name" in
       [[ "${FAKE_K8S_LEGACY_MINIO:-0}" == "1" ]]
     elif [[ " $* " == *" get persistentvolumeclaim data-minio-0 "* ]]; then
       [[ "${FAKE_K8S_LEGACY_MINIO_PVC:-0}" == "1" ]]
-    elif [[ " $* " == *" get service artifact-gateway-console "* ]]; then
+    elif [[ " $* " == *" get service artifact-gateway-console "* || " $* " == *" get service artifact-gateway-ingress "* ]]; then
       exit 1
     else
       exit 0

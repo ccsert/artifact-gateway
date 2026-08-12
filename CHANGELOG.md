@@ -10,6 +10,15 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- A pinned, non-root Traefik Ingress for the Docker Desktop Kubernetes overlay,
+  exposing the complete same-origin Console, API, and artifact surface at
+  `artifact-gateway.localhost` with bounded resources and least-privilege RBAC.
+- A bounded NuGet `.nupkg`/`.nuspec` parser with normalized, case-insensitive
+  immutable package identity, plus an explicit staged roadmap that keeps the
+  format undiscoverable until its executable protocol gates are complete.
+- Idempotent local RustFS credential migration and verified-manifest recording
+  for existing Compose environments, with retained rollback copies and a hard
+  guard against unverified MinIO-to-RustFS cutovers.
 - A hardened Kustomize base and one-command local Kubernetes deployment with
   Gateway, Console, PostgreSQL, RustFS, idempotent migrations, persistent local
   volumes, health checks, manifest validation, and same-origin protocol routes.

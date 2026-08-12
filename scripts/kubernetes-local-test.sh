@@ -88,12 +88,28 @@ FAKE_K8S_LEGACY_MINIO_PVC=1 run_expect 1 "$script" up
 grep -Fq 'legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'orphaned MinIO PVC was ignored'
 
 : >"$log"
-FAKE_K8S_LEGACY_MINIO=1 K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 run_expect 0 "$script" up
+FAKE_K8S_LEGACY_MINIO=1 K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 run_expect 1 "$script" up
+grep -Fq 'verified manifest fingerprint' "$workdir/stderr" || fail 'bare RustFS migration confirmation was accepted'
+if grep -Fq 'kubectl apply -k' "$log"; then
+  fail 'RustFS manifest was applied without a verified migration manifest fingerprint'
+fi
+
+: >"$log"
+FAKE_K8S_LEGACY_MINIO=1 \
+K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 \
+K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=unverified run_expect 1 "$script" up
+grep -Fq 'verified manifest fingerprint' "$workdir/stderr" || fail 'invalid RustFS migration fingerprint was accepted'
+
+: >"$log"
+migration_fingerprint="sha256:$(printf 'b%.0s' {1..64})"
+FAKE_K8S_LEGACY_MINIO=1 \
+K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 \
+K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256="$migration_fingerprint" run_expect 0 "$script" up
 assert_log 'kubectl apply -k'
 
 : >"$log"
 FAKE_K8S_PORT_BUSY=1 run_expect 1 "$script" up
-grep -Fq 'local port 18081 is already in use' "$workdir/stderr" || fail 'occupied Console port was accepted'
+grep -Fq 'local port 80 is already in use' "$workdir/stderr" || fail 'occupied Ingress port was accepted'
 
 : >"$log"
 run_expect 0 "$script" up
@@ -101,7 +117,8 @@ assert_log 'kubectl apply -k'
 assert_log 'kubectl -n artifact-gateway-local rollout status statefulset/postgres --timeout=180s'
 assert_log 'kubectl -n artifact-gateway-local rollout status statefulset/rustfs --timeout=180s'
 assert_log 'kubectl -n artifact-gateway-local rollout status deployment/artifact-gateway --timeout=300s'
-grep -Fq 'Artifact Gateway Kubernetes stack is ready at http://127.0.0.1:18081' "$workdir/stdout" || fail 'up did not report the fixed local endpoint'
+assert_log 'kubectl -n artifact-gateway-local rollout status deployment/artifact-gateway-ingress --timeout=180s'
+grep -Fq 'Artifact Gateway Kubernetes stack is ready at http://artifact-gateway.localhost' "$workdir/stdout" || fail 'up did not report the Ingress endpoint'
 
 : >"$log"
 FAKE_K8S_POSTGRES_PASSWORD='persisted-postgres-password' \
@@ -122,19 +139,30 @@ assert_log '--from-literal=GATEWAY_SETTINGS_ENCRYPTION_KEY=abcdef0123456789abcde
 
 : >"$log"
 run_expect 0 "$script" status
-assert_log 'kubectl -n artifact-gateway-local get pods\,pvc\,services'
+assert_log 'kubectl -n artifact-gateway-local get pods\,pvc\,services\,ingresses'
 
 : >"$log"
 FAKE_K8S_ADMIN_TOKEN='persisted-custom-token' run_expect 0 "$script" verify
 assert_log 'kubectl -n artifact-gateway-local rollout restart deployment/artifact-gateway'
 assert_log 'kubectl -n artifact-gateway-local rollout status deployment/artifact-gateway --timeout=300s'
-assert_log 'curl --noproxy 127.0.0.1\,localhost --connect-timeout 3 --max-time 15 --silent --show-error --fail -H Authorization:\ Bearer\ persisted-custom-token'
-grep -Fq 'Kubernetes persistence verification passed' "$workdir/stdout" || fail 'verify did not confirm the persisted artifact'
+assert_log 'curl --noproxy artifact-gateway.localhost\,127.0.0.1\,localhost --connect-timeout 3 --max-time 15 --silent --show-error --fail -H Authorization:\ Bearer\ persisted-custom-token'
+assert_log 'persistence%3Bencoded.txt'
+assert_log '--head'
+assert_log '--range 0-9'
+assert_log '@scope%2Fwidget'
+assert_log 'http://artifact-gateway.localhost/v2/'
+assert_log '/apt/ingress-missing/dists/stable/Release'
+assert_log 'rejected%5Cpath'
+assert_log 'rejected%00path'
+grep -Fq 'Kubernetes persistence and Ingress protocol verification passed' "$workdir/stdout" || fail 'verify did not confirm persistence and protocol routing'
 
 : >"$log"
 run_expect 0 "$script" down
+assert_log 'kubectl delete ingressclass artifact-gateway-local --ignore-not-found'
+assert_log 'kubectl delete clusterrolebinding artifact-gateway-local-ingress-class-reader --ignore-not-found'
+assert_log 'kubectl delete clusterrole artifact-gateway-local-ingress-class-reader --ignore-not-found'
 assert_log 'kubectl delete namespace artifact-gateway-local --ignore-not-found'
-[[ $(wc -l <"$log" | tr -d ' ') -eq 2 ]] || fail 'down issued commands outside context check and exact namespace deletion'
+[[ $(wc -l <"$log" | tr -d ' ') -eq 5 ]] || fail 'down issued commands outside context check and exact local resource deletion'
 
 run_expect 2 "$script" unsupported
 printf 'kubernetes-local CLI tests passed\n'

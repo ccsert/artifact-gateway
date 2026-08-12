@@ -8,6 +8,9 @@ gateway_image=artifact-gateway:k8s-local
 console_image=artifact-gateway-console:k8s-local
 console_port=18081
 console_url="http://127.0.0.1:${console_port}"
+ingress_port=80
+ingress_url="http://artifact-gateway.localhost"
+local_no_proxy='artifact-gateway.localhost,127.0.0.1,localhost'
 
 postgres_password=${K8S_LOCAL_POSTGRES_PASSWORD:-}
 rustfs_access_key=${K8S_LOCAL_RUSTFS_ACCESS_KEY:-}
@@ -95,22 +98,27 @@ validate_settings() {
 }
 
 refuse_legacy_minio_in_place() {
-  local legacy=0
+  local legacy=0 migration_confirmed migration_manifest
   kubectl -n "$namespace" get statefulset minio >/dev/null 2>&1 && legacy=1
   kubectl -n "$namespace" get persistentvolumeclaim data-minio-0 >/dev/null 2>&1 && legacy=1
   [[ "$legacy" == 0 ]] && return
-  [[ "${K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED:-0}" == 1 ]] && return
+  migration_confirmed=${K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED:-0}
+  migration_manifest=${K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256:-}
+  if [[ "$migration_confirmed" == 1 && "$migration_manifest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    return
+  fi
   printf '%s\n' 'legacy MinIO StatefulSet or data PVC detected; do not apply RustFS without verified cutover evidence' >&2
-  printf '%s\n' 'use docs/rustfs-migration.md, then set K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 only after the frozen final copy and metadata verification' >&2
+  printf '%s\n' 'use docs/rustfs-migration.md, then set K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 and K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=sha256:<64 lowercase hex> only after the frozen final copy and independent verification' >&2
+  printf '%s\n' 'a bare confirmation flag is insufficient; the helper requires the verified manifest fingerprint' >&2
   exit 1
 }
 
-require_console_port() {
-  if kubectl -n "$namespace" get service artifact-gateway-console >/dev/null 2>&1; then
+require_ingress_port() {
+  if kubectl -n "$namespace" get service artifact-gateway-ingress >/dev/null 2>&1; then
     return
   fi
-  if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$console_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    printf 'local port %s is already in use; stop the listener before creating the Kubernetes stack\n' "$console_port" >&2
+  if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$ingress_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    printf 'local port %s is already in use; stop the listener before creating the Kubernetes Ingress\n' "$ingress_port" >&2
     exit 1
   fi
 }
@@ -166,7 +174,7 @@ wait_for_http() {
   local url=$1
   local attempts=${2:-120}
   for ((attempt = 1; attempt <= attempts; attempt++)); do
-    if curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 10 \
+    if curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 10 \
       --silent --show-error --fail "$url" >/dev/null 2>&1; then
       return
     fi
@@ -176,6 +184,18 @@ wait_for_http() {
   return 1
 }
 
+expect_http_status() {
+  local expected_status=$1 url=$2 actual_status
+  shift 2
+  actual_status=$(curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
+    --path-as-is --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    "$@" "$url")
+  if [[ "$actual_status" != "$expected_status" ]]; then
+    printf 'expected HTTP %s from %s, got %s\n' "$expected_status" "$url" "$actual_status" >&2
+    return 1
+  fi
+}
+
 up() {
   require_command docker
   require_command kubectl
@@ -183,7 +203,7 @@ up() {
   require_local_context
   refuse_legacy_minio_in_place
   validate_settings
-  require_console_port
+  require_ingress_port
   render_check
   build_images
   apply_runtime_inputs
@@ -192,15 +212,17 @@ up() {
   kubectl -n "$namespace" rollout status statefulset/rustfs --timeout=180s
   kubectl -n "$namespace" rollout status deployment/artifact-gateway --timeout=300s
   kubectl -n "$namespace" rollout status deployment/artifact-gateway-console --timeout=180s
-  wait_for_http "$console_url/readyz"
-  wait_for_http "$console_url/"
+  kubectl -n "$namespace" rollout status deployment/artifact-gateway-ingress --timeout=180s
+  wait_for_http "$ingress_url/readyz"
+  wait_for_http "$ingress_url/"
   local configured_admin_token
   configured_admin_token=$(effective_admin_token)
-  curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
     --silent --show-error --fail \
     -H "Authorization: Bearer $configured_admin_token" \
-    "$console_url/api/v2/formats" >/dev/null
-  printf 'Artifact Gateway Kubernetes stack is ready at %s\n' "$console_url"
+    "$ingress_url/api/v2/formats" >/dev/null
+  printf 'Artifact Gateway Kubernetes stack is ready at %s\n' "$ingress_url"
+  printf 'Direct Console fallback remains available at %s\n' "$console_url"
   printf 'Local administrator token: %s\n' "$configured_admin_token"
 }
 
@@ -208,12 +230,12 @@ status() {
   require_command kubectl
   require_command curl
   require_local_context
-  kubectl -n "$namespace" get pods,pvc,services
-  curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
-    --silent --show-error --fail "$console_url/readyz" >/dev/null
-  curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
-    --silent --show-error --fail "$console_url/" >/dev/null
-  printf 'Artifact Gateway Kubernetes stack is ready at %s\n' "$console_url"
+  kubectl -n "$namespace" get pods,pvc,services,ingresses
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
+    --silent --show-error --fail "$ingress_url/readyz" >/dev/null
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
+    --silent --show-error --fail "$ingress_url/" >/dev/null
+  printf 'Artifact Gateway Kubernetes stack is ready at %s\n' "$ingress_url"
 }
 
 verify_persistence() {
@@ -223,49 +245,76 @@ verify_persistence() {
   require_local_context
   validate_settings
 
-  local configured_admin_token run_id repository_name response repository_id body restored
+  local configured_admin_token run_id repository_name response repository_id body restored ranged
   configured_admin_token=$(effective_admin_token)
   run_id="$(date +%s)-$$"
   repository_name="k8s-persistence-$run_id"
   body="Kubernetes persistence smoke $run_id"
-  response=$(curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
+  response=$(curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
     --silent --show-error --fail \
     -H "Authorization: Bearer $configured_admin_token" \
     -H 'Content-Type: application/json' \
     -H "Idempotency-Key: $repository_name" \
     --data "$(printf '{\"name\":\"%s\",\"format\":\"raw\"}' "$repository_name")" \
-    "$console_url/api/v2/repositories")
+    "$ingress_url/api/v2/repositories")
   repository_id=$(jq -er '.id' <<<"$response")
 
-  curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
     --silent --show-error --fail \
     -H "Authorization: Bearer $configured_admin_token" \
     -H 'Content-Type: text/plain' \
     -X PUT --data-binary "$body" \
-    "$console_url/raw/$repository_name/smoke/persistence.txt" >/dev/null
+    --path-as-is "$ingress_url/raw/$repository_name/smoke/persistence%3Bencoded.txt" >/dev/null
 
   kubectl -n "$namespace" rollout restart deployment/artifact-gateway
   kubectl -n "$namespace" rollout status deployment/artifact-gateway --timeout=300s
-  wait_for_http "$console_url/readyz"
+  wait_for_http "$ingress_url/readyz"
 
-  curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
     --retry 10 --retry-all-errors --retry-delay 1 --silent --show-error --fail \
     -H "Authorization: Bearer $configured_admin_token" \
-    "$console_url/api/v2/repositories/$repository_id" >/dev/null
-  restored=$(curl --noproxy '127.0.0.1,localhost' --connect-timeout 3 --max-time 15 \
+    "$ingress_url/api/v2/repositories/$repository_id" >/dev/null
+  restored=$(curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
     --retry 10 --retry-all-errors --retry-delay 1 --silent --show-error --fail \
     -H "Authorization: Bearer $configured_admin_token" \
-    "$console_url/raw/$repository_name/smoke/persistence.txt")
+    --path-as-is "$ingress_url/raw/$repository_name/smoke/persistence%3Bencoded.txt")
   if [[ "$restored" != "$body" ]]; then
     printf 'persisted Raw artifact changed after Gateway restart\n' >&2
     exit 1
   fi
-  printf 'Kubernetes persistence verification passed for Repository %s\n' "$repository_name"
+
+  curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
+    --retry 10 --retry-all-errors --retry-delay 1 \
+    --path-as-is --silent --show-error --fail --head \
+    -H "Authorization: Bearer $configured_admin_token" \
+    "$ingress_url/raw/$repository_name/smoke/persistence%3Bencoded.txt" >/dev/null
+  ranged=$(curl --noproxy "$local_no_proxy" --connect-timeout 3 --max-time 15 \
+    --retry 10 --retry-all-errors --retry-delay 1 \
+    --path-as-is --silent --show-error --fail --range 0-9 \
+    -H "Authorization: Bearer $configured_admin_token" \
+    "$ingress_url/raw/$repository_name/smoke/persistence%3Bencoded.txt")
+  if [[ "$ranged" != Kubernetes ]]; then
+    printf 'Ingress did not preserve the Raw byte range; got %q\n' "$ranged" >&2
+    exit 1
+  fi
+
+  expect_http_status 404 "$ingress_url/npm/ingress-missing/@scope%2Fwidget" \
+    -H "Authorization: Bearer $configured_admin_token"
+  expect_http_status 401 "$ingress_url/v2/"
+  expect_http_status 404 "$ingress_url/apt/ingress-missing/dists/stable/Release" \
+    -H "Authorization: Bearer $configured_admin_token"
+  expect_http_status 400 "$ingress_url/raw/$repository_name/smoke/rejected%5Cpath"
+  expect_http_status 400 "$ingress_url/raw/$repository_name/smoke/rejected%00path"
+
+  printf 'Kubernetes persistence and Ingress protocol verification passed for Repository %s\n' "$repository_name"
 }
 
 down() {
   require_command kubectl
   require_local_context
+  kubectl delete ingressclass artifact-gateway-local --ignore-not-found
+  kubectl delete clusterrolebinding artifact-gateway-local-ingress-class-reader --ignore-not-found
+  kubectl delete clusterrole artifact-gateway-local-ingress-class-reader --ignore-not-found
   kubectl delete namespace "$namespace" --ignore-not-found
 }
 
