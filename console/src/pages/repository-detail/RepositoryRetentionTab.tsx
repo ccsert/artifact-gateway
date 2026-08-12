@@ -42,6 +42,53 @@ const RETENTION_DRY_RUN_PAGE_SIZE = 100;
 
 function retentionFormatCopy(format: Repository["format"], text: Localize) {
   switch (format) {
+    case "maven":
+      return {
+        ageLabel: text(
+          "Maven 发布版本保留天数",
+          "Maven release retention days",
+        ),
+        ageHint: text(
+          "发布版本创建超过此天数后，才会进入清理候选。SNAPSHOT 使用下方独立期限。",
+          "A release becomes eligible after this many days. SNAPSHOT builds use the separate period below.",
+        ),
+        minimumLabel: text(
+          "每个 Maven 模块最少保留版本",
+          "Minimum versions per Maven module",
+        ),
+        minimumHint: text(
+          "按 groupId:artifactId 分组，始终保护最新的这些版本。",
+          "Group by groupId:artifactId and always protect the newest versions.",
+        ),
+        maximumLabel: text(
+          "每个 Maven 模块最多保留版本",
+          "Maximum versions per Maven module",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的旧版本或快照构建会进入候选。",
+          "Use 0 for no limit. Older releases or snapshot builds beyond the limit become eligible.",
+        ),
+        matchLabel: text(
+          "只清理匹配 Maven 坐标",
+          "Only clean matching Maven coordinates",
+        ),
+        matchHint: text(
+          "可选 RE2 坐标正则；留空表示匹配全部 Maven 坐标。",
+          "Optional RE2 coordinate regex. Leave empty to match all Maven coordinates.",
+        ),
+        protectLabel: text("保护 Maven 坐标", "Protect Maven coordinates"),
+        protectHint: text(
+          "匹配任一正则的坐标永不进入清理候选。",
+          "Coordinates matching any regex never become eligible.",
+        ),
+        matchPlaceholder: text("如 ^com\\.example:", "e.g. ^com\\.example:"),
+        protectPlaceholder: text(
+          "如 ^com\\.example:platform:",
+          "e.g. ^com\\.example:platform:",
+        ),
+        candidateName: text("Maven 制品版本", "Maven artifact versions"),
+        candidateType: text("Maven 制品版本", "Maven artifact version"),
+      };
     case "oci":
       return {
         ageLabel: text("镜像版本保留天数", "Image version retention days"),
@@ -84,6 +131,7 @@ function retentionFormatCopy(format: Repository["format"], text: Localize) {
           "e.g. ^team/backend:stable$",
         ),
         candidateName: text("镜像版本", "image versions"),
+        candidateType: text("Manifest 版本", "Manifest version"),
       };
     case "conan":
       return {
@@ -130,6 +178,7 @@ function retentionFormatCopy(format: Repository["format"], text: Localize) {
           "e.g. @release/stable(#|$)",
         ),
         candidateName: "Recipe revision",
+        candidateType: "Recipe revision",
       };
     case "raw":
       return {
@@ -161,61 +210,149 @@ function retentionFormatCopy(format: Repository["format"], text: Localize) {
           "e.g. ^releases/stable/",
         ),
         candidateName: text("路径资产", "path assets"),
+        candidateType: text("路径资产", "Path asset"),
+      };
+    case "npm":
+      return {
+        ageLabel: text(
+          "npm 包版本保留天数",
+          "npm package version retention days",
+        ),
+        ageHint: text(
+          "包版本发布超过此天数后，才会进入清理候选。",
+          "A package version becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个 npm 包最少保留版本",
+          "Minimum versions per npm package",
+        ),
+        minimumHint: text(
+          "按包名分组，始终保护按发布时间最新的这些版本。",
+          "Group by package name and always protect these most recently published versions.",
+        ),
+        maximumLabel: text(
+          "每个 npm 包最多保留版本",
+          "Maximum versions per npm package",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的较早发布版本会进入候选。",
+          "Use 0 for no limit. Earlier publications beyond the limit become eligible.",
+        ),
+        matchLabel: text(
+          "只清理匹配 npm 包",
+          "Only clean matching npm packages",
+        ),
+        matchHint: text(
+          "可匹配包名或 package@version；留空表示全部 npm 包。",
+          "Matches a package name or package@version. Leave empty for all npm packages.",
+        ),
+        protectLabel: text("保护 npm 包版本", "Protect npm package versions"),
+        protectHint: text(
+          "匹配包名可保护全部版本，匹配 package@version 可保护一个版本。",
+          "Match a package name to protect every version, or package@version for one version.",
+        ),
+        matchPlaceholder: text("如 ^@team/", "e.g. ^@team/"),
+        protectPlaceholder: text(
+          "如 ^@team/platform(@|$)",
+          "e.g. ^@team/platform(@|$)",
+        ),
+        candidateName: text("npm 包版本", "npm package versions"),
+        candidateType: text("npm 包版本", "npm package version"),
+      };
+    case "pypi":
+      return {
+        ageLabel: text(
+          "PyPI 项目版本保留天数",
+          "PyPI project version retention days",
+        ),
+        ageHint: text(
+          "项目版本发布超过此天数后，才会进入清理候选。",
+          "A project version becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个 PyPI 项目最少保留版本",
+          "Minimum versions per PyPI project",
+        ),
+        minimumHint: text(
+          "按规范化项目名分组，始终保护按发布时间最新的这些版本。",
+          "Group by normalized project name and always protect these most recently published versions.",
+        ),
+        maximumLabel: text(
+          "每个 PyPI 项目最多保留版本",
+          "Maximum versions per PyPI project",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的较早发布版本会进入候选，并隐藏该版本的全部文件。",
+          "Use 0 for no limit. Earlier publications beyond the limit become eligible together with every file in that version.",
+        ),
+        matchLabel: text(
+          "只清理匹配 PyPI 项目",
+          "Only clean matching PyPI projects",
+        ),
+        matchHint: text(
+          "可匹配项目名或 project@version；留空表示全部 PyPI 项目。",
+          "Matches a project name or project@version. Leave empty for all PyPI projects.",
+        ),
+        protectLabel: text(
+          "保护 PyPI 项目版本",
+          "Protect PyPI project versions",
+        ),
+        protectHint: text(
+          "匹配项目名可保护全部版本，匹配 project@version 可保护一个版本。",
+          "Match a project name to protect every version, or project@version for one version.",
+        ),
+        matchPlaceholder: text("如 ^internal-", "e.g. ^internal-"),
+        protectPlaceholder: text(
+          "如 ^platform-core(@|$)",
+          "e.g. ^platform-core(@|$)",
+        ),
+        candidateName: text("PyPI 项目版本", "PyPI project versions"),
+        candidateType: text("PyPI 项目版本", "PyPI project version"),
       };
     default:
       return {
-        ageLabel: text("发布版本保留天数", "Release version retention days"),
+        ageLabel: text("制品保留天数", "Artifact retention days"),
         ageHint: text(
-          "发布版本创建超过此天数后，才会进入清理候选。",
-          "A release version becomes eligible after this many days.",
+          "制品创建超过此天数后，才会进入清理候选。",
+          "An artifact becomes eligible after this many days.",
         ),
-        minimumLabel: text(
-          "每个模块最少保留版本",
-          "Minimum versions per module",
-        ),
+        minimumLabel: text("每组最少保留版本", "Minimum versions per group"),
         minimumHint: text(
-          "按 groupId:artifactId 分组，始终保护最新的这些版本。",
-          "Group by groupId:artifactId and always protect the newest versions.",
+          "始终保护每组最新的这些版本。",
+          "Always protect these newest versions in each group.",
         ),
-        maximumLabel: text(
-          "每个模块最多保留版本",
-          "Maximum versions per module",
-        ),
+        maximumLabel: text("每组最多保留版本", "Maximum versions per group"),
         maximumHint: text(
           "0 表示不限制；超过上限的旧版本会进入候选。",
           "Use 0 for no limit. Older versions beyond the limit become eligible.",
         ),
-        matchLabel: text("只清理匹配坐标", "Only clean matching coordinates"),
+        matchLabel: text("只清理匹配制品", "Only clean matching artifacts"),
         matchHint: text(
-          "可选 RE2 正则；留空表示匹配全部 Maven 坐标。",
-          "Optional RE2 regex. Leave empty to match all Maven coordinates.",
+          "可选 RE2 正则；留空表示匹配全部制品。",
+          "Optional RE2 regex. Leave empty to match all artifacts.",
         ),
-        protectLabel: text("保护 Maven 坐标", "Protect Maven coordinates"),
+        protectLabel: text("保护制品", "Protect artifacts"),
         protectHint: text(
-          "匹配任一正则的坐标永不进入清理候选。",
-          "Coordinates matching any regex never become eligible.",
+          "匹配任一正则的制品永不进入清理候选。",
+          "Artifacts matching any regex never become eligible.",
         ),
-        matchPlaceholder: text("如 ^com\\.example:", "e.g. ^com\\.example:"),
-        protectPlaceholder: text(
-          "如 ^com\\.example:platform:",
-          "e.g. ^com\\.example:platform:",
-        ),
-        candidateName: text("制品版本", "artifact versions"),
+        matchPlaceholder: text("如 ^team/", "e.g. ^team/"),
+        protectPlaceholder: text("如 /stable$", "e.g. /stable$"),
+        candidateName: text("制品", "artifacts"),
+        candidateType: text("制品版本", "Artifact version"),
       };
   }
 }
 
 function retentionCandidateTypeLabel(
   versionType: RetentionDryRun["candidates"][number]["versionType"],
-  format: Repository["format"],
+  versionLabel: string,
   text: Localize,
 ) {
   if (versionType === "snapshot") return text("快照构建", "Snapshot build");
   if (versionType === "release") return text("发布版本", "Release version");
   if (versionType === "asset") return text("路径资产", "Path asset");
-  return format === "oci"
-    ? text("Manifest 版本", "Manifest version")
-    : "Recipe revision";
+  return versionLabel;
 }
 
 export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
@@ -487,7 +624,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
         <span className="text-xs text-zinc-400">
           {retentionCandidateTypeLabel(
             candidate.versionType,
-            candidate.format,
+            copy.candidateType,
             text,
           )}
         </span>

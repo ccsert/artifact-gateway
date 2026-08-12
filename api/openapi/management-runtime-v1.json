@@ -4225,18 +4225,18 @@
           "minimumVersions": {
             "type": "integer",
             "minimum": 1,
-            "description": "Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules."
+            "description": "Minimum newest versions protected per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Raw paths do not use version-count rules."
           },
           "maximumVersions": {
             "type": "integer",
             "minimum": 0,
             "default": 0,
-            "description": "Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it."
+            "description": "Maximum versions retained per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Zero disables the count cap; Raw paths do not use it."
           },
           "coordinatePatterns": {
             "type": "array",
             "maxItems": 20,
-            "description": "Optional RE2 regular expressions selecting coordinates eligible for cleanup.",
+            "description": "Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, and PyPI project names or project versions.",
             "items": {
               "type": "string",
               "minLength": 1,
@@ -4246,7 +4246,7 @@
           "protectedPatterns": {
             "type": "array",
             "maxItems": 20,
-            "description": "RE2 regular expressions protecting matching coordinates from cleanup.",
+            "description": "RE2 regular expressions protecting matching format-specific cleanup units from cleanup.",
             "items": {
               "type": "string",
               "minLength": 1,

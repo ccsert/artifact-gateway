@@ -70,7 +70,7 @@ operations with an equivalent handler:
 | Artifact detail and deletion | Generated | Maven artifacts support UUID detail and idempotent logical deletion; tombstoning removes resolvable asset metadata while the orphan collector retains responsibility for byte reclamation. |
 | Groups | Generated | V2 groups are a separate UUID-based aggregate over active Hosted Repositories; V1 OCI, Maven, Raw, and Conan groups remain protocol-specific and unchanged. |
 | Grants | Generated | Repository grant sets are versioned with `ETag`/`If-Match` and persist principal-to-scope mappings. |
-| Retention policies | Generated | Policies have a default `keepDays=30`/`minimumVersions=1`, versioned `If-Match` replacement, and Memory/Postgres persistence. The hourly Maven maintenance task applies them by module and tombstones only expired versions beyond the configured minimum; byte reclamation remains the orphan collector's responsibility. |
+| Retention policies | Generated | Policies have a default `keepDays=30`/`minimumVersions=1`, versioned `If-Match` replacement, and Memory/Postgres persistence. Durable retention jobs apply format-aware cleanup units for Maven, OCI, Conan, Raw, npm, and PyPI Hosted repositories; byte reclamation remains the orphan collector's responsibility. |
 
 Adding a deferred path to `management-runtime.yaml` requires first adding the
 corresponding domain aggregate, persistence operations in both memory and

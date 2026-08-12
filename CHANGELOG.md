@@ -68,6 +68,8 @@ a dated version heading without rewriting their meaning.
 
 ### Changed
 
+- Updated retention controls to use Maven, OCI, Conan, Raw, npm, and PyPI
+  cleanup-unit terminology instead of Maven fallback copy.
 - Reorganized the repository security tab into separate quarantine-read and
   promotion-admission guardrails with format-aware scope, explicit saved and
   unsaved states, and contextual scanner availability.

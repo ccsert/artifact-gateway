@@ -141,19 +141,19 @@ export type RetentionPolicy = {
    */
   snapshotKeepDays?: number;
   /**
-   * Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules.
+   * Minimum newest versions protected per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Raw paths do not use version-count rules.
    */
   minimumVersions: number;
   /**
-   * Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it.
+   * Maximum versions retained per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Zero disables the count cap; Raw paths do not use it.
    */
   maximumVersions?: number;
   /**
-   * Optional RE2 regular expressions selecting coordinates eligible for cleanup.
+   * Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, and PyPI project names or project versions.
    */
   coordinatePatterns?: Array<string>;
   /**
-   * RE2 regular expressions protecting matching coordinates from cleanup.
+   * RE2 regular expressions protecting matching format-specific cleanup units from cleanup.
    */
   protectedPatterns?: Array<string>;
 };

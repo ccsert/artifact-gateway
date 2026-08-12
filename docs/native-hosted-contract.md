@@ -77,12 +77,19 @@ it, the policy is `keepDays=30` and `minimumVersions=1` with version `1`.
 `PUT /api/v2/repositories/{repositoryId}/retention-policy` requires both that
 version in the representation and an `If-Match` header; a successful replacement
 increments the stored version and a stale precondition returns `412`. Policy
-configuration does not synchronously remove content. Maven enforcement runs as
-an hourly maintenance job: it groups visible coordinates by `groupId:artifactId`,
-retains the newest `minimumVersions`, and tombstones only older coordinates that
-also exceed `keepDays`. Byte removal remains deferred to the orphan collector.
-Raw and OCI retain their existing protocol-level deletion and object-reclamation
-lifecycles; they do not yet interpret this version policy.
+configuration does not synchronously remove content. The scheduler creates
+durable retention jobs for Maven, OCI, Conan, Raw, npm, and PyPI Hosted
+repositories. Version-count rules group Maven by `groupId:artifactId`, OCI by
+image name, Conan by full reference, npm by package name, and PyPI by normalized
+project name; each group protects its newest `minimumVersions` and may select
+older entries beyond `maximumVersions`. Age eligibility uses the release or
+publication time, while Maven SNAPSHOT builds may use `snapshotKeepDays`. Raw
+has no version grouping: each path is evaluated from its last update time and
+does not use minimum or maximum version counts. RE2 selection and protection
+patterns match each format's logical cleanup unit. Cleanup writes recoverable
+tombstones for a Maven coordinate or SNAPSHOT build, OCI manifest, Conan recipe
+revision closure, Raw path, npm package version, or complete PyPI project
+version. Byte removal remains deferred to the orphan collector.
 
 The orphan collector runs after a configurable grace period (minimum 24 hours).
 It deletes a staged object only when no live object reference, nonexpired

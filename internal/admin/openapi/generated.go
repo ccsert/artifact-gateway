@@ -3263,7 +3263,7 @@ type RetentionDryRunSummary struct {
 
 // RetentionPolicy defines model for RetentionPolicy.
 type RetentionPolicy struct {
-	// CoordinatePatterns Optional RE2 regular expressions selecting coordinates eligible for cleanup.
+	// CoordinatePatterns Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, and PyPI project names or project versions.
 	CoordinatePatterns *[]string `json:"coordinatePatterns,omitempty"`
 
 	// Enabled Whether scheduled and manual retention execution is enabled.
@@ -3272,13 +3272,13 @@ type RetentionPolicy struct {
 	// KeepDays Days to retain artifacts or versions before cleanup eligibility.
 	KeepDays int `json:"keepDays"`
 
-	// MaximumVersions Maximum versions retained per Maven module, OCI image, or Conan reference. Zero disables the count cap; Raw paths do not use it.
+	// MaximumVersions Maximum versions retained per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Zero disables the count cap; Raw paths do not use it.
 	MaximumVersions *int `json:"maximumVersions,omitempty"`
 
-	// MinimumVersions Minimum newest versions protected per Maven module, OCI image, or Conan reference. Raw paths do not use version-count rules.
+	// MinimumVersions Minimum newest versions protected per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Raw paths do not use version-count rules.
 	MinimumVersions int `json:"minimumVersions"`
 
-	// ProtectedPatterns RE2 regular expressions protecting matching coordinates from cleanup.
+	// ProtectedPatterns RE2 regular expressions protecting matching format-specific cleanup units from cleanup.
 	ProtectedPatterns *[]string `json:"protectedPatterns,omitempty"`
 
 	// SnapshotKeepDays Days to retain Maven SNAPSHOT versions. Defaults to keepDays when omitted.
