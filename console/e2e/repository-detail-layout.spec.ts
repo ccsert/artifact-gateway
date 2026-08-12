@@ -45,8 +45,33 @@ async function mockRepositoryDetail(page: Page) {
           format: "raw",
           type: "hosted",
           operations: ["read", "publish", "browse", "delete"],
+          artifactScanning: false,
+          publicationScanning: false,
         },
       });
+    }
+    if (path.endsWith("/lifecycle-jobs")) {
+      return route.fulfill({ json: [] });
+    }
+    if (path.endsWith("/security-policy")) {
+      return route.fulfill({
+        json: {
+          version: "1",
+          enabled: false,
+          autoScanOnPublish: false,
+          requireSignature: false,
+          requireVerifiedSignature: false,
+          requireSbom: false,
+          requireProvenance: false,
+          requireVulnerabilityScan: false,
+          maxAllowedSeverity: "critical",
+          failOnScanError: true,
+          allowedLicenses: [],
+        },
+      });
+    }
+    if (path.endsWith("/quarantine-read-policy")) {
+      return route.fulfill({ json: { version: "1", enabled: false } });
     }
     if (path.endsWith("/effective-access")) {
       const allowed = {
@@ -75,7 +100,12 @@ async function mockRepositoryDetail(page: Page) {
             source: "anonymous_policy",
             reason: "repository_anonymous_read_enabled",
           },
-          permissions: { read: allowed, write: allowed, admin: allowed },
+          permissions: {
+            read: allowed,
+            write: allowed,
+            admin: allowed,
+            intelligence: allowed,
+          },
         },
       });
     }
@@ -183,4 +213,102 @@ test("repository settings live in a tab and keep the update workflow", async ({
       fullPage: true,
     });
   }
+});
+
+test("scanning uses a frameless responsive workspace", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page);
+
+  await page.goto(`/repositories/${repositoryId}?tab=scanning`);
+  await expect(
+    page.getByRole("heading", { name: "制品扫描", exact: true }),
+  ).toBeVisible();
+
+  await expect(page.locator(".ag-card .ag-card")).toHaveCount(0);
+
+  const scannerWarning = page
+    .getByRole("alert")
+    .filter({ hasText: "当前仓库未配置可用扫描器" });
+  const enforcementNotice = page
+    .getByRole("alert")
+    .filter({ hasText: "扫描与处置是两个步骤" });
+  const [warningBox, noticeBox] = await Promise.all([
+    scannerWarning.boundingBox(),
+    enforcementNotice.boundingBox(),
+  ]);
+  expect(warningBox).not.toBeNull();
+  expect(noticeBox).not.toBeNull();
+  expect(Math.abs((warningBox?.y ?? 0) - (noticeBox?.y ?? 0))).toBeLessThan(2);
+  expect(noticeBox?.x ?? 0).toBeGreaterThan(
+    (warningBox?.x ?? 0) + (warningBox?.width ?? 0),
+  );
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const [narrowWarningBox, narrowNoticeBox] = await Promise.all([
+    scannerWarning.boundingBox(),
+    enforcementNotice.boundingBox(),
+  ]);
+  expect(
+    Math.abs((narrowWarningBox?.x ?? 0) - (narrowNoticeBox?.x ?? 0)),
+  ).toBeLessThan(2);
+  expect(narrowNoticeBox?.y ?? 0).toBeGreaterThanOrEqual(
+    (narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0) + 12,
+  );
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+});
+
+test("security guardrails use independent desktop columns", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page);
+
+  await page.goto(`/repositories/${repositoryId}?tab=security`);
+  const readHeading = page.getByRole("heading", {
+    name: "隔离制品读取",
+    exact: true,
+  });
+  const admissionHeading = page.getByRole("heading", {
+    name: "晋升准入",
+    exact: true,
+  });
+  await expect(readHeading).toBeVisible();
+  await expect(admissionHeading).toBeVisible();
+  await expect(page.locator(".ag-card .ag-card")).toHaveCount(0);
+
+  const readCard = page.locator(".ag-card").filter({ has: readHeading });
+  const admissionCard = page
+    .locator(".ag-card")
+    .filter({ has: admissionHeading });
+  const [readBox, admissionBox] = await Promise.all([
+    readCard.boundingBox(),
+    admissionCard.boundingBox(),
+  ]);
+  expect(readBox).not.toBeNull();
+  expect(admissionBox).not.toBeNull();
+  expect(Math.abs((readBox?.y ?? 0) - (admissionBox?.y ?? 0))).toBeLessThan(2);
+  expect(admissionBox?.x ?? 0).toBeGreaterThan(
+    (readBox?.x ?? 0) + (readBox?.width ?? 0),
+  );
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const [narrowReadBox, narrowAdmissionBox] = await Promise.all([
+    readCard.boundingBox(),
+    admissionCard.boundingBox(),
+  ]);
+  expect(
+    Math.abs((narrowReadBox?.x ?? 0) - (narrowAdmissionBox?.x ?? 0)),
+  ).toBeLessThan(2);
+  expect(narrowAdmissionBox?.y ?? 0).toBeGreaterThan(
+    (narrowReadBox?.y ?? 0) + (narrowReadBox?.height ?? 0),
+  );
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
 });

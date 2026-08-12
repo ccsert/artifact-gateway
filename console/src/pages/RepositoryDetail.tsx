@@ -1,4 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   Button,
@@ -95,6 +102,16 @@ type Tab =
   | "jobs"
   | "tombstones"
   | "settings";
+
+function RepositoryTabSurface({
+  standalone,
+  children,
+}: {
+  standalone: boolean;
+  children: ReactNode;
+}) {
+  return standalone ? children : <Card bodyClassName="p-4">{children}</Card>;
+}
 
 const TABS: {
   key: Tab;
@@ -942,7 +959,9 @@ export function RepositoryDetailPage() {
             !(t.key === "publish" && repo.type === "proxy"),
         ).map((t) => ({ key: t.key, label: text(t.label, t.labelEn) }))}
       />
-      <Card bodyClassName="p-4">
+      <RepositoryTabSurface
+        standalone={tab === "scanning" || tab === "security"}
+      >
         <Suspense fallback={<Loading />}>
           {tab === "artifacts" && (
             <RepositoryArtifactsTab
@@ -1021,7 +1040,7 @@ export function RepositoryDetailPage() {
             />
           )}
         </Suspense>
-      </Card>
+      </RepositoryTabSurface>
     </div>
   );
 }

@@ -214,15 +214,15 @@ export function RepositorySecurityTab({
     : text("当前格式不可用", "Unavailable for this format");
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6">
-      <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 px-6 py-5">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
+      <div className="border-b border-zinc-800/80 pb-4 xl:col-span-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-500">
           {text("仓库安全防线", "Repository guardrails")}
         </div>
-        <h2 className="mt-2 text-lg font-semibold tracking-tight text-zinc-100">
+        <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
           {text("安全准入与隔离读取", "Admission and quarantined reads")}
         </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
+        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-zinc-500">
           {text(
             "这里有两条彼此独立的防线：读取策略决定已隔离制品能否被下载；晋升准入决定制品能否进入当前仓库。",
             "Two independent guardrails live here: the read policy decides whether quarantined artifacts can be downloaded, while admission decides whether artifacts may enter this repository.",
@@ -272,7 +272,7 @@ export function RepositorySecurityTab({
         {readPolicy && (
           <>
             {readNotice && <Alert type="success" showIcon title={readNotice} />}
-            <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2">
               <ScopeFact
                 label={text("影响请求", "Affected requests")}
                 value="GET / HEAD"
@@ -290,14 +290,14 @@ export function RepositorySecurityTab({
                 value={text("不降级回退", "No lower-priority fallback")}
               />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800/70 pt-4">
+            <div className="flex flex-col gap-4 border-t border-zinc-800/70 pt-4">
               <p className="max-w-2xl text-xs leading-5 text-zinc-500">
                 {text(
                   "默认允许读取以保持升级兼容。启用阻断前，请先检查当前仓库已有的隔离记录。",
                   "Reads remain allowed by default for upgrade compatibility. Review existing quarantine records before enabling enforcement.",
                 )}
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-zinc-600">
                   {text(
                     `读取策略当前版本 ${readPolicy.version}`,
@@ -586,7 +586,7 @@ function PolicyCard({
   children: ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800/70 px-6 py-5">
         <div className="min-w-0 max-w-3xl">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
