@@ -48,3 +48,48 @@ repositories_repositoryId_artifact_search:
         "$ref": "../components/responses.yaml#/ArtifactSummaryList"
       '400':
         "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_artifact_identities:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listRepositoryArtifactIdentities
+    summary: List canonical immutable artifact identities
+    description: Returns visible canonical coordinate and digest pairs that can
+      be submitted directly to scanning or distribution operations. The protocol
+      layer owns coordinate construction. Conan scan results include recipe and
+      package revisions, while distribution results include recipe revisions only.
+    parameters:
+    - name: purpose
+      in: query
+      required: true
+      schema:
+        "$ref": "../components/schemas.yaml#/ArtifactIdentityPurpose"
+    - name: q
+      in: query
+      description: Case-insensitive coordinate substring or exact SHA-256 digest.
+      schema:
+        type: string
+        maxLength: 255
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    responses:
+      '200':
+        description: Visible immutable artifact identities
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/ArtifactIdentityPage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"

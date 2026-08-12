@@ -1352,6 +1352,23 @@ export type GroupCapacity = {
   members: Array<GroupCapacityMember>;
 };
 
+export type ArtifactIdentityPurpose = "scan" | "distribution";
+
+export type ArtifactIdentity = {
+  /**
+   * Protocol-owned canonical coordinate accepted by the requested operation.
+   */
+  coordinate: string;
+  digest: string;
+  size?: number;
+  publishedAt: string;
+  intelligence?: ArtifactIntelligenceSummary;
+};
+
+export type ArtifactIdentityPage = {
+  items: Array<ArtifactIdentity>;
+};
+
 export type ArtifactSignature = {
   keyId: string;
   algorithm: string;
@@ -5286,6 +5303,66 @@ export type SearchRepositoryArtifactsResponses = {
 
 export type SearchRepositoryArtifactsResponse =
   SearchRepositoryArtifactsResponses[keyof SearchRepositoryArtifactsResponses];
+
+export type ListRepositoryArtifactIdentitiesData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    purpose: ArtifactIdentityPurpose;
+    /**
+     * Case-insensitive coordinate substring or exact SHA-256 digest.
+     */
+    q?: string;
+    pageSize?: number;
+  };
+  url: "/repositories/{repositoryId}/artifact-identities";
+};
+
+export type ListRepositoryArtifactIdentitiesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type ListRepositoryArtifactIdentitiesError =
+  ListRepositoryArtifactIdentitiesErrors[keyof ListRepositoryArtifactIdentitiesErrors];
+
+export type ListRepositoryArtifactIdentitiesResponses = {
+  /**
+   * Visible immutable artifact identities
+   */
+  200: ArtifactIdentityPage;
+};
+
+export type ListRepositoryArtifactIdentitiesResponse =
+  ListRepositoryArtifactIdentitiesResponses[keyof ListRepositoryArtifactIdentitiesResponses];
 
 export type DeleteArtifactData = {
   body?: never;

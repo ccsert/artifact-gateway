@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select, Tag } from "antd";
-import { searchRepositoryArtifacts } from "../client";
-import type { ArtifactSummary, Repository } from "../client";
+import { listRepositoryArtifactIdentities } from "../client";
+import type {
+  ArtifactIdentity,
+  ArtifactIdentityPurpose,
+  Repository,
+} from "../client";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 
@@ -11,7 +15,7 @@ export type RepositoryArtifactIdentity = {
   digest: string;
   size?: number;
   createdAt?: string;
-  intelligence?: ArtifactSummary["intelligence"];
+  intelligence?: ArtifactIdentity["intelligence"];
 };
 
 export type RepositoryArtifactStatus = {
@@ -19,40 +23,22 @@ export type RepositoryArtifactStatus = {
   label: string;
 };
 
-function lifecycleCoordinate(
-  format: Repository["format"],
-  artifact: ArtifactSummary,
-): string {
-  if (
-    artifact.version &&
-    (format === "npm" || format === "pypi" || format === "go")
-  ) {
-    return `${artifact.coordinate}@${artifact.version}`;
-  }
-  return artifact.coordinate;
-}
-
 function artifactIdentity(
-  format: Repository["format"],
-  artifact: ArtifactSummary,
-): RepositoryArtifactIdentity | null {
-  if (!artifact.digest) return null;
-  const coordinate = lifecycleCoordinate(format, artifact);
-  // The shared Conan browse projection exposes only a reference, while
-  // lifecycle operations require a pinned recipe/package revision.
-  if (format === "conan" && !coordinate.includes("#")) return null;
+  artifact: ArtifactIdentity,
+): RepositoryArtifactIdentity {
   return {
-    key: JSON.stringify([coordinate, artifact.digest]),
-    coordinate,
+    key: JSON.stringify([artifact.coordinate, artifact.digest]),
+    coordinate: artifact.coordinate,
     digest: artifact.digest,
     size: artifact.size,
-    createdAt: artifact.createdAt,
+    createdAt: artifact.publishedAt,
     intelligence: artifact.intelligence,
   };
 }
 
 export function RepositoryArtifactSelect({
   repo,
+  purpose,
   value,
   onChange,
   enabled = true,
@@ -62,6 +48,7 @@ export function RepositoryArtifactSelect({
   statusForOption,
 }: {
   repo: Repository;
+  purpose: ArtifactIdentityPurpose;
   value: RepositoryArtifactIdentity | null;
   onChange: (value: RepositoryArtifactIdentity | null) => void;
   enabled?: boolean;
@@ -100,9 +87,10 @@ export function RepositoryArtifactSelect({
         setSearchError(null);
         void (async () => {
           try {
-            const { data, error } = await searchRepositoryArtifacts({
+            const { data, error } = await listRepositoryArtifactIdentities({
               path: { repositoryId: repo.id },
               query: {
+                purpose,
                 ...(trimmedQuery ? { q: trimmedQuery } : {}),
                 pageSize: 50,
               },
@@ -116,8 +104,8 @@ export function RepositoryArtifactSelect({
             }
             const unique = new Map<string, RepositoryArtifactIdentity>();
             for (const artifact of data?.items ?? []) {
-              const option = artifactIdentity(repo.format, artifact);
-              if (option) unique.set(option.key, option);
+              const option = artifactIdentity(artifact);
+              unique.set(option.key, option);
             }
             setOptions([...unique.values()]);
           } catch (error) {
@@ -135,7 +123,7 @@ export function RepositoryArtifactSelect({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [enabled, query, repo.format, repo.id]);
+  }, [enabled, purpose, query, repo.id]);
 
   const selectableOptions = useMemo(() => {
     if (value && !options.some((option) => option.key === value.key)) {

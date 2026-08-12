@@ -5,8 +5,8 @@ import {
   createRepositoryPromotion,
   evaluateSecurityPolicy,
   listRepositories,
+  listRepositoryArtifactIdentities,
   listRepositoryReplications,
-  searchRepositoryArtifacts,
 } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -19,15 +19,15 @@ vi.mock("../../client", () => ({
   evaluateSecurityPolicy: vi.fn(),
   getRepositoryReplication: vi.fn(),
   listRepositories: vi.fn(),
+  listRepositoryArtifactIdentities: vi.fn(),
   listRepositoryReplications: vi.fn(),
-  searchRepositoryArtifacts: vi.fn(),
 }));
 
 const mockCreatePromotion = vi.mocked(createRepositoryPromotion);
 const mockEvaluateSecurityPolicy = vi.mocked(evaluateSecurityPolicy);
 const mockListRepositories = vi.mocked(listRepositories);
 const mockListRepositoryReplications = vi.mocked(listRepositoryReplications);
-const mockSearchArtifacts = vi.mocked(searchRepositoryArtifacts);
+const mockListArtifactIdentities = vi.mocked(listRepositoryArtifactIdentities);
 const digestA = `sha256:${"a".repeat(64)}`;
 const digestB = `sha256:${"b".repeat(64)}`;
 const coordinate = "org.example:widget:1.2.3";
@@ -55,9 +55,16 @@ const proxyTarget: Repository = {
 };
 
 beforeEach(() => {
-  mockSearchArtifacts.mockResolvedValue({
+  mockListArtifactIdentities.mockResolvedValue({
     data: {
-      items: [{ coordinate, digest: digestA, size: 2048 }],
+      items: [
+        {
+          coordinate,
+          digest: digestA,
+          size: 2048,
+          publishedAt: "2026-08-12T05:00:00Z",
+        },
+      ],
     },
   } as never);
 });
@@ -132,6 +139,12 @@ describe("RepositoryDistributionTab", () => {
     );
 
     await screen.findByText("暂无复制计划");
+    await waitFor(() =>
+      expect(mockListArtifactIdentities).toHaveBeenCalledWith({
+        path: { repositoryId: source.id },
+        query: { purpose: "distribution", pageSize: 50 },
+      }),
+    );
     await user.click(
       screen.getByRole("combobox", { name: "搜索并选择源制品" }),
     );
@@ -222,8 +235,17 @@ describe("RepositoryDistributionTab", () => {
         reasons: ["verified_signature_required"],
       },
     } as never);
-    mockSearchArtifacts.mockResolvedValue({
-      data: { items: [{ coordinate, digest: digestB, size: 2048 }] },
+    mockListArtifactIdentities.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate,
+            digest: digestB,
+            size: 2048,
+            publishedAt: "2026-08-12T05:00:00Z",
+          },
+        ],
+      },
     } as never);
 
     render(

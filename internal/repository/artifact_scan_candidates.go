@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"time"
 )
 
 type artifactScanCandidateIdentity struct {
@@ -17,57 +16,20 @@ func (s *MemoryStore) ListArtifactScanCandidates(_ context.Context, repositoryID
 	limit = artifactScanCandidateLimit(limit)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	candidates := make([]ArtifactScanCandidate, 0, limit)
-	appendCandidate := func(coordinate, digest string, publishedAt time.Time) {
-		if coordinate != "" && digest != "" {
-			candidates = append(candidates, ArtifactScanCandidate{Coordinate: coordinate, Digest: digest, PublishedAt: publishedAt})
-		}
-	}
-	switch format {
-	case FormatMaven:
-		for _, artifact := range s.mavenArtifacts {
-			if artifact.RepositoryID == repositoryID && artifact.State == "visible" {
-				appendCandidate(artifact.Coordinate, artifact.Digest, artifact.CreatedAt)
-			}
-		}
-	case FormatOCI:
-		for _, manifest := range s.ociManifests {
-			if manifest.RepositoryID == repositoryID {
-				appendCandidate(manifest.Name, manifest.Digest, manifest.CreatedAt)
-			}
-		}
-	case FormatRaw:
-		for _, asset := range s.rawAssets {
-			if asset.RepositoryID == repositoryID {
-				appendCandidate(asset.Path, asset.Digest, asset.UpdatedAt)
-			}
-		}
-	case FormatNPM:
-		for _, version := range s.npmVersions {
-			if version.RepositoryID == repositoryID && version.State == "visible" {
-				appendCandidate(version.PackageName+"@"+version.Version, version.Digest, version.CreatedAt)
-			}
-		}
-	case FormatPyPI:
-		for _, file := range s.pypiFiles {
-			if file.RepositoryID == repositoryID && file.State == "visible" {
-				appendCandidate(file.Project+"@"+file.Version, file.Digest, file.CreatedAt)
-			}
-		}
-	case FormatConan:
-		for _, revision := range s.conanRecipes {
-			if revision.RepositoryID == repositoryID && revision.State == "visible" {
-				appendCandidate(revision.Reference+"#"+revision.Revision, revision.Digest, revision.CreatedAt)
-			}
-		}
-		for _, revision := range s.conanPackages {
-			recipe, recipeExists := s.conanRecipes[conanRecipeKey(repositoryID, revision.Reference, revision.RecipeRevision)]
-			if revision.RepositoryID == repositoryID && revision.State == "visible" && recipeExists && recipe.State == "visible" {
-				appendCandidate(revision.Reference+"#"+revision.RecipeRevision+"/"+revision.PackageID+"#"+revision.Revision, revision.Digest, revision.CreatedAt)
-			}
-		}
-	default:
+	if !formatSupportsPublicationScanReconciliation(format) {
 		return nil, fmt.Errorf("format %q does not support publication scan reconciliation", format)
+	}
+	identities, err := s.artifactIdentitiesLocked(repositoryID, format, ArtifactIdentityScan, "")
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]ArtifactScanCandidate, 0, len(identities))
+	for _, identity := range identities {
+		candidates = append(candidates, ArtifactScanCandidate{
+			Coordinate:  identity.Coordinate,
+			Digest:      identity.Digest,
+			PublishedAt: identity.PublishedAt,
+		})
 	}
 	latestJobs := make(map[artifactScanCandidateIdentity]LifecycleJob)
 	for _, job := range s.lifecycleJobs {
@@ -92,6 +54,15 @@ func (s *MemoryStore) ListArtifactScanCandidates(_ context.Context, repositoryID
 		return 1
 	}
 	return sortAndLimitArtifactScanCandidates(candidates, limit, priority), nil
+}
+
+func formatSupportsPublicationScanReconciliation(format Format) bool {
+	switch format {
+	case FormatMaven, FormatOCI, FormatRaw, FormatNPM, FormatPyPI, FormatConan:
+		return true
+	default:
+		return false
+	}
 }
 
 func sortAndLimitArtifactScanCandidates(candidates []ArtifactScanCandidate, limit int, priority func(ArtifactScanCandidate) int) []ArtifactScanCandidate {

@@ -222,6 +222,10 @@ type ArtifactScanCandidateStore interface {
 	ListArtifactScanCandidates(context.Context, string, Format, int) ([]ArtifactScanCandidate, error)
 }
 
+type ArtifactIdentityStore interface {
+	ListArtifactIdentities(context.Context, string, Format, ArtifactIdentityPurpose, string, int) ([]ArtifactIdentity, error)
+}
+
 type RepositoryLifecycleJobStore interface {
 	ListAllLifecycleJobs(context.Context, int) ([]RepositoryLifecycleJob, error)
 }

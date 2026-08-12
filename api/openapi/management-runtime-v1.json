@@ -3041,6 +3041,73 @@
         }
       }
     },
+    "/repositories/{repositoryId}/artifact-identities": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listRepositoryArtifactIdentities",
+        "summary": "List canonical immutable artifact identities",
+        "description": "Returns visible canonical coordinate and digest pairs that can be submitted directly to scanning or distribution operations. The protocol layer owns coordinate construction. Conan scan results include recipe and package revisions, while distribution results include recipe revisions only.",
+        "parameters": [
+          {
+            "name": "purpose",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtifactIdentityPurpose"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive coordinate substring or exact SHA-256 digest.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible immutable artifact identities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactIdentityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/artifacts/{artifactId}": {
       "parameters": [
         {
@@ -8361,6 +8428,62 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GroupCapacityMember"
+            }
+          }
+        }
+      },
+      "ArtifactIdentityPurpose": {
+        "type": "string",
+        "enum": [
+          "scan",
+          "distribution"
+        ]
+      },
+      "ArtifactIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "coordinate",
+          "digest",
+          "publishedAt"
+        ],
+        "properties": {
+          "coordinate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Protocol-owned canonical coordinate accepted by the requested operation."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "intelligence": {
+            "$ref": "#/components/schemas/ArtifactIntelligenceSummary"
+          }
+        }
+      },
+      "ArtifactIdentityPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ArtifactIdentity"
             }
           }
         }

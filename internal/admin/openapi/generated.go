@@ -58,6 +58,24 @@ func (e ArtifactState) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactIdentityPurpose.
+const (
+	ArtifactIdentityPurposeDistribution ArtifactIdentityPurpose = "distribution"
+	ArtifactIdentityPurposeScan         ArtifactIdentityPurpose = "scan"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactIdentityPurpose enum.
+func (e ArtifactIdentityPurpose) Valid() bool {
+	switch e {
+	case ArtifactIdentityPurposeDistribution:
+		return true
+	case ArtifactIdentityPurposeScan:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactIntelligenceSummaryVulnerabilityStatus.
 const (
 	ArtifactIntelligenceSummaryVulnerabilityStatusAffected   ArtifactIntelligenceSummaryVulnerabilityStatus = "affected"
@@ -1871,6 +1889,24 @@ type Artifact struct {
 
 // ArtifactState defines model for Artifact.State.
 type ArtifactState string
+
+// ArtifactIdentity defines model for ArtifactIdentity.
+type ArtifactIdentity struct {
+	// Coordinate Protocol-owned canonical coordinate accepted by the requested operation.
+	Coordinate   string                       `json:"coordinate"`
+	Digest       string                       `json:"digest"`
+	Intelligence *ArtifactIntelligenceSummary `json:"intelligence,omitempty"`
+	PublishedAt  time.Time                    `json:"publishedAt"`
+	Size         *int64                       `json:"size,omitempty"`
+}
+
+// ArtifactIdentityPage defines model for ArtifactIdentityPage.
+type ArtifactIdentityPage struct {
+	Items []ArtifactIdentity `json:"items"`
+}
+
+// ArtifactIdentityPurpose defines model for ArtifactIdentityPurpose.
+type ArtifactIdentityPurpose string
 
 // ArtifactIntelligence defines model for ArtifactIntelligence.
 type ArtifactIntelligence struct {
@@ -3811,6 +3847,15 @@ type UpdateRepositoryParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ListRepositoryArtifactIdentitiesParams defines parameters for ListRepositoryArtifactIdentities.
+type ListRepositoryArtifactIdentitiesParams struct {
+	Purpose ArtifactIdentityPurpose `form:"purpose" json:"purpose"`
+
+	// Q Case-insensitive coordinate substring or exact SHA-256 digest.
+	Q        *string   `form:"q,omitempty" json:"q,omitempty"`
+	PageSize *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+}
+
 // GetArtifactIntelligenceParams defines parameters for GetArtifactIntelligence.
 type GetArtifactIntelligenceParams struct {
 	Coordinate string `form:"coordinate" json:"coordinate"`
@@ -4377,6 +4422,9 @@ type ServerInterface interface {
 
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams)
+	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
+	// (GET /repositories/{repositoryId}/artifact-identities)
+	ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactIdentitiesParams)
 
 	// (GET /repositories/{repositoryId}/artifact-intelligence)
 	GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetArtifactIntelligenceParams)
@@ -6249,6 +6297,74 @@ func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRepository(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryArtifactIdentities operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryArtifactIdentitiesParams
+
+	// ------------- Required query parameter "purpose" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "purpose", r.URL.Query(), &params.Purpose, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryArtifactIdentities(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9935,6 +10051,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-quarantine", wrapper.GetArtifactQuarantine)
@@ -12214,6 +12331,129 @@ func (response UpdateRepository412ApplicationProblemPlusJSONResponse) VisitUpdat
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentitiesRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListRepositoryArtifactIdentitiesParams
+}
+
+type ListRepositoryArtifactIdentitiesResponseObject interface {
+	VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryArtifactIdentities200JSONResponse ArtifactIdentityPage
+
+func (response ListRepositoryArtifactIdentities200JSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryArtifactIdentities400ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities401ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities403ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities404ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities409ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities500ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactIdentities501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactIdentities501ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactIdentitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -17260,6 +17500,9 @@ type StrictServerInterface interface {
 
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
+	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
+	// (GET /repositories/{repositoryId}/artifact-identities)
+	ListRepositoryArtifactIdentities(ctx context.Context, request ListRepositoryArtifactIdentitiesRequestObject) (ListRepositoryArtifactIdentitiesResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/artifact-intelligence)
 	GetArtifactIntelligence(ctx context.Context, request GetArtifactIntelligenceRequestObject) (GetArtifactIntelligenceResponseObject, error)
@@ -18818,6 +19061,33 @@ func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRepositoryResponseObject); ok {
 		if err := validResponse.VisitUpdateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryArtifactIdentities operation middleware
+func (sh *strictHandler) ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactIdentitiesParams) {
+	var request ListRepositoryArtifactIdentitiesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryArtifactIdentities(ctx, request.(ListRepositoryArtifactIdentitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryArtifactIdentities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryArtifactIdentitiesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryArtifactIdentitiesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

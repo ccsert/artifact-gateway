@@ -435,6 +435,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
           >
             <RepositoryArtifactSelect
               repo={repo}
+              purpose="distribution"
               value={selectedArtifact}
               onChange={chooseArtifact}
               disabled={busy !== null}

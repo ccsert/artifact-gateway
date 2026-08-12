@@ -367,9 +367,13 @@ repository `repositories:intelligence` permission.
 
 The Console exposes these operations on the repository detail **Scanning** tab.
 It reports manual-scan and scan-on-publication availability separately, accepts
-one canonical coordinate and SHA-256 digest for an explicit scan, lists recent
-scan lifecycle jobs, and provides the bounded historical reconciliation action
-when the repository has a publication-scan resolver. When capability discovery
+one protocol-owned canonical coordinate and SHA-256 digest for an explicit scan,
+lists recent scan lifecycle jobs, and provides the bounded historical
+reconciliation action when the repository has a publication-scan resolver. The
+default picker reads `GET /api/v2/repositories/{repositoryId}/artifact-identities`
+with `purpose=scan`; it includes historical versions and both Conan recipe and
+package revisions instead of reconstructing identities from browse results.
+Exact manual entry remains an advanced recovery path. When capability discovery
 reports no scanner, the tab stays visible but disables mutation and points the
 operator to `GATEWAY_SCANNER_ENDPOINT`, `GATEWAY_SCANNER_FORMATS`, and Worker
 `scan`-kind deployment configuration. Scanner endpoints and tokens remain

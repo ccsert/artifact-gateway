@@ -418,6 +418,7 @@ export function RepositoryScanningTab({
             >
               <RepositoryArtifactSelect
                 repo={repo}
+                purpose="scan"
                 value={selectedArtifact}
                 enabled={artifactScanning && canManage}
                 ariaLabel={text(
@@ -441,8 +442,8 @@ export function RepositoryScanningTab({
               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <span className="text-[11px] leading-5 text-zinc-500">
                   {text(
-                    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入前缀缩小范围。旧版本或 Conan 修订未列出时请使用高级手动输入。",
-                    "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; type a prefix to narrow the list. Use advanced manual input for unlisted older versions or Conan revisions.",
+                    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入关键词检索历史版本和 Conan 修订。仅在无法检索时使用高级手动输入。",
+                    "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; search historical versions and Conan revisions by keyword. Use advanced manual input only as a recovery path.",
                   )}
                 </span>
                 <Button

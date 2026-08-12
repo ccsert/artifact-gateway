@@ -634,6 +634,26 @@ type ArtifactScanCandidate struct {
 	PublishedAt time.Time
 }
 
+// ArtifactIdentityPurpose selects the operation whose canonical coordinate
+// rules should be applied. Conan package revisions are independently
+// scannable, but distribution always operates on their parent recipe revision.
+type ArtifactIdentityPurpose string
+
+const (
+	ArtifactIdentityScan         ArtifactIdentityPurpose = "scan"
+	ArtifactIdentityDistribution ArtifactIdentityPurpose = "distribution"
+)
+
+// ArtifactIdentity is one visible protocol-owned coordinate and digest pair
+// that can be submitted directly to the requested management operation.
+type ArtifactIdentity struct {
+	Coordinate   string
+	Digest       string
+	Size         *int64
+	PublishedAt  time.Time
+	Intelligence *ArtifactIntelligenceSummary
+}
+
 // ScheduledTaskKind is intentionally a closed set. Scheduled tasks may only
 // dispatch operations implemented by the gateway; they never execute user
 // supplied commands or SQL.

@@ -29,6 +29,13 @@ A client-visible immutable version, manifest, or coordinate in a Repository.
 Its format determines its canonical identity.
 _Avoid_: File, package
 
+**Artifact Identity**:
+The protocol-owned canonical coordinate and SHA-256 digest pair for one visible
+immutable Artifact. Management clients obtain identities from the Repository
+for a declared operation purpose; they do not reconstruct format-specific
+coordinates from browse projections.
+_Avoid_: Search result, latest version, client-built coordinate
+
 **Asset**:
 One immutable byte object belonging to an Artifact, such as a Maven JAR, OCI
 blob, or Conan package file.

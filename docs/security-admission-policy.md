@@ -56,6 +56,13 @@ The source must be active, use the same format as the target, and contain the
 visible coordinate/digest identity. The caller needs administrator access to
 the target and read access to the source.
 
+Management clients list selectable source identities from
+`GET /api/v2/repositories/{sourceRepositoryId}/artifact-identities?purpose=distribution`.
+The format implementation returns canonical coordinate/digest pairs, including
+historical versions. Conan distribution results intentionally expose recipe
+revisions only because the recipe and its package closure are the atomic unit.
+Clients must not derive these identities from browse projections.
+
 ## Promotion behavior
 
 Promotion evaluates the target policy immediately before enqueueing the

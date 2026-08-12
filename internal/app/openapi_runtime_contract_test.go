@@ -39,6 +39,7 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 		"/api/v2/repositories/" + repo.ID,
 		"/api/v2/repositories/" + repo.ID + "/capabilities",
 		"/api/v2/repositories/" + repo.ID + "/capacity",
+		"/api/v2/repositories/" + repo.ID + "/artifact-identities?purpose=distribution",
 		"/api/v2/repositories/" + repo.ID + "/quarantine-read-policy",
 		"/api/v2/repositories/" + repo.ID + "/conan/references?pageSize=10",
 		"/api/v2/repositories/" + repo.ID + "/conan/recipe-revisions?reference=hello%2F1.0%2Fdemo%2Fstable",

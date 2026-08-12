@@ -1892,6 +1892,41 @@ ArtifactSummaryPage:
         "$ref": "#/ArtifactSummary"
     nextPageToken:
       type: string
+ArtifactIdentityPurpose:
+  type: string
+  enum: [scan, distribution]
+ArtifactIdentity:
+  type: object
+  additionalProperties: false
+  required: [coordinate, digest, publishedAt]
+  properties:
+    coordinate:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: Protocol-owned canonical coordinate accepted by the requested operation.
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      format: int64
+      minimum: 0
+    publishedAt:
+      type: string
+      format: date-time
+    intelligence:
+      "$ref": "#/ArtifactIntelligenceSummary"
+ArtifactIdentityPage:
+  type: object
+  additionalProperties: false
+  required: [items]
+  properties:
+    items:
+      type: array
+      maxItems: 200
+      items:
+        "$ref": "#/ArtifactIdentity"
 ArtifactSignature:
   type: object
   required: [keyId, algorithm, identity, signature, verified]

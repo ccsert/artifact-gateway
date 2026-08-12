@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepositoryArtifactScan,
+  listRepositoryArtifactIdentities,
   listRepositoryLifecycleJobs,
   reconcileRepositoryArtifactScans,
-  searchRepositoryArtifacts,
 } from "../../client";
 import type { Repository, RepositoryCapabilities } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -13,15 +13,15 @@ import { RepositoryScanningTab } from "./RepositoryScanningTab";
 
 vi.mock("../../client", () => ({
   createRepositoryArtifactScan: vi.fn(),
+  listRepositoryArtifactIdentities: vi.fn(),
   listRepositoryLifecycleJobs: vi.fn(),
   reconcileRepositoryArtifactScans: vi.fn(),
-  searchRepositoryArtifacts: vi.fn(),
 }));
 
 const mockCreateScan = vi.mocked(createRepositoryArtifactScan);
 const mockListJobs = vi.mocked(listRepositoryLifecycleJobs);
 const mockReconcileScans = vi.mocked(reconcileRepositoryArtifactScans);
-const mockSearchArtifacts = vi.mocked(searchRepositoryArtifacts);
+const mockListArtifactIdentities = vi.mocked(listRepositoryArtifactIdentities);
 const digest = `sha256:${"a".repeat(64)}`;
 const repository: Repository = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -41,7 +41,9 @@ const capabilities: RepositoryCapabilities = {
 };
 
 beforeEach(() => {
-  mockSearchArtifacts.mockResolvedValue({ data: { items: [] } } as never);
+  mockListArtifactIdentities.mockResolvedValue({
+    data: { items: [] },
+  } as never);
 });
 
 afterEach(() => {
@@ -53,15 +55,14 @@ describe("RepositoryScanningTab", () => {
   it("searches, selects, and queues a repository artifact without manual identity input", async () => {
     const user = userEvent.setup();
     mockListJobs.mockResolvedValue({ data: [] } as never);
-    mockSearchArtifacts.mockResolvedValue({
+    mockListArtifactIdentities.mockResolvedValue({
       data: {
         items: [
           {
-            coordinate: "@team/widget",
-            version: "1.2.3",
+            coordinate: "@team/widget@1.2.3",
             digest,
             size: 2048,
-            createdAt: "2026-08-12T05:00:00Z",
+            publishedAt: "2026-08-12T05:00:00Z",
           },
         ],
       },
@@ -101,7 +102,9 @@ describe("RepositoryScanningTab", () => {
     const artifactPicker = await screen.findByRole("combobox", {
       name: "搜索并选择制品",
     });
-    await waitFor(() => expect(mockSearchArtifacts).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockListArtifactIdentities).toHaveBeenCalledTimes(1),
+    );
     await user.click(artifactPicker);
     expect(
       await screen.findByRole("option", {
@@ -129,7 +132,7 @@ describe("RepositoryScanningTab", () => {
     expect(screen.getAllByText("@team/widget@1.2.3")).not.toHaveLength(0);
   });
 
-  it("sends artifact picker text to repository search", async () => {
+  it("sends artifact picker text to the canonical identity query", async () => {
     const user = userEvent.setup();
     mockListJobs.mockResolvedValue({ data: [] } as never);
 
@@ -153,9 +156,9 @@ describe("RepositoryScanningTab", () => {
     await user.type(artifactPicker, "widget");
 
     await waitFor(() =>
-      expect(mockSearchArtifacts).toHaveBeenCalledWith({
+      expect(mockListArtifactIdentities).toHaveBeenCalledWith({
         path: { repositoryId: repository.id },
-        query: { q: "widget", pageSize: 50 },
+        query: { purpose: "scan", q: "widget", pageSize: 50 },
       }),
     );
   });

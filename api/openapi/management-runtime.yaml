@@ -153,6 +153,8 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
   "/repositories/{repositoryId}/artifact-search":
     "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_search"
+  "/repositories/{repositoryId}/artifact-identities":
+    "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_identities"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
   "/repositories/{repositoryId}/artifact-intelligence":
