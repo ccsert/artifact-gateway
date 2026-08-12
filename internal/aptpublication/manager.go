@@ -25,12 +25,14 @@ const MaxDebianPackageBytes = int64(1 << 30)
 
 var (
 	ErrInvalidSessionInput = errors.New("APT publication session input is invalid")
+	ErrInvalidPackage      = errors.New("debian binary package is invalid")
 	ErrIdentityMismatch    = errors.New("debian package identity does not match expected identity")
 	ErrDigestMismatch      = errors.New("debian package size or digest does not match declaration")
 )
 
 type managerStore interface {
 	repository.HostedRepositoryStore
+	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
 }
 
@@ -83,48 +85,41 @@ func (m *Manager) CreateSession(ctx context.Context, input CreateSessionInput) (
 		ExpectedIdentity: input.ExpectedIdentity, DeclaredSize: input.DeclaredSize,
 	})
 	payloadDigest := sha256.Sum256(payload)
-	return m.store.CreateAPTPublicationSessionIdempotently(ctx, repository.APTPublicationSession{
+	return m.store.CreateAPTPublicationSessionWithAuditIdempotently(ctx, repository.APTPublicationSession{
 		ID: input.ID, RepositoryID: input.RepositoryID, Suite: input.Suite, Component: input.Component,
 		Publisher: input.Publisher, ObjectName: input.ObjectName, DeclaredDigest: input.DeclaredDigest,
 		DeclaredSize: input.DeclaredSize, ExpectedIdentity: input.ExpectedIdentity,
 		State: repository.APTPublicationSessionOpen, ExpiresAt: input.ExpiresAt,
-	}, input.Publisher, "repositories/"+input.RepositoryID+"/apt-publication-sessions", input.IdempotencyKey, hex.EncodeToString(payloadDigest[:]))
+	}, input.Publisher, "repositories/"+input.RepositoryID+"/apt-publication-sessions", input.IdempotencyKey, hex.EncodeToString(payloadDigest[:]), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: input.Publisher, Outcome: repository.AuditResolved,
+		OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: input.ID,
+		Representation: input.DeclaredDigest, Operation: "apt.publication_session.create", Status: 201,
+		CacheDisposition: "bypass", AuthorizationSource: "repository_write", AuthorizationReason: "created",
+	})
 }
 
 func validCreateSessionInput(input CreateSessionInput) bool {
-	return input.RepositoryID != "" && validScopeSegment(input.Suite) && validScopeSegment(input.Component) &&
-		input.Publisher != "" && len(input.Publisher) <= 512 && input.ObjectName != "" &&
-		!strings.Contains(input.ObjectName, "/") && strings.HasSuffix(input.ObjectName, ".deb") &&
-		validDigest(input.DeclaredDigest) && input.DeclaredSize > 0 && input.DeclaredSize <= MaxDebianPackageBytes &&
+	return input.RepositoryID != "" && repository.ValidAPTPublicationScope(input.Suite) && repository.ValidAPTPublicationScope(input.Component) &&
+		input.Publisher != "" && len(input.Publisher) <= 512 && repository.ValidAPTObjectName(input.ObjectName) &&
+		repository.ValidAPTSHA256Digest(input.DeclaredDigest) && input.DeclaredSize > 0 && input.DeclaredSize <= MaxDebianPackageBytes &&
 		len(input.ExpectedIdentity) <= 1024 && !strings.ContainsRune(input.ExpectedIdentity, '\x00') &&
 		input.IdempotencyKey != "" && len(input.IdempotencyKey) <= 128
 }
 
-func validScopeSegment(value string) bool {
-	if value == "" || len(value) > 128 {
-		return false
-	}
-	for _, r := range value {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '+' && r != '.' {
-			return false
-		}
-	}
-	return true
-}
-
-func validDigest(value string) bool {
-	if len(value) != 71 || !strings.HasPrefix(value, "sha256:") {
-		return false
-	}
-	for _, r := range value[7:] {
-		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 func (m *Manager) UploadPackage(ctx context.Context, sessionID, objectName string, body io.Reader, contentLength int64) (repository.APTPackageRevision, error) {
+	return m.uploadPackage(ctx, sessionID, objectName, body, contentLength, "")
+}
+
+// UploadPackageAs records the authenticated management actor in the same
+// transaction that makes the immutable revision management-visible.
+func (m *Manager) UploadPackageAs(ctx context.Context, sessionID, objectName string, body io.Reader, contentLength int64, actor string) (repository.APTPackageRevision, error) {
+	if actor == "" || len(actor) > 512 {
+		return repository.APTPackageRevision{}, ErrInvalidSessionInput
+	}
+	return m.uploadPackage(ctx, sessionID, objectName, body, contentLength, actor)
+}
+
+func (m *Manager) uploadPackage(ctx context.Context, sessionID, objectName string, body io.Reader, contentLength int64, actor string) (repository.APTPackageRevision, error) {
 	if m == nil || m.store == nil || m.objects == nil || body == nil {
 		return repository.APTPackageRevision{}, ErrInvalidSessionInput
 	}
@@ -138,10 +133,13 @@ func (m *Manager) UploadPackage(ctx context.Context, sessionID, objectName strin
 	if session.State == repository.APTPublicationSessionStaged {
 		return m.store.GetAPTPackageRevisionForSession(ctx, sessionID)
 	}
+	if actor == "" {
+		actor = session.Publisher
+	}
 	if session.State != repository.APTPublicationSessionOpen && session.State != repository.APTPublicationSessionUploading {
 		return repository.APTPackageRevision{}, repository.ErrDisabled
 	}
-	if contentLength != session.DeclaredSize || contentLength <= 0 || contentLength > MaxDebianPackageBytes {
+	if contentLength < -1 || contentLength == 0 || contentLength > MaxDebianPackageBytes || contentLength > 0 && contentLength != session.DeclaredSize {
 		return repository.APTPackageRevision{}, ErrDigestMismatch
 	}
 
@@ -167,26 +165,41 @@ func (m *Manager) UploadPackage(ctx context.Context, sessionID, objectName strin
 	}
 	metadata, err := aptprotocol.ParseDebianBinary(spool, written)
 	if err != nil {
-		return repository.APTPackageRevision{}, fmt.Errorf("invalid Debian package: %w", err)
+		return repository.APTPackageRevision{}, fmt.Errorf("%w: %v", ErrInvalidPackage, err)
 	}
 	if session.ExpectedIdentity != "" && session.ExpectedIdentity != metadata.CanonicalIdentity {
 		return repository.APTPackageRevision{}, ErrIdentityMismatch
 	}
 	objectKey := "native/apt/sha256/" + strings.TrimPrefix(session.DeclaredDigest, "sha256:")
-	if err = m.store.BeginAPTPackageUpload(ctx, session.ID, objectKey); err != nil {
+	objectCtx, release, err := repository.LockObjectKeys(ctx, []string{objectKey}, m.store, repository.FormatAPT, m.store.LockAPTObject)
+	if err != nil {
+		return repository.APTPackageRevision{}, fmt.Errorf("coordinate APT package object: %w", err)
+	}
+	defer release()
+	if err = m.store.BeginAPTPackageUpload(objectCtx, session.ID, objectKey); err != nil {
 		return repository.APTPackageRevision{}, err
 	}
 	if _, err = spool.Seek(0, io.SeekStart); err != nil {
 		return repository.APTPackageRevision{}, fmt.Errorf("rewind Debian package: %w", err)
 	}
-	if err = m.objects.PutVerifiedReader(ctx, objectKey, spool, written, session.DeclaredDigest); err != nil {
+	if err = m.objects.PutVerifiedReader(objectCtx, objectKey, spool, written, session.DeclaredDigest); err != nil {
 		return repository.APTPackageRevision{}, fmt.Errorf("store Debian package: %w", err)
 	}
-	return m.store.CompleteAPTPackageUpload(ctx, session.ID, repository.APTPackageRevision{
+	revision := repository.APTPackageRevision{
 		ID: uuid.NewString(), RepositoryID: session.RepositoryID,
 		Package: metadata.Package, Version: metadata.Version, Architecture: metadata.Architecture,
 		CanonicalIdentity: metadata.CanonicalIdentity, Digest: session.DeclaredDigest,
 		ObjectKey: objectKey, Size: written, ObjectName: session.ObjectName, Publisher: session.Publisher,
+	}
+	repo, err := m.store.GetHostedRepository(objectCtx, session.RepositoryID)
+	if err != nil {
+		return repository.APTPackageRevision{}, err
+	}
+	return m.store.CompleteAPTPackageUploadWithAudit(objectCtx, session.ID, revision, repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: actor, Outcome: repository.AuditResolved,
+		OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: revision.CanonicalIdentity,
+		Representation: revision.Digest, Operation: "apt.publication_package.stage", Status: 200, Bytes: revision.Size,
+		CacheDisposition: "bypass", AuthorizationSource: "repository_write", AuthorizationReason: "staged",
 	})
 }
 

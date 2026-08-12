@@ -16,6 +16,14 @@ func aptPackageIdentityKey(repositoryID, identity string) string {
 }
 
 func (s *MemoryStore) CreateAPTPublicationSessionIdempotently(_ context.Context, session APTPublicationSession, actor, target, key, payload string) (APTPublicationSession, bool, error) {
+	return s.createAPTPublicationSessionIdempotently(session, actor, target, key, payload, nil)
+}
+
+func (s *MemoryStore) CreateAPTPublicationSessionWithAuditIdempotently(_ context.Context, session APTPublicationSession, actor, target, key, payload string, audit AuditRecord) (APTPublicationSession, bool, error) {
+	return s.createAPTPublicationSessionIdempotently(session, actor, target, key, payload, &audit)
+}
+
+func (s *MemoryStore) createAPTPublicationSessionIdempotently(session APTPublicationSession, actor, target, key, payload string, audit *AuditRecord) (APTPublicationSession, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -48,18 +56,22 @@ func (s *MemoryStore) CreateAPTPublicationSessionIdempotently(_ context.Context,
 	}
 	s.aptPublicationSessions[session.ID] = session
 	s.aptPublicationKeys[idempotencyKey] = aptPublicationIdempotencyRecord{payload: payload, sessionID: session.ID, expiresAt: now.Add(24 * time.Hour)}
+	if audit != nil {
+		s.appendAuditLocked(*audit)
+	}
 	return session, false, nil
 }
 
 func validAPTPublicationSession(session APTPublicationSession) bool {
-	return session.ID != "" && session.RepositoryID != "" && validAPTScopeSegment(session.Suite) &&
-		validAPTScopeSegment(session.Component) && session.Publisher != "" && session.ObjectName != "" &&
-		len(session.Publisher) <= 512 && validAPTObjectName(session.ObjectName) && validAPTSHA256(session.DeclaredDigest) &&
+	return session.ID != "" && session.RepositoryID != "" && ValidAPTPublicationScope(session.Suite) &&
+		ValidAPTPublicationScope(session.Component) && session.Publisher != "" && session.ObjectName != "" &&
+		len(session.Publisher) <= 512 && ValidAPTObjectName(session.ObjectName) && ValidAPTSHA256Digest(session.DeclaredDigest) &&
 		session.DeclaredSize > 0 && session.DeclaredSize <= 1<<30 && len(session.ExpectedIdentity) <= 1024 &&
 		!strings.ContainsRune(session.ExpectedIdentity, '\x00') && session.State == APTPublicationSessionOpen && !session.ExpiresAt.IsZero()
 }
 
-func validAPTSHA256(value string) bool {
+// ValidAPTSHA256Digest validates the immutable APT publication digest grammar.
+func ValidAPTSHA256Digest(value string) bool {
 	if len(value) != 71 || !strings.HasPrefix(value, "sha256:") {
 		return false
 	}
@@ -71,15 +83,16 @@ func validAPTSHA256(value string) bool {
 	return true
 }
 
-func validAPTObjectName(value string) bool {
+// ValidAPTObjectName validates a single Debian binary upload filename.
+func ValidAPTObjectName(value string) bool {
 	return value != "" && len(value) <= 255 && !strings.Contains(value, "/") && strings.HasSuffix(value, ".deb")
 }
 
 func validAPTPackageRevision(revision APTPackageRevision) bool {
 	return revision.ID != "" && revision.RepositoryID != "" && validAPTPackageName(revision.Package) && validAPTVersion(revision.Version) &&
 		validAPTArchitecture(revision.Architecture) && revision.CanonicalIdentity == revision.Package+"@"+revision.Version+"#"+revision.Architecture &&
-		validAPTSHA256(revision.Digest) && revision.ObjectKey == "native/apt/sha256/"+strings.TrimPrefix(revision.Digest, "sha256:") &&
-		revision.Size > 0 && revision.Size <= 1<<30 && validAPTObjectName(revision.ObjectName) &&
+		ValidAPTSHA256Digest(revision.Digest) && revision.ObjectKey == "native/apt/sha256/"+strings.TrimPrefix(revision.Digest, "sha256:") &&
+		revision.Size > 0 && revision.Size <= 1<<30 && ValidAPTObjectName(revision.ObjectName) &&
 		revision.Publisher != "" && len(revision.Publisher) <= 512
 }
 
@@ -127,8 +140,9 @@ func validAPTArchitecture(value string) bool {
 	return true
 }
 
-func validAPTScopeSegment(value string) bool {
-	if value == "" || len(value) > 128 {
+// ValidAPTPublicationScope validates a suite or component path segment.
+func ValidAPTPublicationScope(value string) bool {
+	if value == "" || len(value) > 128 || (value[0] < 'a' || value[0] > 'z') && (value[0] < '0' || value[0] > '9') {
 		return false
 	}
 	for _, r := range value {
@@ -189,6 +203,14 @@ func (s *MemoryStore) BeginAPTPackageUpload(_ context.Context, id, objectKey str
 }
 
 func (s *MemoryStore) CompleteAPTPackageUpload(_ context.Context, id string, revision APTPackageRevision) (APTPackageRevision, error) {
+	return s.completeAPTPackageUpload(id, revision, nil)
+}
+
+func (s *MemoryStore) CompleteAPTPackageUploadWithAudit(_ context.Context, id string, revision APTPackageRevision, audit AuditRecord) (APTPackageRevision, error) {
+	return s.completeAPTPackageUpload(id, revision, &audit)
+}
+
+func (s *MemoryStore) completeAPTPackageUpload(id string, revision APTPackageRevision, audit *AuditRecord) (APTPackageRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	session, ok := s.aptPublicationSessions[id]
@@ -217,6 +239,9 @@ func (s *MemoryStore) CompleteAPTPackageUpload(_ context.Context, id string, rev
 		session.State = APTPublicationSessionStaged
 		session.PackageRevisionID = existing.ID
 		s.aptPublicationSessions[id] = session
+		if audit != nil {
+			s.appendAuditLocked(*audit)
+		}
 		return existing, nil
 	}
 	if revision.CreatedAt.IsZero() {
@@ -227,6 +252,9 @@ func (s *MemoryStore) CompleteAPTPackageUpload(_ context.Context, id string, rev
 	session.State = APTPublicationSessionStaged
 	session.PackageRevisionID = revision.ID
 	s.aptPublicationSessions[id] = session
+	if audit != nil {
+		s.appendAuditLocked(*audit)
+	}
 	return revision, nil
 }
 
@@ -267,10 +295,92 @@ func (s *MemoryStore) ExpireAPTPublicationSessions(_ context.Context, before tim
 		session.State = APTPublicationSessionAborted
 		s.aptPublicationSessions[id] = session
 		if objectKey != "" && !s.aptObjectHasPackageReferenceLocked(objectKey) {
-			abandoned = append(abandoned, APTAbandonedUpload{SessionID: id, ObjectKey: objectKey})
+			abandoned = append(abandoned, APTAbandonedUpload{SessionID: id, RepositoryID: session.RepositoryID, ObjectKey: objectKey})
 		}
 	}
 	return abandoned, nil
+}
+
+func (s *MemoryStore) ListUncollectedAPTPublicationObjects(_ context.Context, limit int) ([]APTAbandonedUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	ids := make([]string, 0)
+	for id, session := range s.aptPublicationSessions {
+		if session.State == APTPublicationSessionAborted && session.ObjectKey != "" && session.CollectedAt.IsZero() {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	items := make([]APTAbandonedUpload, 0, len(ids))
+	for _, id := range ids {
+		session := s.aptPublicationSessions[id]
+		items = append(items, APTAbandonedUpload{SessionID: id, RepositoryID: session.RepositoryID, ObjectKey: session.ObjectKey})
+	}
+	return items, nil
+}
+
+func (s *MemoryStore) ListUnscheduledAPTPublicationObjects(_ context.Context, limit int) ([]APTAbandonedUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	ids := make([]string, 0)
+	for id, session := range s.aptPublicationSessions {
+		if session.State == APTPublicationSessionAborted && session.ObjectKey != "" && session.ReclaimScheduledAt.IsZero() && session.CollectedAt.IsZero() {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	items := make([]APTAbandonedUpload, 0, len(ids))
+	for _, id := range ids {
+		session := s.aptPublicationSessions[id]
+		items = append(items, APTAbandonedUpload{SessionID: id, RepositoryID: session.RepositoryID, ObjectKey: session.ObjectKey})
+	}
+	return items, nil
+}
+
+func (s *MemoryStore) MarkAPTPublicationObjectScheduled(_ context.Context, sessionID, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.aptPublicationSessions[sessionID]
+	if !ok {
+		return ErrNotFound
+	}
+	if session.State != APTPublicationSessionAborted || session.ObjectKey != objectKey || !session.CollectedAt.IsZero() {
+		return ErrVersionConflict
+	}
+	if session.ReclaimScheduledAt.IsZero() {
+		session.ReclaimScheduledAt = time.Now().UTC()
+		s.aptPublicationSessions[sessionID] = session
+	}
+	return nil
+}
+
+func (s *MemoryStore) MarkAPTPublicationObjectCollected(_ context.Context, sessionID, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.aptPublicationSessions[sessionID]
+	if !ok {
+		return ErrNotFound
+	}
+	if session.State != APTPublicationSessionAborted || session.ObjectKey != objectKey {
+		return ErrVersionConflict
+	}
+	if session.CollectedAt.IsZero() {
+		session.CollectedAt = time.Now().UTC()
+		s.aptPublicationSessions[sessionID] = session
+	}
+	return nil
 }
 
 func (s *MemoryStore) aptObjectHasPackageReferenceLocked(objectKey string) bool {
@@ -291,7 +401,7 @@ func (s *MemoryStore) APTObjectHasPackageReference(_ context.Context, objectKey 
 func (s *MemoryStore) CreateAPTRepositorySnapshot(_ context.Context, snapshot APTRepositorySnapshot, items []APTSnapshotPackage) (APTRepositorySnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if snapshot.ID == "" || snapshot.RepositoryID == "" || !validAPTScopeSegment(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
+	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
 	if err := validateAPTSnapshotMembership(items); err != nil {
@@ -311,7 +421,7 @@ func (s *MemoryStore) CreateAPTRepositorySnapshot(_ context.Context, snapshot AP
 		session, sessionOK := s.aptPublicationSessions[item.PublicationSessionID]
 		if !ok || !sessionOK || session.State != APTPublicationSessionStaged || session.RepositoryID != snapshot.RepositoryID ||
 			session.Suite != snapshot.Suite || session.Component != item.Component || session.PackageRevisionID != item.PackageRevisionID ||
-			revision.RepositoryID != snapshot.RepositoryID || !validAPTScopeSegment(item.Component) || item.Architecture != revision.Architecture {
+			revision.RepositoryID != snapshot.RepositoryID || !ValidAPTPublicationScope(item.Component) || item.Architecture != revision.Architecture {
 			return APTRepositorySnapshot{}, ErrDisabled
 		}
 		item.SnapshotID = snapshot.ID

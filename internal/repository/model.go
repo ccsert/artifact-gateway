@@ -426,20 +426,22 @@ const (
 // and component. Canonical package identity is not accepted as authority: it
 // is populated only after parsing the uploaded Debian control file.
 type APTPublicationSession struct {
-	ID                string
-	RepositoryID      string
-	Suite             string
-	Component         string
-	Publisher         string
-	ObjectName        string
-	DeclaredDigest    string
-	DeclaredSize      int64
-	ExpectedIdentity  string
-	ObjectKey         string
-	PackageRevisionID string
-	State             APTPublicationSessionState
-	ExpiresAt         time.Time
-	CreatedAt         time.Time
+	ID                 string
+	RepositoryID       string
+	Suite              string
+	Component          string
+	Publisher          string
+	ObjectName         string
+	DeclaredDigest     string
+	DeclaredSize       int64
+	ExpectedIdentity   string
+	ObjectKey          string
+	PackageRevisionID  string
+	State              APTPublicationSessionState
+	ExpiresAt          time.Time
+	CreatedAt          time.Time
+	ReclaimScheduledAt time.Time
+	CollectedAt        time.Time
 }
 
 // APTPackageRevision is immutable package metadata derived from the .deb
@@ -496,8 +498,9 @@ type APTSnapshotPackage struct {
 }
 
 type APTAbandonedUpload struct {
-	SessionID string
-	ObjectKey string
+	SessionID    string
+	RepositoryID string
+	ObjectKey    string
 }
 
 // APTAssetMutable reports whether an upstream path may legitimately change in

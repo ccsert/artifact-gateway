@@ -40,6 +40,30 @@ func (e APIKeyRoles) Valid() bool {
 	}
 }
 
+// Defines values for APTPublicationSessionState.
+const (
+	APTPublicationSessionStateAborted   APTPublicationSessionState = "aborted"
+	APTPublicationSessionStateOpen      APTPublicationSessionState = "open"
+	APTPublicationSessionStateStaged    APTPublicationSessionState = "staged"
+	APTPublicationSessionStateUploading APTPublicationSessionState = "uploading"
+)
+
+// Valid indicates whether the value is a known member of the APTPublicationSessionState enum.
+func (e APTPublicationSessionState) Valid() bool {
+	switch e {
+	case APTPublicationSessionStateAborted:
+		return true
+	case APTPublicationSessionStateOpen:
+		return true
+	case APTPublicationSessionStateStaged:
+		return true
+	case APTPublicationSessionStateUploading:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactState.
 const (
 	ArtifactStateDeleted ArtifactState = "deleted"
@@ -1005,15 +1029,18 @@ const (
 	ProblemCodeDigestMismatch           ProblemCode = "digest_mismatch"
 	ProblemCodeEncryptionKeyUnavailable ProblemCode = "encryption_key_unavailable"
 	ProblemCodeIdempotencyConflict      ProblemCode = "idempotency_conflict"
+	ProblemCodeIdentityMismatch         ProblemCode = "identity_mismatch"
 	ProblemCodeInternalError            ProblemCode = "internal_error"
 	ProblemCodeInvalidPageToken         ProblemCode = "invalid_page_token"
 	ProblemCodeInvalidRequest           ProblemCode = "invalid_request"
 	ProblemCodeInvalidState             ProblemCode = "invalid_state"
 	ProblemCodeNameExists               ProblemCode = "name_exists"
 	ProblemCodeNotFound                 ProblemCode = "not_found"
+	ProblemCodeQuotaExceeded            ProblemCode = "quota_exceeded"
 	ProblemCodeRetentionProtected       ProblemCode = "retention_protected"
 	ProblemCodeSecurityPolicyDenied     ProblemCode = "security_policy_denied"
 	ProblemCodeSessionClosed            ProblemCode = "session_closed"
+	ProblemCodeUnsupportedMediaType     ProblemCode = "unsupported_media_type"
 	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
 )
 
@@ -1032,6 +1059,8 @@ func (e ProblemCode) Valid() bool {
 		return true
 	case ProblemCodeIdempotencyConflict:
 		return true
+	case ProblemCodeIdentityMismatch:
+		return true
 	case ProblemCodeInternalError:
 		return true
 	case ProblemCodeInvalidPageToken:
@@ -1044,11 +1073,15 @@ func (e ProblemCode) Valid() bool {
 		return true
 	case ProblemCodeNotFound:
 		return true
+	case ProblemCodeQuotaExceeded:
+		return true
 	case ProblemCodeRetentionProtected:
 		return true
 	case ProblemCodeSecurityPolicyDenied:
 		return true
 	case ProblemCodeSessionClosed:
+		return true
+	case ProblemCodeUnsupportedMediaType:
 		return true
 	case ProblemCodeVersionConflict:
 		return true
@@ -1104,22 +1137,22 @@ func (e ProxyCacheInvalidateRequestScope) Valid() bool {
 
 // Defines values for PublishSessionState.
 const (
-	Aborted   PublishSessionState = "aborted"
-	Committed PublishSessionState = "committed"
-	Expired   PublishSessionState = "expired"
-	Open      PublishSessionState = "open"
+	PublishSessionStateAborted   PublishSessionState = "aborted"
+	PublishSessionStateCommitted PublishSessionState = "committed"
+	PublishSessionStateExpired   PublishSessionState = "expired"
+	PublishSessionStateOpen      PublishSessionState = "open"
 )
 
 // Valid indicates whether the value is a known member of the PublishSessionState enum.
 func (e PublishSessionState) Valid() bool {
 	switch e {
-	case Aborted:
+	case PublishSessionStateAborted:
 		return true
-	case Committed:
+	case PublishSessionStateCommitted:
 		return true
-	case Expired:
+	case PublishSessionStateExpired:
 		return true
-	case Open:
+	case PublishSessionStateOpen:
 		return true
 	default:
 		return false
@@ -1866,6 +1899,41 @@ type APIKeyList struct {
 	Items []APIKey `json:"items"`
 }
 
+// APTPackageRevision defines model for APTPackageRevision.
+type APTPackageRevision struct {
+	Architecture      string             `json:"architecture"`
+	CanonicalIdentity string             `json:"canonicalIdentity"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	Digest            string             `json:"digest"`
+	Id                openapi_types.UUID `json:"id"`
+	ObjectName        string             `json:"objectName"`
+	Package           string             `json:"package"`
+	Publisher         string             `json:"publisher"`
+	RepositoryId      openapi_types.UUID `json:"repositoryId"`
+	Size              int64              `json:"size"`
+	Version           string             `json:"version"`
+}
+
+// APTPublicationSession defines model for APTPublicationSession.
+type APTPublicationSession struct {
+	Component         string                     `json:"component"`
+	CreatedAt         time.Time                  `json:"createdAt"`
+	DeclaredDigest    string                     `json:"declaredDigest"`
+	DeclaredSize      int64                      `json:"declaredSize"`
+	ExpectedIdentity  *string                    `json:"expectedIdentity,omitempty"`
+	ExpiresAt         time.Time                  `json:"expiresAt"`
+	Id                openapi_types.UUID         `json:"id"`
+	ObjectName        string                     `json:"objectName"`
+	PackageRevisionId *openapi_types.UUID        `json:"packageRevisionId,omitempty"`
+	Publisher         string                     `json:"publisher"`
+	RepositoryId      openapi_types.UUID         `json:"repositoryId"`
+	State             APTPublicationSessionState `json:"state"`
+	Suite             string                     `json:"suite"`
+}
+
+// APTPublicationSessionState defines model for APTPublicationSession.State.
+type APTPublicationSessionState string
+
 // AnonymousAccessPolicy defines model for AnonymousAccessPolicy.
 type AnonymousAccessPolicy struct {
 	// Enabled Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
@@ -2327,6 +2395,16 @@ type CreateAPIKey struct {
 // CreateAPIKeyRoles defines model for CreateAPIKey.Roles.
 type CreateAPIKeyRoles string
 
+// CreateAPTPublicationSession defines model for CreateAPTPublicationSession.
+type CreateAPTPublicationSession struct {
+	Component        string  `json:"component"`
+	DeclaredDigest   string  `json:"declaredDigest"`
+	DeclaredSize     int64   `json:"declaredSize"`
+	ExpectedIdentity *string `json:"expectedIdentity,omitempty"`
+	ObjectName       string  `json:"objectName"`
+	Suite            string  `json:"suite"`
+}
+
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
 	// AnonymousRead Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
@@ -2364,13 +2442,15 @@ type CreateRepository struct {
 	EgressProxy *EgressProxy `json:"egressProxy,omitempty"`
 
 	// Endpoint Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
-	Endpoint *string               `json:"endpoint,omitempty"`
-	Format   Format                `json:"format"`
-	Name     string                `json:"name"`
-	Type     *CreateRepositoryType `json:"type,omitempty"`
+	Endpoint *string `json:"endpoint,omitempty"`
+	Format   Format  `json:"format"`
+	Name     string  `json:"name"`
+
+	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
+	Type *CreateRepositoryType `json:"type,omitempty"`
 }
 
-// CreateRepositoryType defines model for CreateRepository.Type.
+// CreateRepositoryType APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 type CreateRepositoryType string
 
 // CreateScheduledTask defines model for CreateScheduledTask.
@@ -3135,7 +3215,9 @@ type Repository struct {
 	Name        string       `json:"name"`
 
 	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
-	State   RepositoryState `json:"state"`
+	State RepositoryState `json:"state"`
+
+	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type    *RepositoryType `json:"type,omitempty"`
 	Version string          `json:"version"`
 }
@@ -3143,7 +3225,7 @@ type Repository struct {
 // RepositoryState Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
 type RepositoryState string
 
-// RepositoryType defines model for Repository.Type.
+// RepositoryType APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 type RepositoryType string
 
 // RepositoryCapabilities defines model for RepositoryCapabilities.
@@ -3847,6 +3929,11 @@ type UpdateRepositoryParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// CreateAPTPublicationSessionParams defines parameters for CreateAPTPublicationSession.
+type CreateAPTPublicationSessionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // ListRepositoryArtifactIdentitiesParams defines parameters for ListRepositoryArtifactIdentities.
 type ListRepositoryArtifactIdentitiesParams struct {
 	Purpose ArtifactIdentityPurpose `form:"purpose" json:"purpose"`
@@ -4171,6 +4258,9 @@ type CreateRepositoryJSONRequestBody = CreateRepository
 // UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
 type UpdateRepositoryJSONRequestBody = UpdateRepository
 
+// CreateAPTPublicationSessionJSONRequestBody defines body for CreateAPTPublicationSession for application/json ContentType.
+type CreateAPTPublicationSessionJSONRequestBody = CreateAPTPublicationSession
+
 // ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
 type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
 
@@ -4422,6 +4512,15 @@ type ServerInterface interface {
 
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams)
+
+	// (POST /repositories/{repositoryId}/apt/publication-sessions)
+	CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateAPTPublicationSessionParams)
+
+	// (GET /repositories/{repositoryId}/apt/publication-sessions/{sessionId})
+	GetAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId)
+
+	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
+	UploadAPTPublicationPackage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactIdentitiesParams)
@@ -6297,6 +6396,130 @@ func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRepository(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAPTPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAPTPublicationSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAPTPublicationSession(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAPTPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) GetAPTPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAPTPublicationSession(w, r, repositoryId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadAPTPublicationPackage operation middleware
+func (siw *ServerInterfaceWrapper) UploadAPTPublicationPackage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadAPTPublicationPackage(w, r, repositoryId, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10051,6 +10274,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions", wrapper.CreateAPTPublicationSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}", wrapper.GetAPTPublicationSession)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
@@ -12331,6 +12557,363 @@ func (response UpdateRepository412ApplicationProblemPlusJSONResponse) VisitUpdat
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSessionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       CreateAPTPublicationSessionParams
+	Body         *CreateAPTPublicationSessionJSONRequestBody
+}
+
+type CreateAPTPublicationSessionResponseObject interface {
+	VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateAPTPublicationSession201JSONResponse APTPublicationSession
+
+func (response CreateAPTPublicationSession201JSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAPTPublicationSession400ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession401ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession403ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession404ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession409ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession500ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession500ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPTPublicationSession507ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAPTPublicationSession507ApplicationProblemPlusJSONResponse) VisitCreateAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTPublicationSessionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	SessionId    SessionId    `json:"sessionId"`
+}
+
+type GetAPTPublicationSessionResponseObject interface {
+	VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type GetAPTPublicationSession200JSONResponse APTPublicationSession
+
+func (response GetAPTPublicationSession200JSONResponse) VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTPublicationSession401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAPTPublicationSession401ApplicationProblemPlusJSONResponse) VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTPublicationSession403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTPublicationSession403ApplicationProblemPlusJSONResponse) VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTPublicationSession404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTPublicationSession404ApplicationProblemPlusJSONResponse) VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTPublicationSession500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTPublicationSession500ApplicationProblemPlusJSONResponse) VisitGetAPTPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackageRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	SessionId    SessionId    `json:"sessionId"`
+	Body         io.Reader
+}
+
+type UploadAPTPublicationPackageResponseObject interface {
+	VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error
+}
+
+type UploadAPTPublicationPackage200JSONResponse APTPackageRevision
+
+func (response UploadAPTPublicationPackage200JSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadAPTPublicationPackage400ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage401ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage401ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage403ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage403ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage404ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage404ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage409ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage409ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage415ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage415ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage422ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage422ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage500ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage500ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAPTPublicationPackage507ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadAPTPublicationPackage507ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -17500,6 +18083,15 @@ type StrictServerInterface interface {
 
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/apt/publication-sessions)
+	CreateAPTPublicationSession(ctx context.Context, request CreateAPTPublicationSessionRequestObject) (CreateAPTPublicationSessionResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/apt/publication-sessions/{sessionId})
+	GetAPTPublicationSession(ctx context.Context, request GetAPTPublicationSessionRequestObject) (GetAPTPublicationSessionResponseObject, error)
+
+	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
+	UploadAPTPublicationPackage(ctx context.Context, request UploadAPTPublicationPackageRequestObject) (UploadAPTPublicationPackageResponseObject, error)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(ctx context.Context, request ListRepositoryArtifactIdentitiesRequestObject) (ListRepositoryArtifactIdentitiesResponseObject, error)
@@ -19061,6 +19653,96 @@ func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRepositoryResponseObject); ok {
 		if err := validResponse.VisitUpdateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAPTPublicationSession operation middleware
+func (sh *strictHandler) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateAPTPublicationSessionParams) {
+	var request CreateAPTPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreateAPTPublicationSessionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAPTPublicationSession(ctx, request.(CreateAPTPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAPTPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAPTPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitCreateAPTPublicationSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAPTPublicationSession operation middleware
+func (sh *strictHandler) GetAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId) {
+	var request GetAPTPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAPTPublicationSession(ctx, request.(GetAPTPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAPTPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAPTPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitGetAPTPublicationSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadAPTPublicationPackage operation middleware
+func (sh *strictHandler) UploadAPTPublicationPackage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId) {
+	var request UploadAPTPublicationPackageRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SessionId = sessionId
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadAPTPublicationPackage(ctx, request.(UploadAPTPublicationPackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadAPTPublicationPackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadAPTPublicationPackageResponseObject); ok {
+		if err := validResponse.VisitUploadAPTPublicationPackageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

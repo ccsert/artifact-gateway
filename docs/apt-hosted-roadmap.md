@@ -18,14 +18,31 @@ and [`apt-secure(8)`](https://manpages.debian.org/unstable/apt/apt-secure.8.en.h
 
 ## APT-H1: publication contract and domain model
 
-Current implementation status: the streaming `.deb` parser, quota-reserving
-idempotent session model, content-addressed staged revision, interrupted-upload
-candidate detection, explicit building-snapshot model, Memory/PostgreSQL conformance, and
-narrow signer interface are implemented. Staged revisions and building
-snapshots remain intentionally absent from APT protocol reads. The management
-HTTP/OpenAPI publication surface, orphan-object cleanup scheduling, and audit
-wiring remain before H1 can pass its
-acceptance gate; APT therefore continues to advertise Proxy-only capability.
+Current implementation status: H1 is complete. The streaming `.deb` parser,
+quota-reserving idempotent session model, repository-write-scoped management
+API, generated OpenAPI clients, content-addressed staged revision,
+interrupted-upload recovery, durable reference-checked orphan collection,
+publication audit evidence, explicit building-snapshot model,
+Memory/PostgreSQL conformance, and narrow signer interface are implemented.
+Staged revisions and building snapshots remain intentionally absent from APT
+protocol reads. APT therefore continues to advertise Proxy-only capability
+until the later signed-snapshot and production-signing gates are complete.
+
+The H1 management sequence is deliberately pre-visibility:
+
+1. An administrator explicitly provisions `format: apt, type: hosted` through
+   `POST /api/v2/repositories`. This preview repository is management-visible,
+   but remains absent from the format capability API and Console creation
+   choices because it has no installable protocol surface yet.
+2. `POST /api/v2/repositories/{repositoryId}/apt/publication-sessions`
+   reserves quota for one suite, component, and declared `.deb` using an
+   `Idempotency-Key`.
+3. `PUT /api/v2/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package`
+   streams, hashes, parses, and stages the exact package while deriving its
+   canonical identity from Debian control metadata.
+4. `GET /api/v2/repositories/{repositoryId}/apt/publication-sessions/{sessionId}`
+   reports the durable state. A `staged` response is not an installable package;
+   only H2 may publish it through an atomically visible signed snapshot.
 
 - Define an APT publication session that accepts a `.deb` plus an explicit
   suite and component. Do not expose generic object PUT as package publication.
@@ -40,9 +57,10 @@ acceptance gate; APT therefore continues to advertise Proxy-only capability.
 - Establish the signing boundary: Gateway requests signatures from a narrow
   signer interface; application nodes do not expose or distribute private keys.
 
-Acceptance gate: migrations, in-memory and PostgreSQL conformance, streaming
+Acceptance gate: supported management provisioning, migrations, in-memory and PostgreSQL conformance, streaming
 upload limits, malformed archive tests, canonical-identity tests, and a frozen
-OpenAPI publication contract.
+OpenAPI publication contract. This gate passed with the H1 management and
+cleanup slice; it does not imply Hosted protocol availability.
 
 ## APT-H2: atomic Hosted repository
 
@@ -110,4 +128,6 @@ tests without partial visibility.
 Work proceeds H1 through H4. H1 and H2 establish the minimum truthful Hosted
 capability; H3 is required before any production claim; H4 closes parity with
 the existing lifecycle and security model. APT appears as `proxy`-only in the
-format capability API and Console until H1-H3 have all passed their gates.
+format capability API and Console until H1-H3 have all passed their gates; the
+explicit H1 Hosted provisioning request is an operator preview surface, not a
+protocol compatibility claim.

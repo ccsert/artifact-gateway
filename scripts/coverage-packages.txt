@@ -1,6 +1,7 @@
 # Package-specific coverage floors. Keep these focused on stable domain seams
 # and raise them as tests are added; do not lower a floor to make CI pass.
 ./internal/app 69.0
+./internal/aptpublication 60.0
 ./internal/authorization 38.0
 ./internal/lifecycle 99.0
 ./internal/protocol/nuget 85.0

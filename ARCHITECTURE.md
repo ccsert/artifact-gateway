@@ -2,8 +2,10 @@
 
 Artifact Gateway is a repository manager for OCI, Raw, Maven, Conan 2, npm,
 PyPI, Go modules, and APT. Hosted lifecycle is available for the first six
-formats; Go and APT intentionally remain Proxy/Group-only while no standard or
-trusted publication workflow exists. The system separates durable metadata,
+formats; Go remains Proxy/Group-only. APT advertises only Proxy/Group protocol
+capabilities, while an explicitly provisioned Hosted preview repository may
+use the pre-visibility staging and orphan-reclaim management workflow. It does
+not become installable until signed snapshots are implemented. The system separates durable metadata,
 immutable artifact bytes, protocol handling, and background lifecycle work so
 the same binary can run as a compact single node or as role-specific cluster
 nodes.

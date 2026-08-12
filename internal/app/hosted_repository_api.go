@@ -13,6 +13,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
@@ -211,6 +212,8 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
 	sessions               nativeMavenHandler
+	aptPublication         *aptpublication.Manager
+	aptPublications        repository.NativeAPTPublicationStore
 	groups                 repository.HostedGroupStore
 	grants                 repository.RepositoryGrantStore
 	templates              repository.AuthorizationTemplateStore
@@ -638,7 +641,7 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 		repoType = string(repository.RepositoryTypeHosted)
 	}
 	repositoryType := repository.RepositoryType(repoType)
-	if !repository.FormatSupportsRepositoryType(request.Format, repositoryType) {
+	if !repository.FormatSupportsRepositoryProvisioning(request.Format, repositoryType) {
 		return false
 	}
 	switch repositoryType {

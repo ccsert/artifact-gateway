@@ -16,9 +16,11 @@ Artifact Gateway is intended to be a complete repository manager for the six
 Hosted-capable formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
 promotion, and replication. Go and APT are admitted under the protocol-only
-format rule: they declare Proxy and Group capabilities until a standard or
-trusted publication workflow exists. It is not a transparent rewrite proxy, a generic
-object browser, or a vulnerability scanner.
+format rule: they declare Proxy and Group protocol capabilities until a
+standard or trusted installable publication workflow exists. APT additionally
+has a management-only Hosted preview for verified pre-visibility staging. It is
+not a transparent rewrite proxy, a generic object browser, or a vulnerability
+scanner.
 
 ## Local development
 
@@ -191,7 +193,9 @@ docker compose ps gateway
 
 Administrators create repositories through `POST /api/v2/repositories` with an
 idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`,
-`pypi`, `go`, or `apt`. Go and APT repositories may only use the Proxy type. OCI
+`pypi`, `go`, or `apt`. Go repositories may only use the Proxy type. APT may use
+Proxy for installable reads or an explicit Hosted preview for management-only
+pre-visibility staging; its advertised protocol profile remains Proxy/Group. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
 Conan 2 uses `/conan/v2/<repository>/...`; npm uses
@@ -248,7 +252,10 @@ Each APT Proxy repository requires an endpoint and `allowedHosts`; see
 [`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
 security rules. Hosted publication is scheduled through the staged
 [APT Hosted roadmap](docs/apt-hosted-roadmap.md); it remains unadvertised until
-the signed-snapshot acceptance gates pass.
+the signed-snapshot acceptance gates pass. Operators may explicitly provision
+an APT Hosted preview repository through the management API for H1 staging;
+the format profile and Console continue to expose only executable Proxy/Group
+protocol capabilities.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

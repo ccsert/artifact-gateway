@@ -7,11 +7,19 @@ import (
 	"time"
 )
 
-const aptPublicationSessionColumns = `id::text,repository_id::text,suite,component,publisher,object_name,declared_digest,declared_size,expected_identity,object_key,COALESCE(package_revision_id::text,''),state,expires_at,created_at`
+const aptPublicationSessionColumns = `id::text,repository_id::text,suite,component,publisher,object_name,declared_digest,declared_size,expected_identity,object_key,COALESCE(package_revision_id::text,''),state,expires_at,created_at,reclaim_scheduled_at,collected_at`
 const aptPackageRevisionColumns = `id::text,repository_id::text,package_name,version,architecture,canonical_identity,digest,object_key,size,object_name,publisher,created_at`
 const aptRepositorySnapshotColumns = `id::text,repository_id::text,suite,sequence,state,release_digest,inrelease_digest,signer_identity,key_fingerprint,created_at,published_at`
 
 func (s *PostgresStore) CreateAPTPublicationSessionIdempotently(ctx context.Context, session APTPublicationSession, actor, target, key, payload string) (APTPublicationSession, bool, error) {
+	return s.createAPTPublicationSessionIdempotently(ctx, session, actor, target, key, payload, nil)
+}
+
+func (s *PostgresStore) CreateAPTPublicationSessionWithAuditIdempotently(ctx context.Context, session APTPublicationSession, actor, target, key, payload string, audit AuditRecord) (APTPublicationSession, bool, error) {
+	return s.createAPTPublicationSessionIdempotently(ctx, session, actor, target, key, payload, &audit)
+}
+
+func (s *PostgresStore) createAPTPublicationSessionIdempotently(ctx context.Context, session APTPublicationSession, actor, target, key, payload string, audit *AuditRecord) (APTPublicationSession, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return APTPublicationSession{}, false, err
@@ -111,6 +119,11 @@ func (s *PostgresStore) CreateAPTPublicationSessionIdempotently(ctx context.Cont
 		existing, getErr := s.GetAPTPublicationSession(ctx, existingID)
 		return existing, true, getErr
 	}
+	if audit != nil {
+		if err = insertAudit(ctx, tx, *audit); err != nil {
+			return APTPublicationSession{}, false, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return APTPublicationSession{}, false, err
 	}
@@ -148,9 +161,17 @@ func (s *PostgresStore) GetAPTPublicationSession(ctx context.Context, id string)
 }
 
 func scanAPTPublicationSession(row interface{ Scan(...any) error }, session *APTPublicationSession) error {
-	return row.Scan(&session.ID, &session.RepositoryID, &session.Suite, &session.Component, &session.Publisher,
+	var scheduledAt, collectedAt sql.NullTime
+	err := row.Scan(&session.ID, &session.RepositoryID, &session.Suite, &session.Component, &session.Publisher,
 		&session.ObjectName, &session.DeclaredDigest, &session.DeclaredSize, &session.ExpectedIdentity,
-		&session.ObjectKey, &session.PackageRevisionID, &session.State, &session.ExpiresAt, &session.CreatedAt)
+		&session.ObjectKey, &session.PackageRevisionID, &session.State, &session.ExpiresAt, &session.CreatedAt, &scheduledAt, &collectedAt)
+	if err == nil && scheduledAt.Valid {
+		session.ReclaimScheduledAt = scheduledAt.Time
+	}
+	if err == nil && collectedAt.Valid {
+		session.CollectedAt = collectedAt.Time
+	}
+	return err
 }
 
 func (s *PostgresStore) BeginAPTPackageUpload(ctx context.Context, id, objectKey string) error {
@@ -170,6 +191,14 @@ func (s *PostgresStore) BeginAPTPackageUpload(ctx context.Context, id, objectKey
 }
 
 func (s *PostgresStore) CompleteAPTPackageUpload(ctx context.Context, id string, revision APTPackageRevision) (APTPackageRevision, error) {
+	return s.completeAPTPackageUpload(ctx, id, revision, nil)
+}
+
+func (s *PostgresStore) CompleteAPTPackageUploadWithAudit(ctx context.Context, id string, revision APTPackageRevision, audit AuditRecord) (APTPackageRevision, error) {
+	return s.completeAPTPackageUpload(ctx, id, revision, &audit)
+}
+
+func (s *PostgresStore) completeAPTPackageUpload(ctx context.Context, id string, revision APTPackageRevision, audit *AuditRecord) (APTPackageRevision, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return APTPackageRevision{}, err
@@ -228,6 +257,11 @@ func (s *PostgresStore) CompleteAPTPackageUpload(ctx context.Context, id string,
 	if rows, _ := result.RowsAffected(); rows != 1 {
 		return APTPackageRevision{}, ErrDisabled
 	}
+	if audit != nil {
+		if err = insertAudit(ctx, tx, *audit); err != nil {
+			return APTPackageRevision{}, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return APTPackageRevision{}, err
 	}
@@ -235,9 +269,17 @@ func (s *PostgresStore) CompleteAPTPackageUpload(ctx context.Context, id string,
 }
 
 func scanAPTPublicationSessionWithActive(row interface{ Scan(...any) error }, session *APTPublicationSession, active *bool) error {
-	return row.Scan(&session.ID, &session.RepositoryID, &session.Suite, &session.Component, &session.Publisher,
+	var scheduledAt, collectedAt sql.NullTime
+	err := row.Scan(&session.ID, &session.RepositoryID, &session.Suite, &session.Component, &session.Publisher,
 		&session.ObjectName, &session.DeclaredDigest, &session.DeclaredSize, &session.ExpectedIdentity,
-		&session.ObjectKey, &session.PackageRevisionID, &session.State, &session.ExpiresAt, &session.CreatedAt, active)
+		&session.ObjectKey, &session.PackageRevisionID, &session.State, &session.ExpiresAt, &session.CreatedAt, &scheduledAt, &collectedAt, active)
+	if err == nil && scheduledAt.Valid {
+		session.ReclaimScheduledAt = scheduledAt.Time
+	}
+	if err == nil && collectedAt.Valid {
+		session.CollectedAt = collectedAt.Time
+	}
+	return err
 }
 
 func scanAPTPackageRevision(row interface{ Scan(...any) error }, revision *APTPackageRevision) error {
@@ -284,7 +326,7 @@ func (s *PostgresStore) ExpireAPTPublicationSessions(ctx context.Context, before
 		WHERE state IN ('open','uploading') AND expires_at<=$1
 		ORDER BY expires_at,id FOR UPDATE SKIP LOCKED LIMIT $2
 	) UPDATE native_apt_publication_sessions s SET state='aborted'
-	FROM candidates c WHERE s.id=c.id RETURNING s.id::text,s.object_key`, before, limit)
+	FROM candidates c WHERE s.id=c.id RETURNING s.id::text,s.repository_id::text,s.object_key`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +334,7 @@ func (s *PostgresStore) ExpireAPTPublicationSessions(ctx context.Context, before
 	candidates := make([]APTAbandonedUpload, 0)
 	for rows.Next() {
 		var candidate APTAbandonedUpload
-		if err = rows.Scan(&candidate.SessionID, &candidate.ObjectKey); err != nil {
+		if err = rows.Scan(&candidate.SessionID, &candidate.RepositoryID, &candidate.ObjectKey); err != nil {
 			return nil, err
 		}
 		if candidate.ObjectKey != "" {
@@ -321,6 +363,78 @@ func (s *PostgresStore) ExpireAPTPublicationSessions(ctx context.Context, before
 	return abandoned, nil
 }
 
+func (s *PostgresStore) ListUncollectedAPTPublicationObjects(ctx context.Context, limit int) ([]APTAbandonedUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,object_key
+		FROM native_apt_publication_sessions
+		WHERE state='aborted' AND object_key<>'' AND collected_at IS NULL
+		ORDER BY expires_at,id LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]APTAbandonedUpload, 0)
+	for rows.Next() {
+		var item APTAbandonedUpload
+		if err = rows.Scan(&item.SessionID, &item.RepositoryID, &item.ObjectKey); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *PostgresStore) ListUnscheduledAPTPublicationObjects(ctx context.Context, limit int) ([]APTAbandonedUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,object_key
+		FROM native_apt_publication_sessions
+		WHERE state='aborted' AND object_key<>'' AND reclaim_scheduled_at IS NULL AND collected_at IS NULL
+		ORDER BY expires_at,id LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]APTAbandonedUpload, 0)
+	for rows.Next() {
+		var item APTAbandonedUpload
+		if err = rows.Scan(&item.SessionID, &item.RepositoryID, &item.ObjectKey); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *PostgresStore) MarkAPTPublicationObjectScheduled(ctx context.Context, sessionID, objectKey string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_apt_publication_sessions
+		SET reclaim_scheduled_at=COALESCE(reclaim_scheduled_at,clock_timestamp())
+		WHERE id::text=$1 AND state='aborted' AND object_key=$2 AND collected_at IS NULL`, sessionID, objectKey)
+	if err != nil {
+		return err
+	}
+	if rows, _ := result.RowsAffected(); rows != 1 {
+		return ErrVersionConflict
+	}
+	return nil
+}
+
+func (s *PostgresStore) MarkAPTPublicationObjectCollected(ctx context.Context, sessionID, objectKey string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_apt_publication_sessions
+		SET collected_at=COALESCE(collected_at,clock_timestamp())
+		WHERE id::text=$1 AND state='aborted' AND object_key=$2`, sessionID, objectKey)
+	if err != nil {
+		return err
+	}
+	if rows, _ := result.RowsAffected(); rows != 1 {
+		return ErrVersionConflict
+	}
+	return nil
+}
+
 func (s *PostgresStore) APTObjectHasPackageReference(ctx context.Context, objectKey string) (bool, error) {
 	var referenced bool
 	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_apt_package_revisions WHERE object_key=$1)`, objectKey).Scan(&referenced)
@@ -328,7 +442,7 @@ func (s *PostgresStore) APTObjectHasPackageReference(ctx context.Context, object
 }
 
 func (s *PostgresStore) CreateAPTRepositorySnapshot(ctx context.Context, snapshot APTRepositorySnapshot, items []APTSnapshotPackage) (APTRepositorySnapshot, error) {
-	if snapshot.ID == "" || snapshot.RepositoryID == "" || !validAPTScopeSegment(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
+	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
 	if err := validateAPTSnapshotMembership(items); err != nil {

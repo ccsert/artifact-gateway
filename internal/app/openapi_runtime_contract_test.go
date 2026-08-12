@@ -1,7 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +22,141 @@ import (
 	"github.com/getkin/kin-openapi/routers/legacy"
 	"github.com/google/uuid"
 )
+
+func TestAPTPublicationRuntimeResponsesConformToOpenAPI(t *testing.T) {
+	loader := openapi3.NewLoader()
+	spec, err := loader.LoadFromFile(filepath.Join("..", "..", "api", "openapi", "management-runtime-v1.json"))
+	if err != nil || spec.Validate(loader.Context) != nil {
+		t.Fatalf("load runtime contract: %v", err)
+	}
+	router, err := legacy.NewRouter(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	validate := func(req *http.Request) *httptest.ResponseRecorder {
+		t.Helper()
+		route, params, routeErr := router.FindRoute(req)
+		if routeErr != nil {
+			t.Fatal(routeErr)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		input := &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route}
+		options := &openapi3filter.Options{IncludeResponseStatus: true}
+		if validateErr := openapi3filter.ValidateResponse(req.Context(), (&openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Options: options}).SetBodyBytes(response.Body.Bytes())); validateErr != nil {
+			t.Fatalf("status=%d does not conform: %v; body=%s", response.Code, validateErr, response.Body.String())
+		}
+		return response
+	}
+	provision := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories", strings.NewReader(`{"name":"conformance-apt","format":"apt","type":"hosted"}`))
+	authorize(provision, "admin-secret")
+	provision.Header.Set("Content-Type", "application/json")
+	provision.Header.Set("Idempotency-Key", "contract-apt-repository")
+	provisioned := validate(provision)
+	if provisioned.Code != http.StatusCreated {
+		t.Fatalf("provision=%d body=%s", provisioned.Code, provisioned.Body.String())
+	}
+	var repo repository.HostedRepository
+	if err = json.Unmarshal(provisioned.Body.Bytes(), &repo); err != nil || repo.ID == "" || repo.Format != repository.FormatAPT || repo.Type != repository.RepositoryTypeHosted {
+		t.Fatalf("repository=%#v err=%v", repo, err)
+	}
+
+	deb := aptManagementDebianPackage(t, "Package: contract\nVersion: 1.0-1\nArchitecture: amd64\n")
+	digestBytes := sha256.Sum256(deb)
+	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
+	createBody := fmt.Sprintf(`{"suite":"stable","component":"main","objectName":"contract.deb","declaredDigest":%q,"declaredSize":%d}`, digest, len(deb))
+	create := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions", strings.NewReader(createBody))
+	authorize(create, "admin-secret")
+	create.Header.Set("Content-Type", "application/json")
+	create.Header.Set("Idempotency-Key", "contract-build")
+	created := validate(create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create=%d body=%s", created.Code, created.Body.String())
+	}
+	var session struct {
+		ID string `json:"id"`
+	}
+	if err = json.Unmarshal(created.Body.Bytes(), &session); err != nil || session.ID == "" {
+		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	upload := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+session.ID+"/package", bytes.NewReader(deb))
+	authorize(upload, "admin-secret")
+	upload.Header.Set("Content-Type", "application/vnd.debian.binary-package")
+	if response := validate(upload); response.Code != http.StatusOK {
+		t.Fatalf("upload=%d body=%s", response.Code, response.Body.String())
+	}
+	get := httptest.NewRequest(http.MethodGet, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+session.ID, nil)
+	authorize(get, "admin-secret")
+	if response := validate(get); response.Code != http.StatusOK {
+		t.Fatalf("get=%d body=%s", response.Code, response.Body.String())
+	}
+
+	wrongMedia := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+session.ID+"/package", bytes.NewReader(deb))
+	authorize(wrongMedia, "admin-secret")
+	wrongMedia.Header.Set("Content-Type", "application/octet-stream")
+	if response := validate(wrongMedia); response.Code != http.StatusUnsupportedMediaType || !strings.Contains(response.Body.String(), `"code":"unsupported_media_type"`) {
+		t.Fatalf("media type=%d body=%s", response.Code, response.Body.String())
+	}
+
+	createErrorSession := func(key, objectName, declaredDigest string, size int, expectedIdentity string) string {
+		t.Helper()
+		body := fmt.Sprintf(`{"suite":"stable","component":"main","objectName":%q,"declaredDigest":%q,"declaredSize":%d`, objectName, declaredDigest, size)
+		if expectedIdentity != "" {
+			body += fmt.Sprintf(`,"expectedIdentity":%q`, expectedIdentity)
+		}
+		body += `}`
+		request := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions", strings.NewReader(body))
+		authorize(request, "admin-secret")
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", key)
+		response := validate(request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create error fixture=%d body=%s", response.Code, response.Body.String())
+		}
+		var createdSession struct {
+			ID string `json:"id"`
+		}
+		if decodeErr := json.Unmarshal(response.Body.Bytes(), &createdSession); decodeErr != nil || createdSession.ID == "" {
+			t.Fatalf("error fixture session=%#v err=%v", createdSession, decodeErr)
+		}
+		return createdSession.ID
+	}
+	uploadError := func(sessionID string, body []byte, wantStatus int, wantCode string) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+sessionID+"/package", bytes.NewReader(body))
+		authorize(request, "admin-secret")
+		request.Header.Set("Content-Type", "application/vnd.debian.binary-package")
+		response := validate(request)
+		if response.Code != wantStatus || !strings.Contains(response.Body.String(), `"code":"`+wantCode+`"`) {
+			t.Fatalf("upload error=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+
+	invalidPackage := []byte("not-a-debian-package")
+	invalidSum := sha256.Sum256(invalidPackage)
+	invalidSession := createErrorSession("contract-invalid-package", "invalid.deb", "sha256:"+hex.EncodeToString(invalidSum[:]), len(invalidPackage), "")
+	uploadError(invalidSession, invalidPackage, http.StatusUnprocessableEntity, "invalid_request")
+
+	digestMismatchSession := createErrorSession("contract-digest-mismatch", "digest.deb", "sha256:"+strings.Repeat("a", 64), len(deb), "")
+	uploadError(digestMismatchSession, deb, http.StatusUnprocessableEntity, "digest_mismatch")
+
+	identityMismatchSession := createErrorSession("contract-identity-mismatch", "identity.deb", digest, len(deb), "other@1.0-1#amd64")
+	uploadError(identityMismatchSession, deb, http.StatusUnprocessableEntity, "identity_mismatch")
+
+	if _, err = store.ReplaceRepositoryCapacityQuota(context.Background(), repo.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	quotaBody := `{"suite":"stable","component":"main","objectName":"quota.deb","declaredDigest":"sha256:` + strings.Repeat("b", 64) + `","declaredSize":2}`
+	quotaRequest := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions", strings.NewReader(quotaBody))
+	authorize(quotaRequest, "admin-secret")
+	quotaRequest.Header.Set("Content-Type", "application/json")
+	quotaRequest.Header.Set("Idempotency-Key", "contract-quota")
+	if response := validate(quotaRequest); response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), `"code":"quota_exceeded"`) {
+		t.Fatalf("quota=%d body=%s", response.Code, response.Body.String())
+	}
+}
 
 func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 	loader := openapi3.NewLoader()

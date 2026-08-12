@@ -1,0 +1,97 @@
+---
+repositories_repositoryId_apt_publication_sessions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createAPTPublicationSession
+    description: Reserves quota for exactly one Debian binary package. The package remains invisible to APT clients until a later signed snapshot is published.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateAPTPublicationSession"
+    responses:
+      '201':
+        description: Publication session created or exactly replayed
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTPublicationSession"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_apt_publication_sessions_sessionId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  get:
+    operationId: getAPTPublicationSession
+    responses:
+      '200':
+        description: Publication session state
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTPublicationSession"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_apt_publication_sessions_sessionId_package:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  put:
+    operationId: uploadAPTPublicationPackage
+    description: Verifies and stages the declared Debian binary package. Staging does not make the package protocol-visible.
+    requestBody:
+      required: true
+      content:
+        application/vnd.debian.binary-package:
+          schema:
+            type: string
+            format: binary
+            contentEncoding: binary
+    responses:
+      '200':
+        description: Immutable package revision staged
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTPackageRevision"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '415':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"

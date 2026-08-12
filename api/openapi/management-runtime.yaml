@@ -167,6 +167,12 @@ paths:
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_manifests"
   "/repositories/{repositoryId}/maven/coordinates":
     "$ref": "./management/maven.yaml#/repositories_repositoryId_maven_coordinates"
+  "/repositories/{repositoryId}/apt/publication-sessions":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions"
+  "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId"
+  "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId_package"
   "/repositories/{repositoryId}/conan/references":
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_references"
   "/repositories/{repositoryId}/conan/recipe-revisions":
@@ -259,6 +265,12 @@ components:
       "$ref": "./components/schemas.yaml#/ArtifactTombstone"
     ArtifactTombstonePage:
       "$ref": "./components/schemas.yaml#/ArtifactTombstonePage"
+    CreateAPTPublicationSession:
+      "$ref": "./components/schemas.yaml#/CreateAPTPublicationSession"
+    APTPublicationSession:
+      "$ref": "./components/schemas.yaml#/APTPublicationSession"
+    APTPackageRevision:
+      "$ref": "./components/schemas.yaml#/APTPackageRevision"
     RepositoryCapabilities:
       "$ref": "./components/schemas.yaml#/RepositoryCapabilities"
     APIKey:

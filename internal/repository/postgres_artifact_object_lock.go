@@ -11,6 +11,8 @@ func (s *PostgresStore) LockArtifactObjectKeys(ctx context.Context, format Forma
 		prefix = "native-npm-object:"
 	case FormatPyPI:
 		prefix = "native-pypi-object:"
+	case FormatAPT:
+		prefix = "native-apt-object:"
 	default:
 		return ctx, nil, ErrDisabled
 	}

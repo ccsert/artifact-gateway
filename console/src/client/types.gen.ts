@@ -47,6 +47,9 @@ export type Repository = {
   id: string;
   name: string;
   format: Format;
+  /**
+   * APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
+   */
   type?: "hosted" | "proxy";
   endpoint?: string;
   allowedHosts?: Array<string>;
@@ -65,6 +68,9 @@ export type Repository = {
 export type CreateRepository = {
   name: string;
   format: Format;
+  /**
+   * APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
+   */
   type?: "hosted" | "proxy";
   /**
    * Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
@@ -363,6 +369,45 @@ export type ArtifactTombstonePage = {
   nextPageToken?: string;
 };
 
+export type CreateAptPublicationSession = {
+  suite: string;
+  component: string;
+  objectName: string;
+  declaredDigest: string;
+  declaredSize: number;
+  expectedIdentity?: string;
+};
+
+export type AptPublicationSession = {
+  id: string;
+  repositoryId: string;
+  suite: string;
+  component: string;
+  publisher: string;
+  objectName: string;
+  declaredDigest: string;
+  declaredSize: number;
+  expectedIdentity?: string;
+  packageRevisionId?: string;
+  state: "open" | "uploading" | "staged" | "aborted";
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type AptPackageRevision = {
+  id: string;
+  repositoryId: string;
+  package: string;
+  version: string;
+  architecture: string;
+  canonicalIdentity: string;
+  digest: string;
+  size: number;
+  objectName: string;
+  publisher: string;
+  createdAt: string;
+};
+
 export type RepositoryCapabilities = {
   format: Format;
   type: "hosted" | "proxy";
@@ -569,6 +614,9 @@ export type Problem = {
     | "coordinate_exists"
     | "session_closed"
     | "digest_mismatch"
+    | "identity_mismatch"
+    | "quota_exceeded"
+    | "unsupported_media_type"
     | "retention_protected"
     | "security_policy_denied"
     | "artifact_quarantined"
@@ -1538,6 +1586,9 @@ export type RepositoryWritable = {
   id: string;
   name: string;
   format: Format;
+  /**
+   * APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
+   */
   type?: "hosted" | "proxy";
   endpoint?: string;
   allowedHosts?: Array<string>;
@@ -1556,6 +1607,9 @@ export type RepositoryWritable = {
 export type CreateRepositoryWritable = {
   name: string;
   format: Format;
+  /**
+   * APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
+   */
   type?: "hosted" | "proxy";
   /**
    * Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
@@ -5732,6 +5786,166 @@ export type ListMavenCoordinatesResponses = {
 
 export type ListMavenCoordinatesResponse =
   ListMavenCoordinatesResponses[keyof ListMavenCoordinatesResponses];
+
+export type CreateAptPublicationSessionData = {
+  body: CreateAptPublicationSession;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/publication-sessions";
+};
+
+export type CreateAptPublicationSessionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type CreateAptPublicationSessionError =
+  CreateAptPublicationSessionErrors[keyof CreateAptPublicationSessionErrors];
+
+export type CreateAptPublicationSessionResponses = {
+  /**
+   * Publication session created or exactly replayed
+   */
+  201: AptPublicationSession;
+};
+
+export type CreateAptPublicationSessionResponse =
+  CreateAptPublicationSessionResponses[keyof CreateAptPublicationSessionResponses];
+
+export type GetAptPublicationSessionData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}";
+};
+
+export type GetAptPublicationSessionErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetAptPublicationSessionError =
+  GetAptPublicationSessionErrors[keyof GetAptPublicationSessionErrors];
+
+export type GetAptPublicationSessionResponses = {
+  /**
+   * Publication session state
+   */
+  200: AptPublicationSession;
+};
+
+export type GetAptPublicationSessionResponse =
+  GetAptPublicationSessionResponses[keyof GetAptPublicationSessionResponses];
+
+export type UploadAptPublicationPackageData = {
+  body: Blob | File;
+  path: {
+    repositoryId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package";
+};
+
+export type UploadAptPublicationPackageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  415: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type UploadAptPublicationPackageError =
+  UploadAptPublicationPackageErrors[keyof UploadAptPublicationPackageErrors];
+
+export type UploadAptPublicationPackageResponses = {
+  /**
+   * Immutable package revision staged
+   */
+  200: AptPackageRevision;
+};
+
+export type UploadAptPublicationPackageResponse =
+  UploadAptPublicationPackageResponses[keyof UploadAptPublicationPackageResponses];
 
 export type ListConanReferencesData = {
   body?: never;

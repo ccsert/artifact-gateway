@@ -144,13 +144,14 @@ func SupportedFormats() []Format {
 	return formats
 }
 
-// WorkerFormats returns formats with at least one declared asynchronous
-// lifecycle operation. Protocol-only formats must not be scheduled by generic
-// background workers until those capabilities are implemented.
+// WorkerFormats returns formats with executable background work. APT is
+// included for its management-only staged-upload reclaim even while its public
+// profile remains Proxy/Group-only. Other protocol-only formats must not be
+// scheduled until they own executable worker behavior.
 func WorkerFormats() []Format {
 	formats := make([]Format, 0, len(supportedFormatProfiles))
 	for _, profile := range supportedFormatProfiles {
-		if hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
+		if profile.Format == FormatAPT || hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
 			formats = append(formats, profile.Format)
 		}
 	}
@@ -192,6 +193,16 @@ func FormatSupportsRepositoryType(format Format, repositoryType RepositoryType) 
 		}
 	}
 	return false
+}
+
+// FormatSupportsRepositoryProvisioning is the create-time admission boundary.
+// APT Hosted is deliberately provisionable for the pre-visibility publication
+// management workflow before its native read protocol is advertised. It stays
+// absent from FormatProfile.RepositoryTypes until signed snapshot publication
+// is complete.
+func FormatSupportsRepositoryProvisioning(format Format, repositoryType RepositoryType) bool {
+	return FormatSupportsRepositoryType(format, repositoryType) ||
+		format == FormatAPT && repositoryType == RepositoryTypeHosted
 }
 
 func FormatSupportsOperation(format Format, repositoryType RepositoryType, operation RepositoryOperation) bool {

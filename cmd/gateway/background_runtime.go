@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
@@ -46,6 +47,7 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.Na
 	app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	aptpublication.Maintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	retention.StartScheduler(ctx, time.Hour)
 }
 
@@ -81,6 +83,17 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	r.startConanWorkers(ctx, cfg)
 	r.startNPMWorkers(ctx, cfg)
 	r.startPyPIWorkers(ctx, cfg)
+	r.startAPTWorkers(ctx, cfg)
+}
+
+func (r backgroundRuntime) startAPTWorkers(ctx context.Context, cfg config.Config) {
+	if aptReclaimWorkerEnabled(cfg) {
+		aptpublication.Maintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+	}
+}
+
+func aptReclaimWorkerEnabled(cfg config.Config) bool {
+	return cfg.WorkerEnabled("apt", "reclaim")
 }
 
 func (r backgroundRuntime) startPyPIWorkers(ctx context.Context, cfg config.Config) {

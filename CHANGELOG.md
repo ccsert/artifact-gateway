@@ -27,10 +27,15 @@ a dated version heading without rewriting their meaning.
   promotion, replication, and real APT client acceptance gates.
 - Streaming Debian binary metadata parsing for gzip, xz, zstd, and uncompressed
   control archives, with server-derived package/version/architecture identity.
-- The APT Hosted H1 persistence foundation: idempotent quota-reserving
-  publication sessions, content-addressed staged package revisions, explicit
-  suite/component/architecture membership, abandoned-upload cleanup candidates,
-  immutable repository-snapshot records, and a private-key-free signer port.
+- The completed APT Hosted H1 pre-visibility foundation: idempotent quota-
+  reserving publication sessions, explicit management-only Hosted provisioning,
+  repository-scoped management and binary-safe generated
+  OpenAPI clients, streaming `.deb` staging, explicit package/suite/component/
+  architecture records, transactionally durable audit evidence, reference-
+  checked RustFS orphan collection with heartbeat-fenced lifecycle-job retries
+  and cross-instance integration coverage, immutable repository-snapshot records,
+  and a private-key-free signer port. Installable Hosted publication remains
+  gated on atomic signed snapshots.
 - A pinned RustFS S3 baseline for Compose, integration tests, and Kubernetes,
   including object-contract coverage and a copy/verify/cutover/rollback migration
   runbook that explicitly rejects MinIO data-volume reuse.

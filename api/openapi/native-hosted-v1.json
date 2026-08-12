@@ -3295,6 +3295,7 @@
           },
           "type": {
             "type": "string",
+            "description": "APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.",
             "enum": [
               "hosted",
               "proxy"
@@ -3346,6 +3347,7 @@
           },
           "type": {
             "type": "string",
+            "description": "APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.",
             "enum": [
               "hosted",
               "proxy"
@@ -4144,6 +4146,9 @@
               "coordinate_exists",
               "session_closed",
               "digest_mismatch",
+              "identity_mismatch",
+              "quota_exceeded",
+              "unsupported_media_type",
               "retention_protected",
               "security_policy_denied",
               "artifact_quarantined",

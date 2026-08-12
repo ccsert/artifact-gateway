@@ -53,11 +53,26 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	if !cfg.HasRole(NodeRoleAPI) || !cfg.HasRole(NodeRoleScheduler) || !cfg.HasRole(NodeRoleWorker) {
 		t.Fatalf("default node roles = %#v", cfg.NodeRoles)
 	}
-	if cfg.InstanceID == "" || !cfg.WorkerEnabled("maven", "promotion") {
+	if cfg.InstanceID == "" || !cfg.WorkerEnabled("maven", "promotion") || !cfg.WorkerEnabled("apt", "reclaim") {
 		t.Fatalf("runtime config = instance %q roles %#v formats %#v kinds %#v", cfg.InstanceID, cfg.NodeRoles, cfg.WorkerFormats, cfg.WorkerKinds)
 	}
 	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
 		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
+}
+
+func TestLoadSupportsDedicatedAPTReclaimWorker(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_NODE_ROLES", "worker")
+	t.Setenv("GATEWAY_WORKER_FORMATS", "apt")
+	t.Setenv("GATEWAY_WORKER_KINDS", "reclaim")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.WorkerFormats) != 1 || len(cfg.WorkerKinds) != 1 || !cfg.WorkerEnabled("apt", "reclaim") || cfg.WorkerEnabled("apt", "promotion") {
+		t.Fatalf("APT reclaim worker filters formats=%#v kinds=%#v", cfg.WorkerFormats, cfg.WorkerKinds)
 	}
 }
 

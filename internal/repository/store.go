@@ -385,8 +385,9 @@ type NativeGoStore interface {
 	LockGoObject(context.Context, string) (func(), error)
 }
 
-// NativeAPTStore owns the immutable metadata for APT Proxy cache entries.
-// APT is protocol-only for now: there is no Hosted publication surface.
+// NativeAPTStore owns immutable APT Proxy cache metadata and the shared object
+// coordination boundary. Pre-visibility Hosted staging lives in
+// NativeAPTPublicationStore; no staged record is an APT protocol asset.
 type NativeAPTStore interface {
 	GetAPTAsset(context.Context, string, string) (APTAsset, error)
 	CacheAPTAsset(context.Context, APTAsset) (APTAsset, error)
@@ -398,12 +399,16 @@ type NativeAPTStore interface {
 // staged package is deliberately absent from NativeAPTStore protocol assets;
 // only a later signed snapshot publication may make it readable.
 type NativeAPTPublicationStore interface {
-	CreateAPTPublicationSessionIdempotently(context.Context, APTPublicationSession, string, string, string, string) (APTPublicationSession, bool, error)
+	CreateAPTPublicationSessionWithAuditIdempotently(context.Context, APTPublicationSession, string, string, string, string, AuditRecord) (APTPublicationSession, bool, error)
 	GetAPTPublicationSession(context.Context, string) (APTPublicationSession, error)
 	BeginAPTPackageUpload(context.Context, string, string) error
-	CompleteAPTPackageUpload(context.Context, string, APTPackageRevision) (APTPackageRevision, error)
+	CompleteAPTPackageUploadWithAudit(context.Context, string, APTPackageRevision, AuditRecord) (APTPackageRevision, error)
 	GetAPTPackageRevisionForSession(context.Context, string) (APTPackageRevision, error)
 	ExpireAPTPublicationSessions(context.Context, time.Time, int) ([]APTAbandonedUpload, error)
+	ListUncollectedAPTPublicationObjects(context.Context, int) ([]APTAbandonedUpload, error)
+	ListUnscheduledAPTPublicationObjects(context.Context, int) ([]APTAbandonedUpload, error)
+	MarkAPTPublicationObjectScheduled(context.Context, string, string) error
+	MarkAPTPublicationObjectCollected(context.Context, string, string) error
 	APTObjectHasPackageReference(context.Context, string) (bool, error)
 	CreateAPTRepositorySnapshot(context.Context, APTRepositorySnapshot, []APTSnapshotPackage) (APTRepositorySnapshot, error)
 	GetVisibleAPTRepositorySnapshot(context.Context, string, string) (APTRepositorySnapshot, error)

@@ -115,6 +115,32 @@ func TestPostgresAPTHostedReservationEnforcesQuotaAndExpiredUploadIsRecoverable(
 	if err != nil || len(abandoned) != 1 || abandoned[0].ObjectKey != objectKey {
 		t.Fatalf("abandoned=%#v err=%v", abandoned, err)
 	}
+	uncollected, err := store.ListUncollectedAPTPublicationObjects(ctx, 10)
+	if err != nil || len(uncollected) != 1 || uncollected[0].SessionID != first.ID || uncollected[0].RepositoryID != repo.ID {
+		t.Fatalf("uncollected=%#v err=%v", uncollected, err)
+	}
+	unscheduled, err := store.ListUnscheduledAPTPublicationObjects(ctx, 10)
+	if err != nil || len(unscheduled) != 1 || unscheduled[0].SessionID != first.ID {
+		t.Fatalf("unscheduled=%#v err=%v", unscheduled, err)
+	}
+	if err = store.MarkAPTPublicationObjectScheduled(ctx, first.ID, objectKey); err != nil {
+		t.Fatal(err)
+	}
+	unscheduled, err = store.ListUnscheduledAPTPublicationObjects(ctx, 10)
+	if err != nil || len(unscheduled) != 0 {
+		t.Fatalf("scheduled objects remain=%#v err=%v", unscheduled, err)
+	}
+	if err = store.MarkAPTPublicationObjectCollected(ctx, first.ID, objectKey); err != nil {
+		t.Fatal(err)
+	}
+	uncollected, err = store.ListUncollectedAPTPublicationObjects(ctx, 10)
+	if err != nil || len(uncollected) != 0 {
+		t.Fatalf("collected objects remain=%#v err=%v", uncollected, err)
+	}
+	collected, err := store.GetAPTPublicationSession(ctx, first.ID)
+	if err != nil || collected.CollectedAt.IsZero() {
+		t.Fatalf("collected session=%#v err=%v", collected, err)
+	}
 }
 
 func TestPostgresAPTPublicationSerializesWithFirstQuotaWrite(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -42,6 +43,9 @@ func isManagementObjectUpload(r *http.Request) bool {
 		return false
 	}
 	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(segments) == 8 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "repositories" && segments[3] != "" && segments[4] == "apt" && segments[5] == "publication-sessions" && segments[6] != "" && segments[7] == "package" {
+		return true
+	}
 	for index := 0; index+3 < len(segments); index++ {
 		if segments[index] == "publish-sessions" && segments[index+1] != "" && segments[index+2] == "objects" && segments[index+3] != "" {
 			return index+4 == len(segments)
@@ -121,6 +125,7 @@ type GatewayStore interface {
 	repository.NativePyPIStore
 	repository.NativeGoStore
 	repository.NativeAPTStore
+	repository.NativeAPTPublicationStore
 	repository.APIKeyStore
 	repository.UserStore
 	repository.UserIdentityStore
@@ -262,13 +267,14 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		aptClient = client
 	}
 	nativeAPT := newNativeAPTHandler(store, nativeAPTObjects, authenticator).withProxy(aptClient)
+	aptPublication := aptpublication.NewManager(store, nativeAPTObjects)
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}
 	var searchProjection repository.ArtifactSearchStore
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

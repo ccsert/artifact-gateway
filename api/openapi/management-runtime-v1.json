@@ -3417,6 +3417,167 @@
         }
       }
     },
+    "/repositories/{repositoryId}/apt/publication-sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "createAPTPublicationSession",
+        "description": "Reserves quota for exactly one Debian binary package. The package remains invisible to APT clients until a later signed snapshot is published.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAPTPublicationSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Publication session created or exactly replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTPublicationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "operationId": "getAPTPublicationSession",
+        "responses": {
+          "200": {
+            "description": "Publication session state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTPublicationSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "put": {
+        "operationId": "uploadAPTPublicationPackage",
+        "description": "Verifies and stages the declared Debian binary package. Staging does not make the package protocol-visible.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.debian.binary-package": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Immutable package revision staged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTPackageRevision"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/conan/references": {
       "parameters": [
         {
@@ -4069,6 +4230,7 @@
           },
           "type": {
             "type": "string",
+            "description": "APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.",
             "enum": [
               "hosted",
               "proxy"
@@ -4120,6 +4282,7 @@
           },
           "type": {
             "type": "string",
+            "description": "APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.",
             "enum": [
               "hosted",
               "proxy"
@@ -5062,6 +5225,175 @@
           }
         }
       },
+      "CreateAPTPublicationSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "suite",
+          "component",
+          "objectName",
+          "declaredDigest",
+          "declaredSize"
+        ],
+        "properties": {
+          "suite": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+.-]{0,127}$"
+          },
+          "component": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+.-]{0,127}$"
+          },
+          "objectName": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 255,
+            "pattern": "^[^/]+[.]deb$"
+          },
+          "declaredDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "declaredSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 1073741824
+          },
+          "expectedIdentity": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "APTPublicationSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repositoryId",
+          "suite",
+          "component",
+          "publisher",
+          "objectName",
+          "declaredDigest",
+          "declaredSize",
+          "state",
+          "expiresAt",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "suite": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "objectName": {
+            "type": "string"
+          },
+          "declaredDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "declaredSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expectedIdentity": {
+            "type": "string"
+          },
+          "packageRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "uploading",
+              "staged",
+              "aborted"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "APTPackageRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repositoryId",
+          "package",
+          "version",
+          "architecture",
+          "canonicalIdentity",
+          "digest",
+          "size",
+          "objectName",
+          "publisher",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "package": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string"
+          },
+          "canonicalIdentity": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "objectName": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "RepositoryCapabilities": {
         "type": "object",
         "required": [
@@ -5741,6 +6073,9 @@
               "coordinate_exists",
               "session_closed",
               "digest_mismatch",
+              "identity_mismatch",
+              "quota_exceeded",
+              "unsupported_media_type",
               "retention_protected",
               "security_policy_denied",
               "artifact_quarantined",

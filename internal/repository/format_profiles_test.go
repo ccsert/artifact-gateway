@@ -107,12 +107,24 @@ func TestUnknownFormatHasNoCapabilities(t *testing.T) {
 	}
 }
 
+func TestAPTHostedProvisioningDoesNotAdvertiseProtocolCapabilities(t *testing.T) {
+	profile, ok := FormatProfileFor(FormatAPT)
+	if !ok || FormatSupportsRepositoryType(FormatAPT, RepositoryTypeHosted) ||
+		!FormatSupportsRepositoryProvisioning(FormatAPT, RepositoryTypeHosted) ||
+		FormatSupportsRepositoryProvisioning(FormatGo, RepositoryTypeHosted) {
+		t.Fatalf("APT profile=%#v found=%t", profile, ok)
+	}
+	if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || len(profile.HostedOperations) != 0 {
+		t.Fatalf("APT Hosted leaked into advertised capabilities: %#v", profile)
+	}
+}
+
 func TestWorkerFormatsExcludeProtocolOnlyFormats(t *testing.T) {
 	found := map[Format]bool{}
 	for _, format := range WorkerFormats() {
 		found[format] = true
 	}
-	for _, format := range []Format{FormatNPM, FormatPyPI} {
+	for _, format := range []Format{FormatNPM, FormatPyPI, FormatAPT} {
 		if !found[format] {
 			t.Fatalf("%s lifecycle workers are missing", format)
 		}

@@ -7,19 +7,8 @@ import (
 )
 
 func (s *PostgresStore) LockAPTObject(ctx context.Context, objectKey string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	lockKey := "native-apt-object:" + objectKey
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, []string{"native-apt-object:" + objectKey})
+	return release, err
 }
 
 func (s *PostgresStore) GetAPTAsset(ctx context.Context, repositoryID, path string) (APTAsset, error) {

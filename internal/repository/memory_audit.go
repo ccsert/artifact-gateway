@@ -9,6 +9,11 @@ import (
 func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.appendAuditLocked(record)
+	return nil
+}
+
+func (s *MemoryStore) appendAuditLocked(record AuditRecord) {
 	if record.OccurredAt.IsZero() {
 		record.OccurredAt = time.Now().UTC()
 	}
@@ -16,7 +21,6 @@ func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
 		record.ID = int64(len(s.Audits) + 1)
 	}
 	s.Audits = append(s.Audits, record)
-	return nil
 }
 
 func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRecord, error) {
