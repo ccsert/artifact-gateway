@@ -11,7 +11,7 @@ import (
 )
 
 const webhookSubscriptionColumns = `id::text,name,endpoint_url,secret_ciphertext,event_types,enabled,version::text,created_at,updated_at`
-const webhookDeliveryColumns = `d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at`
+const webhookDeliveryColumns = `d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_token::text,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at`
 
 func encodeWebhookEventTypes(values []WebhookEventType) ([]byte, error) {
 	if values == nil {
@@ -121,17 +121,18 @@ func enqueueWebhookEventPostgres(ctx context.Context, tx *sql.Tx, event WebhookE
 		return err
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO webhook_deliveries (id,event_id,subscription_id,state,next_attempt_at,created_at,updated_at)
-SELECT gen_random_uuid(),$1,id,'pending',$3,$3,$3 FROM webhook_subscriptions
-WHERE enabled=true AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(event_types) AS configured(value) WHERE configured.value=$2)`, event.ID, event.Type, event.OccurredAt)
+SELECT gen_random_uuid(),$1,id,'pending',clock.now,clock.now,clock.now FROM webhook_subscriptions
+CROSS JOIN (SELECT clock_timestamp() AS now) AS clock
+WHERE enabled=true AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(event_types) AS configured(value) WHERE configured.value=$2)`, event.ID, event.Type)
 	return err
 }
 
 func scanWebhookDelivery(scanner interface{ Scan(...any) error }) (WebhookDelivery, error) {
 	var value WebhookDelivery
 	var nextAttemptAt, leaseExpiresAt, deliveredAt sql.NullTime
-	var leaseOwner sql.NullString
+	var leaseOwner, leaseToken sql.NullString
 	var lastStatus sql.NullInt64
-	if err := scanner.Scan(&value.ID, &value.EventID, &value.EventType, &value.SubscriptionID, &value.State, &value.Attempts, &nextAttemptAt, &leaseOwner, &leaseExpiresAt, &lastStatus, &value.LastError, &value.CreatedAt, &value.UpdatedAt, &deliveredAt); err != nil {
+	if err := scanner.Scan(&value.ID, &value.EventID, &value.EventType, &value.SubscriptionID, &value.State, &value.Attempts, &nextAttemptAt, &leaseOwner, &leaseToken, &leaseExpiresAt, &lastStatus, &value.LastError, &value.CreatedAt, &value.UpdatedAt, &deliveredAt); err != nil {
 		return WebhookDelivery{}, err
 	}
 	if nextAttemptAt.Valid {
@@ -139,6 +140,9 @@ func scanWebhookDelivery(scanner interface{ Scan(...any) error }) (WebhookDelive
 	}
 	if leaseOwner.Valid {
 		value.LeaseOwner = leaseOwner.String
+	}
+	if leaseToken.Valid {
+		value.LeaseToken = leaseToken.String
 	}
 	if leaseExpiresAt.Valid {
 		value.LeaseExpiresAt = leaseExpiresAt.Time
@@ -182,28 +186,27 @@ func (s *PostgresStore) GetWebhookDelivery(ctx context.Context, id string) (Webh
 	return value, err
 }
 
-func (s *PostgresStore) ClaimWebhookDeliveries(ctx context.Context, owner string, now time.Time, lease time.Duration, limit int) ([]WebhookDeliveryClaim, error) {
+func (s *PostgresStore) ClaimWebhookDeliveries(ctx context.Context, owner string, _ time.Time, lease time.Duration, limit int) ([]WebhookDeliveryClaim, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := s.db.QueryContext(ctx, `WITH exhausted AS (
-    UPDATE webhook_deliveries SET state='dead',next_attempt_at=NULL,lease_owner=NULL,lease_expires_at=NULL,updated_at=$2
-    WHERE state='delivering' AND lease_expires_at<=$2 AND attempts>=8
+	rows, err := s.db.QueryContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now), exhausted AS (
+    UPDATE webhook_deliveries SET state='dead',next_attempt_at=NULL,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,updated_at=clock.now
+    FROM clock WHERE state='delivering' AND lease_expires_at<=clock.now AND attempts>=8
 ), candidates AS (
-    SELECT id FROM webhook_deliveries
-    WHERE ((state IN ('pending','retrying') AND next_attempt_at<=$2) OR (state='delivering' AND lease_expires_at<=$2))
-      AND attempts<8
-    ORDER BY COALESCE(next_attempt_at,lease_expires_at),created_at,id FOR UPDATE SKIP LOCKED LIMIT $4
+    SELECT delivery.id FROM webhook_deliveries AS delivery CROSS JOIN clock
+    WHERE ((state IN ('pending','retrying') AND next_attempt_at<=clock.now) OR (state='delivering' AND lease_expires_at<=clock.now))
+      AND attempts<8 ORDER BY COALESCE(next_attempt_at,lease_expires_at),created_at,id FOR UPDATE OF delivery SKIP LOCKED LIMIT $3
 ), claimed AS (
     UPDATE webhook_deliveries AS delivery SET state='delivering',attempts=delivery.attempts+1,next_attempt_at=NULL,
-        lease_owner=$1,lease_expires_at=$2+$3::interval,updated_at=$2
-    FROM candidates WHERE delivery.id=candidates.id RETURNING delivery.*
+        lease_owner=$1,lease_token=gen_random_uuid(),lease_expires_at=clock.now+$2::interval,updated_at=clock.now
+    FROM candidates,clock WHERE delivery.id=candidates.id RETURNING delivery.*
 )
-SELECT d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at,
+SELECT d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_token::text,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at,
        e.id::text,e.event_type,e.occurred_at,e.payload,
        s.id::text,s.name,s.endpoint_url,s.secret_ciphertext,s.event_types,s.enabled,s.version::text,s.created_at,s.updated_at
 FROM claimed d JOIN webhook_events e ON e.id=d.event_id JOIN webhook_subscriptions s ON s.id=d.subscription_id
-ORDER BY d.created_at,d.id`, owner, now, lease.String(), limit)
+ORDER BY d.created_at,d.id`, owner, lease.String(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +221,7 @@ ORDER BY d.created_at,d.id`, owner, now, lease.String(), limit)
 		var leaseOwner sql.NullString
 		var lastStatus sql.NullInt64
 		if err = rows.Scan(
-			&delivery.ID, &delivery.EventID, &delivery.EventType, &delivery.SubscriptionID, &delivery.State, &delivery.Attempts, &nextAttemptAt, &leaseOwner, &leaseExpiresAt, &lastStatus, &delivery.LastError, &delivery.CreatedAt, &delivery.UpdatedAt, &deliveredAt,
+			&delivery.ID, &delivery.EventID, &delivery.EventType, &delivery.SubscriptionID, &delivery.State, &delivery.Attempts, &nextAttemptAt, &leaseOwner, &delivery.LeaseToken, &leaseExpiresAt, &lastStatus, &delivery.LastError, &delivery.CreatedAt, &delivery.UpdatedAt, &deliveredAt,
 			&event.ID, &event.Type, &event.OccurredAt, &eventData,
 			&subscription.ID, &subscription.Name, &subscription.EndpointURL, &subscription.SecretCiphertext, &eventTypes, &subscription.Enabled, &subscription.Version, &subscription.CreatedAt, &subscription.UpdatedAt,
 		); err != nil {
@@ -240,9 +243,10 @@ ORDER BY d.created_at,d.id`, owner, now, lease.String(), limit)
 	return claims, rows.Err()
 }
 
-func (s *PostgresStore) CompleteWebhookDelivery(ctx context.Context, id, owner string, status int, completedAt time.Time) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE webhook_deliveries SET state='succeeded',next_attempt_at=NULL,lease_owner=NULL,lease_expires_at=NULL,last_status=$3,last_error='',delivered_at=$4,updated_at=$4
-WHERE id::text=$1 AND state='delivering' AND lease_owner=$2`, id, owner, status, completedAt)
+func (s *PostgresStore) CompleteWebhookDelivery(ctx context.Context, id, leaseToken string, status int, _ time.Time) error {
+	result, err := s.db.ExecContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now)
+UPDATE webhook_deliveries SET state='succeeded',next_attempt_at=NULL,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,last_status=$3,last_error='',delivered_at=clock.now,updated_at=clock.now
+FROM clock WHERE id::text=$1 AND state='delivering' AND lease_token::text=$2 AND lease_expires_at>clock.now`, id, leaseToken, status)
 	if err != nil {
 		return err
 	}
@@ -252,12 +256,16 @@ WHERE id::text=$1 AND state='delivering' AND lease_owner=$2`, id, owner, status,
 	return nil
 }
 
-func (s *PostgresStore) FailWebhookDelivery(ctx context.Context, id, owner string, retryAt time.Time, status int, message string, dead bool) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE webhook_deliveries
-SET state=CASE WHEN $3 OR attempts>=8 THEN 'dead' ELSE 'retrying' END,
-    next_attempt_at=CASE WHEN $3 OR attempts>=8 THEN NULL ELSE $4 END,
-    lease_owner=NULL,lease_expires_at=NULL,last_status=NULLIF($5,0),last_error=$6,updated_at=now()
-WHERE id::text=$1 AND state='delivering' AND lease_owner=$2`, id, owner, dead, retryAt, status, message)
+func (s *PostgresStore) FailWebhookDelivery(ctx context.Context, id, leaseToken string, failedAt, retryAt time.Time, status int, message string, dead bool) error {
+	retryDelay := retryAt.Sub(failedAt)
+	if retryAt.IsZero() || retryDelay < 0 {
+		retryDelay = 0
+	}
+	result, err := s.db.ExecContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now)
+UPDATE webhook_deliveries SET state=CASE WHEN $3 OR attempts>=8 THEN 'dead' ELSE 'retrying' END,
+    next_attempt_at=CASE WHEN $3 OR attempts>=8 THEN NULL ELSE clock.now+$4::interval END,
+    lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,last_status=NULLIF($5,0),last_error=$6,updated_at=clock.now
+FROM clock WHERE id::text=$1 AND state='delivering' AND lease_token::text=$2 AND lease_expires_at>clock.now`, id, leaseToken, dead, retryDelay.String(), status, message)
 	if err != nil {
 		return err
 	}
@@ -267,12 +275,12 @@ WHERE id::text=$1 AND state='delivering' AND lease_owner=$2`, id, owner, dead, r
 	return nil
 }
 
-func (s *PostgresStore) ReplayWebhookDelivery(ctx context.Context, id string, now time.Time) (WebhookDelivery, error) {
-	value, err := scanWebhookDelivery(s.db.QueryRowContext(ctx, `WITH replayed AS (
-UPDATE webhook_deliveries SET state='pending',attempts=0,next_attempt_at=$2,lease_owner=NULL,lease_expires_at=NULL,last_status=NULL,last_error='',delivered_at=NULL,updated_at=$2
-WHERE id::text=$1 AND state='dead' RETURNING *)
-SELECT d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at
-FROM replayed d JOIN webhook_events e ON e.id=d.event_id`, id, now))
+func (s *PostgresStore) ReplayWebhookDelivery(ctx context.Context, id string, _ time.Time) (WebhookDelivery, error) {
+	value, err := scanWebhookDelivery(s.db.QueryRowContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now), replayed AS (
+UPDATE webhook_deliveries SET state='pending',attempts=0,next_attempt_at=clock.now,lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,last_status=NULL,last_error='',delivered_at=NULL,updated_at=clock.now
+FROM clock WHERE id::text=$1 AND state='dead' RETURNING webhook_deliveries.*)
+SELECT d.id::text,d.event_id::text,e.event_type,d.subscription_id::text,d.state,d.attempts,d.next_attempt_at,d.lease_owner,d.lease_token::text,d.lease_expires_at,d.last_status,d.last_error,d.created_at,d.updated_at,d.delivered_at
+FROM replayed d JOIN webhook_events e ON e.id=d.event_id`, id))
 	if !errors.Is(err, sql.ErrNoRows) {
 		return value, err
 	}

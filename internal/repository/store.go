@@ -60,7 +60,7 @@ type WebhookStore interface {
 	GetWebhookDelivery(context.Context, string) (WebhookDelivery, error)
 	ClaimWebhookDeliveries(context.Context, string, time.Time, time.Duration, int) ([]WebhookDeliveryClaim, error)
 	CompleteWebhookDelivery(context.Context, string, string, int, time.Time) error
-	FailWebhookDelivery(context.Context, string, string, time.Time, int, string, bool) error
+	FailWebhookDelivery(context.Context, string, string, time.Time, time.Time, int, string, bool) error
 	ReplayWebhookDelivery(context.Context, string, time.Time) (WebhookDelivery, error)
 }
 

@@ -559,6 +559,7 @@ export type Problem = {
   code:
     | "invalid_request"
     | "invalid_state"
+    | "encryption_key_unavailable"
     | "invalid_page_token"
     | "name_exists"
     | "access_denied"

@@ -28,9 +28,10 @@ between different Artifacts or subscriptions is not guaranteed.
 
 Webhook subscriptions are global administrator-managed resources. A
 subscription has a unique name, HTTPS endpoint, non-empty event-type filter,
-enabled flag, and optimistic-concurrency version. The signing secret is
-accepted on write, encrypted with `GATEWAY_SETTINGS_ENCRYPTION_KEY`, and never
-returned. Responses expose only `secretConfigured`.
+enabled flag, and optimistic-concurrency version. A 32-to-256-byte signing
+secret is accepted on write, encrypted with
+`GATEWAY_SETTINGS_ENCRYPTION_KEY`, and never returned. Responses expose only
+`secretConfigured`.
 
 The endpoint must be an HTTPS URL without user information or a fragment.
 Production delivery rejects private, loopback, link-local, unspecified, and
@@ -65,7 +66,12 @@ Requests include:
 The signature input is `<timestamp>.<exact request body>` using the decrypted
 subscription secret. A 2xx response completes the delivery. Every other
 status or transport error is retried with bounded exponential backoff. Each
-claim owns a lease so another Worker can resume after process failure.
+claim owns a unique fencing token and an unexpired lease so another Worker can
+resume after process failure. A Worker claims one delivery immediately before
+sending it; higher concurrency is permitted only when every claimed delivery
+starts within its lease or the implementation renews leases while queued.
+PostgreSQL lease, retry, completion, and replay timestamps use the database
+clock so node clock skew cannot extend or prematurely expire a lease.
 
 ## Retry And Replay
 

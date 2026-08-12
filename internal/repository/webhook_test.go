@@ -42,10 +42,10 @@ func TestMemoryWebhookSubscriptionCASAndDeliveryLifecycle(t *testing.T) {
 	}
 
 	claims, err := store.ClaimWebhookDeliveries(ctx, "worker-a", now, 30*time.Second, 10)
-	if err != nil || len(claims) != 1 || claims[0].Delivery.Attempts != 1 || claims[0].Subscription.SecretCiphertext != "encrypted-secret" {
+	if err != nil || len(claims) != 1 || claims[0].Delivery.Attempts != 1 || !claims[0].Delivery.NextAttemptAt.IsZero() || claims[0].Subscription.SecretCiphertext != "encrypted-secret" {
 		t.Fatalf("claims = %#v, err=%v", claims, err)
 	}
-	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, "worker-a", now.Add(5*time.Second), 503, "webhook returned HTTP 503", false); err != nil {
+	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, claims[0].Delivery.LeaseToken, now.Add(time.Second), now.Add(5*time.Second), 503, "webhook returned HTTP 503", false); err != nil {
 		t.Fatal(err)
 	}
 	if claims, err = store.ClaimWebhookDeliveries(ctx, "worker-b", now.Add(4*time.Second), 30*time.Second, 10); err != nil || len(claims) != 0 {
@@ -55,7 +55,7 @@ func TestMemoryWebhookSubscriptionCASAndDeliveryLifecycle(t *testing.T) {
 	if err != nil || len(claims) != 1 || claims[0].Delivery.Attempts != 2 {
 		t.Fatalf("retry claims = %#v, err=%v", claims, err)
 	}
-	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, "worker-b", time.Time{}, 503, "webhook returned HTTP 503", true); err != nil {
+	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, claims[0].Delivery.LeaseToken, now.Add(6*time.Second), time.Time{}, 503, "webhook returned HTTP 503", true); err != nil {
 		t.Fatal(err)
 	}
 	replayed, err := store.ReplayWebhookDelivery(ctx, claims[0].Delivery.ID, now.Add(time.Minute))
@@ -66,7 +66,7 @@ func TestMemoryWebhookSubscriptionCASAndDeliveryLifecycle(t *testing.T) {
 	if err != nil || len(claims) != 1 {
 		t.Fatalf("replay claims = %#v, err=%v", claims, err)
 	}
-	if err = store.CompleteWebhookDelivery(ctx, claims[0].Delivery.ID, "worker-c", 204, now.Add(time.Minute)); err != nil {
+	if err = store.CompleteWebhookDelivery(ctx, claims[0].Delivery.ID, claims[0].Delivery.LeaseToken, 204, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	deliveries, err = store.ListWebhookDeliveries(ctx, WebhookDeliveryQuery{Limit: 10})
@@ -143,7 +143,7 @@ func TestMemoryWebhookExpiredLeaseIsReclaimedAndAttemptEightStops(t *testing.T) 
 		t.Fatalf("exhausted claims=%#v err=%v", claims, err)
 	}
 	delivery, err := store.GetWebhookDelivery(ctx, deliveryID)
-	if err != nil || delivery.State != WebhookDeliveryDead || delivery.Attempts != 8 || delivery.LeaseOwner != "" {
+	if err != nil || delivery.State != WebhookDeliveryDead || delivery.Attempts != 8 || delivery.LeaseOwner != "" || !delivery.NextAttemptAt.IsZero() {
 		t.Fatalf("exhausted delivery=%#v err=%v", delivery, err)
 	}
 }
@@ -166,14 +166,20 @@ func TestMemoryWebhookExpiredLeaseFencesThePreviousOwner(t *testing.T) {
 	if err != nil || len(first) != 1 || first[0].Subscription.ID != subscription.ID {
 		t.Fatalf("first claim=%#v err=%v", first, err)
 	}
+	if err = store.CompleteWebhookDelivery(ctx, first[0].Delivery.ID, first[0].Delivery.LeaseToken, 204, now.Add(time.Second)); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expired token before reclaim completion error=%v", err)
+	}
 	second, err := store.ClaimWebhookDeliveries(ctx, "gateway-a/session-new", now.Add(time.Second), time.Minute, 1)
 	if err != nil || len(second) != 1 || second[0].Delivery.Attempts != 2 {
 		t.Fatalf("second claim=%#v err=%v", second, err)
 	}
-	if err = store.CompleteWebhookDelivery(ctx, first[0].Delivery.ID, "gateway-a/session-old", 204, now.Add(2*time.Second)); !errors.Is(err, ErrVersionConflict) {
-		t.Fatalf("stale owner completion error=%v", err)
+	if err = store.CompleteWebhookDelivery(ctx, first[0].Delivery.ID, first[0].Delivery.LeaseToken, 204, now.Add(2*time.Second)); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expired token completion error=%v", err)
 	}
-	if err = store.CompleteWebhookDelivery(ctx, second[0].Delivery.ID, "gateway-a/session-new", 204, now.Add(2*time.Second)); err != nil {
+	if first[0].Delivery.LeaseToken == second[0].Delivery.LeaseToken {
+		t.Fatal("reclaimed delivery reused its fencing token")
+	}
+	if err = store.CompleteWebhookDelivery(ctx, second[0].Delivery.ID, second[0].Delivery.LeaseToken, 204, now.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }

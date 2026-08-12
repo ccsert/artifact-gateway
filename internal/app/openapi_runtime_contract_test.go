@@ -150,13 +150,15 @@ func TestWebhookRuntimeResponsesConformToOpenAPI(t *testing.T) {
 	if err != nil || len(claims) != 1 {
 		t.Fatalf("claims=%#v err=%v", claims, err)
 	}
-	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, "contract-worker", time.Time{}, http.StatusServiceUnavailable, "webhook returned HTTP 503", true); err != nil {
+	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, claims[0].Delivery.LeaseToken, event.OccurredAt.Add(2*time.Second), time.Time{}, http.StatusServiceUnavailable, "webhook returned HTTP 503", true); err != nil {
 		t.Fatal(err)
 	}
 	deliveryPath := "/api/v2/webhook-deliveries/" + claims[0].Delivery.ID
 	request(http.MethodGet, deliveryPath, "", "", http.StatusOK)
 	request(http.MethodPost, deliveryPath+":replay", "", "", http.StatusOK)
 	request(http.MethodGet, "/api/v2/webhook-deliveries?state=pending&limit=10", "", "", http.StatusOK)
+	t.Setenv(secrets.KeyEnv, "")
+	request(http.MethodPost, "/api/v2/webhook-subscriptions", `{"name":"missing-key","endpointUrl":"https://events.example.test/artifacts","secret":"0123456789abcdef0123456789abcdef","eventTypes":["artifact.quarantined"],"enabled":true}`, "", http.StatusServiceUnavailable)
 }
 
 func TestArtifactQuarantineRuntimeResponsesConformToOpenAPI(t *testing.T) {

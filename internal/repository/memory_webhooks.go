@@ -171,7 +171,8 @@ func (s *MemoryStore) ClaimWebhookDeliveries(_ context.Context, owner string, no
 		due := (value.State == WebhookDeliveryPending || value.State == WebhookDeliveryRetrying) && !value.NextAttemptAt.After(now)
 		expired := value.State == WebhookDeliveryDelivering && !value.LeaseExpiresAt.After(now)
 		if expired && value.Attempts >= 8 {
-			value.State, value.LeaseOwner, value.LeaseExpiresAt, value.UpdatedAt = WebhookDeliveryDead, "", time.Time{}, now
+			value.State, value.LeaseOwner, value.LeaseToken, value.LeaseExpiresAt, value.UpdatedAt = WebhookDeliveryDead, "", "", time.Time{}, now
+			value.NextAttemptAt = time.Time{}
 			s.webhookDeliveries[value.ID] = value
 			continue
 		}
@@ -190,7 +191,8 @@ func (s *MemoryStore) ClaimWebhookDeliveries(_ context.Context, owner string, no
 	}
 	claims := make([]WebhookDeliveryClaim, 0, len(candidates))
 	for _, delivery := range candidates {
-		delivery.State, delivery.Attempts, delivery.LeaseOwner, delivery.LeaseExpiresAt, delivery.UpdatedAt = WebhookDeliveryDelivering, delivery.Attempts+1, owner, now.Add(lease), now
+		delivery.State, delivery.Attempts, delivery.LeaseOwner, delivery.LeaseToken, delivery.LeaseExpiresAt, delivery.UpdatedAt = WebhookDeliveryDelivering, delivery.Attempts+1, owner, uuid.NewString(), now.Add(lease), now
+		delivery.NextAttemptAt = time.Time{}
 		s.webhookDeliveries[delivery.ID] = delivery
 		event, eventOK := s.webhookEvents[delivery.EventID]
 		subscription, subscriptionOK := s.webhookSubscriptions[delivery.SubscriptionID]
@@ -201,37 +203,37 @@ func (s *MemoryStore) ClaimWebhookDeliveries(_ context.Context, owner string, no
 	return claims, nil
 }
 
-func (s *MemoryStore) CompleteWebhookDelivery(_ context.Context, id, owner string, status int, completedAt time.Time) error {
+func (s *MemoryStore) CompleteWebhookDelivery(_ context.Context, id, leaseToken string, status int, completedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	value, ok := s.webhookDeliveries[id]
 	if !ok {
 		return ErrNotFound
 	}
-	if value.State != WebhookDeliveryDelivering || value.LeaseOwner != owner {
+	if value.State != WebhookDeliveryDelivering || value.LeaseToken != leaseToken || !value.LeaseExpiresAt.After(completedAt) {
 		return ErrVersionConflict
 	}
 	value.State, value.LastStatus, value.DeliveredAt, value.UpdatedAt = WebhookDeliverySucceeded, status, completedAt, completedAt
-	value.NextAttemptAt, value.LeaseExpiresAt, value.LeaseOwner, value.LastError = time.Time{}, time.Time{}, "", ""
+	value.NextAttemptAt, value.LeaseExpiresAt, value.LeaseOwner, value.LeaseToken, value.LastError = time.Time{}, time.Time{}, "", "", ""
 	s.webhookDeliveries[id] = value
 	return nil
 }
 
-func (s *MemoryStore) FailWebhookDelivery(_ context.Context, id, owner string, retryAt time.Time, status int, message string, dead bool) error {
+func (s *MemoryStore) FailWebhookDelivery(_ context.Context, id, leaseToken string, failedAt, retryAt time.Time, status int, message string, dead bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	value, ok := s.webhookDeliveries[id]
 	if !ok {
 		return ErrNotFound
 	}
-	if value.State != WebhookDeliveryDelivering || value.LeaseOwner != owner {
+	if value.State != WebhookDeliveryDelivering || value.LeaseToken != leaseToken || !value.LeaseExpiresAt.After(failedAt) {
 		return ErrVersionConflict
 	}
 	value.State, value.NextAttemptAt = WebhookDeliveryRetrying, retryAt
 	if dead || value.Attempts >= 8 {
 		value.State, value.NextAttemptAt = WebhookDeliveryDead, time.Time{}
 	}
-	value.LastStatus, value.LastError, value.LeaseOwner, value.LeaseExpiresAt, value.UpdatedAt = status, message, "", time.Time{}, time.Now().UTC()
+	value.LastStatus, value.LastError, value.LeaseOwner, value.LeaseToken, value.LeaseExpiresAt, value.UpdatedAt = status, message, "", "", time.Time{}, failedAt
 	s.webhookDeliveries[id] = value
 	return nil
 }
@@ -247,6 +249,7 @@ func (s *MemoryStore) ReplayWebhookDelivery(_ context.Context, id string, now ti
 		return WebhookDelivery{}, ErrInvalidWebhookDeliveryState
 	}
 	value.State, value.Attempts, value.NextAttemptAt, value.LastStatus, value.LastError, value.UpdatedAt = WebhookDeliveryPending, 0, now, 0, "", now
+	value.LeaseOwner, value.LeaseToken, value.LeaseExpiresAt = "", "", time.Time{}
 	s.webhookDeliveries[id] = value
 	return value, nil
 }

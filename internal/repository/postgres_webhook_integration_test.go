@@ -90,7 +90,7 @@ func TestPostgresWebhookOutboxCommitsWithQuarantineAndClaimsOnce(t *testing.T) {
 	if len(claimed) != 1 || claimed[0].Event.ID != deliveries[0].EventID || claimed[0].Subscription.SecretCiphertext != "encrypted-secret" {
 		t.Fatalf("cross-connection claims = %#v", claimed)
 	}
-	if err = first.CompleteWebhookDelivery(ctx, claimed[0].Delivery.ID, claimed[0].Delivery.LeaseOwner, httpStatusNoContent, now); err != nil {
+	if err = first.CompleteWebhookDelivery(ctx, claimed[0].Delivery.ID, claimed[0].Delivery.LeaseToken, httpStatusNoContent, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,7 +108,7 @@ func TestPostgresWebhookOutboxCommitsWithQuarantineAndClaimsOnce(t *testing.T) {
 	if err != nil || len(releaseClaims) != 1 || releaseClaims[0].Event.Type != WebhookEventArtifactReleased {
 		t.Fatalf("release claims=%#v err=%v", releaseClaims, err)
 	}
-	if err = first.CompleteWebhookDelivery(ctx, releaseClaims[0].Delivery.ID, "release-worker", httpStatusNoContent, now.Add(30*time.Second)); err != nil {
+	if err = first.CompleteWebhookDelivery(ctx, releaseClaims[0].Delivery.ID, releaseClaims[0].Delivery.LeaseToken, httpStatusNoContent, now.Add(30*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,20 +119,65 @@ func TestPostgresWebhookOutboxCommitsWithQuarantineAndClaimsOnce(t *testing.T) {
 	recoveryNow := recoveryEvent.OccurredAt
 	var recoveryID string
 	for attempt := 1; attempt <= 8; attempt++ {
-		claims, claimErr := first.ClaimWebhookDeliveries(ctx, "recovery-worker-"+string(rune('a'+attempt)), recoveryNow, time.Second, 1)
+		claims, claimErr := first.ClaimWebhookDeliveries(ctx, "recovery-worker-"+string(rune('a'+attempt)), recoveryNow.Add(24*time.Hour), time.Second, 1)
 		if claimErr != nil || len(claims) != 1 || claims[0].Delivery.Attempts != attempt {
 			t.Fatalf("recovery attempt %d claims=%#v err=%v", attempt, claims, claimErr)
 		}
 		recoveryID = claims[0].Delivery.ID
-		recoveryNow = recoveryNow.Add(time.Second)
+		if _, claimErr = first.db.ExecContext(ctx, `UPDATE webhook_deliveries SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, recoveryID); claimErr != nil {
+			t.Fatal(claimErr)
+		}
 	}
-	claims, err := second.ClaimWebhookDeliveries(ctx, "recovery-exhausted", recoveryNow, time.Second, 1)
+	claims, err := second.ClaimWebhookDeliveries(ctx, "recovery-exhausted", recoveryNow.Add(-24*time.Hour), time.Second, 1)
 	if err != nil || len(claims) != 0 {
 		t.Fatalf("exhausted claims=%#v err=%v", claims, err)
 	}
 	exhausted, err := second.GetWebhookDelivery(ctx, recoveryID)
 	if err != nil || exhausted.State != WebhookDeliveryDead || exhausted.Attempts != 8 || exhausted.LeaseOwner != "" {
 		t.Fatalf("exhausted delivery=%#v err=%v", exhausted, err)
+	}
+	replayed, err := second.ReplayWebhookDelivery(ctx, recoveryID, recoveryNow)
+	if err != nil || replayed.State != WebhookDeliveryPending || replayed.Attempts != 0 {
+		t.Fatalf("replayed delivery=%#v err=%v", replayed, err)
+	}
+	replayClaim, err := first.ClaimWebhookDeliveries(ctx, "replay-worker", recoveryNow, time.Minute, 1)
+	if err != nil || len(replayClaim) != 1 || replayClaim[0].Delivery.ID != recoveryID {
+		t.Fatalf("replay claim=%#v err=%v", replayClaim, err)
+	}
+	if err = second.CompleteWebhookDelivery(ctx, replayClaim[0].Delivery.ID, replayClaim[0].Delivery.LeaseToken, httpStatusNoContent, recoveryNow.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	fencingNow := recoveryNow.Add(time.Minute)
+	if _, err = first.EnqueueWebhookEvent(ctx, WebhookEvent{ID: uuid.NewString(), Type: WebhookEventArtifactReleased, OccurredAt: fencingNow, Data: []byte(`{"state":"released"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	var databaseNow time.Time
+	if err = first.db.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&databaseNow); err != nil {
+		t.Fatal(err)
+	}
+	oldClaim, err := first.ClaimWebhookDeliveries(ctx, "same-runtime", fencingNow.Add(24*time.Hour), time.Minute, 1)
+	if err != nil || len(oldClaim) != 1 {
+		t.Fatalf("old claim=%#v err=%v", oldClaim, err)
+	}
+	if oldClaim[0].Delivery.LeaseExpiresAt.Before(databaseNow.Add(55*time.Second)) || oldClaim[0].Delivery.LeaseExpiresAt.After(databaseNow.Add(65*time.Second)) {
+		t.Fatalf("lease expiry=%s database now=%s", oldClaim[0].Delivery.LeaseExpiresAt, databaseNow)
+	}
+	if _, err = first.db.ExecContext(ctx, `UPDATE webhook_deliveries SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, oldClaim[0].Delivery.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = second.CompleteWebhookDelivery(ctx, oldClaim[0].Delivery.ID, oldClaim[0].Delivery.LeaseToken, httpStatusNoContent, fencingNow.Add(time.Second)); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expired token before reclaim completion error=%v", err)
+	}
+	newClaim, err := second.ClaimWebhookDeliveries(ctx, "same-runtime", fencingNow.Add(-24*time.Hour), time.Minute, 1)
+	if err != nil || len(newClaim) != 1 || oldClaim[0].Delivery.LeaseToken == newClaim[0].Delivery.LeaseToken {
+		t.Fatalf("reclaimed claim=%#v err=%v", newClaim, err)
+	}
+	if err = first.CompleteWebhookDelivery(ctx, oldClaim[0].Delivery.ID, oldClaim[0].Delivery.LeaseToken, httpStatusNoContent, fencingNow.Add(2*time.Second)); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("stale token after reclaim completion error=%v", err)
+	}
+	if err = first.CompleteWebhookDelivery(ctx, newClaim[0].Delivery.ID, newClaim[0].Delivery.LeaseToken, httpStatusNoContent, fencingNow.Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
 	}
 }
 

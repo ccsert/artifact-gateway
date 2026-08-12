@@ -140,3 +140,54 @@ func TestWebhookDeliveryWorkerMarksAttemptEightDeadWithoutPersistingResponseBody
 		now = deliveries[0].NextAttemptAt
 	}
 }
+
+func TestWebhookDeliveryWorkerDoesNotPreclaimSerialQueue(t *testing.T) {
+	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	subscriptionID := uuid.NewString()
+	ciphertext, err := secrets.Seal("webhook-subscription:"+subscriptionID, "webhook-signing-secret-32-bytes!!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateWebhookSubscription(ctx, repository.WebhookSubscription{ID: subscriptionID, Name: "serial-lease", EndpointURL: server.URL, SecretCiphertext: ciphertext, EventTypes: []repository.WebhookEventType{repository.WebhookEventArtifactQuarantined}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 8, 12, 7, 0, 0, 0, time.UTC)
+	for index := 0; index < 2; index++ {
+		if _, err = store.EnqueueWebhookEvent(ctx, repository.WebhookEvent{ID: uuid.NewString(), Type: repository.WebhookEventArtifactQuarantined, OccurredAt: base, Data: []byte(`{"state":"quarantined"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nowCalls := 0
+	worker := WebhookDeliveryWorker{
+		Store: store, InstanceID: "serial-worker",
+		Now: func() time.Time {
+			value := base.Add(time.Duration(nowCalls) * 20 * time.Second)
+			nowCalls++
+			return value
+		},
+		ClientFactory: func(string) (*http.Client, error) { return server.Client(), nil },
+	}
+	if count, runErr := worker.RunOnce(ctx); runErr != nil || count != 1 {
+		t.Fatalf("run count=%d err=%v", count, runErr)
+	}
+	deliveries, err := store.ListWebhookDeliveries(ctx, repository.WebhookDeliveryQuery{Limit: 10})
+	if err != nil || len(deliveries) != 2 {
+		t.Fatalf("deliveries=%#v err=%v", deliveries, err)
+	}
+	states := map[repository.WebhookDeliveryState]int{}
+	for _, delivery := range deliveries {
+		states[delivery.State]++
+		if delivery.State == repository.WebhookDeliveryPending && delivery.Attempts != 0 {
+			t.Fatalf("pending delivery was preclaimed: %#v", delivery)
+		}
+	}
+	if states[repository.WebhookDeliverySucceeded] != 1 || states[repository.WebhookDeliveryPending] != 1 {
+		t.Fatalf("delivery states=%v", states)
+	}
+}

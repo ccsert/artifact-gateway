@@ -981,21 +981,22 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	ProblemCodeAccessDenied         ProblemCode = "access_denied"
-	ProblemCodeArtifactQuarantined  ProblemCode = "artifact_quarantined"
-	ProblemCodeCoordinateExists     ProblemCode = "coordinate_exists"
-	ProblemCodeDigestMismatch       ProblemCode = "digest_mismatch"
-	ProblemCodeIdempotencyConflict  ProblemCode = "idempotency_conflict"
-	ProblemCodeInternalError        ProblemCode = "internal_error"
-	ProblemCodeInvalidPageToken     ProblemCode = "invalid_page_token"
-	ProblemCodeInvalidRequest       ProblemCode = "invalid_request"
-	ProblemCodeInvalidState         ProblemCode = "invalid_state"
-	ProblemCodeNameExists           ProblemCode = "name_exists"
-	ProblemCodeNotFound             ProblemCode = "not_found"
-	ProblemCodeRetentionProtected   ProblemCode = "retention_protected"
-	ProblemCodeSecurityPolicyDenied ProblemCode = "security_policy_denied"
-	ProblemCodeSessionClosed        ProblemCode = "session_closed"
-	ProblemCodeVersionConflict      ProblemCode = "version_conflict"
+	ProblemCodeAccessDenied             ProblemCode = "access_denied"
+	ProblemCodeArtifactQuarantined      ProblemCode = "artifact_quarantined"
+	ProblemCodeCoordinateExists         ProblemCode = "coordinate_exists"
+	ProblemCodeDigestMismatch           ProblemCode = "digest_mismatch"
+	ProblemCodeEncryptionKeyUnavailable ProblemCode = "encryption_key_unavailable"
+	ProblemCodeIdempotencyConflict      ProblemCode = "idempotency_conflict"
+	ProblemCodeInternalError            ProblemCode = "internal_error"
+	ProblemCodeInvalidPageToken         ProblemCode = "invalid_page_token"
+	ProblemCodeInvalidRequest           ProblemCode = "invalid_request"
+	ProblemCodeInvalidState             ProblemCode = "invalid_state"
+	ProblemCodeNameExists               ProblemCode = "name_exists"
+	ProblemCodeNotFound                 ProblemCode = "not_found"
+	ProblemCodeRetentionProtected       ProblemCode = "retention_protected"
+	ProblemCodeSecurityPolicyDenied     ProblemCode = "security_policy_denied"
+	ProblemCodeSessionClosed            ProblemCode = "session_closed"
+	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
@@ -1008,6 +1009,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeCoordinateExists:
 		return true
 	case ProblemCodeDigestMismatch:
+		return true
+	case ProblemCodeEncryptionKeyUnavailable:
 		return true
 	case ProblemCodeIdempotencyConflict:
 		return true

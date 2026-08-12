@@ -22,7 +22,7 @@ import (
 const (
 	webhookDeliveryMaxAttempts = 8
 	webhookDeliveryLease       = 30 * time.Second
-	webhookDeliveryBatch       = 20
+	webhookDeliveryClaimLimit  = 1
 )
 
 type webhookEnvelope struct {
@@ -44,6 +44,13 @@ type WebhookDeliveryWorker struct {
 	ClientFactory WebhookClientFactory
 }
 
+func (w WebhookDeliveryWorker) now() time.Time {
+	if w.Now != nil {
+		return w.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
 func ProductionWebhookClient(endpoint string) (*http.Client, error) {
 	base := &http.Client{
 		Timeout: 10 * time.Second,
@@ -58,15 +65,12 @@ func (w WebhookDeliveryWorker) RunOnce(ctx context.Context) (int, error) {
 	if w.Store == nil {
 		return 0, errors.New("webhook store is required")
 	}
-	now := time.Now().UTC()
-	if w.Now != nil {
-		now = w.Now().UTC()
-	}
+	now := w.now()
 	owner := w.InstanceID
 	if owner == "" {
 		owner = "webhook-worker"
 	}
-	claims, err := w.Store.ClaimWebhookDeliveries(ctx, owner, now, webhookDeliveryLease, webhookDeliveryBatch)
+	claims, err := w.Store.ClaimWebhookDeliveries(ctx, owner, now, webhookDeliveryLease, webhookDeliveryClaimLimit)
 	if err != nil {
 		return 0, err
 	}
@@ -76,8 +80,9 @@ func (w WebhookDeliveryWorker) RunOnce(ctx context.Context) (int, error) {
 	}
 	for _, claim := range claims {
 		status, message, permanent := deliverWebhook(ctx, factory, claim, now)
+		finishedAt := w.now()
 		if status >= 200 && status < 300 && message == "" {
-			if err = w.Store.CompleteWebhookDelivery(ctx, claim.Delivery.ID, owner, status, now); err != nil {
+			if err = w.Store.CompleteWebhookDelivery(ctx, claim.Delivery.ID, claim.Delivery.LeaseToken, status, finishedAt); err != nil {
 				return len(claims), err
 			}
 			continue
@@ -85,9 +90,9 @@ func (w WebhookDeliveryWorker) RunOnce(ctx context.Context) (int, error) {
 		dead := permanent || claim.Delivery.Attempts >= webhookDeliveryMaxAttempts
 		retryAt := time.Time{}
 		if !dead {
-			retryAt = now.Add(webhookRetryDelay(claim.Delivery.Attempts))
+			retryAt = finishedAt.Add(webhookRetryDelay(claim.Delivery.Attempts))
 		}
-		if err = w.Store.FailWebhookDelivery(ctx, claim.Delivery.ID, owner, retryAt, status, message, dead); err != nil {
+		if err = w.Store.FailWebhookDelivery(ctx, claim.Delivery.ID, claim.Delivery.LeaseToken, finishedAt, retryAt, status, message, dead); err != nil {
 			return len(claims), err
 		}
 	}
@@ -158,8 +163,12 @@ func (w WebhookDeliveryWorker) Start(ctx context.Context, interval time.Duration
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
-			if _, err := w.RunOnce(ctx); err != nil && ctx.Err() == nil {
+			processed, err := w.RunOnce(ctx)
+			if err != nil && ctx.Err() == nil {
 				slog.Warn("webhook delivery worker iteration failed", "error", err)
+			}
+			if err == nil && processed > 0 {
+				continue
 			}
 			select {
 			case <-ctx.Done():

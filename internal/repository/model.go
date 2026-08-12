@@ -1126,6 +1126,7 @@ type WebhookDelivery struct {
 	Attempts       int
 	NextAttemptAt  time.Time
 	LeaseOwner     string
+	LeaseToken     string
 	LeaseExpiresAt time.Time
 	LastStatus     int
 	LastError      string

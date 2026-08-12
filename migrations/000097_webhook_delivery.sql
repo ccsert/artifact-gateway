@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
     attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0 AND attempts <= 8),
     next_attempt_at TIMESTAMPTZ,
     lease_owner TEXT,
+    lease_token UUID,
     lease_expires_at TIMESTAMPTZ,
     last_status INTEGER CHECK (last_status IS NULL OR last_status BETWEEN 100 AND 599),
     last_error TEXT NOT NULL DEFAULT '' CHECK (length(last_error) <= 1024),
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (event_id, subscription_id),
-    CHECK ((state = 'delivering') = (lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)),
+    CHECK ((state = 'delivering') = (lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)),
     CHECK ((state = 'succeeded') = (delivered_at IS NOT NULL)),
     CHECK ((state IN ('pending', 'retrying')) = (next_attempt_at IS NOT NULL))
 );

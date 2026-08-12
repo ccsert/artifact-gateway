@@ -86,7 +86,8 @@ func TestWebhookManagementAPIEncryptsSecretsUsesCASAndReplaysDeadDelivery(t *tes
 	if err != nil || len(claims) != 1 || claims[0].Event.ID != event.ID {
 		t.Fatalf("claims=%#v err=%v", claims, err)
 	}
-	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, "test-worker", time.Time{}, 503, "webhook returned HTTP 503", true); err != nil {
+	failedAt := time.Now().UTC().Add(time.Second)
+	if err = store.FailWebhookDelivery(ctx, claims[0].Delivery.ID, claims[0].Delivery.LeaseToken, failedAt, time.Time{}, 503, "webhook returned HTTP 503", true); err != nil {
 		t.Fatal(err)
 	}
 	deliveryPath := "/api/v2/webhook-deliveries/" + claims[0].Delivery.ID
@@ -100,5 +101,18 @@ func TestWebhookManagementAPIEncryptsSecretsUsesCASAndReplaysDeadDelivery(t *tes
 	listed := request(http.MethodGet, "/api/v2/webhook-deliveries?state=pending&limit=10", "admin-secret", "", "")
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), claims[0].Delivery.ID) {
 		t.Fatalf("listed=%d body=%q", listed.Code, listed.Body.String())
+	}
+}
+
+func TestWebhookManagementAPIRequiresSettingsEncryptionKey(t *testing.T) {
+	t.Setenv(secrets.KeyEnv, "")
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/webhook-subscriptions", strings.NewReader(`{"name":"missing-key","endpointUrl":"https://events.example.test/hooks/artifacts","secret":"0123456789abcdef0123456789abcdef","eventTypes":["artifact.quarantined"],"enabled":true}`))
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"code":"encryption_key_unavailable"`) {
+		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
 }
