@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircleOutlined,
   ScanOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Form, Input, Space, Table, Tag } from "antd";
+import { Alert, Button, Form, Input, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createRepositoryArtifactScan,
   listRepositoryLifecycleJobs,
   reconcileRepositoryArtifactScans,
+  searchRepositoryArtifacts,
 } from "../../client";
 import type {
+  ArtifactSummary,
   LifecycleJob,
   Repository,
   RepositoryCapabilities,
@@ -19,13 +21,93 @@ import type {
 import { StateBadge } from "../../components/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
 import { Card, CardHeader } from "../../components/Layout";
-import { formatDate, shortDigest } from "../../lib/format";
+import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 
 type ScanForm = {
   coordinate: string;
   digest: string;
 };
+
+type ScanArtifactOption = {
+  key: string;
+  coordinate: string;
+  digest: string;
+  size?: number;
+  createdAt?: string;
+  intelligence?: ArtifactSummary["intelligence"];
+};
+
+function scanCoordinate(
+  format: Repository["format"],
+  artifact: ArtifactSummary,
+): string {
+  if (
+    artifact.version &&
+    (format === "npm" || format === "pypi" || format === "go")
+  ) {
+    return `${artifact.coordinate}@${artifact.version}`;
+  }
+  return artifact.coordinate;
+}
+
+function scanArtifactOption(
+  format: Repository["format"],
+  artifact: ArtifactSummary,
+): ScanArtifactOption | null {
+  if (!artifact.digest) return null;
+  const coordinate = scanCoordinate(format, artifact);
+  // The shared Conan browse projection exposes only the reference, while a
+  // scan must pin a recipe/package revision. Do not offer an identity that the
+  // worker cannot resolve; advanced input remains available for that format.
+  if (format === "conan" && !coordinate.includes("#")) return null;
+  return {
+    key: JSON.stringify([coordinate, artifact.digest]),
+    coordinate,
+    digest: artifact.digest,
+    size: artifact.size,
+    createdAt: artifact.createdAt,
+    intelligence: artifact.intelligence,
+  };
+}
+
+function scanStatus(
+  option: ScanArtifactOption,
+  jobs: LifecycleJob[] | null,
+  text: (zh: string, en: string) => string,
+): { color?: string; label: string } {
+  const job = jobs?.find(
+    (candidate) =>
+      candidate.details?.coordinate === option.coordinate &&
+      candidate.details.digest === option.digest,
+  );
+  switch (job?.state) {
+    case "completed":
+      return { color: "success", label: text("扫描完成", "Scan completed") };
+    case "pending":
+    case "running":
+    case "retrying":
+      return { color: "processing", label: text("扫描中", "Scanning") };
+    case "failed":
+    case "cancelled":
+      return { color: "error", label: text("扫描失败", "Scan failed") };
+  }
+  switch (option.intelligence?.vulnerabilityStatus) {
+    case "clean":
+      return { color: "success", label: text("已扫描", "Scanned") };
+    case "affected":
+      return { color: "warning", label: text("发现漏洞", "Affected") };
+    case "error":
+      return { color: "error", label: text("扫描异常", "Scan error") };
+  }
+  if (
+    (option.intelligence?.sbomCount ?? 0) > 0 ||
+    (option.intelligence?.licenseCount ?? 0) > 0
+  ) {
+    return { color: "processing", label: text("已有情报", "Has evidence") };
+  }
+  return { label: text("未扫描", "Not scanned") };
+}
 
 function coordinatePlaceholder(format: Repository["format"]): string {
   switch (format) {
@@ -81,6 +163,16 @@ export function RepositoryScanningTab({
   const [reconcileError, setReconcileError] = useState<unknown>(null);
   const [reconcileNotice, setReconcileNotice] = useState("");
   const [reconciling, setReconciling] = useState(false);
+  const [artifactQuery, setArtifactQuery] = useState("");
+  const [artifactOptions, setArtifactOptions] = useState<ScanArtifactOption[]>(
+    [],
+  );
+  const [selectedArtifact, setSelectedArtifact] =
+    useState<ScanArtifactOption | null>(null);
+  const [searchingArtifacts, setSearchingArtifacts] = useState(false);
+  const [artifactSearchError, setArtifactSearchError] = useState<unknown>(null);
+  const [manualIdentity, setManualIdentity] = useState(false);
+  const artifactSearchRequest = useRef(0);
 
   const artifactScanning = capabilities?.artifactScanning === true;
   const publicationScanning = capabilities?.publicationScanning === true;
@@ -107,6 +199,57 @@ export function RepositoryScanningTab({
     return () => clearInterval(timer);
   }, [load]);
 
+  useEffect(() => {
+    const request = ++artifactSearchRequest.current;
+    let active = true;
+    if (!artifactScanning || !canManage) {
+      setSearchingArtifacts(false);
+      setArtifactOptions([]);
+      setArtifactSearchError(null);
+      return;
+    }
+
+    const query = artifactQuery.trim();
+    const timer = window.setTimeout(
+      () => {
+        setSearchingArtifacts(true);
+        setArtifactSearchError(null);
+        void (async () => {
+          try {
+            const { data, error } = await searchRepositoryArtifacts({
+              path: { repositoryId: repo.id },
+              query: { ...(query ? { q: query } : {}), pageSize: 50 },
+            });
+            if (!active || request !== artifactSearchRequest.current) return;
+            setSearchingArtifacts(false);
+            if (error) {
+              setArtifactOptions([]);
+              setArtifactSearchError(error);
+              return;
+            }
+            const unique = new Map<string, ScanArtifactOption>();
+            for (const artifact of data?.items ?? []) {
+              const option = scanArtifactOption(repo.format, artifact);
+              if (option) unique.set(option.key, option);
+            }
+            setArtifactOptions([...unique.values()]);
+          } catch (error) {
+            if (!active || request !== artifactSearchRequest.current) return;
+            setSearchingArtifacts(false);
+            setArtifactOptions([]);
+            setArtifactSearchError(error);
+          }
+        })();
+      },
+      query ? 250 : 0,
+    );
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [artifactQuery, artifactScanning, canManage, repo.format, repo.id]);
+
   const submitScan = async (values: ScanForm) => {
     setSubmitting(true);
     setSubmitError(null);
@@ -131,6 +274,9 @@ export function RepositoryScanningTab({
       ...(current ?? []).filter((job) => job.id !== data.id),
     ]);
     form.resetFields();
+    setSelectedArtifact(null);
+    setManualIdentity(false);
+    setArtifactQuery("");
   };
 
   const reconcileScans = async () => {
@@ -221,6 +367,46 @@ export function RepositoryScanningTab({
     ],
     [text],
   );
+
+  const selectableArtifacts = useMemo(() => {
+    if (
+      selectedArtifact &&
+      !artifactOptions.some((option) => option.key === selectedArtifact.key)
+    ) {
+      return [selectedArtifact, ...artifactOptions];
+    }
+    return artifactOptions;
+  }, [artifactOptions, selectedArtifact]);
+
+  const selectArtifact = (key: string) => {
+    const option = selectableArtifacts.find(
+      (candidate) => candidate.key === key,
+    );
+    if (!option) return;
+    setSelectedArtifact(option);
+    setManualIdentity(false);
+    form.setFieldsValue({
+      coordinate: option.coordinate,
+      digest: option.digest,
+    });
+  };
+
+  const toggleManualIdentity = () => {
+    setManualIdentity((current) => {
+      const next = !current;
+      if (!next) {
+        if (selectedArtifact) {
+          form.setFieldsValue({
+            coordinate: selectedArtifact.coordinate,
+            digest: selectedArtifact.digest,
+          });
+        } else {
+          form.resetFields();
+        }
+      }
+      return next;
+    });
+  };
 
   if (capabilitiesLoading) {
     return (
@@ -335,8 +521,8 @@ export function RepositoryScanningTab({
       <Card>
         <CardHeader
           title={text(
-            "手动扫描不可变制品",
-            "Scan an immutable artifact manually",
+            "选择并扫描不可变制品",
+            "Select and scan an immutable artifact",
           )}
         />
         <div className="px-5 py-4">
@@ -348,8 +534,122 @@ export function RepositoryScanningTab({
             requiredMark={false}
           >
             <Form.Item
+              className="md:col-span-2"
+              label={text("搜索并选择制品", "Search and select an artifact")}
+              style={{ marginBottom: 0 }}
+            >
+              <Select
+                id="artifact-scan-picker"
+                aria-label={text(
+                  "搜索并选择制品",
+                  "Search and select an artifact",
+                )}
+                className="w-full"
+                value={selectedArtifact?.key}
+                disabled={!artifactScanning || !canManage}
+                loading={searchingArtifacts}
+                placeholder={text(
+                  "输入包名、路径或坐标进行搜索",
+                  "Search by package, path, or coordinate",
+                )}
+                showSearch={{
+                  filterOption: false,
+                  onSearch: setArtifactQuery,
+                }}
+                options={selectableArtifacts.map((option) => ({
+                  value: option.key,
+                  label: option.coordinate,
+                }))}
+                optionRender={(option) => {
+                  const artifact = selectableArtifacts.find(
+                    (candidate) => candidate.key === option.value,
+                  );
+                  if (!artifact) return option.label;
+                  const status = scanStatus(artifact, jobs, text);
+                  return (
+                    <div className="flex min-w-0 items-center justify-between gap-4 py-1">
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-xs text-zinc-200">
+                          {artifact.coordinate}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-zinc-500">
+                          <span className="font-mono">
+                            {shortDigest(artifact.digest)}
+                          </span>
+                          {artifact.size !== undefined && (
+                            <span>{formatBytes(artifact.size)}</span>
+                          )}
+                          {artifact.createdAt && (
+                            <span>{formatDate(artifact.createdAt)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Tag color={status.color}>{status.label}</Tag>
+                    </div>
+                  );
+                }}
+                notFoundContent={
+                  searchingArtifacts
+                    ? text("正在搜索…", "Searching…")
+                    : text("没有可直接选择的制品", "No selectable artifacts")
+                }
+                onChange={selectArtifact}
+                allowClear
+                onClear={() => {
+                  setSelectedArtifact(null);
+                  setArtifactQuery("");
+                  form.resetFields();
+                }}
+                listHeight={320}
+              />
+              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <span className="text-[11px] leading-5 text-zinc-500">
+                  {text(
+                    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入前缀缩小范围。旧版本或 Conan 修订未列出时请使用高级手动输入。",
+                    "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; type a prefix to narrow the list. Use advanced manual input for unlisted older versions or Conan revisions.",
+                  )}
+                </span>
+                <Button
+                  type="link"
+                  size="small"
+                  className="h-auto px-0 py-0 text-xs"
+                  onClick={toggleManualIdentity}
+                >
+                  {manualIdentity
+                    ? text("收起高级手动输入", "Hide advanced manual input")
+                    : text("高级手动输入", "Advanced manual input")}
+                </Button>
+              </div>
+              {artifactSearchError !== null && (
+                <p className="mt-1 text-xs text-rose-400" role="alert">
+                  {text(
+                    "制品搜索失败，请修改关键词后重试。",
+                    "Artifact search failed. Change the query and try again.",
+                  )}
+                </p>
+              )}
+            </Form.Item>
+
+            {selectedArtifact && !manualIdentity && (
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 md:col-span-2">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-xs text-zinc-200">
+                    {selectedArtifact.coordinate}
+                  </p>
+                  <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-500">
+                    {selectedArtifact.digest}
+                  </p>
+                </div>
+                <Tag color={scanStatus(selectedArtifact, jobs, text).color}>
+                  {scanStatus(selectedArtifact, jobs, text).label}
+                </Tag>
+              </div>
+            )}
+
+            <Form.Item
               name="coordinate"
               label={text("制品坐标", "Artifact coordinate")}
+              hidden={!manualIdentity}
               style={{ marginBottom: 0 }}
               rules={[
                 {
@@ -378,6 +678,7 @@ export function RepositoryScanningTab({
             <Form.Item
               name="digest"
               label={text("SHA-256 摘要", "SHA-256 digest")}
+              hidden={!manualIdentity}
               style={{ marginBottom: 0 }}
               rules={[
                 {
@@ -407,19 +708,37 @@ export function RepositoryScanningTab({
             </Form.Item>
             <div className="grid gap-3 border-t border-zinc-800/70 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:col-span-2">
               <p className="max-w-2xl text-xs leading-5 text-zinc-500">
-                {text(
-                  "坐标和摘要必须与仓库中已存在的不可变制品完全一致；扫描任务不会拉取或修改上游内容。",
-                  "The coordinate and digest must exactly match an immutable artifact already in this repository. Scans never fetch or modify upstream content.",
-                )}
+                {manualIdentity
+                  ? text(
+                      "高级模式要求坐标和摘要与仓库中的不可变制品完全一致。",
+                      "Advanced mode requires an exact coordinate and digest match.",
+                    )
+                  : text(
+                      "扫描只读取已选制品，不会拉取或修改上游内容。",
+                      "The scan only reads the selected artifact and never fetches or modifies upstream content.",
+                    )}
               </p>
               <Button
                 className="w-full sm:w-auto"
                 type="primary"
-                htmlType="submit"
+                htmlType={manualIdentity ? "submit" : "button"}
                 aria-label={text("提交扫描", "Queue scan")}
                 icon={<ScanOutlined />}
                 loading={submitting}
-                disabled={!artifactScanning || !canManage}
+                disabled={
+                  !artifactScanning ||
+                  !canManage ||
+                  (!manualIdentity && !selectedArtifact)
+                }
+                onClick={
+                  !manualIdentity && selectedArtifact
+                    ? () =>
+                        void submitScan({
+                          coordinate: selectedArtifact.coordinate,
+                          digest: selectedArtifact.digest,
+                        })
+                    : undefined
+                }
               >
                 {text("提交扫描", "Queue scan")}
               </Button>

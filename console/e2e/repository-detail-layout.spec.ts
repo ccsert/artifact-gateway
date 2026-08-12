@@ -3,7 +3,10 @@ import { authenticateAsAdmin } from "./support/auth";
 
 const repositoryId = "repo-layout";
 
-async function mockRepositoryDetail(page: Page) {
+async function mockRepositoryDetail(
+  page: Page,
+  { scannerEnabled = false }: { scannerEnabled?: boolean } = {},
+) {
   await authenticateAsAdmin(page);
 
   await page.route("**/api/v2/repositories?**", (route) =>
@@ -14,6 +17,29 @@ async function mockRepositoryDetail(page: Page) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
 
+    if (path.endsWith("/artifact-scans") && request.method() === "POST") {
+      const body = request.postDataJSON() as {
+        coordinate: string;
+        digest: string;
+      };
+      return route.fulfill({
+        json: {
+          id: "scan-job-layout",
+          kind: "scan",
+          state: "pending",
+          createdAt: "2026-08-12T08:00:00Z",
+          attempts: 0,
+          maxAttempts: 3,
+          progressCurrent: 0,
+          progressTotal: 0,
+          details: {
+            format: "raw",
+            coordinate: body.coordinate,
+            digest: body.digest,
+          },
+        },
+      });
+    }
     if (request.method() === "PATCH") {
       return route.fulfill({
         json: {
@@ -45,8 +71,8 @@ async function mockRepositoryDetail(page: Page) {
           format: "raw",
           type: "hosted",
           operations: ["read", "publish", "browse", "delete"],
-          artifactScanning: false,
-          publicationScanning: false,
+          artifactScanning: scannerEnabled,
+          publicationScanning: scannerEnabled,
         },
       });
     }
@@ -245,40 +271,38 @@ test("scanning uses a frameless responsive workspace", async ({
     (warningBox?.x ?? 0) + (warningBox?.width ?? 0),
   );
 
-  const manualScanHeading = page.getByRole("heading", {
-    name: "手动扫描不可变制品",
+  const artifactScanHeading = page.getByRole("heading", {
+    name: "选择并扫描不可变制品",
     exact: true,
   });
-  const manualScanCard = page
+  const artifactScanCard = page
     .locator(".ag-card")
-    .filter({ has: manualScanHeading });
-  const coordinateInput = page.getByRole("textbox", { name: "制品坐标" });
-  const digestInput = page.getByRole("textbox", { name: "SHA-256 摘要" });
-  const scanHint = manualScanCard.getByText(
-    "坐标和摘要必须与仓库中已存在的不可变制品完全一致；扫描任务不会拉取或修改上游内容。",
+    .filter({ has: artifactScanHeading });
+  const artifactPicker = artifactScanCard.getByRole("combobox", {
+    name: "搜索并选择制品",
+  });
+  const scanHint = artifactScanCard.getByText(
+    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入前缀缩小范围。旧版本或 Conan 修订未列出时请使用高级手动输入。",
     { exact: true },
   );
-  const submitScan = manualScanCard.getByRole("button", { name: "提交扫描" });
-  const [manualCardBox, coordinateBox, digestBox, hintBox, submitBox] =
-    await Promise.all([
-      manualScanCard.boundingBox(),
-      coordinateInput.boundingBox(),
-      digestInput.boundingBox(),
-      scanHint.boundingBox(),
-      submitScan.boundingBox(),
-    ]);
-  expect(manualCardBox).not.toBeNull();
-  expect(coordinateBox).not.toBeNull();
-  expect(digestBox).not.toBeNull();
+  const submitScan = artifactScanCard.getByRole("button", { name: "提交扫描" });
+  const [artifactCardBox, pickerBox, hintBox, submitBox] = await Promise.all([
+    artifactScanCard.boundingBox(),
+    artifactPicker.boundingBox(),
+    scanHint.boundingBox(),
+    submitScan.boundingBox(),
+  ]);
+  expect(artifactCardBox).not.toBeNull();
+  expect(pickerBox).not.toBeNull();
   expect(hintBox).not.toBeNull();
   expect(submitBox).not.toBeNull();
 
-  const cardLeft = manualCardBox?.x ?? 0;
-  const cardRight = cardLeft + (manualCardBox?.width ?? 0);
-  const cardBottom = (manualCardBox?.y ?? 0) + (manualCardBox?.height ?? 0);
-  expect((coordinateBox?.x ?? 0) - cardLeft).toBeGreaterThanOrEqual(20);
+  const cardLeft = artifactCardBox?.x ?? 0;
+  const cardRight = cardLeft + (artifactCardBox?.width ?? 0);
+  const cardBottom = (artifactCardBox?.y ?? 0) + (artifactCardBox?.height ?? 0);
+  expect((pickerBox?.x ?? 0) - cardLeft).toBeGreaterThanOrEqual(20);
   expect(
-    cardRight - ((digestBox?.x ?? 0) + (digestBox?.width ?? 0)),
+    cardRight - ((pickerBox?.x ?? 0) + (pickerBox?.width ?? 0)),
   ).toBeGreaterThanOrEqual(20);
   expect((hintBox?.x ?? 0) - cardLeft).toBeGreaterThanOrEqual(20);
   expect(
@@ -287,6 +311,14 @@ test("scanning uses a frameless responsive workspace", async ({
   expect(
     cardBottom - ((submitBox?.y ?? 0) + (submitBox?.height ?? 0)),
   ).toBeGreaterThanOrEqual(16);
+
+  await artifactScanCard.getByRole("button", { name: "高级手动输入" }).click();
+  await expect(
+    artifactScanCard.getByRole("textbox", { name: "制品坐标" }),
+  ).toBeVisible();
+  await expect(
+    artifactScanCard.getByRole("textbox", { name: "SHA-256 摘要" }),
+  ).toBeVisible();
 
   const recentJobsHeading = page.getByRole("heading", {
     name: "最近扫描任务",
@@ -338,6 +370,44 @@ test("scanning uses a frameless responsive workspace", async ({
       () => document.body.scrollWidth - document.body.clientWidth,
     ),
   ).toBe(0);
+});
+
+test("scanning selects a searchable immutable artifact before queuing", async ({
+  page,
+}) => {
+  const coordinate = "releases/example-1.zip";
+  const digest = `sha256:${"0".repeat(64)}`;
+  await mockRepositoryDetail(page, { scannerEnabled: true });
+  const scanRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname.endsWith(
+        `/repositories/${repositoryId}/artifact-scans`,
+      ),
+  );
+
+  await page.goto(`/repositories/${repositoryId}?tab=scanning`);
+  const artifactScanCard = page
+    .locator(".ag-card")
+    .filter({ hasText: "选择并扫描不可变制品" });
+  const picker = artifactScanCard.getByRole("combobox", {
+    name: "搜索并选择制品",
+  });
+  await picker.click();
+  const option = page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: coordinate })
+    .first();
+  await expect(option).toBeVisible();
+  await option.click();
+
+  await expect(
+    artifactScanCard.getByText(digest, { exact: true }),
+  ).toBeVisible();
+  await artifactScanCard.getByRole("button", { name: "提交扫描" }).click();
+
+  expect((await scanRequest).postDataJSON()).toEqual({ coordinate, digest });
+  await expect(page.getByText("扫描任务已提交")).toBeVisible();
 });
 
 test("security guardrails use independent desktop columns", async ({

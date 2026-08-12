@@ -1,10 +1,11 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepositoryArtifactScan,
   listRepositoryLifecycleJobs,
   reconcileRepositoryArtifactScans,
+  searchRepositoryArtifacts,
 } from "../../client";
 import type { Repository, RepositoryCapabilities } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -14,11 +15,13 @@ vi.mock("../../client", () => ({
   createRepositoryArtifactScan: vi.fn(),
   listRepositoryLifecycleJobs: vi.fn(),
   reconcileRepositoryArtifactScans: vi.fn(),
+  searchRepositoryArtifacts: vi.fn(),
 }));
 
 const mockCreateScan = vi.mocked(createRepositoryArtifactScan);
 const mockListJobs = vi.mocked(listRepositoryLifecycleJobs);
 const mockReconcileScans = vi.mocked(reconcileRepositoryArtifactScans);
+const mockSearchArtifacts = vi.mocked(searchRepositoryArtifacts);
 const digest = `sha256:${"a".repeat(64)}`;
 const repository: Repository = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -37,15 +40,32 @@ const capabilities: RepositoryCapabilities = {
   publicationScanning: true,
 };
 
+beforeEach(() => {
+  mockSearchArtifacts.mockResolvedValue({ data: { items: [] } } as never);
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
 describe("RepositoryScanningTab", () => {
-  it("queues a manual scan from a discoverable repository page", async () => {
+  it("searches, selects, and queues a repository artifact without manual identity input", async () => {
     const user = userEvent.setup();
     mockListJobs.mockResolvedValue({ data: [] } as never);
+    mockSearchArtifacts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate: "@team/widget",
+            version: "1.2.3",
+            digest,
+            size: 2048,
+            createdAt: "2026-08-12T05:00:00Z",
+          },
+        ],
+      },
+    } as never);
     mockCreateScan.mockResolvedValue({
       data: {
         id: "scan-job-1",
@@ -77,10 +97,26 @@ describe("RepositoryScanningTab", () => {
       </PreferencesProvider>,
     );
 
-    expect(await screen.findByText("手动扫描不可变制品")).toBeInTheDocument();
-    await user.type(screen.getByLabelText("制品坐标"), "@team/widget@1.2.3");
-    await user.type(screen.getByLabelText("SHA-256 摘要"), digest);
-    await user.click(screen.getByRole("button", { name: "提交扫描" }));
+    expect(await screen.findByText("选择并扫描不可变制品")).toBeInTheDocument();
+    const artifactPicker = await screen.findByRole("combobox", {
+      name: "搜索并选择制品",
+    });
+    await waitFor(() => expect(mockSearchArtifacts).toHaveBeenCalledTimes(1));
+    await user.click(artifactPicker);
+    expect(
+      await screen.findByRole("option", {
+        name: /@team\/widget@1\.2\.3/,
+      }),
+    ).toBeInTheDocument();
+    const visibleOption = document.querySelector<HTMLElement>(
+      ".ant-select-item-option",
+    );
+    expect(visibleOption).not.toBeNull();
+    await user.click(visibleOption!);
+    expect(await screen.findByText(digest)).toBeInTheDocument();
+    const submitScan = screen.getByRole("button", { name: "提交扫描" });
+    expect(submitScan).toBeEnabled();
+    await user.click(submitScan);
 
     await waitFor(() => expect(mockCreateScan).toHaveBeenCalledTimes(1));
     expect(mockCreateScan).toHaveBeenCalledWith({
@@ -90,7 +126,87 @@ describe("RepositoryScanningTab", () => {
     });
     expect(await screen.findByText("扫描任务已提交")).toBeInTheDocument();
     expect(screen.getAllByText("scan-job-1")).not.toHaveLength(0);
-    expect(screen.getByText("@team/widget@1.2.3")).toBeInTheDocument();
+    expect(screen.getAllByText("@team/widget@1.2.3")).not.toHaveLength(0);
+  });
+
+  it("sends artifact picker text to repository search", async () => {
+    const user = userEvent.setup();
+    mockListJobs.mockResolvedValue({ data: [] } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryScanningTab
+          repo={repository}
+          capabilities={capabilities}
+          capabilitiesLoading={false}
+          capabilitiesError={null}
+          canManage
+          canViewJobs
+        />
+      </PreferencesProvider>,
+    );
+
+    const artifactPicker = await screen.findByRole("combobox", {
+      name: "搜索并选择制品",
+    });
+    await user.click(artifactPicker);
+    await user.type(artifactPicker, "widget");
+
+    await waitFor(() =>
+      expect(mockSearchArtifacts).toHaveBeenCalledWith({
+        path: { repositoryId: repository.id },
+        query: { q: "widget", pageSize: 50 },
+      }),
+    );
+  });
+
+  it("keeps exact coordinate and digest entry as an advanced fallback", async () => {
+    const user = userEvent.setup();
+    mockListJobs.mockResolvedValue({ data: [] } as never);
+    mockCreateScan.mockResolvedValue({
+      data: {
+        id: "manual-scan-job",
+        kind: "scan",
+        state: "pending",
+        createdAt: "2026-08-12T06:00:00Z",
+        attempts: 0,
+        maxAttempts: 3,
+        progressCurrent: 0,
+        progressTotal: 0,
+        details: {
+          format: "npm",
+          coordinate: "@team/legacy@0.9.0",
+          digest,
+        },
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryScanningTab
+          repo={repository}
+          capabilities={capabilities}
+          capabilitiesLoading={false}
+          capabilitiesError={null}
+          canManage
+          canViewJobs
+        />
+      </PreferencesProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "高级手动输入" }),
+    );
+    await user.type(screen.getByLabelText("制品坐标"), "@team/legacy@0.9.0");
+    await user.type(screen.getByLabelText("SHA-256 摘要"), digest);
+    await user.click(screen.getByRole("button", { name: "提交扫描" }));
+
+    await waitFor(() => expect(mockCreateScan).toHaveBeenCalledTimes(1));
+    expect(mockCreateScan).toHaveBeenCalledWith({
+      path: { repositoryId: repository.id },
+      headers: { "Idempotency-Key": expect.stringMatching(/^manual-scan:/) },
+      body: { coordinate: "@team/legacy@0.9.0", digest },
+    });
   });
 
   it("explains scanner configuration when the repository cannot scan", async () => {
@@ -208,6 +324,7 @@ describe("RepositoryScanningTab", () => {
   });
 
   it("asks OCI users for an image name while keeping the digest separate", async () => {
+    const user = userEvent.setup();
     render(
       <PreferencesProvider>
         <RepositoryScanningTab
@@ -219,6 +336,10 @@ describe("RepositoryScanningTab", () => {
           canViewJobs={false}
         />
       </PreferencesProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "高级手动输入" }),
     );
 
     expect(await screen.findByLabelText("制品坐标")).toHaveAttribute(
