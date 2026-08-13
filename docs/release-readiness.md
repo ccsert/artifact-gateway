@@ -3,6 +3,9 @@
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
 Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths plus the Go
 Module Proxy/Group read path.
+The gate also carries the unadvertised APT Hosted signing preview through a
+real Debian client and exact signed-snapshot recovery rehearsal; passing it does
+not promote APT Hosted into the V1 compatibility claim.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -16,6 +19,7 @@ make native-maven-e2e
 make native-npm-e2e
 make native-pypi-e2e
 make native-go-e2e
+make native-apt-e2e
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
@@ -43,7 +47,7 @@ storage credentials, or unredacted upstream URLs in that record.
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
 	  `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
-	  `make native-pypi-e2e`, `make native-go-e2e`,
+	  `make native-pypi-e2e`, `make native-go-e2e`, `make native-apt-e2e`,
       and `make conan-e2e`
       pass.
 - [ ] `make integration-test` includes PostgreSQL and RustFS worker evidence for
@@ -65,6 +69,11 @@ storage credentials, or unredacted upstream URLs in that record.
 	  Go uses a real `go mod download` against the Gateway `GOPROXY`, stops its
 	  upstream, clears the module cache, and downloads the same `.info`, `.mod`,
 	  and `.zip` assets from Gateway storage.
+      The unadvertised APT Hosted preview builds a real `.deb`, publishes and
+      installs a signed snapshot, captures all signed/index/package digests,
+      backs up PostgreSQL and RustFS, publishes a later snapshot, restores the
+      original one byte-for-byte, then installs it again with the signer
+      offline.
       Raw HTTP covers live-Gateway public GET/HEAD/range, anonymous allow and
       denial, canonical-path rejection, negative cache, Proxy allowlist denial,
       source-outage cache recovery, audit, and metrics. Conan 2.21.0 covers the v2
@@ -120,6 +129,11 @@ storage credentials, or unredacted upstream URLs in that record.
       Repository grant version/content, and the Native Raw authorization
       denial/allow behavior. Run `make backup-drill`
       against the release environment only after the isolated rehearsal passes.
+- [ ] `make native-apt-e2e` proves exact recovery of an immutable signed APT
+      snapshot in addition to the broader backup rehearsal: signing-state
+      evidence, `Release`, both signatures, direct/by-hash indices, and package
+      bytes must all match the pre-mutation backup after PostgreSQL/RustFS
+      restore. The signer key volume is intentionally not part of this proof.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
       allowlists, Repository grant sets, quotas, and OIDC issuer/audience. For
       a grant rollout, review the bounded authorization signal without adding

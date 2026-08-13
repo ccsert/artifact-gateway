@@ -59,9 +59,18 @@ retried with the same key after the operator raises the quota.
 
 Run `make native-apt-e2e`. The gate builds a real `.deb`, publishes it through
 the generated management contract, imports the reference public key in a clean
-Debian container, runs `apt-get update` and installs the package, stops the
-signer, and repeats update and installation from the already published
-immutable snapshot.
+Debian container, runs `apt-get update`, and installs the package. It then
+captures the complete immutable evidence for `Release`, `InRelease`,
+`Release.gpg`, direct and by-hash package indices, and the referenced `.deb`;
+backs up PostgreSQL and RustFS; publishes a different snapshot; and restores
+the backup. The restored signing-state object and every captured byte digest
+must exactly match the original snapshot. Finally, the gate stops the signer
+and repeats update and installation from the restored immutable snapshot.
+
+This recovery gate proves repository metadata and object restoration. The
+reference signer's private-key volume is deliberately outside the
+PostgreSQL/RustFS backup, so managed key custody, key backup, and key recovery
+remain production H3 responsibilities.
 
 The Console artifact tab and repository search show only the current visible
 snapshot. Capacity includes staged package revisions and deduplicated generated

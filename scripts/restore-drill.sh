@@ -4,8 +4,6 @@ set -euo pipefail
 environment_file=${GATEWAY_ENV_FILE:-.env}
 backup_dir=${1:?usage: scripts/restore-drill.sh <backup-directory>}
 compose=(docker compose --env-file "$environment_file" -f compose.yml)
-# shellcheck disable=SC1091
-source "$environment_file"
 shasum -a 256 --check "$backup_dir/SHA256SUMS"
 
 "${compose[@]}" stop gateway rustfs
@@ -24,7 +22,17 @@ docker start "$rustfs_container" >/dev/null
 gateway_container=$("${compose[@]}" ps -aq gateway)
 test -n "$gateway_container"
 docker start "$gateway_container" >/dev/null
-gateway_url="http://localhost:${GATEWAY_HTTP_PORT:-8080}"
-ready_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$gateway_url/readyz")
-[[ "$ready_status" == 204 ]] || { printf 'Restored Gateway readiness returned HTTP %s.\n' "$ready_status" >&2; exit 1; }
+ready_status=000
+gateway_url=
+for _ in $(seq 1 80); do
+  gateway_binding=$("${compose[@]}" port gateway 8080 | tail -n 1)
+  if [[ -n "$gateway_binding" ]]; then
+    gateway_url="http://127.0.0.1:${gateway_binding##*:}"
+    ready_status=$(curl --noproxy '*' --silent --show-error --output /dev/null --write-out '%{http_code}' \
+      --max-time 2 "$gateway_url/readyz" 2>/dev/null || true)
+    [[ "$ready_status" == 204 ]] && break
+  fi
+  sleep 0.25
+done
+[[ "$ready_status" == 204 ]] || { printf 'Restored Gateway readiness returned HTTP %s at %s.\n' "$ready_status" "${gateway_url:-unresolved endpoint}" >&2; exit 1; }
 printf 'Restore completed from: %s\n' "$backup_dir"

@@ -43,6 +43,7 @@ tokens, or unredacted upstream URLs.
 | make console-e2e | | | | |
 | make upgrade-readiness | | | | |
 | make backup-restore-readiness | | | | |
+| make native-apt-e2e | | | | |
 
 ## Production Verification
 

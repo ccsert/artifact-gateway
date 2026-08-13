@@ -123,9 +123,12 @@ active/next/out-of-policy key role, and make the rotation overlap explicit.
 Bounded signing outcome and latency metrics support alerting without signer,
 repository, or actor labels. The audit keeps authorization reason vocabulary stable
 and stores signer identity, verified fingerprint, and derived algorithm in its
-dedicated immutable `evidence` object. Managed key custody, client rotation
-drills, snapshot export/restore verification, and deployment-specific alert
-installation remain before H3 can pass.
+dedicated immutable `evidence` object. The native APT gate now backs up
+PostgreSQL and RustFS, publishes a later snapshot, restores the earlier signed
+snapshot, verifies its complete evidence and object digests, and installs from
+it with the signer offline. Managed key custody and key recovery, client
+rotation drills, dedicated snapshot export/retention/rebuild tooling, and
+deployment-specific alert installation remain before H3 can pass.
 
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
   record signer identity, key fingerprint, algorithm, snapshot digest, actor,
@@ -134,12 +137,14 @@ installation remain before H3 can pass.
   signing state. Public-key distribution remains an explicit operator action in
   the first release rather than an automatic trust change.
 - Add snapshot retention, rebuild, export, backup/restore, metrics, alerts, and
-  a disaster-recovery drill that verifies signature and object checksums after
-  restoration.
+  disaster-recovery evidence. PostgreSQL/RustFS restore, signing metrics, and
+  exact signature/object checksum verification are complete; dedicated
+  retention, rebuild, export, and deployment alert installation remain.
 
 Acceptance gate: Debian client verification passes before, during, and after a
 documented rotation; a restored repository reproduces the same signed snapshot
-digests.
+digests. The restore half is complete in `make native-apt-e2e`; the documented
+production rotation half remains open.
 
 ## APT-H4: lifecycle, scanning, and distribution
 

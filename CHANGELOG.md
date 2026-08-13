@@ -64,8 +64,11 @@ a dated version heading without rewriting their meaning.
   durable reference-checked cleanup of interrupted snapshot objects, a
   generated idempotent snapshot-publish API, loopback reference signer with an
   isolated persistent private key, Console/search/capacity projection, and a
-  real signed Debian update/install gate. Hosted remains unadvertised until H3
-  production key custody and rotation are complete.
+  real signed Debian update/install gate. The gate now also proves exact
+  PostgreSQL/RustFS recovery by publishing a later mutation, restoring the
+  original signing evidence and every signed/index/package byte, and installing
+  with the signer offline. Hosted remains unadvertised until H3 production key
+  custody and rotation are complete.
 - A pinned RustFS-only object-store baseline for Compose, integration tests,
   and Kubernetes, including streaming, metadata, Range, lifecycle, backup, and
   recovery contract coverage.
