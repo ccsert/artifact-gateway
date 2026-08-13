@@ -87,6 +87,7 @@ describe("RepositoryGrantsTab", () => {
 
     expect(screen.getByText(/用户 · active-user/)).toBeInTheDocument();
     expect(screen.getByText(/API Key · Active key/)).toBeInTheDocument();
+    expect(screen.getByText(/OIDC \/ 自定义 actor/)).toBeInTheDocument();
     expect(screen.queryByText(/disabled-user/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Revoked key/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Expired key/)).not.toBeInTheDocument();

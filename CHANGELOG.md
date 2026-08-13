@@ -29,8 +29,9 @@ a dated version heading without rewriting their meaning.
   incorrectly reporting that the repository does not exist.
 - Prioritized Cargo sparse-registry planning after APT H3 and deferred NuGet
   repository implementation while retaining its tested parser foundation.
-- Kept access evaluation focused on usable authorization principals by hiding
-  disabled users and revoked or expired API keys from the principal picker.
+- Kept access evaluation and repository grant editing focused on usable
+  authorization principals by hiding disabled users and revoked or expired API
+  keys from both principal pickers.
 
 ### Added
 
