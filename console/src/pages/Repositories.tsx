@@ -380,6 +380,7 @@ export function RepositoriesPage() {
       key: "name",
       fixed: "left",
       width: 190,
+      sorter: (left, right) => left.name.localeCompare(right.name),
       render: (name: string, repository) => (
         <Link
           to={`/repositories/${repository.id}`}
@@ -418,6 +419,10 @@ export function RepositoriesPage() {
       title: text("容量", "Capacity"),
       key: "capacity",
       width: 140,
+      defaultSortOrder: "descend",
+      sorter: (left, right) =>
+        (capacities[left.id]?.usedBytes ?? 0) -
+        (capacities[right.id]?.usedBytes ?? 0),
       render: (_value, repository) => {
         const capacity = capacities[repository.id];
         return capacity ? (
@@ -482,6 +487,7 @@ export function RepositoriesPage() {
             size="small"
             danger
             icon={<DeleteOutlined />}
+            className="opacity-40 transition-opacity group-hover:opacity-100 focus:opacity-100"
             aria-label={text(
               `删除 ${repository.name}`,
               `Delete ${repository.name}`,
@@ -653,10 +659,20 @@ export function RepositoriesPage() {
             <Table<Repository>
               className="ag-console-table"
               rowKey="id"
+              rowClassName={() => "group"}
               size="middle"
               dataSource={visible}
               columns={columns}
-              pagination={false}
+              pagination={{
+                defaultPageSize: 20,
+                pageSizeOptions: [10, 20, 50],
+                showSizeChanger: true,
+                showTotal: (total, range) =>
+                  text(
+                    `${range[0]}-${range[1]} / 共 ${total} 个仓库`,
+                    `${range[0]}-${range[1]} of ${total} repositories`,
+                  ),
+              }}
               scroll={{ x: 1100 }}
             />
           )}

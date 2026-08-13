@@ -5,11 +5,11 @@ services:
     image: postgres:16-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
     environment:
-      POSTGRES_DB: gateway
+      POSTGRES_DB: gateway_test
       POSTGRES_USER: gateway
       POSTGRES_PASSWORD: integration-password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway"]
+      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway_test"]
       interval: 1s
       timeout: 3s
       retries: 20
@@ -21,6 +21,7 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: integration-password
+      PGDATABASE: gateway_test
     entrypoint: ["/usr/local/bin/run-migrations"]
     volumes:
       - ./migrations:/migrations:ro
@@ -34,7 +35,7 @@ services:
       rustfs-ready:
         condition: service_completed_successfully
     environment:
-      TEST_DATABASE_URL: postgres://gateway:integration-password@postgres:5432/gateway?sslmode=disable
+      TEST_DATABASE_URL: postgres://gateway:integration-password@postgres:5432/gateway_test?sslmode=disable
       TEST_RUSTFS_ENDPOINT: http://rustfs:9000
       TEST_RUSTFS_ACCESS_KEY: integration-rustfs
       TEST_RUSTFS_SECRET_KEY: integration-password

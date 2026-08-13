@@ -107,6 +107,10 @@ no-op, and runs the persistent-store tests. Applied migration filenames and
 SHA-256 checksums are recorded in `artifact_gateway_schema_migrations`; edit
 history only through a new forward migration.
 
+Integration tests refuse a `TEST_DATABASE_URL` whose database name does not
+end in `_test`, so fixture repositories cannot pollute a development or
+operator-visible database.
+
 Native protocol fixtures exercise the externally visible behavior without an
 external package service:
 
