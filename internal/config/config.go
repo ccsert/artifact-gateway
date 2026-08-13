@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -56,128 +57,133 @@ var supportedWorkerKinds = map[string]struct{}{
 }
 
 type Config struct {
-	ListenAddress              string
-	NodeRoles                  []NodeRole
-	InstanceID                 string
-	WorkerFormats              []string
-	WorkerKinds                []string
-	ScannerEndpoint            string
-	ScannerHealthEndpoint      string
-	ScannerName                string
-	ScannerToken               string
-	ScannerTimeout             time.Duration
-	ScannerHealthTimeout       time.Duration
-	ScannerDatabaseMaxAge      time.Duration
-	ScannerMaxResponseBytes    int64
-	ScannerMaxArtifactBytes    int64
-	ScannerFormats             []string
-	APTSignerEndpoint          string
-	APTSignerToken             string
-	APTSignerTimeout           time.Duration
-	RuntimeNodeRetention       time.Duration
-	RuntimeNodePruneInterval   time.Duration
-	DatabaseURL                string
-	DatabasePool               database.PoolConfig
-	DatabaseCoordinatorPool    database.PoolConfig
-	DatabaseArtifactLockPool   database.PoolConfig
-	S3Endpoint                 string
-	S3Bucket                   string
-	S3AccessKey                string
-	S3SecretKey                string
-	OCIProxyAllowedHosts       []string
-	MavenProxyAllowedHosts     []string
-	RawProxyAllowedHosts       []string
-	RawCacheMaxObjectBytes     int64
-	ConanCacheMaxObjectBytes   int64
-	OCICacheTTL                time.Duration
-	MavenCacheTTL              time.Duration
-	MavenMetadataCacheTTL      time.Duration
-	MavenNegativeCacheTTL      time.Duration
-	NPMMetadataCacheTTL        time.Duration
-	NPMNegativeCacheTTL        time.Duration
-	NPMProxyBreakerTTL         time.Duration
-	RawCacheTTL                time.Duration
-	ConanCacheTTL              time.Duration
-	AdminToken                 string
-	ResolverToken              string
-	AdminActor                 string
-	ResolverActor              string
-	LocalAuthMaxFailedAttempts int
-	LocalAuthLockoutDuration   time.Duration
-	RepositoryReaders          map[string][]string
-	RepositoryCacheQuotas      map[string]int64
-	OIDCIssuer                 string
-	OIDCAudience               string
-	OIDCJWKSURL                string
-	OIDCClientID               string
-	OIDCClientSecret           string
-	OIDCRedirectURL            string
-	OIDCScopes                 []string
-	OIDCAdminSubjects          []string
-	OIDCRoles                  authorization.OIDCRoleMapping
-	OTLPHTTPEndpoint           string
-	OTELSamplingRatio          float64
+	ListenAddress                  string
+	NodeRoles                      []NodeRole
+	InstanceID                     string
+	WorkerFormats                  []string
+	WorkerKinds                    []string
+	ScannerEndpoint                string
+	ScannerHealthEndpoint          string
+	ScannerName                    string
+	ScannerToken                   string
+	ScannerTimeout                 time.Duration
+	ScannerHealthTimeout           time.Duration
+	ScannerDatabaseMaxAge          time.Duration
+	ScannerMaxResponseBytes        int64
+	ScannerMaxArtifactBytes        int64
+	ScannerFormats                 []string
+	APTSignerEndpoint              string
+	APTSignerToken                 string
+	APTSignerTimeout               time.Duration
+	APTSignerTrustedFingerprints   []string
+	APTSignerTrustedPublicKeysFile string
+	APTSignerTrustedPublicKeys     []byte
+	RuntimeNodeRetention           time.Duration
+	RuntimeNodePruneInterval       time.Duration
+	DatabaseURL                    string
+	DatabasePool                   database.PoolConfig
+	DatabaseCoordinatorPool        database.PoolConfig
+	DatabaseArtifactLockPool       database.PoolConfig
+	RustFSEndpoint                 string
+	RustFSBucket                   string
+	RustFSAccessKey                string
+	RustFSSecretKey                string
+	OCIProxyAllowedHosts           []string
+	MavenProxyAllowedHosts         []string
+	RawProxyAllowedHosts           []string
+	RawCacheMaxObjectBytes         int64
+	ConanCacheMaxObjectBytes       int64
+	OCICacheTTL                    time.Duration
+	MavenCacheTTL                  time.Duration
+	MavenMetadataCacheTTL          time.Duration
+	MavenNegativeCacheTTL          time.Duration
+	NPMMetadataCacheTTL            time.Duration
+	NPMNegativeCacheTTL            time.Duration
+	NPMProxyBreakerTTL             time.Duration
+	RawCacheTTL                    time.Duration
+	ConanCacheTTL                  time.Duration
+	AdminToken                     string
+	ResolverToken                  string
+	AdminActor                     string
+	ResolverActor                  string
+	LocalAuthMaxFailedAttempts     int
+	LocalAuthLockoutDuration       time.Duration
+	RepositoryReaders              map[string][]string
+	RepositoryCacheQuotas          map[string]int64
+	OIDCIssuer                     string
+	OIDCAudience                   string
+	OIDCJWKSURL                    string
+	OIDCClientID                   string
+	OIDCClientSecret               string
+	OIDCRedirectURL                string
+	OIDCScopes                     []string
+	OIDCAdminSubjects              []string
+	OIDCRoles                      authorization.OIDCRoleMapping
+	OTLPHTTPEndpoint               string
+	OTELSamplingRatio              float64
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		ListenAddress:              value("GATEWAY_LISTEN_ADDRESS", ":8080"),
-		NodeRoles:                  parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
-		InstanceID:                 value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
-		WorkerFormats:              parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
-		WorkerKinds:                parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
-		ScannerEndpoint:            strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
-		ScannerHealthEndpoint:      strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_HEALTH_ENDPOINT")),
-		ScannerName:                strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_NAME")),
-		ScannerToken:               os.Getenv("GATEWAY_SCANNER_TOKEN"),
-		ScannerTimeout:             2 * time.Minute,
-		ScannerHealthTimeout:       2 * time.Second,
-		ScannerDatabaseMaxAge:      24 * time.Hour,
-		ScannerMaxResponseBytes:    512 << 10,
-		ScannerMaxArtifactBytes:    20 << 30,
-		APTSignerEndpoint:          strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_ENDPOINT")),
-		APTSignerToken:             os.Getenv("GATEWAY_APT_SIGNER_TOKEN"),
-		APTSignerTimeout:           15 * time.Second,
-		RuntimeNodeRetention:       7 * 24 * time.Hour,
-		RuntimeNodePruneInterval:   time.Hour,
-		DatabaseURL:                os.Getenv("GATEWAY_DATABASE_URL"),
-		DatabasePool:               database.DefaultPoolConfig(),
-		DatabaseCoordinatorPool:    database.DefaultCoordinatorPoolConfig(),
-		DatabaseArtifactLockPool:   database.DefaultArtifactLockPoolConfig(),
-		S3Endpoint:                 os.Getenv("GATEWAY_S3_ENDPOINT"),
-		S3Bucket:                   os.Getenv("GATEWAY_S3_BUCKET"),
-		S3AccessKey:                os.Getenv("GATEWAY_S3_ACCESS_KEY"),
-		S3SecretKey:                os.Getenv("GATEWAY_S3_SECRET_KEY"),
-		OCIProxyAllowedHosts:       splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
-		MavenProxyAllowedHosts:     splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
-		RawProxyAllowedHosts:       splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
-		RawCacheMaxObjectBytes:     1 << 30,
-		ConanCacheMaxObjectBytes:   1 << 30,
-		OCICacheTTL:                15 * time.Minute,
-		MavenCacheTTL:              24 * time.Hour,
-		MavenMetadataCacheTTL:      15 * time.Minute,
-		MavenNegativeCacheTTL:      10 * time.Minute,
-		NPMMetadataCacheTTL:        15 * time.Minute,
-		NPMNegativeCacheTTL:        10 * time.Minute,
-		NPMProxyBreakerTTL:         30 * time.Second,
-		RawCacheTTL:                15 * time.Minute,
-		ConanCacheTTL:              15 * time.Minute,
-		AdminToken:                 os.Getenv("GATEWAY_ADMIN_TOKEN"),
-		ResolverToken:              os.Getenv("GATEWAY_RESOLVER_TOKEN"),
-		AdminActor:                 value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
-		ResolverActor:              value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
-		LocalAuthMaxFailedAttempts: 5,
-		LocalAuthLockoutDuration:   15 * time.Minute,
-		RepositoryReaders:          repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
-		RepositoryCacheQuotas:      repositoryCacheQuotas(os.Getenv("GATEWAY_REPOSITORY_CACHE_QUOTAS")),
-		OIDCIssuer:                 strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
-		OIDCAudience:               strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
-		OIDCJWKSURL:                strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
-		OIDCClientID:               strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_ID")),
-		OIDCClientSecret:           strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_SECRET")),
-		OIDCRedirectURL:            strings.TrimSpace(os.Getenv("GATEWAY_OIDC_REDIRECT_URL")),
-		OIDCScopes:                 oidcScopes(os.Getenv("GATEWAY_OIDC_SCOPES")),
-		OIDCAdminSubjects:          splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
+		ListenAddress:                  value("GATEWAY_LISTEN_ADDRESS", ":8080"),
+		NodeRoles:                      parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
+		InstanceID:                     value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
+		WorkerFormats:                  parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
+		WorkerKinds:                    parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
+		ScannerEndpoint:                strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
+		ScannerHealthEndpoint:          strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_HEALTH_ENDPOINT")),
+		ScannerName:                    strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_NAME")),
+		ScannerToken:                   os.Getenv("GATEWAY_SCANNER_TOKEN"),
+		ScannerTimeout:                 2 * time.Minute,
+		ScannerHealthTimeout:           2 * time.Second,
+		ScannerDatabaseMaxAge:          24 * time.Hour,
+		ScannerMaxResponseBytes:        512 << 10,
+		ScannerMaxArtifactBytes:        20 << 30,
+		APTSignerEndpoint:              strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_ENDPOINT")),
+		APTSignerToken:                 os.Getenv("GATEWAY_APT_SIGNER_TOKEN"),
+		APTSignerTimeout:               15 * time.Second,
+		APTSignerTrustedFingerprints:   splitCSV(os.Getenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS")),
+		APTSignerTrustedPublicKeysFile: strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE")),
+		RuntimeNodeRetention:           7 * 24 * time.Hour,
+		RuntimeNodePruneInterval:       time.Hour,
+		DatabaseURL:                    os.Getenv("GATEWAY_DATABASE_URL"),
+		DatabasePool:                   database.DefaultPoolConfig(),
+		DatabaseCoordinatorPool:        database.DefaultCoordinatorPoolConfig(),
+		DatabaseArtifactLockPool:       database.DefaultArtifactLockPoolConfig(),
+		RustFSEndpoint:                 os.Getenv("GATEWAY_RUSTFS_ENDPOINT"),
+		RustFSBucket:                   os.Getenv("GATEWAY_RUSTFS_BUCKET"),
+		RustFSAccessKey:                os.Getenv("GATEWAY_RUSTFS_ACCESS_KEY"),
+		RustFSSecretKey:                os.Getenv("GATEWAY_RUSTFS_SECRET_KEY"),
+		OCIProxyAllowedHosts:           splitCSV(os.Getenv("GATEWAY_OCI_PROXY_ALLOWED_HOSTS")),
+		MavenProxyAllowedHosts:         splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
+		RawProxyAllowedHosts:           splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
+		RawCacheMaxObjectBytes:         1 << 30,
+		ConanCacheMaxObjectBytes:       1 << 30,
+		OCICacheTTL:                    15 * time.Minute,
+		MavenCacheTTL:                  24 * time.Hour,
+		MavenMetadataCacheTTL:          15 * time.Minute,
+		MavenNegativeCacheTTL:          10 * time.Minute,
+		NPMMetadataCacheTTL:            15 * time.Minute,
+		NPMNegativeCacheTTL:            10 * time.Minute,
+		NPMProxyBreakerTTL:             30 * time.Second,
+		RawCacheTTL:                    15 * time.Minute,
+		ConanCacheTTL:                  15 * time.Minute,
+		AdminToken:                     os.Getenv("GATEWAY_ADMIN_TOKEN"),
+		ResolverToken:                  os.Getenv("GATEWAY_RESOLVER_TOKEN"),
+		AdminActor:                     value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
+		ResolverActor:                  value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
+		LocalAuthMaxFailedAttempts:     5,
+		LocalAuthLockoutDuration:       15 * time.Minute,
+		RepositoryReaders:              repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
+		RepositoryCacheQuotas:          repositoryCacheQuotas(os.Getenv("GATEWAY_REPOSITORY_CACHE_QUOTAS")),
+		OIDCIssuer:                     strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
+		OIDCAudience:                   strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
+		OIDCJWKSURL:                    strings.TrimSpace(os.Getenv("GATEWAY_OIDC_JWKS_URL")),
+		OIDCClientID:                   strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_ID")),
+		OIDCClientSecret:               strings.TrimSpace(os.Getenv("GATEWAY_OIDC_CLIENT_SECRET")),
+		OIDCRedirectURL:                strings.TrimSpace(os.Getenv("GATEWAY_OIDC_REDIRECT_URL")),
+		OIDCScopes:                     oidcScopes(os.Getenv("GATEWAY_OIDC_SCOPES")),
+		OIDCAdminSubjects:              splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
 		OIDCRoles: authorization.OIDCRoleMapping{
 			Reader: splitCSV(os.Getenv("GATEWAY_OIDC_READER_ROLES")),
 			Writer: splitCSV(os.Getenv("GATEWAY_OIDC_WRITER_ROLES")),
@@ -190,14 +196,14 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	if cfg.DatabaseURL == "" || cfg.S3Endpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
-		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_S3_ENDPOINT, GATEWAY_S3_BUCKET, GATEWAY_S3_ACCESS_KEY, GATEWAY_S3_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
+	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
+		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_RUSTFS_ENDPOINT, GATEWAY_RUSTFS_BUCKET, GATEWAY_RUSTFS_ACCESS_KEY, GATEWAY_RUSTFS_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
 	}
 	if _, err := url.ParseRequestURI(cfg.DatabaseURL); err != nil {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL is not a valid URL")
 	}
-	if _, err := url.ParseRequestURI(cfg.S3Endpoint); err != nil {
-		return Config{}, fmt.Errorf("GATEWAY_S3_ENDPOINT is not a valid URL")
+	if _, err := url.ParseRequestURI(cfg.RustFSEndpoint); err != nil {
+		return Config{}, fmt.Errorf("GATEWAY_RUSTFS_ENDPOINT is not a valid URL")
 	}
 	if err := configureScanner(&cfg); err != nil {
 		return Config{}, err
@@ -464,12 +470,16 @@ func configureScanner(cfg *Config) error {
 }
 
 func configureAPTSigner(cfg *Config) error {
-	requestedWithoutEndpoint := cfg.APTSignerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TIMEOUT")) != ""
+	requestedWithoutEndpoint := cfg.APTSignerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TIMEOUT")) != "" ||
+		len(cfg.APTSignerTrustedFingerprints) > 0 || cfg.APTSignerTrustedPublicKeysFile != ""
 	if cfg.APTSignerEndpoint == "" {
 		if requestedWithoutEndpoint {
 			return fmt.Errorf("GATEWAY_APT_SIGNER_ENDPOINT is required when APT signer settings are configured")
 		}
 		cfg.APTSignerToken = ""
+		cfg.APTSignerTrustedFingerprints = nil
+		cfg.APTSignerTrustedPublicKeysFile = ""
+		cfg.APTSignerTrustedPublicKeys = nil
 		return nil
 	}
 	parsed, err := url.ParseRequestURI(cfg.APTSignerEndpoint)
@@ -485,6 +495,28 @@ func configureAPTSigner(cfg *Config) error {
 	if cfg.APTSignerTimeout < time.Second || cfg.APTSignerTimeout > time.Minute {
 		return fmt.Errorf("GATEWAY_APT_SIGNER_TIMEOUT must be between 1s and 1m")
 	}
+	fingerprints, err := aptpublication.NormalizeTrustedSignerFingerprints(cfg.APTSignerTrustedFingerprints)
+	if err != nil {
+		return fmt.Errorf("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS: %w", err)
+	}
+	remote := !aptpublication.IsLoopbackSignerHost(parsed.Hostname())
+	if remote && (len(fingerprints) == 0 || cfg.APTSignerTrustedPublicKeysFile == "") {
+		return fmt.Errorf("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS and GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE are required for a remote APT signer")
+	}
+	if len(fingerprints) > 0 || cfg.APTSignerTrustedPublicKeysFile != "" {
+		if len(fingerprints) == 0 || cfg.APTSignerTrustedPublicKeysFile == "" {
+			return fmt.Errorf("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS and GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE must be configured together")
+		}
+		publicKeys, loadErr := aptpublication.LoadTrustedSignerPublicKeys(cfg.APTSignerTrustedPublicKeysFile)
+		if loadErr != nil {
+			return fmt.Errorf("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE could not be loaded")
+		}
+		if validateErr := aptpublication.ValidateTrustedSignerPublicKeys(fingerprints, publicKeys); validateErr != nil {
+			return fmt.Errorf("APT signer trusted public-key policy is invalid")
+		}
+		cfg.APTSignerTrustedPublicKeys = publicKeys
+	}
+	cfg.APTSignerTrustedFingerprints = fingerprints
 	return nil
 }
 

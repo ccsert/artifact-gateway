@@ -82,35 +82,23 @@ grep -Fq 'K8S_LOCAL_APT_SIGNER_TOKEN must be between 32 and 256 characters' "$wo
 
 : >"$log"
 FAKE_K8S_LEGACY_MINIO=1 run_expect 1 "$script" up
-grep -Fq 'legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'legacy MinIO stack was overwritten in place'
+grep -Fq 'unsupported legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'legacy MinIO stack was overwritten in place'
 if grep -Fq 'kubectl apply -k' "$log"; then
   fail 'RustFS manifest was applied over a legacy MinIO stack'
 fi
 
 : >"$log"
 FAKE_K8S_LEGACY_MINIO_PVC=1 run_expect 1 "$script" up
-grep -Fq 'legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'orphaned MinIO PVC was ignored'
+grep -Fq 'unsupported legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'orphaned MinIO PVC was ignored'
 
 : >"$log"
 FAKE_K8S_LEGACY_MINIO=1 K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 run_expect 1 "$script" up
-grep -Fq 'verified manifest fingerprint' "$workdir/stderr" || fail 'bare RustFS migration confirmation was accepted'
+grep -Fq 'no compatibility or migration bypass is available' "$workdir/stderr" || fail 'removed RustFS migration bypass was accepted'
 if grep -Fq 'kubectl apply -k' "$log"; then
   fail 'RustFS manifest was applied without a verified migration manifest fingerprint'
 fi
 
 : >"$log"
-FAKE_K8S_LEGACY_MINIO=1 \
-K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 \
-K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=unverified run_expect 1 "$script" up
-grep -Fq 'verified manifest fingerprint' "$workdir/stderr" || fail 'invalid RustFS migration fingerprint was accepted'
-
-: >"$log"
-migration_fingerprint="sha256:$(printf 'b%.0s' {1..64})"
-FAKE_K8S_LEGACY_MINIO=1 \
-K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 \
-K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256="$migration_fingerprint" run_expect 0 "$script" up
-assert_log 'kubectl apply -k'
-
 : >"$log"
 FAKE_K8S_PORT_BUSY=1 run_expect 1 "$script" up
 grep -Fq 'local port 80 is already in use' "$workdir/stderr" || fail 'occupied Ingress port was accepted'

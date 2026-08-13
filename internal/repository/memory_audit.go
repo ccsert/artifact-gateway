@@ -20,7 +20,19 @@ func (s *MemoryStore) appendAuditLocked(record AuditRecord) {
 	if record.ID == 0 {
 		record.ID = int64(len(s.Audits) + 1)
 	}
+	record.Evidence = cloneAuditEvidence(record.Evidence)
 	s.Audits = append(s.Audits, record)
+}
+
+func cloneAuditEvidence(evidence map[string]string) map[string]string {
+	if len(evidence) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(evidence))
+	for key, value := range evidence {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRecord, error) {
@@ -71,6 +83,7 @@ func (s *MemoryStore) ListAuditPage(_ context.Context, query AuditQuery) (AuditP
 		if query.Actor != "" && record.Actor != query.Actor {
 			continue
 		}
+		record.Evidence = cloneAuditEvidence(record.Evidence)
 		records = append(records, record)
 	}
 	sort.SliceStable(records, func(i, j int) bool {

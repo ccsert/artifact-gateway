@@ -8,6 +8,21 @@ a dated version heading without rewriting their meaning.
 
 ## Unreleased
 
+- Switched the runtime, local Compose, Kubernetes, integration tests, and
+  configuration contract fully to RustFS using the official AWS SDK for Go v2;
+  removed MinIO services, SDK dependencies, migration tooling, and cutover
+  bypasses while retaining fail-closed detection of legacy resources.
+- Added the first APT H3 signing hardening slice: remote signers require a
+  public-only OpenPGP keyring matching one or two pinned fingerprints, and
+  Gateway cryptographically verifies both signatures before visibility. This
+  allows a controlled rotation overlap, derives signer identity and algorithm
+  from verified keys, validates the complete keyring before preflight can pass,
+  and records structured immutable signing evidence without changing
+  authorization-reason semantics; the
+  OpenPGP dependency chain now includes the CIRCL secp384r1 fix from v1.6.3.
+- Prioritized Cargo sparse-registry planning after APT H3 and deferred NuGet
+  repository implementation while retaining its tested parser foundation.
+
 ### Added
 
 - A pinned, non-root Traefik Ingress for the Docker Desktop Kubernetes overlay,
@@ -16,9 +31,8 @@ a dated version heading without rewriting their meaning.
 - A bounded NuGet `.nupkg`/`.nuspec` parser with normalized, case-insensitive
   immutable package identity, plus an explicit staged roadmap that keeps the
   format undiscoverable until its executable protocol gates are complete.
-- Idempotent local RustFS credential migration and verified-manifest recording
-  for existing Compose environments, with retained rollback copies and a hard
-  guard against unverified MinIO-to-RustFS cutovers.
+- Idempotent local RustFS credential bootstrapping with retained rollback copies
+  and a fail-closed guard for unsupported legacy object-store resources.
 - A hardened Kustomize base and one-command local Kubernetes deployment with
   Gateway, Console, PostgreSQL, RustFS, idempotent migrations, persistent local
   volumes, health checks, manifest validation, and same-origin protocol routes.
@@ -45,12 +59,9 @@ a dated version heading without rewriting their meaning.
   isolated persistent private key, Console/search/capacity projection, and a
   real signed Debian update/install gate. Hosted remains unadvertised until H3
   production key custody and rotation are complete.
-- A pinned RustFS S3 baseline for Compose, integration tests, and Kubernetes,
-  including object-contract coverage and a copy/verify/cutover/rollback migration
-  runbook that explicitly rejects MinIO data-volume reuse.
-- A repository-native streaming MinIO-to-RustFS migration command that preserves
-  durable HTTP and S3 user metadata, emits a byte-level verified manifest, and
-  supports explicit frozen-write exact mirroring for rollback.
+- A pinned RustFS-only object-store baseline for Compose, integration tests,
+  and Kubernetes, including streaming, metadata, Range, lifecycle, backup, and
+  recovery contract coverage.
 - One-command local development lifecycle targets for starting the complete
   stack, checking the Console and Gateway paths, and stopping only the
   checkout-managed Console.

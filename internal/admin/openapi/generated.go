@@ -2282,23 +2282,26 @@ type AuditRecord struct {
 	AuthorizationReason *string `json:"authorizationReason,omitempty"`
 
 	// AuthorizationSource Optional bounded authorization decision source. Current values include repository_grants, legacy_static, legacy_protocol, and administrator; consumers must accept future bounded values.
-	AuthorizationSource *string   `json:"authorizationSource,omitempty"`
-	Bytes               *int64    `json:"bytes,omitempty"`
-	CacheDisposition    *string   `json:"cacheDisposition,omitempty"`
-	Format              *string   `json:"format,omitempty"`
-	GroupName           *string   `json:"groupName,omitempty"`
-	MemberName          *string   `json:"memberName,omitempty"`
-	MemberType          *string   `json:"memberType,omitempty"`
-	OccurredAt          time.Time `json:"occurredAt"`
-	Operation           *string   `json:"operation,omitempty"`
-	Outcome             string    `json:"outcome"`
-	Repository          *string   `json:"repository,omitempty"`
-	Representation      *string   `json:"representation,omitempty"`
-	RequestId           *string   `json:"requestId,omitempty"`
-	Resource            *string   `json:"resource,omitempty"`
-	Status              *int      `json:"status,omitempty"`
-	TraceId             *string   `json:"traceId,omitempty"`
-	UpstreamHost        *string   `json:"upstreamHost,omitempty"`
+	AuthorizationSource *string `json:"authorizationSource,omitempty"`
+	Bytes               *int64  `json:"bytes,omitempty"`
+	CacheDisposition    *string `json:"cacheDisposition,omitempty"`
+
+	// Evidence Optional immutable, operation-specific evidence. Keys and values are bounded strings; consumers must accept future keys.
+	Evidence       *map[string]string `json:"evidence,omitempty"`
+	Format         *string            `json:"format,omitempty"`
+	GroupName      *string            `json:"groupName,omitempty"`
+	MemberName     *string            `json:"memberName,omitempty"`
+	MemberType     *string            `json:"memberType,omitempty"`
+	OccurredAt     time.Time          `json:"occurredAt"`
+	Operation      *string            `json:"operation,omitempty"`
+	Outcome        string             `json:"outcome"`
+	Repository     *string            `json:"repository,omitempty"`
+	Representation *string            `json:"representation,omitempty"`
+	RequestId      *string            `json:"requestId,omitempty"`
+	Resource       *string            `json:"resource,omitempty"`
+	Status         *int               `json:"status,omitempty"`
+	TraceId        *string            `json:"traceId,omitempty"`
+	UpstreamHost   *string            `json:"upstreamHost,omitempty"`
 }
 
 // AuditRetentionPolicy defines model for AuditRetentionPolicy.

@@ -107,19 +107,22 @@ func configurationResult(cfg config.Config) Result {
 		Status:  StatusPass,
 		Summary: "required configuration loaded",
 		Details: map[string]any{
-			"oidc_enabled":                        cfg.OIDCIssuer != "",
-			"oidc_browser_login_enabled":          cfg.OIDCClientID != "",
-			"oci_proxy_allowed_host_count":        len(cfg.OCIProxyAllowedHosts),
-			"maven_proxy_allowed_host_count":      len(cfg.MavenProxyAllowedHosts),
-			"raw_proxy_allowed_host_count":        len(cfg.RawProxyAllowedHosts),
-			"repository_grant_actor_count":        len(cfg.RepositoryReaders),
-			"repository_cache_quota_count":        len(cfg.RepositoryCacheQuotas),
-			"oidc_admin_subject_count":            len(cfg.OIDCAdminSubjects),
-			"settings_encryption_key_configured":  strings.TrimSpace(os.Getenv(secrets.KeyEnv)) != "",
-			"artifact_scanner_enabled":            cfg.ScannerEnabled(),
-			"artifact_scanner_health_enabled":     cfg.ScannerHealthEndpoint != "",
-			"artifact_scanner_format_count":       len(cfg.ScannerFormats),
-			"artifact_scanner_database_max_age_s": int64(cfg.ScannerDatabaseMaxAge / time.Second),
+			"oidc_enabled":                             cfg.OIDCIssuer != "",
+			"oidc_browser_login_enabled":               cfg.OIDCClientID != "",
+			"oci_proxy_allowed_host_count":             len(cfg.OCIProxyAllowedHosts),
+			"maven_proxy_allowed_host_count":           len(cfg.MavenProxyAllowedHosts),
+			"raw_proxy_allowed_host_count":             len(cfg.RawProxyAllowedHosts),
+			"repository_grant_actor_count":             len(cfg.RepositoryReaders),
+			"repository_cache_quota_count":             len(cfg.RepositoryCacheQuotas),
+			"oidc_admin_subject_count":                 len(cfg.OIDCAdminSubjects),
+			"settings_encryption_key_configured":       strings.TrimSpace(os.Getenv(secrets.KeyEnv)) != "",
+			"artifact_scanner_enabled":                 cfg.ScannerEnabled(),
+			"artifact_scanner_health_enabled":          cfg.ScannerHealthEndpoint != "",
+			"artifact_scanner_format_count":            len(cfg.ScannerFormats),
+			"artifact_scanner_database_max_age_s":      int64(cfg.ScannerDatabaseMaxAge / time.Second),
+			"apt_signer_enabled":                       cfg.APTSignerEnabled(),
+			"apt_signer_trusted_fingerprint_count":     len(cfg.APTSignerTrustedFingerprints),
+			"apt_signer_trusted_public_keys_validated": len(cfg.APTSignerTrustedPublicKeys) > 0,
 		},
 	}
 }
@@ -158,7 +161,7 @@ func pingPostgres(ctx context.Context, databaseURL string) error {
 }
 
 func checkObjectStore(ctx context.Context, cfg config.Config) error {
-	store, err := objectstore.NewS3Store(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket)
+	store, err := objectstore.NewRustFSStore(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
 	if err != nil {
 		return err
 	}

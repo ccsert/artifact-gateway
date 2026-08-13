@@ -18,7 +18,7 @@ read_environment_value() {
   awk -F= -v name="$name" '$1 == name { print substr($0, index($0, "=") + 1); exit }' "$environment_file"
 }
 
-migrate_rustfs_environment() {
+bootstrap_rustfs_environment() {
   [[ -f "$environment_file" ]] || {
     printf 'Missing %s; copy .env.example before migrating local RustFS credentials.\n' "$environment_file" >&2
     return 1
@@ -71,45 +71,6 @@ migrate_rustfs_environment() {
   printf 'Added independent RustFS credentials to %s; rollback copy: %s\n' "$environment_file" "$backup_file"
 }
 
-confirm_rustfs_migration() {
-  local manifest_fingerprint=${1:-} existing_fingerprint existing_confirmation backup_dir backup_file temporary_file
-  [[ -f "$environment_file" ]] || {
-    printf 'Missing %s; cannot record RustFS migration evidence.\n' "$environment_file" >&2
-    return 1
-  }
-  if [[ ! "$manifest_fingerprint" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    printf 'RustFS migration confirmation requires the verified sha256 manifest fingerprint.\n' >&2
-    return 1
-  fi
-  existing_fingerprint=$(read_environment_value GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256)
-  existing_confirmation=$(read_environment_value GATEWAY_RUSTFS_MIGRATION_CONFIRMED)
-  if [[ "$existing_confirmation" == 1 && "$existing_fingerprint" == "$manifest_fingerprint" ]]; then
-    printf 'Verified RustFS manifest %s is already recorded in %s.\n' "$manifest_fingerprint" "$environment_file"
-    return
-  fi
-
-  backup_dir="$state_dir/rustfs-env-backups"
-  mkdir -p "$backup_dir"
-  chmod 700 "$backup_dir"
-  backup_file="$backup_dir/$(basename "$environment_file").before-rustfs-confirmation-$(date -u +%Y%m%dT%H%M%SZ)-$$"
-  temporary_file=$(mktemp "${environment_file}.rustfs-confirmation.XXXXXX")
-  if ! {
-    cp -p "$environment_file" "$backup_file" &&
-      awk '!/^GATEWAY_RUSTFS_MIGRATION_(CONFIRMED|MANIFEST_SHA256)=/' "$environment_file" >"$temporary_file" &&
-      printf '\n# Recorded only after a frozen S3 copy and independent verification.\n' >>"$temporary_file" &&
-      printf 'GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256=%s\n' "$manifest_fingerprint" >>"$temporary_file" &&
-      printf 'GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1\n' >>"$temporary_file" &&
-      chmod "$(stat -f '%Lp' "$environment_file" 2>/dev/null || stat -c '%a' "$environment_file")" "$temporary_file" &&
-      mv "$temporary_file" "$environment_file"
-  }; then
-    rm -f "$temporary_file"
-    printf 'Unable to atomically record RustFS migration evidence in %s; the original file is unchanged.\n' "$environment_file" >&2
-    return 1
-  fi
-  printf 'Recorded verified RustFS manifest %s in %s.\n' "$manifest_fingerprint" "$environment_file"
-  printf 'Rollback copy: %s\n' "$backup_file"
-}
-
 local_dev_environment=
 if [[ -f "$environment_file" ]] && command -v docker >/dev/null 2>&1; then
   local_dev_environment=$(
@@ -150,22 +111,17 @@ check_endpoint() {
 }
 
 refuse_legacy_minio_in_place() {
-  local project=${COMPOSE_PROJECT_NAME:-artifact-gateway}
-  local old_volume="${project}_gateway-minio"
-  local legacy_container migration_confirmed migration_manifest
-  migration_confirmed=${GATEWAY_RUSTFS_MIGRATION_CONFIRMED:-$(awk -F= '$1 == "GATEWAY_RUSTFS_MIGRATION_CONFIRMED" { print substr($0, index($0, "=") + 1); exit }' "$environment_file")}
-  migration_manifest=${GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256:-$(awk -F= '$1 == "GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256" { print substr($0, index($0, "=") + 1); exit }' "$environment_file")}
+	local project=${COMPOSE_PROJECT_NAME:-artifact-gateway}
+	local old_volume="${project}_gateway-minio"
+	local legacy_container
   legacy_container=$(docker ps -aq \
     --filter "label=com.docker.compose.project=$project" \
     --filter 'label=com.docker.compose.service=minio')
   if [[ -z "$legacy_container" ]] && ! docker volume inspect "$old_volume" >/dev/null 2>&1; then
     return
   fi
-  if [[ "$migration_confirmed" == 1 && "$migration_manifest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    return
-  fi
-  printf '%s\n' 'Legacy MinIO data was detected; refusing to start Gateway against RustFS without verified cutover evidence.' >&2
-  printf '%s\n' 'Follow docs/rustfs-migration.md, then record the frozen-copy manifest with scripts/local-dev.sh confirm-rustfs-migration.' >&2
+	printf '%s\n' 'Unsupported legacy MinIO resources were detected; remove or rename them explicitly before starting the RustFS-only stack.' >&2
+	printf '%s\n' 'The helper never deletes legacy volumes and no longer provides an in-place compatibility or migration bypass.' >&2
   return 1
 }
 
@@ -314,8 +270,7 @@ stop() {
 }
 
 case ${1:-} in
-  migrate-rustfs-env) migrate_rustfs_environment ;;
-  confirm-rustfs-migration) confirm_rustfs_migration "${2:-}" ;;
+  bootstrap-rustfs-env) bootstrap_rustfs_environment ;;
   guard)
     [[ -f "$environment_file" ]] || {
       printf 'Missing %s; cannot validate the RustFS cutover boundary.\n' "$environment_file" >&2
@@ -327,7 +282,7 @@ case ${1:-} in
   status) status ;;
   stop) stop ;;
   *)
-    printf 'usage: %s {migrate-rustfs-env|confirm-rustfs-migration|guard|start|status|stop}\n' "${0##*/}" >&2
+		printf 'usage: %s {bootstrap-rustfs-env|guard|start|status|stop}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

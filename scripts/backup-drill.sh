@@ -30,8 +30,8 @@ services_stopped=1
 "${compose[@]}" exec -T postgres \
   pg_dump -U gateway -d gateway --format=custom >"$backup_dir/gateway.dump"
 
-# Stop the S3 writer before streaming its volume. This is a RustFS-to-RustFS
-# recovery artifact; MinIO data must be copied through the S3 API instead.
+# Stop the RustFS writer before streaming its volume. This archive is supported
+# only for the pinned RustFS baseline used by the running stack.
 "${compose[@]}" stop rustfs
 docker cp "$rustfs_container:/data/." - >"$backup_dir/rustfs-data.tar"
 resume_services

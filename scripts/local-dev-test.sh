@@ -23,7 +23,7 @@ fail() {
   exit 1
 }
 
-output=$($subject migrate-rustfs-env)
+output=$($subject bootstrap-rustfs-env)
 assert_migrated_key() {
   local name=$1 minimum_length=$2 value
   value=$(awk -F= -v name="$name" '$1 == name { print substr($0, index($0, "=") + 1); exit }' "$workdir/.env")
@@ -35,44 +35,22 @@ assert_migrated_key RUSTFS_RPC_SECRET 32
 rustfs_secret=$(awk -F= '$1 == "RUSTFS_SECRET_KEY" { print substr($0, index($0, "=") + 1); exit }' "$workdir/.env")
 rustfs_rpc_secret=$(awk -F= '$1 == "RUSTFS_RPC_SECRET" { print substr($0, index($0, "=") + 1); exit }' "$workdir/.env")
 [[ "$rustfs_secret" != "$rustfs_rpc_secret" ]] || fail 'migration reused the S3 secret as the RPC secret'
-[[ "$output" != *"$rustfs_secret"* && "$output" != *"$rustfs_rpc_secret"* ]] || fail 'migration printed generated credentials'
+[[ "$output" != *"$rustfs_secret"* && "$output" != *"$rustfs_rpc_secret"* ]] || fail 'bootstrap printed generated credentials'
 backup_count=$(find "$GATEWAY_DEV_STATE_DIR/rustfs-env-backups" -maxdepth 1 -name '.env.before-rustfs-*' | wc -l | tr -d ' ')
-[[ "$backup_count" == 1 ]] || fail 'migration did not create exactly one rollback copy'
-$subject migrate-rustfs-env >/dev/null
+[[ "$backup_count" == 1 ]] || fail 'bootstrap did not create exactly one rollback copy'
+$subject bootstrap-rustfs-env >/dev/null
 second_backup_count=$(find "$GATEWAY_DEV_STATE_DIR/rustfs-env-backups" -maxdepth 1 -name '.env.before-rustfs-*' | wc -l | tr -d ' ')
-[[ "$second_backup_count" == 1 ]] || fail 'idempotent migration created another rollback copy'
-if output=$($subject confirm-rustfs-migration invalid-fingerprint 2>&1); then
-  fail 'migration confirmation accepted an invalid manifest fingerprint'
-fi
-migration_fingerprint="sha256:$(printf 'a%.0s' {1..64})"
-$subject confirm-rustfs-migration "$migration_fingerprint" >/dev/null
-grep -Fxq 'GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1' "$workdir/.env" || fail 'migration confirmation was not persisted'
-grep -Fxq "GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256=$migration_fingerprint" "$workdir/.env" || fail 'verified migration fingerprint was not persisted'
-confirmation_backup_count=$(find "$GATEWAY_DEV_STATE_DIR/rustfs-env-backups" -maxdepth 1 -name '.env.before-rustfs-confirmation-*' | wc -l | tr -d ' ')
-[[ "$confirmation_backup_count" == 1 ]] || fail 'migration confirmation did not create exactly one rollback copy'
-$subject confirm-rustfs-migration "$migration_fingerprint" >/dev/null
-second_confirmation_backup_count=$(find "$GATEWAY_DEV_STATE_DIR/rustfs-env-backups" -maxdepth 1 -name '.env.before-rustfs-confirmation-*' | wc -l | tr -d ' ')
-[[ "$second_confirmation_backup_count" == 1 ]] || fail 'idempotent migration confirmation created another rollback copy'
-
+[[ "$second_backup_count" == 1 ]] || fail 'idempotent bootstrap created another rollback copy'
 cp "$workdir/.env" "$workdir/.env.before-failure-tests"
 awk '!/^RUSTFS_(ACCESS_KEY|SECRET_KEY|RPC_SECRET)=/' "$workdir/.env.before-failure-tests" >"$workdir/.env"
 export LOCAL_DEV_TEST_MODE=env-write-fails
-if output=$($subject migrate-rustfs-env 2>&1); then
-  fail 'RustFS credential migration succeeded after the atomic write failed'
+if output=$($subject bootstrap-rustfs-env 2>&1); then
+  fail 'RustFS credential bootstrap succeeded after the atomic write failed'
 fi
 if compgen -G "$workdir/.env.rustfs.*" >/dev/null; then
-  fail 'failed RustFS credential migration left a temporary file containing secrets'
+  fail 'failed RustFS credential bootstrap left a temporary file containing secrets'
 fi
 
-cp "$workdir/.env.before-failure-tests" "$workdir/.env"
-export LOCAL_DEV_TEST_MODE=env-write-fails
-second_fingerprint="sha256:$(printf 'c%.0s' {1..64})"
-if output=$($subject confirm-rustfs-migration "$second_fingerprint" 2>&1); then
-  fail 'RustFS migration confirmation succeeded after the atomic write failed'
-fi
-if compgen -G "$workdir/.env.rustfs-confirmation.*" >/dev/null; then
-  fail 'failed RustFS migration confirmation left a temporary file containing secrets'
-fi
 cp "$workdir/.env.before-failure-tests" "$workdir/.env"
 
 assert_contains() {
@@ -100,17 +78,15 @@ export LOCAL_DEV_TEST_MODE=legacy-minio
 if output=$(GATEWAY_RUSTFS_MIGRATION_CONFIRMED=0 $subject start 2>&1); then
   fail 'start replaced legacy MinIO data with an empty RustFS volume'
 fi
-assert_contains "$output" 'Legacy MinIO data was detected'
+assert_contains "$output" 'Unsupported legacy MinIO resources were detected'
 if grep -Fq ' up -d ' "$workdir/state/docker.log"; then
   fail 'start invoked Compose after detecting legacy MinIO data'
 fi
 
-if output=$(GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1 GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256=unverified $subject guard 2>&1); then
-  fail 'legacy MinIO guard accepted confirmation without a verified manifest fingerprint'
+if output=$(GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1 GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256="sha256:$(printf 'a%.0s' {1..64})" $subject guard 2>&1); then
+  fail 'legacy MinIO guard accepted the removed migration bypass'
 fi
-assert_contains "$output" 'verified cutover evidence'
-
-GATEWAY_RUSTFS_MIGRATION_CONFIRMED=1 GATEWAY_RUSTFS_MIGRATION_MANIFEST_SHA256="$migration_fingerprint" $subject guard
+assert_contains "$output" 'no longer provides an in-place compatibility or migration bypass'
 
 export LOCAL_DEV_TEST_MODE=managed
 $subject start >/dev/null

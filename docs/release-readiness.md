@@ -93,15 +93,14 @@ storage credentials, or unredacted upstream URLs in that record.
       `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
 - [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
-      `0d1d3f8`) into fresh isolated volumes, migrates it to the current
-      checkout while retaining the same legacy S3 service, verifies persisted
+      `324aba95`) into fresh isolated volumes, migrates it to the current
+      checkout while retaining the same RustFS service, verifies persisted
       Maven object bytes and OCI/Maven Groups, creates current
       Raw/Conan Group state, then starts the prior revision against those
       volumes and verifies the persisted OCI Group can still be read. V2
       migrations are additive: a rollback binary must not need V2 rows to
-      serve existing OCI Groups. This is an application/schema upgrade gate,
-      not a MinIO-to-RustFS data migration; run the copied-cutover procedure in
-      `docs/rustfs-migration.md` separately.
+      serve existing OCI Groups. This is an application/schema upgrade gate;
+      the project no longer ships a legacy object-store migration path.
 - [ ] Before rolling out migration `000095`, stop accepting new replication
       requests, drain every pre-upgrade replication plan to a terminal state,
       and stop all old replication workers. Apply the migration and start only
@@ -158,7 +157,7 @@ storage credentials, or unredacted upstream URLs in that record.
 | Backup target | PostgreSQL metadata plus RustFS object data; 24-hour RPO, 30-minute RTO drill target |
 | OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
 | Cache operations gate | Resolver denied; administrator collection increases successful-run count |
-| Upgrade gate | Previous revision `0d1d3f8`, isolated object-store volumes, current migration, protocol regression, binary rollback |
+| Upgrade gate | Previous RustFS revision `324aba95`, isolated object-store volumes, current migration, protocol regression, binary rollback |
 
 ## Architecture
 

@@ -37,8 +37,8 @@ func (s *failOnceDeleteStore) Delete(ctx context.Context, key string) error {
 }
 
 func TestPostgresRustFSAPTReclaimSerializesWithPublicationAndRetriesDelete(t *testing.T) {
-	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
-	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and RustFS integration environment is required")
 	}
@@ -54,7 +54,7 @@ func TestPostgresRustFSAPTReclaimSerializesWithPublicationAndRetriesDelete(t *te
 		t.Fatal(err)
 	}
 	defer func() { _ = storeB.Close() }()
-	objects, err := objectstore.NewS3Store(endpoint, accessKey, secretKey, "apt-reclaim-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "apt-reclaim-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}

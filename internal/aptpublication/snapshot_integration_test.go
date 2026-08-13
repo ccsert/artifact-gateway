@@ -19,8 +19,8 @@ import (
 )
 
 func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(t *testing.T) {
-	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
-	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and RustFS integration environment is required")
 	}
@@ -36,7 +36,7 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 		t.Fatal(err)
 	}
 	defer func() { _ = storeB.Close() }()
-	objects, err := objectstore.NewS3Store(endpoint, accessKey, secretKey, "apt-snapshot-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "apt-snapshot-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,6 +90,13 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 	visible, err := storeB.GetVisibleAPTRepositorySnapshot(ctx, repo.ID, "stable")
 	if err != nil || visible.ID != snapshot.ID || visible.ReleaseDigest != snapshot.ReleaseDigest || visible.SignatureAlgorithm != "fixture-sha256" {
 		t.Fatalf("cross-instance snapshot=%#v err=%v", visible, err)
+	}
+	audits, err := storeB.ListAudits(ctx, repository.AuditQuery{Repository: repo.Name, Operation: "apt.repository_snapshot.publish", Limit: 10})
+	if err != nil || len(audits) != 1 || audits[0].AuthorizationReason != "signed_snapshot_visible" ||
+		audits[0].Evidence["signerIdentity"] != "apt-release@example.test" ||
+		audits[0].Evidence["keyFingerprint"] != strings.Repeat("a", 40) ||
+		audits[0].Evidence["signatureAlgorithm"] != "fixture-sha256" {
+		t.Fatalf("cross-instance immutable signing audit=%#v err=%v", audits, err)
 	}
 	assets, err := storeB.ListVisibleAPTSnapshotAssets(ctx, repo.ID, "stable")
 	if err != nil || len(assets) < 8 {
@@ -230,8 +237,8 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 }
 
 func TestPostgresRustFSFailedSnapshotObjectsAreDurablyReclaimed(t *testing.T) {
-	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
-	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and RustFS integration environment is required")
 	}
@@ -242,7 +249,7 @@ func TestPostgresRustFSFailedSnapshotObjectsAreDurablyReclaimed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	objects, err := objectstore.NewS3Store(endpoint, accessKey, secretKey, "apt-failed-snapshot-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:14])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "apt-failed-snapshot-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:14])
 	if err != nil {
 		t.Fatal(err)
 	}

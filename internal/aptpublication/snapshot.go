@@ -130,6 +130,9 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		Release: bytes.NewReader(bundle.release),
 	})
 	if err != nil {
+		if errors.Is(err, ErrUntrustedSigner) {
+			return repository.APTRepositorySnapshot{}, ErrInvalidSignature
+		}
 		return repository.APTRepositorySnapshot{}, fmt.Errorf("%w: %v", ErrSignerUnavailable, err)
 	}
 	if !validSignatureResult(signature) {
@@ -170,11 +173,19 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: input.Suite,
 		Representation: releaseDigest, Operation: "apt.repository_snapshot.publish", Status: 200,
 		CacheDisposition: "bypass", AuthorizationSource: "repository_write", AuthorizationReason: "signed_snapshot_visible",
+		Evidence: signedSnapshotAuditEvidence(signature),
 	})
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
 	return published, nil
+}
+
+func signedSnapshotAuditEvidence(signature SignReleaseResult) map[string]string {
+	return map[string]string{
+		"signerIdentity": signature.SignerIdentity, "keyFingerprint": signature.KeyFingerprint,
+		"signatureAlgorithm": signature.Algorithm,
+	}
 }
 
 func sameSnapshotRequest(snapshot repository.APTRepositorySnapshot, membership []repository.APTSnapshotPackage, input PublishSnapshotInput) bool {

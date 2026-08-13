@@ -815,6 +815,12 @@ export type AuditRecord = {
    * Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values.
    */
   authorizationReason?: string;
+  /**
+   * Optional immutable, operation-specific evidence. Keys and values are bounded strings; consumers must accept future keys.
+   */
+  evidence?: {
+    [key: string]: string;
+  };
   requestId?: string;
   traceId?: string;
 };

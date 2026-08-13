@@ -11,21 +11,62 @@ import (
 	"io"
 	"os"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 )
 
-func TestS3StoreContractAgainstConfiguredImplementation(t *testing.T) {
-	endpoint := os.Getenv("TEST_S3_ENDPOINT")
-	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
-	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+func TestRustFSStoreConcurrentBucketInitializationIsIdempotent(t *testing.T) {
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if endpoint == "" || accessKey == "" || secretKey == "" {
-		t.Skip("TEST_S3_ENDPOINT and credentials are required")
+		t.Skip("TEST_RUSTFS_ENDPOINT and credentials are required")
+	}
+	bucket := "gateway-concurrent-" + uuid.NewString()
+	const clients = 8
+	errorsByClient := make([]error, clients)
+	var ready sync.WaitGroup
+	var start sync.WaitGroup
+	ready.Add(clients)
+	start.Add(1)
+	var workers sync.WaitGroup
+	workers.Add(clients)
+	for index := range clients {
+		go func() {
+			defer workers.Done()
+			store, err := NewRustFSStore(endpoint, accessKey, secretKey, bucket)
+			if err != nil {
+				errorsByClient[index] = err
+				ready.Done()
+				return
+			}
+			ready.Done()
+			start.Wait()
+			errorsByClient[index] = store.EnsureBucket(context.Background())
+		}()
+	}
+	ready.Wait()
+	start.Done()
+	workers.Wait()
+	for index, err := range errorsByClient {
+		if err != nil {
+			t.Fatalf("client %d failed concurrent bucket initialization: %v", index, err)
+		}
+	}
+}
+
+func TestRustFSStoreContractAgainstConfiguredImplementation(t *testing.T) {
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("TEST_RUSTFS_ENDPOINT and credentials are required")
 	}
 
 	ctx := context.Background()
-	store, err := NewS3Store(endpoint, accessKey, secretKey, "gateway-contract-"+uuid.NewString())
+	store, err := NewRustFSStore(endpoint, accessKey, secretKey, "gateway-contract-"+uuid.NewString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +74,7 @@ func TestS3StoreContractAgainstConfiguredImplementation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := []byte("RustFS S3 contract: verified bytes, metadata, range, list, copy, delete")
+	body := []byte("RustFS contract: verified bytes, metadata, range, list, copy, delete")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	key := "contract/artifact.bin"
@@ -50,7 +91,7 @@ func TestS3StoreContractAgainstConfiguredImplementation(t *testing.T) {
 	}
 	rangeBody, readErr := io.ReadAll(reader)
 	_ = reader.Close()
-	if readErr != nil || size != int64(len(body)) || string(rangeBody) != "S3 contract" {
+	if readErr != nil || size != int64(len(body)) || string(rangeBody) != "contract: v" {
 		t.Fatalf("range=%q size=%d err=%v", rangeBody, size, readErr)
 	}
 

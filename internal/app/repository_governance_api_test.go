@@ -20,6 +20,7 @@ func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 		GroupName: "releases", Repository: "releases", Actor: "reader", Outcome: repository.AuditAccessDenied,
 		OccurredAt: time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC), Format: "maven", Operation: "get", Status: http.StatusForbidden,
 		AuthorizationSource: "repository_grants", AuthorizationReason: "scope_not_granted",
+		Evidence: map[string]string{"policyVersion": "v2"},
 	}}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
 
@@ -31,14 +32,16 @@ func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 	var audits []struct {
-		AuthorizationSource string    `json:"authorizationSource"`
-		AuthorizationReason string    `json:"authorizationReason"`
-		OccurredAt          time.Time `json:"occurredAt"`
+		AuthorizationSource string            `json:"authorizationSource"`
+		AuthorizationReason string            `json:"authorizationReason"`
+		Evidence            map[string]string `json:"evidence"`
+		OccurredAt          time.Time         `json:"occurredAt"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&audits); err != nil {
 		t.Fatal(err)
 	}
-	if len(audits) != 1 || audits[0].AuthorizationSource != "repository_grants" || audits[0].AuthorizationReason != "scope_not_granted" || audits[0].OccurredAt.IsZero() {
+	if len(audits) != 1 || audits[0].AuthorizationSource != "repository_grants" || audits[0].AuthorizationReason != "scope_not_granted" ||
+		audits[0].Evidence["policyVersion"] != "v2" || audits[0].OccurredAt.IsZero() {
 		t.Fatalf("audits=%#v", audits)
 	}
 

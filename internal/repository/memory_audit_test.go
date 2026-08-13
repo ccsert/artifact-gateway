@@ -36,6 +36,24 @@ func TestMemoryStoreListAuditsAppliesAllFilters(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreAuditEvidenceIsImmutableAcrossCallers(t *testing.T) {
+	store := NewMemoryStore()
+	evidence := map[string]string{"keyFingerprint": "trusted"}
+	if err := store.RecordAudit(context.Background(), AuditRecord{Repository: "apt", Outcome: AuditResolved, Evidence: evidence}); err != nil {
+		t.Fatal(err)
+	}
+	evidence["keyFingerprint"] = "mutated-before-read"
+	first, err := store.ListAudits(context.Background(), AuditQuery{Repository: "apt", Limit: 10})
+	if err != nil || len(first) != 1 || first[0].Evidence["keyFingerprint"] != "trusted" {
+		t.Fatalf("first audit=%#v err=%v", first, err)
+	}
+	first[0].Evidence["keyFingerprint"] = "mutated-after-read"
+	second, err := store.ListAudits(context.Background(), AuditQuery{Repository: "apt", Limit: 10})
+	if err != nil || len(second) != 1 || second[0].Evidence["keyFingerprint"] != "trusted" {
+		t.Fatalf("second audit=%#v err=%v", second, err)
+	}
+}
+
 func TestMemoryStoreAuditPageUsesStableCursorAndTimeBounds(t *testing.T) {
 	store := NewMemoryStore()
 	base := time.Date(2026, 8, 8, 10, 0, 0, 0, time.UTC)

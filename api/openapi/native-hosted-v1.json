@@ -4277,6 +4277,15 @@
             "type": "string",
             "description": "Optional bounded authorization decision reason. Current values include scope_not_granted and grant_lookup_failed; consumers must accept future bounded values."
           },
+          "evidence": {
+            "type": "object",
+            "description": "Optional immutable, operation-specific evidence. Keys and values are bounded strings; consumers must accept future keys.",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
           "requestId": {
             "type": "string"
           },

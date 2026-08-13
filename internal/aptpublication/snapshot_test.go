@@ -88,6 +88,26 @@ func TestPublisherBuildsDeterministicSignedSnapshot(t *testing.T) {
 	if !bytes.HasPrefix(first.objects["dists/stable/InRelease"], []byte("signed-cleartext\n")) {
 		t.Fatal("InRelease was not produced by the signer")
 	}
+	audits, err := first.store.ListAudits(context.Background(), repository.AuditQuery{Repository: "apt-hosted", Limit: 10})
+	if err != nil {
+		t.Fatalf("snapshot audit=%#v err=%v", audits, err)
+	}
+	var publicationAudit *repository.AuditRecord
+	for index := range audits {
+		if audits[index].Operation == "apt.repository_snapshot.publish" {
+			publicationAudit = &audits[index]
+			break
+		}
+	}
+	if publicationAudit == nil {
+		t.Fatalf("snapshot publication audit missing: %#v", audits)
+	}
+	if publicationAudit.AuthorizationReason != "signed_snapshot_visible" ||
+		publicationAudit.Evidence["signerIdentity"] != "apt-release@example.test" ||
+		publicationAudit.Evidence["keyFingerprint"] != strings.Repeat("a", 40) ||
+		publicationAudit.Evidence["signatureAlgorithm"] != "fixture-sha256" {
+		t.Fatalf("snapshot audit=%#v", publicationAudit)
+	}
 }
 
 func TestPublishedSnapshotProjectsVisibleAssetsAndGeneratedCapacity(t *testing.T) {

@@ -23,9 +23,9 @@ import (
 
 func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	endpoint := os.Getenv("TEST_S3_ENDPOINT")
-	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
-	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
@@ -41,14 +41,14 @@ func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing
 	}
 	defer storeB.Close()
 	bucket := "native-pypi-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -18,7 +19,15 @@ func insertAudit(ctx context.Context, execer auditExecer, audit AuditRecord) err
 	if audit.OccurredAt.IsZero() {
 		audit.OccurredAt = time.Now().UTC()
 	}
-	_, err := execer.ExecContext(ctx, `INSERT INTO resolver_audit_log (group_name, repository, member_name, outcome, actor, occurred_at, format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes, authorization_source, authorization_reason, request_id, trace_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`, audit.GroupName, audit.Repository, audit.MemberName, audit.Outcome, audit.Actor, audit.OccurredAt, audit.Format, audit.Resource, audit.Representation, audit.MemberType, audit.UpstreamHost, audit.Operation, audit.Status, audit.CacheDisposition, audit.Bytes, audit.AuthorizationSource, audit.AuthorizationReason, audit.RequestID, audit.TraceID)
+	evidence := []byte("{}")
+	if len(audit.Evidence) > 0 {
+		encoded, err := json.Marshal(audit.Evidence)
+		if err != nil {
+			return err
+		}
+		evidence = encoded
+	}
+	_, err := execer.ExecContext(ctx, `INSERT INTO resolver_audit_log (group_name, repository, member_name, outcome, actor, occurred_at, format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes, authorization_source, authorization_reason, request_id, trace_id, evidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)`, audit.GroupName, audit.Repository, audit.MemberName, audit.Outcome, audit.Actor, audit.OccurredAt, audit.Format, audit.Resource, audit.Representation, audit.MemberType, audit.UpstreamHost, audit.Operation, audit.Status, audit.CacheDisposition, audit.Bytes, audit.AuthorizationSource, audit.AuthorizationReason, audit.RequestID, audit.TraceID, evidence)
 	return err
 }
 
@@ -46,7 +55,7 @@ func (s *PostgresStore) ListAuditPage(ctx context.Context, query AuditQuery) (Au
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id, group_name, repository, member_name, outcome, actor, occurred_at,
 		COALESCE(format, ''), COALESCE(resource, ''), COALESCE(representation, ''), COALESCE(member_type, ''), COALESCE(upstream_host, ''), COALESCE(operation, ''),
-		COALESCE(http_status, 0), COALESCE(cache_disposition, ''), COALESCE(bytes, 0), COALESCE(authorization_source, ''), COALESCE(authorization_reason, ''), COALESCE(request_id, ''), COALESCE(trace_id, '')
+		COALESCE(http_status, 0), COALESCE(cache_disposition, ''), COALESCE(bytes, 0), COALESCE(authorization_source, ''), COALESCE(authorization_reason, ''), COALESCE(request_id, ''), COALESCE(trace_id, ''), COALESCE(evidence, '{}'::jsonb)
 		FROM resolver_audit_log
 		WHERE ($1 = '' OR group_name = $1) AND ($2 = '' OR repository = $2)
 		  AND ($3 = '' OR outcome = $3) AND ($4 = '' OR format = $4)
@@ -63,7 +72,11 @@ func (s *PostgresStore) ListAuditPage(ctx context.Context, query AuditQuery) (Au
 	page := AuditPage{Items: make([]AuditRecord, 0, limit)}
 	for rows.Next() {
 		var audit AuditRecord
-		if err := rows.Scan(&audit.ID, &audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt, &audit.Format, &audit.Resource, &audit.Representation, &audit.MemberType, &audit.UpstreamHost, &audit.Operation, &audit.Status, &audit.CacheDisposition, &audit.Bytes, &audit.AuthorizationSource, &audit.AuthorizationReason, &audit.RequestID, &audit.TraceID); err != nil {
+		var evidence []byte
+		if err := rows.Scan(&audit.ID, &audit.GroupName, &audit.Repository, &audit.MemberName, &audit.Outcome, &audit.Actor, &audit.OccurredAt, &audit.Format, &audit.Resource, &audit.Representation, &audit.MemberType, &audit.UpstreamHost, &audit.Operation, &audit.Status, &audit.CacheDisposition, &audit.Bytes, &audit.AuthorizationSource, &audit.AuthorizationReason, &audit.RequestID, &audit.TraceID, &evidence); err != nil {
+			return AuditPage{}, err
+		}
+		if err := json.Unmarshal(evidence, &audit.Evidence); err != nil {
 			return AuditPage{}, err
 		}
 		page.Items = append(page.Items, audit)

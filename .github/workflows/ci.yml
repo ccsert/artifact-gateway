@@ -126,10 +126,11 @@ jobs:
           GATEWAY_POSTGRES_PASSWORD=ci-postgres-password
           GATEWAY_ADMIN_TOKEN=ci-admin-token
           GATEWAY_RESOLVER_TOKEN=ci-resolver-token
-          MINIO_ROOT_USER=ci-minio-user
-          MINIO_ROOT_PASSWORD=ci-minio-password
-          MINIO_API_PORT=19000
-          MINIO_CONSOLE_PORT=19001
+          RUSTFS_ACCESS_KEY=ci-rustfs-user
+          RUSTFS_SECRET_KEY=ci-rustfs-password
+          RUSTFS_RPC_SECRET=ci-rustfs-independent-rpc-secret-0001
+          RUSTFS_API_PORT=19000
+          RUSTFS_CONSOLE_PORT=19001
           EOF
           docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml up --build --wait --remove-orphans
       - name: Run console E2E

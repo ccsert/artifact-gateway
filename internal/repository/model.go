@@ -1143,6 +1143,7 @@ type AuditRecord struct {
 	Format, Resource, Representation, MemberType, UpstreamHost, Operation, CacheDisposition string
 	AuthorizationSource, AuthorizationReason                                                string
 	RequestID, TraceID                                                                      string
+	Evidence                                                                                map[string]string `json:"-"`
 	Status                                                                                  int
 	Bytes                                                                                   int64
 }

@@ -106,18 +106,12 @@ validate_settings() {
 }
 
 refuse_legacy_minio_in_place() {
-  local legacy=0 migration_confirmed migration_manifest
+	local legacy=0
   kubectl -n "$namespace" get statefulset minio >/dev/null 2>&1 && legacy=1
   kubectl -n "$namespace" get persistentvolumeclaim data-minio-0 >/dev/null 2>&1 && legacy=1
   [[ "$legacy" == 0 ]] && return
-  migration_confirmed=${K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED:-0}
-  migration_manifest=${K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256:-}
-  if [[ "$migration_confirmed" == 1 && "$migration_manifest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    return
-  fi
-  printf '%s\n' 'legacy MinIO StatefulSet or data PVC detected; do not apply RustFS without verified cutover evidence' >&2
-  printf '%s\n' 'use docs/rustfs-migration.md, then set K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1 and K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=sha256:<64 lowercase hex> only after the frozen final copy and independent verification' >&2
-  printf '%s\n' 'a bare confirmation flag is insufficient; the helper requires the verified manifest fingerprint' >&2
+	printf '%s\n' 'unsupported legacy MinIO StatefulSet or data PVC detected; the RustFS-only helper will not apply over it' >&2
+	printf '%s\n' 'remove or rename the legacy resources explicitly; no compatibility or migration bypass is available' >&2
   exit 1
 }
 
@@ -169,8 +163,8 @@ apply_runtime_inputs() {
     --from-literal=RUSTFS_SECRET_KEY="$configured_rustfs_secret_key" \
     --from-literal=RUSTFS_RPC_SECRET="$configured_rustfs_rpc_secret" \
     --from-literal=GATEWAY_DATABASE_URL="postgres://gateway:${configured_postgres_password}@postgres:5432/gateway?sslmode=disable" \
-    --from-literal=GATEWAY_S3_ACCESS_KEY="$configured_rustfs_access_key" \
-    --from-literal=GATEWAY_S3_SECRET_KEY="$configured_rustfs_secret_key" \
+    --from-literal=GATEWAY_RUSTFS_ACCESS_KEY="$configured_rustfs_access_key" \
+    --from-literal=GATEWAY_RUSTFS_SECRET_KEY="$configured_rustfs_secret_key" \
     --from-literal=GATEWAY_ADMIN_TOKEN="$configured_admin_token" \
     --from-literal=GATEWAY_RESOLVER_TOKEN="$configured_resolver_token" \
     --from-literal=GATEWAY_SETTINGS_ENCRYPTION_KEY="$configured_settings_key" \

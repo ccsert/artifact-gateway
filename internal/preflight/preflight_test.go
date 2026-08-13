@@ -27,6 +27,26 @@ func TestRunnerReportsSelectedChecksInStableOrder(t *testing.T) {
 	}
 }
 
+func TestConfigurationReportsAPTSignerTrustWithoutExposingFingerprints(t *testing.T) {
+	cfg := testConfig()
+	cfg.APTSignerEndpoint = "https://signer.example.test/v1/sign-release"
+	cfg.APTSignerTrustedFingerprints = []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}
+	cfg.APTSignerTrustedPublicKeysFile = "/run/secrets/apt-release-public-keys.asc"
+	cfg.APTSignerTrustedPublicKeys = []byte("validated public keys")
+	result := configurationResult(cfg)
+	if result.Details["apt_signer_enabled"] != true || result.Details["apt_signer_trusted_fingerprint_count"] != 2 ||
+		result.Details["apt_signer_trusted_public_keys_validated"] != true {
+		t.Fatalf("APT signer diagnostics=%#v", result.Details)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), strings.Repeat("a", 40)) || strings.Contains(string(encoded), strings.Repeat("b", 40)) {
+		t.Fatalf("diagnostics exposed trusted fingerprints: %s", encoded)
+	}
+}
+
 func TestRunnerDoesNotExposeDependencyError(t *testing.T) {
 	secret := "postgres://gateway:super-secret@db/gateway"
 	runner := NewRunner()
@@ -71,10 +91,10 @@ func TestRunnerChecksOIDCJWKS(t *testing.T) {
 func TestCLIConfigurationFailureIsRedacted(t *testing.T) {
 	secret := "do-not-log-this-database-secret"
 	t.Setenv("GATEWAY_DATABASE_URL", secret)
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "access-key")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "object-store-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "access-key")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "object-store-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 
@@ -97,10 +117,10 @@ func TestCLIConfigurationFailureIsRedacted(t *testing.T) {
 
 func testConfig() config.Config {
 	return config.Config{
-		DatabaseURL: "postgres://gateway:password@db/gateway",
-		S3Endpoint:  "http://minio:9000",
-		S3Bucket:    "gateway-cache",
-		S3AccessKey: "access-key",
-		S3SecretKey: "secret-key",
+		DatabaseURL:     "postgres://gateway:password@db/gateway",
+		RustFSEndpoint:  "http://rustfs:9000",
+		RustFSBucket:    "gateway-cache",
+		RustFSAccessKey: "access-key",
+		RustFSSecretKey: "secret-key",
 	}
 }

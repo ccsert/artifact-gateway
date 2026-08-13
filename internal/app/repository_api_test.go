@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -398,7 +399,7 @@ func TestAdminCanQueryRepositoryAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	store.Audits = []repository.AuditRecord{
 		{GroupName: "engineering", Repository: "team/old", Actor: "alice", Outcome: repository.AuditResolved},
-		{GroupName: "engineering", Repository: "team/app", Actor: "bob", Outcome: repository.AuditUpstreamError},
+		{GroupName: "engineering", Repository: "team/app", Actor: "bob", Outcome: repository.AuditUpstreamError, Evidence: map[string]string{"privateToV2": "value"}},
 		{GroupName: "engineering", Repository: "team/app", Actor: "carol", Outcome: repository.AuditResolved},
 	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
@@ -410,12 +411,16 @@ func TestAdminCanQueryRepositoryAudits(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 	}
+	body := response.Body.Bytes()
 	var audits []repository.AuditRecord
-	if err := json.NewDecoder(response.Body).Decode(&audits); err != nil {
+	if err := json.Unmarshal(body, &audits); err != nil {
 		t.Fatal(err)
 	}
 	if len(audits) != 2 || audits[0].Actor != "carol" || audits[1].Actor != "bob" {
 		t.Fatalf("audits = %#v", audits)
+	}
+	if bytes.Contains(body, []byte("Evidence")) || bytes.Contains(body, []byte("privateToV2")) {
+		t.Fatalf("V1 audit response exposed V2 evidence: %s", body)
 	}
 
 	request = httptest.NewRequest(http.MethodGet, "/api/v1/audits?repository=team/app", nil)

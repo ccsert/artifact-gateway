@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-base_ref=${GATEWAY_UPGRADE_FROM_REF:-0d1d3f8}
+base_ref=${GATEWAY_UPGRADE_FROM_REF:-324aba95}
 environment_file=${GATEWAY_ENV_FILE:-.env}
 test -f "$environment_file" || { printf '%s\n' 'Upgrade readiness requires a configured environment file.' >&2; exit 1; }
 git cat-file -e "$base_ref^{commit}"
@@ -20,8 +20,6 @@ upstream_dir=$(mktemp -d)
 old_tree=$(cd "$old_tree" && pwd -P)
 isolated_environment=$(mktemp)
 gateway_port=$(free_port)
-object_api_port=$(free_port)
-object_console_port=$(free_port)
 rustfs_api_port=$(free_port)
 rustfs_console_port=$(free_port)
 upstream_port=$(free_port)
@@ -41,18 +39,20 @@ cleanup() {
 trap cleanup EXIT
 
 git worktree add --detach "$old_tree" "$base_ref" >/dev/null
-awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "MINIO_API_PORT" && $1 != "MINIO_CONSOLE_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" && $1 != "GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS" && $1 != "GATEWAY_REPOSITORY_READERS" && $1 != "COMPOSE_PROFILES" { print }' "$environment_file" >"$isolated_environment"
-rustfs_access_key=${RUSTFS_ACCESS_KEY:-$(awk -F= '$1 == "RUSTFS_ACCESS_KEY" { print substr($0, index($0, "=") + 1) }' "$isolated_environment")}
-rustfs_secret_key=${RUSTFS_SECRET_KEY:-$(awk -F= '$1 == "RUSTFS_SECRET_KEY" { print substr($0, index($0, "=") + 1) }' "$isolated_environment")}
+awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" && $1 != "RUSTFS_ACCESS_KEY" && $1 != "RUSTFS_SECRET_KEY" && $1 != "RUSTFS_RPC_SECRET" && $1 != "GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS" && $1 != "GATEWAY_REPOSITORY_READERS" && $1 != "COMPOSE_PROFILES" { print }' "$environment_file" >"$isolated_environment"
+rustfs_access_key=${RUSTFS_ACCESS_KEY:-$(awk -F= '$1 == "RUSTFS_ACCESS_KEY" { print substr($0, index($0, "=") + 1) }' "$environment_file")}
+rustfs_secret_key=${RUSTFS_SECRET_KEY:-$(awk -F= '$1 == "RUSTFS_SECRET_KEY" { print substr($0, index($0, "=") + 1) }' "$environment_file")}
+rustfs_rpc_secret=${RUSTFS_RPC_SECRET:-$(awk -F= '$1 == "RUSTFS_RPC_SECRET" { print substr($0, index($0, "=") + 1) }' "$environment_file")}
 test -n "$rustfs_access_key"
 test -n "$rustfs_secret_key"
-printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nMINIO_API_PORT=%s\nMINIO_CONSOLE_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nMINIO_ROOT_USER=%s\nMINIO_ROOT_PASSWORD=%s\nGATEWAY_MAVEN_PROXY_ALLOWED_HOSTS=host.docker.internal:%s\n' \
-  "$gateway_port" "$(free_port)" "$object_api_port" "$object_console_port" "$rustfs_api_port" "$rustfs_console_port" \
-  "$rustfs_access_key" "$rustfs_secret_key" "$upstream_port" >>"$isolated_environment"
+test -n "$rustfs_rpc_secret"
+printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nRUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_RPC_SECRET=%s\nGATEWAY_MAVEN_PROXY_ALLOWED_HOSTS=host.docker.internal:%s\n' \
+  "$gateway_port" "$(free_port)" "$rustfs_api_port" "$rustfs_console_port" \
+  "$rustfs_access_key" "$rustfs_secret_key" "$rustfs_rpc_secret" "$upstream_port" >>"$isolated_environment"
 gateway_url="http://127.0.0.1:${gateway_port}"
 
 old_compose=(docker compose --env-file "$isolated_environment" -f "$old_tree/compose.yml")
-current_compose=(docker compose --env-file "$isolated_environment" -f compose.yml -f compose.upgrade-minio.yml)
+current_compose=(docker compose --env-file "$isolated_environment" -f compose.yml)
 status() { curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@"; }
 admin=(-H "Authorization: Bearer $(awk -F= '$1 == "GATEWAY_ADMIN_TOKEN" { print substr($0, index($0, "=") + 1) }' "$isolated_environment")")
 resolver_token=$(awk -F= '$1 == "GATEWAY_RESOLVER_TOKEN" { print substr($0, index($0, "=") + 1) }' "$isolated_environment")
@@ -117,7 +117,7 @@ for format in oci maven; do
   [[ "$code" == 200 ]] || { printf 'Current Gateway could not read base %s Group: HTTP %s.\n' "$format" "$code" >&2; exit 1; }
 done
 cached=$(curl --silent --show-error --fail "${resolver[@]}" "$gateway_url/maven/$maven_group/$maven_path")
-[[ "$cached" == "$maven_body" ]] || { printf '%s\n' 'Current Gateway could not read the cached Maven object from legacy S3 storage.' >&2; exit 1; }
+[[ "$cached" == "$maven_body" ]] || { printf '%s\n' 'Current Gateway could not read the cached Maven object from RustFS.' >&2; exit 1; }
 for format in raw conan; do
   payload=$(printf '{"name":"%s-%s","anonymous":false,"cacheQuotaBytes":1048576,"members":[{"name":"current","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":false}]}' "$format" "$suffix")
   code=$(status "${admin[@]}" -H 'Content-Type: application/json' --data "$payload" "$gateway_url/api/v1/$format/groups")
@@ -130,5 +130,5 @@ COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --no-build --wait
 code=$(status "${admin[@]}" "$gateway_url/api/v1/oci/groups/oci-$suffix")
 [[ "$code" == 200 ]] || { printf 'Rollback Gateway could not read base OCI Group: HTTP %s.\n' "$code" >&2; exit 1; }
 cached=$(curl --silent --show-error --fail "${resolver[@]}" "$gateway_url/maven/$maven_group/$maven_path")
-[[ "$cached" == "$maven_body" ]] || { printf '%s\n' 'Rollback Gateway could not read the cached Maven object from the shared S3 store.' >&2; exit 1; }
-printf '%s\n' 'Upgrade readiness passed: one shared legacy S3 store preserved cached Maven bytes across current migration and binary rollback; the copied RustFS cutover remains a separate gate.'
+[[ "$cached" == "$maven_body" ]] || { printf '%s\n' 'Rollback Gateway could not read the cached Maven object from the shared RustFS store.' >&2; exit 1; }
+printf '%s\n' 'Upgrade readiness passed: one shared RustFS store preserved cached Maven bytes across current migration and binary rollback.'

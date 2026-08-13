@@ -1,26 +1,54 @@
 package config
 
 import (
+	"bytes"
+	"crypto"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 )
 
 func TestLoadRejectsIncompleteConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "")
-	t.Setenv("GATEWAY_S3_BUCKET", "")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want error")
 	}
 }
 
+func TestLoadDoesNotAcceptLegacyS3Configuration(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "")
+	t.Setenv("GATEWAY_S3_ENDPOINT", "http://legacy-object-store:9000")
+	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_S3_ACCESS_KEY", "legacy-access-key")
+	t.Setenv("GATEWAY_S3_SECRET_KEY", "legacy-secret-key")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin")
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver")
+	if _, err := Load(); err == nil {
+		t.Fatal("legacy GATEWAY_S3 configuration was accepted")
+	}
+}
+
 func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
@@ -242,6 +270,74 @@ func TestLoadConfiguresAPTReleaseSigner(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresRemoteAPTSignerRotationOverlap(t *testing.T) {
+	setCompleteConfiguration(t)
+	fingerprints, publicKeysFile := writeAPTSignerPublicKeyRing(t, 2)
+	t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "https://signer.example.test/v1/sign-release")
+	t.Setenv("GATEWAY_APT_SIGNER_TOKEN", strings.Repeat("s", 32))
+	t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS", strings.ToUpper(strings.Join(fingerprints, ",")))
+	t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE", publicKeysFile)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cfg.APTSignerTrustedFingerprints, fingerprints) || len(cfg.APTSignerTrustedPublicKeys) == 0 {
+		t.Fatalf("trusted fingerprints=%#v", cfg.APTSignerTrustedFingerprints)
+	}
+}
+
+func TestLoadRejectsUnreadableOrMismatchedAPTSignerPublicKeys(t *testing.T) {
+	fingerprints, publicKeysFile := writeAPTSignerPublicKeyRing(t, 1)
+	for _, testCase := range []struct {
+		name, fingerprint, path string
+	}{
+		{name: "missing file", fingerprint: fingerprints[0], path: filepath.Join(t.TempDir(), "missing.asc")},
+		{name: "mismatched fingerprint", fingerprint: strings.Repeat("a", 40), path: publicKeysFile},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			setCompleteConfiguration(t)
+			t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "https://signer.example.test/v1/sign-release")
+			t.Setenv("GATEWAY_APT_SIGNER_TOKEN", strings.Repeat("s", 32))
+			t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS", testCase.fingerprint)
+			t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE", testCase.path)
+			if _, err := Load(); err == nil {
+				t.Fatal("Load() accepted an invalid trusted public-key policy")
+			}
+		})
+	}
+}
+
+func writeAPTSignerPublicKeyRing(t *testing.T, count int) ([]string, string) {
+	t.Helper()
+	var body bytes.Buffer
+	armored, err := armor.Encode(&body, openpgp.PublicKeyType, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprints := make([]string, 0, count)
+	for index := 0; index < count; index++ {
+		entity, entityErr := openpgp.NewEntity("APT Config Test", "", "apt-config@example.test", &packet.Config{RSABits: 1024, DefaultHash: crypto.SHA256})
+		if entityErr != nil {
+			t.Fatal(entityErr)
+		}
+		if err = entity.Serialize(armored); err != nil {
+			t.Fatal(err)
+		}
+		fingerprints = append(fingerprints, hex.EncodeToString(entity.PrimaryKey.Fingerprint))
+	}
+	if err = armored.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "apt-release-public-keys.asc")
+	if err = os.WriteFile(path, body.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = aptpublication.ValidateTrustedSignerPublicKeys(fingerprints, body.Bytes()); err != nil {
+		t.Fatalf("generated trusted public-key fixture is invalid: %v", err)
+	}
+	return fingerprints, path
+}
+
 func TestLoadRejectsInvalidAPTReleaseSignerConfiguration(t *testing.T) {
 	for _, testCase := range []struct {
 		name, endpoint, token, timeout string
@@ -251,6 +347,7 @@ func TestLoadRejectsInvalidAPTReleaseSignerConfiguration(t *testing.T) {
 		{name: "short token", endpoint: "https://signer.example.test/v1/sign-release", token: "short"},
 		{name: "short timeout", endpoint: "https://signer.example.test/v1/sign-release", token: strings.Repeat("s", 32), timeout: "500ms"},
 		{name: "settings without endpoint", token: strings.Repeat("s", 32)},
+		{name: "remote endpoint without trusted fingerprint", endpoint: "https://signer.example.test/v1/sign-release", token: strings.Repeat("s", 32)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			setCompleteConfiguration(t)
@@ -261,6 +358,19 @@ func TestLoadRejectsInvalidAPTReleaseSignerConfiguration(t *testing.T) {
 				t.Fatalf("Load() error=%v", err)
 			}
 		})
+	}
+	for _, fingerprints := range []string{
+		"not-a-fingerprint",
+		strings.Repeat("a", 40) + "," + strings.Repeat("b", 40) + "," + strings.Repeat("c", 40),
+	} {
+		setCompleteConfiguration(t)
+		t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "https://signer.example.test/v1/sign-release")
+		t.Setenv("GATEWAY_APT_SIGNER_TOKEN", strings.Repeat("s", 32))
+		t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS", fingerprints)
+		t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE", "/run/secrets/apt-release-public-keys.asc")
+		if _, err := Load(); err == nil {
+			t.Fatalf("invalid trusted fingerprints accepted: %q", fingerprints)
+		}
 	}
 }
 
@@ -290,10 +400,10 @@ func TestLoadRejectsStandaloneRoleCombination(t *testing.T) {
 func setCompleteConfiguration(t *testing.T) {
 	t.Helper()
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 }
@@ -301,10 +411,10 @@ func setCompleteConfiguration(t *testing.T) {
 func TestLoadDoesNotIncludeDatabaseURLInValidationError(t *testing.T) {
 	secret := "not-a-url-password"
 	t.Setenv("GATEWAY_DATABASE_URL", secret)
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	_, err := Load()
@@ -335,10 +445,10 @@ func TestRepositoryCacheQuotasParsesPositiveByteLimits(t *testing.T) {
 
 func TestLoadConfiguresOIDCWithHTTPSIssuerAndDiscoveryDefault(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test/")
@@ -382,10 +492,10 @@ func TestLoadRejectsNonLoopbackHTTPOIDCIssuer(t *testing.T) {
 
 func TestLoadRejectsOIDCWithoutAudience(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_OIDC_ISSUER", "https://login.example.test")
@@ -429,10 +539,10 @@ func TestLoadRejectsInsecureOIDCBrowserRedirect(t *testing.T) {
 
 func TestLoadRejectsInvalidOTELSamplingRatio(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	for _, ratio := range []string{"1.1", "NaN"} {
@@ -445,10 +555,10 @@ func TestLoadRejectsInvalidOTELSamplingRatio(t *testing.T) {
 
 func TestLoadParsesCacheTTLs(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_OCI_CACHE_TTL", "30m")
@@ -483,10 +593,10 @@ func TestLoadParsesCacheTTLs(t *testing.T) {
 
 func TestLoadUsesMavenCacheDefaultsSuitedToImmutableComponents(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_MAVEN_CACHE_TTL", "")
@@ -504,10 +614,10 @@ func TestLoadUsesMavenCacheDefaultsSuitedToImmutableComponents(t *testing.T) {
 
 func TestLoadConfiguresDatabasePool(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_DATABASE_MAX_OPEN_CONNS", "24")
@@ -536,10 +646,10 @@ func TestLoadConfiguresDatabasePool(t *testing.T) {
 
 func TestLoadRejectsDatabaseIdleConnectionsAboveOpenLimit(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_DATABASE_MAX_OPEN_CONNS", "2")
@@ -551,10 +661,10 @@ func TestLoadRejectsDatabaseIdleConnectionsAboveOpenLimit(t *testing.T) {
 
 func TestLoadRejectsCoordinatorIdleConnectionsAboveOpenLimit(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_DATABASE_COORDINATOR_MAX_OPEN_CONNS", "1")
@@ -566,10 +676,10 @@ func TestLoadRejectsCoordinatorIdleConnectionsAboveOpenLimit(t *testing.T) {
 
 func TestLoadRejectsArtifactLockIdleConnectionsAboveOpenLimit(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	t.Setenv("GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_OPEN_CONNS", "1")
@@ -581,10 +691,10 @@ func TestLoadRejectsArtifactLockIdleConnectionsAboveOpenLimit(t *testing.T) {
 
 func TestLoadRejectsInvalidCacheTTL(t *testing.T) {
 	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
-	t.Setenv("GATEWAY_S3_ENDPOINT", "http://minio:9000")
-	t.Setenv("GATEWAY_S3_BUCKET", "gateway-cache")
-	t.Setenv("GATEWAY_S3_ACCESS_KEY", "minio-user")
-	t.Setenv("GATEWAY_S3_SECRET_KEY", "minio-secret")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
 	t.Setenv("GATEWAY_ADMIN_TOKEN", "admin-token")
 	t.Setenv("GATEWAY_RESOLVER_TOKEN", "resolver-token")
 	for _, name := range []string{"GATEWAY_OCI_CACHE_TTL", "GATEWAY_MAVEN_CACHE_TTL", "GATEWAY_MAVEN_METADATA_CACHE_TTL", "GATEWAY_MAVEN_NEGATIVE_CACHE_TTL", "GATEWAY_RAW_CACHE_TTL", "GATEWAY_CONAN_CACHE_TTL"} {

@@ -47,7 +47,7 @@ func main() {
 			slog.Error("shutdown tracing", "error", err)
 		}
 	}()
-	objectStore, err := app.NewS3OCIObjectStore(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Bucket)
+	objectStore, err := app.NewRustFSOCIObjectStore(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
 	if err != nil {
 		slog.Error("create OCI object store", "error", err)
 		os.Exit(1)
@@ -66,6 +66,7 @@ func main() {
 	if cfg.APTSignerEnabled() {
 		aptSigner, signerErr := aptpublication.NewHTTPSigner(aptpublication.HTTPSignerOptions{
 			Endpoint: cfg.APTSignerEndpoint, Token: cfg.APTSignerToken, Timeout: cfg.APTSignerTimeout,
+			TrustedFingerprints: cfg.APTSignerTrustedFingerprints, TrustedPublicKeys: cfg.APTSignerTrustedPublicKeys,
 		})
 		if signerErr != nil {
 			slog.Error("initialize APT Release signer")
@@ -167,7 +168,7 @@ func main() {
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
-	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled())
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints))
 	runtimeSessionID := uuid.NewString()
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,

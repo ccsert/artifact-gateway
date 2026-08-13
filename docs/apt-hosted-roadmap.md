@@ -111,6 +111,18 @@ validation, and the real Debian client fixture.
 
 ## APT-H3: production signing, key rotation, and operations
 
+Current implementation status: in progress. The first H3 slice requires a
+remote HTTPS signer to produce both signatures verifiable by an operator-mounted
+public keyring whose one or two keys exactly match the pinned OpenPGP
+fingerprints. This supports a fail-closed old/new rotation overlap while
+keeping public-key distribution explicit. Startup logs, preflight diagnostics,
+snapshot responses, and immutable publication audit expose the effective
+fingerprint evidence. The audit keeps authorization reason vocabulary stable
+and stores signer identity, verified fingerprint, and derived algorithm in its
+dedicated immutable `evidence` object. Managed key custody, client rotation
+drills, snapshot export/restore verification, metrics, and alerts remain before
+H3 can pass.
+
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
   record signer identity, key fingerprint, algorithm, snapshot digest, actor,
   and timestamps in immutable audit evidence.

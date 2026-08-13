@@ -262,6 +262,7 @@ type auditResponse struct {
 	Bytes               int64                   `json:"bytes,omitempty"`
 	AuthorizationSource string                  `json:"authorizationSource,omitempty"`
 	AuthorizationReason string                  `json:"authorizationReason,omitempty"`
+	Evidence            map[string]string       `json:"evidence,omitempty"`
 	RequestID           string                  `json:"requestId,omitempty"`
 	TraceID             string                  `json:"traceId,omitempty"`
 }
@@ -298,6 +299,6 @@ func auditResponseFromRecord(audit repository.AuditRecord) auditResponse {
 		GroupName: audit.GroupName, Repository: audit.Repository, MemberName: audit.MemberName, Outcome: audit.Outcome, Actor: audit.Actor, OccurredAt: audit.OccurredAt,
 		Format: audit.Format, Resource: audit.Resource, Representation: audit.Representation, MemberType: audit.MemberType, UpstreamHost: audit.UpstreamHost,
 		Operation: audit.Operation, CacheDisposition: audit.CacheDisposition, AuthorizationSource: audit.AuthorizationSource, AuthorizationReason: audit.AuthorizationReason,
-		RequestID: audit.RequestID, TraceID: audit.TraceID, Status: audit.Status, Bytes: audit.Bytes,
+		Evidence: audit.Evidence, RequestID: audit.RequestID, TraceID: audit.TraceID, Status: audit.Status, Bytes: audit.Bytes,
 	}
 }

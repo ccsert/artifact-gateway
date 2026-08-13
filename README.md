@@ -36,12 +36,10 @@ Vite Console under a checkout-specific local supervisor. It waits for both
 Gateway readiness and the Console before printing their configured addresses.
 Use `make dev-status` as a repeatable health check.
 
-For an existing MinIO-era `.env`, first run
-`./scripts/local-dev.sh migrate-rustfs-env`. It adds independent local RustFS
+`./scripts/local-dev.sh bootstrap-rustfs-env` can add independent local RustFS
 credentials without printing them and retains a timestamped rollback copy.
-Existing MinIO data is never mounted in place or discarded; follow the
-[S3 cutover procedure](docs/rustfs-migration.md), then record the verified
-manifest with `./scripts/local-dev.sh confirm-rustfs-migration sha256:...`.
+The current runtime is RustFS-only. If the helper detects legacy object-store
+containers or volumes, it fails closed and never deletes or mounts them.
 
 Open the Console at `http://127.0.0.1:4173` by default. The checked-in example
 uses `GATEWAY_HTTP_PORT=8080` and `GATEWAY_CONSOLE_PORT=4173`; local `.env`

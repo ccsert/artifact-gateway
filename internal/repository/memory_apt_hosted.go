@@ -697,15 +697,6 @@ func assetDigestAtPath(assets []APTSnapshotAsset, path string) string {
 	return ""
 }
 
-func aptSnapshotGeneratedCapacity(assets []APTSnapshotAsset) (int64, int64) {
-	objects := aptSnapshotGeneratedObjects(assets)
-	var bytes int64
-	for _, size := range objects {
-		bytes += size
-	}
-	return bytes, int64(len(objects))
-}
-
 func aptSnapshotGeneratedObjects(assets []APTSnapshotAsset) map[string]int64 {
 	objects := make(map[string]int64)
 	for _, asset := range assets {

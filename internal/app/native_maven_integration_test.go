@@ -23,9 +23,9 @@ import (
 
 func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
-	s3AccessKey := os.Getenv("TEST_S3_ACCESS_KEY")
-	s3SecretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	s3Endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	s3AccessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	s3SecretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || s3Endpoint == "" || s3AccessKey == "" || s3SecretKey == "" {
 		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
@@ -35,7 +35,7 @@ func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *test
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewS3OCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := NewRustFSOCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,8 @@ func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *test
 }
 
 func TestPostgresRustFSMavenReplicationPublishesTargetOwnedCheckpoints(t *testing.T) {
-	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_S3_ENDPOINT")
-	accessKey, secretKey := os.Getenv("TEST_S3_ACCESS_KEY"), os.Getenv("TEST_S3_SECRET_KEY")
+	databaseURL, endpoint := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey, secretKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
@@ -102,7 +102,7 @@ func TestPostgresRustFSMavenReplicationPublishesTargetOwnedCheckpoints(t *testin
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewS3OCIObjectStore(endpoint, accessKey, secretKey, "maven-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "maven-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,9 +791,9 @@ func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
 
 func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
-	s3AccessKey := os.Getenv("TEST_S3_ACCESS_KEY")
-	s3SecretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	s3Endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	s3AccessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	s3SecretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || s3Endpoint == "" || s3AccessKey == "" || s3SecretKey == "" {
 		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
@@ -803,7 +803,7 @@ func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testin
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewS3OCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "native-maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := NewRustFSOCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "native-maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}

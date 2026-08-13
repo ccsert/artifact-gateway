@@ -10,12 +10,12 @@ import (
 type OCIObjectStore = objectstore.Store
 type OCIObjectInfo = objectstore.Info
 type MemoryOCIObjectStore = objectstore.MemoryStore
-type S3OCIObjectStore = objectstore.S3Store
+type RustFSOCIObjectStore = objectstore.RustFSStore
 type CachedOCIContent = ociprotocol.CachedContent
 type OCICache = ociprotocol.Cache
 
 var NewMemoryOCIObjectStore = objectstore.NewMemoryStore
-var NewS3OCIObjectStore = objectstore.NewS3Store
+var NewRustFSOCIObjectStore = objectstore.NewRustFSStore
 var NewOCICache = ociprotocol.NewCache
 var NewDefaultOCICache = ociprotocol.NewDefaultCache
 

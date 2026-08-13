@@ -84,9 +84,9 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 
 func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	s3Endpoint := os.Getenv("TEST_S3_ENDPOINT")
-	accessKey := os.Getenv("TEST_S3_ACCESS_KEY")
-	secretKey := os.Getenv("TEST_S3_SECRET_KEY")
+	s3Endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
 	if databaseURL == "" || s3Endpoint == "" || accessKey == "" || secretKey == "" {
 		t.Skip("PostgreSQL and S3 integration environment is required")
 	}
@@ -101,14 +101,14 @@ func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	}
 	defer storeB.Close()
 	bucket := "native-raw-list-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewS3OCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}

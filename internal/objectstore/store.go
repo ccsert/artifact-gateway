@@ -8,12 +8,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"sync"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // ErrNotFound is returned when a requested object is absent.
@@ -127,140 +133,187 @@ func (s *MemoryStore) List(_ context.Context, prefix string) ([]string, error) {
 	return keys, nil
 }
 
-type S3Store struct {
-	client *minio.Client
+type RustFSStore struct {
+	client *s3.Client
 	bucket string
 }
 
-func NewS3Store(endpoint, accessKey, secretKey, bucket string) (*S3Store, error) {
-	client, err := minio.New(strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://"), &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: strings.HasPrefix(endpoint, "https://"),
-	})
-	if err != nil {
-		return nil, err
+func NewRustFSStore(endpoint, accessKey, secretKey, bucket string) (*RustFSStore, error) {
+	parsed, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil ||
+		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		strings.TrimSpace(accessKey) == "" || strings.TrimSpace(secretKey) == "" || strings.TrimSpace(bucket) == "" {
+		return nil, errors.New("RustFS endpoint, bucket, and credentials are invalid")
 	}
-	return &S3Store{client: client, bucket: bucket}, nil
+	config := aws.Config{
+		Region:      "us-east-1",
+		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	}
+	client := s3.NewFromConfig(config, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(parsed.String())
+		options.UsePathStyle = true
+	})
+	return &RustFSStore{client: client, bucket: bucket}, nil
 }
 
-func (s *S3Store) EnsureBucket(ctx context.Context) error {
-	exists, err := s.client.BucketExists(ctx, s.bucket)
-	if err != nil || exists {
+func (s *RustFSStore) EnsureBucket(ctx context.Context) error {
+	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)}); err == nil {
+		return nil
+	} else if !rustFSNotFound(err) {
 		return err
 	}
-	return s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
+	if _, err := s.client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(s.bucket)}); err == nil {
+		return nil
+	} else if _, headErr := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)}); headErr == nil {
+		return nil
+	} else {
+		return err
+	}
 }
 
 // CheckBucket verifies that the configured bucket is accessible without
 // creating or modifying it.
-func (s *S3Store) CheckBucket(ctx context.Context) error {
-	exists, err := s.client.BucketExists(ctx, s.bucket)
-	if err != nil {
+func (s *RustFSStore) CheckBucket(ctx context.Context) error {
+	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)}); rustFSNotFound(err) {
+		return errors.New("configured bucket does not exist")
+	} else {
 		return err
 	}
-	if !exists {
-		return errors.New("configured bucket does not exist")
-	}
-	return nil
 }
 
-func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
-	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+func (s *RustFSStore) Get(ctx context.Context, key string) ([]byte, error) {
+	object, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
+		if rustFSNotFound(err) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	defer func() { _ = object.Close() }()
-	value, err := io.ReadAll(object)
-	if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-		return nil, ErrNotFound
-	}
+	defer func() { _ = object.Body.Close() }()
+	value, err := io.ReadAll(object.Body)
 	return value, err
 }
 
-func (s *S3Store) Put(ctx context.Context, key string, value []byte) error {
+func (s *RustFSStore) Put(ctx context.Context, key string, value []byte) error {
 	return s.PutReader(ctx, key, bytes.NewReader(value), int64(len(value)))
 }
 
-func (s *S3Store) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
-	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+func (s *RustFSStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	object, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
-		return nil, 0, err
-	}
-	info, err := object.Stat()
-	if err != nil {
-		_ = object.Close()
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+		if rustFSNotFound(err) {
 			return nil, 0, ErrNotFound
 		}
 		return nil, 0, err
 	}
-	return object, info.Size, nil
+	return object.Body, aws.ToInt64(object.ContentLength), nil
 }
 
-func (s *S3Store) Stat(ctx context.Context, key string) (Info, error) {
-	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+func (s *RustFSStore) Stat(ctx context.Context, key string) (Info, error) {
+	info, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+		if rustFSNotFound(err) {
 			return Info{}, ErrNotFound
 		}
 		return Info{}, err
 	}
-	return Info{Size: info.Size, Digest: digestMetadata(info.UserMetadata)}, nil
+	return Info{Size: aws.ToInt64(info.ContentLength), Digest: digestMetadata(info.Metadata)}, nil
 }
 
-func (s *S3Store) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
-	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+func (s *RustFSStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
+	info, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
-		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+		if rustFSNotFound(err) {
 			return nil, 0, ErrNotFound
 		}
 		return nil, 0, err
 	}
-	if offset < 0 || length < 0 || offset > info.Size || length > info.Size-offset {
+	size := aws.ToInt64(info.ContentLength)
+	if offset < 0 || length < 0 || offset > size || length > size-offset {
 		return nil, 0, errors.New("object range is out of bounds")
 	}
-	options := minio.GetObjectOptions{}
-	if err := options.SetRange(offset, offset+length-1); err != nil {
-		return nil, 0, err
+	if length == 0 {
+		return io.NopCloser(bytes.NewReader(nil)), size, nil
 	}
-	object, err := s.client.GetObject(ctx, s.bucket, key, options)
+	object, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Range: aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)),
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-	return object, info.Size, nil
+	return object.Body, size, nil
 }
 
-func (s *S3Store) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
-	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+func (s *RustFSStore) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: value, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
+	})
 	return err
 }
 
-func (s *S3Store) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
-	_, err := s.client.PutObject(ctx, s.bucket, key, value, size, minio.PutObjectOptions{ContentType: "application/octet-stream", UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}})
+func (s *RustFSStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: value, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
+		Metadata: map[string]string{"artifact-gateway-sha256": digest},
+	})
 	return err
 }
 
-func (s *S3Store) SetVerifiedDigest(ctx context.Context, key, digest string) error {
-	_, err := s.client.CopyObject(ctx,
-		minio.CopyDestOptions{Bucket: s.bucket, Object: key, ReplaceMetadata: true, UserMetadata: map[string]string{"Artifact-Gateway-Sha256": digest}},
-		minio.CopySrcOptions{Bucket: s.bucket, Object: key},
-	)
-	return err
-}
-
-func (s *S3Store) Delete(ctx context.Context, key string) error {
-	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
-}
-
-func (s *S3Store) List(ctx context.Context, prefix string) ([]string, error) {
-	keys := make([]string, 0)
-	for object := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
-		if object.Err != nil {
-			return nil, object.Err
+func (s *RustFSStore) SetVerifiedDigest(ctx context.Context, key, digest string) error {
+	info, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		if rustFSNotFound(err) {
+			return ErrNotFound
 		}
-		keys = append(keys, object.Key)
+		return err
+	}
+	metadata := make(map[string]string, len(info.Metadata)+1)
+	for name, value := range info.Metadata {
+		metadata[name] = value
+	}
+	metadata["artifact-gateway-sha256"] = digest
+	_, err = s.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), CopySource: aws.String(url.PathEscape(s.bucket + "/" + key)),
+		MetadataDirective: types.MetadataDirectiveReplace, Metadata: metadata,
+		CacheControl: info.CacheControl, ContentDisposition: info.ContentDisposition, ContentEncoding: info.ContentEncoding,
+		ContentLanguage: info.ContentLanguage, ContentType: info.ContentType,
+	})
+	return err
+}
+
+func (s *RustFSStore) Delete(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	return err
+}
+
+func (s *RustFSStore) List(ctx context.Context, prefix string) ([]string, error) {
+	keys := make([]string, 0)
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: aws.String(s.bucket), Prefix: aws.String(prefix)})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, object := range page.Contents {
+			keys = append(keys, aws.ToString(object.Key))
+		}
 	}
 	return keys, nil
+}
+
+func rustFSNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiError smithy.APIError
+	if errors.As(err, &apiError) {
+		switch apiError.ErrorCode() {
+		case "NoSuchBucket", "NoSuchKey", "NotFound":
+			return true
+		}
+	}
+	var responseError *smithyhttp.ResponseError
+	return errors.As(err, &responseError) && responseError.HTTPStatusCode() == 404
 }
 
 func digestMetadata(metadata map[string]string) string {

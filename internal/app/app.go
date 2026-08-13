@@ -29,7 +29,7 @@ type Dependencies struct {
 	BuildModified  bool
 	BuildGoVersion string
 	Runtime        DiagnosticRuntime
-	// NativeMavenObjectStore is supplied by the runtime after S3 is initialized.
+	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore
 	NativeOCIObjectStore          OCIObjectStore
@@ -74,7 +74,7 @@ func NewDependencies(cfg config.Config) Dependencies {
 	return Dependencies{
 		checkers: []Checker{
 			postgresChecker{databaseURL: cfg.DatabaseURL},
-			httpChecker{url: s3EndpointURL(cfg.S3Endpoint)},
+			httpChecker{url: rustFSEndpointURL(cfg.RustFSEndpoint)},
 		},
 		BuildVersion:                  version,
 		BuildRevision:                 revision,
@@ -193,6 +193,6 @@ func (h httpChecker) Check(ctx context.Context) error {
 	return nil
 }
 
-func s3EndpointURL(endpoint string) string {
+func rustFSEndpointURL(endpoint string) string {
 	return strings.TrimRight(endpoint, "/") + "/"
 }

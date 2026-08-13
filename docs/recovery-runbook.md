@@ -42,5 +42,5 @@ the local stack started by `make up`. The scripts keep backups under
 Run it only against an isolated drill environment after preserving any data that
 must be retained. It stops Gateway while the two stores are restored to avoid
 new metadata pointing to objects from the interrupted state. The object archive
-is valid only for the pinned RustFS baseline; use the
-[S3 migration procedure](rustfs-migration.md) when moving from MinIO.
+is valid only for the pinned RustFS baseline. The project no longer ships or
+supports a legacy object-store migration path.

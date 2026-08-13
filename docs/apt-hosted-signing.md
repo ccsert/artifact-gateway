@@ -75,3 +75,35 @@ production root of trust. Do not publish its token or volume. A production H3
 adapter must expose the same narrow digest-bound signing protocol over HTTPS
 while keeping private-key operations in a managed KMS, HSM, or equivalent
 audited signer.
+
+Remote HTTPS signers are fail-closed unless
+`GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS` contains their OpenPGP fingerprint
+and `GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE` points to a bounded, armored,
+public-only keyring containing exactly the same one or two keys. Gateway verifies
+both `InRelease` and `Release.gpg` against this keyring and requires the verified
+signing entity to match the reported fingerprint. The persisted signer identity,
+signing-key algorithm, and primary-key fingerprint are derived from the verified
+OpenPGP packets and trusted entity rather than accepted from the HTTP response.
+The parser accepts exactly one public-key armor block and rejects private keys,
+additional armor blocks, and trailing data. Remote signatures must use RSA with
+SHA-256 and a 2048- to 4096-bit signing key. The fingerprint setting
+accepts one active 40- or 64-hex-character fingerprint and one optional next
+fingerprint for a controlled rotation overlap. It never changes client trust
+automatically.
+
+A production rotation uses this order:
+
+1. distribute and verify the next public key through the operator-owned trust
+   channel;
+2. mount a public keyring containing `old,new`, configure the matching trusted
+   fingerprints, and restart Gateway;
+3. rotate the external signer and confirm a newly published snapshot reports
+   the new fingerprint in the immutable publication response and audit;
+4. remove the old fingerprint only after the client overlap window closes.
+
+An unlisted signer key is rejected before snapshot visibility changes. The
+loopback reference signer may omit this setting because it remains an H2 test
+fixture. Configuration loading reads and validates the complete public-only
+keyring against the configured fingerprint set before preflight can pass;
+preflight diagnostics and startup logs expose only the validated key count so
+an unpinned deployment is not mistaken for H3 production readiness.

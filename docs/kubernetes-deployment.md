@@ -70,14 +70,10 @@ make kubernetes-local-down
 
 This deletes the `artifact-gateway-local` namespace, its dedicated IngressClass
 and read-only cluster RBAC, including its PostgreSQL and RustFS
-PersistentVolumeClaims, the APT signer key claim, and all local data. An existing MinIO-based
-local namespace or orphaned MinIO data PVC is not changed in place: the helper
-refuses startup and points to the
-[RustFS migration procedure](rustfs-migration.md). Only after retaining the
-frozen-copy and metadata-verification evidence should an operator set both
-`K8S_LOCAL_RUSTFS_MIGRATION_CONFIRMED=1` and
-`K8S_LOCAL_RUSTFS_MIGRATION_MANIFEST_SHA256=sha256:<64 lowercase hex>`. A bare
-boolean cannot authorize switching an existing namespace to an empty RustFS.
+PersistentVolumeClaims, the APT signer key claim, and all local data. An existing
+legacy object-store StatefulSet or data PVC is never changed in place: the RustFS-only
+helper fails closed and requires the operator to remove or rename those resources
+explicitly. No compatibility or migration-bypass flag is available.
 
 ## Local topology
 
