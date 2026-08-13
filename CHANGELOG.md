@@ -23,7 +23,10 @@ a dated version heading without rewriting their meaning.
   Repository administrators can now compare the configured old/next trust
   window with the latest visible snapshot in a generated API and bilingual
   Console view, while bounded outcome and latency metrics support operational
-  alerting without high-cardinality signer or repository labels.
+  alerting without high-cardinality signer or repository labels. During a
+  rolling upgrade, a Console connected to an older Gateway now identifies the
+  missing signing-state endpoint as an unavailable feature instead of
+  incorrectly reporting that the repository does not exist.
 - Prioritized Cargo sparse-registry planning after APT H3 and deferred NuGet
   repository implementation while retaining its tested parser foundation.
 

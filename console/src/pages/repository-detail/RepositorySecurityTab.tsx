@@ -223,7 +223,11 @@ export function RepositorySecurityTab({
 
   if (aptSigningApplicable) {
     if (aptSigningError !== null) {
-      return (
+      return isNotFound(aptSigningError) ? (
+        <RepositoryFeatureUnavailable
+          feature={text("APT 签名状态", "APT signing state")}
+        />
+      ) : (
         <ErrorBanner error={aptSigningError} onRetry={loadAptSigningState} />
       );
     }

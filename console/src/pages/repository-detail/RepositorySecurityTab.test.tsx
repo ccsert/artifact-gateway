@@ -145,6 +145,31 @@ describe("RepositorySecurityTab", () => {
     expect(screen.getByText("生产信任已固定")).toBeInTheDocument();
   });
 
+  it("explains an unavailable APT signing endpoint during a rolling upgrade", async () => {
+    mockGetAptRepositorySigningState.mockResolvedValue({
+      error: {
+        status: 404,
+        code: "not_found",
+        message: "repository not found",
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositorySecurityTab
+          repo={{ ...repo, format: "apt" }}
+          publicationScanning={false}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByText("APT 签名状态功能未启用"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/当前后端构建尚未挂载/)).toBeInTheDocument();
+    expect(screen.queryByText("请求出错")).not.toBeInTheDocument();
+  });
+
   it("loads and saves a versioned security admission policy", async () => {
     const user = userEvent.setup();
     mockGetSecurityPolicy.mockResolvedValue({
