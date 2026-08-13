@@ -116,6 +116,11 @@ func TestAPTPublicationRuntimeResponsesConformToOpenAPI(t *testing.T) {
 	if response := publishSnapshot(); response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"state":"visible"`) {
 		t.Fatalf("snapshot replay=%d body=%s", response.Code, response.Body.String())
 	}
+	signingState := httptest.NewRequest(http.MethodGet, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/signing-state", nil)
+	authorize(signingState, "admin-secret")
+	if response := validate(signingState); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"readiness":"fixture"`) || !strings.Contains(response.Body.String(), `"currentSnapshot"`) {
+		t.Fatalf("signing state=%d body=%s", response.Code, response.Body.String())
+	}
 
 	wrongMedia := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+session.ID+"/package", bytes.NewReader(deb))
 	authorize(wrongMedia, "admin-secret")

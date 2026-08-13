@@ -2784,6 +2784,47 @@ APTRepositorySnapshot:
     publishedAt:
       type: string
       format: date-time
+APTRepositorySigningState:
+  type: object
+  additionalProperties: false
+  required:
+  - repositoryId
+  - signerMode
+  - readiness
+  - trustedFingerprints
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    signerMode:
+      type: string
+      enum:
+      - disabled
+      - reference
+      - remote
+    readiness:
+      type: string
+      enum:
+      - unconfigured
+      - fixture
+      - ready
+      - rotation_overlap
+      - policy_mismatch
+    trustedFingerprints:
+      type: array
+      maxItems: 2
+      items:
+        type: string
+        pattern: "^([a-f0-9]{40}|[a-f0-9]{64})$"
+    currentKeyRole:
+      type: string
+      enum:
+      - active
+      - next
+      - fixture
+      - outside_policy
+    currentSnapshot:
+      "$ref": "#/APTRepositorySnapshot"
 RepositoryPage:
   type: object
   required:

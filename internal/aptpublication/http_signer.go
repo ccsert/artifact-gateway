@@ -30,7 +30,10 @@ const (
 	maxTrustedPublicKeysBytes  = int64(1 << 20)
 )
 
-var ErrUntrustedSigner = errors.New("APT signer fingerprint is not trusted")
+var (
+	ErrUntrustedSigner        = errors.New("APT signer fingerprint is not trusted")
+	ErrSignerInvalidSignature = errors.New("APT signer signature is invalid")
+)
 
 type HTTPSignerOptions struct {
 	Endpoint            string
@@ -259,7 +262,7 @@ func (s *HTTPSigner) SignRelease(ctx context.Context, input SignReleaseRequest) 
 	var result SignReleaseResult
 	if err = decoder.Decode(&result); err != nil || decoder.Decode(&struct{}{}) != io.EOF || !validSignatureResult(result) ||
 		!signatureEnvelopeMatchesRelease(release, result) {
-		return SignReleaseResult{}, errors.New("APT signer result is invalid")
+		return SignReleaseResult{}, ErrSignerInvalidSignature
 	}
 	if len(s.trusted) > 0 {
 		if _, trusted := s.trusted[strings.ToLower(result.KeyFingerprint)]; !trusted {
@@ -267,7 +270,7 @@ func (s *HTTPSigner) SignRelease(ctx context.Context, input SignReleaseRequest) 
 		}
 		evidence, verified := signatureEnvelopeVerifiedByTrustedKey(s.keyring, release, result)
 		if !verified {
-			return SignReleaseResult{}, ErrUntrustedSigner
+			return SignReleaseResult{}, ErrSignerInvalidSignature
 		}
 		result.KeyFingerprint = evidence.fingerprint
 		result.SignerIdentity = evidence.identity

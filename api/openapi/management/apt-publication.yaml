@@ -132,3 +132,24 @@ repositories_repositoryId_apt_snapshots:
         "$ref": "../components/responses.yaml#/Problem"
       '500':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_apt_signing_state:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getAPTRepositorySigningState
+    description: Reports the configured signer trust policy and latest immutable signing evidence without exposing signer credentials or private-key material.
+    responses:
+      '200':
+        description: Effective APT signing state
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTRepositorySigningState"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"

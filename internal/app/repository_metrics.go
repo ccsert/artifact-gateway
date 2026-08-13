@@ -2,11 +2,13 @@ package app
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -72,6 +74,10 @@ type Metrics struct {
 	auditCleanupCompleted          atomic.Uint64
 	auditCleanupFailed             atomic.Uint64
 	auditCleanupDeleted            atomic.Uint64
+	aptSigningRequests             [aptSigningOutcomeCount]atomic.Uint64
+	aptSigningDurationBuckets      [len(aptSigningDurationBounds)]atomic.Uint64
+	aptSigningDurationCount        atomic.Uint64
+	aptSigningDurationNanos        atomic.Uint64
 
 	mu           sync.RWMutex
 	repositories map[string]RepositoryMetrics
@@ -79,6 +85,20 @@ type Metrics struct {
 	instanceID   string
 	nodeRoles    []string
 }
+
+const aptSigningOutcomeCount = 4
+
+var aptSigningOutcomes = [...]aptpublication.SigningOutcome{
+	aptpublication.SigningOutcomeSuccess,
+	aptpublication.SigningOutcomeUntrustedSigner,
+	aptpublication.SigningOutcomeInvalidSignature,
+	aptpublication.SigningOutcomeUnavailable,
+}
+var aptSigningDurationBounds = [...]time.Duration{
+	100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second,
+	2500 * time.Millisecond, 5 * time.Second, 10 * time.Second, 30 * time.Second,
+}
+var aptSigningDurationLabels = [...]string{"0.1", "0.25", "0.5", "1", "2.5", "5", "10", "30"}
 
 // WithNodeIdentity adds bounded deployment labels to metrics. The values are
 // configured once at startup and never come from request paths.
@@ -294,6 +314,30 @@ func (m *Metrics) RecordAuditRetentionCleanup(outcome string, deleted int) {
 	}
 }
 
+func (m *Metrics) RecordAPTSigning(outcome aptpublication.SigningOutcome, duration time.Duration) {
+	index := -1
+	for candidate, value := range aptSigningOutcomes {
+		if value == outcome {
+			index = candidate
+			break
+		}
+	}
+	if index < 0 {
+		return
+	}
+	if duration < 0 {
+		duration = 0
+	}
+	m.aptSigningRequests[index].Add(1)
+	m.aptSigningDurationCount.Add(1)
+	m.aptSigningDurationNanos.Add(uint64(duration))
+	for bucket, upperBound := range aptSigningDurationBounds {
+		if duration <= upperBound {
+			m.aptSigningDurationBuckets[bucket].Add(1)
+		}
+	}
+}
+
 // recordRepositoryAuthorizationDenied accepts only bounded grant decision
 // values. Actor, repository, path, and endpoint must never become labels.
 func (m *Metrics) recordRepositoryAuthorizationDenied(format, source, reason string) {
@@ -453,6 +497,7 @@ func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	m.writeHTTPMetrics(w)
 	m.writeRuntimeMetrics(w)
 	m.writeDatabaseMetrics(w)
+	m.writeAPTSigningMetrics(w)
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_cache_quota_rejections_total counter\nartifact_gateway_cache_quota_rejections_total " + utoa(m.cacheQuotaDenied.Load()) + "\n# TYPE artifact_gateway_anonymous_reads_total counter\nartifact_gateway_anonymous_reads_total " + utoa(m.anonymousReads.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_repository_authorization_denials_total counter\n"))
 	for formatIndex, format := range repositoryAuthorizationFormats {
@@ -491,6 +536,21 @@ func (m *Metrics) Handler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_raw_requests_total counter\nartifact_gateway_raw_requests_total{method=\"get\"} " + utoa(m.rawGetRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"head\"} " + utoa(m.rawHeadRequests.Load()) + "\nartifact_gateway_raw_requests_total{method=\"other\"} " + utoa(m.rawOtherRequests.Load()) + "\n# TYPE artifact_gateway_raw_authorization_denials_total counter\nartifact_gateway_raw_authorization_denials_total " + utoa(m.rawAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_raw_cache_requests_total counter\nartifact_gateway_raw_cache_requests_total{outcome=\"hit\"} " + utoa(m.rawCacheHit.Load()) + "\nartifact_gateway_raw_cache_requests_total{outcome=\"miss\"} " + utoa(m.rawCacheMiss.Load()) + "\n# TYPE artifact_gateway_raw_negative_cache_hits_total counter\nartifact_gateway_raw_negative_cache_hits_total " + utoa(m.rawNegativeHit.Load()) + "\n# TYPE artifact_gateway_raw_proxy_denied_total counter\nartifact_gateway_raw_proxy_denied_total " + utoa(m.rawProxyDenied.Load()) + "\n# TYPE artifact_gateway_raw_checksum_failures_total counter\nartifact_gateway_raw_checksum_failures_total " + utoa(m.rawChecksumFailure.Load()) + "\n# TYPE artifact_gateway_raw_upstream_failures_total counter\nartifact_gateway_raw_upstream_failures_total " + utoa(m.rawUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_raw_response_bytes_total counter\nartifact_gateway_raw_response_bytes_total " + utoa(m.rawResponseBytes.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_conan_requests_total counter\nartifact_gateway_conan_requests_total{method=\"get\"} " + utoa(m.conanGetRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"head\"} " + utoa(m.conanHeadRequests.Load()) + "\nartifact_gateway_conan_requests_total{method=\"other\"} " + utoa(m.conanOtherRequests.Load()) + "\n# TYPE artifact_gateway_conan_authorization_denials_total counter\nartifact_gateway_conan_authorization_denials_total " + utoa(m.conanAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_conan_cache_requests_total counter\nartifact_gateway_conan_cache_requests_total{outcome=\"hit\"} " + utoa(m.conanCacheHit.Load()) + "\nartifact_gateway_conan_cache_requests_total{outcome=\"miss\"} " + utoa(m.conanCacheMiss.Load()) + "\n# TYPE artifact_gateway_conan_negative_cache_hits_total counter\nartifact_gateway_conan_negative_cache_hits_total " + utoa(m.conanNegativeHit.Load()) + "\n# TYPE artifact_gateway_conan_proxy_denied_total counter\nartifact_gateway_conan_proxy_denied_total " + utoa(m.conanProxyDenied.Load()) + "\n# TYPE artifact_gateway_conan_checksum_failures_total counter\nartifact_gateway_conan_checksum_failures_total " + utoa(m.conanChecksumFailure.Load()) + "\n# TYPE artifact_gateway_conan_upstream_failures_total counter\nartifact_gateway_conan_upstream_failures_total " + utoa(m.conanUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_conan_response_bytes_total counter\nartifact_gateway_conan_response_bytes_total " + utoa(m.conanResponseBytes.Load()) + "\n# TYPE artifact_gateway_conan_cache_quota_rejections_total counter\nartifact_gateway_conan_cache_quota_rejections_total " + utoa(m.conanCacheQuotaDenied.Load()) + "\n"))
 	_, _ = w.Write([]byte("# TYPE artifact_gateway_npm_requests_total counter\nartifact_gateway_npm_requests_total{method=\"get\"} " + utoa(m.npmGetRequests.Load()) + "\nartifact_gateway_npm_requests_total{method=\"head\"} " + utoa(m.npmHeadRequests.Load()) + "\nartifact_gateway_npm_requests_total{method=\"other\"} " + utoa(m.npmOtherRequests.Load()) + "\n# TYPE artifact_gateway_npm_authorization_denials_total counter\nartifact_gateway_npm_authorization_denials_total " + utoa(m.npmAuthorizationDenied.Load()) + "\n# TYPE artifact_gateway_npm_cache_requests_total counter\nartifact_gateway_npm_cache_requests_total{outcome=\"hit\"} " + utoa(m.npmCacheHit.Load()) + "\nartifact_gateway_npm_cache_requests_total{outcome=\"miss\"} " + utoa(m.npmCacheMiss.Load()) + "\n# TYPE artifact_gateway_npm_negative_cache_hits_total counter\nartifact_gateway_npm_negative_cache_hits_total " + utoa(m.npmNegativeHit.Load()) + "\n# TYPE artifact_gateway_npm_upstream_retries_total counter\nartifact_gateway_npm_upstream_retries_total " + utoa(m.npmRetry.Load()) + "\n# TYPE artifact_gateway_npm_upstream_circuit_open_total counter\nartifact_gateway_npm_upstream_circuit_open_total " + utoa(m.npmCircuitOpen.Load()) + "\n# TYPE artifact_gateway_npm_integrity_failures_total counter\nartifact_gateway_npm_integrity_failures_total " + utoa(m.npmIntegrityFailure.Load()) + "\n# TYPE artifact_gateway_npm_upstream_failures_total counter\nartifact_gateway_npm_upstream_failures_total " + utoa(m.npmUpstreamFailure.Load()) + "\n# TYPE artifact_gateway_npm_response_bytes_total counter\nartifact_gateway_npm_response_bytes_total " + utoa(m.npmResponseBytes.Load()) + "\n"))
+}
+
+func (m *Metrics) writeAPTSigningMetrics(w http.ResponseWriter) {
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_apt_signing_requests_total counter\n"))
+	for index, outcome := range aptSigningOutcomes {
+		_, _ = w.Write([]byte("artifact_gateway_apt_signing_requests_total{outcome=\"" + string(outcome) + "\"} " + utoa(m.aptSigningRequests[index].Load()) + "\n"))
+	}
+	_, _ = w.Write([]byte("# TYPE artifact_gateway_apt_signing_duration_seconds histogram\n"))
+	for index, label := range aptSigningDurationLabels {
+		_, _ = w.Write([]byte("artifact_gateway_apt_signing_duration_seconds_bucket{le=\"" + label + "\"} " + utoa(m.aptSigningDurationBuckets[index].Load()) + "\n"))
+	}
+	count := m.aptSigningDurationCount.Load()
+	_, _ = w.Write([]byte("artifact_gateway_apt_signing_duration_seconds_bucket{le=\"+Inf\"} " + utoa(count) + "\n"))
+	sum := strconv.FormatFloat(float64(m.aptSigningDurationNanos.Load())/float64(time.Second), 'f', -1, 64)
+	_, _ = w.Write([]byte("artifact_gateway_apt_signing_duration_seconds_sum " + sum + "\nartifact_gateway_apt_signing_duration_seconds_count " + utoa(count) + "\n"))
 }
 
 func itoa(value int64) string {

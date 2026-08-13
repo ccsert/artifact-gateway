@@ -17,6 +17,8 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
+	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
 func TestHTTPSignerRequiresCompletePinnedRemoteTrustPolicy(t *testing.T) {
@@ -96,7 +98,7 @@ func TestHTTPSignerRejectsForgedFingerprint(t *testing.T) {
 	}
 	if _, err = forgedSigner.SignRelease(context.Background(), SignReleaseRequest{
 		RepositoryID: "repository", SnapshotID: "snapshot", ReleaseDigest: digestBytes(release), Release: bytes.NewReader(release),
-	}); !errors.Is(err, ErrUntrustedSigner) {
+	}); !errors.Is(err, ErrSignerInvalidSignature) {
 		t.Fatalf("forged signer fingerprint err=%v", err)
 	}
 }
@@ -120,6 +122,71 @@ func TestHTTPSignerRejectsUntrustedSigningKey(t *testing.T) {
 	}
 }
 
+func TestHTTPSignerClassifiesMalformedSignatureResult(t *testing.T) {
+	t.Parallel()
+	release := []byte("Suite: stable\n")
+	active := aptSignerTestFixtureForRelease(t, release)
+	var malformed map[string]any
+	if err := json.Unmarshal(active.response, &malformed); err != nil {
+		t.Fatal(err)
+	}
+	malformed["inRelease"] = "not-an-openpgp-signature"
+	body, err := json.Marshal(malformed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := NewHTTPSigner(HTTPSignerOptions{
+		Endpoint: "https://signer.example.test/v1/sign-release", Token: strings.Repeat("t", 32), Timeout: time.Second,
+		Client: aptSignerResponseClient(body), TrustedFingerprints: []string{active.fingerprint}, TrustedPublicKeys: active.publicKey,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = signer.SignRelease(context.Background(), SignReleaseRequest{
+		RepositoryID: "repository", SnapshotID: "snapshot", ReleaseDigest: digestBytes(release), Release: bytes.NewReader(release),
+	}); !errors.Is(err, ErrSignerInvalidSignature) {
+		t.Fatalf("malformed signature result err=%v", err)
+	}
+}
+
+func TestPublisherMetricsClassifyHTTPSignerInvalidSignature(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-http-signer-metric", "widget", "1.0-1")
+	release := []byte("placeholder")
+	active := aptSignerTestFixtureForRelease(t, release)
+	var malformed map[string]any
+	if err := json.Unmarshal(active.response, &malformed); err != nil {
+		t.Fatal(err)
+	}
+	malformed["inRelease"] = "not-an-openpgp-signature"
+	body, err := json.Marshal(malformed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := NewHTTPSigner(HTTPSignerOptions{
+		Endpoint: "https://signer.example.test/v1/sign-release", Token: strings.Repeat("t", 32), Timeout: time.Second,
+		Client: aptSignerResponseClient(body), TrustedFingerprints: []string{active.fingerprint}, TrustedPublicKeys: active.publicKey,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := &recordingSigningMetrics{}
+	_, err = NewPublisher(store, objects, signer).WithMetrics(metrics).Publish(ctx, PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000019", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: time.Now().UTC(),
+	})
+	if !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("publish error=%v", err)
+	}
+	if len(metrics.events) != 1 || metrics.events[0].outcome != SigningOutcomeInvalidSignature {
+		t.Fatalf("signing metric events=%#v", metrics.events)
+	}
+}
+
 func TestHTTPSignerRejectsWeakTrustedSigningKey(t *testing.T) {
 	t.Parallel()
 	release := []byte("Suite: stable\n")
@@ -133,7 +200,7 @@ func TestHTTPSignerRejectsWeakTrustedSigningKey(t *testing.T) {
 	}
 	if _, err = signer.SignRelease(context.Background(), SignReleaseRequest{
 		RepositoryID: "repository", SnapshotID: "snapshot", ReleaseDigest: digestBytes(release), Release: bytes.NewReader(release),
-	}); !errors.Is(err, ErrUntrustedSigner) {
+	}); !errors.Is(err, ErrSignerInvalidSignature) {
 		t.Fatalf("weak signing key err=%v", err)
 	}
 }

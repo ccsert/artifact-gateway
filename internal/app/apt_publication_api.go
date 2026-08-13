@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
@@ -59,6 +60,78 @@ func (h generatedRepositoryAPIAdapter) PublishAPTRepositorySnapshot(w http.Respo
 		}
 		writeNativeMavenJSON(w, http.StatusCreated, response)
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) GetAPTRepositorySigningState(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Format != repository.FormatAPT || repo.Type != repository.RepositoryTypeHosted {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "APT Hosted signing state is not available for this repository")
+			return
+		}
+		runtime := h.diagnostics.APTSigning
+		if runtime.Mode == "" {
+			runtime.Mode = APTSigningModeDisabled
+			if h.aptSnapshotPublisher != nil {
+				runtime.Mode = APTSigningModeReference
+			}
+		}
+		response := adminopenapi.APTRepositorySigningState{
+			RepositoryId:        repositoryID,
+			SignerMode:          adminopenapi.APTRepositorySigningStateSignerMode(string(runtime.Mode)),
+			TrustedFingerprints: make([]string, len(runtime.TrustedFingerprints)),
+		}
+		copy(response.TrustedFingerprints, runtime.TrustedFingerprints)
+		snapshot, err := h.aptPublications.GetLatestVisibleAPTRepositorySnapshot(r.Context(), repo.ID)
+		if err == nil {
+			current, conversionErr := aptRepositorySnapshotResponse(snapshot)
+			if conversionErr != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "APT signing evidence is invalid")
+				return
+			}
+			response.CurrentSnapshot = &current
+			response.Readiness, response.CurrentKeyRole = aptSigningReadiness(runtime, snapshot.KeyFingerprint)
+		} else if errors.Is(err, repository.ErrNotFound) {
+			response.Readiness, response.CurrentKeyRole = aptSigningReadiness(runtime, "")
+		} else {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get APT signing state failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, response)
+	})
+}
+
+func aptSigningReadiness(runtime APTSigningRuntime, currentFingerprint string) (adminopenapi.APTRepositorySigningStateReadiness, *adminopenapi.APTRepositorySigningStateCurrentKeyRole) {
+	switch runtime.Mode {
+	case APTSigningModeReference:
+		if currentFingerprint == "" {
+			return adminopenapi.APTRepositorySigningStateReadinessFixture, nil
+		}
+		role := adminopenapi.APTRepositorySigningStateCurrentKeyRoleFixture
+		return adminopenapi.APTRepositorySigningStateReadinessFixture, &role
+	case APTSigningModeRemote:
+		readiness := adminopenapi.APTRepositorySigningStateReadinessPolicyMismatch
+		if len(runtime.TrustedFingerprints) == 1 {
+			readiness = adminopenapi.APTRepositorySigningStateReadinessReady
+		} else if len(runtime.TrustedFingerprints) == 2 {
+			readiness = adminopenapi.APTRepositorySigningStateReadinessRotationOverlap
+		}
+		if currentFingerprint == "" {
+			return readiness, nil
+		}
+		for index, fingerprint := range runtime.TrustedFingerprints {
+			if strings.EqualFold(fingerprint, currentFingerprint) {
+				role := adminopenapi.APTRepositorySigningStateCurrentKeyRoleActive
+				if index == 1 {
+					role = adminopenapi.APTRepositorySigningStateCurrentKeyRoleNext
+				}
+				return readiness, &role
+			}
+		}
+		role := adminopenapi.APTRepositorySigningStateCurrentKeyRoleOutsidePolicy
+		return adminopenapi.APTRepositorySigningStateReadinessPolicyMismatch, &role
+	default:
+		return adminopenapi.APTRepositorySigningStateReadinessUnconfigured, nil
+	}
 }
 
 func (h generatedRepositoryAPIAdapter) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateAPTPublicationSessionParams) {

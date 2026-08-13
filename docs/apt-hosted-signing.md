@@ -107,3 +107,47 @@ fixture. Configuration loading reads and validates the complete public-only
 keyring against the configured fingerprint set before preflight can pass;
 preflight diagnostics and startup logs expose only the validated key count so
 an unpinned deployment is not mistaken for H3 production readiness.
+
+## Operator state and metrics
+
+Repository administrators can inspect
+`GET /api/v2/repositories/{repositoryId}/apt/signing-state` or open the
+repository Security tab. The response contains only the signer mode, the one or
+two public fingerprints, and evidence copied from the latest visible immutable
+snapshot. It never returns the signer endpoint, bearer token, public-key file
+path, or private-key material.
+
+The readiness values are operationally significant:
+
+- `unconfigured` means no signer can publish a new snapshot;
+- `fixture` means the loopback H2 reference signer is active and must not be
+  treated as production trust;
+- `ready` means one remote fingerprint is pinned as the active trust key;
+- `rotation_overlap` means the old/next two-key window is active;
+- `policy_mismatch` means the trust policy is incomplete or the latest visible
+  snapshot was signed by a key outside the current pins. Publication is already
+  fail-closed for an untrusted new signature, but operators must resolve this
+  state before the next release.
+
+`/metrics` exports bounded process-wide counters and a signing latency
+histogram:
+
+```text
+artifact_gateway_apt_signing_requests_total{outcome="success|untrusted_signer|invalid_signature|unavailable"}
+artifact_gateway_apt_signing_duration_seconds_bucket
+artifact_gateway_apt_signing_duration_seconds_sum
+artifact_gateway_apt_signing_duration_seconds_count
+```
+
+The labels deliberately exclude repository, actor, endpoint, and fingerprint.
+A deployment may start with alerts equivalent to these PromQL expressions,
+tuning the window and threshold to its release frequency:
+
+```promql
+sum(increase(artifact_gateway_apt_signing_requests_total{outcome!="success"}[15m])) > 0
+histogram_quantile(0.95, sum by (le) (rate(artifact_gateway_apt_signing_duration_seconds_bucket[15m]))) > 10
+```
+
+The first alert should page during an active release window; the second is a
+warning for signer or HSM latency. Alert installation remains deployment-owned
+until the project ships a supported monitoring stack.

@@ -56,6 +56,25 @@ func TestAPTSnapshotPublicationValidationBindsReleaseAndByHashClosure(t *testing
 	}
 }
 
+func TestMemoryLatestVisibleAPTSnapshotIsRepositoryWide(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryStore()
+	older := APTRepositorySnapshot{ID: "snapshot-a", RepositoryID: "repo", Suite: "stable", State: APTRepositorySnapshotVisible, PublishedAt: time.Unix(10, 0)}
+	latest := APTRepositorySnapshot{ID: "snapshot-b", RepositoryID: "repo", Suite: "testing", State: APTRepositorySnapshotVisible, PublishedAt: time.Unix(20, 0)}
+	store.aptSnapshots[older.ID] = older
+	store.aptSnapshots[latest.ID] = latest
+	store.aptSnapshots["other"] = APTRepositorySnapshot{ID: "other", RepositoryID: "other-repo", Suite: "stable", State: APTRepositorySnapshotVisible, PublishedAt: time.Unix(30, 0)}
+	store.aptSnapshots["failed"] = APTRepositorySnapshot{ID: "failed", RepositoryID: "repo", Suite: "unstable", State: APTRepositorySnapshotFailed, PublishedAt: time.Unix(40, 0)}
+
+	got, err := store.GetLatestVisibleAPTRepositorySnapshot(context.Background(), "repo")
+	if err != nil || got.ID != latest.ID {
+		t.Fatalf("latest snapshot=%#v err=%v", got, err)
+	}
+	if _, err = store.GetLatestVisibleAPTRepositorySnapshot(context.Background(), "missing"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing repository error=%v", err)
+	}
+}
+
 func TestMemoryAPTPublicationSessionReservesQuotaAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

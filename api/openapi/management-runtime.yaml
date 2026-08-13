@@ -175,6 +175,8 @@ paths:
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId_package"
   "/repositories/{repositoryId}/apt/snapshots":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots"
+  "/repositories/{repositoryId}/apt/signing-state":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_signing_state"
   "/repositories/{repositoryId}/conan/references":
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_references"
   "/repositories/{repositoryId}/conan/recipe-revisions":

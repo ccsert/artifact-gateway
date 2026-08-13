@@ -421,6 +421,7 @@ type NativeAPTPublicationStore interface {
 	MarkAPTSnapshotObjectCollected(context.Context, string, string) error
 	APTObjectHasDurableReference(context.Context, string) (bool, error)
 	GetVisibleAPTRepositorySnapshot(context.Context, string, string) (APTRepositorySnapshot, error)
+	GetLatestVisibleAPTRepositorySnapshot(context.Context, string) (APTRepositorySnapshot, error)
 	GetVisibleAPTSnapshotAsset(context.Context, string, string) (APTSnapshotAsset, error)
 	ListVisibleAPTSnapshotAssets(context.Context, string, string) ([]APTSnapshotAsset, error)
 }

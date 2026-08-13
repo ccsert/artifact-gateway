@@ -953,6 +953,25 @@ func (s *MemoryStore) GetVisibleAPTRepositorySnapshot(_ context.Context, reposit
 	return found, nil
 }
 
+func (s *MemoryStore) GetLatestVisibleAPTRepositorySnapshot(_ context.Context, repositoryID string) (APTRepositorySnapshot, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var found APTRepositorySnapshot
+	for _, snapshot := range s.aptSnapshots {
+		if snapshot.RepositoryID != repositoryID || snapshot.State != APTRepositorySnapshotVisible {
+			continue
+		}
+		if found.ID == "" || snapshot.PublishedAt.After(found.PublishedAt) ||
+			(snapshot.PublishedAt.Equal(found.PublishedAt) && snapshot.ID > found.ID) {
+			found = snapshot
+		}
+	}
+	if found.ID == "" {
+		return APTRepositorySnapshot{}, ErrNotFound
+	}
+	return found, nil
+}
+
 func (s *MemoryStore) GetVisibleAPTSnapshotAsset(_ context.Context, repositoryID, path string) (APTSnapshotAsset, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

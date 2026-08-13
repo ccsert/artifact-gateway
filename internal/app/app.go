@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -39,6 +40,7 @@ type Dependencies struct {
 	NativeGoObjectStore           OCIObjectStore
 	NativeAPTObjectStore          OCIObjectStore
 	APTSigner                     aptpublication.Signer
+	APTSigning                    APTSigningRuntime
 	NPMMetadataTTL                time.Duration
 	NPMNegativeTTL                time.Duration
 	NPMBreakerTTL                 time.Duration
@@ -52,6 +54,19 @@ type Dependencies struct {
 	OIDCClient                    *authorization.OIDCClient
 	OIDCLoginValidator            *authorization.OIDCValidator
 	OIDCRuntime                   *OIDCRuntime
+}
+
+type APTSigningMode string
+
+const (
+	APTSigningModeDisabled  APTSigningMode = "disabled"
+	APTSigningModeReference APTSigningMode = "reference"
+	APTSigningModeRemote    APTSigningMode = "remote"
+)
+
+type APTSigningRuntime struct {
+	Mode                APTSigningMode
+	TrustedFingerprints []string
 }
 
 type DiagnosticRuntime struct {
@@ -82,12 +97,24 @@ func NewDependencies(cfg config.Config) Dependencies {
 		BuildGoVersion:                runtime.Version(),
 		ArtifactScannerHealthTimeout:  2 * time.Second,
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
+		APTSigning:                    aptSigningRuntime(cfg),
 		Runtime: DiagnosticRuntime{
 			InstanceID: cfg.InstanceID, Roles: roles,
 			WorkerFormats: formats,
 			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
 		},
 	}
+}
+
+func aptSigningRuntime(cfg config.Config) APTSigningRuntime {
+	if cfg.APTSignerEndpoint == "" {
+		return APTSigningRuntime{Mode: APTSigningModeDisabled}
+	}
+	mode := APTSigningModeRemote
+	if parsed, err := url.Parse(cfg.APTSignerEndpoint); err == nil && aptpublication.IsLoopbackSignerHost(parsed.Hostname()) {
+		mode = APTSigningModeReference
+	}
+	return APTSigningRuntime{Mode: mode, TrustedFingerprints: append([]string(nil), cfg.APTSignerTrustedFingerprints...)}
 }
 
 func buildIdentity() (version, revision string, modified bool) {

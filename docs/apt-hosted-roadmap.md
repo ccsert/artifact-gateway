@@ -117,11 +117,15 @@ public keyring whose one or two keys exactly match the pinned OpenPGP
 fingerprints. This supports a fail-closed old/new rotation overlap while
 keeping public-key distribution explicit. Startup logs, preflight diagnostics,
 snapshot responses, and immutable publication audit expose the effective
-fingerprint evidence. The audit keeps authorization reason vocabulary stable
+fingerprint evidence. An administrator-only signing-state API and the Console
+now compare that runtime policy with the latest visible snapshot, identify the
+active/next/out-of-policy key role, and make the rotation overlap explicit.
+Bounded signing outcome and latency metrics support alerting without signer,
+repository, or actor labels. The audit keeps authorization reason vocabulary stable
 and stores signer identity, verified fingerprint, and derived algorithm in its
 dedicated immutable `evidence` object. Managed key custody, client rotation
-drills, snapshot export/restore verification, metrics, and alerts remain before
-H3 can pass.
+drills, snapshot export/restore verification, and deployment-specific alert
+installation remain before H3 can pass.
 
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
   record signer identity, key fingerprint, algorithm, snapshot digest, actor,

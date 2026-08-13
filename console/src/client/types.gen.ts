@@ -1582,6 +1582,20 @@ export type OciManifestSummaryPage = {
   nextPageToken?: string;
 };
 
+export type AptRepositorySigningState = {
+  repositoryId: string;
+  signerMode: "disabled" | "reference" | "remote";
+  readiness:
+    | "unconfigured"
+    | "fixture"
+    | "ready"
+    | "rotation_overlap"
+    | "policy_mismatch";
+  trustedFingerprints: Array<string>;
+  currentKeyRole?: "active" | "next" | "fixture" | "outside_policy";
+  currentSnapshot?: AptRepositorySnapshot;
+};
+
 export type ProxyCacheAsset = {
   path: string;
   name: string;
@@ -6034,6 +6048,47 @@ export type PublishAptRepositorySnapshotResponses = {
 
 export type PublishAptRepositorySnapshotResponse =
   PublishAptRepositorySnapshotResponses[keyof PublishAptRepositorySnapshotResponses];
+
+export type GetAptRepositorySigningStateData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/signing-state";
+};
+
+export type GetAptRepositorySigningStateErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetAptRepositorySigningStateError =
+  GetAptRepositorySigningStateErrors[keyof GetAptRepositorySigningStateErrors];
+
+export type GetAptRepositorySigningStateResponses = {
+  /**
+   * Effective APT signing state
+   */
+  200: AptRepositorySigningState;
+};
+
+export type GetAptRepositorySigningStateResponse =
+  GetAptRepositorySigningStateResponses[keyof GetAptRepositorySigningStateResponses];
 
 export type ListConanReferencesData = {
   body?: never;

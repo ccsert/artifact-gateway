@@ -1,20 +1,34 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Alert, Button, Select, Switch, Tag } from "antd";
 import {
+  getAptRepositorySigningState,
   getQuarantineReadPolicy,
   getSecurityPolicy,
   replaceQuarantineReadPolicy,
   replaceSecurityPolicy,
 } from "../../client";
 import type {
+  AptRepositorySigningState,
   QuarantineReadPolicy,
   Repository,
   SecurityPolicy,
 } from "../../client";
 import { ErrorBanner, Loading, isNotFound } from "../../components/Feedback";
-import { Card, Field } from "../../components/Layout";
+import { Field } from "../../components/Layout";
 import { usePreferences } from "../../lib/preferences";
+import { APTSigningStatePanel } from "./APTSigningStatePanel";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import {
+  PolicyCard,
+  PolicySectionHeader,
+  ScopeFact,
+} from "./RepositorySecurityPrimitives";
 
 type SecurityPolicyDraft = Required<
   Pick<
@@ -81,6 +95,11 @@ export function RepositorySecurityTab({
   const [readError, setReadError] = useState<unknown>(null);
   const [readSaving, setReadSaving] = useState(false);
   const [readNotice, setReadNotice] = useState("");
+  const [aptSigningState, setAptSigningState] =
+    useState<AptRepositorySigningState | null>(null);
+  const [aptSigningError, setAptSigningError] = useState<unknown>(null);
+  const aptSigningRequest = useRef(0);
+  const aptSigningApplicable = repo.format === "apt" && repo.type === "hosted";
 
   const load = useCallback(async () => {
     setError(null);
@@ -112,10 +131,32 @@ export function RepositorySecurityTab({
     }
   }, [repo.id]);
 
+  const loadAptSigningState = useCallback(async () => {
+    const requestId = ++aptSigningRequest.current;
+    setAptSigningState(null);
+    setAptSigningError(null);
+    const { data, error: err } = await getAptRepositorySigningState({
+      path: { repositoryId: repo.id },
+    });
+    if (requestId !== aptSigningRequest.current) return;
+    if (err) {
+      setAptSigningError(err);
+      return;
+    }
+    if (data) setAptSigningState(data);
+  }, [repo.id]);
+
   useEffect(() => {
+    if (aptSigningApplicable) {
+      void loadAptSigningState();
+      return;
+    }
+    aptSigningRequest.current += 1;
+    setAptSigningState(null);
+    setAptSigningError(null);
     void load();
     void loadReadPolicy();
-  }, [load, loadReadPolicy]);
+  }, [aptSigningApplicable, load, loadAptSigningState, loadReadPolicy]);
 
   const update = <K extends keyof SecurityPolicyDraft>(
     key: K,
@@ -179,6 +220,16 @@ export function RepositorySecurityTab({
       void loadReadPolicy();
     }
   };
+
+  if (aptSigningApplicable) {
+    if (aptSigningError !== null) {
+      return (
+        <ErrorBanner error={aptSigningError} onRetry={loadAptSigningState} />
+      );
+    }
+    if (!aptSigningState) return <Loading />;
+    return <APTSigningStatePanel state={aptSigningState} />;
+  }
 
   if (error !== null) {
     return isNotFound(error) ? (
@@ -570,69 +621,6 @@ function quarantineReadScope(
         metadata: text("从发现元数据隐藏", "Hidden from discovery metadata"),
       };
   }
-}
-
-function PolicyCard({
-  eyebrow,
-  title,
-  description,
-  status,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  status: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="min-w-0">
-      <div className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800/70 px-6 py-5">
-        <div className="min-w-0 max-w-3xl">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
-            {eyebrow}
-          </div>
-          <h3 className="mt-1.5 text-base font-semibold text-zinc-100">
-            {title}
-          </h3>
-          <p className="mt-1.5 text-sm leading-6 text-zinc-500">
-            {description}
-          </p>
-        </div>
-        <div className="flex min-h-8 shrink-0 items-center gap-2">{status}</div>
-      </div>
-      <div className="space-y-5 px-6 py-5">{children}</div>
-    </Card>
-  );
-}
-
-function ScopeFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 bg-[var(--ag-table-header)] px-4 py-3">
-      <div className="text-[11px] font-medium text-zinc-600">{label}</div>
-      <div
-        className="mt-1 truncate text-xs font-medium text-zinc-300"
-        title={value}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function PolicySectionHeader({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="border-t border-zinc-800/70 pt-5 first:border-t-0 first:pt-0">
-      <h4 className="text-sm font-semibold text-zinc-200">{title}</h4>
-      <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>
-    </div>
-  );
 }
 
 function SettingRow({

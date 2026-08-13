@@ -20,6 +20,10 @@ a dated version heading without rewriting their meaning.
   and records structured immutable signing evidence without changing
   authorization-reason semantics; the
   OpenPGP dependency chain now includes the CIRCL secp384r1 fix from v1.6.3.
+  Repository administrators can now compare the configured old/next trust
+  window with the latest visible snapshot in a generated API and bilingual
+  Console view, while bounded outcome and latency metrics support operational
+  alerting without high-cardinality signer or repository labels.
 - Prioritized Cargo sparse-registry planning after APT H3 and deferred NuGet
   repository implementation while retaining its tested parser foundation.
 

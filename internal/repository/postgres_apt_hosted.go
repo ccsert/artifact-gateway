@@ -880,6 +880,17 @@ func (s *PostgresStore) GetVisibleAPTRepositorySnapshot(ctx context.Context, rep
 	return snapshot, err
 }
 
+func (s *PostgresStore) GetLatestVisibleAPTRepositorySnapshot(ctx context.Context, repositoryID string) (APTRepositorySnapshot, error) {
+	var snapshot APTRepositorySnapshot
+	err := scanAPTRepositorySnapshot(s.db.QueryRowContext(ctx, `SELECT `+aptRepositorySnapshotColumns+`
+		FROM native_apt_repository_snapshots WHERE repository_id::text=$1 AND state='visible'
+		ORDER BY published_at DESC,id DESC LIMIT 1`, repositoryID), &snapshot)
+	if errors.Is(err, sql.ErrNoRows) {
+		return APTRepositorySnapshot{}, ErrNotFound
+	}
+	return snapshot, err
+}
+
 func (s *PostgresStore) GetVisibleAPTSnapshotAsset(ctx context.Context, repositoryID, path string) (APTSnapshotAsset, error) {
 	var asset APTSnapshotAsset
 	err := scanAPTSnapshotAsset(s.db.QueryRowContext(ctx, `SELECT `+aptSnapshotAssetColumns+`

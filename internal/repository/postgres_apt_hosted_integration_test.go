@@ -100,6 +100,10 @@ func TestPostgresAPTSignedSnapshotVisibilityAndAuditCommitAtomically(t *testing.
 	if err != nil || first.State != APTRepositorySnapshotVisible || first.PublishedAt.IsZero() {
 		t.Fatalf("first snapshot=%#v err=%v", first, err)
 	}
+	latest, err := store.GetLatestVisibleAPTRepositorySnapshot(ctx, repo.ID)
+	if err != nil || latest.ID != first.ID {
+		t.Fatalf("latest visible snapshot=%#v err=%v", latest, err)
+	}
 
 	second := create(2)
 	secondAssets, secondRelease := assets(second, "second")
@@ -126,6 +130,38 @@ func TestPostgresAPTSignedSnapshotVisibilityAndAuditCommitAtomically(t *testing.
 	listed, err := store.ListVisibleAPTSnapshotAssets(ctx, repo.ID, "stable")
 	if err != nil || len(listed) != 6 {
 		t.Fatalf("visible assets=%#v err=%v", listed, err)
+	}
+}
+
+func TestPostgresLatestVisibleAPTSnapshotIsRepositoryWide(t *testing.T) {
+	ctx, store, repo := newPostgresAPTHostedFixture(t)
+	otherRepo, err := store.CreateHostedRepository(ctx, HostedRepository{
+		ID: uuid.NewString(), Name: "apt-hosted-other-" + uuid.NewString(), Format: FormatAPT, Type: RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseTime := time.Now().Add(-time.Hour)
+	insertSnapshot := func(repositoryID, suite string, state APTRepositorySnapshotState, publishedAt time.Time) string {
+		t.Helper()
+		id := uuid.NewString()
+		_, insertErr := store.db.ExecContext(ctx, `INSERT INTO native_apt_repository_snapshots
+			(id,repository_id,suite,sequence,state,release_digest,inrelease_digest,signer_identity,key_fingerprint,signature_algorithm,created_at,published_at)
+			VALUES ($1,$2,$3,1,$4,$5,$6,'integration-signer',$7,'integration-fixture',$8,$8)`,
+			id, repositoryID, suite, string(state), "sha256:"+strings.Repeat("c", 64), "sha256:"+strings.Repeat("d", 64), strings.Repeat("e", 40), publishedAt)
+		if insertErr != nil {
+			t.Fatal(insertErr)
+		}
+		return id
+	}
+	_ = insertSnapshot(repo.ID, "stable", APTRepositorySnapshotVisible, baseTime)
+	latestAcrossSuitesID := insertSnapshot(repo.ID, "testing", APTRepositorySnapshotVisible, baseTime.Add(time.Minute))
+	_ = insertSnapshot(repo.ID, "unstable", APTRepositorySnapshotRetired, baseTime.Add(2*time.Minute))
+	_ = insertSnapshot(otherRepo.ID, "stable", APTRepositorySnapshotVisible, baseTime.Add(3*time.Minute))
+
+	latest, err := store.GetLatestVisibleAPTRepositorySnapshot(ctx, repo.ID)
+	if err != nil || latest.ID != latestAcrossSuitesID || latest.Suite != "testing" {
+		t.Fatalf("repository-wide latest visible snapshot=%#v err=%v", latest, err)
 	}
 }
 

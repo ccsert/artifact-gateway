@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getAptRepositorySigningState,
   getQuarantineReadPolicy,
   getSecurityPolicy,
   replaceQuarantineReadPolicy,
@@ -12,12 +13,16 @@ import { PreferencesProvider } from "../../lib/preferences";
 import { RepositorySecurityTab } from "./RepositorySecurityTab";
 
 vi.mock("../../client", () => ({
+  getAptRepositorySigningState: vi.fn(),
   getSecurityPolicy: vi.fn(),
   replaceSecurityPolicy: vi.fn(),
   getQuarantineReadPolicy: vi.fn(),
   replaceQuarantineReadPolicy: vi.fn(),
 }));
 
+const mockGetAptRepositorySigningState = vi.mocked(
+  getAptRepositorySigningState,
+);
 const mockGetSecurityPolicy = vi.mocked(getSecurityPolicy);
 const mockReplaceSecurityPolicy = vi.mocked(replaceSecurityPolicy);
 const mockGetQuarantineReadPolicy = vi.mocked(getQuarantineReadPolicy);
@@ -44,6 +49,102 @@ beforeEach(() => {
 });
 
 describe("RepositorySecurityTab", () => {
+  it("shows APT trust rotation and immutable snapshot evidence without loading unsupported policies", async () => {
+    mockGetAptRepositorySigningState.mockResolvedValue({
+      data: {
+        repositoryId: repo.id,
+        signerMode: "remote",
+        readiness: "rotation_overlap",
+        trustedFingerprints: ["a".repeat(40), "b".repeat(40)],
+        currentKeyRole: "active",
+        currentSnapshot: {
+          id: "22222222-2222-4222-8222-222222222222",
+          repositoryId: repo.id,
+          suite: "stable",
+          sequence: 7,
+          state: "visible",
+          releaseDigest: `sha256:${"c".repeat(64)}`,
+          inReleaseDigest: `sha256:${"d".repeat(64)}`,
+          signerIdentity: "release@example.test",
+          keyFingerprint: "a".repeat(40),
+          signatureAlgorithm: "rsa4096-sha256",
+          createdAt: "2026-08-13T08:00:00Z",
+          publishedAt: "2026-08-13T08:01:00Z",
+        },
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositorySecurityTab
+          repo={{ ...repo, format: "apt" }}
+          publicationScanning={false}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByText("签名信任与当前快照")).toBeInTheDocument();
+    expect(screen.getByText("密钥轮换重叠")).toBeInTheDocument();
+    expect(screen.getByText("stable / 7")).toBeInTheDocument();
+    expect(screen.getByText("release@example.test")).toBeInTheDocument();
+    expect(screen.getByText("当前使用")).toBeInTheDocument();
+    expect(mockGetSecurityPolicy).not.toHaveBeenCalled();
+    expect(mockGetQuarantineReadPolicy).not.toHaveBeenCalled();
+  });
+
+  it("does not show stale APT signing evidence after switching repositories", async () => {
+    let resolveFirst: ((value: unknown) => void) | undefined;
+    const first = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    mockGetAptRepositorySigningState
+      .mockReturnValueOnce(first as never)
+      .mockResolvedValueOnce({
+        data: {
+          repositoryId: "33333333-3333-4333-8333-333333333333",
+          signerMode: "remote",
+          readiness: "ready",
+          trustedFingerprints: ["b".repeat(40)],
+          currentKeyRole: "active",
+        },
+      } as never);
+
+    const view = render(
+      <PreferencesProvider>
+        <RepositorySecurityTab
+          repo={{ ...repo, format: "apt" }}
+          publicationScanning={false}
+        />
+      </PreferencesProvider>,
+    );
+    view.rerender(
+      <PreferencesProvider>
+        <RepositorySecurityTab
+          repo={{
+            ...repo,
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "apt-next",
+            format: "apt",
+          }}
+          publicationScanning={false}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByText("生产信任已固定")).toBeInTheDocument();
+    resolveFirst?.({
+      data: {
+        repositoryId: repo.id,
+        signerMode: "reference",
+        readiness: "fixture",
+        trustedFingerprints: [],
+      },
+    });
+    await Promise.resolve();
+    expect(screen.queryByText("仅参考签名器")).not.toBeInTheDocument();
+    expect(screen.getByText("生产信任已固定")).toBeInTheDocument();
+  });
+
   it("loads and saves a versioned security admission policy", async () => {
     const user = userEvent.setup();
     mockGetSecurityPolicy.mockResolvedValue({

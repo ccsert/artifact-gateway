@@ -17,12 +17,16 @@ import (
 )
 
 type deterministicAPTSigner struct {
-	err error
+	err     error
+	invalid bool
 }
 
 func (s deterministicAPTSigner) SignRelease(_ context.Context, request SignReleaseRequest) (SignReleaseResult, error) {
 	if s.err != nil {
 		return SignReleaseResult{}, s.err
+	}
+	if s.invalid {
+		return SignReleaseResult{}, nil
 	}
 	release, err := io.ReadAll(request.Release)
 	if err != nil {
@@ -35,6 +39,17 @@ func (s deterministicAPTSigner) SignRelease(_ context.Context, request SignRelea
 		KeyFingerprint: strings.Repeat("a", 40),
 		Algorithm:      "fixture-sha256",
 	}, nil
+}
+
+type recordedSigningMetric struct {
+	outcome  SigningOutcome
+	duration time.Duration
+}
+
+type recordingSigningMetrics struct{ events []recordedSigningMetric }
+
+func (m *recordingSigningMetrics) RecordAPTSigning(outcome SigningOutcome, duration time.Duration) {
+	m.events = append(m.events, recordedSigningMetric{outcome: outcome, duration: duration})
 }
 
 type failingSnapshotObjectStore struct {
@@ -197,12 +212,28 @@ func TestPublisherExactReplayRecoversAfterTransientSignerFailure(t *testing.T) {
 		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 15, 0, 0, time.UTC),
 	}
 
-	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: errors.New("temporary signer outage")}).Publish(ctx, input); !errors.Is(err, ErrSignerUnavailable) {
+	metrics := &recordingSigningMetrics{}
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: errors.New("temporary signer outage")}).WithMetrics(metrics).Publish(ctx, input); !errors.Is(err, ErrSignerUnavailable) {
 		t.Fatalf("first publish error=%v", err)
 	}
-	published, err := NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, input)
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: ErrUntrustedSigner}).WithMetrics(metrics).Publish(ctx, input); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("untrusted signer publish error=%v", err)
+	}
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{invalid: true}).WithMetrics(metrics).Publish(ctx, input); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("invalid signature publish error=%v", err)
+	}
+	published, err := NewPublisher(store, objects, deterministicAPTSigner{}).WithMetrics(metrics).Publish(ctx, input)
 	if err != nil || published.ID != input.ID || published.State != repository.APTRepositorySnapshotVisible {
 		t.Fatalf("exact replay snapshot=%#v err=%v", published, err)
+	}
+	want := []SigningOutcome{SigningOutcomeUnavailable, SigningOutcomeUntrustedSigner, SigningOutcomeInvalidSignature, SigningOutcomeSuccess}
+	if len(metrics.events) != len(want) {
+		t.Fatalf("signing metric events=%#v", metrics.events)
+	}
+	for index, outcome := range want {
+		if metrics.events[index].outcome != outcome || metrics.events[index].duration < 0 {
+			t.Fatalf("signing metric event %d=%#v want outcome=%q", index, metrics.events[index], outcome)
+		}
 	}
 }
 

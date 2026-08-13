@@ -44,7 +44,10 @@ func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testi
 		t.Fatal(err)
 	}
 	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(Dependencies{
+		NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{},
+		APTSigning: APTSigningRuntime{Mode: "remote", TrustedFingerprints: []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}},
+	}, store, TestAdapter{}, testAuthenticator())
 	deb := aptManagementDebianPackage(t, "Package: widget\nVersion: 1:2.0-3\nArchitecture: amd64\n")
 	digestBytes := sha256.Sum256(deb)
 	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
@@ -143,6 +146,18 @@ func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testi
 		t.Fatalf("snapshot=%#v err=%v", snapshot, err)
 	}
 
+	signingStateRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/apt/signing-state", nil)
+	authorize(signingStateRequest, "admin-secret")
+	signingStateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(signingStateResponse, signingStateRequest)
+	if signingStateResponse.Code != http.StatusOK ||
+		!strings.Contains(signingStateResponse.Body.String(), `"signerMode":"remote"`) ||
+		!strings.Contains(signingStateResponse.Body.String(), `"readiness":"rotation_overlap"`) ||
+		!strings.Contains(signingStateResponse.Body.String(), `"currentKeyRole":"active"`) ||
+		!strings.Contains(signingStateResponse.Body.String(), `"id":"`+snapshot.ID+`"`) {
+		t.Fatalf("signing state=%d body=%s", signingStateResponse.Code, signingStateResponse.Body.String())
+	}
+
 	replaySnapshot := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/apt/snapshots", strings.NewReader(publishBody))
 	authorize(replaySnapshot, "admin-secret")
 	replaySnapshot.Header.Set("Content-Type", "application/json")
@@ -222,6 +237,30 @@ func TestAPTPublicationManagementRequiresRepositoryWriteAndCanonicalScope(t *tes
 	handler.ServeHTTP(rejected, invalid)
 	if rejected.Code != http.StatusBadRequest || !strings.Contains(rejected.Body.String(), `"code":"invalid_request"`) {
 		t.Fatalf("invalid scope=%d body=%s", rejected.Code, rejected.Body.String())
+	}
+
+	readSigningState := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/apt/signing-state", nil)
+	authorize(readSigningState, authenticator.IssueToken("reader"))
+	readSigningStateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readSigningStateResponse, readSigningState)
+	if readSigningStateResponse.Code != http.StatusForbidden || !strings.Contains(readSigningStateResponse.Body.String(), `"code":"access_denied"`) {
+		t.Fatalf("read-only signing state=%d body=%s", readSigningStateResponse.Code, readSigningStateResponse.Body.String())
+	}
+}
+
+func TestAPTSigningReadinessFailsClosedWhenVisibleKeyLeavesPolicy(t *testing.T) {
+	t.Parallel()
+	readiness, role := aptSigningReadiness(APTSigningRuntime{
+		Mode: "remote", TrustedFingerprints: []string{strings.Repeat("a", 40), strings.Repeat("b", 40)},
+	}, strings.Repeat("c", 40))
+	if readiness != "policy_mismatch" || role == nil || *role != "outside_policy" {
+		t.Fatalf("readiness=%q role=%v", readiness, role)
+	}
+	readiness, role = aptSigningReadiness(APTSigningRuntime{
+		Mode: "remote", TrustedFingerprints: []string{strings.Repeat("a", 40), strings.Repeat("b", 40)},
+	}, strings.Repeat("b", 40))
+	if readiness != "rotation_overlap" || role == nil || *role != "next" {
+		t.Fatalf("rotation readiness=%q role=%v", readiness, role)
 	}
 }
 

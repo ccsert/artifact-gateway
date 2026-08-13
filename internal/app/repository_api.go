@@ -270,7 +270,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	aptPublication := aptpublication.NewManager(store, nativeAPTObjects)
 	var aptSnapshotPublisher *aptpublication.Publisher
 	if dependencies.APTSigner != nil {
-		aptSnapshotPublisher = aptpublication.NewPublisher(store, nativeAPTObjects, dependencies.APTSigner)
+		aptSnapshotPublisher = aptpublication.NewPublisher(store, nativeAPTObjects, dependencies.APTSigner).WithMetrics(metrics)
 	}
 	publishRouter := nativePublishRouter{maven: nativeMaven, conan: nativeConanPublish}
 	hostedRepositories := hostedRepositoryAPIHandler{store: store, groups: store, authenticator: authenticator}

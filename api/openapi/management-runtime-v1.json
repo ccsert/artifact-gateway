@@ -3640,6 +3640,41 @@
         }
       }
     },
+    "/repositories/{repositoryId}/apt/signing-state": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getAPTRepositorySigningState",
+        "description": "Reports the configured signer trust policy and latest immutable signing evidence without exposing signer credentials or private-key material.",
+        "responses": {
+          "200": {
+            "description": "Effective APT signing state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTRepositorySigningState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/conan/references": {
       "parameters": [
         {
@@ -9529,6 +9564,60 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "APTRepositorySigningState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "signerMode",
+          "readiness",
+          "trustedFingerprints"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "signerMode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "reference",
+              "remote"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "unconfigured",
+              "fixture",
+              "ready",
+              "rotation_overlap",
+              "policy_mismatch"
+            ]
+          },
+          "trustedFingerprints": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "string",
+              "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+            }
+          },
+          "currentKeyRole": {
+            "type": "string",
+            "enum": [
+              "active",
+              "next",
+              "fixture",
+              "outside_policy"
+            ]
+          },
+          "currentSnapshot": {
+            "$ref": "#/components/schemas/APTRepositorySnapshot"
           }
         }
       },

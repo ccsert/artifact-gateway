@@ -37,10 +37,29 @@ type Publisher struct {
 	store   publisherStore
 	objects objectstore.Store
 	signer  Signer
+	metrics SigningMetrics
 }
 
 func NewPublisher(store publisherStore, objects objectstore.Store, signer Signer) *Publisher {
 	return &Publisher{store: store, objects: objects, signer: signer}
+}
+
+type SigningMetrics interface {
+	RecordAPTSigning(outcome SigningOutcome, duration time.Duration)
+}
+
+type SigningOutcome string
+
+const (
+	SigningOutcomeSuccess          SigningOutcome = "success"
+	SigningOutcomeUntrustedSigner  SigningOutcome = "untrusted_signer"
+	SigningOutcomeInvalidSignature SigningOutcome = "invalid_signature"
+	SigningOutcomeUnavailable      SigningOutcome = "unavailable"
+)
+
+func (p *Publisher) WithMetrics(metrics SigningMetrics) *Publisher {
+	p.metrics = metrics
+	return p
 }
 
 type PublishSnapshotInput struct {
@@ -125,19 +144,28 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		return repository.APTRepositorySnapshot{}, err
 	}
 	releaseDigest := digestBytes(bundle.release)
+	signingStartedAt := time.Now()
 	signature, err := p.signer.SignRelease(snapshotCtx, SignReleaseRequest{
 		RepositoryID: snapshot.RepositoryID, SnapshotID: snapshot.ID, ReleaseDigest: releaseDigest,
 		Release: bytes.NewReader(bundle.release),
 	})
 	if err != nil {
 		if errors.Is(err, ErrUntrustedSigner) {
+			p.recordSigning(SigningOutcomeUntrustedSigner, time.Since(signingStartedAt))
 			return repository.APTRepositorySnapshot{}, ErrInvalidSignature
 		}
+		if errors.Is(err, ErrSignerInvalidSignature) {
+			p.recordSigning(SigningOutcomeInvalidSignature, time.Since(signingStartedAt))
+			return repository.APTRepositorySnapshot{}, ErrInvalidSignature
+		}
+		p.recordSigning(SigningOutcomeUnavailable, time.Since(signingStartedAt))
 		return repository.APTRepositorySnapshot{}, fmt.Errorf("%w: %v", ErrSignerUnavailable, err)
 	}
 	if !validSignatureResult(signature) {
+		p.recordSigning(SigningOutcomeInvalidSignature, time.Since(signingStartedAt))
 		return repository.APTRepositorySnapshot{}, ErrInvalidSignature
 	}
+	p.recordSigning(SigningOutcomeSuccess, time.Since(signingStartedAt))
 	bundle.addGenerated(snapshot, "dists/"+snapshot.Suite+"/Release", bundle.release, "text/plain; charset=utf-8")
 	bundle.addGenerated(snapshot, "dists/"+snapshot.Suite+"/InRelease", signature.InRelease, "application/pgp-signature")
 	bundle.addGenerated(snapshot, "dists/"+snapshot.Suite+"/Release.gpg", signature.Detached, "application/pgp-signature")
@@ -179,6 +207,12 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		return repository.APTRepositorySnapshot{}, err
 	}
 	return published, nil
+}
+
+func (p *Publisher) recordSigning(outcome SigningOutcome, duration time.Duration) {
+	if p.metrics != nil {
+		p.metrics.RecordAPTSigning(outcome, duration)
+	}
 }
 
 func signedSnapshotAuditEvidence(signature SignReleaseResult) map[string]string {

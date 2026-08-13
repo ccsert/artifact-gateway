@@ -144,7 +144,7 @@ const TABS: {
     key: "security",
     label: "安全准入",
     labelEn: "Security admission",
-    formats: ["maven", "oci", "conan", "raw", "npm", "pypi"],
+    formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "apt"],
     hostedOnly: true,
   },
   { key: "capacity", label: "容量", labelEn: "Capacity" },

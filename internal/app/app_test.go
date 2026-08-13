@@ -58,6 +58,25 @@ func TestNewDependenciesChecksRustFSEndpoint(t *testing.T) {
 	}
 }
 
+func TestNewDependenciesClassifiesAPTSignerWithoutExposingEndpoint(t *testing.T) {
+	reference := NewDependencies(config.Config{APTSignerEndpoint: "http://127.0.0.1:18083/v1/sign-release"})
+	if reference.APTSigning.Mode != "reference" || len(reference.APTSigning.TrustedFingerprints) != 0 {
+		t.Fatalf("reference signing runtime=%#v", reference.APTSigning)
+	}
+	cfg := config.Config{
+		APTSignerEndpoint:            "https://signer.example.test/v1/sign-release",
+		APTSignerTrustedFingerprints: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+	}
+	remote := NewDependencies(cfg)
+	if remote.APTSigning.Mode != "remote" || len(remote.APTSigning.TrustedFingerprints) != 1 {
+		t.Fatalf("remote signing runtime=%#v", remote.APTSigning)
+	}
+	remote.APTSigning.TrustedFingerprints[0] = "changed"
+	if cfg.APTSignerTrustedFingerprints[0] == "changed" {
+		t.Fatal("signing runtime aliases configuration fingerprints")
+	}
+}
+
 func TestDependenciesUseSharedDatabasePoolForReadiness(t *testing.T) {
 	pool, err := database.OpenPostgres("postgres://gateway:password@db:5432/gateway", database.PoolConfig{MaxOpenConns: 2, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute})
 	if err != nil {

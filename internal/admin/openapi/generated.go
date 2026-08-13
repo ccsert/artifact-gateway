@@ -64,6 +64,78 @@ func (e APTPublicationSessionState) Valid() bool {
 	}
 }
 
+// Defines values for APTRepositorySigningStateCurrentKeyRole.
+const (
+	APTRepositorySigningStateCurrentKeyRoleActive        APTRepositorySigningStateCurrentKeyRole = "active"
+	APTRepositorySigningStateCurrentKeyRoleFixture       APTRepositorySigningStateCurrentKeyRole = "fixture"
+	APTRepositorySigningStateCurrentKeyRoleNext          APTRepositorySigningStateCurrentKeyRole = "next"
+	APTRepositorySigningStateCurrentKeyRoleOutsidePolicy APTRepositorySigningStateCurrentKeyRole = "outside_policy"
+)
+
+// Valid indicates whether the value is a known member of the APTRepositorySigningStateCurrentKeyRole enum.
+func (e APTRepositorySigningStateCurrentKeyRole) Valid() bool {
+	switch e {
+	case APTRepositorySigningStateCurrentKeyRoleActive:
+		return true
+	case APTRepositorySigningStateCurrentKeyRoleFixture:
+		return true
+	case APTRepositorySigningStateCurrentKeyRoleNext:
+		return true
+	case APTRepositorySigningStateCurrentKeyRoleOutsidePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for APTRepositorySigningStateReadiness.
+const (
+	APTRepositorySigningStateReadinessFixture         APTRepositorySigningStateReadiness = "fixture"
+	APTRepositorySigningStateReadinessPolicyMismatch  APTRepositorySigningStateReadiness = "policy_mismatch"
+	APTRepositorySigningStateReadinessReady           APTRepositorySigningStateReadiness = "ready"
+	APTRepositorySigningStateReadinessRotationOverlap APTRepositorySigningStateReadiness = "rotation_overlap"
+	APTRepositorySigningStateReadinessUnconfigured    APTRepositorySigningStateReadiness = "unconfigured"
+)
+
+// Valid indicates whether the value is a known member of the APTRepositorySigningStateReadiness enum.
+func (e APTRepositorySigningStateReadiness) Valid() bool {
+	switch e {
+	case APTRepositorySigningStateReadinessFixture:
+		return true
+	case APTRepositorySigningStateReadinessPolicyMismatch:
+		return true
+	case APTRepositorySigningStateReadinessReady:
+		return true
+	case APTRepositorySigningStateReadinessRotationOverlap:
+		return true
+	case APTRepositorySigningStateReadinessUnconfigured:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for APTRepositorySigningStateSignerMode.
+const (
+	APTRepositorySigningStateSignerModeDisabled  APTRepositorySigningStateSignerMode = "disabled"
+	APTRepositorySigningStateSignerModeReference APTRepositorySigningStateSignerMode = "reference"
+	APTRepositorySigningStateSignerModeRemote    APTRepositorySigningStateSignerMode = "remote"
+)
+
+// Valid indicates whether the value is a known member of the APTRepositorySigningStateSignerMode enum.
+func (e APTRepositorySigningStateSignerMode) Valid() bool {
+	switch e {
+	case APTRepositorySigningStateSignerModeDisabled:
+		return true
+	case APTRepositorySigningStateSignerModeReference:
+		return true
+	case APTRepositorySigningStateSignerModeRemote:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for APTRepositorySnapshotState.
 const (
 	APTRepositorySnapshotStateRetired APTRepositorySnapshotState = "retired"
@@ -1954,6 +2026,25 @@ type APTPublicationSession struct {
 
 // APTPublicationSessionState defines model for APTPublicationSession.State.
 type APTPublicationSessionState string
+
+// APTRepositorySigningState defines model for APTRepositorySigningState.
+type APTRepositorySigningState struct {
+	CurrentKeyRole      *APTRepositorySigningStateCurrentKeyRole `json:"currentKeyRole,omitempty"`
+	CurrentSnapshot     *APTRepositorySnapshot                   `json:"currentSnapshot,omitempty"`
+	Readiness           APTRepositorySigningStateReadiness       `json:"readiness"`
+	RepositoryId        openapi_types.UUID                       `json:"repositoryId"`
+	SignerMode          APTRepositorySigningStateSignerMode      `json:"signerMode"`
+	TrustedFingerprints []string                                 `json:"trustedFingerprints"`
+}
+
+// APTRepositorySigningStateCurrentKeyRole defines model for APTRepositorySigningState.CurrentKeyRole.
+type APTRepositorySigningStateCurrentKeyRole string
+
+// APTRepositorySigningStateReadiness defines model for APTRepositorySigningState.Readiness.
+type APTRepositorySigningStateReadiness string
+
+// APTRepositorySigningStateSignerMode defines model for APTRepositorySigningState.SignerMode.
+type APTRepositorySigningStateSignerMode string
 
 // APTRepositorySnapshot defines model for APTRepositorySnapshot.
 type APTRepositorySnapshot struct {
@@ -4580,6 +4671,9 @@ type ServerInterface interface {
 	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
 	UploadAPTPublicationPackage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId)
 
+	// (GET /repositories/{repositoryId}/apt/signing-state)
+	GetAPTRepositorySigningState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
@@ -6581,6 +6675,32 @@ func (siw *ServerInterfaceWrapper) UploadAPTPublicationPackage(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadAPTPublicationPackage(w, r, repositoryId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAPTRepositorySigningState operation middleware
+func (siw *ServerInterfaceWrapper) GetAPTRepositorySigningState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAPTRepositorySigningState(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10392,6 +10512,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions", wrapper.CreateAPTPublicationSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}", wrapper.GetAPTPublicationSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/signing-state", wrapper.GetAPTRepositorySigningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots", wrapper.PublishAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
@@ -13030,6 +13151,86 @@ func (response UploadAPTPublicationPackage507ApplicationProblemPlusJSONResponse)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTRepositorySigningStateRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetAPTRepositorySigningStateResponseObject interface {
+	VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error
+}
+
+type GetAPTRepositorySigningState200JSONResponse APTRepositorySigningState
+
+func (response GetAPTRepositorySigningState200JSONResponse) VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTRepositorySigningState401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAPTRepositorySigningState401ApplicationProblemPlusJSONResponse) VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTRepositorySigningState403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTRepositorySigningState403ApplicationProblemPlusJSONResponse) VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTRepositorySigningState404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTRepositorySigningState404ApplicationProblemPlusJSONResponse) VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTRepositorySigningState500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTRepositorySigningState500ApplicationProblemPlusJSONResponse) VisitGetAPTRepositorySigningStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -18347,6 +18548,9 @@ type StrictServerInterface interface {
 	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
 	UploadAPTPublicationPackage(ctx context.Context, request UploadAPTPublicationPackageRequestObject) (UploadAPTPublicationPackageResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/apt/signing-state)
+	GetAPTRepositorySigningState(ctx context.Context, request GetAPTRepositorySigningStateRequestObject) (GetAPTRepositorySigningStateResponseObject, error)
+
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(ctx context.Context, request PublishAPTRepositorySnapshotRequestObject) (PublishAPTRepositorySnapshotResponseObject, error)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
@@ -20000,6 +20204,32 @@ func (sh *strictHandler) UploadAPTPublicationPackage(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UploadAPTPublicationPackageResponseObject); ok {
 		if err := validResponse.VisitUploadAPTPublicationPackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAPTRepositorySigningState operation middleware
+func (sh *strictHandler) GetAPTRepositorySigningState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetAPTRepositorySigningStateRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAPTRepositorySigningState(ctx, request.(GetAPTRepositorySigningStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAPTRepositorySigningState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAPTRepositorySigningStateResponseObject); ok {
+		if err := validResponse.VisitGetAPTRepositorySigningStateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
