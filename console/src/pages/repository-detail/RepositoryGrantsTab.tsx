@@ -25,6 +25,10 @@ import {
 } from "../../components/Feedback";
 import { Modal, useDisclosure } from "../../components/Modal";
 import { usePreferences } from "../../lib/preferences";
+import {
+  isActiveApiKeyPrincipal,
+  isActiveUserPrincipal,
+} from "../../lib/accessPrincipals";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { ResourcePrefixEditor } from "../../components/ResourcePrefixEditor";
 
@@ -42,7 +46,6 @@ interface PrincipalOption {
   value: string;
   label: string;
   detail: string;
-  disabled?: boolean;
 }
 
 type PrincipalKind = "user" | "api-key" | "custom";
@@ -112,18 +115,18 @@ function principalOptions(
   text: Localize,
 ): PrincipalOption[] {
   return [
-    ...users.map((user) => ({
+    ...users.filter(isActiveUserPrincipal).map((user) => ({
       value: `user:${user.name}`,
       label: `${text("用户", "User")} · ${user.name}`,
-      detail: `${text("全局角色", "Global role")} ${user.role}${user.state === "disabled" ? ` · ${text("已停用", "Disabled")}` : ""}`,
-      disabled: user.state === "disabled",
+      detail: `${text("全局角色", "Global role")} ${user.role}`,
     })),
-    ...apiKeys.map((key) => ({
-      value: `api-key:${key.id}`,
-      label: `API Key · ${key.name}`,
-      detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}${key.revokedAt ? ` · ${text("已撤销", "Revoked")}` : ""}`,
-      disabled: Boolean(key.revokedAt),
-    })),
+    ...apiKeys
+      .filter((key) => isActiveApiKeyPrincipal(key))
+      .map((key) => ({
+        value: `api-key:${key.id}`,
+        label: `API Key · ${key.name}`,
+        detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}`,
+      })),
   ];
 }
 
@@ -399,6 +402,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                     <div className="min-w-0">
                       <Select
                         className="w-full"
+                        aria-label={text("授权主体", "Principal")}
                         showSearch={{ optionFilterProp: "label" }}
                         value={
                           kind === "custom"
@@ -419,7 +423,6 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                               .map((choice) => ({
                                 value: choice.value,
                                 label: `${choice.label} · ${choice.detail}`,
-                                disabled: choice.disabled,
                               })),
                           },
                           {
@@ -431,7 +434,6 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                               .map((choice) => ({
                                 value: choice.value,
                                 label: `${choice.label} · ${choice.detail}`,
-                                disabled: choice.disabled,
                               })),
                           },
                           {

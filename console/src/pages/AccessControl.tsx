@@ -46,6 +46,10 @@ import {
 } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import {
+  isActiveApiKeyPrincipal,
+  isActiveUserPrincipal,
+} from "../lib/accessPrincipals";
+import {
   AuthorizationTemplatesPanel,
   type PrincipalOption,
 } from "../components/AuthorizationTemplatesPanel";
@@ -86,17 +90,6 @@ function strongestRole(roles: ApiKey["roles"]): EvaluatorRole {
   if (roles.includes("writer")) return "writer";
   if (roles.includes("reader")) return "reader";
   return "none";
-}
-
-export function isActiveUserPrincipal(user: Pick<User, "state">): boolean {
-  return user.state === "active";
-}
-
-export function isActiveApiKeyPrincipal(
-  key: Pick<ApiKey, "revokedAt" | "expiresAt">,
-  now = Date.now(),
-): boolean {
-  return !key.revokedAt && (!key.expiresAt || Date.parse(key.expiresAt) > now);
 }
 
 function resourcePlaceholder(format: Repository["format"] | undefined) {
