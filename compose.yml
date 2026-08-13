@@ -224,7 +224,7 @@ services:
       rustfs:
         condition: service_started
     entrypoint: ["/bin/sh", "-ec"]
-    command: ["until curl --fail --silent http://rustfs:9000/health > /dev/null; do sleep 1; done"]
+    command: ["for attempt in $$(seq 1 30); do curl --fail --silent --max-time 2 http://rustfs:9000/health > /dev/null && exit 0; sleep 1; done; echo 'RustFS readiness deadline exceeded after 30 attempts.' >&2; exit 1"]
 
 volumes:
   gateway-postgres:

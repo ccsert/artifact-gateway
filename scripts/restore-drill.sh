@@ -15,7 +15,12 @@ test -n "$rustfs_container"
   -ec 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
 docker cp - "$rustfs_container:/data" <"$backup_dir/rustfs-data.tar"
 docker start "$rustfs_container" >/dev/null
-"${compose[@]}" run --rm --no-deps rustfs-ready
+if ! "${compose[@]}" run --rm --no-deps rustfs-ready; then
+  printf 'Restored RustFS did not become healthy before the readiness deadline.\n' >&2
+  "${compose[@]}" ps rustfs >&2 || true
+  "${compose[@]}" logs --tail=50 rustfs >&2 || true
+  exit 1
+fi
 # Starting through Compose re-evaluates the completed migrate dependency on
 # some Compose releases. The restored dump already contains its schema, so
 # restart only the existing Gateway container.

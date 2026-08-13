@@ -33,6 +33,7 @@ chmod 0700 "$workdir"
 chmod 0600 "$env_file"
 
 compose=(docker compose --env-file "$env_file" -p "$project" --profile apt-signer)
+curl_request=(curl --noproxy '*' --connect-timeout 2 --max-time 45 --silent --show-error)
 cleanup() {
   "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$workdir"
@@ -90,7 +91,7 @@ fi
 package_size=$(wc -c <"$package_file" | tr -d ' ')
 
 repository_response="$workdir/repository.json"
-repository_status=$(curl --silent --show-error --output "$repository_response" --write-out '%{http_code}' \
+repository_status=$("${curl_request[@]}" --output "$repository_response" --write-out '%{http_code}' \
   --request POST "$gateway_url/api/v2/repositories" \
   --header "Authorization: Bearer $admin_token" \
   --header 'Content-Type: application/json' \
@@ -106,7 +107,7 @@ repository_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$repository_response")
 
 session_response="$workdir/session.json"
 session_body=$(printf '{"suite":"stable","component":"main","objectName":"artifact-gateway-e2e_1.0.0-1_all.deb","declaredDigest":"sha256:%s","declaredSize":%s,"expectedIdentity":"artifact-gateway-e2e@1.0.0-1#all"}' "$package_sha256" "$package_size")
-session_status=$(curl --silent --show-error --output "$session_response" --write-out '%{http_code}' \
+session_status=$("${curl_request[@]}" --output "$session_response" --write-out '%{http_code}' \
   --request POST "$gateway_url/api/v2/repositories/$repository_id/apt/publication-sessions" \
   --header "Authorization: Bearer $admin_token" \
   --header 'Content-Type: application/json' \
@@ -121,7 +122,7 @@ session_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$session_response")
 [[ -n "$session_id" ]] || { printf 'session response has no id\n' >&2; exit 1; }
 
 upload_response="$workdir/upload.json"
-upload_status=$(curl --silent --show-error --output "$upload_response" --write-out '%{http_code}' \
+upload_status=$("${curl_request[@]}" --output "$upload_response" --write-out '%{http_code}' \
   --request PUT "$gateway_url/api/v2/repositories/$repository_id/apt/publication-sessions/$session_id/package" \
   --header "Authorization: Bearer $admin_token" \
   --header 'Content-Type: application/vnd.debian.binary-package' \
@@ -134,7 +135,7 @@ fi
 
 snapshot_response="$workdir/snapshot.json"
 snapshot_body=$(printf '{"suite":"stable","sequence":1,"publicationSessionIds":["%s"]}' "$session_id")
-snapshot_status=$(curl --silent --show-error --output "$snapshot_response" --write-out '%{http_code}' \
+snapshot_status=$("${curl_request[@]}" --output "$snapshot_response" --write-out '%{http_code}' \
   --request POST "$gateway_url/api/v2/repositories/$repository_id/apt/snapshots" \
   --header "Authorization: Bearer $admin_token" \
   --header 'Content-Type: application/json' \
@@ -173,7 +174,7 @@ apt_install() {
 }
 
 signing_state() {
-  curl --silent --show-error --fail \
+  "${curl_request[@]}" --fail \
     --header "Authorization: Bearer $admin_token" \
     "$gateway_url/api/v2/repositories/$repository_id/apt/signing-state"
 }
@@ -202,7 +203,7 @@ PY
   fetch_and_record() {
     local path=$1 destination=$2 expected_digest=${3:-} expected_size=${4:-}
     local actual_digest actual_size
-    curl --silent --show-error --fail --user "resolver:$resolver_token" \
+    "${curl_request[@]}" --fail --user "resolver:$resolver_token" \
       "$gateway_url/apt/apt-hosted-e2e/$path" >"$destination"
     actual_digest="sha256:$(shasum -a 256 "$destination" | awk '{print $1}')"
     actual_size=$(wc -c <"$destination" | tr -d ' ')
@@ -223,7 +224,8 @@ PY
   fetch_and_record 'pool/main/a/artifact-gateway-e2e/artifact-gateway-e2e_1.0.0-1_all.deb' \
     "$package_copy" "sha256:$package_sha256" "$package_size"
 
-  local index=0 digest size relative direct_path by_hash_path
+  local index=0 digest size relative direct_path by_hash_path index_paths
+  local -a release_index_paths=()
   while read -r digest size relative; do
     [[ "$digest" =~ ^[0-9a-f]{64}$ && "$size" =~ ^[0-9]+$ && -n "$relative" ]] || {
       printf 'APT Release contains an invalid SHA256 entry.\n' >&2
@@ -231,12 +233,18 @@ PY
     }
     direct_path="dists/stable/$relative"
     by_hash_path="${direct_path%/*}/by-hash/SHA256/$digest"
+    release_index_paths+=("$relative")
     fetch_and_record "$direct_path" "$capture_dir/index-$index" "sha256:$digest" "$size"
     fetch_and_record "$by_hash_path" "$capture_dir/by-hash-$index" "sha256:$digest" "$size"
     index=$((index + 1))
   done < <(awk '/^SHA256:$/ { found = 1; next } found && NF == 3 { print $1, $2, $3 }' "$release_file")
   [[ "$index" == 2 ]] || {
     printf 'APT Release did not describe exactly Packages and Packages.gz.\n' >&2
+    return 1
+  }
+  index_paths=$(printf '%s\n' "${release_index_paths[@]}" | LC_ALL=C sort | paste -sd, -)
+  [[ "$index_paths" == 'main/binary-all/Packages,main/binary-all/Packages.gz' ]] || {
+    printf 'APT Release described unexpected index paths: %s.\n' "$index_paths" >&2
     return 1
   }
 }
@@ -265,7 +273,7 @@ wait_gateway_ready
 
 mutation_response="$workdir/mutation-snapshot.json"
 mutation_body=$(printf '{"suite":"stable","sequence":2,"publicationSessionIds":["%s"]}' "$session_id")
-mutation_status=$(curl --silent --show-error --output "$mutation_response" --write-out '%{http_code}' \
+mutation_status=$("${curl_request[@]}" --output "$mutation_response" --write-out '%{http_code}' \
   --request POST "$gateway_url/api/v2/repositories/$repository_id/apt/snapshots" \
   --header "Authorization: Bearer $admin_token" \
   --header 'Content-Type: application/json' \
@@ -301,11 +309,11 @@ import json
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
-    original = json.load(source)["currentSnapshot"]
+    original = json.load(source)
 with open(sys.argv[2], encoding="utf-8") as source:
-    restored = json.load(source)["currentSnapshot"]
+    restored = json.load(source)
 if restored != original:
-    raise SystemExit("restored APT signing evidence does not exactly match the backed-up immutable snapshot")
+    raise SystemExit("restored APT signing state does not exactly match the backed-up state")
 PY
 capture_signed_snapshot "$restored_capture" "$restored_state"
 if ! cmp -s "$original_capture/SHA256SUMS" "$restored_capture/SHA256SUMS"; then
