@@ -575,6 +575,16 @@ func TestNativeOCIManifestAcceptNegotiation(t *testing.T) {
 			t.Fatalf("accept %q=%d %s", accept, response.Code, response.Body.String())
 		}
 	}
+	multiple := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
+	multiple.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+	multiple.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+	multiple.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	authorize(multiple, "resolver-secret")
+	multipleResponse := httptest.NewRecorder()
+	handler.ServeHTTP(multipleResponse, multiple)
+	if multipleResponse.Code != http.StatusOK {
+		t.Fatalf("multiple accept headers=%d %s", multipleResponse.Code, multipleResponse.Body.String())
+	}
 	reject := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	reject.Header.Set("Accept", "text/plain")
 	authorize(reject, "resolver-secret")

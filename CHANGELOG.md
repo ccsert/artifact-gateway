@@ -185,6 +185,8 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Honored repeated OCI `Accept` request headers when selecting manifest media
+  types, matching Docker clients that send one header field per supported type.
 - Prevented OpenAPI contract checks from reinstalling dependencies underneath
   a running Vite Console, and replaced the default lazy-route exception page
   with a bilingual recovery screen.
