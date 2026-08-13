@@ -8,6 +8,9 @@ a dated version heading without rewriting their meaning.
 
 ## Unreleased
 
+- Added each OCI manifest's immutable creation timestamp to repository browse
+  responses so consumers can select the newest publication without inferring
+  order from tags or digest text.
 - Switched the runtime, local Compose, Kubernetes, integration tests, and
   configuration contract fully to RustFS using the official AWS SDK for Go v2;
   removed MinIO services, SDK dependencies, migration tooling, and cutover

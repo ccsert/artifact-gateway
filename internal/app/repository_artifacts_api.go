@@ -289,7 +289,7 @@ func (h generatedRepositoryAPIAdapter) ListOCIManifests(w http.ResponseWriter, r
 		items := make([]adminopenapi.OCIManifestSummary, 0, len(manifests))
 		for _, manifest := range manifests {
 			tags := append([]string{}, manifest.Tags...)
-			item := adminopenapi.OCIManifestSummary{Digest: manifest.Digest, MediaType: manifest.MediaType, Size: manifest.Size, Tags: tags}
+			item := adminopenapi.OCIManifestSummary{Digest: manifest.Digest, MediaType: manifest.MediaType, Size: manifest.Size, Tags: tags, CreatedAt: manifest.CreatedAt}
 			if manifest.SubjectDigest != "" {
 				item.SubjectDigest = &manifest.SubjectDigest
 			}

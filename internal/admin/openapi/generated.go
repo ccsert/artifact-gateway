@@ -3060,12 +3060,13 @@ type OCIImagePage struct {
 
 // OCIManifestSummary defines model for OCIManifestSummary.
 type OCIManifestSummary struct {
-	ArtifactType  *string  `json:"artifactType,omitempty"`
-	Digest        string   `json:"digest"`
-	MediaType     string   `json:"mediaType"`
-	Size          int64    `json:"size"`
-	SubjectDigest *string  `json:"subjectDigest,omitempty"`
-	Tags          []string `json:"tags"`
+	ArtifactType  *string   `json:"artifactType,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Digest        string    `json:"digest"`
+	MediaType     string    `json:"mediaType"`
+	Size          int64     `json:"size"`
+	SubjectDigest *string   `json:"subjectDigest,omitempty"`
+	Tags          []string  `json:"tags"`
 }
 
 // OCIManifestSummaryPage defines model for OCIManifestSummaryPage.

@@ -1573,6 +1573,7 @@ export type OciManifestSummary = {
   mediaType: string;
   size: number;
   tags: Array<string>;
+  createdAt: string;
   subjectDigest?: string;
   artifactType?: string;
 };

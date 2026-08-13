@@ -2189,6 +2189,7 @@ OCIManifestSummary:
   - mediaType
   - size
   - tags
+  - createdAt
   properties:
     digest:
       type: string
@@ -2203,6 +2204,9 @@ OCIManifestSummary:
       type: array
       items:
         type: string
+    createdAt:
+      type: string
+      format: date-time
     subjectDigest:
       type: string
       pattern: "^sha256:[a-f0-9]{64}$"
