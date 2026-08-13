@@ -76,7 +76,6 @@ interface EvaluatorPrincipal {
   detail: string;
   role: EvaluatorRole;
   current?: boolean;
-  disabled?: boolean;
 }
 
 const CURRENT_PRINCIPAL = "__current__";
@@ -87,6 +86,17 @@ function strongestRole(roles: ApiKey["roles"]): EvaluatorRole {
   if (roles.includes("writer")) return "writer";
   if (roles.includes("reader")) return "reader";
   return "none";
+}
+
+export function isActiveUserPrincipal(user: Pick<User, "state">): boolean {
+  return user.state === "active";
+}
+
+export function isActiveApiKeyPrincipal(
+  key: Pick<ApiKey, "revokedAt" | "expiresAt">,
+  now = Date.now(),
+): boolean {
+  return !key.revokedAt && (!key.expiresAt || Date.parse(key.expiresAt) > now);
 }
 
 function resourcePlaceholder(format: Repository["format"] | undefined) {
@@ -409,29 +419,27 @@ export function AccessControlPage() {
       });
     }
     choices.push(
-      ...users.map((user) => ({
+      ...users.filter(isActiveUserPrincipal).map((user) => ({
         value: `user:${user.name}`,
         actor: `user:${user.name}`,
         label: `${text("用户", "User")} · ${user.name}`,
-        detail: `${text("全局角色", "Global role")} ${user.role}${
-          user.state === "disabled" ? ` · ${text("已停用", "Disabled")}` : ""
-        }`,
+        detail: `${text("全局角色", "Global role")} ${user.role}`,
         role: user.role,
-        disabled: user.state === "disabled",
       })),
-      ...apiKeys.map((key) => {
-        const role = strongestRole(key.roles);
-        return {
-          value: `api-key:${key.id}`,
-          actor: `api-key:${key.id}`,
-          label: `API Key · ${key.name}`,
-          detail: `${text("全局角色", "Global role")} ${
-            role === "none" ? text("无", "none") : role
-          }${key.revokedAt ? ` · ${text("已撤销", "Revoked")}` : ""}`,
-          role,
-          disabled: Boolean(key.revokedAt),
-        };
-      }),
+      ...apiKeys
+        .filter((key) => isActiveApiKeyPrincipal(key))
+        .map((key) => {
+          const role = strongestRole(key.roles);
+          return {
+            value: `api-key:${key.id}`,
+            actor: `api-key:${key.id}`,
+            label: `API Key · ${key.name}`,
+            detail: `${text("全局角色", "Global role")} ${
+              role === "none" ? text("无", "none") : role
+            }`,
+            role,
+          };
+        }),
       {
         value: CUSTOM_PRINCIPAL,
         actor: customActor.trim(),
@@ -474,7 +482,7 @@ export function AccessControlPage() {
       );
     }
     users
-      .filter((user) => user.state === "active")
+      .filter(isActiveUserPrincipal)
       .forEach((user) =>
         add(
           `user:${user.name}`,
@@ -484,11 +492,7 @@ export function AccessControlPage() {
         ),
       );
     apiKeys
-      .filter(
-        (key) =>
-          !key.revokedAt &&
-          (!key.expiresAt || Date.parse(key.expiresAt) > Date.now()),
-      )
+      .filter((key) => isActiveApiKeyPrincipal(key))
       .forEach((key) => add(`api-key:${key.id}`, `API Key · ${key.name}`));
     return options;
   }, [apiKeys, identity, text, users]);
@@ -861,13 +865,13 @@ export function AccessControlPage() {
                       <FilterField label={text("授权主体", "Principal")}>
                         <Select
                           className="w-full"
+                          aria-label={text("授权主体", "Principal")}
                           showSearch={{ optionFilterProp: "label" }}
                           loading={evaluatorOptionsLoading || identityLoading}
                           value={selectedPrincipal}
                           options={evaluatorPrincipals.map((choice) => ({
                             value: choice.value,
                             label: `${choice.label} · ${choice.detail}`,
-                            disabled: choice.disabled,
                           }))}
                           onChange={(value) => {
                             setSelectedPrincipal(value);
