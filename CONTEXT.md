@@ -53,9 +53,10 @@ uploaded control file; a staged session is never an APT client read surface.
 _Avoid_: Generic upload, visible package
 
 **APT Repository Snapshot**:
-An immutable suite view that will own generated package indices, Release
-metadata, signatures, and the single visibility switch. A `building` snapshot
-is explicitly not client-visible.
+An immutable suite view that owns generated package indices, Release metadata,
+signatures, package paths, and the single visibility switch. Only `visible`
+snapshots participate in APT client reads; `building` and `failed` snapshots do
+not.
 _Avoid_: Mutable index, cached upstream Release
 
 **Tombstone**:

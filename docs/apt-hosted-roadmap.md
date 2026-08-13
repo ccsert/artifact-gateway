@@ -64,6 +64,21 @@ cleanup slice; it does not imply Hosted protocol availability.
 
 ## APT-H2: atomic Hosted repository
 
+Current implementation status: the atomic snapshot core is implemented.
+Committed package bytes are reparsed into deterministic `Packages` and gzip
+indices, Release checksums and Acquire-By-Hash objects are generated, the H1
+signer boundary supplies `InRelease` and `Release.gpg`, and PostgreSQL exposes
+all signed assets through one audited visibility transaction. Hosted reads use
+that transaction for GET, HEAD, conditional responses, and ranges. Unit failure
+injection covers signer failure; PostgreSQL proves audit rollback; and
+PostgreSQL/RustFS cross-instance tests cover successful publication, pool-path
+immutability, failed object writes, and durable reference-checked orphan
+cleanup. Interrupted builds retain object intents and cannot replace the
+previous snapshot. The supported
+management publish operation, deployable H2 signer, capacity/search/Console
+projection, and real Debian container gate remain before H2 is complete; APT
+therefore remains advertised as Proxy/Group-only.
+
 - Generate `Packages` plus supported compressed variants from committed package
   records, including `Filename`, `Size`, and SHA-256 fields that match the stored
   object.

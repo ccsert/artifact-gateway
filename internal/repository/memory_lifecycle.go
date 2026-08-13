@@ -290,7 +290,7 @@ func (s *MemoryStore) UpdateLifecycleJobProgress(_ context.Context, id, leaseTok
 			continue
 		}
 		job.ProgressCurrent, job.ProgressTotal, job.ProgressMessage = current, total, message
-		job.LeaseExpiresAt = time.Now().UTC().Add(lifecycleJobLeaseDuration)
+		job.LeaseExpiresAt = renewedLifecycleLeaseExpiry(job.LeaseExpiresAt, time.Now().UTC())
 		s.lifecycleJobs[key] = job
 		return nil
 	}
@@ -304,11 +304,19 @@ func (s *MemoryStore) RenewLifecycleJobLease(_ context.Context, id, leaseToken s
 		if job.ID != id || job.State != LifecycleJobRunning || job.LeaseToken != leaseToken {
 			continue
 		}
-		job.LeaseExpiresAt = time.Now().UTC().Add(lifecycleJobLeaseDuration)
+		job.LeaseExpiresAt = renewedLifecycleLeaseExpiry(job.LeaseExpiresAt, time.Now().UTC())
 		s.lifecycleJobs[key] = job
 		return nil
 	}
 	return ErrNotFound
+}
+
+func renewedLifecycleLeaseExpiry(current, now time.Time) time.Time {
+	next := now.Add(lifecycleJobLeaseDuration)
+	if !next.After(current) {
+		return current.Add(time.Microsecond)
+	}
+	return next
 }
 
 func lifecycleJobMatchesFormat(payload []byte, format Format) bool {

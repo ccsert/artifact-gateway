@@ -4,7 +4,10 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -12,6 +15,119 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func TestPostgresAPTSignedSnapshotVisibilityAndAuditCommitAtomically(t *testing.T) {
+	ctx, store, repo := newPostgresAPTHostedFixture(t)
+	packageDigest := "sha256:" + strings.Repeat("a", 64)
+	session := APTPublicationSession{
+		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "stable", Component: "main", Publisher: "ci",
+		ObjectName: "widget_1.0-1_amd64.deb", DeclaredDigest: packageDigest, DeclaredSize: 8,
+		State: APTPublicationSessionOpen, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if _, _, err := store.CreateAPTPublicationSessionIdempotently(ctx, session, "ci", "apt/"+repo.ID, "snapshot-atomic-"+repo.ID, "snapshot-atomic"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginAPTPackageUpload(ctx, session.ID, "native/apt/sha256/"+strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	revision, err := store.CompleteAPTPackageUpload(ctx, session.ID, APTPackageRevision{
+		ID: uuid.NewString(), RepositoryID: repo.ID, Package: "widget", Version: "1.0-1", Architecture: "amd64",
+		CanonicalIdentity: "widget@1.0-1#amd64", Digest: packageDigest,
+		ObjectKey: "native/apt/sha256/" + strings.Repeat("a", 64), Size: 8, ObjectName: session.ObjectName, Publisher: "ci",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := func(sequence int64) APTRepositorySnapshot {
+		t.Helper()
+		snapshot, createErr := store.CreateAPTRepositorySnapshot(ctx, APTRepositorySnapshot{
+			ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "stable", Sequence: sequence, State: APTRepositorySnapshotBuilding,
+		}, []APTSnapshotPackage{{PublicationSessionID: session.ID, PackageRevisionID: revision.ID, Component: "main", Architecture: "amd64"}})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		return snapshot
+	}
+	assets := func(snapshot APTRepositorySnapshot, marker string) ([]APTSnapshotAsset, []byte) {
+		t.Helper()
+		indexPath := "dists/stable/main/binary-amd64/Packages"
+		indexBody := []byte(marker + ":Packages")
+		indexSum := sha256.Sum256(indexBody)
+		indexDigest := "sha256:" + hex.EncodeToString(indexSum[:])
+		releaseBody := []byte(fmt.Sprintf("Suite: stable\nAcquire-By-Hash: yes\nSHA256:\n %s %16d main/binary-amd64/Packages\n", strings.TrimPrefix(indexDigest, "sha256:"), len(indexBody)))
+		bodies := map[string][]byte{
+			"dists/stable/Release": releaseBody, "dists/stable/InRelease": []byte(marker + ":InRelease"),
+			"dists/stable/Release.gpg": []byte(marker + ":Release.gpg"), indexPath: indexBody,
+			"dists/stable/main/binary-amd64/by-hash/SHA256/" + strings.TrimPrefix(indexDigest, "sha256:"): indexBody,
+		}
+		result := make([]APTSnapshotAsset, 0, len(bodies)+1)
+		for path, body := range bodies {
+			sum := sha256.Sum256(body)
+			digest := "sha256:" + hex.EncodeToString(sum[:])
+			result = append(result, APTSnapshotAsset{
+				SnapshotID: snapshot.ID, RepositoryID: repo.ID, Path: path,
+				Digest: digest, ObjectKey: "native/apt/sha256/" + strings.TrimPrefix(digest, "sha256:"),
+				Size: int64(len(body)), ContentType: "text/plain",
+			})
+		}
+		result = append(result, APTSnapshotAsset{
+			SnapshotID: snapshot.ID, RepositoryID: repo.ID, Path: "pool/main/w/widget/widget_1.0-1_amd64.deb",
+			Digest: revision.Digest, ObjectKey: revision.ObjectKey, Size: revision.Size, ContentType: "application/vnd.debian.binary-package",
+		})
+		return result, releaseBody
+	}
+	complete := func(snapshot APTRepositorySnapshot, snapshotAssets []APTSnapshotAsset) APTRepositorySnapshot {
+		snapshot.State = APTRepositorySnapshotVisible
+		for _, asset := range snapshotAssets {
+			if asset.Path == "dists/stable/Release" {
+				snapshot.ReleaseDigest = asset.Digest
+			}
+			if asset.Path == "dists/stable/InRelease" {
+				snapshot.InReleaseDigest = asset.Digest
+			}
+		}
+		snapshot.SignerIdentity = "integration-signer"
+		snapshot.KeyFingerprint = strings.Repeat("b", 40)
+		snapshot.SignatureAlgorithm = "integration-fixture"
+		return snapshot
+	}
+
+	first := create(1)
+	firstAssets, firstRelease := assets(first, "first")
+	first, err = store.PublishAPTRepositorySnapshotWithAudit(ctx, complete(first, firstAssets), firstAssets, firstRelease, AuditRecord{
+		Repository: repo.Name, Actor: "release-operator", Outcome: AuditResolved, Operation: "apt.repository_snapshot.publish", Status: 200,
+	})
+	if err != nil || first.State != APTRepositorySnapshotVisible || first.PublishedAt.IsZero() {
+		t.Fatalf("first snapshot=%#v err=%v", first, err)
+	}
+
+	second := create(2)
+	secondAssets, secondRelease := assets(second, "second")
+	_, err = store.PublishAPTRepositorySnapshotWithAudit(ctx, complete(second, secondAssets), secondAssets, secondRelease, AuditRecord{
+		Repository: repo.Name, Actor: string([]byte{0xff}), Outcome: AuditResolved, Operation: "apt.repository_snapshot.publish", Status: 200,
+	})
+	if err == nil {
+		t.Fatal("snapshot visibility committed without durable audit")
+	}
+	visible, err := store.GetVisibleAPTRepositorySnapshot(ctx, repo.ID, "stable")
+	if err != nil || visible.ID != first.ID {
+		t.Fatalf("visible snapshot changed after rollback: %#v err=%v", visible, err)
+	}
+	asset, err := store.GetVisibleAPTSnapshotAsset(ctx, repo.ID, "dists/stable/InRelease")
+	var firstInReleaseDigest string
+	for _, firstAsset := range firstAssets {
+		if firstAsset.Path == "dists/stable/InRelease" {
+			firstInReleaseDigest = firstAsset.Digest
+		}
+	}
+	if err != nil || asset.SnapshotID != first.ID || asset.Digest != firstInReleaseDigest {
+		t.Fatalf("visible asset changed after rollback: %#v err=%v", asset, err)
+	}
+	listed, err := store.ListVisibleAPTSnapshotAssets(ctx, repo.ID, "stable")
+	if err != nil || len(listed) != 6 {
+		t.Fatalf("visible assets=%#v err=%v", listed, err)
+	}
+}
 
 func newPostgresAPTHostedFixture(t *testing.T) (context.Context, *PostgresStore, HostedRepository) {
 	t.Helper()

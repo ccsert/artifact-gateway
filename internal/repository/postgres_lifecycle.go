@@ -226,7 +226,9 @@ func (s *PostgresStore) UpdateLifecycleJobProgress(ctx context.Context, id, leas
 	if current < 0 || total < 0 || current > total {
 		return ErrVersionConflict
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET progress_current=$3,progress_total=$4,progress_message=$5,lease_expires_at=now()+interval '10 minutes' WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken, current, total, message)
+	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET progress_current=$3,progress_total=$4,progress_message=$5,
+		lease_expires_at=GREATEST(lease_expires_at+interval '1 microsecond',clock_timestamp()+interval '10 minutes')
+		WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken, current, total, message)
 	if err != nil {
 		return err
 	}
@@ -237,7 +239,9 @@ func (s *PostgresStore) UpdateLifecycleJobProgress(ctx context.Context, id, leas
 }
 
 func (s *PostgresStore) RenewLifecycleJobLease(ctx context.Context, id, leaseToken string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET lease_expires_at=now()+interval '10 minutes' WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
+	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET
+		lease_expires_at=GREATEST(lease_expires_at+interval '1 microsecond',clock_timestamp()+interval '10 minutes')
+		WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
 	if err != nil {
 		return err
 	}

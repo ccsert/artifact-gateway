@@ -40,6 +40,10 @@ type DebianBinaryMetadata struct {
 	Version           string
 	Architecture      string
 	CanonicalIdentity string
+	// Control is the normalized, single-paragraph control stanza used when a
+	// Hosted repository later generates Packages metadata. Repository-owned
+	// fields such as Filename, Size, and SHA256 are replaced by the publisher.
+	Control []byte
 }
 
 // ParseDebianBinary validates the outer ar archive, the Debian format marker,
@@ -339,11 +343,25 @@ func readXZVLI(encoded []byte, offset *int) (uint64, error) {
 }
 
 func parseControlFields(body []byte) (DebianBinaryMetadata, error) {
+	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
+	if bytes.ContainsRune(normalized, '\r') {
+		return DebianBinaryMetadata{}, errors.New("invalid Debian control line ending")
+	}
+	normalized = bytes.TrimRight(normalized, "\n")
+	normalized = append(normalized, '\n')
 	fields := make(map[string]string)
-	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner := bufio.NewScanner(bytes.NewReader(normalized))
+	paragraphEnded := false
 	for scanner.Scan() {
-		line := strings.TrimSuffix(scanner.Text(), "\r")
-		if line == "" || line[0] == ' ' || line[0] == '\t' {
+		line := scanner.Text()
+		if line == "" {
+			paragraphEnded = true
+			continue
+		}
+		if paragraphEnded {
+			return DebianBinaryMetadata{}, errors.New("debian control file contains multiple paragraphs")
+		}
+		if line[0] == ' ' || line[0] == '\t' {
 			continue
 		}
 		name, value, found := strings.Cut(line, ":")
@@ -378,6 +396,7 @@ func parseControlFields(body []byte) (DebianBinaryMetadata, error) {
 		Version:           version,
 		Architecture:      architecture,
 		CanonicalIdentity: identity.APTVersion(packageName, version, architecture),
+		Control:           append([]byte(nil), normalized...),
 	}, nil
 }
 

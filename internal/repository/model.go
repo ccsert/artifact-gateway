@@ -472,21 +472,21 @@ const (
 	APTRepositorySnapshotFailed   APTRepositorySnapshotState = "failed"
 )
 
-// APTRepositorySnapshot is the future single visibility switch. H1 permits
-// only building snapshots; H2 will attach generated indices and signer
-// evidence before transitioning one snapshot to visible.
+// APTRepositorySnapshot is the single visibility switch for one signed suite.
+// Building and failed snapshots are never returned by protocol reads.
 type APTRepositorySnapshot struct {
-	ID              string
-	RepositoryID    string
-	Suite           string
-	Sequence        int64
-	State           APTRepositorySnapshotState
-	ReleaseDigest   string
-	InReleaseDigest string
-	SignerIdentity  string
-	KeyFingerprint  string
-	CreatedAt       time.Time
-	PublishedAt     time.Time
+	ID                 string
+	RepositoryID       string
+	Suite              string
+	Sequence           int64
+	State              APTRepositorySnapshotState
+	ReleaseDigest      string
+	InReleaseDigest    string
+	SignerIdentity     string
+	KeyFingerprint     string
+	SignatureAlgorithm string
+	CreatedAt          time.Time
+	PublishedAt        time.Time
 }
 
 type APTSnapshotPackage struct {
@@ -495,6 +495,34 @@ type APTSnapshotPackage struct {
 	PackageRevisionID    string
 	Component            string
 	Architecture         string
+}
+
+// APTSnapshotAsset binds one client-visible path to immutable object bytes.
+// Assets become readable only when their owning snapshot atomically becomes
+// visible; generated metadata and package bytes therefore cannot be mixed
+// across publication attempts.
+type APTSnapshotAsset struct {
+	SnapshotID   string
+	RepositoryID string
+	Path         string
+	Digest       string
+	ObjectKey    string
+	Size         int64
+	ContentType  string
+}
+
+// APTSnapshotObjectIntent records generated content-addressed bytes before the
+// object store is mutated. Failed or abandoned builds can therefore be
+// reclaimed only after checking that no durable package or snapshot uses them.
+type APTSnapshotObjectIntent struct {
+	SnapshotID   string
+	RepositoryID string
+	ObjectKey    string
+	Digest       string
+	Size         int64
+	CreatedAt    time.Time
+	ScheduledAt  time.Time
+	CollectedAt  time.Time
 }
 
 type APTAbandonedUpload struct {

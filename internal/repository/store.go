@@ -395,9 +395,9 @@ type NativeAPTStore interface {
 	ListAPTAssets(context.Context, string, string, int, string) ([]APTAsset, error)
 }
 
-// NativeAPTPublicationStore is the pre-visibility APT Hosted boundary. A
-// staged package is deliberately absent from NativeAPTStore protocol assets;
-// only a later signed snapshot publication may make it readable.
+// NativeAPTPublicationStore persists APT Hosted staging and immutable signed
+// snapshots. A staged package is deliberately absent from NativeAPTStore
+// protocol assets; only one atomically visible snapshot may make it readable.
 type NativeAPTPublicationStore interface {
 	CreateAPTPublicationSessionWithAuditIdempotently(context.Context, APTPublicationSession, string, string, string, string, AuditRecord) (APTPublicationSession, bool, error)
 	GetAPTPublicationSession(context.Context, string) (APTPublicationSession, error)
@@ -411,7 +411,17 @@ type NativeAPTPublicationStore interface {
 	MarkAPTPublicationObjectCollected(context.Context, string, string) error
 	APTObjectHasPackageReference(context.Context, string) (bool, error)
 	CreateAPTRepositorySnapshot(context.Context, APTRepositorySnapshot, []APTSnapshotPackage) (APTRepositorySnapshot, error)
+	CreateAPTSnapshotObjectIntents(context.Context, string, []APTSnapshotObjectIntent) error
+	PublishAPTRepositorySnapshotWithAudit(context.Context, APTRepositorySnapshot, []APTSnapshotAsset, []byte, AuditRecord) (APTRepositorySnapshot, error)
+	FailAPTRepositorySnapshot(context.Context, string) error
+	ExpireAPTRepositorySnapshots(context.Context, time.Time, int) error
+	ListUnscheduledAPTSnapshotObjects(context.Context, int) ([]APTSnapshotObjectIntent, error)
+	MarkAPTSnapshotObjectScheduled(context.Context, string, string) error
+	MarkAPTSnapshotObjectCollected(context.Context, string, string) error
+	APTObjectHasDurableReference(context.Context, string) (bool, error)
 	GetVisibleAPTRepositorySnapshot(context.Context, string, string) (APTRepositorySnapshot, error)
+	GetVisibleAPTSnapshotAsset(context.Context, string, string) (APTSnapshotAsset, error)
+	ListVisibleAPTSnapshotAssets(context.Context, string, string) ([]APTSnapshotAsset, error)
 }
 
 type Store interface {

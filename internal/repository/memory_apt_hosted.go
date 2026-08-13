@@ -1,8 +1,13 @@
 package repository
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -452,6 +457,432 @@ func validateAPTSnapshotMembership(items []APTSnapshotPackage) error {
 	return nil
 }
 
+// ValidAPTRepositoryPath validates an immutable Hosted APT protocol path.
+func ValidAPTRepositoryPath(path string) bool {
+	if path == "" || len(path) > 2048 || strings.HasPrefix(path, "/") || strings.ContainsRune(path, 0) || strings.ContainsAny(path, "\\\r\n\t?#") {
+		return false
+	}
+	segments := strings.Split(path, "/")
+	if len(segments) < 2 || (segments[0] != "dists" && segments[0] != "pool") {
+		return false
+	}
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// APTPoolPath derives the repository-global immutable path for one package.
+func APTPoolPath(component, packageName, objectName string) string {
+	prefix := packageName[:1]
+	if strings.HasPrefix(packageName, "lib") && len(packageName) >= 4 {
+		prefix = packageName[:4]
+	}
+	return "pool/" + component + "/" + prefix + "/" + packageName + "/" + objectName
+}
+
+func validAPTSnapshotAssets(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset) bool {
+	if len(assets) == 0 {
+		return false
+	}
+	paths := make(map[string]struct{}, len(assets))
+	byPath := make(map[string]APTSnapshotAsset, len(assets))
+	poolCount, indexCount := 0, 0
+	required := map[string]bool{
+		"dists/" + snapshot.Suite + "/Release":     false,
+		"dists/" + snapshot.Suite + "/InRelease":   false,
+		"dists/" + snapshot.Suite + "/Release.gpg": false,
+	}
+	for _, asset := range assets {
+		if asset.SnapshotID != snapshot.ID || asset.RepositoryID != snapshot.RepositoryID || !ValidAPTRepositoryPath(asset.Path) ||
+			!ValidAPTSHA256Digest(asset.Digest) || asset.ObjectKey != "native/apt/sha256/"+strings.TrimPrefix(asset.Digest, "sha256:") ||
+			asset.Size <= 0 || asset.Size > 1<<30 || asset.ContentType == "" || len(asset.ContentType) > 255 ||
+			strings.ContainsAny(asset.ContentType, "\x00\r\n") ||
+			(strings.HasPrefix(asset.Path, "dists/") && !strings.HasPrefix(asset.Path, "dists/"+snapshot.Suite+"/")) {
+			return false
+		}
+		if _, duplicate := paths[asset.Path]; duplicate {
+			return false
+		}
+		paths[asset.Path] = struct{}{}
+		byPath[asset.Path] = asset
+		if strings.HasPrefix(asset.Path, "pool/") {
+			poolCount++
+		}
+		if aptDirectIndexPath(snapshot.Suite, asset.Path) {
+			indexCount++
+		}
+		if _, ok := required[asset.Path]; ok {
+			required[asset.Path] = true
+		}
+	}
+	for _, present := range required {
+		if !present {
+			return false
+		}
+	}
+	if poolCount == 0 || indexCount == 0 || assetDigestAtPath(assets, "dists/"+snapshot.Suite+"/Release") != snapshot.ReleaseDigest ||
+		assetDigestAtPath(assets, "dists/"+snapshot.Suite+"/InRelease") != snapshot.InReleaseDigest {
+		return false
+	}
+	for _, asset := range assets {
+		if aptDirectIndexPath(snapshot.Suite, asset.Path) {
+			base := asset.Path[:strings.LastIndex(asset.Path, "/")]
+			byHash, ok := byPath[base+"/by-hash/SHA256/"+strings.TrimPrefix(asset.Digest, "sha256:")]
+			if !ok || byHash.Digest != asset.Digest || byHash.Size != asset.Size {
+				return false
+			}
+		}
+		if strings.Contains(asset.Path, "/by-hash/SHA256/") {
+			base, _, _ := strings.Cut(asset.Path, "/by-hash/SHA256/")
+			if !strings.HasSuffix(asset.Path, "/"+strings.TrimPrefix(asset.Digest, "sha256:")) {
+				return false
+			}
+			matched := false
+			for _, direct := range assets {
+				if aptDirectIndexPath(snapshot.Suite, direct.Path) && strings.HasPrefix(direct.Path, base+"/") &&
+					direct.Digest == asset.Digest && direct.Size == asset.Size {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func aptDirectIndexPath(suite, path string) bool {
+	return strings.HasPrefix(path, "dists/"+suite+"/") && !strings.Contains(path, "/by-hash/") &&
+		path != "dists/"+suite+"/Release" && path != "dists/"+suite+"/InRelease" && path != "dists/"+suite+"/Release.gpg"
+}
+
+func validAPTSnapshotPublication(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte) bool {
+	return snapshot.State == APTRepositorySnapshotVisible && ValidAPTSHA256Digest(snapshot.ReleaseDigest) &&
+		ValidAPTSHA256Digest(snapshot.InReleaseDigest) && snapshot.SignerIdentity != "" && len(snapshot.SignerIdentity) <= 512 &&
+		snapshot.KeyFingerprint != "" && len(snapshot.KeyFingerprint) <= 512 && snapshot.SignatureAlgorithm != "" &&
+		len(snapshot.SignatureAlgorithm) <= 128 && !strings.ContainsAny(snapshot.SignerIdentity+snapshot.KeyFingerprint+snapshot.SignatureAlgorithm, "\x00\r\n") &&
+		validAPTSnapshotAssets(snapshot, assets) && validAPTReleaseClosure(snapshot, assets, release)
+}
+
+func validAPTReleaseClosure(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte) bool {
+	if len(release) == 0 || len(release) > 16<<20 {
+		return false
+	}
+	sum := sha256.Sum256(release)
+	if "sha256:"+hex.EncodeToString(sum[:]) != snapshot.ReleaseDigest {
+		return false
+	}
+	expected := make(map[string]APTSnapshotAsset)
+	for _, asset := range assets {
+		if aptDirectIndexPath(snapshot.Suite, asset.Path) {
+			expected[strings.TrimPrefix(asset.Path, "dists/"+snapshot.Suite+"/")] = asset
+		}
+	}
+	actual := make(map[string]struct{}, len(expected))
+	scanner := bufio.NewScanner(bytes.NewReader(release))
+	inSHA256, seenSection, suiteMatches, acquireByHash := false, false, false, false
+	for scanner.Scan() {
+		line := scanner.Text()
+		suiteMatches = suiteMatches || line == "Suite: "+snapshot.Suite
+		acquireByHash = acquireByHash || line == "Acquire-By-Hash: yes"
+		if line == "SHA256:" {
+			if seenSection {
+				return false
+			}
+			seenSection, inSHA256 = true, true
+			continue
+		}
+		if !inSHA256 {
+			continue
+		}
+		if !strings.HasPrefix(line, " ") {
+			inSHA256 = false
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			return false
+		}
+		asset, ok := expected[fields[2]]
+		size, err := strconv.ParseInt(fields[1], 10, 64)
+		if !ok || err != nil || fields[0] != strings.TrimPrefix(asset.Digest, "sha256:") || size != asset.Size {
+			return false
+		}
+		if _, duplicate := actual[fields[2]]; duplicate {
+			return false
+		}
+		actual[fields[2]] = struct{}{}
+	}
+	return scanner.Err() == nil && seenSection && suiteMatches && acquireByHash && len(actual) == len(expected)
+}
+
+func validAPTSnapshotObjectIntent(snapshot APTRepositorySnapshot, intent APTSnapshotObjectIntent) bool {
+	return intent.SnapshotID == snapshot.ID && intent.RepositoryID == snapshot.RepositoryID && ValidAPTSHA256Digest(intent.Digest) &&
+		intent.ObjectKey == "native/apt/sha256/"+strings.TrimPrefix(intent.Digest, "sha256:") && intent.Size > 0 && intent.Size <= 1<<30
+}
+
+func (s *MemoryStore) CreateAPTSnapshotObjectIntents(_ context.Context, snapshotID string, intents []APTSnapshotObjectIntent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snapshot, ok := s.aptSnapshots[snapshotID]
+	if !ok {
+		return ErrNotFound
+	}
+	if snapshot.State != APTRepositorySnapshotBuilding || len(intents) == 0 {
+		return ErrDisabled
+	}
+	stored := s.aptSnapshotObjects[snapshotID]
+	if stored == nil {
+		stored = make(map[string]APTSnapshotObjectIntent, len(intents))
+	}
+	for _, intent := range intents {
+		if !validAPTSnapshotObjectIntent(snapshot, intent) {
+			return ErrDisabled
+		}
+		if current, exists := stored[intent.ObjectKey]; exists && (current.Digest != intent.Digest || current.Size != intent.Size) {
+			return ErrVersionConflict
+		}
+	}
+	for _, intent := range intents {
+		if intent.CreatedAt.IsZero() {
+			intent.CreatedAt = time.Now().UTC()
+		}
+		stored[intent.ObjectKey] = intent
+	}
+	s.aptSnapshotObjects[snapshotID] = stored
+	return nil
+}
+
+func assetDigestAtPath(assets []APTSnapshotAsset, path string) string {
+	for _, asset := range assets {
+		if asset.Path == path {
+			return asset.Digest
+		}
+	}
+	return ""
+}
+
+func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, ok := s.aptSnapshots[snapshot.ID]
+	if !ok {
+		return APTRepositorySnapshot{}, ErrNotFound
+	}
+	if existing.State != APTRepositorySnapshotBuilding || existing.RepositoryID != snapshot.RepositoryID || existing.Suite != snapshot.Suite ||
+		existing.Sequence != snapshot.Sequence || !validAPTSnapshotPublication(snapshot, assets, release) ||
+		!s.validAPTSnapshotPoolAssetsLocked(snapshot, assets) {
+		return APTRepositorySnapshot{}, ErrDisabled
+	}
+	for existingSnapshotID, existingAssets := range s.aptSnapshotAssets {
+		if s.aptSnapshots[existingSnapshotID].RepositoryID != snapshot.RepositoryID {
+			continue
+		}
+		for _, existingAsset := range existingAssets {
+			if !strings.HasPrefix(existingAsset.Path, "pool/") {
+				continue
+			}
+			for _, asset := range assets {
+				if asset.Path == existingAsset.Path && asset.Digest != existingAsset.Digest {
+					return APTRepositorySnapshot{}, ErrAPTPackageConflict
+				}
+			}
+		}
+	}
+	for id, current := range s.aptSnapshots {
+		if current.RepositoryID == snapshot.RepositoryID && current.Suite == snapshot.Suite && current.State == APTRepositorySnapshotVisible {
+			if current.Sequence >= snapshot.Sequence {
+				return APTRepositorySnapshot{}, ErrVersionConflict
+			}
+			current.State = APTRepositorySnapshotRetired
+			s.aptSnapshots[id] = current
+		}
+	}
+	if snapshot.PublishedAt.IsZero() {
+		snapshot.PublishedAt = time.Now().UTC()
+	}
+	snapshot.CreatedAt = existing.CreatedAt
+	s.aptSnapshots[snapshot.ID] = snapshot
+	s.aptSnapshotAssets[snapshot.ID] = append([]APTSnapshotAsset(nil), assets...)
+	s.appendAuditLocked(audit)
+	return snapshot, nil
+}
+
+func (s *MemoryStore) validAPTSnapshotPoolAssetsLocked(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset) bool {
+	expected := make(map[string]APTSnapshotAsset)
+	for _, item := range s.aptSnapshotPackages[snapshot.ID] {
+		revision, ok := s.aptPackageRevisions[item.PackageRevisionID]
+		if !ok {
+			return false
+		}
+		path := APTPoolPath(item.Component, revision.Package, revision.ObjectName)
+		if _, duplicate := expected[path]; duplicate {
+			return false
+		}
+		expected[path] = APTSnapshotAsset{Digest: revision.Digest, ObjectKey: revision.ObjectKey, Size: revision.Size}
+	}
+	actual := 0
+	for _, asset := range assets {
+		if !strings.HasPrefix(asset.Path, "pool/") {
+			continue
+		}
+		actual++
+		want, ok := expected[asset.Path]
+		if !ok || want.Digest != asset.Digest || want.ObjectKey != asset.ObjectKey || want.Size != asset.Size {
+			return false
+		}
+	}
+	return actual == len(expected) && actual > 0
+}
+
+func (s *MemoryStore) FailAPTRepositorySnapshot(_ context.Context, snapshotID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snapshot, ok := s.aptSnapshots[snapshotID]
+	if !ok {
+		return ErrNotFound
+	}
+	if snapshot.State == APTRepositorySnapshotFailed {
+		return nil
+	}
+	if snapshot.State != APTRepositorySnapshotBuilding {
+		return ErrVersionConflict
+	}
+	snapshot.State = APTRepositorySnapshotFailed
+	s.aptSnapshots[snapshotID] = snapshot
+	return nil
+}
+
+func (s *MemoryStore) ExpireAPTRepositorySnapshots(_ context.Context, before time.Time, limit int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	ids := make([]string, 0)
+	for id, snapshot := range s.aptSnapshots {
+		if snapshot.State != APTRepositorySnapshotBuilding {
+			continue
+		}
+		intents := s.aptSnapshotObjects[id]
+		if len(intents) == 0 {
+			continue
+		}
+		expired := true
+		for _, intent := range intents {
+			if intent.CreatedAt.IsZero() || intent.CreatedAt.After(before) {
+				expired = false
+				break
+			}
+		}
+		if expired {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	for _, id := range ids {
+		snapshot := s.aptSnapshots[id]
+		snapshot.State = APTRepositorySnapshotFailed
+		s.aptSnapshots[id] = snapshot
+	}
+	return nil
+}
+
+func (s *MemoryStore) ListUnscheduledAPTSnapshotObjects(_ context.Context, limit int) ([]APTSnapshotObjectIntent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	result := make([]APTSnapshotObjectIntent, 0)
+	for snapshotID, intents := range s.aptSnapshotObjects {
+		if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed {
+			continue
+		}
+		for _, intent := range intents {
+			if intent.ScheduledAt.IsZero() && intent.CollectedAt.IsZero() {
+				result = append(result, intent)
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SnapshotID+"\x00"+result[i].ObjectKey < result[j].SnapshotID+"\x00"+result[j].ObjectKey
+	})
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) MarkAPTSnapshotObjectScheduled(_ context.Context, snapshotID, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	intent, ok := s.aptSnapshotObjects[snapshotID][objectKey]
+	if !ok {
+		return ErrNotFound
+	}
+	if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed || !intent.CollectedAt.IsZero() {
+		return ErrVersionConflict
+	}
+	if intent.ScheduledAt.IsZero() {
+		intent.ScheduledAt = time.Now().UTC()
+		s.aptSnapshotObjects[snapshotID][objectKey] = intent
+	}
+	return nil
+}
+
+func (s *MemoryStore) MarkAPTSnapshotObjectCollected(_ context.Context, snapshotID, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	intent, ok := s.aptSnapshotObjects[snapshotID][objectKey]
+	if !ok {
+		return ErrNotFound
+	}
+	if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed {
+		return ErrVersionConflict
+	}
+	if intent.CollectedAt.IsZero() {
+		intent.CollectedAt = time.Now().UTC()
+		s.aptSnapshotObjects[snapshotID][objectKey] = intent
+	}
+	return nil
+}
+
+func (s *MemoryStore) APTObjectHasDurableReference(_ context.Context, objectKey string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.aptObjectHasPackageReferenceLocked(objectKey) {
+		return true, nil
+	}
+	for snapshotID, assets := range s.aptSnapshotAssets {
+		if s.aptSnapshots[snapshotID].State == APTRepositorySnapshotFailed {
+			continue
+		}
+		for _, asset := range assets {
+			if asset.ObjectKey == objectKey {
+				return true, nil
+			}
+		}
+	}
+	for snapshotID, intents := range s.aptSnapshotObjects {
+		if s.aptSnapshots[snapshotID].State == APTRepositorySnapshotFailed {
+			continue
+		}
+		if _, ok := intents[objectKey]; ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *MemoryStore) GetVisibleAPTRepositorySnapshot(_ context.Context, repositoryID, suite string) (APTRepositorySnapshot, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -465,6 +896,50 @@ func (s *MemoryStore) GetVisibleAPTRepositorySnapshot(_ context.Context, reposit
 		return APTRepositorySnapshot{}, ErrNotFound
 	}
 	return found, nil
+}
+
+func (s *MemoryStore) GetVisibleAPTSnapshotAsset(_ context.Context, repositoryID, path string) (APTSnapshotAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var found APTSnapshotAsset
+	var foundSequence int64
+	for snapshotID, assets := range s.aptSnapshotAssets {
+		snapshot := s.aptSnapshots[snapshotID]
+		if snapshot.RepositoryID != repositoryID || snapshot.State != APTRepositorySnapshotVisible || snapshot.Sequence < foundSequence {
+			continue
+		}
+		if strings.HasPrefix(path, "dists/") && !strings.HasPrefix(path, "dists/"+snapshot.Suite+"/") {
+			continue
+		}
+		for _, asset := range assets {
+			if asset.Path == path {
+				found, foundSequence = asset, snapshot.Sequence
+				break
+			}
+		}
+	}
+	if found.Path == "" {
+		return APTSnapshotAsset{}, ErrNotFound
+	}
+	return found, nil
+}
+
+func (s *MemoryStore) ListVisibleAPTSnapshotAssets(_ context.Context, repositoryID, suite string) ([]APTSnapshotAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var snapshotID string
+	var sequence int64
+	for id, snapshot := range s.aptSnapshots {
+		if snapshot.RepositoryID == repositoryID && snapshot.Suite == suite && snapshot.State == APTRepositorySnapshotVisible && snapshot.Sequence > sequence {
+			snapshotID, sequence = id, snapshot.Sequence
+		}
+	}
+	if snapshotID == "" {
+		return nil, ErrNotFound
+	}
+	assets := append([]APTSnapshotAsset(nil), s.aptSnapshotAssets[snapshotID]...)
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+	return assets, nil
 }
 
 var _ NativeAPTPublicationStore = (*MemoryStore)(nil)

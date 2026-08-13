@@ -73,8 +73,10 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-1. Finish APT H1's management/OpenAPI publication surface, orphan cleanup, and
-   audit wiring without advertising Hosted before its signed-snapshot gates.
+1. Finish APT H2 around the implemented atomic signed-snapshot core: add the
+   supported management publish operation, deployable signer, capacity/search/
+   Console projection, and real Debian install gate without advertising Hosted
+   before its production-signing gates.
 2. Continue NuGet N1 from the implemented bounded `.nupkg`/`.nuspec` identity
    parser into idempotent publication persistence, cross-checking normalized
    versions against official `NuGet.Versioning` vectors.

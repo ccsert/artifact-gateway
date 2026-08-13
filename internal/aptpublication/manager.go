@@ -1,6 +1,6 @@
-// Package aptpublication owns the pre-visibility APT Hosted upload workflow.
-// It deliberately cannot publish protocol metadata; signed snapshot assembly
-// is a separate boundary.
+// Package aptpublication owns APT Hosted staging and signed repository-snapshot
+// assembly. Session staging cannot publish protocol metadata; Publisher is the
+// only boundary allowed to make a complete signed snapshot visible.
 package aptpublication
 
 import (

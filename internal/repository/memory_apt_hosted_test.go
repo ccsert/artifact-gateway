@@ -2,11 +2,59 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestAPTSnapshotPublicationValidationBindsReleaseAndByHashClosure(t *testing.T) {
+	t.Parallel()
+	digest := func(body []byte) string {
+		sum := sha256.Sum256(body)
+		return "sha256:" + hex.EncodeToString(sum[:])
+	}
+	snapshot := APTRepositorySnapshot{
+		ID: "snapshot", RepositoryID: "repo", Suite: "stable", Sequence: 1, State: APTRepositorySnapshotVisible,
+		SignerIdentity: "signer", KeyFingerprint: strings.Repeat("a", 40), SignatureAlgorithm: "fixture",
+	}
+	indexBody := []byte("Package: widget\n")
+	indexDigest := digest(indexBody)
+	release := []byte(fmt.Sprintf("Suite: stable\nAcquire-By-Hash: yes\nSHA256:\n %s %16d main/binary-amd64/Packages\n", strings.TrimPrefix(indexDigest, "sha256:"), len(indexBody)))
+	snapshot.ReleaseDigest = digest(release)
+	snapshot.InReleaseDigest = digest([]byte("inrelease"))
+	asset := func(path, body, contentType string) APTSnapshotAsset {
+		d := digest([]byte(body))
+		return APTSnapshotAsset{SnapshotID: snapshot.ID, RepositoryID: snapshot.RepositoryID, Path: path, Digest: d, ObjectKey: "native/apt/sha256/" + strings.TrimPrefix(d, "sha256:"), Size: int64(len(body)), ContentType: contentType}
+	}
+	assets := []APTSnapshotAsset{
+		asset("dists/stable/Release", string(release), "text/plain"),
+		asset("dists/stable/InRelease", "inrelease", "application/pgp-signature"),
+		asset("dists/stable/Release.gpg", "signature", "application/pgp-signature"),
+		asset("dists/stable/main/binary-amd64/Packages", string(indexBody), "text/plain"),
+		asset("dists/stable/main/binary-amd64/by-hash/SHA256/"+strings.TrimPrefix(indexDigest, "sha256:"), string(indexBody), "text/plain"),
+		asset("pool/main/w/widget/widget_1.0-1_amd64.deb", "package", "application/vnd.debian.binary-package"),
+	}
+	if !validAPTSnapshotPublication(snapshot, assets, release) {
+		t.Fatal("coherent snapshot publication was rejected")
+	}
+	badByHash := append([]APTSnapshotAsset(nil), assets...)
+	badByHash[4].Path = strings.TrimSuffix(badByHash[4].Path, strings.TrimPrefix(indexDigest, "sha256:")) + strings.Repeat("b", 64)
+	if validAPTSnapshotPublication(snapshot, badByHash, release) {
+		t.Fatal("mismatched by-hash suffix was accepted")
+	}
+	badRelease := []byte(strings.Replace(string(release), strings.TrimPrefix(indexDigest, "sha256:"), strings.Repeat("c", 64), 1))
+	badSnapshot := snapshot
+	badSnapshot.ReleaseDigest = digest(badRelease)
+	badAssets := append([]APTSnapshotAsset(nil), assets...)
+	badAssets[0] = asset("dists/stable/Release", string(badRelease), "text/plain")
+	if validAPTSnapshotPublication(badSnapshot, badAssets, badRelease) {
+		t.Fatal("Release checksum closure mismatch was accepted")
+	}
+}
 
 func TestMemoryAPTPublicationSessionReservesQuotaAndIsIdempotent(t *testing.T) {
 	t.Parallel()
@@ -181,5 +229,35 @@ func TestMemoryAPTUploadRecoveryDoesNotDeleteReferencedObjects(t *testing.T) {
 	referenced, err := store.APTObjectHasPackageReference(ctx, objectKey)
 	if err != nil || referenced {
 		t.Fatalf("referenced=%t err=%v", referenced, err)
+	}
+}
+
+func TestMemoryAPTAbandonedSnapshotIntentsBecomeReclaimable(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, time.UTC)
+	store := NewMemoryStore()
+	digest := "sha256:" + strings.Repeat("e", 64)
+	objectKey := "native/apt/sha256/" + strings.Repeat("e", 64)
+	store.aptSnapshots["abandoned-snapshot"] = APTRepositorySnapshot{
+		ID: "abandoned-snapshot", RepositoryID: "apt-hosted", Suite: "stable",
+		Sequence: 1, State: APTRepositorySnapshotBuilding, CreatedAt: now.Add(-2 * time.Hour),
+	}
+	store.aptSnapshotObjects["abandoned-snapshot"] = map[string]APTSnapshotObjectIntent{
+		objectKey: {
+			SnapshotID: "abandoned-snapshot", RepositoryID: "apt-hosted", ObjectKey: objectKey,
+			Digest: digest, Size: 8, CreatedAt: now.Add(-2 * time.Hour),
+		},
+	}
+
+	if err := store.ExpireAPTRepositorySnapshots(ctx, now.Add(-time.Hour), 10); err != nil {
+		t.Fatal(err)
+	}
+	if state := store.aptSnapshots["abandoned-snapshot"].State; state != APTRepositorySnapshotFailed {
+		t.Fatalf("snapshot state=%q", state)
+	}
+	intents, err := store.ListUnscheduledAPTSnapshotObjects(ctx, 10)
+	if err != nil || len(intents) != 1 || intents[0].ObjectKey != objectKey {
+		t.Fatalf("reclaimable intents=%#v err=%v", intents, err)
 	}
 }

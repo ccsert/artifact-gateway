@@ -70,13 +70,14 @@ func (c UpstreamClient) FetchAPT(ctx context.Context, method string, repo reposi
 }
 
 type nativeAPTHandler struct {
-	store      repository.NativeAPTStore
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	proxy      APTClient
+	store        repository.NativeAPTStore
+	publications repository.NativeAPTPublicationStore
+	repos        repository.HostedRepositoryStore
+	objects      OCIObjectStore
+	auth         Authenticator
+	authorizer   RepositoryAuthorizer
+	audit        repository.Store
+	proxy        APTClient
 }
 
 type aptRoute struct {
@@ -89,7 +90,7 @@ func newNativeAPTHandler(store GatewayStore, objects OCIObjectStore, auth Authen
 		objects = NewMemoryOCIObjectStore()
 	}
 	return nativeAPTHandler{
-		store: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
+		store: store, publications: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
 			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
 		}},
@@ -181,7 +182,8 @@ func (h nativeAPTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	repo, err := h.repos.GetHostedRepositoryByName(r.Context(), route.repository)
-	if errors.Is(err, repository.ErrNotFound) || (err == nil && (repo.Format != repository.FormatAPT || repo.Type != repository.RepositoryTypeProxy || repo.State != repository.RepositoryActive)) {
+	if errors.Is(err, repository.ErrNotFound) || (err == nil && (repo.Format != repository.FormatAPT ||
+		(repo.Type != repository.RepositoryTypeProxy && repo.Type != repository.RepositoryTypeHosted) || repo.State != repository.RepositoryActive)) {
 		http.NotFound(w, r)
 		return
 	}
@@ -238,6 +240,19 @@ func (h nativeAPTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepository, path string) (repository.APTAsset, string, error) {
+	if repo.Type == repository.RepositoryTypeHosted {
+		if h.publications == nil {
+			return repository.APTAsset{}, "hosted", errors.New("APT Hosted publication store is unavailable")
+		}
+		asset, err := h.publications.GetVisibleAPTSnapshotAsset(r.Context(), repo.ID, path)
+		if err != nil {
+			return repository.APTAsset{}, "hosted", err
+		}
+		return repository.APTAsset{
+			RepositoryID: asset.RepositoryID, Path: asset.Path, Digest: asset.Digest, ObjectKey: asset.ObjectKey,
+			Size: asset.Size, ContentType: asset.ContentType,
+		}, "hosted", nil
+	}
 	asset, err := h.store.GetAPTAsset(r.Context(), repo.ID, path)
 	if err == nil {
 		if !repository.APTAssetMutable(path) {

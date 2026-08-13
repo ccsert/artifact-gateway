@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +19,124 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestNativeAPTHostedReadsSwitchOnlyAfterSignedSnapshotIsVisible(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: "apt-hosted-read", Name: "apt-hosted-read", Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("c", 64)
+	session := repository.APTPublicationSession{
+		ID: "apt-hosted-session", RepositoryID: repo.ID, Suite: "stable", Component: "main", Publisher: "ci",
+		ObjectName: "widget_1.0-1_amd64.deb", DeclaredDigest: digest, DeclaredSize: 8,
+		State: repository.APTPublicationSessionOpen, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if _, _, err = store.CreateAPTPublicationSessionIdempotently(ctx, session, "ci", "apt", "hosted-read", "hosted-read"); err != nil {
+		t.Fatal(err)
+	}
+	objectKey := "native/apt/sha256/" + strings.Repeat("c", 64)
+	if err = store.BeginAPTPackageUpload(ctx, session.ID, objectKey); err != nil {
+		t.Fatal(err)
+	}
+	revision, err := store.CompleteAPTPackageUpload(ctx, session.ID, repository.APTPackageRevision{
+		ID: "apt-hosted-revision", RepositoryID: repo.ID, Package: "widget", Version: "1.0-1", Architecture: "amd64",
+		CanonicalIdentity: "widget@1.0-1#amd64", Digest: digest, ObjectKey: objectKey, Size: 8,
+		ObjectName: session.ObjectName, Publisher: "ci",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	publish := func(id string, sequence int64, body string, visible bool) {
+		t.Helper()
+		snapshot, createErr := store.CreateAPTRepositorySnapshot(ctx, repository.APTRepositorySnapshot{
+			ID: id, RepositoryID: repo.ID, Suite: "stable", Sequence: sequence, State: repository.APTRepositorySnapshotBuilding,
+		}, []repository.APTSnapshotPackage{{PublicationSessionID: session.ID, PackageRevisionID: revision.ID, Component: "main", Architecture: "amd64"}})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		if !visible {
+			return
+		}
+		indexPath := "dists/stable/main/binary-amd64/Packages"
+		indexBody := []byte(body + ":Packages")
+		indexSum := sha256.Sum256(indexBody)
+		indexDigest := "sha256:" + hex.EncodeToString(indexSum[:])
+		releaseBody := []byte(fmt.Sprintf("Suite: stable\nAcquire-By-Hash: yes\nSHA256:\n %s %16d main/binary-amd64/Packages\n", strings.TrimPrefix(indexDigest, "sha256:"), len(indexBody)))
+		assetBodies := map[string][]byte{
+			"dists/stable/Release": releaseBody, "dists/stable/InRelease": []byte(body + ":InRelease"),
+			"dists/stable/Release.gpg": []byte(body + ":Release.gpg"), indexPath: indexBody,
+			"dists/stable/main/binary-amd64/by-hash/SHA256/" + strings.TrimPrefix(indexDigest, "sha256:"): indexBody,
+		}
+		assets := make([]repository.APTSnapshotAsset, 0, len(assetBodies))
+		for path, assetBody := range assetBodies {
+			sum := sha256.Sum256(assetBody)
+			assetDigest := "sha256:" + hex.EncodeToString(sum[:])
+			assetObjectKey := "native/apt/sha256/" + strings.TrimPrefix(assetDigest, "sha256:")
+			if putErr := objects.Put(ctx, assetObjectKey, assetBody); putErr != nil {
+				t.Fatal(putErr)
+			}
+			assets = append(assets, repository.APTSnapshotAsset{
+				SnapshotID: id, RepositoryID: repo.ID, Path: path,
+				Digest: assetDigest, ObjectKey: assetObjectKey, Size: int64(len(assetBody)), ContentType: "text/plain",
+			})
+		}
+		assets = append(assets, repository.APTSnapshotAsset{
+			SnapshotID: id, RepositoryID: repo.ID, Path: "pool/main/w/widget/widget_1.0-1_amd64.deb",
+			Digest: revision.Digest, ObjectKey: revision.ObjectKey, Size: revision.Size, ContentType: "application/vnd.debian.binary-package",
+		})
+		snapshot.State = repository.APTRepositorySnapshotVisible
+		for _, asset := range assets {
+			if asset.Path == "dists/stable/Release" {
+				snapshot.ReleaseDigest = asset.Digest
+			}
+			if asset.Path == "dists/stable/InRelease" {
+				snapshot.InReleaseDigest = asset.Digest
+			}
+		}
+		snapshot.SignerIdentity = "fixture"
+		snapshot.KeyFingerprint = strings.Repeat("a", 40)
+		snapshot.SignatureAlgorithm = "fixture"
+		if _, publishErr := store.PublishAPTRepositorySnapshotWithAudit(ctx, snapshot, assets, releaseBody, repository.AuditRecord{Actor: "test", Operation: "apt.repository_snapshot.publish"}); publishErr != nil {
+			t.Fatal(publishErr)
+		}
+	}
+	publish("apt-snapshot-one", 1, "first", true)
+	publish("apt-snapshot-two", 2, "second", false)
+
+	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	request := func(method string, headers http.Header) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/apt/"+repo.Name+"/dists/stable/InRelease", nil)
+		if headers != nil {
+			req.Header = headers.Clone()
+		}
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	old := request(http.MethodGet, nil)
+	if old.Code != http.StatusOK || old.Body.String() != "first:InRelease" {
+		t.Fatalf("building snapshot leaked: status=%d body=%q", old.Code, old.Body.String())
+	}
+	if err = store.FailAPTRepositorySnapshot(ctx, "apt-snapshot-two"); err != nil {
+		t.Fatal(err)
+	}
+	publish("apt-snapshot-three", 3, "third", true)
+	current := request(http.MethodGet, http.Header{"Range": []string{"bytes=0-4"}})
+	if current.Code != http.StatusPartialContent || current.Body.String() != "third" {
+		t.Fatalf("visible range status=%d body=%q headers=%v", current.Code, current.Body.String(), current.Header())
+	}
+	head := request(http.MethodHead, nil)
+	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("ETag") == "" {
+		t.Fatalf("visible HEAD status=%d body=%q headers=%v", head.Code, head.Body.String(), head.Header())
+	}
+}
 
 func TestAPTArtifactSearchReturnsEmptyAndCachedAssetPages(t *testing.T) {
 	store := repository.NewMemoryStore()

@@ -290,7 +290,6 @@ func TestMemoryLifecycleJobLeaseTokenFencesExpiredWorkerAndProgressRenewsLease(t
 	if err != nil || !progressed.LeaseExpiresAt.After(firstLeaseExpiry) {
 		t.Fatalf("progressed=%#v err=%v", progressed, err)
 	}
-	time.Sleep(time.Millisecond)
 	if err = store.RenewLifecycleJobLease(ctx, first[0].ID, first[0].LeaseToken); err != nil {
 		t.Fatal(err)
 	}
