@@ -2,8 +2,9 @@
 
 ## Status and priority
 
-NuGet is the next new ecosystem planned after the already-prioritized APT
-Hosted work. It is valuable because it is the Microsoft-supported package
+NuGet is a deferred ecosystem candidate and is no longer a first-priority
+roadmap item. Cargo is evaluated ahead of it after APT H3. NuGet remains
+valuable because it is the Microsoft-supported package
 mechanism for .NET, Visual Studio, and `dotnet` clients, and because its V3
 service index gives a stable discovery boundary for private repositories.
 
@@ -89,8 +90,7 @@ the format catalog advertise NuGet as a supported repository type.
 
 ## Delivery order
 
-APT Hosted remains the active format-completion priority because its H1 domain
-model is already farther along. NuGet proceeds N1 through N4 without widening
-the public format enum early. This keeps the implementation stream productive
-while preserving the rule that capability discovery describes only executable
-behavior.
+APT Hosted remains the active format-completion priority and Cargo is the next
+candidate. NuGet N1 through N4 are retained as a technically reviewed backlog,
+but no publication work is scheduled. The existing parser stays covered while
+capability discovery continues to describe only executable behavior.

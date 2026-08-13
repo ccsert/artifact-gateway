@@ -76,13 +76,17 @@ goal. It intentionally excludes frontend work.
 1. Begin APT H3 without widening the public format profile: define production
    signer/key custody, rotation overlap, backup/restore verification, metrics,
    alerts, and an operator-visible signing state.
-2. Continue NuGet N1 from the implemented bounded `.nupkg`/`.nuspec` identity
-   parser into idempotent publication persistence, cross-checking normalized
-   versions against official `NuGet.Versioning` vectors.
+2. Start Cargo C0 after the APT H3 production-signing gate: freeze a bounded
+   `.crate` byte/identity contract and canonical sparse-index rules before
+   adding the format enum. Cargo is the next candidate ecosystem; see
+   [Cargo repository research](cargo-repository-research.md).
 3. Add the optional scanner workload to the Kubernetes overlay only when its
    network policy, persistent SBOM storage, resource limits, and real scan
    smoke test are part of the same slice. Keep the local APT reference signer
    confined to its loopback sidecar and dedicated key volume until H3 replaces
    it with production key custody.
-4. Run the release gates and retain their output in the release record before
+4. Keep NuGet deferred. Preserve and test the existing bounded parser, but do
+   not begin publication persistence until Cargo C0-C1 or customer demand
+   changes the priority.
+5. Run the release gates and retain their output in the release record before
    any public capability expansion.

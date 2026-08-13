@@ -90,10 +90,12 @@ minimum Hosted and production-signing gates are complete. See the
 [APT Hosted Roadmap](apt-hosted-roadmap.md) for the ordered contract and
 acceptance criteria.
 
-## Subsequent Planned Format: NuGet
+## Subsequent Planned Format: Cargo
 
-After the APT Hosted milestones, NuGet is the next new ecosystem. The first
-byte-contract slice validates `.nupkg` archives and derives a normalized,
-case-insensitive identity from the embedded `.nuspec`, but does not admit a
-public format prematurely. See the [NuGet Repository Roadmap](nuget-roadmap.md)
-for publication, V3 restore, Proxy/Group, and lifecycle acceptance gates.
+After the APT H3 production-signing milestone, Cargo is the next candidate
+ecosystem. Its first slice validates bounded `.crate` archives and freezes the
+canonical sparse-index identity/checksum contract without admitting a public
+format prematurely. See [Cargo repository research](cargo-repository-research.md)
+for Hosted, Proxy, immutable Group ownership, lifecycle, and acceptance gates.
+NuGet's existing bounded parser remains maintained but its repository roadmap
+is deferred rather than a first-priority delivery stream.
