@@ -5,6 +5,9 @@ metadata:
 spec:
   template:
     spec:
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: migrate
           image: postgres:16-alpine
@@ -43,8 +46,61 @@ spec:
             - name: migrations
               mountPath: /migrations
               readOnly: true
+      containers:
+        - name: gateway
+        - name: reference-apt-signer
+          image: artifact-gateway-apt-signer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REFERENCE_APT_SIGNER_LISTEN_ADDRESS
+              value: 127.0.0.1:18083
+            - name: REFERENCE_APT_SIGNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: artifact-gateway-secrets
+                  key: GATEWAY_APT_SIGNER_TOKEN
+            - name: REFERENCE_APT_SIGNER_KEY_FILE
+              value: /var/lib/reference-apt-signer/apt-release-private.gpg
+            - name: REFERENCE_APT_SIGNER_RSA_BITS
+              value: "4096"
+          startupProbe:
+            exec:
+              command: ["/usr/local/bin/reference-apt-signer-healthcheck"]
+            failureThreshold: 60
+            periodSeconds: 2
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/reference-apt-signer-healthcheck"]
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/reference-apt-signer-healthcheck"]
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: apt-signer-key
+              mountPath: /var/lib/reference-apt-signer
       volumes:
         - name: migrations
           configMap:
             name: artifact-gateway-migrations
             defaultMode: 0555
+        - name: apt-signer-key
+          persistentVolumeClaim:
+            claimName: artifact-gateway-apt-signer-key

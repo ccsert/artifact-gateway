@@ -6,6 +6,7 @@ namespace=artifact-gateway-local
 overlay="$root/deploy/kubernetes/overlays/local"
 gateway_image=artifact-gateway:k8s-local
 console_image=artifact-gateway-console:k8s-local
+apt_signer_image=artifact-gateway-apt-signer:k8s-local
 console_port=18081
 console_url="http://127.0.0.1:${console_port}"
 ingress_port=80
@@ -19,6 +20,7 @@ rustfs_rpc_secret=${K8S_LOCAL_RUSTFS_RPC_SECRET:-}
 admin_token=${K8S_LOCAL_ADMIN_TOKEN:-}
 resolver_token=${K8S_LOCAL_RESOLVER_TOKEN:-}
 settings_key=${K8S_LOCAL_SETTINGS_ENCRYPTION_KEY:-}
+apt_signer_token=${K8S_LOCAL_APT_SIGNER_TOKEN:-}
 
 effective_secret_value() {
   local configured_value=$1 key=$2 local_default=$3 encoded
@@ -66,7 +68,7 @@ require_local_context() {
 }
 
 validate_settings() {
-  local configured_postgres_password configured_settings_key configured_rustfs_secret_key configured_rustfs_rpc_secret
+  local configured_postgres_password configured_settings_key configured_rustfs_secret_key configured_rustfs_rpc_secret configured_apt_signer_token
   configured_postgres_password=$(effective_secret_value \
     "$postgres_password" POSTGRES_PASSWORD local-postgres-password)
   configured_settings_key=$(effective_secret_value \
@@ -75,6 +77,8 @@ validate_settings() {
     "$rustfs_secret_key" RUSTFS_SECRET_KEY local-rustfs-password)
   configured_rustfs_rpc_secret=$(effective_secret_value \
     "$rustfs_rpc_secret" RUSTFS_RPC_SECRET local-rustfs-rpc-secret-0123456789)
+  configured_apt_signer_token=$(effective_secret_value \
+    "$apt_signer_token" GATEWAY_APT_SIGNER_TOKEN local-reference-apt-signer-token-0001)
   if [[ ! "$configured_postgres_password" =~ ^[A-Za-z0-9._~-]+$ ]]; then
     printf 'K8S_LOCAL_POSTGRES_PASSWORD must contain only URL-safe unreserved characters\n' >&2
     exit 1
@@ -93,6 +97,10 @@ validate_settings() {
   fi
   if [[ "$configured_rustfs_secret_key" == "$configured_rustfs_rpc_secret" ]]; then
     printf 'K8S_LOCAL_RUSTFS_RPC_SECRET must differ from K8S_LOCAL_RUSTFS_SECRET_KEY\n' >&2
+    exit 1
+  fi
+  if [[ ${#configured_apt_signer_token} -lt 32 || ${#configured_apt_signer_token} -gt 256 ]]; then
+    printf 'K8S_LOCAL_APT_SIGNER_TOKEN must be between 32 and 256 characters\n' >&2
     exit 1
   fi
 }
@@ -133,11 +141,12 @@ build_images() {
   fi
   docker build -t "$gateway_image" "$root"
   docker build -f "$root/Dockerfile.console" -t "$console_image" "$root"
+  docker build -f "$root/Dockerfile.apt-signer" -t "$apt_signer_image" "$root"
 }
 
 apply_runtime_inputs() {
   local configured_postgres_password configured_rustfs_access_key configured_rustfs_secret_key configured_rustfs_rpc_secret
-  local configured_admin_token configured_resolver_token configured_settings_key
+  local configured_admin_token configured_resolver_token configured_settings_key configured_apt_signer_token
   configured_postgres_password=$(effective_secret_value \
     "$postgres_password" POSTGRES_PASSWORD local-postgres-password)
   configured_rustfs_access_key=$(effective_secret_value \
@@ -151,6 +160,8 @@ apply_runtime_inputs() {
     "$resolver_token" GATEWAY_RESOLVER_TOKEN local-gateway-resolver-token)
   configured_settings_key=$(effective_secret_value \
     "$settings_key" GATEWAY_SETTINGS_ENCRYPTION_KEY 0123456789abcdef0123456789abcdef)
+  configured_apt_signer_token=$(effective_secret_value \
+    "$apt_signer_token" GATEWAY_APT_SIGNER_TOKEN local-reference-apt-signer-token-0001)
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n "$namespace" create secret generic artifact-gateway-secrets \
     --from-literal=POSTGRES_PASSWORD="$configured_postgres_password" \
@@ -163,6 +174,7 @@ apply_runtime_inputs() {
     --from-literal=GATEWAY_ADMIN_TOKEN="$configured_admin_token" \
     --from-literal=GATEWAY_RESOLVER_TOKEN="$configured_resolver_token" \
     --from-literal=GATEWAY_SETTINGS_ENCRYPTION_KEY="$configured_settings_key" \
+    --from-literal=GATEWAY_APT_SIGNER_TOKEN="$configured_apt_signer_token" \
     --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n "$namespace" create configmap artifact-gateway-migrations \
     --from-file="$root/migrations" \

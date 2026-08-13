@@ -54,7 +54,7 @@ jobs:
         run: make native-pypi-e2e
       - name: Run Go Module Proxy E2E
         run: make native-go-e2e
-      - name: Run APT Proxy E2E
+      - name: Run APT Proxy and Hosted E2E
         run: make native-apt-e2e
       - name: Run Conan E2E
         run: make conan-e2e

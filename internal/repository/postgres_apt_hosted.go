@@ -459,16 +459,34 @@ func (s *PostgresStore) CreateAPTRepositorySnapshot(ctx context.Context, snapsho
 	if !snapshot.CreatedAt.IsZero() {
 		snapshotCreatedAt = snapshot.CreatedAt
 	}
-	err = scanAPTRepositorySnapshot(tx.QueryRowContext(ctx, `INSERT INTO native_apt_repository_snapshots
+	result, err := tx.ExecContext(ctx, `INSERT INTO native_apt_repository_snapshots
 		(id,repository_id,suite,sequence,state,release_digest,inrelease_digest,signer_identity,key_fingerprint,signature_algorithm,created_at,published_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,clock_timestamp()),NULL)
-		RETURNING `+aptRepositorySnapshotColumns, snapshot.ID, snapshot.RepositoryID, snapshot.Suite, snapshot.Sequence,
-		snapshot.State, snapshot.ReleaseDigest, snapshot.InReleaseDigest, snapshot.SignerIdentity, snapshot.KeyFingerprint, snapshot.SignatureAlgorithm, snapshotCreatedAt), &snapshot)
-	if isUnique(err) {
-		return APTRepositorySnapshot{}, ErrNameExists
-	}
+		ON CONFLICT DO NOTHING`, snapshot.ID, snapshot.RepositoryID, snapshot.Suite, snapshot.Sequence,
+		snapshot.State, snapshot.ReleaseDigest, snapshot.InReleaseDigest, snapshot.SignerIdentity, snapshot.KeyFingerprint, snapshot.SignatureAlgorithm, snapshotCreatedAt)
 	if err != nil {
 		return APTRepositorySnapshot{}, err
+	}
+	created, _ := result.RowsAffected()
+	if created == 0 {
+		var existing APTRepositorySnapshot
+		if err = scanAPTRepositorySnapshot(tx.QueryRowContext(ctx, `SELECT `+aptRepositorySnapshotColumns+` FROM native_apt_repository_snapshots WHERE id=$1 FOR UPDATE`, snapshot.ID), &existing); errors.Is(err, sql.ErrNoRows) {
+			return APTRepositorySnapshot{}, ErrNameExists
+		} else if err != nil {
+			return APTRepositorySnapshot{}, err
+		}
+		storedItems, listErr := listAPTSnapshotMembership(ctx, tx, snapshot.ID)
+		if listErr != nil {
+			return APTRepositorySnapshot{}, listErr
+		}
+		if existing.RepositoryID != snapshot.RepositoryID || existing.Suite != snapshot.Suite || existing.Sequence != snapshot.Sequence ||
+			!sameAPTSnapshotMembership(storedItems, items) {
+			return APTRepositorySnapshot{}, ErrIdempotencyConflict
+		}
+		if err = tx.Commit(); err != nil {
+			return APTRepositorySnapshot{}, err
+		}
+		return existing, nil
 	}
 	for _, item := range items {
 		result, insertErr := tx.ExecContext(ctx, `INSERT INTO native_apt_snapshot_packages (snapshot_id,publication_session_id,package_revision_id,component,architecture)
@@ -491,7 +509,44 @@ func (s *PostgresStore) CreateAPTRepositorySnapshot(ctx context.Context, snapsho
 	if err = tx.Commit(); err != nil {
 		return APTRepositorySnapshot{}, err
 	}
+	if err = scanAPTRepositorySnapshot(s.db.QueryRowContext(ctx, `SELECT `+aptRepositorySnapshotColumns+` FROM native_apt_repository_snapshots WHERE id=$1`, snapshot.ID), &snapshot); err != nil {
+		return APTRepositorySnapshot{}, err
+	}
 	return snapshot, nil
+}
+
+func (s *PostgresStore) GetAPTRepositorySnapshot(ctx context.Context, snapshotID string) (APTRepositorySnapshot, []APTSnapshotPackage, error) {
+	var snapshot APTRepositorySnapshot
+	if err := scanAPTRepositorySnapshot(s.db.QueryRowContext(ctx, `SELECT `+aptRepositorySnapshotColumns+` FROM native_apt_repository_snapshots WHERE id::text=$1`, snapshotID), &snapshot); errors.Is(err, sql.ErrNoRows) {
+		return APTRepositorySnapshot{}, nil, ErrNotFound
+	} else if err != nil {
+		return APTRepositorySnapshot{}, nil, err
+	}
+	items, err := listAPTSnapshotMembership(ctx, s.db, snapshotID)
+	if err != nil {
+		return APTRepositorySnapshot{}, nil, err
+	}
+	return snapshot, items, nil
+}
+
+func listAPTSnapshotMembership(ctx context.Context, queryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, snapshotID string) ([]APTSnapshotPackage, error) {
+	rows, err := queryer.QueryContext(ctx, `SELECT snapshot_id::text,publication_session_id::text,package_revision_id::text,component,architecture
+		FROM native_apt_snapshot_packages WHERE snapshot_id=$1`, snapshotID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]APTSnapshotPackage, 0)
+	for rows.Next() {
+		var item APTSnapshotPackage
+		if err = rows.Scan(&item.SnapshotID, &item.PublicationSessionID, &item.PackageRevisionID, &item.Component, &item.Architecture); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (s *PostgresStore) CreateAPTSnapshotObjectIntents(ctx context.Context, snapshotID string, intents []APTSnapshotObjectIntent) error {
@@ -565,6 +620,49 @@ func (s *PostgresStore) PublishAPTRepositorySnapshotWithAudit(ctx context.Contex
 	}
 	if err == nil && visibleSequence >= snapshot.Sequence {
 		return APTRepositorySnapshot{}, ErrVersionConflict
+	}
+	var quota int64
+	if err = tx.QueryRowContext(ctx, `SELECT quota_bytes FROM repository_capacity_quotas WHERE repository_id=$1 FOR UPDATE`, snapshot.RepositoryID).Scan(&quota); errors.Is(err, sql.ErrNoRows) {
+		quota = 0
+	} else if err != nil {
+		return APTRepositorySnapshot{}, err
+	}
+	if quota > 0 {
+		var baseBytes int64
+		if err = tx.QueryRowContext(ctx, `SELECT
+			COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id=$1),0)+
+			COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id=$1),0)`, snapshot.RepositoryID).Scan(&baseBytes); err != nil {
+			return APTRepositorySnapshot{}, err
+		}
+		generated := aptSnapshotGeneratedObjects(assets)
+		rows, queryErr := tx.QueryContext(ctx, `SELECT a.object_key,MAX(a.size)::bigint
+			FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id
+			WHERE s.repository_id=$1 AND s.state='visible' AND s.suite<>$2 AND a.path LIKE 'dists/%'
+			GROUP BY a.object_key`, snapshot.RepositoryID, snapshot.Suite)
+		if queryErr != nil {
+			return APTRepositorySnapshot{}, queryErr
+		}
+		for rows.Next() {
+			var objectKey string
+			var size int64
+			if err = rows.Scan(&objectKey, &size); err != nil {
+				_ = rows.Close()
+				return APTRepositorySnapshot{}, err
+			}
+			generated[objectKey] = size
+		}
+		if err = rows.Err(); err != nil {
+			_ = rows.Close()
+			return APTRepositorySnapshot{}, err
+		}
+		_ = rows.Close()
+		var generatedBytes int64
+		for _, size := range generated {
+			generatedBytes += size
+		}
+		if baseBytes+generatedBytes > quota {
+			return APTRepositorySnapshot{}, ErrQuotaExceeded
+		}
 	}
 	expectedPool := make(map[string]APTSnapshotAsset)
 	packageRows, queryErr := tx.QueryContext(ctx, `SELECT sp.component,p.package_name,p.object_name,p.digest,p.object_key,p.size
@@ -676,14 +774,38 @@ func (s *PostgresStore) ExpireAPTRepositorySnapshots(ctx context.Context, before
 	if limit <= 0 {
 		limit = 100
 	}
-	_, err := s.db.ExecContext(ctx, `WITH expired AS (
-		SELECT s.id FROM native_apt_repository_snapshots s
-		WHERE s.state='building'
-		  AND EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i WHERE i.snapshot_id=s.id)
-		  AND NOT EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i WHERE i.snapshot_id=s.id AND i.created_at>$1)
-		ORDER BY s.id LIMIT $2 FOR UPDATE OF s SKIP LOCKED
-	) UPDATE native_apt_repository_snapshots s SET state='failed' FROM expired e WHERE s.id=e.id`, before, limit)
-	return err
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text FROM native_apt_repository_snapshots
+		WHERE state='building' AND created_at<$1 ORDER BY id LIMIT $2`, before, limit)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	_ = rows.Close()
+	for _, id := range ids {
+		release, lockErr := s.LockAPTObject(ctx, "snapshot-lock/"+id)
+		if lockErr != nil {
+			return lockErr
+		}
+		_, updateErr := s.db.ExecContext(ctx, `UPDATE native_apt_repository_snapshots SET state='failed'
+			WHERE id::text=$1 AND state='building' AND created_at<$2`, id, before)
+		release()
+		if updateErr != nil {
+			return updateErr
+		}
+	}
+	return nil
 }
 
 func (s *PostgresStore) ListUnscheduledAPTSnapshotObjects(ctx context.Context, limit int) ([]APTSnapshotObjectIntent, error) {

@@ -95,3 +95,40 @@ repositories_repositoryId_apt_publication_sessions_sessionId_package:
         "$ref": "../components/responses.yaml#/Problem"
       '500':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_apt_snapshots:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: publishAPTRepositorySnapshot
+    description: Builds, signs, and atomically publishes one immutable APT suite snapshot from staged package revisions. Exact retries return the same snapshot and never expose a partial repository view.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/PublishAPTRepositorySnapshot"
+    responses:
+      '201':
+        description: Signed snapshot published or exactly replayed
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTRepositorySnapshot"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -37,6 +38,7 @@ type Dependencies struct {
 	NativePyPIObjectStore         OCIObjectStore
 	NativeGoObjectStore           OCIObjectStore
 	NativeAPTObjectStore          OCIObjectStore
+	APTSigner                     aptpublication.Signer
 	NPMMetadataTTL                time.Duration
 	NPMNegativeTTL                time.Duration
 	NPMBreakerTTL                 time.Duration

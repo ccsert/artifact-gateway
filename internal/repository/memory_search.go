@@ -174,6 +174,16 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 			createdAt, size := asset.CreatedAt, asset.Size
 			items = append(items, ArtifactSearchItem{Coordinate: asset.Path, Digest: asset.Digest, CreatedAt: &createdAt, Size: &size, ContentType: asset.ContentType})
 		}
+		for snapshotID, assets := range s.aptSnapshotAssets {
+			snapshot := s.aptSnapshots[snapshotID]
+			if snapshot.RepositoryID != repositoryID || snapshot.State != APTRepositorySnapshotVisible {
+				continue
+			}
+			for _, asset := range assets {
+				createdAt, size := snapshot.CreatedAt, asset.Size
+				items = append(items, ArtifactSearchItem{Coordinate: asset.Path, Digest: asset.Digest, CreatedAt: &createdAt, Size: &size, ContentType: asset.ContentType})
+			}
+		}
 	}
 	return items
 }

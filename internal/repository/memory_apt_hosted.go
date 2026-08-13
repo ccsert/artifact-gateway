@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -412,8 +413,12 @@ func (s *MemoryStore) CreateAPTRepositorySnapshot(_ context.Context, snapshot AP
 	if err := validateAPTSnapshotMembership(items); err != nil {
 		return APTRepositorySnapshot{}, err
 	}
-	if _, exists := s.aptSnapshots[snapshot.ID]; exists {
-		return APTRepositorySnapshot{}, ErrNameExists
+	if existing, exists := s.aptSnapshots[snapshot.ID]; exists {
+		if existing.RepositoryID != snapshot.RepositoryID || existing.Suite != snapshot.Suite || existing.Sequence != snapshot.Sequence ||
+			!sameAPTSnapshotMembership(s.aptSnapshotPackages[snapshot.ID], items) {
+			return APTRepositorySnapshot{}, ErrIdempotencyConflict
+		}
+		return existing, nil
 	}
 	for _, existing := range s.aptSnapshots {
 		if existing.RepositoryID == snapshot.RepositoryID && existing.Suite == snapshot.Suite && existing.Sequence == snapshot.Sequence {
@@ -438,6 +443,31 @@ func (s *MemoryStore) CreateAPTRepositorySnapshot(_ context.Context, snapshot AP
 	s.aptSnapshots[snapshot.ID] = snapshot
 	s.aptSnapshotPackages[snapshot.ID] = storedItems
 	return snapshot, nil
+}
+
+func (s *MemoryStore) GetAPTRepositorySnapshot(_ context.Context, snapshotID string) (APTRepositorySnapshot, []APTSnapshotPackage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	snapshot, ok := s.aptSnapshots[snapshotID]
+	if !ok {
+		return APTRepositorySnapshot{}, nil, ErrNotFound
+	}
+	return snapshot, append([]APTSnapshotPackage(nil), s.aptSnapshotPackages[snapshotID]...), nil
+}
+
+func sameAPTSnapshotMembership(left, right []APTSnapshotPackage) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	keys := func(items []APTSnapshotPackage) []string {
+		result := make([]string, 0, len(items))
+		for _, item := range items {
+			result = append(result, strings.Join([]string{item.PublicationSessionID, item.PackageRevisionID, item.Component, item.Architecture}, "\x00"))
+		}
+		sort.Strings(result)
+		return result
+	}
+	return slices.Equal(keys(left), keys(right))
 }
 
 func validateAPTSnapshotMembership(items []APTSnapshotPackage) error {
@@ -667,6 +697,25 @@ func assetDigestAtPath(assets []APTSnapshotAsset, path string) string {
 	return ""
 }
 
+func aptSnapshotGeneratedCapacity(assets []APTSnapshotAsset) (int64, int64) {
+	objects := aptSnapshotGeneratedObjects(assets)
+	var bytes int64
+	for _, size := range objects {
+		bytes += size
+	}
+	return bytes, int64(len(objects))
+}
+
+func aptSnapshotGeneratedObjects(assets []APTSnapshotAsset) map[string]int64 {
+	objects := make(map[string]int64)
+	for _, asset := range assets {
+		if strings.HasPrefix(asset.Path, "dists/") {
+			objects[asset.ObjectKey] = asset.Size
+		}
+	}
+	return objects
+}
+
 func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -678,6 +727,26 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 		existing.Sequence != snapshot.Sequence || !validAPTSnapshotPublication(snapshot, assets, release) ||
 		!s.validAPTSnapshotPoolAssetsLocked(snapshot, assets) {
 		return APTRepositorySnapshot{}, ErrDisabled
+	}
+	baseBytes, _ := s.aptBaseCapacityLocked(snapshot.RepositoryID)
+	if quota := s.capacityQuotas[snapshot.RepositoryID]; quota > 0 {
+		generated := aptSnapshotGeneratedObjects(assets)
+		for snapshotID, visibleAssets := range s.aptSnapshotAssets {
+			visible := s.aptSnapshots[snapshotID]
+			if visible.RepositoryID != snapshot.RepositoryID || visible.State != APTRepositorySnapshotVisible || visible.Suite == snapshot.Suite {
+				continue
+			}
+			for objectKey, size := range aptSnapshotGeneratedObjects(visibleAssets) {
+				generated[objectKey] = size
+			}
+		}
+		var generatedBytes int64
+		for _, size := range generated {
+			generatedBytes += size
+		}
+		if baseBytes+generatedBytes > quota {
+			return APTRepositorySnapshot{}, ErrQuotaExceeded
+		}
 	}
 	for existingSnapshotID, existingAssets := range s.aptSnapshotAssets {
 		if s.aptSnapshots[existingSnapshotID].RepositoryID != snapshot.RepositoryID {
@@ -758,40 +827,35 @@ func (s *MemoryStore) FailAPTRepositorySnapshot(_ context.Context, snapshotID st
 	return nil
 }
 
-func (s *MemoryStore) ExpireAPTRepositorySnapshots(_ context.Context, before time.Time, limit int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *MemoryStore) ExpireAPTRepositorySnapshots(ctx context.Context, before time.Time, limit int) error {
 	if limit <= 0 {
 		limit = 100
 	}
+	s.mu.RLock()
 	ids := make([]string, 0)
 	for id, snapshot := range s.aptSnapshots {
-		if snapshot.State != APTRepositorySnapshotBuilding {
-			continue
-		}
-		intents := s.aptSnapshotObjects[id]
-		if len(intents) == 0 {
-			continue
-		}
-		expired := true
-		for _, intent := range intents {
-			if intent.CreatedAt.IsZero() || intent.CreatedAt.After(before) {
-				expired = false
-				break
-			}
-		}
-		if expired {
+		if snapshot.State == APTRepositorySnapshotBuilding && snapshot.CreatedAt.Before(before) {
 			ids = append(ids, id)
 		}
 	}
+	s.mu.RUnlock()
 	sort.Strings(ids)
 	if len(ids) > limit {
 		ids = ids[:limit]
 	}
 	for _, id := range ids {
+		release, err := s.LockAPTObject(ctx, "snapshot-lock/"+id)
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
 		snapshot := s.aptSnapshots[id]
-		snapshot.State = APTRepositorySnapshotFailed
-		s.aptSnapshots[id] = snapshot
+		if snapshot.State == APTRepositorySnapshotBuilding && snapshot.CreatedAt.Before(before) {
+			snapshot.State = APTRepositorySnapshotFailed
+			s.aptSnapshots[id] = snapshot
+		}
+		s.mu.Unlock()
+		release()
 	}
 	return nil
 }

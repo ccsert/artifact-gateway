@@ -71,6 +71,9 @@ type Config struct {
 	ScannerMaxResponseBytes    int64
 	ScannerMaxArtifactBytes    int64
 	ScannerFormats             []string
+	APTSignerEndpoint          string
+	APTSignerToken             string
+	APTSignerTimeout           time.Duration
 	RuntimeNodeRetention       time.Duration
 	RuntimeNodePruneInterval   time.Duration
 	DatabaseURL                string
@@ -132,6 +135,9 @@ func Load() (Config, error) {
 		ScannerDatabaseMaxAge:      24 * time.Hour,
 		ScannerMaxResponseBytes:    512 << 10,
 		ScannerMaxArtifactBytes:    20 << 30,
+		APTSignerEndpoint:          strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_ENDPOINT")),
+		APTSignerToken:             os.Getenv("GATEWAY_APT_SIGNER_TOKEN"),
+		APTSignerTimeout:           15 * time.Second,
 		RuntimeNodeRetention:       7 * 24 * time.Hour,
 		RuntimeNodePruneInterval:   time.Hour,
 		DatabaseURL:                os.Getenv("GATEWAY_DATABASE_URL"),
@@ -194,6 +200,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("GATEWAY_S3_ENDPOINT is not a valid URL")
 	}
 	if err := configureScanner(&cfg); err != nil {
+		return Config{}, err
+	}
+	if err := configureAPTSigner(&cfg); err != nil {
 		return Config{}, err
 	}
 	if attempts, err := positiveIntEnv("GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS", cfg.LocalAuthMaxFailedAttempts, false); err != nil {
@@ -454,6 +463,31 @@ func configureScanner(cfg *Config) error {
 	return nil
 }
 
+func configureAPTSigner(cfg *Config) error {
+	requestedWithoutEndpoint := cfg.APTSignerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TIMEOUT")) != ""
+	if cfg.APTSignerEndpoint == "" {
+		if requestedWithoutEndpoint {
+			return fmt.Errorf("GATEWAY_APT_SIGNER_ENDPOINT is required when APT signer settings are configured")
+		}
+		cfg.APTSignerToken = ""
+		return nil
+	}
+	parsed, err := url.ParseRequestURI(cfg.APTSignerEndpoint)
+	if err != nil || parsed.Host == "" || parsed.Path == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !secureOrLoopbackHTTP(parsed) {
+		return fmt.Errorf("GATEWAY_APT_SIGNER_ENDPOINT must be an HTTPS URL without credentials, query, or fragment outside localhost")
+	}
+	if len(cfg.APTSignerToken) < 32 || len(cfg.APTSignerToken) > 256 || strings.ContainsAny(cfg.APTSignerToken, "\x00\r\n") {
+		return fmt.Errorf("GATEWAY_APT_SIGNER_TOKEN must contain between 32 and 256 safe bytes")
+	}
+	if cfg.APTSignerTimeout, err = durationEnv("GATEWAY_APT_SIGNER_TIMEOUT", cfg.APTSignerTimeout); err != nil {
+		return err
+	}
+	if cfg.APTSignerTimeout < time.Second || cfg.APTSignerTimeout > time.Minute {
+		return fmt.Errorf("GATEWAY_APT_SIGNER_TIMEOUT must be between 1s and 1m")
+	}
+	return nil
+}
+
 func oidcScopes(raw string) []string {
 	values := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
 	seen := map[string]bool{"openid": true}
@@ -498,6 +532,10 @@ func (c Config) WorkerKindEnabled(kind string) bool {
 
 func (c Config) ScannerEnabled() bool {
 	return c.ScannerEndpoint != ""
+}
+
+func (c Config) APTSignerEnabled() bool {
+	return c.APTSignerEndpoint != ""
 }
 
 func (c Config) ScannerFormatEnabled(format string) bool {

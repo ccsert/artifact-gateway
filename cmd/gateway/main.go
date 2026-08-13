@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
@@ -62,6 +63,16 @@ func main() {
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
 	dependencies.NativeAPTObjectStore = objectStore
+	if cfg.APTSignerEnabled() {
+		aptSigner, signerErr := aptpublication.NewHTTPSigner(aptpublication.HTTPSignerOptions{
+			Endpoint: cfg.APTSignerEndpoint, Token: cfg.APTSignerToken, Timeout: cfg.APTSignerTimeout,
+		})
+		if signerErr != nil {
+			slog.Error("initialize APT Release signer")
+			os.Exit(1)
+		}
+		dependencies.APTSigner = aptSigner
+	}
 	if cfg.ScannerEnabled() {
 		artifactScanner, scannerErr := scanning.NewHTTPScanner(scanning.HTTPOptions{
 			Name: cfg.ScannerName, Endpoint: cfg.ScannerEndpoint, HealthEndpoint: cfg.ScannerHealthEndpoint, Token: cfg.ScannerToken,
@@ -156,7 +167,7 @@ func main() {
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
-	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge)
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled())
 	runtimeSessionID := uuid.NewString()
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,

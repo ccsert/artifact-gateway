@@ -34,7 +34,7 @@ func TestAPTPublicationRuntimeResponsesConformToOpenAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore(), APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
 	validate := func(req *http.Request) *httptest.ResponseRecorder {
 		t.Helper()
 		route, params, routeErr := router.FindRoute(req)
@@ -91,6 +91,30 @@ func TestAPTPublicationRuntimeResponsesConformToOpenAPI(t *testing.T) {
 	authorize(get, "admin-secret")
 	if response := validate(get); response.Code != http.StatusOK {
 		t.Fatalf("get=%d body=%s", response.Code, response.Body.String())
+	}
+	capacity, err := store.GetRepositoryCapacity(context.Background(), repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryCapacityQuota(context.Background(), repo.ID, capacity.UsedBytes); err != nil {
+		t.Fatal(err)
+	}
+	publishBody := fmt.Sprintf(`{"suite":"stable","sequence":1,"publicationSessionIds":[%q]}`, session.ID)
+	publishSnapshot := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/snapshots", strings.NewReader(publishBody))
+		authorize(request, "admin-secret")
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", "contract-snapshot")
+		return validate(request)
+	}
+	if response := publishSnapshot(); response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), `"code":"quota_exceeded"`) {
+		t.Fatalf("snapshot quota=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err = store.ReplaceRepositoryCapacityQuota(context.Background(), repo.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if response := publishSnapshot(); response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"state":"visible"`) {
+		t.Fatalf("snapshot replay=%d body=%s", response.Code, response.Body.String())
 	}
 
 	wrongMedia := httptest.NewRequest(http.MethodPut, "https://gateway.example.com/api/v2/repositories/"+repo.ID+"/apt/publication-sessions/"+session.ID+"/package", bytes.NewReader(deb))

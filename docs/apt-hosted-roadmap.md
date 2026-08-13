@@ -15,6 +15,8 @@ Artifact Gateway therefore needs one atomic, signed repository-snapshot model
 before it can claim Hosted support. The normative upstream references are the
 [Debian Repository Format](https://wiki.debian.org/DebianRepository/Format)
 and [`apt-secure(8)`](https://manpages.debian.org/unstable/apt/apt-secure.8.en.html).
+The deployable H2 preview and its production boundary are documented in
+[APT Hosted H2 signing](apt-hosted-signing.md).
 
 ## APT-H1: publication contract and domain model
 
@@ -64,7 +66,8 @@ cleanup slice; it does not imply Hosted protocol availability.
 
 ## APT-H2: atomic Hosted repository
 
-Current implementation status: the atomic snapshot core is implemented.
+Current implementation status: H2 is complete as an unadvertised operator
+preview.
 Committed package bytes are reparsed into deterministic `Packages` and gzip
 indices, Release checksums and Acquire-By-Hash objects are generated, the H1
 signer boundary supplies `InRelease` and `Release.gpg`, and PostgreSQL exposes
@@ -74,10 +77,14 @@ injection covers signer failure; PostgreSQL proves audit rollback; and
 PostgreSQL/RustFS cross-instance tests cover successful publication, pool-path
 immutability, failed object writes, and durable reference-checked orphan
 cleanup. Interrupted builds retain object intents and cannot replace the
-previous snapshot. The supported
-management publish operation, deployable H2 signer, capacity/search/Console
-projection, and real Debian container gate remain before H2 is complete; APT
-therefore remains advertised as Proxy/Group-only.
+previous snapshot. The generated management operation publishes an immutable
+session set under an `Idempotency-Key`; transient signing and quota failures
+can resume the exact request. The bundled loopback reference signer keeps its
+private key outside Gateway, current visible package and metadata objects are
+included in capacity/search/Console projection, and the Debian container gate
+performs signed `apt-get update` plus installation before and after the signer
+is stopped. APT remains advertised as Proxy/Group-only because the bundled
+signer is an H2 acceptance fixture, not a production key-custody system.
 
 - Generate `Packages` plus supported compressed variants from committed package
   records, including `Filename`, `Size`, and SHA-256 fields that match the stored
@@ -98,7 +105,9 @@ therefore remains advertised as Proxy/Group-only.
 
 Acceptance gate: an authenticated publication becomes installable only after
 the signed snapshot is committed; injected failures at every publication stage
-leave the previous snapshot completely readable.
+leave the previous snapshot completely readable. This gate is complete through
+unit failure injection, PostgreSQL/RustFS integration, generated contract
+validation, and the real Debian client fixture.
 
 ## APT-H3: production signing, key rotation, and operations
 
@@ -140,9 +149,9 @@ tests without partial visibility.
 
 ## Delivery order
 
-Work proceeds H1 through H4. H1 and H2 establish the minimum truthful Hosted
-capability; H3 is required before any production claim; H4 closes parity with
+Work proceeds H1 through H4. H1 and H2 now establish the minimum truthful
+Hosted preview capability; H3 is required before any production claim; H4 closes parity with
 the existing lifecycle and security model. APT appears as `proxy`-only in the
 format capability API and Console until H1-H3 have all passed their gates; the
-explicit H1 Hosted provisioning request is an operator preview surface, not a
+explicit Hosted provisioning and snapshot publication surface is an operator preview, not a
 protocol compatibility claim.

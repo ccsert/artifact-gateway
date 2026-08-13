@@ -44,6 +44,14 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_apt_package_revisions GROUP BY repository_id
+	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint FROM (
+		SELECT s.repository_id,a.object_key,MAX(a.size)::bigint AS size
+		FROM native_apt_repository_snapshots s
+		JOIN native_apt_snapshot_assets a ON a.snapshot_id=s.id
+		WHERE s.state='visible' AND a.path LIKE 'dists/%'
+		GROUP BY s.repository_id,a.object_key
+	) apt_snapshot_objects GROUP BY repository_id
 ), totals AS (
 	SELECT repository_id,SUM(used_bytes)::bigint AS used_bytes,SUM(object_count)::bigint AS object_count
 	FROM usage GROUP BY repository_id
@@ -80,7 +88,13 @@ func (s *PostgresStore) GetRepositoryCapacity(ctx context.Context, id string) (R
 		FormatNPM:   `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_npm_versions WHERE repository_id::text=$1 AND object_key<>''`,
 		FormatPyPI:  `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_pypi_files WHERE repository_id::text=$1 AND object_key<>'' AND state='visible'`,
 		FormatGo:    `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_go_assets WHERE repository_id::text=$1`,
-		FormatAPT:   `SELECT COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id::text=$1),0)+COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id::text=$1),0), (SELECT COUNT(*) FROM native_apt_assets WHERE repository_id::text=$1)+(SELECT COUNT(*) FROM native_apt_package_revisions WHERE repository_id::text=$1)`,
+		FormatAPT: `SELECT
+			COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id::text=$1),0)+
+			COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id::text=$1),0)+
+			COALESCE((SELECT SUM(size) FROM (SELECT MAX(a.size)::bigint AS size FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.repository_id::text=$1 AND s.state='visible' AND a.path LIKE 'dists/%' GROUP BY a.object_key) generated),0),
+			(SELECT COUNT(*) FROM native_apt_assets WHERE repository_id::text=$1)+
+			(SELECT COUNT(*) FROM native_apt_package_revisions WHERE repository_id::text=$1)+
+			(SELECT COUNT(*) FROM (SELECT a.object_key FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.repository_id::text=$1 AND s.state='visible' AND a.path LIKE 'dists/%' GROUP BY a.object_key) generated)`,
 	}[capacity.Format]
 	if err = s.db.QueryRowContext(ctx, query, id).Scan(&capacity.UsedBytes, &capacity.ObjectCount); err != nil {
 		return RepositoryCapacity{}, err

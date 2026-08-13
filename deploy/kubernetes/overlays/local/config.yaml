@@ -13,4 +13,6 @@ data:
   GATEWAY_DATABASE_ARTIFACT_LOCK_MAX_IDLE_CONNS: "1"
   GATEWAY_S3_ENDPOINT: http://rustfs:9000
   GATEWAY_S3_BUCKET: gateway-cache
+  GATEWAY_APT_SIGNER_ENDPOINT: http://127.0.0.1:18083/v1/sign-release
+  GATEWAY_APT_SIGNER_TIMEOUT: 15s
   NO_PROXY: postgres,rustfs,artifact-gateway,artifact-gateway-console,127.0.0.1,localhost

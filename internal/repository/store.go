@@ -411,6 +411,7 @@ type NativeAPTPublicationStore interface {
 	MarkAPTPublicationObjectCollected(context.Context, string, string) error
 	APTObjectHasPackageReference(context.Context, string) (bool, error)
 	CreateAPTRepositorySnapshot(context.Context, APTRepositorySnapshot, []APTSnapshotPackage) (APTRepositorySnapshot, error)
+	GetAPTRepositorySnapshot(context.Context, string) (APTRepositorySnapshot, []APTSnapshotPackage, error)
 	CreateAPTSnapshotObjectIntents(context.Context, string, []APTSnapshotObjectIntent) error
 	PublishAPTRepositorySnapshotWithAudit(context.Context, APTRepositorySnapshot, []APTSnapshotAsset, []byte, AuditRecord) (APTRepositorySnapshot, error)
 	FailAPTRepositorySnapshot(context.Context, string) error

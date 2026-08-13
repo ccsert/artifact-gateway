@@ -64,6 +64,24 @@ func (e APTPublicationSessionState) Valid() bool {
 	}
 }
 
+// Defines values for APTRepositorySnapshotState.
+const (
+	APTRepositorySnapshotStateRetired APTRepositorySnapshotState = "retired"
+	APTRepositorySnapshotStateVisible APTRepositorySnapshotState = "visible"
+)
+
+// Valid indicates whether the value is a known member of the APTRepositorySnapshotState enum.
+func (e APTRepositorySnapshotState) Valid() bool {
+	switch e {
+	case APTRepositorySnapshotStateRetired:
+		return true
+	case APTRepositorySnapshotStateVisible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactState.
 const (
 	ArtifactStateDeleted ArtifactState = "deleted"
@@ -1040,6 +1058,7 @@ const (
 	ProblemCodeRetentionProtected       ProblemCode = "retention_protected"
 	ProblemCodeSecurityPolicyDenied     ProblemCode = "security_policy_denied"
 	ProblemCodeSessionClosed            ProblemCode = "session_closed"
+	ProblemCodeSignerUnavailable        ProblemCode = "signer_unavailable"
 	ProblemCodeUnsupportedMediaType     ProblemCode = "unsupported_media_type"
 	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
 )
@@ -1080,6 +1099,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeSecurityPolicyDenied:
 		return true
 	case ProblemCodeSessionClosed:
+		return true
+	case ProblemCodeSignerUnavailable:
 		return true
 	case ProblemCodeUnsupportedMediaType:
 		return true
@@ -1933,6 +1954,25 @@ type APTPublicationSession struct {
 
 // APTPublicationSessionState defines model for APTPublicationSession.State.
 type APTPublicationSessionState string
+
+// APTRepositorySnapshot defines model for APTRepositorySnapshot.
+type APTRepositorySnapshot struct {
+	CreatedAt          time.Time                  `json:"createdAt"`
+	Id                 openapi_types.UUID         `json:"id"`
+	InReleaseDigest    string                     `json:"inReleaseDigest"`
+	KeyFingerprint     string                     `json:"keyFingerprint"`
+	PublishedAt        time.Time                  `json:"publishedAt"`
+	ReleaseDigest      string                     `json:"releaseDigest"`
+	RepositoryId       openapi_types.UUID         `json:"repositoryId"`
+	Sequence           int64                      `json:"sequence"`
+	SignatureAlgorithm string                     `json:"signatureAlgorithm"`
+	SignerIdentity     string                     `json:"signerIdentity"`
+	State              APTRepositorySnapshotState `json:"state"`
+	Suite              string                     `json:"suite"`
+}
+
+// APTRepositorySnapshotState defines model for APTRepositorySnapshot.State.
+type APTRepositorySnapshotState string
 
 // AnonymousAccessPolicy defines model for AnonymousAccessPolicy.
 type AnonymousAccessPolicy struct {
@@ -3110,6 +3150,13 @@ type ProxyCacheNegativeClearResult struct {
 	Cleared int `json:"cleared"`
 }
 
+// PublishAPTRepositorySnapshot defines model for PublishAPTRepositorySnapshot.
+type PublishAPTRepositorySnapshot struct {
+	PublicationSessionIds []openapi_types.UUID `json:"publicationSessionIds"`
+	Sequence              int64                `json:"sequence"`
+	Suite                 string               `json:"suite"`
+}
+
 // PublishSession defines model for PublishSession.
 type PublishSession struct {
 	Coordinate   string              `json:"coordinate"`
@@ -3934,6 +3981,11 @@ type CreateAPTPublicationSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// PublishAPTRepositorySnapshotParams defines parameters for PublishAPTRepositorySnapshot.
+type PublishAPTRepositorySnapshotParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // ListRepositoryArtifactIdentitiesParams defines parameters for ListRepositoryArtifactIdentities.
 type ListRepositoryArtifactIdentitiesParams struct {
 	Purpose ArtifactIdentityPurpose `form:"purpose" json:"purpose"`
@@ -4261,6 +4313,9 @@ type UpdateRepositoryJSONRequestBody = UpdateRepository
 // CreateAPTPublicationSessionJSONRequestBody defines body for CreateAPTPublicationSession for application/json ContentType.
 type CreateAPTPublicationSessionJSONRequestBody = CreateAPTPublicationSession
 
+// PublishAPTRepositorySnapshotJSONRequestBody defines body for PublishAPTRepositorySnapshot for application/json ContentType.
+type PublishAPTRepositorySnapshotJSONRequestBody = PublishAPTRepositorySnapshot
+
 // ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
 type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
 
@@ -4521,6 +4576,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
 	UploadAPTPublicationPackage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, sessionId SessionId)
+
+	// (POST /repositories/{repositoryId}/apt/snapshots)
+	PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactIdentitiesParams)
@@ -6520,6 +6578,60 @@ func (siw *ServerInterfaceWrapper) UploadAPTPublicationPackage(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadAPTPublicationPackage(w, r, repositoryId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishAPTRepositorySnapshot operation middleware
+func (siw *ServerInterfaceWrapper) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PublishAPTRepositorySnapshotParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishAPTRepositorySnapshot(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10277,6 +10389,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions", wrapper.CreateAPTPublicationSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}", wrapper.GetAPTPublicationSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots", wrapper.PublishAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
@@ -12907,6 +13020,144 @@ func (response UploadAPTPublicationPackage500ApplicationProblemPlusJSONResponse)
 type UploadAPTPublicationPackage507ApplicationProblemPlusJSONResponse Problem
 
 func (response UploadAPTPublicationPackage507ApplicationProblemPlusJSONResponse) VisitUploadAPTPublicationPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshotRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       PublishAPTRepositorySnapshotParams
+	Body         *PublishAPTRepositorySnapshotJSONRequestBody
+}
+
+type PublishAPTRepositorySnapshotResponseObject interface {
+	VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error
+}
+
+type PublishAPTRepositorySnapshot201JSONResponse APTRepositorySnapshot
+
+func (response PublishAPTRepositorySnapshot201JSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PublishAPTRepositorySnapshot400ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot503ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot503ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -18092,6 +18343,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package)
 	UploadAPTPublicationPackage(ctx context.Context, request UploadAPTPublicationPackageRequestObject) (UploadAPTPublicationPackageResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/apt/snapshots)
+	PublishAPTRepositorySnapshot(ctx context.Context, request PublishAPTRepositorySnapshotRequestObject) (PublishAPTRepositorySnapshotResponseObject, error)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(ctx context.Context, request ListRepositoryArtifactIdentitiesRequestObject) (ListRepositoryArtifactIdentitiesResponseObject, error)
@@ -19743,6 +19997,40 @@ func (sh *strictHandler) UploadAPTPublicationPackage(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UploadAPTPublicationPackageResponseObject); ok {
 		if err := validResponse.VisitUploadAPTPublicationPackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishAPTRepositorySnapshot operation middleware
+func (sh *strictHandler) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams) {
+	var request PublishAPTRepositorySnapshotRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body PublishAPTRepositorySnapshotJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishAPTRepositorySnapshot(ctx, request.(PublishAPTRepositorySnapshotRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishAPTRepositorySnapshot")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishAPTRepositorySnapshotResponseObject); ok {
+		if err := validResponse.VisitPublishAPTRepositorySnapshotResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

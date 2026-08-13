@@ -15,9 +15,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type aptManagementSigner struct{}
+
+func (aptManagementSigner) SignRelease(_ context.Context, request aptpublication.SignReleaseRequest) (aptpublication.SignReleaseResult, error) {
+	release, err := io.ReadAll(request.Release)
+	if err != nil {
+		return aptpublication.SignReleaseResult{}, err
+	}
+	return aptpublication.SignReleaseResult{
+		InRelease: append([]byte("signed\n"), release...), Detached: []byte("detached:" + request.ReleaseDigest),
+		SignerIdentity: "apt-release@example.test", KeyFingerprint: strings.Repeat("a", 40), Algorithm: "fixture-sha256",
+	}, nil
+}
 
 func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testing.T) {
 	t.Parallel()
@@ -30,7 +44,7 @@ func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testi
 		t.Fatal(err)
 	}
 	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
 	deb := aptManagementDebianPackage(t, "Package: widget\nVersion: 1:2.0-3\nArchitecture: amd64\n")
 	digestBytes := sha256.Sum256(deb)
 	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
@@ -113,16 +127,63 @@ func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testi
 		t.Fatalf("staged package became protocol-visible: status=%d body=%s", protocol.Code, protocol.Body.String())
 	}
 
+	publishBody := fmt.Sprintf(`{"suite":"stable","sequence":1,"publicationSessionIds":[%q]}`, session.ID)
+	publish := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/apt/snapshots", strings.NewReader(publishBody))
+	authorize(publish, "admin-secret")
+	publish.Header.Set("Content-Type", "application/json")
+	publish.Header.Set("Idempotency-Key", "stable-1")
+	published := httptest.NewRecorder()
+	handler.ServeHTTP(published, publish)
+	if published.Code != http.StatusCreated || !strings.Contains(published.Body.String(), `"state":"visible"`) ||
+		!strings.Contains(published.Body.String(), `"signerIdentity":"apt-release@example.test"`) {
+		t.Fatalf("publish=%d body=%s", published.Code, published.Body.String())
+	}
+	var snapshot struct{ ID string }
+	if err = json.Unmarshal(published.Body.Bytes(), &snapshot); err != nil || snapshot.ID == "" {
+		t.Fatalf("snapshot=%#v err=%v", snapshot, err)
+	}
+
+	replaySnapshot := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/apt/snapshots", strings.NewReader(publishBody))
+	authorize(replaySnapshot, "admin-secret")
+	replaySnapshot.Header.Set("Content-Type", "application/json")
+	replaySnapshot.Header.Set("Idempotency-Key", "stable-1")
+	replayedSnapshot := httptest.NewRecorder()
+	handler.ServeHTTP(replayedSnapshot, replaySnapshot)
+	if replayedSnapshot.Code != http.StatusCreated || !strings.Contains(replayedSnapshot.Body.String(), `"id":"`+snapshot.ID+`"`) {
+		t.Fatalf("snapshot replay=%d body=%s", replayedSnapshot.Code, replayedSnapshot.Body.String())
+	}
+
+	conflictingSnapshot := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/apt/snapshots", strings.NewReader(strings.Replace(publishBody, `"sequence":1`, `"sequence":2`, 1)))
+	authorize(conflictingSnapshot, "admin-secret")
+	conflictingSnapshot.Header.Set("Content-Type", "application/json")
+	conflictingSnapshot.Header.Set("Idempotency-Key", "stable-1")
+	snapshotConflict := httptest.NewRecorder()
+	handler.ServeHTTP(snapshotConflict, conflictingSnapshot)
+	if snapshotConflict.Code != http.StatusConflict || !strings.Contains(snapshotConflict.Body.String(), `"code":"idempotency_conflict"`) {
+		t.Fatalf("snapshot conflict=%d body=%s", snapshotConflict.Code, snapshotConflict.Body.String())
+	}
+
+	for _, path := range []string{"dists/stable/InRelease", "dists/stable/Release", "pool/main/w/widget/widget_2.0-3_amd64.deb"} {
+		request := httptest.NewRequest(http.MethodGet, "/apt/"+repo.Name+"/"+path, nil)
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("published path %s=%d body=%s", path, response.Code, response.Body.String())
+		}
+	}
+
 	audits, err := store.ListAudits(ctx, repository.AuditQuery{Repository: repo.Name, Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var createdAudit, stagedAudit bool
+	var createdAudit, stagedAudit, publishedAudit bool
 	for _, audit := range audits {
 		createdAudit = createdAudit || audit.Operation == "apt.publication_session.create" && audit.Actor == "alice" && audit.Status == http.StatusCreated
 		stagedAudit = stagedAudit || audit.Operation == "apt.publication_package.stage" && audit.Actor == "alice" && audit.Resource == "widget@1:2.0-3#amd64" && audit.Representation == digest && audit.Status == http.StatusOK
+		publishedAudit = publishedAudit || audit.Operation == "apt.repository_snapshot.publish" && audit.Actor == "alice" && audit.Resource == "stable" && audit.Status == http.StatusOK
 	}
-	if !createdAudit || !stagedAudit {
+	if !createdAudit || !stagedAudit || !publishedAudit {
 		t.Fatalf("publication audits missing: %#v", audits)
 	}
 }

@@ -8,11 +8,13 @@ export function APTAssetDetail({
   repoName,
   meta,
   canQuarantine = false,
+  published = false,
 }: {
   repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
   canQuarantine?: boolean;
+  published?: boolean;
 }) {
   const { locale, text } = usePreferences();
   const assetKind = meta.coordinate.startsWith("pool/")
@@ -28,7 +30,11 @@ export function APTAssetDetail({
       repoName={repoName}
       meta={meta}
       canQuarantine={canQuarantine}
-      timestampLabel={text("首次缓存", "First cached")}
+      timestampLabel={
+        published
+          ? text("已发布", "Published")
+          : text("首次缓存", "First cached")
+      }
       extra={
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-zinc-800 px-3 py-2">

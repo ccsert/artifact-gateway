@@ -227,6 +227,43 @@ func TestLoadRejectsScannerSettingsWithoutEndpoint(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresAPTReleaseSigner(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "http://127.0.0.1:18083/v1/sign-release")
+	t.Setenv("GATEWAY_APT_SIGNER_TOKEN", strings.Repeat("s", 32))
+	t.Setenv("GATEWAY_APT_SIGNER_TIMEOUT", "12s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.APTSignerEnabled() || cfg.APTSignerEndpoint != "http://127.0.0.1:18083/v1/sign-release" ||
+		cfg.APTSignerToken != strings.Repeat("s", 32) || cfg.APTSignerTimeout != 12*time.Second {
+		t.Fatalf("APT signer config=%#v", cfg)
+	}
+}
+
+func TestLoadRejectsInvalidAPTReleaseSignerConfiguration(t *testing.T) {
+	for _, testCase := range []struct {
+		name, endpoint, token, timeout string
+	}{
+		{name: "insecure remote endpoint", endpoint: "http://signer.example.test/v1/sign-release", token: strings.Repeat("s", 32)},
+		{name: "endpoint credentials", endpoint: "https://user@signer.example.test/v1/sign-release", token: strings.Repeat("s", 32)},
+		{name: "short token", endpoint: "https://signer.example.test/v1/sign-release", token: "short"},
+		{name: "short timeout", endpoint: "https://signer.example.test/v1/sign-release", token: strings.Repeat("s", 32), timeout: "500ms"},
+		{name: "settings without endpoint", token: strings.Repeat("s", 32)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			setCompleteConfiguration(t)
+			t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", testCase.endpoint)
+			t.Setenv("GATEWAY_APT_SIGNER_TOKEN", testCase.token)
+			t.Setenv("GATEWAY_APT_SIGNER_TIMEOUT", testCase.timeout)
+			if _, err := Load(); err == nil || strings.Contains(err.Error(), testCase.token) {
+				t.Fatalf("Load() error=%v", err)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsUnknownClusterRoleOrWorkerFilter(t *testing.T) {
 	setCompleteConfiguration(t)
 	for name, value := range map[string]string{

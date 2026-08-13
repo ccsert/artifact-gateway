@@ -6,10 +6,11 @@ Artifact Gateway exposes Debian repositories at:
 https://gateway.example.com/apt/<repository>/
 ```
 
-APT is currently a protocol-only format. Proxy repositories and ordered Groups
-are supported; Hosted publication and lifecycle operations are intentionally
-not advertised because generating and signing `Release`, `InRelease`, and
-`Packages` metadata requires a separate trusted publication workflow.
+APT remains a protocol-only advertised format. Proxy repositories and ordered
+Groups are supported. An administrator can explicitly provision the H2 Hosted
+preview and publish an atomically visible signed snapshot, but Hosted and its
+lifecycle operations remain unadvertised until H3 supplies production signing
+key custody, rotation, recovery, and operational evidence.
 The ordered implementation milestones and acceptance gates are tracked in the
 [APT Hosted roadmap](apt-hosted-roadmap.md).
 

@@ -18,7 +18,8 @@ resolution, browsing and search, authorization, audit, retention, recovery,
 promotion, and replication. Go and APT are admitted under the protocol-only
 format rule: they declare Proxy and Group protocol capabilities until a
 standard or trusted installable publication workflow exists. APT additionally
-has a management-only Hosted preview for verified pre-visibility staging. It is
+has a management-only Hosted preview for verified staging and atomic signed
+snapshot publication; its bundled signer is an H2 fixture, not production key custody. It is
 not a transparent rewrite proxy, a generic object browser, or a vulnerability
 scanner.
 
@@ -194,8 +195,8 @@ docker compose ps gateway
 Administrators create repositories through `POST /api/v2/repositories` with an
 idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`,
 `pypi`, `go`, or `apt`. Go repositories may only use the Proxy type. APT may use
-Proxy for installable reads or an explicit Hosted preview for management-only
-pre-visibility staging; its advertised protocol profile remains Proxy/Group. OCI
+Proxy for installable reads or an explicit Hosted preview for management-owned
+signed snapshots; its advertised protocol profile remains Proxy/Group. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
 `/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
 Conan 2 uses `/conan/v2/<repository>/...`; npm uses
@@ -250,12 +251,14 @@ supports `@v/list`, `@latest`, `.info`, `.mod`, and `.zip` with immutable
 SHA-256 cache validation.
 Each APT Proxy repository requires an endpoint and `allowedHosts`; see
 [`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
-security rules. Hosted publication is scheduled through the staged
-[APT Hosted roadmap](docs/apt-hosted-roadmap.md); it remains unadvertised until
-the signed-snapshot acceptance gates pass. Operators may explicitly provision
-an APT Hosted preview repository through the management API for H1 staging;
+security rules. Hosted publication follows the staged
+[APT Hosted roadmap](docs/apt-hosted-roadmap.md); H2 is installable through the
+management preview but remains unadvertised until the production-signing gates
+pass. Operators may explicitly provision an APT Hosted preview repository,
+stage `.deb` revisions, and publish a signed snapshot through the management API;
 the format profile and Console continue to expose only executable Proxy/Group
-protocol capabilities.
+protocol capabilities. See [the H2 signing preview guide](docs/apt-hosted-signing.md)
+for local configuration, publication, verification, and the production boundary.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

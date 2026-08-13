@@ -6,12 +6,60 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"sort"
+	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func (h generatedRepositoryAPIAdapter) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.PublishAPTRepositorySnapshotParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
+		if h.aptSnapshotPublisher == nil {
+			writeHostedProblem(w, http.StatusServiceUnavailable, "signer_unavailable", "APT Release signer is not configured")
+			return
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		var request adminopenapi.PublishAPTRepositorySnapshot
+		if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+			!repository.ValidAPTPublicationScope(request.Suite) || request.Sequence <= 0 || len(request.PublicationSessionIds) == 0 ||
+			len(request.PublicationSessionIds) > 10000 || len(params.IdempotencyKey) == 0 || len(params.IdempotencyKey) > 128 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "APT snapshot publication body is invalid")
+			return
+		}
+		sessionIDs := make([]string, 0, len(request.PublicationSessionIds))
+		seen := make(map[string]struct{}, len(request.PublicationSessionIds))
+		for _, sessionID := range request.PublicationSessionIds {
+			value := sessionID.String()
+			if _, duplicate := seen[value]; duplicate {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "publicationSessionIds must be unique")
+				return
+			}
+			seen[value] = struct{}{}
+			sessionIDs = append(sessionIDs, value)
+		}
+		sort.Strings(sessionIDs)
+		target := "repositories/" + repo.ID + "/apt/snapshots"
+		snapshotID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(principal.Actor+"\x00"+target+"\x00"+string(params.IdempotencyKey))).String()
+		snapshot, err := h.aptSnapshotPublisher.Publish(r.Context(), aptpublication.PublishSnapshotInput{
+			ID: snapshotID, RepositoryID: repo.ID, Suite: request.Suite, Sequence: request.Sequence,
+			SessionIDs: sessionIDs, Actor: principal.Actor, CreatedAt: time.Now().UTC(),
+		})
+		if err != nil {
+			writeAPTSnapshotProblem(w, err)
+			return
+		}
+		response, err := aptRepositorySnapshotResponse(snapshot)
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "APT repository snapshot identity is invalid")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusCreated, response)
+	})
+}
 
 func (h generatedRepositoryAPIAdapter) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateAPTPublicationSessionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
@@ -135,6 +183,45 @@ func aptPackageRevisionResponse(revision repository.APTPackageRevision) (adminop
 		CanonicalIdentity: revision.CanonicalIdentity, Digest: revision.Digest, Size: revision.Size, ObjectName: revision.ObjectName,
 		Publisher: revision.Publisher, CreatedAt: revision.CreatedAt,
 	}, nil
+}
+
+func aptRepositorySnapshotResponse(snapshot repository.APTRepositorySnapshot) (adminopenapi.APTRepositorySnapshot, error) {
+	id, err := uuid.Parse(snapshot.ID)
+	if err != nil {
+		return adminopenapi.APTRepositorySnapshot{}, err
+	}
+	repositoryID, err := uuid.Parse(snapshot.RepositoryID)
+	if err != nil || snapshot.CreatedAt.IsZero() || snapshot.PublishedAt.IsZero() {
+		return adminopenapi.APTRepositorySnapshot{}, errors.New("invalid APT repository snapshot")
+	}
+	return adminopenapi.APTRepositorySnapshot{
+		Id: id, RepositoryId: repositoryID, Suite: snapshot.Suite, Sequence: snapshot.Sequence,
+		State: adminopenapi.APTRepositorySnapshotState(snapshot.State), ReleaseDigest: snapshot.ReleaseDigest,
+		InReleaseDigest: snapshot.InReleaseDigest, SignerIdentity: snapshot.SignerIdentity,
+		KeyFingerprint: snapshot.KeyFingerprint, SignatureAlgorithm: snapshot.SignatureAlgorithm,
+		CreatedAt: snapshot.CreatedAt, PublishedAt: snapshot.PublishedAt,
+	}, nil
+}
+
+func writeAPTSnapshotProblem(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, aptpublication.ErrInvalidSnapshotInput):
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "APT snapshot publication request is invalid")
+	case errors.Is(err, aptpublication.ErrSignerUnavailable), errors.Is(err, aptpublication.ErrInvalidSignature):
+		writeHostedProblem(w, http.StatusServiceUnavailable, "signer_unavailable", "APT Release signer is unavailable")
+	case errors.Is(err, repository.ErrNotFound):
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "APT publication resource not found")
+	case errors.Is(err, repository.ErrIdempotencyConflict):
+		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
+	case errors.Is(err, repository.ErrNameExists), errors.Is(err, repository.ErrAPTPackageConflict):
+		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "APT snapshot sequence or pool path already exists with different content")
+	case errors.Is(err, repository.ErrQuotaExceeded):
+		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota would be exceeded by generated snapshot metadata")
+	case errors.Is(err, repository.ErrDisabled), errors.Is(err, repository.ErrVersionConflict):
+		writeHostedProblem(w, http.StatusConflict, "invalid_state", "APT snapshot cannot be published from the current state")
+	default:
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "APT snapshot publication failed")
+	}
 }
 
 func writeAPTPublicationProblem(w http.ResponseWriter, err error) {

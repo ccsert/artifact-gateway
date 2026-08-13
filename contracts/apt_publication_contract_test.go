@@ -28,6 +28,22 @@ func TestAPTPublicationManagementContract(t *testing.T) {
 	for _, status := range []string{"200", "400", "401", "403", "404", "409", "415", "422", "500", "507"} {
 		requireResponse(t, upload, status)
 	}
+	publish := operation(t, spec, "/repositories/{repositoryId}/apt/snapshots", "POST")
+	if !hasParameter(publish.Parameters, "Idempotency-Key", "header") {
+		t.Fatal("APT snapshot publication must require Idempotency-Key")
+	}
+	for _, status := range []string{"201", "400", "401", "403", "404", "409", "503", "507", "500"} {
+		requireResponse(t, publish, status)
+	}
+	snapshot := spec.Components.Schemas["APTRepositorySnapshot"]
+	if snapshot == nil || snapshot.Value == nil {
+		t.Fatal("APTRepositorySnapshot schema is missing")
+	}
+	for _, property := range []string{"id", "repositoryId", "suite", "sequence", "state", "releaseDigest", "inReleaseDigest", "signerIdentity", "keyFingerprint", "signatureAlgorithm", "createdAt", "publishedAt"} {
+		if snapshot.Value.Properties[property] == nil {
+			t.Fatalf("APTRepositorySnapshot.%s is missing", property)
+		}
+	}
 
 	session := spec.Components.Schemas["APTPublicationSession"]
 	if session == nil || session.Value == nil || session.Value.Properties["state"] == nil || session.Value.Properties["state"].Value == nil {
@@ -46,7 +62,7 @@ func TestAPTPublicationManagementContract(t *testing.T) {
 	for _, code := range problem.Value.Properties["code"].Value.Enum {
 		codes[code] = true
 	}
-	for _, code := range []string{"identity_mismatch", "digest_mismatch", "quota_exceeded", "unsupported_media_type"} {
+	for _, code := range []string{"identity_mismatch", "digest_mismatch", "quota_exceeded", "unsupported_media_type", "signer_unavailable"} {
 		if !codes[code] {
 			t.Fatalf("Problem.code is missing %s", code)
 		}

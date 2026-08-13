@@ -11,3 +11,5 @@ go test ./internal/app \
 go test ./internal/repository \
   -run '^TestMemoryAPTStore' \
   -count=1 -v
+
+"$root/scripts/native-apt-hosted-e2e.sh"

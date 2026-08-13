@@ -36,13 +36,15 @@ a dated version heading without rewriting their meaning.
   and cross-instance integration coverage, immutable repository-snapshot records,
   and a private-key-free signer port. Installable Hosted publication remains
   gated on atomic signed snapshots.
-- The APT Hosted H2 atomic-snapshot core: deterministic `Packages` and gzip
+- The completed APT Hosted H2 operator preview: deterministic `Packages` and gzip
   indices, Release checksum closure, Acquire-By-Hash objects, signed
   `InRelease`/`Release.gpg` assets, repository-global immutable pool paths,
   audited PostgreSQL visibility switching, Hosted GET/HEAD/range reads, and
-  durable reference-checked cleanup of interrupted snapshot objects. A
-  supported publish API, deployable signer, Console/search/capacity projection,
-  and real Debian install gate remain before Hosted is advertised.
+  durable reference-checked cleanup of interrupted snapshot objects, a
+  generated idempotent snapshot-publish API, loopback reference signer with an
+  isolated persistent private key, Console/search/capacity projection, and a
+  real signed Debian update/install gate. Hosted remains unadvertised until H3
+  production key custody and rotation are complete.
 - A pinned RustFS S3 baseline for Compose, integration tests, and Kubernetes,
   including object-contract coverage and a copy/verify/cutover/rollback migration
   runbook that explicitly rejects MinIO data-volume reuse.

@@ -408,6 +408,27 @@ export type AptPackageRevision = {
   createdAt: string;
 };
 
+export type PublishAptRepositorySnapshot = {
+  suite: string;
+  sequence: number;
+  publicationSessionIds: Array<string>;
+};
+
+export type AptRepositorySnapshot = {
+  id: string;
+  repositoryId: string;
+  suite: string;
+  sequence: number;
+  state: "visible" | "retired";
+  releaseDigest: string;
+  inReleaseDigest: string;
+  signerIdentity: string;
+  keyFingerprint: string;
+  signatureAlgorithm: string;
+  createdAt: string;
+  publishedAt: string;
+};
+
 export type RepositoryCapabilities = {
   format: Format;
   type: "hosted" | "proxy";
@@ -620,6 +641,7 @@ export type Problem = {
     | "retention_protected"
     | "security_policy_denied"
     | "artifact_quarantined"
+    | "signer_unavailable"
     | "internal_error";
   message: string;
   requestId: string;
@@ -5946,6 +5968,66 @@ export type UploadAptPublicationPackageResponses = {
 
 export type UploadAptPublicationPackageResponse =
   UploadAptPublicationPackageResponses[keyof UploadAptPublicationPackageResponses];
+
+export type PublishAptRepositorySnapshotData = {
+  body: PublishAptRepositorySnapshot;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/snapshots";
+};
+
+export type PublishAptRepositorySnapshotErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type PublishAptRepositorySnapshotError =
+  PublishAptRepositorySnapshotErrors[keyof PublishAptRepositorySnapshotErrors];
+
+export type PublishAptRepositorySnapshotResponses = {
+  /**
+   * Signed snapshot published or exactly replayed
+   */
+  201: AptRepositorySnapshot;
+};
+
+export type PublishAptRepositorySnapshotResponse =
+  PublishAptRepositorySnapshotResponses[keyof PublishAptRepositorySnapshotResponses];
 
 export type ListConanReferencesData = {
   body?: never;

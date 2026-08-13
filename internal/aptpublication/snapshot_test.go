@@ -90,6 +90,27 @@ func TestPublisherBuildsDeterministicSignedSnapshot(t *testing.T) {
 	}
 }
 
+func TestPublishedSnapshotProjectsVisibleAssetsAndGeneratedCapacity(t *testing.T) {
+	t.Parallel()
+	fixture := publishFixtureSnapshot(t, time.Date(2026, time.August, 13, 9, 0, 0, 0, time.UTC))
+	items, err := fixture.store.SearchArtifactProjection(context.Background(), fixture.repositoryID, repository.FormatAPT, repository.ArtifactSearchQuery{
+		Mode: repository.ArtifactSearchByCoordinate, Value: "pool/",
+	}, 10, repository.ArtifactSearchPosition{})
+	if err != nil || len(items) != 1 || items[0].Coordinate != "pool/main/w/widget/widget_2.0-3_amd64.deb" || items[0].Digest == "" || items[0].Size == nil {
+		t.Fatalf("visible APT search projection=%#v err=%v", items, err)
+	}
+	metadata, err := fixture.store.SearchArtifactProjection(context.Background(), fixture.repositoryID, repository.FormatAPT, repository.ArtifactSearchQuery{
+		Mode: repository.ArtifactSearchByCoordinate, Value: "dists/stable/",
+	}, 100, repository.ArtifactSearchPosition{})
+	if err != nil || len(metadata) < 5 {
+		t.Fatalf("visible APT metadata projection=%#v err=%v", metadata, err)
+	}
+	capacity, err := fixture.store.GetRepositoryCapacity(context.Background(), fixture.repositoryID)
+	if err != nil || capacity.UsedBytes <= fixture.packageSize || capacity.ObjectCount <= 1 {
+		t.Fatalf("published APT capacity=%#v packageSize=%d err=%v", capacity, fixture.packageSize, err)
+	}
+}
+
 func TestPublisherRejectsNonUUIDSnapshotIDAtDomainBoundary(t *testing.T) {
 	t.Parallel()
 	store := repository.NewMemoryStore()
@@ -144,6 +165,158 @@ func TestPublisherFailuresLeavePreviousSnapshotCompletelyVisible(t *testing.T) {
 	assertAPTSnapshotUnchanged(t, ctx, store, visible.ID, releaseBefore)
 }
 
+func TestPublisherExactReplayRecoversAfterTransientSignerFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-retry", "widget", "1.0-1")
+	input := PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000008", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 15, 0, 0, time.UTC),
+	}
+
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: errors.New("temporary signer outage")}).Publish(ctx, input); !errors.Is(err, ErrSignerUnavailable) {
+		t.Fatalf("first publish error=%v", err)
+	}
+	published, err := NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, input)
+	if err != nil || published.ID != input.ID || published.State != repository.APTRepositorySnapshotVisible {
+		t.Fatalf("exact replay snapshot=%#v err=%v", published, err)
+	}
+}
+
+func TestPublisherChangedReplayConflictsBeforeLoadingChangedSessions(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-idempotency", "widget", "1.0-1")
+	input := PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000010", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 25, 0, 0, time.UTC),
+	}
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: errors.New("temporary signer outage")}).Publish(ctx, input); !errors.Is(err, ErrSignerUnavailable) {
+		t.Fatalf("first publish error=%v", err)
+	}
+	changed := input
+	changed.Suite = "testing"
+	changed.SessionIDs = []string{"missing-session"}
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, changed); !errors.Is(err, repository.ErrIdempotencyConflict) {
+		t.Fatalf("changed replay error=%v", err)
+	}
+}
+
+func TestPublisherSignerFailureWithoutObjectIntentsCanExpire(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-expire", "widget", "1.0-1")
+	createdAt := time.Date(2026, time.August, 13, 9, 30, 0, 0, time.UTC)
+	input := PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000011", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: createdAt,
+	}
+	if _, err := NewPublisher(store, objects, deterministicAPTSigner{err: errors.New("temporary signer outage")}).Publish(ctx, input); !errors.Is(err, ErrSignerUnavailable) {
+		t.Fatalf("publish error=%v", err)
+	}
+	if err := store.ExpireAPTRepositorySnapshots(ctx, createdAt.Add(time.Minute), 10); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _, err := store.GetAPTRepositorySnapshot(ctx, input.ID)
+	if err != nil || snapshot.State != repository.APTRepositorySnapshotFailed {
+		t.Fatalf("expired snapshot=%#v err=%v", snapshot, err)
+	}
+}
+
+func TestPublisherExactReplayRecoversAfterGeneratedMetadataQuotaIsRaised(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-quota", "widget", "1.0-1")
+	capacity, err := store.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, capacity.UsedBytes); err != nil {
+		t.Fatal(err)
+	}
+	input := PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000009", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 20, 0, 0, time.UTC),
+	}
+	if _, err = NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, input); !errors.Is(err, repository.ErrQuotaExceeded) {
+		t.Fatalf("quota publish error=%v", err)
+	}
+	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	published, err := NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, input)
+	if err != nil || published.ID != input.ID || published.State != repository.APTRepositorySnapshotVisible {
+		t.Fatalf("quota replay snapshot=%#v err=%v", published, err)
+	}
+}
+
+func TestPublisherQuotaIncludesVisibleMetadataFromEverySuite(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo := createAPTHostedRepository(t, ctx, store)
+	objects := objectstore.NewMemoryStore()
+	stable := stageAPTPackageInScope(t, ctx, store, objects, repo.ID, "session-stable-quota", "stable", "widget", "1.0-1", "widget_1.0-1_amd64.deb")
+	testing := stageAPTPackageInScope(t, ctx, store, objects, repo.ID, "session-testing-quota", "testing", "gadget", "1.0-1", "gadget_1.0-1_amd64.deb")
+	base, err := store.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := NewPublisher(store, objects, deterministicAPTSigner{})
+	if _, err = publisher.Publish(ctx, PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000012", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
+		SessionIDs: []string{stable.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 35, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	afterStable, err := store.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingInput := PublishSnapshotInput{
+		ID: "00000000-0000-4000-8000-000000000013", RepositoryID: repo.ID, Suite: "testing", Sequence: 1,
+		SessionIDs: []string{testing.ID}, Actor: "release-operator", CreatedAt: time.Date(2026, time.August, 13, 9, 36, 0, 0, time.UTC),
+	}
+	packages, _, err := publisher.loadPackages(ctx, testingInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := buildSnapshotBundle(repository.APTRepositorySnapshot{ID: testingInput.ID, RepositoryID: repo.ID, Suite: testingInput.Suite, Sequence: 1}, packages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objectsByKey := make(map[string]int64)
+	for _, asset := range bundle.assets {
+		if strings.HasPrefix(asset.Path, "dists/") {
+			objectsByKey[asset.ObjectKey] = asset.Size
+		}
+	}
+	var testingGenerated int64
+	for _, size := range objectsByKey {
+		testingGenerated += size
+	}
+	stableGenerated := afterStable.UsedBytes - base.UsedBytes
+	quota := base.UsedBytes + max(stableGenerated, testingGenerated)
+	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, quota); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = publisher.Publish(ctx, testingInput); !errors.Is(err, repository.ErrQuotaExceeded) {
+		t.Fatalf("cross-suite quota publish error=%v quota=%d stableGenerated=%d testingGenerated=%d", err, quota, stableGenerated, testingGenerated)
+	}
+}
+
 func TestPublisherRejectsRepositoryGlobalPoolPathRebindingAcrossSuites(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -194,7 +367,7 @@ func TestPublisherFailureIntentsReclaimOnlyUnreferencedGeneratedObjects(t *testi
 	if err != nil || len(keys) != 2 {
 		t.Fatalf("expected package plus one partial generated object, keys=%v err=%v", keys, err)
 	}
-	maintenance := Maintenance{Store: store, Objects: objects}
+	maintenance := Maintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(2 * time.Hour) }}
 	if err = maintenance.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +381,11 @@ func TestPublisherFailureIntentsReclaimOnlyUnreferencedGeneratedObjects(t *testi
 }
 
 type publishedSnapshotFixture struct {
-	paths   []string
-	objects map[string][]byte
+	paths        []string
+	objects      map[string][]byte
+	store        *repository.MemoryStore
+	repositoryID string
+	packageSize  int64
 }
 
 func publishFixtureSnapshot(t *testing.T, createdAt time.Time) publishedSnapshotFixture {
@@ -219,7 +395,11 @@ func publishFixtureSnapshot(t *testing.T, createdAt time.Time) publishedSnapshot
 	repo := createAPTHostedRepository(t, ctx, store)
 	objects := objectstore.NewMemoryStore()
 	session := stageAPTPackage(t, ctx, store, objects, repo.ID, "session-one", "widget", "1:2.0-3")
-	_, err := NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, PublishSnapshotInput{
+	revision, err := store.GetAPTPackageRevisionForSession(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewPublisher(store, objects, deterministicAPTSigner{}).Publish(ctx, PublishSnapshotInput{
 		ID: "00000000-0000-4000-8000-000000000007", RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
 		SessionIDs: []string{session.ID}, Actor: "release-operator", CreatedAt: createdAt,
 	})
@@ -230,7 +410,7 @@ func publishFixtureSnapshot(t *testing.T, createdAt time.Time) publishedSnapshot
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := publishedSnapshotFixture{objects: make(map[string][]byte, len(assets))}
+	result := publishedSnapshotFixture{objects: make(map[string][]byte, len(assets)), store: store, repositoryID: repo.ID, packageSize: revision.Size}
 	for _, asset := range assets {
 		body, getErr := objects.Get(ctx, asset.ObjectKey)
 		if getErr != nil {

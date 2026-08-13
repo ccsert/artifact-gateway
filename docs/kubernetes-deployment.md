@@ -22,7 +22,7 @@ dedicated `artifact-gateway-local` IngressClass at
 `http://artifact-gateway.localhost`. The `.localhost` special-use domain resolves
 to the loopback interface without editing `/etc/hosts`; the direct Console
 fallback remains `http://127.0.0.1:18081`. The start command builds the Gateway
-and Console images, creates runtime Secrets without checking credential values
+Console, and APT reference-signer images, creates runtime Secrets without checking credential values
 into the rendered manifests, applies every database migration, waits for all
 workloads, and verifies the Console and authenticated format API through the
 Ingress.
@@ -38,6 +38,7 @@ an environment override is omitted on a later command, the helper reuses every
 credential and encryption key already stored in the namespace Secret. Repeating
 `up` or `verify` therefore does not silently rotate PostgreSQL, RustFS, Resolver,
 administrator, or settings-encryption secrets back to local defaults.
+The APT reference-signer token follows the same reuse rule.
 
 The default administrator token is `local-gateway-admin-token`. These defaults
 are for a disposable local cluster only. Override them before a shared local
@@ -51,6 +52,7 @@ K8S_LOCAL_RUSTFS_RPC_SECRET='independent-rpc-secret-replace-me' \
 K8S_LOCAL_ADMIN_TOKEN='replace-me' \
 K8S_LOCAL_RESOLVER_TOKEN='replace-me' \
 K8S_LOCAL_SETTINGS_ENCRYPTION_KEY='0123456789abcdef0123456789abcdef' \
+K8S_LOCAL_APT_SIGNER_TOKEN='replace-with-at-least-32-random-bytes' \
 make kubernetes-local-up
 ```
 
@@ -68,7 +70,7 @@ make kubernetes-local-down
 
 This deletes the `artifact-gateway-local` namespace, its dedicated IngressClass
 and read-only cluster RBAC, including its PostgreSQL and RustFS
-PersistentVolumeClaims and all local data. An existing MinIO-based
+PersistentVolumeClaims, the APT signer key claim, and all local data. An existing MinIO-based
 local namespace or orphaned MinIO data PVC is not changed in place: the helper
 refuses startup and points to the
 [RustFS migration procedure](rustfs-migration.md). Only after retaining the
@@ -90,9 +92,13 @@ Console nginx (SPA + same-origin reverse proxy)
        |
        v
 Artifact Gateway (standalone API + scheduler + worker)
-       |                         |
-       v                         v
-PostgreSQL PVC                 RustFS PVC
+       |                 |                 |
+       v                 v                 v
+PostgreSQL PVC       RustFS PVC      APT H2 signer sidecar
+                                      |
+                                      v
+                                private-key PVC
+                                (loopback only)
 ```
 
 The Console, Gateway, and digest-pinned Traefik 3.7.10 controller run as
@@ -100,6 +106,10 @@ non-root users with read-only root filesystems, dropped Linux capabilities,
 resource requests and limits, and HTTP health probes. Console and Gateway
 disable service-account token mounting; Traefik uses its token only with the
 namespaced Role and read-only cluster discovery RBAC declared by this overlay.
+The H2 reference signer is a hardened sidecar in the Gateway Pod. It has no
+Service or Ingress, talks to Gateway only over loopback, and persists its
+private key in a dedicated PVC; its bearer token stays in the namespace Secret.
+It remains a local acceptance fixture rather than a production signer.
 PostgreSQL and RustFS are pinned single-replica local dependencies. A bounded
 ephemeral `/tmp` volume supports Gateway's streamed upload spool without making
 its root filesystem writable.
@@ -156,6 +166,8 @@ environment overlay or chart with all of the following:
   and upgrade/rollback evidence;
 - dedicated scanner workers and an explicitly network-restricted scanner service
   when automatic scanning is enabled.
+- an external APT signer with managed key custody, rotation, revocation,
+  backup/restore verification, metrics, and alerts before Hosted is advertised.
 
 The release-readiness checks remain authoritative even after these deployment
 resources exist. A successful Pod rollout alone is not production evidence.

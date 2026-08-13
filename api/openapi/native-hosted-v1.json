@@ -4152,6 +4152,7 @@
               "retention_protected",
               "security_policy_denied",
               "artifact_quarantined",
+              "signer_unavailable",
               "internal_error"
             ]
           },

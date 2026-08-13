@@ -142,6 +142,17 @@ func TestMemoryAPTStagedRevisionAndBuildingSnapshotRemainInvisible(t *testing.T)
 	if _, err = store.GetVisibleAPTRepositorySnapshot(ctx, repo.ID, "stable"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("building snapshot became visible: %v", err)
 	}
+	replayed, err := store.CreateAPTRepositorySnapshot(ctx, APTRepositorySnapshot{
+		ID: snapshot.ID, RepositoryID: repo.ID, Suite: "stable", Sequence: 1, State: APTRepositorySnapshotBuilding,
+	}, []APTSnapshotPackage{{PublicationSessionID: session.ID, PackageRevisionID: revision.ID, Component: "main", Architecture: "amd64"}})
+	if err != nil || replayed.ID != snapshot.ID || replayed.CreatedAt != snapshot.CreatedAt {
+		t.Fatalf("exact snapshot replay=%#v err=%v", replayed, err)
+	}
+	if _, err = store.CreateAPTRepositorySnapshot(ctx, APTRepositorySnapshot{
+		ID: snapshot.ID, RepositoryID: repo.ID, Suite: "stable", Sequence: 2, State: APTRepositorySnapshotBuilding,
+	}, []APTSnapshotPackage{{PublicationSessionID: session.ID, PackageRevisionID: revision.ID, Component: "main", Architecture: "amd64"}}); !errors.Is(err, ErrIdempotencyConflict) {
+		t.Fatalf("conflicting snapshot replay error=%v", err)
+	}
 }
 
 func TestAPTSnapshotMembershipRejectsDuplicateSessionsAndPackageMembership(t *testing.T) {

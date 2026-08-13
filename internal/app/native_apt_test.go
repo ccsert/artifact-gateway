@@ -25,7 +25,7 @@ func TestNativeAPTHostedReadsSwitchOnlyAfterSignedSnapshotIsVisible(t *testing.T
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
-		ID: "apt-hosted-read", Name: "apt-hosted-read", Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted,
+		ID: uuid.NewString(), Name: "apt-hosted-read", Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +135,13 @@ func TestNativeAPTHostedReadsSwitchOnlyAfterSignedSnapshotIsVisible(t *testing.T
 	head := request(http.MethodHead, nil)
 	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("ETag") == "" {
 		t.Fatalf("visible HEAD status=%d body=%q headers=%v", head.Code, head.Body.String(), head.Header())
+	}
+	searchRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-search?q=pool/main/w/widget/", nil)
+	authorize(searchRequest, "admin-secret")
+	searchResponse := httptest.NewRecorder()
+	handler.ServeHTTP(searchResponse, searchRequest)
+	if searchResponse.Code != http.StatusOK || !strings.Contains(searchResponse.Body.String(), `"coordinate":"pool/main/w/widget/widget_1.0-1_amd64.deb"`) || strings.Contains(searchResponse.Body.String(), `"sourceUrl"`) {
+		t.Fatalf("Hosted snapshot search=%d body=%s", searchResponse.Code, searchResponse.Body.String())
 	}
 }
 

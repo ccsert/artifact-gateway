@@ -63,14 +63,30 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 	if _, err = manager.UploadPackageAs(ctx, session.ID, session.ObjectName, bytes.NewReader(deb), int64(len(deb)), "release-operator"); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := NewPublisher(storeA, objects, deterministicAPTSigner{}).Publish(ctx, PublishSnapshotInput{
+	input := PublishSnapshotInput{
 		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "stable", Sequence: 1,
 		SessionIDs: []string{session.ID}, Actor: "release-operator",
 		CreatedAt: time.Date(2026, time.August, 13, 8, 30, 0, 0, time.UTC),
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+	type publicationResult struct {
+		snapshot repository.APTRepositorySnapshot
+		err      error
+	}
+	start := make(chan struct{})
+	results := make(chan publicationResult, 2)
+	for _, publisher := range []*Publisher{NewPublisher(storeA, objects, deterministicAPTSigner{}), NewPublisher(storeB, objects, deterministicAPTSigner{})} {
+		go func() {
+			<-start
+			snapshot, publishErr := publisher.Publish(ctx, input)
+			results <- publicationResult{snapshot: snapshot, err: publishErr}
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil || first.snapshot.ID != input.ID || second.snapshot.ID != input.ID {
+		t.Fatalf("concurrent exact replay first=%#v second=%#v", first, second)
+	}
+	snapshot := first.snapshot
 	visible, err := storeB.GetVisibleAPTRepositorySnapshot(ctx, repo.ID, "stable")
 	if err != nil || visible.ID != snapshot.ID || visible.ReleaseDigest != snapshot.ReleaseDigest || visible.SignatureAlgorithm != "fixture-sha256" {
 		t.Fatalf("cross-instance snapshot=%#v err=%v", visible, err)
@@ -78,6 +94,22 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 	assets, err := storeB.ListVisibleAPTSnapshotAssets(ctx, repo.ID, "stable")
 	if err != nil || len(assets) < 8 {
 		t.Fatalf("cross-instance assets=%#v err=%v", assets, err)
+	}
+	search, err := storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatAPT, repository.ArtifactSearchQuery{
+		Mode: repository.ArtifactSearchByCoordinate, Value: "pool/main/w/widget/",
+	}, 10, repository.ArtifactSearchPosition{})
+	if err != nil || len(search) != 1 || search[0].Coordinate != "pool/main/w/widget/widget_1.0-1_amd64.deb" || search[0].Digest == "" {
+		t.Fatalf("cross-instance search projection=%#v err=%v", search, err)
+	}
+	capacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || capacity.UsedBytes <= int64(len(deb)) || capacity.ObjectCount <= 1 {
+		t.Fatalf("cross-instance capacity=%#v packageSize=%d err=%v", capacity, len(deb), err)
+	}
+	changed := input
+	changed.Suite = "testing"
+	changed.SessionIDs = []string{"missing-session"}
+	if _, err = NewPublisher(storeB, objects, deterministicAPTSigner{}).Publish(ctx, changed); !errors.Is(err, repository.ErrIdempotencyConflict) {
+		t.Fatalf("cross-instance changed replay error=%v", err)
 	}
 	for _, path := range []string{
 		"dists/stable/InRelease", "dists/stable/Release", "dists/stable/Release.gpg",
@@ -94,6 +126,82 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 		}
 	}
 
+	quotaDeb := testDebianPackage(t, "Package: gadget\nVersion: 1.0-1\nArchitecture: amd64\nMaintainer: Gateway Team <gateway@example.test>\nDescription: quota fixture\n")
+	quotaSum := sha256.Sum256(quotaDeb)
+	quotaSession, _, err := manager.CreateSession(ctx, CreateSessionInput{
+		RepositoryID: repo.ID, Suite: "testing", Component: "main", Publisher: "release-ci",
+		ObjectName: "gadget_1.0-1_amd64.deb", DeclaredDigest: "sha256:" + hex.EncodeToString(quotaSum[:]),
+		DeclaredSize: int64(len(quotaDeb)), ExpectedIdentity: "gadget@1.0-1#amd64", IdempotencyKey: uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = manager.UploadPackageAs(ctx, quotaSession.ID, quotaSession.ObjectName, bytes.NewReader(quotaDeb), int64(len(quotaDeb)), "release-operator"); err != nil {
+		t.Fatal(err)
+	}
+	quotaInput := PublishSnapshotInput{
+		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "testing", Sequence: 1,
+		SessionIDs: []string{quotaSession.ID}, Actor: "release-operator", CreatedAt: time.Now().UTC(),
+	}
+	quotaPublisher := NewPublisher(storeB, objects, deterministicAPTSigner{})
+	quotaPackages, _, err := quotaPublisher.loadPackages(ctx, quotaInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quotaBundle, err := buildSnapshotBundle(repository.APTRepositorySnapshot{ID: quotaInput.ID, RepositoryID: repo.ID, Suite: "testing", Sequence: 1}, quotaPackages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quotaObjects := make(map[string]int64)
+	for _, asset := range quotaBundle.assets {
+		if strings.HasPrefix(asset.Path, "dists/") {
+			quotaObjects[asset.ObjectKey] = asset.Size
+		}
+	}
+	var testingGenerated int64
+	for _, size := range quotaObjects {
+		testingGenerated += size
+	}
+	stableGenerated := capacity.UsedBytes - int64(len(deb))
+	quota := int64(len(deb)+len(quotaDeb)) + max(stableGenerated, testingGenerated)
+	if _, err = storeA.ReplaceRepositoryCapacityQuota(ctx, repo.ID, quota); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = quotaPublisher.Publish(ctx, quotaInput); !errors.Is(err, repository.ErrQuotaExceeded) {
+		t.Fatalf("cross-suite PostgreSQL quota error=%v quota=%d stable=%d testing=%d", err, quota, stableGenerated, testingGenerated)
+	}
+	if _, err = storeA.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	expiredDeb := testDebianPackage(t, "Package: expiring\nVersion: 1.0-1\nArchitecture: amd64\nDescription: signer failure fixture\n")
+	expiredSum := sha256.Sum256(expiredDeb)
+	expiredSession, _, err := manager.CreateSession(ctx, CreateSessionInput{
+		RepositoryID: repo.ID, Suite: "unstable", Component: "main", Publisher: "release-ci",
+		ObjectName: "expiring_1.0-1_amd64.deb", DeclaredDigest: "sha256:" + hex.EncodeToString(expiredSum[:]),
+		DeclaredSize: int64(len(expiredDeb)), ExpectedIdentity: "expiring@1.0-1#amd64", IdempotencyKey: uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = manager.UploadPackageAs(ctx, expiredSession.ID, expiredSession.ObjectName, bytes.NewReader(expiredDeb), int64(len(expiredDeb)), "release-operator"); err != nil {
+		t.Fatal(err)
+	}
+	expiredInput := PublishSnapshotInput{
+		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "unstable", Sequence: 1,
+		SessionIDs: []string{expiredSession.ID}, Actor: "release-operator", CreatedAt: time.Now().UTC().Add(-2 * time.Hour),
+	}
+	if _, err = NewPublisher(storeA, objects, deterministicAPTSigner{err: errors.New("signer offline")}).Publish(ctx, expiredInput); !errors.Is(err, ErrSignerUnavailable) {
+		t.Fatalf("signer failure error=%v", err)
+	}
+	if err = storeB.ExpireAPTRepositorySnapshots(ctx, time.Now().UTC().Add(-time.Hour), 10); err != nil {
+		t.Fatal(err)
+	}
+	expired, intents, err := storeA.GetAPTRepositorySnapshot(ctx, expiredInput.ID)
+	if err != nil || expired.State != repository.APTRepositorySnapshotFailed || len(intents) != 1 {
+		t.Fatalf("expired no-intent snapshot=%#v membership=%#v err=%v", expired, intents, err)
+	}
+
 	conflictingDeb := testDebianPackage(t, "Package: widget\nVersion: 2.0-1\nArchitecture: amd64\nMaintainer: Gateway Team <gateway@example.test>\nDescription: conflicting pool path\n")
 	conflictingSum := sha256.Sum256(conflictingDeb)
 	conflictingSession, _, err := manager.CreateSession(ctx, CreateSessionInput{
@@ -108,7 +216,7 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 		t.Fatal(err)
 	}
 	if _, err = NewPublisher(storeA, objects, deterministicAPTSigner{}).Publish(ctx, PublishSnapshotInput{
-		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "testing", Sequence: 1,
+		ID: uuid.NewString(), RepositoryID: repo.ID, Suite: "testing", Sequence: 2,
 		SessionIDs: []string{conflictingSession.ID}, Actor: "release-operator",
 		CreatedAt: time.Date(2026, time.August, 13, 8, 31, 0, 0, time.UTC),
 	}); !errors.Is(err, repository.ErrAPTPackageConflict) {
@@ -170,7 +278,7 @@ func TestPostgresRustFSFailedSnapshotObjectsAreDurablyReclaimed(t *testing.T) {
 	if err != nil || len(keysBefore) != 2 {
 		t.Fatalf("partial snapshot objects=%v err=%v", keysBefore, err)
 	}
-	maintenance := Maintenance{Store: store, Objects: objects}
+	maintenance := Maintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().UTC().Add(2 * time.Hour) }}
 	if err = maintenance.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}

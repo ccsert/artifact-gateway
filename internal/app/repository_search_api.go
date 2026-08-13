@@ -168,19 +168,35 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = items[len(items)-1].Coordinate
 			}
 		case repository.FormatAPT:
-			assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			if repo.Type == repository.RepositoryTypeProxy {
+				assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
+					return
+				}
+				hasMore = len(assets) > pageSize
+				if hasMore {
+					assets = assets[:pageSize]
+				}
+				for _, asset := range assets {
+					d, size, created, cached, sourceURL := asset.Digest, asset.Size, asset.CreatedAt, asset.CachedAt, asset.SourceURL
+					items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &d, Size: &size, CreatedAt: &created, CachedAt: &cached, SourceUrl: &sourceURL, ContentType: optionalString(asset.ContentType)})
+					lastCoordinate = asset.Path
+				}
+				break
+			}
+			projected, err := h.searchGroupMemberArtifacts(r, repo, query, pageSize+1, after)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
 				return
 			}
-			hasMore = len(assets) > pageSize
+			hasMore = len(projected) > pageSize
 			if hasMore {
-				assets = assets[:pageSize]
+				projected = projected[:pageSize]
 			}
-			for _, asset := range assets {
-				d, size, created, cached, sourceURL := asset.Digest, asset.Size, asset.CreatedAt, asset.CachedAt, asset.SourceURL
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &d, Size: &size, CreatedAt: &created, CachedAt: &cached, SourceUrl: &sourceURL, ContentType: optionalString(asset.ContentType)})
-				lastCoordinate = asset.Path
+			items = append(items, projected...)
+			if len(items) > 0 {
+				lastCoordinate = items[len(items)-1].Coordinate
 			}
 		}
 		var next *string

@@ -77,6 +77,10 @@ K8S_LOCAL_RUSTFS_RPC_SECRET='same-rustfs-secret-value-12345678' run_expect 1 "$s
 grep -Fq 'must differ from K8S_LOCAL_RUSTFS_SECRET_KEY' "$workdir/stderr" || fail 'reused RustFS RPC secret was accepted'
 
 : >"$log"
+K8S_LOCAL_APT_SIGNER_TOKEN='short' run_expect 1 "$script" up
+grep -Fq 'K8S_LOCAL_APT_SIGNER_TOKEN must be between 32 and 256 characters' "$workdir/stderr" || fail 'short APT signer token was accepted'
+
+: >"$log"
 FAKE_K8S_LEGACY_MINIO=1 run_expect 1 "$script" up
 grep -Fq 'legacy MinIO StatefulSet or data PVC detected' "$workdir/stderr" || fail 'legacy MinIO stack was overwritten in place'
 if grep -Fq 'kubectl apply -k' "$log"; then
@@ -118,6 +122,7 @@ assert_log 'kubectl -n artifact-gateway-local rollout status statefulset/postgre
 assert_log 'kubectl -n artifact-gateway-local rollout status statefulset/rustfs --timeout=180s'
 assert_log 'kubectl -n artifact-gateway-local rollout status deployment/artifact-gateway --timeout=300s'
 assert_log 'kubectl -n artifact-gateway-local rollout status deployment/artifact-gateway-ingress --timeout=180s'
+assert_log '--from-literal=GATEWAY_APT_SIGNER_TOKEN='
 grep -Fq 'Artifact Gateway Kubernetes stack is ready at http://artifact-gateway.localhost' "$workdir/stdout" || fail 'up did not report the Ingress endpoint'
 
 : >"$log"
@@ -128,6 +133,7 @@ FAKE_K8S_RUSTFS_RPC_SECRET='persisted-rustfs-independent-rpc-secret' \
 FAKE_K8S_ADMIN_TOKEN='persisted-admin-token' \
 FAKE_K8S_RESOLVER_TOKEN='persisted-resolver-token' \
 FAKE_K8S_SETTINGS_KEY='abcdef0123456789abcdef0123456789' \
+K8S_LOCAL_APT_SIGNER_TOKEN='persisted-apt-signer-token-0000001' \
   run_expect 0 "$script" up
 assert_log '--from-literal=POSTGRES_PASSWORD=persisted-postgres-password'
 assert_log '--from-literal=RUSTFS_ACCESS_KEY=persisted-rustfs-user'
@@ -136,6 +142,7 @@ assert_log '--from-literal=RUSTFS_RPC_SECRET=persisted-rustfs-independent-rpc-se
 assert_log '--from-literal=GATEWAY_ADMIN_TOKEN=persisted-admin-token'
 assert_log '--from-literal=GATEWAY_RESOLVER_TOKEN=persisted-resolver-token'
 assert_log '--from-literal=GATEWAY_SETTINGS_ENCRYPTION_KEY=abcdef0123456789abcdef0123456789'
+assert_log '--from-literal=GATEWAY_APT_SIGNER_TOKEN=persisted-apt-signer-token-0000001'
 
 : >"$log"
 run_expect 0 "$script" status

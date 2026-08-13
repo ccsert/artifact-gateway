@@ -75,4 +75,45 @@ describe("RepositoryArtifactsTab APT browse", () => {
     expect(screen.getByText("上游地址")).toBeInTheDocument();
     expect(screen.queryByText("删除文件")).not.toBeInTheDocument();
   });
+
+  it("presents only the current hosted signed snapshot as published content", async () => {
+    const user = userEvent.setup();
+    const hostedRepository: Repository = {
+      ...repository,
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "debian-release",
+      type: "hosted",
+      endpoint: undefined,
+      allowedHosts: [],
+    };
+    const path = "pool/main/w/widget/widget_1.0-1_amd64.deb";
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate: path,
+            digest:
+              "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            size: 8192,
+            contentType: "application/vnd.debian.binary-package",
+            createdAt: "2026-08-13T09:00:00Z",
+          },
+        ],
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={hostedRepository} canWrite />
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByText(path)).toBeInTheDocument();
+    await user.click(screen.getByText(path));
+    expect((await screen.findAllByText("已发布")).length).toBeGreaterThan(0);
+    expect(screen.getByText("APT 资产类型")).toBeInTheDocument();
+    expect(screen.queryByText("首次缓存")).not.toBeInTheDocument();
+    expect(screen.queryByText("上游地址")).not.toBeInTheDocument();
+    expect(screen.queryByText("最近缓存")).not.toBeInTheDocument();
+  });
 });

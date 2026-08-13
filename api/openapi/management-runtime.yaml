@@ -173,6 +173,8 @@ paths:
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId"
   "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId_package"
+  "/repositories/{repositoryId}/apt/snapshots":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots"
   "/repositories/{repositoryId}/conan/references":
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_references"
   "/repositories/{repositoryId}/conan/recipe-revisions":
@@ -271,6 +273,10 @@ components:
       "$ref": "./components/schemas.yaml#/APTPublicationSession"
     APTPackageRevision:
       "$ref": "./components/schemas.yaml#/APTPackageRevision"
+    PublishAPTRepositorySnapshot:
+      "$ref": "./components/schemas.yaml#/PublishAPTRepositorySnapshot"
+    APTRepositorySnapshot:
+      "$ref": "./components/schemas.yaml#/APTRepositorySnapshot"
     RepositoryCapabilities:
       "$ref": "./components/schemas.yaml#/RepositoryCapabilities"
     APIKey:

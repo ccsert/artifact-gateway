@@ -775,6 +775,7 @@ export function RepositoryArtifactsTab({
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
   const proxyGo = format === "go" && repo.type === "proxy";
   const proxyAPT = format === "apt" && repo.type === "proxy";
+  const hostedAPT = format === "apt" && repo.type === "hosted";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
 
   const load = useCallback(
@@ -1142,7 +1143,9 @@ export function RepositoryArtifactsTab({
                 ),
               },
               {
-                title: text("首次缓存", "First cached"),
+                title: proxyAPT
+                  ? text("首次缓存", "First cached")
+                  : text("已发布", "Published"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -1380,6 +1383,7 @@ export function RepositoryArtifactsTab({
           repositoryId={repo.id}
           repoName={repo.name}
           canQuarantine={canQuarantine}
+          published={hostedAPT}
           meta={{
             coordinate: r.coordinate,
             digest: r.digest,
@@ -1526,10 +1530,15 @@ export function RepositoryArtifactsTab({
                               "通过 apt update、apt install 或直接请求 APT 路径后会显示代理缓存",
                               "The proxy cache appears after apt update, apt install, or a direct APT path request.",
                             )
-                          : text(
-                              `通过 ${format} 客户端推送制品后会显示在这里`,
-                              "Push artifacts with the matching client to display them here.",
-                            )
+                          : hostedAPT
+                            ? text(
+                                "通过发布会话上传 .deb，并提交签名快照后会显示当前可见版本",
+                                "Upload .deb files through publication sessions and publish a signed snapshot to display the current visible version.",
+                              )
+                            : text(
+                                `通过 ${format} 客户端推送制品后会显示在这里`,
+                                "Push artifacts with the matching client to display them here.",
+                              )
             }
           />
         </>

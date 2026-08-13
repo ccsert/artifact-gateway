@@ -74,20 +74,40 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 			}
 		}
 	case FormatAPT:
-		for _, asset := range s.aptAssets {
-			if asset.RepositoryID == id {
-				capacity.UsedBytes += asset.Size
-				capacity.ObjectCount++
+		capacity.UsedBytes, capacity.ObjectCount = s.aptBaseCapacityLocked(id)
+		generated := make(map[string]int64)
+		for snapshotID, assets := range s.aptSnapshotAssets {
+			snapshot := s.aptSnapshots[snapshotID]
+			if snapshot.RepositoryID != id || snapshot.State != APTRepositorySnapshotVisible {
+				continue
+			}
+			for objectKey, size := range aptSnapshotGeneratedObjects(assets) {
+				generated[objectKey] = size
 			}
 		}
-		for _, revision := range s.aptPackageRevisions {
-			if revision.RepositoryID == id {
-				capacity.UsedBytes += revision.Size
-				capacity.ObjectCount++
-			}
+		for _, size := range generated {
+			capacity.UsedBytes += size
 		}
+		capacity.ObjectCount += int64(len(generated))
 	}
 	return capacity, nil
+}
+
+func (s *MemoryStore) aptBaseCapacityLocked(repositoryID string) (int64, int64) {
+	var bytes, objects int64
+	for _, asset := range s.aptAssets {
+		if asset.RepositoryID == repositoryID {
+			bytes += asset.Size
+			objects++
+		}
+	}
+	for _, revision := range s.aptPackageRevisions {
+		if revision.RepositoryID == repositoryID {
+			bytes += revision.Size
+			objects++
+		}
+	}
+	return bytes, objects
 }
 
 func (s *MemoryStore) ListRepositoryCapacityRecords(_ context.Context) ([]RepositoryCapacityRecord, error) {

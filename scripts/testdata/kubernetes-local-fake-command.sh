@@ -60,6 +60,7 @@ case "$command_name" in
         *GATEWAY_ADMIN_TOKEN*) value=${FAKE_K8S_ADMIN_TOKEN:-} ;;
         *GATEWAY_RESOLVER_TOKEN*) value=${FAKE_K8S_RESOLVER_TOKEN:-} ;;
         *GATEWAY_SETTINGS_ENCRYPTION_KEY*) value=${FAKE_K8S_SETTINGS_KEY:-} ;;
+        *GATEWAY_APT_SIGNER_TOKEN*) value=${FAKE_K8S_APT_SIGNER_TOKEN:-} ;;
         *) value= ;;
       esac
       if [[ -n "$value" ]]; then

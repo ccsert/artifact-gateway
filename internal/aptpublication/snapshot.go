@@ -22,6 +22,7 @@ import (
 var (
 	ErrInvalidSnapshotInput = errors.New("APT repository snapshot input is invalid")
 	ErrInvalidSignature     = errors.New("APT Release signature result is invalid")
+	ErrSignerUnavailable    = errors.New("APT Release signer is unavailable")
 )
 
 type publisherStore interface {
@@ -79,7 +80,26 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	if repo.Format != repository.FormatAPT || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive {
 		return repository.APTRepositorySnapshot{}, repository.ErrNotFound
 	}
-	packages, memberships, err := p.loadPackages(ctx, input)
+	snapshotCtx, releaseSnapshot, err := repository.LockObjectKeys(ctx, []string{"snapshot-lock/" + input.ID}, p.store, repository.FormatAPT, p.store.LockAPTObject)
+	if err != nil {
+		return repository.APTRepositorySnapshot{}, err
+	}
+	defer releaseSnapshot()
+	existing, existingMembership, existingErr := p.store.GetAPTRepositorySnapshot(snapshotCtx, input.ID)
+	if existingErr == nil {
+		if !sameSnapshotRequest(existing, existingMembership, input) {
+			return repository.APTRepositorySnapshot{}, repository.ErrIdempotencyConflict
+		}
+		if existing.State == repository.APTRepositorySnapshotVisible || existing.State == repository.APTRepositorySnapshotRetired {
+			return existing, nil
+		}
+		if existing.State != repository.APTRepositorySnapshotBuilding {
+			return repository.APTRepositorySnapshot{}, repository.ErrVersionConflict
+		}
+	} else if !errors.Is(existingErr, repository.ErrNotFound) {
+		return repository.APTRepositorySnapshot{}, existingErr
+	}
+	packages, memberships, err := p.loadPackages(snapshotCtx, input)
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
@@ -87,32 +107,30 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		ID: input.ID, RepositoryID: input.RepositoryID, Suite: input.Suite, Sequence: input.Sequence,
 		State: repository.APTRepositorySnapshotBuilding, CreatedAt: input.CreatedAt.UTC(),
 	}
-	snapshot, err = p.store.CreateAPTRepositorySnapshot(ctx, snapshot, memberships)
+	snapshot, err = p.store.CreateAPTRepositorySnapshot(snapshotCtx, snapshot, memberships)
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
-	committed := false
+	if snapshot.State == repository.APTRepositorySnapshotVisible || snapshot.State == repository.APTRepositorySnapshotRetired {
+		return snapshot, nil
+	}
+	if snapshot.State != repository.APTRepositorySnapshotBuilding {
+		return repository.APTRepositorySnapshot{}, repository.ErrVersionConflict
+	}
 	releaseObjects := func() {}
-	defer func() {
-		if !committed {
-			failureCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			_ = p.store.FailAPTRepositorySnapshot(failureCtx, snapshot.ID)
-		}
-		releaseObjects()
-	}()
+	defer func() { releaseObjects() }()
 
 	bundle, err := buildSnapshotBundle(snapshot, packages)
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
 	releaseDigest := digestBytes(bundle.release)
-	signature, err := p.signer.SignRelease(ctx, SignReleaseRequest{
+	signature, err := p.signer.SignRelease(snapshotCtx, SignReleaseRequest{
 		RepositoryID: snapshot.RepositoryID, SnapshotID: snapshot.ID, ReleaseDigest: releaseDigest,
 		Release: bytes.NewReader(bundle.release),
 	})
 	if err != nil {
-		return repository.APTRepositorySnapshot{}, fmt.Errorf("sign APT Release: %w", err)
+		return repository.APTRepositorySnapshot{}, fmt.Errorf("%w: %v", ErrSignerUnavailable, err)
 	}
 	if !validSignatureResult(signature) {
 		return repository.APTRepositorySnapshot{}, ErrInvalidSignature
@@ -130,10 +148,10 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		})
 		objectKeys = append(objectKeys, objectKey)
 	}
-	if err = p.store.CreateAPTSnapshotObjectIntents(ctx, snapshot.ID, intents); err != nil {
+	if err = p.store.CreateAPTSnapshotObjectIntents(snapshotCtx, snapshot.ID, intents); err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
-	objectCtx, release, err := repository.LockObjectKeys(ctx, objectKeys, p.store, repository.FormatAPT, p.store.LockAPTObject)
+	objectCtx, release, err := repository.LockObjectKeys(snapshotCtx, objectKeys, p.store, repository.FormatAPT, p.store.LockAPTObject)
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
@@ -156,8 +174,21 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
-	committed = true
 	return published, nil
+}
+
+func sameSnapshotRequest(snapshot repository.APTRepositorySnapshot, membership []repository.APTSnapshotPackage, input PublishSnapshotInput) bool {
+	if snapshot.RepositoryID != input.RepositoryID || snapshot.Suite != input.Suite || snapshot.Sequence != input.Sequence || len(membership) != len(input.SessionIDs) {
+		return false
+	}
+	stored := make([]string, 0, len(membership))
+	for _, item := range membership {
+		stored = append(stored, item.PublicationSessionID)
+	}
+	requested := append([]string(nil), input.SessionIDs...)
+	slices.Sort(stored)
+	slices.Sort(requested)
+	return slices.Equal(stored, requested)
 }
 
 func validPublishSnapshotInput(input PublishSnapshotInput) bool {

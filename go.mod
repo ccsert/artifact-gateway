@@ -3,6 +3,7 @@ module github.com/artifact-gateway/artifact-gateway
 go 1.26.5
 
 require (
+	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/getkin/kin-openapi v0.143.0
 	github.com/google/uuid v1.6.0
@@ -26,6 +27,7 @@ require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cloudflare/circl v1.6.2 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect

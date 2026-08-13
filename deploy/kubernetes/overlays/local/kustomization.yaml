@@ -17,3 +17,6 @@ images:
   - name: artifact-gateway-console
     newName: artifact-gateway-console
     newTag: k8s-local
+  - name: artifact-gateway-apt-signer
+    newName: artifact-gateway-apt-signer
+    newTag: k8s-local
