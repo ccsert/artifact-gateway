@@ -763,6 +763,15 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		}
 		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: principal.Actor, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
 		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
+		if errors.Is(err, repository.ErrNameExists) {
+			// A concurrent first asset may have created the replacement session
+			// after our lookup. Rejoin that live session instead of surfacing a
+			// transient 500 or overwriting its staged facts.
+			s, err = h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+			if err == nil {
+				err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
+			}
+		}
 	} else if err == nil {
 		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
 	}

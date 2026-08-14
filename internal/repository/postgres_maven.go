@@ -11,9 +11,25 @@ import (
 )
 
 func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPublishSession) (MavenPublishSession, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenPublishSession{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='expired' WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 AND state='open' AND expires_at<=now()`, v.RepositoryID, v.Coordinate, v.Publisher); err != nil {
+		return MavenPublishSession{}, err
+	}
 	objects, _ := json.Marshal(v.Objects)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, v.ID, v.RepositoryID, v.Coordinate, v.Publisher, v.PomObject, v.State, v.ExpiresAt, objects)
-	return v, err
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, v.ID, v.RepositoryID, v.Coordinate, v.Publisher, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
+		if isUnique(err) {
+			return MavenPublishSession{}, ErrNameExists
+		}
+		return MavenPublishSession{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return MavenPublishSession{}, err
+	}
+	return v, nil
 }
 func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Context, v MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -84,7 +100,7 @@ func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (
 func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
 	var v MavenPublishSession
 	var raw []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 AND state='open'`, repoID, coordinate, publisher).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 AND state='open' AND expires_at>now()`, repoID, coordinate, publisher).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}

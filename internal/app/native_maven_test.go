@@ -219,6 +219,46 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	_ = repo
 }
 
+func TestNativeMavenProtocolReplacesExpiredOpenSessionBeforeStaging(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired := repository.MavenPublishSession{
+		ID:           uuid.NewString(),
+		RepositoryID: repo.ID,
+		Coordinate:   "org.example:widget:1.2.0",
+		Publisher:    "maven",
+		PomObject:    "widget-1.2.0.pom",
+		State:        "open",
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		Objects:      []repository.MavenDeclaredObject{{Name: "widget-1.2.0.pom", Digest: "sha256:stale", Size: 1}},
+	}
+	if _, err = store.CreateMavenPublishSession(context.Background(), expired); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
+	request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/widget-1.2.0.pom", strings.NewReader(pom))
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("retry PUT=%d %s", response.Code, response.Body.String())
+	}
+
+	stale, err := store.GetMavenPublishSession(context.Background(), expired.ID)
+	if err != nil || stale.State != "expired" {
+		t.Fatalf("expired session=%#v err=%v", stale, err)
+	}
+	fresh, err := store.FindOpenMavenPublishSession(context.Background(), repo.ID, expired.Coordinate, expired.Publisher)
+	if err != nil || fresh.ID == expired.ID || len(fresh.Objects) != 1 || fresh.Objects[0].Digest == "sha256:stale" {
+		t.Fatalf("fresh session=%#v err=%v", fresh, err)
+	}
+}
+
 func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})

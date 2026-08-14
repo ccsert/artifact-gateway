@@ -15,6 +15,17 @@ const mavenObjectClaimLease = 5 * time.Minute
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for id, existing := range s.mavenSessions {
+		if existing.RepositoryID != session.RepositoryID || existing.Coordinate != session.Coordinate || existing.Publisher != session.Publisher || existing.State != "open" {
+			continue
+		}
+		if existing.ExpiresAt.After(now) {
+			return MavenPublishSession{}, ErrNameExists
+		}
+		existing.State = "expired"
+		s.mavenSessions[id] = existing
+	}
 	s.mavenSessions[session.ID] = session
 	s.mavenUploads[session.ID] = map[string]string{}
 	return session, nil
@@ -44,10 +55,16 @@ func (s *MemoryStore) GetMavenPublishSession(_ context.Context, id string) (Mave
 	return v, nil
 }
 func (s *MemoryStore) FindOpenMavenPublishSession(_ context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, v := range s.mavenSessions {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for id, v := range s.mavenSessions {
 		if v.RepositoryID == repoID && v.Coordinate == coordinate && v.Publisher == publisher && v.State == "open" {
+			if !v.ExpiresAt.After(now) {
+				v.State = "expired"
+				s.mavenSessions[id] = v
+				continue
+			}
 			return v, nil
 		}
 	}

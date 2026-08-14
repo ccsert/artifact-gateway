@@ -188,6 +188,9 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Replaced expired native Maven staging sessions on the next authenticated PUT
+  so interrupted publishes can retry without remaining permanently blocked by
+  the expired coordinate lock.
 - Resolved npm Proxy and Group tarballs directly from a cold `package-lock.json`
   URL before any packument request, accepted canonical single-root manifest
   layouts used by legacy scoped packages, retained online-to-offline `npm ci`
