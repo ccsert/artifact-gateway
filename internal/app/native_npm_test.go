@@ -532,6 +532,59 @@ func TestNativeNPMProxyKeepsValidVersionsWhenLegacyMetadataLacksIntegrity(t *tes
 	}
 }
 
+func TestNativeNPMProxyRequestsBoundedInstallMetadata(t *testing.T) {
+	const packageName, version = "large-install-metadata", "1.0.0"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	upstreamAccept := ""
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamAccept = r.Header.Get("Accept")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": packageName, "dist-tags": map[string]string{"latest": version},
+			"versions": map[string]any{version: map[string]any{
+				"name": packageName, "version": version,
+				"dist": map[string]string{
+					"tarball":   upstream.URL + "/" + packageName + "-" + version + ".tgz",
+					"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+					"shasum":    hex.EncodeToString(sha1Sum[:]),
+				},
+			}},
+		})
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-install-metadata-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+version, nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", response.Code, response.Body.String())
+	}
+	if upstreamAccept != "application/vnd.npm.install-v1+json" {
+		t.Fatalf("upstream Accept=%q", upstreamAccept)
+	}
+}
+
+func TestNPMProxyPackumentLimitCoversLargePublicInstallMetadata(t *testing.T) {
+	if npmPackumentLimit < 64<<20 {
+		t.Fatalf("npmPackumentLimit=%d, want at least 64 MiB", npmPackumentLimit)
+	}
+}
+
 func TestNativeNPMProxyColdScopedLegacyRootTarballResolvesWithoutPackumentRequest(t *testing.T) {
 	packageName, version := "@types/json-schema", "7.0.15"
 	tarballName := "json-schema-" + version + ".tgz"

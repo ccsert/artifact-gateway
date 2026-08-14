@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	npmPublishBodyLimit = 384 << 20
-	npmTarballLimit     = 256 << 20
-	npmPackumentLimit   = 16 << 20
-	npmMetadataTTL      = 15 * time.Minute
+	npmPublishBodyLimit     = 384 << 20
+	npmTarballLimit         = 256 << 20
+	npmPackumentLimit       = 64 << 20
+	npmInstallMetadataMedia = "application/vnd.npm.install-v1+json"
+	npmMetadataTTL          = 15 * time.Minute
 )
 
 type nativeNPMHandler struct {
@@ -458,9 +459,7 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	}
 	upstreamTarget := strings.TrimRight(repo.Endpoint, "/") + "/" + url.PathEscape(packageName)
 	upstreamHeaders := make(http.Header)
-	if accept := r.Header.Get("Accept"); accept != "" {
-		upstreamHeaders.Set("Accept", accept)
-	}
+	upstreamHeaders.Set("Accept", npmInstallMetadataMedia)
 	if err == nil && pkg.SourceEndpoint == repo.Endpoint && !pkg.Negative {
 		if pkg.UpstreamETag != "" {
 			upstreamHeaders.Set("If-None-Match", pkg.UpstreamETag)

@@ -199,6 +199,7 @@ a dated version heading without rewriting their meaning.
   layouts used by legacy scoped packages plus harmless dot segments emitted by
   official packages, retained valid versions when unrelated legacy metadata
   lacks modern integrity, removed dist-tags that target skipped versions,
+  requested bounded install metadata and accepted large public packuments,
   retained online-to-offline `npm ci` caching, and emitted one member-owned
   terminal audit for metadata failures.
 - Honored repeated OCI `Accept` request headers when selecting manifest media
