@@ -188,6 +188,9 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Resolved npm Proxy and Group tarballs directly from a cold `package-lock.json`
+  URL before any packument request, retained online-to-offline `npm ci` caching,
+  and emitted one member-owned terminal audit for metadata failures.
 - Honored repeated OCI `Accept` request headers when selecting manifest media
   types, matching Docker clients that send one header field per supported type.
 - Prevented OpenAPI contract checks from reinstalling dependencies underneath

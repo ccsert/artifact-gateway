@@ -95,6 +95,49 @@ until curl --silent --show-error --fail "$proxy_url/livez" >/dev/null; do
 done
 
 npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${proxy_port}/npm/private/:_authToken" fixture-secret
+
+lockfile_install="$workdir/lockfile-install"
+mkdir "$lockfile_install"
+(
+  cd "$lockfile_install"
+  npm init -y >/dev/null
+  npm pkg set \
+    dependencies.ag-npm-fixture='1.0.0' \
+    'dependencies.@artifact-gateway/npm-fixture'='2.0.0'
+  npm_config_cache="$workdir/npm-cache-lock" npm_config_userconfig="$anonymous_config" npm install \
+    --package-lock-only --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
+  node -e '
+    const lock=require("./package-lock.json");
+    const registry=process.argv[1];
+    for (const name of ["ag-npm-fixture", "@artifact-gateway/npm-fixture"]) {
+      const resolved=lock.packages[`node_modules/${name}`]?.resolved;
+      if (!resolved?.startsWith(registry)) throw new Error(`${name} did not lock to Group: ${resolved}`);
+    }
+  ' "$group_registry_url"
+)
+
+# package-lock-only has resolved metadata through the Group. Restarting the
+# in-memory Gateway now proves npm ci can lead with the locked tarball URL when
+# the Proxy has neither packument nor tarball cache state.
+kill "$proxy_pid"
+wait "$proxy_pid" 2>/dev/null || true
+proxy_pid=""
+LISTEN_ADDR="127.0.0.1:${proxy_port}" NPM_PROXY_ENDPOINT="$registry_url" "$workdir/native-npm-fixture" >"$workdir/proxy-cold.log" 2>&1 &
+proxy_pid=$!
+until curl --silent --show-error --fail "$proxy_url/livez" >/dev/null; do
+  if ! kill -0 "$proxy_pid" 2>/dev/null; then
+    sed -n '1,200p' "$workdir/proxy-cold.log" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+(
+  cd "$lockfile_install"
+  npm_config_cache="$workdir/npm-cache-ci-online" npm_config_userconfig="$anonymous_config" npm ci \
+    --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+)
+
 private_package="$workdir/private-package"
 mkdir "$private_package"
 (
@@ -116,6 +159,15 @@ mkdir "$install_dir"
 kill "$upstream_pid"
 wait "$upstream_pid" 2>/dev/null || true
 upstream_pid=""
+
+rm -rf "$lockfile_install/node_modules"
+(
+  cd "$lockfile_install"
+  npm_config_cache="$workdir/npm-cache-ci-offline" npm_config_userconfig="$anonymous_config" npm ci \
+    --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+)
+
 offline_install="$workdir/offline-install"
 mkdir "$offline_install"
 (
@@ -125,4 +177,4 @@ mkdir "$offline_install"
   node -e 'for (const [name,version] of Object.entries({"ag-npm-private-fixture":"3.0.0","ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
-printf 'Native npm Hosted, Proxy, and Group online/offline install E2E passed through %s\n' "$proxy_url"
+printf 'Native npm Hosted, Proxy, Group, and cold package-lock online/offline npm ci E2E passed through %s\n' "$proxy_url"

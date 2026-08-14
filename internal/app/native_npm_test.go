@@ -364,6 +364,91 @@ func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) 
 	}
 }
 
+func TestNativeNPMProxyColdTarballMetadataFailuresAuditExactlyOnce(t *testing.T) {
+	const packageName, version = "lockfile-audit-widget", "1.2.3"
+	tarballName := packageName + "-" + version + ".tgz"
+	checksum := sha512.Sum512([]byte("fixture"))
+	tests := []struct {
+		name        string
+		upstream    http.HandlerFunc
+		wantStatus  int
+		wantOutcome repository.AuditOutcome
+	}{
+		{
+			name: "first upstream not found",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.NotFound(w, nil)
+			},
+			wantStatus:  http.StatusNotFound,
+			wantOutcome: repository.AuditNotFound,
+		},
+		{
+			name: "tarball host rejected by allowlist",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"name": packageName, "dist-tags": map[string]string{"latest": version},
+					"versions": map[string]any{version: map[string]any{
+						"name": packageName, "version": version,
+						"dist": map[string]string{
+							"tarball":   "https://blocked.example/" + tarballName,
+							"integrity": "sha512-" + base64.StdEncoding.EncodeToString(checksum[:]),
+							"shasum":    strings.Repeat("a", 40),
+						},
+					}},
+				})
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditProxyDenied,
+		},
+		{
+			name: "metadata upstream unavailable",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditUpstreamError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstream := httptest.NewServer(tt.upstream)
+			defer upstream.Close()
+			parsed, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := repository.NewMemoryStore()
+			repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+				ID: uuid.NewString(), Name: "npm-cold-audit", Format: repository.FormatNPM,
+				Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsed.Hostname()},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := NewGatewayHandler(
+				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+				UpstreamClient{HTTPClient: upstream.Client()},
+			)
+			request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
+			authorize(request, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if len(store.Audits) != 1 {
+				t.Fatalf("audits=%#v", store.Audits)
+			}
+			audit := store.Audits[0]
+			if audit.GroupName != repo.Name || audit.Repository != repo.Name || audit.MemberName != "" ||
+				audit.Resource != packageName+"/-/"+tarballName || audit.Status != tt.wantStatus ||
+				audit.Outcome != tt.wantOutcome || audit.CacheDisposition != "miss" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
+	}
+}
+
 func TestNativeNPMProxyNegativeCachesAndServesStaleMetadata(t *testing.T) {
 	const version = "1.0.0"
 	tarball := npmFixtureTarball(t, "stale-widget", version)

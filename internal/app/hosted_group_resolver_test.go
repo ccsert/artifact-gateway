@@ -12,11 +12,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 // conanGatewayClient adapts the Conan-only fixture client to the OCIClient
@@ -240,6 +242,94 @@ func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *tes
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
 		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestV2GroupNPMColdTarballMetadataFailuresAuditMemberExactlyOnce(t *testing.T) {
+	const packageName, version = "group-lockfile-audit-widget", "1.2.3"
+	tarballName := packageName + "-" + version + ".tgz"
+	checksum := sha512.Sum512([]byte("fixture"))
+	tests := []struct {
+		name        string
+		upstream    http.HandlerFunc
+		wantStatus  int
+		wantOutcome repository.AuditOutcome
+	}{
+		{
+			name: "first upstream not found",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.NotFound(w, nil)
+			},
+			wantStatus:  http.StatusNotFound,
+			wantOutcome: repository.AuditNotFound,
+		},
+		{
+			name: "tarball host rejected by allowlist",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"name": packageName, "dist-tags": map[string]string{"latest": version},
+					"versions": map[string]any{version: map[string]any{
+						"name": packageName, "version": version,
+						"dist": map[string]string{
+							"tarball":   "https://blocked.example/" + tarballName,
+							"integrity": "sha512-" + base64.StdEncoding.EncodeToString(checksum[:]),
+							"shasum":    strings.Repeat("a", 40),
+						},
+					}},
+				})
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditProxyDenied,
+		},
+		{
+			name: "metadata upstream unavailable",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditUpstreamError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstream := httptest.NewServer(tt.upstream)
+			defer upstream.Close()
+			parsed, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := repository.NewMemoryStore()
+			proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+				ID: uuid.NewString(), Name: "npm-group-cold-audit-proxy", Format: repository.FormatNPM,
+				Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsed.Hostname()},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			group := createV2Group(t, store, "npm-group-cold-audit", repository.FormatNPM,
+				repository.GroupMember{RepositoryID: proxy.ID},
+			)
+			handler := NewGatewayHandler(
+				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+				UpstreamClient{HTTPClient: upstream.Client()},
+			)
+			request := httptest.NewRequest(http.MethodGet, "/npm/"+group.Name+"/"+packageName+"/-/"+tarballName, nil)
+			authorize(request, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if len(store.Audits) != 1 {
+				t.Fatalf("audits=%#v", store.Audits)
+			}
+			audit := store.Audits[0]
+			if audit.GroupName != group.Name || audit.Repository != group.Name || audit.MemberName != proxy.Name ||
+				audit.Resource != packageName+"/-/"+tarballName || audit.Status != tt.wantStatus ||
+				audit.Outcome != tt.wantOutcome || audit.CacheDisposition != "miss" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
 	}
 }
 

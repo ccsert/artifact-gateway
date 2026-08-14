@@ -112,11 +112,15 @@ func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, res
 		}
 		var pkg repository.NPMPackage
 		if repo.Type == repository.RepositoryTypeProxy {
-			resolved, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name})
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+			resolved, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, target)
 			if resolveErr != nil {
 				var responseError *npmProxyPackageError
-				if errors.As(resolveErr, &responseError) && responseError.Status != http.StatusNotFound && firstError == nil {
-					firstError = responseError
+				if errors.As(resolveErr, &responseError) {
+					h.native.recordNPMProxyPackageError(r, repo, target, packageName, actor, responseError)
+					if responseError.Status != http.StatusNotFound && firstError == nil {
+						firstError = responseError
+					}
 				}
 				continue
 			}
@@ -193,6 +197,7 @@ func mergeNPMGroupPackage(merged *repository.NPMPackage, incoming repository.NPM
 
 func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, tarballName, actor string) {
 	higherPriority := make([]repository.HostedRepository, 0, len(members))
+	memberFailureAudited := false
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
@@ -204,6 +209,8 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 			if _, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
 				var responseError *npmProxyPackageError
 				if errors.As(resolveErr, &responseError) {
+					h.native.recordNPMProxyPackageError(r, repo, target, packageName+"/-/"+tarballName, actor, responseError)
+					memberFailureAudited = true
 					if responseError.Status == http.StatusNotFound {
 						higherPriority = append(higherPriority, repo)
 						continue
@@ -211,17 +218,25 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 					h.native.writeError(w, responseError.Status, responseError.Message)
 					return
 				}
+				h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
 				h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
 				return
 			}
 			version, err = h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 		}
 		if errors.Is(err, repository.ErrNotFound) {
+			if repo.Type == repository.RepositoryTypeProxy {
+				target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+				h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditNotFound, http.StatusNotFound, 0, "miss")
+				memberFailureAudited = true
+			}
 			higherPriority = append(higherPriority, repo)
 			continue
 		}
 		if err != nil {
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
 			h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+			h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
 			return
 		}
 		for _, higher := range higherPriority {
@@ -262,6 +277,8 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 		}
 		return
 	}
-	resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+	if !memberFailureAudited {
+		resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+	}
 	h.native.writeError(w, http.StatusNotFound, "package tarball not found")
 }
