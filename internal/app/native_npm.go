@@ -767,6 +767,18 @@ func (h nativeNPMHandler) proxyTarball(w http.ResponseWriter, r *http.Request, r
 func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, tarballName, actor string, target npmAuditTarget) {
 	version, err := h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 	if errors.Is(err, repository.ErrNotFound) {
+		if _, resolveErr := h.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
+			var responseError *npmProxyPackageError
+			if errors.As(resolveErr, &responseError) {
+				h.writeError(w, responseError.Status, responseError.Message)
+				return
+			}
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			return
+		}
+		version, err = h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+	}
+	if errors.Is(err, repository.ErrNotFound) {
 		h.writeError(w, http.StatusNotFound, "package tarball not found")
 		h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditNotFound, http.StatusNotFound, 0, "bypass")
 		return

@@ -199,6 +199,23 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 			continue
 		}
 		version, err := h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+		if errors.Is(err, repository.ErrNotFound) && repo.Type == repository.RepositoryTypeProxy {
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+			if _, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
+				var responseError *npmProxyPackageError
+				if errors.As(resolveErr, &responseError) {
+					if responseError.Status == http.StatusNotFound {
+						higherPriority = append(higherPriority, repo)
+						continue
+					}
+					h.native.writeError(w, responseError.Status, responseError.Message)
+					return
+				}
+				h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+				return
+			}
+			version, err = h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			higherPriority = append(higherPriority, repo)
 			continue

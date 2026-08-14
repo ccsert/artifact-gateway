@@ -182,6 +182,67 @@ func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 	}
 }
 
+func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-empty-hosted", Name: "npm-empty-hosted", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	packageName, version := "yocto-queue", "0.1.0"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + packageName + "-" + version + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + packageName + "-" + version + ".tgz":
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-real-shape-proxy", Name: "npm-real-shape-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-real-shape-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-real-shape-group/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestV2GroupNPMAnonymousReadExcludesPrivateMembers(t *testing.T) {
 	store := repository.NewMemoryStore()
 	public, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{

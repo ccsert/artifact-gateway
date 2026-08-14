@@ -312,6 +312,58 @@ func TestNativeNPMProxyCachesPackumentAndVerifiedTarball(t *testing.T) {
 	}
 }
 
+func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) {
+	packageName, version := "lockfile-widget", "1.2.3"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + packageName + "-" + version + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + packageName + "-" + version + ".tgz":
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-lockfile-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestNativeNPMProxyNegativeCachesAndServesStaleMetadata(t *testing.T) {
 	const version = "1.0.0"
 	tarball := npmFixtureTarball(t, "stale-widget", version)
