@@ -196,8 +196,11 @@ a dated version heading without rewriting their meaning.
   the expired coordinate lock.
 - Resolved npm Proxy and Group tarballs directly from a cold `package-lock.json`
   URL before any packument request, accepted canonical single-root manifest
-  layouts used by legacy scoped packages, retained online-to-offline `npm ci`
-  caching, and emitted one member-owned terminal audit for metadata failures.
+  layouts used by legacy scoped packages plus harmless dot segments emitted by
+  official packages, retained valid versions when unrelated legacy metadata
+  lacks modern integrity, removed dist-tags that target skipped versions,
+  retained online-to-offline `npm ci` caching, and emitted one member-owned
+  terminal audit for metadata failures.
 - Honored repeated OCI `Accept` request headers when selecting manifest media
   types, matching Docker clients that send one header field per supported type.
 - Prevented OpenAPI contract checks from reinstalling dependencies underneath

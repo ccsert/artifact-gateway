@@ -604,17 +604,21 @@ func npmProxyPackage(repo repository.HostedRepository, packageName string, body 
 		SourceEndpoint: repo.Endpoint, UpstreamETag: headers.Get("ETag"),
 		UpstreamModified: headers.Get("Last-Modified"), MetadataExpiresAt: now.Add(ttl),
 	}
+	invalidVersionMetadata := false
+	invalidTarballURL := false
 	for version, manifest := range document.Versions {
 		if !npmprotocol.ValidVersion(version) {
 			continue
 		}
 		var identity npmVersionIdentity
 		if json.Unmarshal(manifest, &identity) != nil || identity.Name != packageName || identity.Version != version || !validNPMProxyIntegrity(identity.Dist.Integrity, identity.Dist.Shasum) {
-			return repository.NPMPackage{}, errors.New("npm upstream version metadata is invalid")
+			invalidVersionMetadata = true
+			continue
 		}
 		tarballURL, parseErr := url.Parse(identity.Dist.Tarball)
 		if parseErr != nil || !proxyUpstreamURLAllowed(repo, tarballURL) {
-			return repository.NPMPackage{}, errors.New("npm upstream tarball URL is not allowed")
+			invalidTarballURL = true
+			continue
 		}
 		createdAt := now
 		if published := document.Time[version]; published != "" {
@@ -631,17 +635,28 @@ func npmProxyPackage(repo repository.HostedRepository, packageName string, body 
 		})
 	}
 	if len(pkg.Versions) == 0 {
+		if invalidTarballURL {
+			return repository.NPMPackage{}, errors.New("npm upstream tarball URL is not allowed")
+		}
+		if invalidVersionMetadata {
+			return repository.NPMPackage{}, errors.New("npm upstream version metadata is invalid")
+		}
 		return repository.NPMPackage{}, errors.New("npm upstream package has no supported versions")
 	}
 	versions := make(map[string]bool, len(pkg.Versions))
 	for _, version := range pkg.Versions {
 		versions[version.Version] = true
 	}
+	filteredDistTags := make(map[string]string, len(pkg.DistTags))
 	for tag, target := range pkg.DistTags {
-		if tag == "" || len(tag) > 128 || strings.ContainsAny(tag, "/\\\x00") || !versions[target] {
+		if tag == "" || len(tag) > 128 || strings.ContainsAny(tag, "/\\\x00") {
 			return repository.NPMPackage{}, errors.New("npm upstream distribution tags are invalid")
 		}
+		if versions[target] {
+			filteredDistTags[tag] = target
+		}
 	}
+	pkg.DistTags = filteredDistTags
 	return pkg, nil
 }
 

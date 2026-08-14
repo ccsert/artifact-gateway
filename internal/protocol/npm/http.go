@@ -256,15 +256,19 @@ func canonicalNPMTarEntryPath(name string) (string, error) {
 		return "", errors.New("attachment contains an unsafe tar path")
 	}
 	canonical := strings.TrimSuffix(name, "/")
-	if canonical == "" || path.Clean(canonical) != canonical {
+	if canonical == "" {
 		return "", errors.New("attachment contains an unsafe tar path")
 	}
 	for _, segment := range strings.Split(canonical, "/") {
-		if segment == "" || segment == "." || segment == ".." {
+		if segment == "" || segment == ".." {
 			return "", errors.New("attachment contains an unsafe tar path")
 		}
 	}
-	return canonical, nil
+	cleaned := path.Clean(canonical)
+	if cleaned == "." || strings.HasPrefix(cleaned, "../") {
+		return "", errors.New("attachment contains an unsafe tar path")
+	}
+	return cleaned, nil
 }
 
 func PackagePath(name string) string {

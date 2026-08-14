@@ -456,6 +456,82 @@ func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) 
 	}
 }
 
+func TestNativeNPMProxyKeepsValidVersionsWhenLegacyMetadataLacksIntegrity(t *testing.T) {
+	const packageName, validVersion, legacyVersion = "color-convert", "2.0.1", "0.3.0"
+	validTarball := npmFixtureTarball(t, packageName, validVersion)
+	sha512Sum := sha512.Sum512(validTarball)
+	sha1Sum := sha1.Sum(validTarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+packageName {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":      packageName,
+			"dist-tags": map[string]string{"latest": validVersion, "legacy": legacyVersion},
+			"versions": map[string]any{
+				legacyVersion: map[string]any{
+					"name": packageName, "version": legacyVersion,
+					"dist": map[string]string{
+						"tarball": upstream.URL + "/" + packageName + "-" + legacyVersion + ".tgz",
+						"shasum":  strings.Repeat("a", 40),
+					},
+				},
+				validVersion: map[string]any{
+					"name": packageName, "version": validVersion,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "-" + validVersion + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				},
+			},
+		})
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-legacy-metadata-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	versionRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+validVersion, nil)
+	authorize(versionRequest, "resolver-secret")
+	versionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(versionResponse, versionRequest)
+	if versionResponse.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", versionResponse.Code, versionResponse.Body.String())
+	}
+	packumentRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName, nil)
+	authorize(packumentRequest, "resolver-secret")
+	packumentResponse := httptest.NewRecorder()
+	handler.ServeHTTP(packumentResponse, packumentRequest)
+	var packument struct {
+		DistTags map[string]string          `json:"dist-tags"`
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if packumentResponse.Code != http.StatusOK || json.NewDecoder(packumentResponse.Body).Decode(&packument) != nil {
+		t.Fatalf("packument=%d %s", packumentResponse.Code, packumentResponse.Body.String())
+	}
+	if _, ok := packument.Versions[validVersion]; !ok || len(packument.Versions) != 1 {
+		t.Fatalf("versions=%#v", packument.Versions)
+	}
+	if packument.DistTags["latest"] != validVersion {
+		t.Fatalf("dist-tags=%#v", packument.DistTags)
+	}
+	if _, ok := packument.DistTags["legacy"]; ok {
+		t.Fatalf("invalid legacy dist-tag remained: %#v", packument.DistTags)
+	}
+}
+
 func TestNativeNPMProxyColdScopedLegacyRootTarballResolvesWithoutPackumentRequest(t *testing.T) {
 	packageName, version := "@types/json-schema", "7.0.15"
 	tarballName := "json-schema-" + version + ".tgz"

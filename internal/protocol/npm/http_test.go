@@ -86,6 +86,16 @@ func TestValidateTarballAcceptsOneCanonicalLegacyRoot(t *testing.T) {
 	}
 }
 
+func TestValidateTarballAcceptsHarmlessDotSegmentsFromOfficialPackages(t *testing.T) {
+	body := npmTestTarballEntries(t, []npmTestTarEntry{
+		{Name: "package/./dist/index.js", Body: "module.exports = {}\n"},
+		{Name: "package/package.json", Body: `{"name":"agent-base","version":"7.1.4"}`},
+	})
+	if err := ValidateTarball(body, "agent-base", "7.1.4"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateTarballRejectsUnsafeOrAmbiguousManifestRoots(t *testing.T) {
 	identity := `{"name":"@types/json-schema","version":"7.0.15"}`
 	tests := []struct {
