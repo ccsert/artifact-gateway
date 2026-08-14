@@ -188,6 +188,9 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Served npm package-version metadata through Hosted, Proxy, and Group routes,
+  including cold proxy resolution and group tarball URL rewriting, so Corepack
+  can install pinned package-manager versions through Artifact Gateway.
 - Replaced expired native Maven staging sessions on the next authenticated PUT
   so interrupted publishes can retry without remaining permanently blocked by
   the expired coordinate lock.

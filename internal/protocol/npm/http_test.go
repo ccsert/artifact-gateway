@@ -21,6 +21,26 @@ func TestParsePathSupportsScopedPackagesAndTarballs(t *testing.T) {
 	}
 }
 
+func TestParsePathSupportsPackageVersionMetadata(t *testing.T) {
+	version, ok := ParsePath("/npm/releases/pnpm/10.7.1")
+	if !ok || version.Repository != "releases" || version.Package != "pnpm" || version.Version != "10.7.1" || version.Kind != RouteVersion {
+		t.Fatalf("version=%#v ok=%t", version, ok)
+	}
+	scoped, ok := ParsePath("/npm/releases/@scope%2Fwidget/1.2.3-beta.1")
+	if !ok || scoped.Package != "@scope/widget" || scoped.Version != "1.2.3-beta.1" || scoped.Kind != RouteVersion {
+		t.Fatalf("scoped=%#v ok=%t", scoped, ok)
+	}
+	for _, route := range []string{
+		"/npm/releases/pnpm/latest",
+		"/npm/releases/pnpm/../../secret",
+		"/npm/releases/@scope%2Fwidget/not-a-version",
+	} {
+		if parsed, accepted := ParsePath(route); accepted {
+			t.Fatalf("invalid version route %q accepted as %#v", route, parsed)
+		}
+	}
+}
+
 func TestValidVersionUsesStrictSemVer(t *testing.T) {
 	for _, version := range []string{"0.0.0", "1.2.3", "1.2.3-beta.1", "1.2.3+build.7", "1.2.3-rc.1+linux"} {
 		if !ValidVersion(version) {

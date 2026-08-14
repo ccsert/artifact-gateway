@@ -216,6 +216,12 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+	case npmprotocol.RouteVersion:
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
+		}
+		h.versionMetadata(w, r, repo, route.Package, route.Version, principal.Actor)
 	case npmprotocol.RouteTarball:
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -228,6 +234,53 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 	}
 	return true
+}
+
+func (h nativeNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, versionName, actor string) {
+	var pkg repository.NPMPackage
+	disposition := "bypass"
+	if repo.Type == repository.RepositoryTypeProxy {
+		target := npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}
+		resolved, err := h.resolveProxyPackageWithAudit(r, repo, packageName, actor, target)
+		if err != nil {
+			var responseError *npmProxyPackageError
+			if errors.As(err, &responseError) {
+				h.recordNPMProxyPackageError(r, repo, target, packageName+"@"+versionName, actor, responseError)
+				h.writeError(w, responseError.Status, responseError.Message)
+				return
+			}
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			return
+		}
+		pkg = resolved.Package
+		disposition = resolved.Disposition
+		if resolved.Stale {
+			w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+		}
+	} else {
+		var err error
+		pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
+		if errors.Is(err, repository.ErrNotFound) {
+			h.writeError(w, http.StatusNotFound, "package version not found")
+			return
+		}
+		if err != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			return
+		}
+	}
+	pkg, _, err := h.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		return
+	}
+	version, ok := findNPMVersion(pkg, versionName)
+	if !ok {
+		h.writeError(w, http.StatusNotFound, "package version not found")
+		h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
+		return
+	}
+	h.writeNPMVersionMetadata(w, r, repo, repo.Name, version, actor, disposition)
 }
 
 func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, publisher string) {
@@ -652,6 +705,15 @@ func cloneNPMStringMap(source map[string]string) map[string]string {
 	return cloned
 }
 
+func findNPMVersion(pkg repository.NPMPackage, versionName string) (repository.NPMVersion, bool) {
+	for _, version := range pkg.Versions {
+		if version.Version == versionName {
+			return version, true
+		}
+	}
+	return repository.NPMVersion{}, false
+}
+
 func (h nativeNPMHandler) npmVersionReadBlocked(ctx context.Context, repo repository.HostedRepository, version repository.NPMVersion) (bool, error) {
 	return repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatNPM, version.PackageName+"@"+version.Version, version.Digest)
 }
@@ -677,33 +739,10 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 	versions := make(map[string]any, len(pkg.Versions))
 	times := map[string]string{"created": pkg.CreatedAt.Format(time.RFC3339Nano), "modified": pkg.UpdatedAt.Format(time.RFC3339Nano)}
 	for _, version := range pkg.Versions {
-		var document map[string]any
-		if json.Unmarshal(version.Manifest, &document) != nil {
+		document, ok := h.npmVersionDocument(r, registryName, version)
+		if !ok {
 			continue
 		}
-		document["name"] = packageName
-		document["version"] = version.Version
-		document["dist"] = map[string]any{
-			"tarball":   h.tarballURL(r, registryName, packageName, version.TarballName),
-			"integrity": version.Integrity,
-			"shasum":    version.Shasum,
-		}
-		metadata := map[string]any{
-			"source": "hosted", "cacheStatus": "cached", "publisher": version.Publisher,
-		}
-		if version.UpstreamTarball != "" {
-			metadata["source"] = "proxy"
-			metadata["cacheStatus"] = "metadata"
-		}
-		if version.ObjectKey != "" {
-			metadata["cacheStatus"] = "cached"
-			metadata["digest"] = version.Digest
-			metadata["size"] = version.Size
-			if !version.CachedAt.IsZero() {
-				metadata["cachedAt"] = version.CachedAt.Format(time.RFC3339Nano)
-			}
-		}
-		document["_artifactGateway"] = metadata
 		versions[version.Version] = document
 		times[version.Version] = version.CreatedAt.Format(time.RFC3339Nano)
 	}
@@ -730,6 +769,64 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 		_, _ = w.Write(encoded)
 	}
 	h.recordAuditWithDisposition(r, repo, packageName, actor, repository.AuditResolved, http.StatusOK, int64(len(encoded)), disposition)
+}
+
+func (h nativeNPMHandler) writeNPMVersionMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, version repository.NPMVersion, actor, disposition string) {
+	document, ok := h.npmVersionDocument(r, registryName, version)
+	if !ok {
+		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		return
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "encode package metadata failed")
+		return
+	}
+	etagSum := sha256.Sum256(encoded)
+	etag := `"sha256-` + hex.EncodeToString(etagSum[:]) + `"`
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", etag)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Length", utoa(uint64(len(encoded))))
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(encoded)
+	}
+	h.recordAuditWithDisposition(r, repo, version.PackageName+"@"+version.Version, actor, repository.AuditResolved, http.StatusOK, int64(len(encoded)), disposition)
+}
+
+func (h nativeNPMHandler) npmVersionDocument(r *http.Request, registryName string, version repository.NPMVersion) (map[string]any, bool) {
+	var document map[string]any
+	if json.Unmarshal(version.Manifest, &document) != nil {
+		return nil, false
+	}
+	document["name"] = version.PackageName
+	document["version"] = version.Version
+	document["dist"] = map[string]any{
+		"tarball":   h.tarballURL(r, registryName, version.PackageName, version.TarballName),
+		"integrity": version.Integrity,
+		"shasum":    version.Shasum,
+	}
+	metadata := map[string]any{
+		"source": "hosted", "cacheStatus": "cached", "publisher": version.Publisher,
+	}
+	if version.UpstreamTarball != "" {
+		metadata["source"] = "proxy"
+		metadata["cacheStatus"] = "metadata"
+	}
+	if version.ObjectKey != "" {
+		metadata["cacheStatus"] = "cached"
+		metadata["digest"] = version.Digest
+		metadata["size"] = version.Size
+		if !version.CachedAt.IsZero() {
+			metadata["cachedAt"] = version.CachedAt.Format(time.RFC3339Nano)
+		}
+	}
+	document["_artifactGateway"] = metadata
+	return document, true
 }
 
 func (h nativeNPMHandler) tarball(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, tarballName, actor string) {

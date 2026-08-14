@@ -184,6 +184,75 @@ func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 	}
 }
 
+func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	tarball := npmFixtureTarball(t, "pnpm", "10.7.1")
+	sha512Digest := sha512.Sum512(tarball)
+	sha1Digest := sha1.Sum(tarball)
+	metadataRequests := 0
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pnpm" {
+			http.NotFound(w, r)
+			return
+		}
+		metadataRequests++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": "pnpm", "dist-tags": map[string]string{"latest": "10.7.1"},
+			"versions": map[string]any{
+				"10.7.1": map[string]any{
+					"name": "pnpm", "version": "10.7.1",
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/pnpm-10.7.1.tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Digest[:]),
+						"shasum":    hex.EncodeToString(sha1Digest[:]),
+					},
+				},
+			},
+		})
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-corepack-proxy", Name: "npm-corepack-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-corepack-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 0},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-corepack-group/pnpm/10.7.1", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	var version struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball string `json:"tarball"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version.Name != "pnpm" || version.Version != "10.7.1" || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-group/pnpm/-/pnpm-10.7.1.tgz") {
+		t.Fatalf("version metadata=%#v", version)
+	}
+	if metadataRequests != 1 {
+		t.Fatalf("metadata requests=%d", metadataRequests)
+	}
+}
+
 func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()

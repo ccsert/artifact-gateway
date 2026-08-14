@@ -17,6 +17,7 @@ type RouteKind uint8
 
 const (
 	RoutePackage RouteKind = iota + 1
+	RouteVersion
 	RouteTarball
 	RoutePing
 	RouteAuditBulk
@@ -26,6 +27,7 @@ const (
 type Route struct {
 	Repository string
 	Package    string
+	Version    string
 	Tarball    string
 	Kind       RouteKind
 }
@@ -62,6 +64,12 @@ func ParsePath(escapedPath string) (Route, bool) {
 			return Route{}, false
 		}
 		return Route{Repository: repositoryName, Package: packageName, Tarball: tarballName, Kind: RouteTarball}, true
+	}
+	if separator := strings.LastIndexByte(resource, '/'); separator > 0 && separator < len(resource)-1 {
+		packageName, version := resource[:separator], resource[separator+1:]
+		if ValidPackageName(packageName) && ValidVersion(version) {
+			return Route{Repository: repositoryName, Package: packageName, Version: version, Kind: RouteVersion}, true
+		}
 	}
 	if !ValidPackageName(resource) {
 		return Route{}, false

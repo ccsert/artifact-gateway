@@ -94,6 +94,29 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if packument.DistTags["latest"] != "1.2.3" || packument.DistTags["next"] != "2.0.0-beta.1" || len(packument.Versions) != 2 || !strings.HasPrefix(version.Dist.Integrity, "sha512-") || len(version.Dist.Shasum) != 40 || !strings.HasSuffix(version.Dist.Tarball, "/npm/npm-releases/@scope/widget/-/widget-1.2.3.tgz") || !strings.HasPrefix(version.ArtifactGateway.Digest, "sha256:") || version.ArtifactGateway.Publisher != "build-agent" || version.ArtifactGateway.Size != int64(len(tarball)) {
 		t.Fatalf("packument=%#v", packument)
 	}
+	versionMetadata := httptest.NewRecorder()
+	handler.ServeHTTP(versionMetadata, httptest.NewRequest(http.MethodGet, "/npm/npm-releases/@scope%2Fwidget/1.2.3", nil))
+	if versionMetadata.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", versionMetadata.Code, versionMetadata.Body.String())
+	}
+	var hostedVersion struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball string `json:"tarball"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(versionMetadata.Body).Decode(&hostedVersion); err != nil {
+		t.Fatal(err)
+	}
+	if hostedVersion.Name != "@scope/widget" || hostedVersion.Version != "1.2.3" || !strings.HasSuffix(hostedVersion.Dist.Tarball, "/npm/npm-releases/@scope/widget/-/widget-1.2.3.tgz") {
+		t.Fatalf("hosted version metadata=%#v", hostedVersion)
+	}
+	versionHead := httptest.NewRecorder()
+	handler.ServeHTTP(versionHead, httptest.NewRequest(http.MethodHead, "/npm/npm-releases/@scope%2Fwidget/1.2.3", nil))
+	if versionHead.Code != http.StatusOK || versionHead.Body.Len() != 0 || versionHead.Header().Get("Content-Length") == "" {
+		t.Fatalf("version HEAD=%d bytes=%d headers=%v", versionHead.Code, versionHead.Body.Len(), versionHead.Header())
+	}
 
 	auditRequest := httptest.NewRequest(http.MethodPost, "/npm/npm-releases/-/npm/v1/security/advisories/bulk", strings.NewReader(`{}`))
 	auditResult := httptest.NewRecorder()
@@ -309,6 +332,66 @@ func TestNativeNPMProxyCachesPackumentAndVerifiedTarball(t *testing.T) {
 	}
 	if !foundMiss || !foundHit {
 		t.Fatalf("npm proxy audits missing hit/miss: %#v", store.Audits)
+	}
+}
+
+func TestNativeNPMProxyColdVersionMetadataResolvesForCorepack(t *testing.T) {
+	packageName, versionName := "pnpm", "10.7.1"
+	tarball := npmFixtureTarball(t, packageName, versionName)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	metadataRequests := 0
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pnpm" {
+			http.NotFound(w, r)
+			return
+		}
+		metadataRequests++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": packageName, "dist-tags": map[string]string{"latest": versionName},
+			"versions": map[string]any{versionName: map[string]any{
+				"name": packageName, "version": versionName,
+				"dist": map[string]string{
+					"tarball":   upstream.URL + "/pnpm-10.7.1.tgz",
+					"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+					"shasum":    hex.EncodeToString(sha1Sum[:]),
+				},
+			}},
+		})
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-corepack-direct", Name: "npm-corepack-direct", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/pnpm/10.7.1", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	var version struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball string `json:"tarball"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version.Name != packageName || version.Version != versionName || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-direct/pnpm/-/pnpm-10.7.1.tgz") || metadataRequests != 1 {
+		t.Fatalf("version metadata=%#v requests=%d", version, metadataRequests)
 	}
 }
 

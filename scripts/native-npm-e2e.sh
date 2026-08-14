@@ -154,6 +154,16 @@ done
 
 npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${proxy_port}/npm/private/:_authToken" fixture-secret
 
+# Corepack resolves pinned package-manager releases through npm's package
+# version endpoint (`/<package>/<version>`), not through the full packument.
+corepack_metadata=$(curl --fail --silent --show-error "${group_registry_url}ag-npm-fixture/1.0.0")
+node -e '
+  const metadata=JSON.parse(process.argv[1]);
+  const registry=process.argv[2];
+  if (metadata.name !== "ag-npm-fixture" || metadata.version !== "1.0.0") process.exit(1);
+  if (!metadata.dist?.tarball?.startsWith(registry)) process.exit(1);
+' "$corepack_metadata" "$group_registry_url"
+
 lockfile_install="$workdir/lockfile-install"
 mkdir "$lockfile_install"
 (

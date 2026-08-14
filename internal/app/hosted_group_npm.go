@@ -87,6 +87,12 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			return
 		}
 		h.packument(w, r, resolver, group, members, route.Package, principal.Actor)
+	case npmprotocol.RouteVersion:
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		h.versionMetadata(w, r, resolver, group, members, route.Package, route.Version, principal.Actor)
 	case npmprotocol.RouteTarball:
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -97,6 +103,46 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 }
 
 func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) {
+	merged, firstError, stale := h.resolvePackage(r, resolver, group, members, packageName, actor)
+	if len(merged.Versions) == 0 {
+		if firstError != nil {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditUpstreamError, firstError.Status)
+			h.native.writeError(w, firstError.Status, firstError.Message)
+		} else {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+			h.native.writeError(w, http.StatusNotFound, "package not found")
+		}
+		return
+	}
+	if stale {
+		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+	}
+	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
+	h.native.writePackument(w, r, groupRepo, group.Name, merged, actor, "bypass")
+}
+
+func (h v2GroupNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, versionName, actor string) {
+	merged, firstError, stale := h.resolvePackage(r, resolver, group, members, packageName, actor)
+	version, ok := findNPMVersion(merged, versionName)
+	if !ok {
+		resource := packageName + "@" + versionName
+		if firstError != nil && len(merged.Versions) == 0 {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, resource, strings.ToLower(r.Method), actor, repository.AuditUpstreamError, firstError.Status)
+			h.native.writeError(w, firstError.Status, firstError.Message)
+		} else {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, resource, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+			h.native.writeError(w, http.StatusNotFound, "package version not found")
+		}
+		return
+	}
+	if stale {
+		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+	}
+	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
+	h.native.writeNPMVersionMetadata(w, r, groupRepo, group.Name, version, actor, "bypass")
+}
+
+func (h v2GroupNPMHandler) resolvePackage(r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) (repository.NPMPackage, *npmProxyPackageError, bool) {
 	merged := repository.NPMPackage{Name: packageName, DistTags: make(map[string]string)}
 	seenVersions := make(map[string]bool)
 	var firstError *npmProxyPackageError
@@ -157,21 +203,7 @@ func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, res
 		}
 	}
 
-	if len(merged.Versions) == 0 {
-		if firstError != nil {
-			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditUpstreamError, firstError.Status)
-			h.native.writeError(w, firstError.Status, firstError.Message)
-		} else {
-			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
-			h.native.writeError(w, http.StatusNotFound, "package not found")
-		}
-		return
-	}
-	if stale {
-		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
-	}
-	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
-	h.native.writePackument(w, r, groupRepo, group.Name, merged, actor, "bypass")
+	return merged, firstError, stale
 }
 
 func mergeNPMGroupPackage(merged *repository.NPMPackage, incoming repository.NPMPackage, seenVersions map[string]bool) {
