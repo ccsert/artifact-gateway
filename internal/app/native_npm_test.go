@@ -364,6 +364,59 @@ func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) 
 	}
 }
 
+func TestNativeNPMProxyColdScopedLegacyRootTarballResolvesWithoutPackumentRequest(t *testing.T) {
+	packageName, version := "@types/json-schema", "7.0.15"
+	tarballName := "json-schema-" + version + ".tgz"
+	tarball := npmFixtureTarballWithRoot(t, "json-schema", packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + tarballName,
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + tarballName:
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-scoped-lockfile-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestNativeNPMProxyColdTarballMetadataFailuresAuditExactlyOnce(t *testing.T) {
 	const packageName, version = "lockfile-audit-widget", "1.2.3"
 	tarballName := packageName + "-" + version + ".tgz"
@@ -761,6 +814,10 @@ func npmFixturePublishDocumentWithTags(t *testing.T, name, version, tarballName 
 }
 
 func npmFixtureTarball(t *testing.T, name, version string) []byte {
+	return npmFixtureTarballWithRoot(t, "package", name, version)
+}
+
+func npmFixtureTarballWithRoot(t *testing.T, root, name, version string) []byte {
 	t.Helper()
 	manifest, err := json.Marshal(map[string]string{"name": name, "version": version})
 	if err != nil {
@@ -769,7 +826,7 @@ func npmFixtureTarball(t *testing.T, name, version string) []byte {
 	var compressed bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressed)
 	tarWriter := tar.NewWriter(gzipWriter)
-	if err = tarWriter.WriteHeader(&tar.Header{Name: "package/package.json", Mode: 0o644, Size: int64(len(manifest))}); err != nil {
+	if err = tarWriter.WriteHeader(&tar.Header{Name: root + "/package.json", Mode: 0o644, Size: int64(len(manifest))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tarWriter.Write(manifest); err != nil {

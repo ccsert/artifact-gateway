@@ -72,6 +72,64 @@ mkdir "$scoped"
   npm_config_userconfig="$auth_config" npm publish --registry="$registry_url" --tag=latest --access=public
 )
 
+# DefinitelyTyped tarballs such as @types/json-schema@7.0.15 use a legacy
+# single root (`json-schema/package.json`) instead of npm pack's usual
+# `package/package.json`. Publish that exact archive shape so the lockfile gate
+# covers the real scoped-package compatibility boundary without public-network
+# access during CI.
+legacy_scoped_document="$workdir/legacy-scoped-publication.json"
+python3 - "$legacy_scoped_document" <<'PY'
+import base64
+import io
+import json
+import sys
+import tarfile
+
+name = "@types/json-schema"
+version = "7.0.15"
+manifest = json.dumps({"name": name, "version": version, "license": "MIT"}, separators=(",", ":")).encode()
+archive = io.BytesIO()
+with tarfile.open(fileobj=archive, mode="w:gz") as tar:
+    root = tarfile.TarInfo("json-schema/")
+    root.type = tarfile.DIRTYPE
+    root.mode = 0o755
+    tar.addfile(root)
+    package_json = tarfile.TarInfo("json-schema/package.json")
+    package_json.mode = 0o644
+    package_json.size = len(manifest)
+    tar.addfile(package_json, io.BytesIO(manifest))
+    declaration = b"export interface JSONSchema {}\n"
+    index = tarfile.TarInfo("json-schema/index.d.ts")
+    index.mode = 0o644
+    index.size = len(declaration)
+    tar.addfile(index, io.BytesIO(declaration))
+tarball = archive.getvalue()
+tarball_name = "json-schema-7.0.15.tgz"
+document = {
+    "_id": name,
+    "name": name,
+    "dist-tags": {"latest": version},
+    "versions": {version: {
+        "name": name,
+        "version": version,
+        "dist": {"tarball": "https://registry.invalid/" + tarball_name},
+    }},
+    "_attachments": {tarball_name: {
+        "content_type": "application/octet-stream",
+        "length": len(tarball),
+        "data": base64.b64encode(tarball).decode(),
+    }},
+}
+with open(sys.argv[1], "w", encoding="utf-8") as output:
+    json.dump(document, output, separators=(",", ":"))
+PY
+curl --fail --silent --show-error \
+  --request PUT \
+  --header 'Authorization: Bearer fixture-secret' \
+  --header 'Content-Type: application/json' \
+  --data-binary "@$legacy_scoped_document" \
+  "${registry_url}@types%2Fjson-schema" >/dev/null
+
 tags=$(npm_config_userconfig="$anonymous_config" npm view ag-npm-fixture dist-tags --json --registry="$registry_url")
 node -e 'const tags=JSON.parse(process.argv[1]); if(tags.latest!=="1.0.0" || tags.next!=="1.1.0") process.exit(1)' "$tags"
 
@@ -103,13 +161,14 @@ mkdir "$lockfile_install"
   npm init -y >/dev/null
   npm pkg set \
     dependencies.ag-npm-fixture='1.0.0' \
-    'dependencies.@artifact-gateway/npm-fixture'='2.0.0'
+    'dependencies.@artifact-gateway/npm-fixture'='2.0.0' \
+    'dependencies.@types/json-schema'='7.0.15'
   npm_config_cache="$workdir/npm-cache-lock" npm_config_userconfig="$anonymous_config" npm install \
     --package-lock-only --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
   node -e '
     const lock=require("./package-lock.json");
     const registry=process.argv[1];
-    for (const name of ["ag-npm-fixture", "@artifact-gateway/npm-fixture"]) {
+    for (const name of ["ag-npm-fixture", "@artifact-gateway/npm-fixture", "@types/json-schema"]) {
       const resolved=lock.packages[`node_modules/${name}`]?.resolved;
       if (!resolved?.startsWith(registry)) throw new Error(`${name} did not lock to Group: ${resolved}`);
     }
@@ -135,7 +194,7 @@ done
   cd "$lockfile_install"
   npm_config_cache="$workdir/npm-cache-ci-online" npm_config_userconfig="$anonymous_config" npm ci \
     --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
-  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0","@types/json-schema":"7.0.15"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
 private_package="$workdir/private-package"
@@ -165,7 +224,7 @@ rm -rf "$lockfile_install/node_modules"
   cd "$lockfile_install"
   npm_config_cache="$workdir/npm-cache-ci-offline" npm_config_userconfig="$anonymous_config" npm ci \
     --registry="$group_registry_url" --ignore-scripts --no-audit --no-fund
-  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
+  node -e 'for (const [name,version] of Object.entries({"ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0","@types/json-schema":"7.0.15"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
 offline_install="$workdir/offline-install"
