@@ -117,6 +117,15 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if versionHead.Code != http.StatusOK || versionHead.Body.Len() != 0 || versionHead.Header().Get("Content-Length") == "" {
 		t.Fatalf("version HEAD=%d bytes=%d headers=%v", versionHead.Code, versionHead.Body.Len(), versionHead.Header())
 	}
+	var headAudit *repository.AuditRecord
+	for index := range store.Audits {
+		if store.Audits[index].Resource == "@scope/widget@1.2.3" && store.Audits[index].Operation == "head" {
+			headAudit = &store.Audits[index]
+		}
+	}
+	if headAudit == nil || headAudit.Status != http.StatusOK || headAudit.Bytes != 0 {
+		t.Fatalf("HEAD audit=%#v all=%#v", headAudit, store.Audits)
+	}
 
 	auditRequest := httptest.NewRequest(http.MethodPost, "/npm/npm-releases/-/npm/v1/security/advisories/bulk", strings.NewReader(`{}`))
 	auditResult := httptest.NewRecorder()

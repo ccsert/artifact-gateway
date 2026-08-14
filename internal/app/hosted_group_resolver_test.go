@@ -203,10 +203,11 @@ func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
 			"versions": map[string]any{
 				"10.7.1": map[string]any{
 					"name": "pnpm", "version": "10.7.1",
-					"dist": map[string]string{
-						"tarball":   upstream.URL + "/pnpm-10.7.1.tgz",
-						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Digest[:]),
-						"shasum":    hex.EncodeToString(sha1Digest[:]),
+					"dist": map[string]any{
+						"tarball":    upstream.URL + "/pnpm-10.7.1.tgz",
+						"integrity":  "sha512-" + base64.StdEncoding.EncodeToString(sha512Digest[:]),
+						"shasum":     hex.EncodeToString(sha1Digest[:]),
+						"signatures": []map[string]string{{"keyid": "SHA256:test-corepack-key", "sig": "signed-fixture"}},
 					},
 				},
 			},
@@ -235,21 +236,71 @@ func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
 	}
+	responseBytes := response.Body.Len()
 	var version struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		Dist    struct {
-			Tarball string `json:"tarball"`
+			Tarball    string `json:"tarball"`
+			Signatures []struct {
+				KeyID string `json:"keyid"`
+				Sig   string `json:"sig"`
+			} `json:"signatures"`
 		} `json:"dist"`
 	}
 	if err = json.NewDecoder(response.Body).Decode(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version.Name != "pnpm" || version.Version != "10.7.1" || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-group/pnpm/-/pnpm-10.7.1.tgz") {
+	if version.Name != "pnpm" || version.Version != "10.7.1" || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-group/pnpm/-/pnpm-10.7.1.tgz") || len(version.Dist.Signatures) != 1 || version.Dist.Signatures[0].KeyID != "SHA256:test-corepack-key" {
 		t.Fatalf("version metadata=%#v", version)
 	}
 	if metadataRequests != 1 {
 		t.Fatalf("metadata requests=%d", metadataRequests)
+	}
+	var resolvedAudit *repository.AuditRecord
+	for index := range store.Audits {
+		if store.Audits[index].Resource == "pnpm@10.7.1" && store.Audits[index].Outcome == repository.AuditResolved {
+			resolvedAudit = &store.Audits[index]
+		}
+	}
+	if resolvedAudit == nil || resolvedAudit.GroupName != "npm-corepack-group" || resolvedAudit.Repository != "npm-corepack-group" || resolvedAudit.MemberName != proxy.Name || resolvedAudit.MemberType != string(repository.RepositoryTypeProxy) || resolvedAudit.CacheDisposition != "miss" || resolvedAudit.Bytes != int64(responseBytes) {
+		t.Fatalf("resolved audit=%#v all=%#v", resolvedAudit, store.Audits)
+	}
+}
+
+func TestV2GroupNPMVersionMetadataPreservesUpstreamFailureWhenAnotherVersionExists(t *testing.T) {
+	store := repository.NewMemoryStore()
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "npm-version-hosted", Name: "npm-version-hosted", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, hosted, "widget", "1.0.0")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusInternalServerError)
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-version-proxy", Name: "npm-version-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-version-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-version-group/widget/2.0.0", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.Resource != "widget@2.0.0" || audit.Outcome != repository.AuditUpstreamError || audit.Status != http.StatusBadGateway {
+		t.Fatalf("terminal audit=%#v", audit)
 	}
 }
 

@@ -250,6 +250,7 @@ func (h nativeNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request
 				return
 			}
 			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "miss")
 			return
 		}
 		pkg = resolved.Package
@@ -262,16 +263,25 @@ func (h nativeNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request
 		pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 		if errors.Is(err, repository.ErrNotFound) {
 			h.writeError(w, http.StatusNotFound, "package version not found")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
 			return
 		}
 		if err != nil {
 			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
 			return
 		}
 	}
-	pkg, _, err := h.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
+	unfiltered := pkg
+	pkg, blockedVersions, err := h.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+		return
+	}
+	if blockedVersions[versionName] {
+		blocked, _ := findNPMVersion(unfiltered, versionName)
+		h.writeNPMQuarantineDenied(w, r, repo, blocked, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name})
 		return
 	}
 	version, ok := findNPMVersion(pkg, versionName)
@@ -750,36 +760,28 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 		"_id": packageName, "name": packageName, "dist-tags": pkg.DistTags,
 		"versions": versions, "time": times,
 	}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, "encode package metadata failed")
-		return
-	}
-	etagSum := sha256.Sum256(encoded)
-	etag := `"sha256-` + hex.EncodeToString(etagSum[:]) + `"`
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", etag)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.Header().Set("Content-Length", utoa(uint64(len(encoded))))
-	w.WriteHeader(http.StatusOK)
-	if r.Method != http.MethodHead {
-		_, _ = w.Write(encoded)
-	}
-	h.recordAuditWithDisposition(r, repo, packageName, actor, repository.AuditResolved, http.StatusOK, int64(len(encoded)), disposition)
+	h.writeNPMMetadataJSON(w, r, repo, packageName, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, payload)
 }
 
 func (h nativeNPMHandler) writeNPMVersionMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, version repository.NPMVersion, actor, disposition string) {
+	h.writeNPMVersionMetadataForTarget(w, r, repo, registryName, version, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name})
+}
+
+func (h nativeNPMHandler) writeNPMVersionMetadataForTarget(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, version repository.NPMVersion, actor, disposition string, target npmAuditTarget) {
 	document, ok := h.npmVersionDocument(r, registryName, version)
 	if !ok {
 		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		h.recordAuditForTarget(r, repo, target, version.PackageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
 		return
 	}
-	encoded, err := json.Marshal(document)
+	h.writeNPMMetadataJSON(w, r, repo, version.PackageName+"@"+version.Version, actor, disposition, target, document)
+}
+
+func (h nativeNPMHandler) writeNPMMetadataJSON(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, resource, actor, disposition string, target npmAuditTarget, payload any) {
+	encoded, err := json.Marshal(payload)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "encode package metadata failed")
+		h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditStorageError, http.StatusInternalServerError, 0, disposition)
 		return
 	}
 	etagSum := sha256.Sum256(encoded)
@@ -788,14 +790,17 @@ func (h nativeNPMHandler) writeNPMVersionMetadata(w http.ResponseWriter, r *http
 	w.Header().Set("ETag", etag)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
+		h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditResolved, http.StatusNotModified, 0, disposition)
 		return
 	}
 	w.Header().Set("Content-Length", utoa(uint64(len(encoded))))
 	w.WriteHeader(http.StatusOK)
+	servedBytes := int64(0)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(encoded)
+		servedBytes = int64(len(encoded))
 	}
-	h.recordAuditWithDisposition(r, repo, version.PackageName+"@"+version.Version, actor, repository.AuditResolved, http.StatusOK, int64(len(encoded)), disposition)
+	h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditResolved, http.StatusOK, servedBytes, disposition)
 }
 
 func (h nativeNPMHandler) npmVersionDocument(r *http.Request, registryName string, version repository.NPMVersion) (map[string]any, bool) {
@@ -805,11 +810,14 @@ func (h nativeNPMHandler) npmVersionDocument(r *http.Request, registryName strin
 	}
 	document["name"] = version.PackageName
 	document["version"] = version.Version
-	document["dist"] = map[string]any{
-		"tarball":   h.tarballURL(r, registryName, version.PackageName, version.TarballName),
-		"integrity": version.Integrity,
-		"shasum":    version.Shasum,
+	dist, ok := document["dist"].(map[string]any)
+	if !ok {
+		dist = make(map[string]any)
 	}
+	dist["tarball"] = h.tarballURL(r, registryName, version.PackageName, version.TarballName)
+	dist["integrity"] = version.Integrity
+	dist["shasum"] = version.Shasum
+	document["dist"] = dist
 	metadata := map[string]any{
 		"source": "hosted", "cacheStatus": "cached", "publisher": version.Publisher,
 	}
