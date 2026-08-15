@@ -110,6 +110,7 @@ export function ArtifactScanStatus({
   if (!status)
     return (
       <Alert
+        className="col-span-full"
         type="warning"
         showIcon
         title={loadError}
@@ -124,7 +125,7 @@ export function ArtifactScanStatus({
   const job = status.job;
   const canRescan = !activeStates.has(status.state);
   return (
-    <div className="border-b border-zinc-800/80 pb-3">
+    <div className="col-span-full border-b border-zinc-800/80 pb-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-zinc-500">
           {text("扫描状态", "Scan status")} · {format.toUpperCase()}

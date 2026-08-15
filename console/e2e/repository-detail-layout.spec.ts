@@ -8,9 +8,46 @@ async function mockRepositoryDetail(
   {
     scannerEnabled = false,
     distributionEnabled = false,
-  }: { scannerEnabled?: boolean; distributionEnabled?: boolean } = {},
+    format = "raw",
+  }: {
+    scannerEnabled?: boolean;
+    distributionEnabled?: boolean;
+    format?: "raw" | "npm";
+  } = {},
 ) {
   await authenticateAsAdmin(page);
+  const repositoryName = format === "npm" ? "npm-hosted" : "release-files";
+  const npmPackage = "pipeone-npm-frontend-validation-v2-beta";
+  const npmDigest = `sha256:${"8".repeat(64)}`;
+
+  if (format === "npm") {
+    await page.route(`**/npm/${repositoryName}/${npmPackage}`, (route) =>
+      route.fulfill({
+        json: {
+          name: npmPackage,
+          "dist-tags": { latest: "0.1.3" },
+          versions: {
+            "0.1.3": {
+              name: npmPackage,
+              version: "0.1.3",
+              description:
+                "Minimal frontend service used to validate PipeOne's NPM delivery path.",
+              license: "UNLICENSED",
+              dist: { integrity: "sha512-example", shasum: "0ea64af013" },
+              _artifactGateway: {
+                digest: npmDigest,
+                publisher: "resolver",
+                size: 4024,
+                source: "hosted",
+                cacheStatus: "cached",
+              },
+            },
+          },
+          time: { "0.1.3": "2026-08-14T08:01:43Z" },
+        },
+      }),
+    );
+  }
 
   await page.route("**/api/v2/repositories?**", (route) =>
     route.fulfill({
@@ -81,6 +118,19 @@ async function mockRepositoryDetail(
     if (path.endsWith("/replications") && request.method() === "GET") {
       return route.fulfill({ json: [] });
     }
+    if (
+      format === "npm" &&
+      path.endsWith("/artifact-scans") &&
+      request.method() === "GET"
+    ) {
+      return route.fulfill({
+        json: {
+          coordinate: `${npmPackage}@0.1.3`,
+          digest: npmDigest,
+          state: "never",
+        },
+      });
+    }
     if (path.endsWith("/artifact-scans") && request.method() === "POST") {
       const body = request.postDataJSON() as {
         coordinate: string;
@@ -108,8 +158,8 @@ async function mockRepositoryDetail(
       return route.fulfill({
         json: {
           id: repositoryId,
-          name: "release-files",
-          format: "raw",
+          name: repositoryName,
+          format,
           type: "hosted",
           anonymousRead: true,
           state: "active",
@@ -117,22 +167,69 @@ async function mockRepositoryDetail(
         },
       });
     }
+    if (path.endsWith("/artifact-identities")) {
+      return route.fulfill({
+        json: {
+          items:
+            format === "npm"
+              ? [
+                  {
+                    coordinate: `${npmPackage}@0.1.3`,
+                    digest: npmDigest,
+                    size: 4024,
+                    publishedAt: "2026-08-14T08:01:43Z",
+                  },
+                ]
+              : Array.from({ length: 20 }, (_, index) => ({
+                  coordinate: `releases/example-${index + 1}.zip`,
+                  digest: `sha256:${String(index).padStart(64, "0")}`,
+                  size: 1024 * (index + 1),
+                  publishedAt: "2026-08-08T08:00:00Z",
+                })),
+        },
+      });
+    }
     if (path.endsWith("/artifact-search")) {
       return route.fulfill({
         json: {
-          items: Array.from({ length: 20 }, (_, index) => ({
-            coordinate: `releases/example-${index + 1}.zip`,
-            digest: `sha256:${String(index).padStart(64, "0")}`,
-            size: 1024 * (index + 1),
-            createdAt: "2026-08-08T08:00:00Z",
-          })),
+          items:
+            format === "npm"
+              ? [
+                  {
+                    coordinate: npmPackage,
+                    digest: npmDigest,
+                    size: 4024,
+                    createdAt: "2026-08-14T08:01:43Z",
+                    publisher: "resolver",
+                    version: "0.1.3",
+                    versionCount: 4,
+                  },
+                ]
+              : Array.from({ length: 20 }, (_, index) => ({
+                  coordinate: `releases/example-${index + 1}.zip`,
+                  digest: `sha256:${String(index).padStart(64, "0")}`,
+                  size: 1024 * (index + 1),
+                  createdAt: "2026-08-08T08:00:00Z",
+                })),
         },
+      });
+    }
+    if (format === "npm" && path.endsWith("/artifact-quarantine")) {
+      return route.fulfill({
+        status: 404,
+        json: { code: "not_found", message: "not found", status: 404 },
+      });
+    }
+    if (format === "npm" && path.endsWith("/artifact-intelligence")) {
+      return route.fulfill({
+        status: 404,
+        json: { code: "not_found", message: "not found", status: 404 },
       });
     }
     if (path.endsWith("/capabilities")) {
       return route.fulfill({
         json: {
-          format: "raw",
+          format,
           type: "hosted",
           operations: ["read", "publish", "browse", "delete"],
           artifactScanning: scannerEnabled,
@@ -180,8 +277,8 @@ async function mockRepositoryDetail(
           },
           repository: {
             id: repositoryId,
-            name: "release-files",
-            format: "raw",
+            name: repositoryName,
+            format,
             type: "hosted",
             state: "active",
           },
@@ -203,9 +300,9 @@ async function mockRepositoryDetail(
       return route.fulfill({
         json: {
           repositoryId,
-          format: "raw",
-          usedBytes: 1024 * 1024,
-          objectCount: 20,
+          format,
+          usedBytes: format === "npm" ? 4024 : 1024 * 1024,
+          objectCount: format === "npm" ? 1 : 20,
           quotaBytes: 0,
         },
       });
@@ -213,8 +310,8 @@ async function mockRepositoryDetail(
     return route.fulfill({
       json: {
         id: repositoryId,
-        name: "release-files",
-        format: "raw",
+        name: repositoryName,
+        format,
         type: "hosted",
         anonymousRead: true,
         state: "active",
@@ -223,6 +320,36 @@ async function mockRepositoryDetail(
     });
   });
 }
+
+test("npm detail keeps version selection and package content aligned when intelligence is absent", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page, { format: "npm" });
+
+  const packageName = "pipeone-npm-frontend-validation-v2-beta";
+  await page.goto(
+    `/repositories/${repositoryId}?artifact=${packageName}&version=0.1.3`,
+  );
+
+  await expect(page.getByText("扫描状态 · NPM", { exact: true })).toBeVisible();
+  const versionPanel = page.getByText(/^选择版本/).locator("..");
+  const detailPanel = page
+    .getByText(`${packageName}@0.1.3`, { exact: true })
+    .locator("../..");
+  const [versionBox, detailBox] = await Promise.all([
+    versionPanel.boundingBox(),
+    detailPanel.boundingBox(),
+  ]);
+
+  expect(versionBox).not.toBeNull();
+  expect(detailBox).not.toBeNull();
+  expect(detailBox?.width ?? 0).toBeGreaterThan(700);
+  expect(detailBox?.x ?? 0).toBeGreaterThan(
+    (versionBox?.x ?? 0) + (versionBox?.width ?? 0),
+  );
+  expect(Math.abs((detailBox?.y ?? 0) - (versionBox?.y ?? 0))).toBeLessThan(2);
+});
 
 test("repository detail keeps operational content above the fold", async ({
   page,
@@ -346,7 +473,7 @@ test("scanning uses a frameless responsive workspace", async ({
     name: "搜索并选择制品",
   });
   const scanHint = artifactScanCard.getByText(
-    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入前缀缩小范围。旧版本或 Conan 修订未列出时请使用高级手动输入。",
+    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入关键词检索历史版本和 Conan 修订。仅在无法检索时使用高级手动输入。",
     { exact: true },
   );
   const submitScan = artifactScanCard.getByRole("button", { name: "提交扫描" });
