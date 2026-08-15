@@ -11,6 +11,7 @@ contribution.
 - `kubectl`, `jq`, and a local Kubernetes cluster when changing deployment
   resources
 - Go at the version declared in `go.mod`
+- Rust/Cargo 1.96.0 when changing the staged Cargo protocol foundation
 - Node.js 24 and npm
 - GNU Make
 
@@ -88,6 +89,7 @@ make native-oci-e2e
 make native-raw-e2e
 make native-maven-e2e
 make conan-e2e
+make cargo-contract
 ```
 
 For Kubernetes manifests, Console container routing, or local deployment

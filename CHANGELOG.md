@@ -27,6 +27,9 @@ a dated version heading without rewriting their meaning.
   rolling upgrade, a Console connected to an older Gateway now identifies the
   missing signing-state endpoint as an unavailable feature instead of
   incorrectly reporting that the repository does not exist.
+  A dedicated external-signer gate now provisions signer-owned keys, mounts
+  them read-only for serving, uses a signer-specific TLS CA, and proves old,
+  overlap, new, rejection, and retirement behavior with clean Debian clients.
 - Prioritized Cargo sparse-registry planning after APT H3 and deferred NuGet
   repository implementation while retaining its tested parser foundation.
 - Kept access evaluation and repository grant editing focused on usable
@@ -35,6 +38,12 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- A bounded Cargo C0 parser foundation that validates official publish framing
+  and complete `.crate` gzip/tar archives, derives collision-safe immutable
+  crate/version identity from normalized `Cargo.toml`, and translates current
+  publish metadata into checksum-owned sparse-index rows. Official
+  `cargo package` and `cargo publish` tests exercise the byte boundary without
+  admitting Cargo to the public format catalog.
 - A pinned, non-root Traefik Ingress for the Docker Desktop Kubernetes overlay,
   exposing the complete same-origin Console, API, and artifact surface at
   `artifact-gateway.localhost` with bounded resources and least-privilege RBAC.

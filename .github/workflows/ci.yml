@@ -19,6 +19,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.96.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -40,6 +43,8 @@ jobs:
         run: make api-change-check
       - name: Run tests
         run: make test
+      - name: Validate Cargo C0 with the pinned official client
+        run: make cargo-contract
       - name: Validate Kubernetes manifests
         run: make kubernetes-local-check
       - name: Run Native OCI E2E
@@ -56,6 +61,8 @@ jobs:
         run: make native-go-e2e
       - name: Run APT Proxy and Hosted E2E
         run: make native-apt-e2e
+      - name: Run APT external signer rotation E2E
+        run: make apt-signer-rotation-e2e
       - name: Run Conan E2E
         run: make conan-e2e
       - name: Run integration tests

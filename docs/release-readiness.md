@@ -20,6 +20,8 @@ make native-npm-e2e
 make native-pypi-e2e
 make native-go-e2e
 make native-apt-e2e
+make apt-signer-rotation-e2e
+make cargo-contract
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
@@ -48,6 +50,7 @@ storage credentials, or unredacted upstream URLs in that record.
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
 	  `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,
 	  `make native-pypi-e2e`, `make native-go-e2e`, `make native-apt-e2e`,
+	  `make apt-signer-rotation-e2e`,
       and `make conan-e2e`
       pass.
 - [ ] `make integration-test` includes PostgreSQL and RustFS worker evidence for
@@ -134,6 +137,12 @@ storage credentials, or unredacted upstream URLs in that record.
       evidence, `Release`, both signatures, direct/by-hash indices, and package
       bytes must all match the pre-mutation backup after PostgreSQL/RustFS
       restore. The signer key volume is intentionally not part of this proof.
+- [ ] `make apt-signer-rotation-e2e` provisions two signer-owned private-key
+      volumes, exposes both signers only over CA-verified HTTPS, and proves a
+      real Debian client before, during, and after the old/new trust overlap.
+      It must also prove that an old-key-only client rejects the new snapshot
+      with a concrete signature error, and that the serving signer mounts both
+      its pre-provisioned signing key and validated TLS materials read-only.
 - [ ] Review `/metrics`, `/api/v1/audits`, cache capacity, configured upstream
       allowlists, Repository grant sets, quotas, and OIDC issuer/audience. For
       a grant rollout, review the bounded authorization signal without adding

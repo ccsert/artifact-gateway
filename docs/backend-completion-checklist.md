@@ -73,12 +73,16 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-1. Begin APT H3 without widening the public format profile: define production
-   signer/key custody, rotation overlap, backup/restore verification, metrics,
-   alerts, and an operator-visible signing state.
-2. Start Cargo C0 after the APT H3 production-signing gate: freeze a bounded
-   `.crate` byte/identity contract and canonical sparse-index rules before
-   adding the format enum. Cargo is the next candidate ecosystem; see
+1. Finish APT H3 without widening the public format profile: the rotation
+   overlap, external HTTPS/client drill, backup/restore verification, metrics,
+   and operator-visible state are complete; managed KMS/HSM key custody and
+   recovery, snapshot export tooling, and deployment alerts remain.
+2. Continue Cargo C0 after the APT H3 production-signing gate. Bounded publish
+   framing, `.crate`/manifest identity, sparse-index translation, fuzz seams,
+   and official `cargo package`/`cargo publish` contract tests are complete.
+   Add non-public persisted collision reservation and Memory/PostgreSQL
+   identity conformance before C1 or the format enum. Cargo is the next
+   candidate ecosystem; see
    [Cargo repository research](cargo-repository-research.md).
 3. Add the optional scanner workload to the Kubernetes overlay only when its
    network policy, persistent SBOM storage, resource limits, and real scan
