@@ -3,6 +3,7 @@ module github.com/artifact-gateway/artifact-gateway
 go 1.26.5
 
 require (
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/aws/aws-sdk-go-v2 v1.43.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.35
@@ -14,6 +15,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/klauspost/compress v1.18.2
 	github.com/oapi-codegen/runtime v1.6.0
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/ulikunitz/xz v0.5.15
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
 	go.opentelemetry.io/otel v1.44.0

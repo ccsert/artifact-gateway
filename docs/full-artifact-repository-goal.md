@@ -93,9 +93,10 @@ acceptance criteria.
 ## Subsequent Planned Format: Cargo
 
 After the APT H3 production-signing milestone, Cargo is the next candidate
-ecosystem. Its first slice validates bounded `.crate` archives and freezes the
-canonical sparse-index identity/checksum contract without admitting a public
-format prematurely. See [Cargo repository research](cargo-repository-research.md)
+ecosystem. Its first slice now validates official publish frames and bounded
+`.crate` archives and freezes the canonical sparse-index identity/checksum
+contract. Persisted collision conformance remains before C1, and Cargo is still
+not admitted as a public format. See [Cargo repository research](cargo-repository-research.md)
 for Hosted, Proxy, immutable Group ownership, lifecycle, and acceptance gates.
 NuGet's existing bounded parser remains maintained but its repository roadmap
 is deferred rather than a first-priority delivery stream.

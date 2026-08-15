@@ -18,6 +18,7 @@ func TestCanonicalCoordinates(t *testing.T) {
 		{name: "pypi", got: PyPIVersion("widget", "1.0"), want: "widget@1.0"},
 		{name: "go", got: GoVersion("example.com/team/widget", "v1.0.0"), want: "example.com/team/widget@v1.0.0"},
 		{name: "nuget", got: NuGetVersion("contoso.utility", "1.2.3-rc.1"), want: "contoso.utility@1.2.3-rc.1"},
+		{name: "cargo", got: CargoVersion("demo-crate", "1.2.3"), want: "demo-crate@1.2.3"},
 		{name: "apt", got: APTVersion("artifact-gateway", "1:2.3.4-5", "arm64"), want: "artifact-gateway@1:2.3.4-5#arm64"},
 		{name: "conan recipe", got: ConanRecipe("widget/1.0@team/stable", "rrev"), want: "widget/1.0@team/stable#rrev"},
 		{name: "conan package", got: ConanPackage("widget/1.0@team/stable", "rrev", "pkg", "prev"), want: "widget/1.0@team/stable#rrev/pkg#prev"},

@@ -20,6 +20,8 @@ func GoVersion(module, version string) string { return module + "@" + version }
 
 func NuGetVersion(packageID, version string) string { return packageID + "@" + version }
 
+func CargoVersion(crateName, version string) string { return crateName + "@" + version }
+
 func APTVersion(packageName, version, architecture string) string {
 	return packageName + "@" + version + "#" + architecture
 }

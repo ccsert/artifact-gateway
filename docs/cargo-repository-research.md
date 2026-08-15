@@ -1,8 +1,17 @@
 # Cargo Repository Research And Recommended Roadmap
 
 Status: research recommendation, not an implemented protocol or an admitted
-format profile. This document uses only Gitea and Cargo-owned documentation as
-protocol evidence.
+format profile. The C0 byte foundation is now implemented: strict bounded
+publish framing, complete `.crate` validation, normalized manifest identity,
+sparse-index path/row translation, and official `cargo package`/`cargo publish`
+contract tests. Persisted collision reservation and Memory/PostgreSQL identity
+conformance remain before C0 exits; no Cargo route, repository format, OpenAPI
+surface, or Console option is advertised yet. This document uses only Gitea
+and Cargo-owned documentation as protocol evidence.
+
+Run `make cargo-contract` with the pinned Rust/Cargo 1.96.0 prerequisite. The
+gate fails when Cargo is absent and drives both `cargo package` and
+`cargo publish` through the staged parser contract.
 
 ## Decision
 
@@ -293,6 +302,11 @@ weaken Artifact Gateway's immutable-coordinate rule
 ## Recommended Delivery Roadmap
 
 ### C0: frozen contract and byte parser
+
+Current state: the byte parser and official-client contract are complete. The
+remaining C0 slice is the non-public persisted identity reservation used to
+prove case-insensitive and `-`/`_` collision behavior across Memory and
+PostgreSQL before C1 starts.
 
 - Freeze the sparse-only route, canonical identity, collision policy, publish
   framing limits, Cargo error envelope, and private-auth behavior.
