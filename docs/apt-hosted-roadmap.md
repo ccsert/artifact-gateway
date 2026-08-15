@@ -126,8 +126,10 @@ and stores signer identity, verified fingerprint, and derived algorithm in its
 dedicated immutable `evidence` object. The native APT gate now backs up
 PostgreSQL and RustFS, publishes a later snapshot, restores the earlier signed
 snapshot, verifies its complete evidence and object digests, and installs from
-it with the signer offline. Managed key custody and key recovery, client
-rotation drills, dedicated snapshot export/retention/rebuild tooling, and
+it with the signer offline. A second gate now uses independently networked,
+CA-verified HTTPS signers and real Debian clients to prove old-key, overlap,
+new-key, rejection, and retirement behavior. Managed KMS/HSM custody and key
+recovery, dedicated snapshot export/retention/rebuild tooling, and
 deployment-specific alert installation remain before H3 can pass.
 
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
@@ -143,8 +145,10 @@ deployment-specific alert installation remain before H3 can pass.
 
 Acceptance gate: Debian client verification passes before, during, and after a
 documented rotation; a restored repository reproduces the same signed snapshot
-digests. The restore half is complete in `make native-apt-e2e`; the documented
-production rotation half remains open.
+digests. The restore half is complete in `make native-apt-e2e`; the external
+HTTPS rotation and client-trust half is complete in
+`make apt-signer-rotation-e2e`. Managed production key custody and recovery
+remain open.
 
 ## APT-H4: lifecycle, scanning, and distribution
 

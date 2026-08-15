@@ -6,9 +6,11 @@ import (
 	"crypto"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,60 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+func TestHTTPSignerUsesDedicatedTLSRootCertificates(t *testing.T) {
+	t.Parallel()
+	release := []byte("Suite: stable\n")
+	fixture := aptSignerTestFixtureForRelease(t, release)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Artifact-Signer-Schema", "v1")
+		_, _ = w.Write(fixture.response)
+	}))
+	defer server.Close()
+	root := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	signer, err := NewHTTPSigner(HTTPSignerOptions{
+		Endpoint: server.URL + "/v1/sign-release", Token: strings.Repeat("t", 32), Timeout: time.Second,
+		TrustedFingerprints: []string{fixture.fingerprint}, TrustedPublicKeys: fixture.publicKey,
+		TLSRootCertificates: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = signer.SignRelease(context.Background(), SignReleaseRequest{
+		RepositoryID: "repository", SnapshotID: "snapshot", ReleaseDigest: digestBytes(release), Release: bytes.NewReader(release),
+	}); err != nil {
+		t.Fatalf("SignRelease() error=%v", err)
+	}
+}
+
+func TestHTTPSignerRejectsInvalidTLSRootCertificates(t *testing.T) {
+	t.Parallel()
+	fixture := aptSignerTestFixtureForRelease(t, []byte("Suite: stable\n"))
+	if _, err := NewHTTPSigner(HTTPSignerOptions{
+		Endpoint: "https://signer.example.test/v1/sign-release", Token: strings.Repeat("t", 32), Timeout: time.Second,
+		TrustedFingerprints: []string{fixture.fingerprint}, TrustedPublicKeys: fixture.publicKey,
+		TLSRootCertificates: []byte("not a certificate"),
+	}); err == nil {
+		t.Fatal("invalid TLS root certificate was accepted")
+	}
+}
+
+func TestMergeTrustedSignerPublicKeysBuildsOneRotationKeyring(t *testing.T) {
+	t.Parallel()
+	active := aptSignerTestFixtureForRelease(t, []byte("Suite: stable\n"))
+	next := aptSignerTestFixtureForRelease(t, []byte("Suite: stable\n"))
+	merged, fingerprints, err := MergeTrustedSignerPublicKeys(active.publicKey, next.publicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fingerprints) != 2 || fingerprints[0] != active.fingerprint || fingerprints[1] != next.fingerprint {
+		t.Fatalf("fingerprints=%#v", fingerprints)
+	}
+	if err = ValidateTrustedSignerPublicKeys(fingerprints, merged); err != nil {
+		t.Fatalf("merged keyring is invalid: %v", err)
+	}
+}
 
 func TestHTTPSignerRequiresCompletePinnedRemoteTrustPolicy(t *testing.T) {
 	t.Parallel()
@@ -187,21 +243,16 @@ func TestPublisherMetricsClassifyHTTPSignerInvalidSignature(t *testing.T) {
 	}
 }
 
-func TestHTTPSignerRejectsWeakTrustedSigningKey(t *testing.T) {
+func TestHTTPSignerRejectsWeakTrustedSigningKeyAtConfiguration(t *testing.T) {
 	t.Parallel()
 	release := []byte("Suite: stable\n")
 	weak := aptSignerTestFixtureForReleaseWithBits(t, release, 1024)
-	signer, err := NewHTTPSigner(HTTPSignerOptions{
+	_, err := NewHTTPSigner(HTTPSignerOptions{
 		Endpoint: "https://signer.example.test/v1/sign-release", Token: strings.Repeat("t", 32), Timeout: time.Second,
 		Client: aptSignerResponseClient(weak.response), TrustedFingerprints: []string{weak.fingerprint}, TrustedPublicKeys: weak.publicKey,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = signer.SignRelease(context.Background(), SignReleaseRequest{
-		RepositoryID: "repository", SnapshotID: "snapshot", ReleaseDigest: digestBytes(release), Release: bytes.NewReader(release),
-	}); !errors.Is(err, ErrSignerInvalidSignature) {
-		t.Fatalf("weak signing key err=%v", err)
+	if err == nil {
+		t.Fatal("NewHTTPSigner accepted a 1024-bit trusted signing key")
 	}
 }
 

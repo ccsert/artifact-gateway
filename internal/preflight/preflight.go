@@ -32,6 +32,13 @@ type Result struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
+func aptSignerTLSTrustMode(cfg config.Config) string {
+	if len(cfg.APTSignerTLSRootCertificates) > 0 {
+		return "custom_roots"
+	}
+	return "system_roots"
+}
+
 type Report struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Results   []Result  `json:"results"`
@@ -123,6 +130,7 @@ func configurationResult(cfg config.Config) Result {
 			"apt_signer_enabled":                       cfg.APTSignerEnabled(),
 			"apt_signer_trusted_fingerprint_count":     len(cfg.APTSignerTrustedFingerprints),
 			"apt_signer_trusted_public_keys_validated": len(cfg.APTSignerTrustedPublicKeys) > 0,
+			"apt_signer_tls_trust_mode":                aptSignerTLSTrustMode(cfg),
 		},
 	}
 }

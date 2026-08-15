@@ -6,21 +6,30 @@ RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=loc
 COPY . .
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
-    go test ./cmd/reference-apt-signer ./cmd/reference-apt-signer-healthcheck ./internal/refaptsigner
+    go test ./cmd/reference-apt-signer ./cmd/reference-apt-signer-healthcheck ./cmd/reference-apt-signer-keygen ./cmd/reference-apt-signer-tls-init ./internal/refaptsigner
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
     CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-apt-signer ./cmd/reference-apt-signer
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
     CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-apt-signer-healthcheck ./cmd/reference-apt-signer-healthcheck
-RUN mkdir -p /var/lib/reference-apt-signer
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-apt-signer-keygen ./cmd/reference-apt-signer-keygen
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /reference-apt-signer-tls-init ./cmd/reference-apt-signer-tls-init
+RUN mkdir -p /var/lib/reference-apt-signer /var/lib/reference-apt-signer-tls
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /reference-apt-signer /usr/local/bin/reference-apt-signer
 COPY --from=build /reference-apt-signer-healthcheck /usr/local/bin/reference-apt-signer-healthcheck
+COPY --from=build /reference-apt-signer-keygen /usr/local/bin/reference-apt-signer-keygen
+COPY --from=build /reference-apt-signer-tls-init /usr/local/bin/reference-apt-signer-tls-init
 COPY --from=build --chown=65532:65532 /var/lib/reference-apt-signer /var/lib/reference-apt-signer
+COPY --from=build --chown=65532:65532 /var/lib/reference-apt-signer-tls /var/lib/reference-apt-signer-tls
 USER nonroot:nonroot
-VOLUME ["/var/lib/reference-apt-signer"]
+VOLUME ["/var/lib/reference-apt-signer", "/var/lib/reference-apt-signer-tls"]
 EXPOSE 18083
 HEALTHCHECK --interval=10s --timeout=3s --retries=6 CMD ["/usr/local/bin/reference-apt-signer-healthcheck"]
 ENTRYPOINT ["/usr/local/bin/reference-apt-signer"]

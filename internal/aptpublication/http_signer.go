@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -25,9 +28,11 @@ import (
 )
 
 const (
-	maxHTTPSignerReleaseBytes  = int64(16 << 20)
-	maxHTTPSignerResponseBytes = int64(24 << 20)
-	maxTrustedPublicKeysBytes  = int64(1 << 20)
+	maxHTTPSignerReleaseBytes   = int64(16 << 20)
+	maxHTTPSignerResponseBytes  = int64(24 << 20)
+	maxTrustedPublicKeysBytes   = int64(1 << 20)
+	maxTLSRootCertificatesBytes = int64(1 << 20)
+	maxTLSRootCertificates      = 8
 )
 
 var (
@@ -42,6 +47,7 @@ type HTTPSignerOptions struct {
 	Client              *http.Client
 	TrustedFingerprints []string
 	TrustedPublicKeys   []byte
+	TLSRootCertificates []byte
 }
 
 // HTTPSigner keeps private-key operations outside Gateway processes. The wire
@@ -74,10 +80,66 @@ func NewHTTPSigner(options HTTPSignerOptions) (*HTTPSigner, error) {
 		trusted[fingerprint] = struct{}{}
 	}
 	client := options.Client
-	if client == nil {
+	if len(options.TLSRootCertificates) > 0 {
+		if parsed.Scheme != "https" || client != nil {
+			return nil, errors.New("APT signer HTTP configuration is invalid")
+		}
+		rootCertificates, rootErr := parseTLSRootCertificates(options.TLSRootCertificates)
+		if rootErr != nil {
+			return nil, errors.New("APT signer HTTP configuration is invalid")
+		}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCertificates}
+		client = &http.Client{Transport: transport}
+	} else if client == nil {
 		client = &http.Client{}
 	}
 	return &HTTPSigner{endpoint: endpoint, token: options.Token, timeout: options.Timeout, client: client, trusted: trusted, keyring: keyring}, nil
+}
+
+// LoadHTTPSignerTLSRootCertificates loads a bounded public certificate bundle.
+// The caller retains the bytes so the signer client can build a dedicated
+// trust pool without changing process-wide TLS roots.
+func LoadHTTPSignerTLSRootCertificates(path string) ([]byte, error) {
+	file, err := os.Open(strings.TrimSpace(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	body, err := io.ReadAll(io.LimitReader(file, maxTLSRootCertificatesBytes+1))
+	if err != nil || len(body) == 0 || int64(len(body)) > maxTLSRootCertificatesBytes {
+		return nil, errors.New("APT signer TLS root certificate file is invalid")
+	}
+	if _, err = parseTLSRootCertificates(body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func parseTLSRootCertificates(body []byte) (*x509.CertPool, error) {
+	remaining := bytes.TrimSpace(body)
+	pool := x509.NewCertPool()
+	count := 0
+	for len(remaining) > 0 {
+		block, rest := pem.Decode(remaining)
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			return nil, errors.New("APT signer TLS roots must contain only certificates")
+		}
+		certificate, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, errors.New("APT signer TLS root certificate is invalid")
+		}
+		count++
+		if count > maxTLSRootCertificates {
+			return nil, errors.New("APT signer TLS root certificate bundle is too large")
+		}
+		pool.AddCert(certificate)
+		remaining = bytes.TrimSpace(rest)
+	}
+	if count == 0 {
+		return nil, errors.New("APT signer TLS root certificate bundle is empty")
+	}
+	return pool, nil
 }
 
 func LoadTrustedSignerPublicKeys(path string) ([]byte, error) {
@@ -119,6 +181,9 @@ func parseTrustedSignerPublicKeys(body []byte) (openpgp.EntityList, []string, er
 				return nil, nil, errors.New("APT signer trusted key ring must contain public keys only")
 			}
 		}
+		if !validTrustedSignerEntity(entity) {
+			return nil, nil, errors.New("APT signer trusted signing keys must use RSA 2048-4096")
+		}
 		fingerprints = append(fingerprints, strings.ToLower(hex.EncodeToString(entity.PrimaryKey.Fingerprint)))
 	}
 	canonical, err := NormalizeTrustedSignerFingerprints(fingerprints)
@@ -126,6 +191,42 @@ func parseTrustedSignerPublicKeys(body []byte) (openpgp.EntityList, []string, er
 		return nil, nil, err
 	}
 	return keyring, canonical, nil
+}
+
+func validTrustedSignerEntity(entity *openpgp.Entity) bool {
+	if entity == nil || entity.PrimaryKey == nil {
+		return false
+	}
+	hasSigningKey := false
+	primaryCanSign := entity.PrimaryKey.PubKeyAlgo.CanSign()
+	if identity := entity.PrimaryIdentity(); identity != nil && identity.SelfSignature != nil && identity.SelfSignature.FlagsValid {
+		primaryCanSign = primaryCanSign && identity.SelfSignature.FlagSign
+	}
+	if primaryCanSign {
+		if !validTrustedRSASigningKey(entity.PrimaryKey) {
+			return false
+		}
+		hasSigningKey = true
+	}
+	for _, subkey := range entity.Subkeys {
+		if subkey.PublicKey == nil || subkey.Sig == nil || !subkey.PublicKey.PubKeyAlgo.CanSign() ||
+			(subkey.Sig.FlagsValid && !subkey.Sig.FlagSign) {
+			continue
+		}
+		if !validTrustedRSASigningKey(subkey.PublicKey) {
+			return false
+		}
+		hasSigningKey = true
+	}
+	return hasSigningKey
+}
+
+func validTrustedRSASigningKey(key *packet.PublicKey) bool {
+	if key == nil || (key.PubKeyAlgo != packet.PubKeyAlgoRSA && key.PubKeyAlgo != packet.PubKeyAlgoRSASignOnly) {
+		return false
+	}
+	bits, err := key.BitLength()
+	return err == nil && bits >= 2048 && bits <= 4096
 }
 
 func decodeSingleArmoredBlock(body []byte, blockType string) (*armor.Block, error) {
@@ -158,6 +259,44 @@ func ValidateTrustedSignerPublicKeys(fingerprints []string, body []byte) error {
 		return errors.New("APT signer trusted fingerprints do not match the public-key ring")
 	}
 	return nil
+}
+
+// MergeTrustedSignerPublicKeys builds the single public-only armor block used
+// during a one- or two-key rotation window. Each input must independently
+// satisfy the bounded trusted-key parser.
+func MergeTrustedSignerPublicKeys(bodies ...[]byte) ([]byte, []string, error) {
+	if len(bodies) == 0 || len(bodies) > 2 {
+		return nil, nil, errors.New("one or two APT signer public-key files are required")
+	}
+	entities := make(openpgp.EntityList, 0, len(bodies))
+	fingerprints := make([]string, 0, len(bodies))
+	for _, body := range bodies {
+		keyring, parsedFingerprints, err := parseTrustedSignerPublicKeys(body)
+		if err != nil {
+			return nil, nil, err
+		}
+		entities = append(entities, keyring...)
+		fingerprints = append(fingerprints, parsedFingerprints...)
+	}
+	canonical, err := NormalizeTrustedSignerFingerprints(fingerprints)
+	if err != nil || len(entities) != len(canonical) {
+		return nil, nil, errors.New("APT signer public-key rotation set is invalid")
+	}
+	var output bytes.Buffer
+	armored, err := armor.Encode(&output, openpgp.PublicKeyType, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, entity := range entities {
+		if err = entity.Serialize(armored); err != nil {
+			_ = armored.Close()
+			return nil, nil, err
+		}
+	}
+	if err = armored.Close(); err != nil {
+		return nil, nil, err
+	}
+	return output.Bytes(), canonical, nil
 }
 
 func sameFingerprints(configured, keys []string) bool {

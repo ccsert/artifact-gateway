@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto"
 	"encoding/hex"
+	"encoding/pem"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -286,6 +288,29 @@ func TestLoadConfiguresRemoteAPTSignerRotationOverlap(t *testing.T) {
 	}
 }
 
+func TestLoadConfiguresDedicatedAPTSignerTLSRoots(t *testing.T) {
+	setCompleteConfiguration(t)
+	fingerprints, publicKeysFile := writeAPTSignerPublicKeyRing(t, 1)
+	server := httptest.NewTLSServer(nil)
+	server.Close()
+	tlsRootsFile := filepath.Join(t.TempDir(), "apt-signer-ca.pem")
+	if err := os.WriteFile(tlsRootsFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "https://signer.example.test/v1/sign-release")
+	t.Setenv("GATEWAY_APT_SIGNER_TOKEN", strings.Repeat("s", 32))
+	t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS", fingerprints[0])
+	t.Setenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE", publicKeysFile)
+	t.Setenv("GATEWAY_APT_SIGNER_TLS_CA_FILE", tlsRootsFile)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APTSignerTLSCAFile != tlsRootsFile || len(cfg.APTSignerTLSRootCertificates) == 0 {
+		t.Fatalf("APT signer TLS config=%#v", cfg)
+	}
+}
+
 func TestLoadRejectsUnreadableOrMismatchedAPTSignerPublicKeys(t *testing.T) {
 	fingerprints, publicKeysFile := writeAPTSignerPublicKeyRing(t, 1)
 	for _, testCase := range []struct {
@@ -316,7 +341,7 @@ func writeAPTSignerPublicKeyRing(t *testing.T, count int) ([]string, string) {
 	}
 	fingerprints := make([]string, 0, count)
 	for index := 0; index < count; index++ {
-		entity, entityErr := openpgp.NewEntity("APT Config Test", "", "apt-config@example.test", &packet.Config{RSABits: 1024, DefaultHash: crypto.SHA256})
+		entity, entityErr := openpgp.NewEntity("APT Config Test", "", "apt-config@example.test", &packet.Config{RSABits: 2048, DefaultHash: crypto.SHA256})
 		if entityErr != nil {
 			t.Fatal(entityErr)
 		}

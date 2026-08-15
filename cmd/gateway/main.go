@@ -67,6 +67,7 @@ func main() {
 		aptSigner, signerErr := aptpublication.NewHTTPSigner(aptpublication.HTTPSignerOptions{
 			Endpoint: cfg.APTSignerEndpoint, Token: cfg.APTSignerToken, Timeout: cfg.APTSignerTimeout,
 			TrustedFingerprints: cfg.APTSignerTrustedFingerprints, TrustedPublicKeys: cfg.APTSignerTrustedPublicKeys,
+			TLSRootCertificates: cfg.APTSignerTLSRootCertificates,
 		})
 		if signerErr != nil {
 			slog.Error("initialize APT Release signer")

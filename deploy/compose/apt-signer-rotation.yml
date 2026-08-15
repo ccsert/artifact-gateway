@@ -1,0 +1,128 @@
+x-reference-apt-signer: &reference-apt-signer
+  profiles: ["apt-signer-rotation"]
+  build:
+    context: .
+    dockerfile: Dockerfile.apt-signer
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  pids_limit: 64
+  mem_limit: 256m
+  cpus: 1.0
+  environment: &reference-apt-signer-environment
+    REFERENCE_APT_SIGNER_LISTEN_ADDRESS: 0.0.0.0:18083
+    REFERENCE_APT_SIGNER_TOKEN: ${GATEWAY_APT_SIGNER_TOKEN:?set GATEWAY_APT_SIGNER_TOKEN}
+    REFERENCE_APT_SIGNER_RSA_BITS: ${REFERENCE_APT_SIGNER_RSA_BITS:-2048}
+    REFERENCE_APT_SIGNER_MAX_RELEASE_BYTES: ${REFERENCE_APT_SIGNER_MAX_RELEASE_BYTES:-16777216}
+    REFERENCE_APT_SIGNER_TLS_CERT_FILE: /run/tls/tls.crt
+    REFERENCE_APT_SIGNER_TLS_KEY_FILE: /run/tls/tls.key
+    REFERENCE_APT_SIGNER_REQUIRE_EXISTING_KEY: "true"
+    REFERENCE_APT_SIGNER_HEALTH_SCHEME: https
+    SSL_CERT_FILE: /run/tls/ca.pem
+  healthcheck:
+    test: ["CMD", "/usr/local/bin/reference-apt-signer-healthcheck"]
+    interval: 3s
+    timeout: 3s
+    retries: 20
+
+services:
+  gateway:
+    environment:
+      GATEWAY_APT_SIGNER_ENDPOINT: https://${APT_SIGNER_ROTATION_SERVICE:-reference-apt-signer-old}:18083/v1/sign-release
+      GATEWAY_APT_SIGNER_TOKEN: ${GATEWAY_APT_SIGNER_TOKEN:?set GATEWAY_APT_SIGNER_TOKEN}
+      GATEWAY_APT_SIGNER_TIMEOUT: ${GATEWAY_APT_SIGNER_TIMEOUT:-15s}
+      GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS: ${GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS:?set GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS}
+      GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE: /run/secrets/apt-signer-public-keys.asc
+      GATEWAY_APT_SIGNER_TLS_CA_FILE: /run/secrets/apt-signer-ca.pem
+    volumes:
+      - ${APT_SIGNER_ROTATION_DIR:?set APT_SIGNER_ROTATION_DIR}/trusted-public-keys.asc:/run/secrets/apt-signer-public-keys.asc:ro
+      - ${APT_SIGNER_ROTATION_DIR:?set APT_SIGNER_ROTATION_DIR}/ca.pem:/run/secrets/apt-signer-ca.pem:ro
+
+  reference-apt-signer-old:
+    <<: *reference-apt-signer
+    environment:
+      <<: *reference-apt-signer-environment
+      REFERENCE_APT_SIGNER_KEY_FILE: /var/lib/reference-apt-signer/apt-release-private.gpg
+      REFERENCE_APT_SIGNER_NAME: Artifact Gateway Rotation Old
+      REFERENCE_APT_SIGNER_EMAIL: apt-rotation-old@artifact-gateway.local
+    volumes:
+      - gateway-apt-signer-old:/var/lib/reference-apt-signer:ro
+      - gateway-apt-signer-tls:/run/tls:ro
+
+  reference-apt-signer-next:
+    <<: *reference-apt-signer
+    environment:
+      <<: *reference-apt-signer-environment
+      REFERENCE_APT_SIGNER_KEY_FILE: /var/lib/reference-apt-signer/apt-release-private.gpg
+      REFERENCE_APT_SIGNER_NAME: Artifact Gateway Rotation Next
+      REFERENCE_APT_SIGNER_EMAIL: apt-rotation-next@artifact-gateway.local
+    volumes:
+      - gateway-apt-signer-next:/var/lib/reference-apt-signer:ro
+      - gateway-apt-signer-tls:/run/tls:ro
+
+  reference-apt-signer-tls-init:
+    profiles: ["apt-signer-rotation"]
+    build:
+      context: .
+      dockerfile: Dockerfile.apt-signer
+    entrypoint: ["/usr/local/bin/reference-apt-signer-tls-init"]
+    environment:
+      REFERENCE_APT_SIGNER_TLS_SOURCE_CA_FILE: /run/source/ca.pem
+      REFERENCE_APT_SIGNER_TLS_SOURCE_CERT_FILE: /run/source/tls.crt
+      REFERENCE_APT_SIGNER_TLS_SOURCE_KEY_FILE: /run/source/tls.key
+      REFERENCE_APT_SIGNER_TLS_DIRECTORY: /var/lib/reference-apt-signer-tls
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - ${APT_SIGNER_ROTATION_DIR:?set APT_SIGNER_ROTATION_DIR}/ca.pem:/run/source/ca.pem:ro
+      - ${APT_SIGNER_ROTATION_DIR:?set APT_SIGNER_ROTATION_DIR}/tls.crt:/run/source/tls.crt:ro
+      - ${APT_SIGNER_ROTATION_DIR:?set APT_SIGNER_ROTATION_DIR}/tls.key:/run/source/tls.key:ro
+      - gateway-apt-signer-tls:/var/lib/reference-apt-signer-tls
+
+  reference-apt-signer-old-keygen:
+    profiles: ["apt-signer-rotation"]
+    build:
+      context: .
+      dockerfile: Dockerfile.apt-signer
+    entrypoint: ["/usr/local/bin/reference-apt-signer-keygen"]
+    environment:
+      REFERENCE_APT_SIGNER_KEY_FILE: /var/lib/reference-apt-signer/apt-release-private.gpg
+      REFERENCE_APT_SIGNER_NAME: Artifact Gateway Rotation Old
+      REFERENCE_APT_SIGNER_EMAIL: apt-rotation-old@artifact-gateway.local
+      REFERENCE_APT_SIGNER_RSA_BITS: ${REFERENCE_APT_SIGNER_RSA_BITS:-2048}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - gateway-apt-signer-old:/var/lib/reference-apt-signer
+
+  reference-apt-signer-next-keygen:
+    profiles: ["apt-signer-rotation"]
+    build:
+      context: .
+      dockerfile: Dockerfile.apt-signer
+    entrypoint: ["/usr/local/bin/reference-apt-signer-keygen"]
+    environment:
+      REFERENCE_APT_SIGNER_KEY_FILE: /var/lib/reference-apt-signer/apt-release-private.gpg
+      REFERENCE_APT_SIGNER_NAME: Artifact Gateway Rotation Next
+      REFERENCE_APT_SIGNER_EMAIL: apt-rotation-next@artifact-gateway.local
+      REFERENCE_APT_SIGNER_RSA_BITS: ${REFERENCE_APT_SIGNER_RSA_BITS:-2048}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - gateway-apt-signer-next:/var/lib/reference-apt-signer
+
+volumes:
+  gateway-apt-signer-old:
+  gateway-apt-signer-next:
+  gateway-apt-signer-tls:

@@ -15,11 +15,17 @@ func (function healthRoundTrip) RoundTrip(request *http.Request) (*http.Response
 }
 
 func TestHealthEndpointAndStatusContract(t *testing.T) {
-	if got := healthEndpoint("[::1]:19083"); got != "http://[::1]:19083/healthz" {
+	if got := healthEndpoint("[::1]:19083", ""); got != "http://[::1]:19083/healthz" {
 		t.Fatalf("endpoint=%q", got)
 	}
-	if got := healthEndpoint(""); got != "http://127.0.0.1:18083/healthz" {
+	if got := healthEndpoint("", ""); got != "http://127.0.0.1:18083/healthz" {
 		t.Fatalf("default endpoint=%q", got)
+	}
+	if got := healthEndpoint("127.0.0.1:18083", "https"); got != "https://127.0.0.1:18083/healthz" {
+		t.Fatalf("TLS endpoint=%q", got)
+	}
+	if got := healthEndpoint("0.0.0.0:18083", "https"); got != "https://127.0.0.1:18083/healthz" {
+		t.Fatalf("wildcard listener endpoint=%q", got)
 	}
 	client := &http.Client{Transport: healthRoundTrip(func(request *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
@@ -46,7 +52,7 @@ func TestFetchPublicKeyRequiresPGPKeyResponse(t *testing.T) {
 			Body: io.NopCloser(strings.NewReader("public-key")),
 		}, nil
 	})}
-	if err := fetchPublicKey(context.Background(), client, publicKeyEndpoint(""), &output); err != nil || output.String() != "public-key" {
+	if err := fetchPublicKey(context.Background(), client, publicKeyEndpoint("", ""), &output); err != nil || output.String() != "public-key" {
 		t.Fatalf("output=%q err=%v", output.String(), err)
 	}
 }

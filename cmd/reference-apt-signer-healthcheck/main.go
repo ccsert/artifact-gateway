@@ -14,22 +14,23 @@ import (
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	scheme := os.Getenv("REFERENCE_APT_SIGNER_HEALTH_SCHEME")
 	if len(os.Args) == 2 && os.Args[1] == "public-key" {
-		if err := fetchPublicKey(ctx, &http.Client{}, publicKeyEndpoint(os.Getenv("REFERENCE_APT_SIGNER_LISTEN_ADDRESS")), os.Stdout); err != nil {
+		if err := fetchPublicKey(ctx, &http.Client{}, publicKeyEndpoint(os.Getenv("REFERENCE_APT_SIGNER_LISTEN_ADDRESS"), scheme), os.Stdout); err != nil {
 			os.Exit(1)
 		}
 		return
 	}
-	if err := check(ctx, &http.Client{}, healthEndpoint(os.Getenv("REFERENCE_APT_SIGNER_LISTEN_ADDRESS"))); err != nil {
+	if err := check(ctx, &http.Client{}, healthEndpoint(os.Getenv("REFERENCE_APT_SIGNER_LISTEN_ADDRESS"), scheme)); err != nil {
 		os.Exit(1)
 	}
 }
 
-func publicKeyEndpoint(address string) string {
-	return strings.TrimSuffix(healthEndpoint(address), "/healthz") + "/v1/public-key"
+func publicKeyEndpoint(address, scheme string) string {
+	return strings.TrimSuffix(healthEndpoint(address, scheme), "/healthz") + "/v1/public-key"
 }
 
-func healthEndpoint(address string) string {
+func healthEndpoint(address, scheme string) string {
 	address = strings.TrimSpace(address)
 	if address == "" {
 		address = "127.0.0.1:18083"
@@ -38,7 +39,19 @@ func healthEndpoint(address string) string {
 	if err != nil {
 		return "http://127.0.0.1:18083/healthz"
 	}
-	return "http://" + net.JoinHostPort(host, port) + "/healthz"
+	if strings.EqualFold(strings.TrimSpace(scheme), "https") {
+		scheme = "https"
+	} else {
+		scheme = "http"
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		if ip.To4() != nil {
+			host = "127.0.0.1"
+		} else {
+			host = "::1"
+		}
+	}
+	return scheme + "://" + net.JoinHostPort(host, port) + "/healthz"
 }
 
 func fetchPublicKey(ctx context.Context, client *http.Client, endpoint string, output io.Writer) error {

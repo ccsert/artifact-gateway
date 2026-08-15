@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,18 +16,22 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/artifact-gateway/artifact-gateway/internal/refaptsigner"
 )
 
 type configuration struct {
-	ListenAddress   string
-	Token           string
-	KeyFile         string
-	Name            string
-	Comment         string
-	Email           string
-	RSABits         int
-	MaxReleaseBytes int64
+	ListenAddress      string
+	Token              string
+	KeyFile            string
+	Name               string
+	Comment            string
+	Email              string
+	RSABits            int
+	MaxReleaseBytes    int64
+	TLSCertFile        string
+	TLSKeyFile         string
+	RequireExistingKey bool
 }
 
 func main() {
@@ -35,9 +40,14 @@ func main() {
 		slog.Error("invalid reference APT signer configuration", "error", err)
 		os.Exit(1)
 	}
-	entity, err := refaptsigner.LoadOrCreateEntity(context.Background(), refaptsigner.KeyOptions{
-		Path: config.KeyFile, Name: config.Name, Comment: config.Comment, Email: config.Email, RSABits: config.RSABits,
-	})
+	var entity *openpgp.Entity
+	if config.RequireExistingKey {
+		entity, err = refaptsigner.LoadEntity(config.KeyFile)
+	} else {
+		entity, err = refaptsigner.LoadOrCreateEntity(context.Background(), refaptsigner.KeyOptions{
+			Path: config.KeyFile, Name: config.Name, Comment: config.Comment, Email: config.Email, RSABits: config.RSABits,
+		})
+	}
 	if err != nil {
 		slog.Error("initialize reference APT signing key")
 		os.Exit(1)
@@ -58,12 +68,19 @@ func main() {
 	server := &http.Server{
 		Addr: config.ListenAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errorsChannel := make(chan error, 1)
-	go func() { errorsChannel <- server.ListenAndServe() }()
-	slog.Info("reference APT signer listening", "address", config.ListenAddress, "key_fingerprint", service.Fingerprint())
+	go func() {
+		if config.TLSCertFile != "" {
+			errorsChannel <- server.ListenAndServeTLS(config.TLSCertFile, config.TLSKeyFile)
+			return
+		}
+		errorsChannel <- server.ListenAndServe()
+	}()
+	slog.Info("reference APT signer listening", "address", config.ListenAddress, "tls", config.TLSCertFile != "", "key_fingerprint", service.Fingerprint())
 	select {
 	case err = <-errorsChannel:
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -81,6 +98,7 @@ func main() {
 }
 
 func loadConfig(getenv func(string) string) (configuration, error) {
+	var err error
 	config := configuration{
 		ListenAddress:   envOrDefault(getenv, "REFERENCE_APT_SIGNER_LISTEN_ADDRESS", "127.0.0.1:18083"),
 		Token:           getenv("REFERENCE_APT_SIGNER_TOKEN"),
@@ -90,13 +108,22 @@ func loadConfig(getenv func(string) string) (configuration, error) {
 		Email:           envOrDefault(getenv, "REFERENCE_APT_SIGNER_EMAIL", "apt-release@artifact-gateway.local"),
 		RSABits:         4096,
 		MaxReleaseBytes: 16 << 20,
+		TLSCertFile:     strings.TrimSpace(getenv("REFERENCE_APT_SIGNER_TLS_CERT_FILE")),
+		TLSKeyFile:      strings.TrimSpace(getenv("REFERENCE_APT_SIGNER_TLS_KEY_FILE")),
 	}
-	if !loopbackAddress(config.ListenAddress) || len(config.Token) < 32 || len(config.Token) > 256 || strings.ContainsAny(config.Token, "\x00\r\n") ||
+	if raw := strings.TrimSpace(getenv("REFERENCE_APT_SIGNER_REQUIRE_EXISTING_KEY")); raw != "" {
+		if config.RequireExistingKey, err = strconv.ParseBool(raw); err != nil {
+			return configuration{}, errors.New("REFERENCE_APT_SIGNER_REQUIRE_EXISTING_KEY is invalid")
+		}
+	}
+	tlsConfigured := config.TLSCertFile != "" && config.TLSKeyFile != ""
+	if (!loopbackAddress(config.ListenAddress) && !tlsConfigured) || (config.TLSCertFile == "") != (config.TLSKeyFile == "") ||
+		(config.TLSCertFile != "" && (!filepath.IsAbs(config.TLSCertFile) || !filepath.IsAbs(config.TLSKeyFile))) ||
+		len(config.Token) < 32 || len(config.Token) > 256 || strings.ContainsAny(config.Token, "\x00\r\n") ||
 		!filepath.IsAbs(config.KeyFile) || strings.ContainsAny(config.Name+config.Comment+config.Email, "\x00\r\n") ||
 		config.Name == "" || config.Email == "" {
 		return configuration{}, errors.New("listener, token, key path, or identity is invalid")
 	}
-	var err error
 	if config.RSABits, err = intValue(getenv("REFERENCE_APT_SIGNER_RSA_BITS"), config.RSABits, 2048, 4096); err != nil {
 		return configuration{}, fmt.Errorf("REFERENCE_APT_SIGNER_RSA_BITS: %w", err)
 	}

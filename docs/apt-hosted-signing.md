@@ -1,10 +1,11 @@
-# APT Hosted H2 Signing Preview
+# APT Hosted Signing And H3 Rotation Preview
 
 APT Hosted H2 is an operator preview for validating the complete signed
 publication path. It is installable by Debian clients, but it is not a
 production signing service. H3 must add managed key custody, rotation,
 revocation, recovery drills, metrics, and alerts before the format is
-advertised.
+advertised. The external HTTPS and client-rotation drill is now executable;
+managed KMS/HSM custody and key recovery remain open.
 
 ## Local deployment
 
@@ -72,6 +73,23 @@ reference signer's private-key volume is deliberately outside the
 PostgreSQL/RustFS backup, so managed key custody, key backup, and key recovery
 remain production H3 responsibilities.
 
+Run `make apt-signer-rotation-e2e` for the external boundary. The gate
+pre-provisions two private keys into signer-owned volumes, starts two separate
+signer services with those volumes mounted read-only, and connects Gateway over
+TLS using a signer-specific CA bundle. A separate init container validates the
+certificate/key pair and copies it into a signer-owned volume; the serving
+containers receive that volume read-only, so the drill has the same UID and
+mount semantics on Linux and macOS. It then publishes with the old key,
+enters an old/new trust overlap, switches the external signer, verifies that an
+old-key-only Debian client rejects the new snapshot, retires the old key, and
+installs again with only the new public key. Gateway never mounts either
+private-key volume.
+
+This is a production-shaped local rotation and client-trust drill, not a claim
+that the reference signer is a managed KMS or HSM. The generated keys and
+short-lived CA are test fixtures and are deleted with the isolated Compose
+project.
+
 The Console artifact tab and repository search show only the current visible
 snapshot. Capacity includes staged package revisions and deduplicated generated
 metadata for the current visible snapshot; direct and by-hash names pointing to
@@ -100,6 +118,11 @@ accepts one active 40- or 64-hex-character fingerprint and one optional next
 fingerprint for a controlled rotation overlap. It never changes client trust
 automatically.
 
+For a signer whose server certificate chains to a private CA, mount the bounded
+PEM bundle read-only and set `GATEWAY_APT_SIGNER_TLS_CA_FILE`. Gateway builds a
+dedicated TLS trust pool for only the signer client; it does not change
+process-wide roots. Public-CA signers leave this setting empty.
+
 A production rotation uses this order:
 
 1. distribute and verify the next public key through the operator-owned trust
@@ -109,6 +132,11 @@ A production rotation uses this order:
 3. rotate the external signer and confirm a newly published snapshot reports
    the new fingerprint in the immutable publication response and audit;
 4. remove the old fingerprint only after the client overlap window closes.
+
+The `reference-apt-signer-keyring` helper merges one or two independently
+exported public keys into the single public-only armor block required by the
+Gateway trust policy and can print their canonical comma-separated
+fingerprints. It never accepts or emits a private key.
 
 An unlisted signer key is rejected before snapshot visibility changes. The
 loopback reference signer may omit this setting because it remains an H2 test

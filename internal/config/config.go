@@ -78,6 +78,8 @@ type Config struct {
 	APTSignerTrustedFingerprints   []string
 	APTSignerTrustedPublicKeysFile string
 	APTSignerTrustedPublicKeys     []byte
+	APTSignerTLSCAFile             string
+	APTSignerTLSRootCertificates   []byte
 	RuntimeNodeRetention           time.Duration
 	RuntimeNodePruneInterval       time.Duration
 	DatabaseURL                    string
@@ -144,6 +146,7 @@ func Load() (Config, error) {
 		APTSignerTimeout:               15 * time.Second,
 		APTSignerTrustedFingerprints:   splitCSV(os.Getenv("GATEWAY_APT_SIGNER_TRUSTED_FINGERPRINTS")),
 		APTSignerTrustedPublicKeysFile: strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TRUSTED_PUBLIC_KEYS_FILE")),
+		APTSignerTLSCAFile:             strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TLS_CA_FILE")),
 		RuntimeNodeRetention:           7 * 24 * time.Hour,
 		RuntimeNodePruneInterval:       time.Hour,
 		DatabaseURL:                    os.Getenv("GATEWAY_DATABASE_URL"),
@@ -471,7 +474,7 @@ func configureScanner(cfg *Config) error {
 
 func configureAPTSigner(cfg *Config) error {
 	requestedWithoutEndpoint := cfg.APTSignerToken != "" || strings.TrimSpace(os.Getenv("GATEWAY_APT_SIGNER_TIMEOUT")) != "" ||
-		len(cfg.APTSignerTrustedFingerprints) > 0 || cfg.APTSignerTrustedPublicKeysFile != ""
+		len(cfg.APTSignerTrustedFingerprints) > 0 || cfg.APTSignerTrustedPublicKeysFile != "" || cfg.APTSignerTLSCAFile != ""
 	if cfg.APTSignerEndpoint == "" {
 		if requestedWithoutEndpoint {
 			return fmt.Errorf("GATEWAY_APT_SIGNER_ENDPOINT is required when APT signer settings are configured")
@@ -480,6 +483,8 @@ func configureAPTSigner(cfg *Config) error {
 		cfg.APTSignerTrustedFingerprints = nil
 		cfg.APTSignerTrustedPublicKeysFile = ""
 		cfg.APTSignerTrustedPublicKeys = nil
+		cfg.APTSignerTLSCAFile = ""
+		cfg.APTSignerTLSRootCertificates = nil
 		return nil
 	}
 	parsed, err := url.ParseRequestURI(cfg.APTSignerEndpoint)
@@ -515,6 +520,16 @@ func configureAPTSigner(cfg *Config) error {
 			return fmt.Errorf("APT signer trusted public-key policy is invalid")
 		}
 		cfg.APTSignerTrustedPublicKeys = publicKeys
+	}
+	if cfg.APTSignerTLSCAFile != "" {
+		if parsed.Scheme != "https" {
+			return fmt.Errorf("GATEWAY_APT_SIGNER_TLS_CA_FILE requires an HTTPS signer endpoint")
+		}
+		rootCertificates, loadErr := aptpublication.LoadHTTPSignerTLSRootCertificates(cfg.APTSignerTLSCAFile)
+		if loadErr != nil {
+			return fmt.Errorf("GATEWAY_APT_SIGNER_TLS_CA_FILE could not be loaded")
+		}
+		cfg.APTSignerTLSRootCertificates = rootCertificates
 	}
 	cfg.APTSignerTrustedFingerprints = fingerprints
 	return nil

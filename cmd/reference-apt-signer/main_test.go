@@ -41,3 +41,33 @@ func TestLoadConfigRejectsPublicListenerAndUnsafeSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigAllowsPublicListenerOnlyWithTLS(t *testing.T) {
+	values := map[string]string{
+		"REFERENCE_APT_SIGNER_LISTEN_ADDRESS":       "0.0.0.0:18083",
+		"REFERENCE_APT_SIGNER_TOKEN":                strings.Repeat("t", 32),
+		"REFERENCE_APT_SIGNER_TLS_CERT_FILE":        "/run/secrets/tls.crt",
+		"REFERENCE_APT_SIGNER_TLS_KEY_FILE":         "/run/secrets/tls.key",
+		"REFERENCE_APT_SIGNER_REQUIRE_EXISTING_KEY": "true",
+	}
+	config, err := loadConfig(func(name string) string { return values[name] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.TLSCertFile != values["REFERENCE_APT_SIGNER_TLS_CERT_FILE"] || config.TLSKeyFile != values["REFERENCE_APT_SIGNER_TLS_KEY_FILE"] || !config.RequireExistingKey {
+		t.Fatalf("TLS config=%#v", config)
+	}
+}
+
+func TestLoadConfigRejectsIncompleteTLSListener(t *testing.T) {
+	for _, configured := range []string{"REFERENCE_APT_SIGNER_TLS_CERT_FILE", "REFERENCE_APT_SIGNER_TLS_KEY_FILE"} {
+		values := map[string]string{
+			"REFERENCE_APT_SIGNER_LISTEN_ADDRESS": "0.0.0.0:18083",
+			"REFERENCE_APT_SIGNER_TOKEN":          strings.Repeat("t", 32),
+			configured:                            "/run/secrets/value.pem",
+		}
+		if _, err := loadConfig(func(name string) string { return values[name] }); err == nil {
+			t.Fatalf("loadConfig() accepted incomplete TLS configuration with %s", configured)
+		}
+	}
+}

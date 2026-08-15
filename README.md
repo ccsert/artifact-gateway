@@ -255,8 +255,9 @@ management preview but remains unadvertised until the production-signing gates
 pass. Operators may explicitly provision an APT Hosted preview repository,
 stage `.deb` revisions, and publish a signed snapshot through the management API;
 the format profile and Console continue to expose only executable Proxy/Group
-protocol capabilities. See [the H2 signing preview guide](docs/apt-hosted-signing.md)
-for local configuration, publication, verification, and the production boundary.
+protocol capabilities. See [the signing and H3 rotation preview guide](docs/apt-hosted-signing.md)
+for local configuration, publication, recovery, external HTTPS rotation, and
+the remaining managed-key production boundary.
 For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
 `GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
 explicitly configured.

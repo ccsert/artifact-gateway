@@ -153,6 +153,28 @@ func TestLoadOrCreateEntityPersistsOnePrivateKeyWithRestrictedMode(t *testing.T)
 	}
 }
 
+func TestLoadEntityAcceptsReadOnlyPrivateKeyWithoutMutatingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "read-only-private.gpg")
+	if _, err := LoadOrCreateEntity(context.Background(), KeyOptions{
+		Path: path, Name: "Read Only", Email: "read-only@example.test", RSABits: 1024,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadEntity(path); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o400 {
+		t.Fatalf("private key mode=%#o", info.Mode().Perm())
+	}
+}
+
 func digest(body []byte) string {
 	sum := sha256.Sum256(body)
 	return "sha256:" + hex.EncodeToString(sum[:])

@@ -33,9 +33,11 @@ func TestConfigurationReportsAPTSignerTrustWithoutExposingFingerprints(t *testin
 	cfg.APTSignerTrustedFingerprints = []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}
 	cfg.APTSignerTrustedPublicKeysFile = "/run/secrets/apt-release-public-keys.asc"
 	cfg.APTSignerTrustedPublicKeys = []byte("validated public keys")
+	cfg.APTSignerTLSCAFile = "/run/secrets/apt-signer-ca.pem"
+	cfg.APTSignerTLSRootCertificates = []byte("validated TLS roots")
 	result := configurationResult(cfg)
 	if result.Details["apt_signer_enabled"] != true || result.Details["apt_signer_trusted_fingerprint_count"] != 2 ||
-		result.Details["apt_signer_trusted_public_keys_validated"] != true {
+		result.Details["apt_signer_trusted_public_keys_validated"] != true || result.Details["apt_signer_tls_trust_mode"] != "custom_roots" {
 		t.Fatalf("APT signer diagnostics=%#v", result.Details)
 	}
 	encoded, err := json.Marshal(result)
