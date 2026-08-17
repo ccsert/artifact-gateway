@@ -953,6 +953,22 @@ func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 	if got := upstream.callCount("/" + assetPath); got != 0 {
 		t.Fatalf("upstream calls=%d, want 0 (hosted member preferred)", got)
 	}
+	metadataPath := "org/example/widget/maven-metadata.xml"
+	metadataRequest := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+metadataPath, nil)
+	authorize(metadataRequest, "resolver-secret")
+	metadataResponse := httptest.NewRecorder()
+	handler.ServeHTTP(metadataResponse, metadataRequest)
+	if metadataResponse.Code != http.StatusOK {
+		t.Fatalf("hosted group metadata=%d body=%q", metadataResponse.Code, metadataResponse.Body.String())
+	}
+	checksumRequest := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+metadataPath+".sha256", nil)
+	authorize(checksumRequest, "resolver-secret")
+	checksumResponse := httptest.NewRecorder()
+	handler.ServeHTTP(checksumResponse, checksumRequest)
+	metadataSum := sha256.Sum256(metadataResponse.Body.Bytes())
+	if checksumResponse.Code != http.StatusOK || strings.TrimSpace(checksumResponse.Body.String()) != hex.EncodeToString(metadataSum[:]) {
+		t.Fatalf("hosted group metadata checksum=%d body=%q", checksumResponse.Code, checksumResponse.Body.String())
+	}
 }
 
 func TestV2GroupMavenFallsBackToProxy(t *testing.T) {

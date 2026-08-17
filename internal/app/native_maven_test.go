@@ -884,6 +884,11 @@ func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("snapshot metadata = %d %s", code, metadata)
 	}
+	metadataSum := sha256.Sum256([]byte(metadata))
+	code, metadataChecksum := read("org/example/widget/1.0-SNAPSHOT/maven-metadata.xml.sha256")
+	if code != http.StatusOK || strings.TrimSpace(metadataChecksum) != hex.EncodeToString(metadataSum[:]) {
+		t.Fatalf("snapshot metadata checksum = (%d, %q), want generated SHA-256", code, metadataChecksum)
+	}
 	if !strings.Contains(metadata, "<buildNumber>2</buildNumber>") {
 		t.Fatalf("metadata lacks latest buildNumber 2: %s", metadata)
 	}

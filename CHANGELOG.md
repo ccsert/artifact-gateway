@@ -191,7 +191,9 @@ a dated version heading without rewriting their meaning.
 - Generated Maven-compatible SNAPSHOT metadata using the latest timestamped
   version value and separate extension/classifier fields, so standard Maven
   clients can resolve POM, JAR, sources, and javadoc assets while older
-  immutable builds remain directly addressable.
+  immutable builds remain directly addressable; generated metadata now also
+  serves SHA-512, SHA-256, SHA-1, and MD5 sidecars through Hosted and Group
+  routes for warning-free client verification.
 - Served npm package-version metadata through Hosted, Proxy, and Group routes,
   including cold proxy resolution and group tarball URL rewriting, so Corepack
   can install pinned package-manager versions through Artifact Gateway.

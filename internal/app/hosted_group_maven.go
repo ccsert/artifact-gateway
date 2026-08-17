@@ -92,7 +92,7 @@ func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Reque
 	// The coordinate is the Group conflict boundary. A quarantined higher
 	// priority coordinate must claim every classifier/extension even when that
 	// exact asset name only exists in a lower member.
-	if !strings.HasSuffix(assetPath, "maven-metadata.xml") && h.blockQuarantinedRead(w, r, repo, assetPath, actor) {
+	if _, _, metadataRequest := mavenMetadataRequest(assetPath); !metadataRequest && h.blockQuarantinedRead(w, r, repo, assetPath, actor) {
 		return true
 	}
 	asset, err := h.store.GetMavenAsset(r.Context(), repo.ID, assetPath)
@@ -103,7 +103,7 @@ func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if err != nil {
-		if strings.HasSuffix(assetPath, "maven-metadata.xml") {
+		if _, _, metadataRequest := mavenMetadataRequest(assetPath); metadataRequest {
 			if h.serveHostedMetadata(w, r, repo, assetPath) {
 				return true
 			}
@@ -127,12 +127,16 @@ func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Reque
 // when it can answer the request, reusing the native metadata generator. It
 // reports whether metadata was available.
 func (h nativeMavenHandler) serveHostedMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) bool {
+	metadataPath, _, ok := mavenMetadataRequest(path)
+	if !ok {
+		return false
+	}
 	items, err := h.store.ListMavenArtifacts(r.Context(), repo.ID)
 	if err != nil {
 		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
 		return true
 	}
-	prefix := strings.TrimSuffix(path, "/maven-metadata.xml")
+	prefix := strings.TrimSuffix(metadataPath, "/maven-metadata.xml")
 	for _, item := range items {
 		base := mavenCoordinatePath(item.Coordinate)
 		if base == prefix || strings.HasPrefix(base, prefix+"/") {
