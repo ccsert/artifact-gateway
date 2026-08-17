@@ -920,40 +920,39 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		}
 		var body strings.Builder
 		body.WriteString("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><version>" + version + "</version><versioning><snapshot><timestamp>" + latestTimestamp + "</timestamp><buildNumber>" + strconv.Itoa(latest.BuildNumber) + "</buildNumber></snapshot><snapshotVersions>")
-		for _, build := range builds {
-			// One snapshotVersion per build and extension, derived from the
-			// build's stored asset paths rather than a hardcoded pom+jar set.
-			value := mavenSnapshotBuildNamePrefix(coordinate, build.CreatedAt, build.BuildNumber)
-			updated := build.CreatedAt.UTC().Format("20060102150405")
-			extensions := map[string]bool{}
-			for _, asset := range assets {
-				slash := strings.LastIndexByte(asset.Path, '/')
-				name := asset.Path
-				if slash >= 0 {
-					name = asset.Path[slash+1:]
-				}
-				if !strings.HasPrefix(name, value) {
-					continue
-				}
-				extension := strings.TrimPrefix(name, value)
-				extension = strings.TrimPrefix(extension, ".")
-				// Checksum sidecars are served next to their asset, not listed.
-				base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(extension, ".sha512"), ".sha256"), ".sha1"), ".md5")
-				if base != extension {
-					continue
-				}
-				if extension != "" && !extensions[extension] {
-					extensions[extension] = true
-				}
+		// Maven resolves a SNAPSHOT from exactly one current value per
+		// extension/classifier pair. Older builds remain addressable by their
+		// immutable timestamped filenames but are not repeated in metadata.
+		filenamePrefix := mavenSnapshotBuildNamePrefix(coordinate, latest.CreatedAt, latest.BuildNumber)
+		value := strings.TrimPrefix(filenamePrefix, artifact+"-")
+		updated := latest.CreatedAt.UTC().Format("20060102150405")
+		type snapshotAsset struct{ extension, classifier string }
+		versions := map[string]snapshotAsset{}
+		for _, asset := range assets {
+			slash := strings.LastIndexByte(asset.Path, '/')
+			name := asset.Path
+			if slash >= 0 {
+				name = asset.Path[slash+1:]
 			}
-			ordered := make([]string, 0, len(extensions))
-			for extension := range extensions {
-				ordered = append(ordered, extension)
+			extension, classifier, ok := mavenSnapshotAssetIdentity(name, filenamePrefix)
+			if !ok {
+				continue
 			}
-			sort.Strings(ordered)
-			for _, extension := range ordered {
-				body.WriteString("<snapshotVersion><extension>" + extension + "</extension><value>" + value + "</value><updated>" + updated + "</updated></snapshotVersion>")
+			identity := extension + "\x00" + classifier
+			versions[identity] = snapshotAsset{extension: extension, classifier: classifier}
+		}
+		ordered := make([]string, 0, len(versions))
+		for identity := range versions {
+			ordered = append(ordered, identity)
+		}
+		sort.Strings(ordered)
+		for _, identity := range ordered {
+			item := versions[identity]
+			body.WriteString("<snapshotVersion><extension>" + item.extension + "</extension>")
+			if item.classifier != "" {
+				body.WriteString("<classifier>" + item.classifier + "</classifier>")
 			}
+			body.WriteString("<value>" + value + "</value><updated>" + updated + "</updated></snapshotVersion>")
 		}
 		body.WriteString("</snapshotVersions></versioning></metadata>")
 		w.Header().Set("Content-Type", "application/xml")
@@ -1009,6 +1008,31 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		_, _ = w.Write(body)
 	}
 	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
+}
+
+func mavenSnapshotAssetIdentity(name, filenamePrefix string) (extension, classifier string, ok bool) {
+	if !strings.HasPrefix(name, filenamePrefix) {
+		return "", "", false
+	}
+	remainder := strings.TrimPrefix(name, filenamePrefix)
+	for _, checksum := range []string{".sha512", ".sha256", ".sha1", ".md5"} {
+		if strings.HasSuffix(remainder, checksum) {
+			return "", "", false
+		}
+	}
+	if strings.HasPrefix(remainder, ".") {
+		extension = strings.TrimPrefix(remainder, ".")
+		return extension, "", extension != "" && !strings.Contains(extension, ".")
+	}
+	if !strings.HasPrefix(remainder, "-") {
+		return "", "", false
+	}
+	classified := strings.TrimPrefix(remainder, "-")
+	dot := strings.LastIndexByte(classified, '.')
+	if dot <= 0 || dot == len(classified)-1 {
+		return "", "", false
+	}
+	return classified[dot+1:], classified[:dot], true
 }
 func validMavenCoordinate(s string) bool {
 	p := strings.Split(s, ":")
