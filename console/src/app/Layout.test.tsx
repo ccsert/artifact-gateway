@@ -36,6 +36,9 @@ function renderLayout(pathname: string) {
           <Route path="/repositories" element={<AppLayout />}>
             <Route index element={<div>repository catalog</div>} />
           </Route>
+          <Route path="/service-accounts" element={<AppLayout />}>
+            <Route index element={<div>service account management</div>} />
+          </Route>
         </Routes>
       </MemoryRouter>
     </PreferencesProvider>,
@@ -83,6 +86,20 @@ describe("AppLayout", () => {
 
     expect(await screen.findByTestId("location")).toHaveTextContent("/search");
     expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
+  });
+
+  it("keeps Service Account credential management away from a reader", async () => {
+    Object.assign(auth, {
+      role: "reader",
+      identity: { administrator: false },
+    });
+
+    renderLayout("/service-accounts");
+
+    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(
+      screen.queryByText("service account management"),
+    ).not.toBeInTheDocument();
   });
 
   it("provides global search, persistent navigation collapse, and logout", async () => {

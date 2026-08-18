@@ -476,6 +476,58 @@ export type CreatedApiKey = ApiKey & {
   token: string;
 };
 
+export type ServiceAccount = {
+  id: string;
+  name: string;
+  description: string;
+  state: "active" | "disabled";
+  createdAt: string;
+  updatedAt: string;
+  version: string;
+};
+
+export type ServiceAccountList = {
+  items: Array<ServiceAccount>;
+  nextPageToken?: string;
+};
+
+export type CreateServiceAccount = {
+  name: string;
+  description?: string;
+};
+
+export type UpdateServiceAccount = {
+  description?: string;
+  state?: "active" | "disabled";
+};
+
+export type ServiceAccountCredential = {
+  id: string;
+  serviceAccountId: string;
+  name: string;
+  createdAt: string;
+  expiresAt?: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+};
+
+export type ServiceAccountCredentialList = {
+  items: Array<ServiceAccountCredential>;
+  nextPageToken?: string;
+};
+
+export type CreateServiceAccountCredential = {
+  name: string;
+  /**
+   * Optional expiry. Defaults to 90 days and cannot exceed 365 days.
+   */
+  expiresAt?: string;
+};
+
+export type CreatedServiceAccountCredential = ServiceAccountCredential & {
+  token: string;
+};
+
 export type User = {
   id: string;
   name: string;
@@ -904,7 +956,12 @@ export type AuditCleanupJob = {
 };
 
 export type AuthenticationKind =
-  "static_admin" | "static_resolver" | "local_session" | "api_key" | "oidc";
+  | "static_admin"
+  | "static_resolver"
+  | "local_session"
+  | "api_key"
+  | "service_account_credential"
+  | "oidc";
 
 export type OidcRoleMappingMatch = {
   externalRole: string;
@@ -2519,6 +2576,226 @@ export type RevokeApiKeyResponses = {
 
 export type RevokeApiKeyResponse =
   RevokeApiKeyResponses[keyof RevokeApiKeyResponses];
+
+export type ListServiceAccountsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    pageSize?: number;
+    pageToken?: string;
+  };
+  url: "/service-accounts";
+};
+
+export type ListServiceAccountsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ListServiceAccountsError =
+  ListServiceAccountsErrors[keyof ListServiceAccountsErrors];
+
+export type ListServiceAccountsResponses = {
+  /**
+   * Service accounts
+   */
+  200: ServiceAccountList;
+};
+
+export type ListServiceAccountsResponse =
+  ListServiceAccountsResponses[keyof ListServiceAccountsResponses];
+
+export type CreateServiceAccountData = {
+  body: CreateServiceAccount;
+  path?: never;
+  query?: never;
+  url: "/service-accounts";
+};
+
+export type CreateServiceAccountErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateServiceAccountError =
+  CreateServiceAccountErrors[keyof CreateServiceAccountErrors];
+
+export type CreateServiceAccountResponses = {
+  /**
+   * Stable non-human authorization principal
+   */
+  201: ServiceAccount;
+};
+
+export type CreateServiceAccountResponse =
+  CreateServiceAccountResponses[keyof CreateServiceAccountResponses];
+
+export type UpdateServiceAccountData = {
+  body: UpdateServiceAccount;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    serviceAccountId: string;
+  };
+  query?: never;
+  url: "/service-accounts/{serviceAccountId}";
+};
+
+export type UpdateServiceAccountErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type UpdateServiceAccountError =
+  UpdateServiceAccountErrors[keyof UpdateServiceAccountErrors];
+
+export type UpdateServiceAccountResponses = {
+  /**
+   * Stable non-human authorization principal
+   */
+  200: ServiceAccount;
+};
+
+export type UpdateServiceAccountResponse =
+  UpdateServiceAccountResponses[keyof UpdateServiceAccountResponses];
+
+export type ListServiceAccountCredentialsData = {
+  body?: never;
+  path: {
+    serviceAccountId: string;
+  };
+  query?: {
+    pageSize?: number;
+    pageToken?: string;
+  };
+  url: "/service-accounts/{serviceAccountId}/credentials";
+};
+
+export type ListServiceAccountCredentialsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListServiceAccountCredentialsError =
+  ListServiceAccountCredentialsErrors[keyof ListServiceAccountCredentialsErrors];
+
+export type ListServiceAccountCredentialsResponses = {
+  /**
+   * Service-account credential metadata
+   */
+  200: ServiceAccountCredentialList;
+};
+
+export type ListServiceAccountCredentialsResponse =
+  ListServiceAccountCredentialsResponses[keyof ListServiceAccountCredentialsResponses];
+
+export type CreateServiceAccountCredentialData = {
+  body: CreateServiceAccountCredential;
+  path: {
+    serviceAccountId: string;
+  };
+  query?: never;
+  url: "/service-accounts/{serviceAccountId}/credentials";
+};
+
+export type CreateServiceAccountCredentialErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateServiceAccountCredentialError =
+  CreateServiceAccountCredentialErrors[keyof CreateServiceAccountCredentialErrors];
+
+export type CreateServiceAccountCredentialResponses = {
+  /**
+   * Newly generated service-account credential. The plaintext token is returned only by this response.
+   */
+  201: CreatedServiceAccountCredential;
+};
+
+export type CreateServiceAccountCredentialResponse =
+  CreateServiceAccountCredentialResponses[keyof CreateServiceAccountCredentialResponses];
+
+export type RevokeServiceAccountCredentialData = {
+  body?: never;
+  path: {
+    serviceAccountId: string;
+    credentialId: string;
+  };
+  query?: never;
+  url: "/service-accounts/{serviceAccountId}/credentials/{credentialId}";
+};
+
+export type RevokeServiceAccountCredentialErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type RevokeServiceAccountCredentialError =
+  RevokeServiceAccountCredentialErrors[keyof RevokeServiceAccountCredentialErrors];
+
+export type RevokeServiceAccountCredentialResponses = {
+  /**
+   * Revocable service-account credential metadata
+   */
+  200: ServiceAccountCredential;
+};
+
+export type RevokeServiceAccountCredentialResponse =
+  RevokeServiceAccountCredentialResponses[keyof RevokeServiceAccountCredentialResponses];
 
 export type ListUsersData = {
   body?: never;

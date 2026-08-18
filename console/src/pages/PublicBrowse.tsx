@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   ArrowLeftOutlined,
+  ArrowRightOutlined,
+  AppstoreOutlined,
   CheckOutlined,
   CopyOutlined,
   DownOutlined,
   LinkOutlined,
   ReloadOutlined,
+  SafetyCertificateOutlined,
+  SearchOutlined,
   UpOutlined,
 } from "@ant-design/icons";
 import { Button, Input, Table, Tooltip } from "antd";
@@ -47,10 +51,13 @@ import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
 import { APTAssetDetail } from "../components/APTAssetDetail";
 
+type PublicRepositoryFormat =
+  "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
+
 interface PublicRepository {
   id: string;
   name: string;
-  format: "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
+  format: PublicRepositoryFormat;
   type?: string;
 }
 
@@ -92,6 +99,55 @@ interface ConanRevisionPage {
 }
 
 const VERSION_PAGE_SIZE = 50;
+
+const PUBLIC_FORMAT_ORDER: PublicRepositoryFormat[] = [
+  "oci",
+  "maven",
+  "npm",
+  "pypi",
+  "go",
+  "apt",
+  "conan",
+  "raw",
+];
+
+const PUBLIC_FORMAT_STYLE: Record<
+  PublicRepositoryFormat,
+  { icon: string; surface: string }
+> = {
+  oci: {
+    icon: "OCI",
+    surface: "border-violet-400/20 bg-violet-400/10 text-violet-200",
+  },
+  maven: {
+    icon: "MVN",
+    surface: "border-orange-400/20 bg-orange-400/10 text-orange-200",
+  },
+  npm: {
+    icon: "NPM",
+    surface: "border-rose-400/20 bg-rose-400/10 text-rose-200",
+  },
+  pypi: {
+    icon: "PY",
+    surface: "border-blue-400/20 bg-blue-400/10 text-blue-200",
+  },
+  go: {
+    icon: "GO",
+    surface: "border-cyan-400/20 bg-cyan-400/10 text-cyan-200",
+  },
+  apt: {
+    icon: "APT",
+    surface: "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+  },
+  conan: {
+    icon: "C++",
+    surface: "border-amber-400/20 bg-amber-400/10 text-amber-200",
+  },
+  raw: {
+    icon: "RAW",
+    surface: "border-zinc-400/20 bg-zinc-400/10 text-zinc-200",
+  },
+};
 
 function nextOciTagCursor(
   response: Response,
@@ -1061,6 +1117,10 @@ export function PublicBrowsePage() {
     null,
   );
   const [catalogError, setCatalogError] = useState<unknown>(null);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogFormat, setCatalogFormat] = useState<
+    PublicRepositoryFormat | "all"
+  >("all");
   const [copiedCoordinate, setCopiedCoordinate] = useState<string | null>(null);
   const [expandedCoordinate, setExpandedCoordinate] = useState<string | null>(
     null,
@@ -1093,6 +1153,26 @@ export function PublicBrowsePage() {
   const selectedRepository = repositories?.find(
     (repository) => repository.id === repositoryId,
   );
+  const publicFormats = useMemo(
+    () =>
+      PUBLIC_FORMAT_ORDER.filter((format) =>
+        repositories?.some((repository) => repository.format === format),
+      ),
+    [repositories],
+  );
+  const visibleRepositories = useMemo(() => {
+    const normalizedQuery = catalogQuery.trim().toLocaleLowerCase();
+    return (repositories ?? []).filter((repository) => {
+      if (catalogFormat !== "all" && repository.format !== catalogFormat) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return [repository.name, repository.format, repository.type ?? "hosted"]
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(normalizedQuery);
+    });
+  }, [catalogFormat, catalogQuery, repositories]);
 
   useEffect(() => {
     void fetch("/api/v2/public/repositories")
@@ -2116,15 +2196,20 @@ export function PublicBrowsePage() {
   };
 
   return (
-    <main className="ag-login-shell min-h-screen px-4 py-8 text-zinc-200 sm:px-6 sm:py-12">
+    <main className="ag-login-shell min-h-screen px-4 py-6 text-zinc-200 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-lg font-semibold text-zinc-100">
-              Artifact Gateway
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.08)]">
+              <AppstoreOutlined className="text-lg" />
             </div>
-            <div className="mt-1 text-sm text-zinc-500">
-              {t("public.browseTitle")}
+            <div>
+              <div className="font-semibold tracking-tight text-zinc-100">
+                Artifact Gateway
+              </div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                {t("public.browseTitle")}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -2137,32 +2222,102 @@ export function PublicBrowsePage() {
             </Link>
           </div>
         </div>
-        <Card bodyClassName="p-5 sm:p-6">
-          <h1 className="text-xl font-semibold text-zinc-50">
-            {t("public.catalogTitle")}
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {t("public.description")}
-          </p>
-          {selectedRepository && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
-              <span>{text("正在浏览", "Browsing")}</span>
-              <span className="font-medium text-zinc-100">
-                {selectedRepository.name}
-              </span>
-              <FormatBadge format={selectedRepository.format} />
+        {!repositoryId ? (
+          <Card
+            className="relative overflow-hidden border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,47,73,0.48),rgba(9,9,11,0.94)_56%,rgba(24,24,27,0.96))]"
+            bodyClassName="relative p-6 sm:p-8 lg:p-10"
+          >
+            <div className="pointer-events-none absolute -right-24 -top-32 size-80 rounded-full bg-cyan-400/10 blur-3xl" />
+            <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
+              <div className="max-w-3xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-200">
+                  <SafetyCertificateOutlined />
+                  {text("公开只读", "Public read-only")}
+                </div>
+                <h1 className="mt-5 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
+                  {text(
+                    "查找并使用可信的公开制品",
+                    "Discover and consume trusted public artifacts",
+                  )}
+                </h1>
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400 sm:text-base">
+                  {text(
+                    "从团队明确公开的仓库中检索镜像、依赖和软件包。读取无需登录，发布、授权和仓库管理始终需要身份认证。",
+                    "Search images, dependencies, and packages from repositories explicitly published by your team. Reading needs no sign-in; publishing, grants, and repository administration always require authentication.",
+                  )}
+                </p>
+                <Input
+                  allowClear
+                  size="large"
+                  prefix={<SearchOutlined className="text-zinc-500" />}
+                  className="mt-7 max-w-2xl"
+                  placeholder={text(
+                    "搜索仓库名称或格式",
+                    "Search repository name or format",
+                  )}
+                  value={catalogQuery}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 shadow-2xl shadow-black/20">
+                <div className="bg-zinc-950/70 p-4">
+                  <div className="text-2xl font-semibold text-zinc-50">
+                    {repositories?.length ?? "—"}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {text("个公开来源", "public sources")}
+                  </div>
+                </div>
+                <div className="bg-zinc-950/70 p-4">
+                  <div className="text-2xl font-semibold text-zinc-50">
+                    {publicFormats.length || "—"}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {text("种制品格式", "artifact formats")}
+                  </div>
+                </div>
+                <div className="col-span-2 flex items-center gap-3 bg-zinc-950/70 p-4">
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-200">
+                    <SafetyCertificateOutlined />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-zinc-200">
+                      {text(
+                        "管理操作需要登录",
+                        "Management actions require sign-in",
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-zinc-500">
+                      {text(
+                        "公开目录不会授予写入或管理权限",
+                        "The public catalog never grants write or admin access",
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card bodyClassName="p-5 sm:p-6">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
               <Button
-                type="link"
+                type="text"
                 size="small"
                 icon={<ArrowLeftOutlined />}
-                className="ml-auto"
                 onClick={() => setParams({})}
               >
-                {text("返回公开仓库", "Back to public repositories")}
+                {text("公开仓库", "Public repositories")}
               </Button>
+              <span className="text-zinc-700">/</span>
+              <span className="font-medium text-zinc-100">
+                {selectedRepository?.name ??
+                  text("未知仓库", "Unknown repository")}
+              </span>
+              {selectedRepository && (
+                <FormatBadge format={selectedRepository.format} />
+              )}
             </div>
-          )}
-          {repositoryId && (
             <form onSubmit={submit} className="mt-5 flex items-center gap-2">
               <Input
                 className="min-w-0 flex-1 font-mono text-xs"
@@ -2181,8 +2336,8 @@ export function PublicBrowsePage() {
                 {text("搜索", "Search")}
               </Button>
             </form>
-          )}
-        </Card>
+          </Card>
+        )}
         <div
           className={
             selectedRepository
@@ -2245,38 +2400,137 @@ export function PublicBrowsePage() {
                   )}
                 />
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {repositories.map((repository) => (
-                    <Link
-                      key={repository.id}
-                      to={`/browse?repository=${encodeURIComponent(repository.id)}`}
-                      className="block text-left"
+                <div>
+                  <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80">
+                        {text("公开目录", "Public catalog")}
+                      </div>
+                      <h2 className="mt-1 text-lg font-semibold text-zinc-100">
+                        {text("选择制品来源", "Choose an artifact source")}
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {text(
+                          `${repositories.length} 个公开来源 · ${publicFormats.length} 种制品格式`,
+                          `${repositories.length} public sources · ${publicFormats.length} artifact formats`,
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/40 p-1"
+                      aria-label={text(
+                        "按制品格式筛选",
+                        "Filter by artifact format",
+                      )}
                     >
-                      <Card
-                        className="h-full border-zinc-800 transition-colors hover:border-cyan-500/50 hover:bg-zinc-900"
-                        bodyClassName="px-4 py-4"
+                      <Button
+                        size="small"
+                        type={catalogFormat === "all" ? "primary" : "text"}
+                        aria-pressed={catalogFormat === "all"}
+                        onClick={() => setCatalogFormat("all")}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 truncate font-medium text-zinc-100">
-                            {repository.name}
-                          </span>
-                          <FormatBadge format={repository.format} />
-                        </div>
-                        <div className="mt-3">
-                          <Badge
-                            tone={
-                              repository.type === "proxy" ? "amber" : "cyan"
-                            }
+                        {text("全部", "All")}
+                      </Button>
+                      {publicFormats.map((format) => (
+                        <Button
+                          key={format}
+                          size="small"
+                          type={catalogFormat === format ? "primary" : "text"}
+                          aria-pressed={catalogFormat === format}
+                          onClick={() => setCatalogFormat(format)}
+                        >
+                          {format.toUpperCase()}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  {visibleRepositories.length === 0 ? (
+                    <EmptyState
+                      title={text(
+                        "没有匹配的公开仓库",
+                        "No matching public repositories",
+                      )}
+                      hint={text(
+                        "调整搜索词或格式筛选后重试。",
+                        "Adjust the search term or format filter and try again.",
+                      )}
+                      action={
+                        <Button
+                          onClick={() => {
+                            setCatalogQuery("");
+                            setCatalogFormat("all");
+                          }}
+                        >
+                          {text("清除筛选", "Clear filters")}
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {visibleRepositories.map((repository) => (
+                        <Link
+                          key={repository.id}
+                          to={`/browse?repository=${encodeURIComponent(repository.id)}`}
+                          className="group block text-left"
+                        >
+                          <Card
+                            className="h-full border-zinc-800/90 bg-zinc-950/35 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80 group-hover:shadow-xl group-hover:shadow-black/20"
+                            bodyClassName="flex h-full min-h-52 flex-col p-5"
                           >
-                            {repository.type ?? "hosted"}
-                          </Badge>
-                        </div>
-                        <div className="mt-4 text-xs text-cyan-300">
-                          {text("浏览制品", "Browse artifacts")}
-                        </div>
-                      </Card>
-                    </Link>
-                  ))}
+                            <div className="flex items-start justify-between gap-3">
+                              <div
+                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-[11px] font-semibold tracking-wide ${PUBLIC_FORMAT_STYLE[repository.format].surface}`}
+                              >
+                                {PUBLIC_FORMAT_STYLE[repository.format].icon}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  tone={
+                                    repository.type === "proxy"
+                                      ? "amber"
+                                      : repository.type === "group"
+                                        ? "violet"
+                                        : "cyan"
+                                  }
+                                >
+                                  {(repository.type ?? "hosted").toUpperCase()}
+                                </Badge>
+                                <FormatBadge format={repository.format} />
+                              </div>
+                            </div>
+                            <div className="mt-5 min-w-0 truncate text-base font-semibold text-zinc-100">
+                              {repository.name}
+                            </div>
+                            <p className="mt-2 text-sm leading-5 text-zinc-500">
+                              {repository.type === "proxy"
+                                ? text(
+                                    "缓存并加速经过管理员信任的上游制品。",
+                                    "Caches and accelerates artifacts from an administrator-trusted upstream.",
+                                  )
+                                : repository.type === "group"
+                                  ? text(
+                                      "通过一个稳定入口聚合多个公开仓库。",
+                                      "Aggregates multiple public repositories behind one stable endpoint.",
+                                    )
+                                  : text(
+                                      "由团队直接发布和维护的公开制品。",
+                                      "Public artifacts published and maintained directly by the team.",
+                                    )}
+                            </p>
+                            <div className="mt-auto flex items-center justify-between pt-5 text-xs">
+                              <span className="text-zinc-600">
+                                {text("无需登录即可读取", "No sign-in to read")}
+                              </span>
+                              <span className="flex items-center gap-1 font-medium text-cyan-300 transition-colors group-hover:text-cyan-200">
+                                {text("进入仓库", "Open repository")}
+                                <ArrowRightOutlined />
+                              </span>
+                            </div>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             ) : error ? (

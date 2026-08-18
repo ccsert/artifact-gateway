@@ -41,6 +41,36 @@ CreatedAPIKey:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/CreatedAPIKey"
+ServiceAccount:
+  description: Stable non-human authorization principal
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ServiceAccount"
+ServiceAccountList:
+  description: Service accounts
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ServiceAccountList"
+ServiceAccountCredential:
+  description: Revocable service-account credential metadata
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ServiceAccountCredential"
+ServiceAccountCredentialList:
+  description: Service-account credential metadata
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/ServiceAccountCredentialList"
+CreatedServiceAccountCredential:
+  description: Newly generated service-account credential. The plaintext token is returned only by this response.
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/CreatedServiceAccountCredential"
 User:
   description: User account metadata. The password hash is never returned.
   content:

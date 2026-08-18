@@ -2,7 +2,7 @@
 # digest was resolved from the official aquasec/trivy 0.72.0 image.
 ARG TRIVY_IMAGE=aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 
-FROM golang:1.26.5-alpine AS build
+FROM golang:1.26.6-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \

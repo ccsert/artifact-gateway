@@ -39,9 +39,7 @@ export function APTSigningStatePanel({
           "远程模式必须使用固定公钥指纹；双指纹表示受控的旧/新密钥重叠窗口。",
           "Remote mode requires pinned public-key fingerprints. Two fingerprints represent a controlled old/new overlap window.",
         )}
-        status={
-          <Tag color={presentation.color}>{presentation.label}</Tag>
-        }
+        status={<Tag color={presentation.color}>{presentation.label}</Tag>}
       >
         {presentation.warning && (
           <Alert

@@ -126,7 +126,7 @@ test("anonymous browsing and global-search deep links reach the exact artifact",
   await page.goto(
     `/browse?repository=${repositoryId}&artifact=${encodeURIComponent(artifactPath)}`,
   );
-  await expect(page.getByRole("heading", { name: "公开制品" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "公开仓库" })).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: artifactPath }).first(),
   ).toBeVisible();

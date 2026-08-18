@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -200,8 +206,12 @@ describe("RepositoryScanningTab", () => {
     await user.click(
       await screen.findByRole("button", { name: "高级手动输入" }),
     );
-    await user.type(screen.getByLabelText("制品坐标"), "@team/legacy@0.9.0");
-    await user.type(screen.getByLabelText("SHA-256 摘要"), digest);
+    fireEvent.change(screen.getByLabelText("制品坐标"), {
+      target: { value: "@team/legacy@0.9.0" },
+    });
+    fireEvent.change(screen.getByLabelText("SHA-256 摘要"), {
+      target: { value: digest },
+    });
     await user.click(screen.getByRole("button", { name: "提交扫描" }));
 
     await waitFor(() => expect(mockCreateScan).toHaveBeenCalledTimes(1));

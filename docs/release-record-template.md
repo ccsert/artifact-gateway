@@ -33,6 +33,7 @@ tokens, or unredacted upstream URLs.
 | make conan-e2e | | | | |
 | make readiness-e2e | | | | |
 | make resolver-rotation-e2e | | | | |
+| make service-account-rotation-e2e | | | | |
 | make oci-performance-e2e | | | | |
 | make cache-operations-e2e | | | | |
 | make openapi-check | | | | |

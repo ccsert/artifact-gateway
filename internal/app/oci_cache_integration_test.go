@@ -495,8 +495,15 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer coordinatorB.Close()
-	cacheA := NewOCICache(controlA, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(coordinatorA)
-	cacheB := NewOCICache(controlB, 40*time.Millisecond, 40*time.Millisecond, 40*time.Millisecond, []string{allowedHost}).WithCoordinator(coordinatorB)
+	// Keep the cache window comfortably above a clean runner's PostgreSQL/S3
+	// round-trip. A 40 ms TTL made the cross-instance negative-cache assertion
+	// depend on host scheduling rather than the cache contract under test.
+	const (
+		cacheTTL   = 2 * time.Second
+		breakerTTL = time.Second
+	)
+	cacheA := NewOCICache(controlA, cacheTTL, cacheTTL, breakerTTL, []string{allowedHost}).WithCoordinator(coordinatorA)
+	cacheB := NewOCICache(controlB, cacheTTL, cacheTTL, breakerTTL, []string{allowedHost}).WithCoordinator(coordinatorB)
 	metricsA, metricsB := &Metrics{}, &Metrics{}
 	client := UpstreamClient{HTTPClient: upstreamServer.Client()}
 	handlerA := OCIHandler{Resolver: Resolver{Store: repositoryStore, Adapter: TestAdapter{}, Metrics: metricsA}, Client: client, Authenticator: testAuthenticator(), Cache: cacheA}
@@ -574,7 +581,7 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 		t.Fatalf("whitelist metric missing:\n%s", deniedMetrics.Body.String())
 	}
 
-	time.Sleep(60 * time.Millisecond)
+	time.Sleep(cacheTTL + 100*time.Millisecond)
 	upstream.mu.Lock()
 	upstream.responses["latest"] = integrationOCIResponse{status: http.StatusOK, content: []byte(`{"schemaVersion":3}`)}
 	upstream.responses["missing"] = integrationOCIResponse{status: http.StatusOK, content: []byte(`{"schemaVersion":4}`)}
@@ -602,7 +609,7 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 	upstream.mu.Lock()
 	upstream.responses["invalid"] = integrationOCIResponse{status: http.StatusOK, content: []byte("valid")}
 	upstream.mu.Unlock()
-	time.Sleep(60 * time.Millisecond)
+	time.Sleep(breakerTTL + 100*time.Millisecond)
 	if response := integrationRequest(handlerB, http.MethodGet, invalidPath, "", "resolver-secret"); response.Code != http.StatusOK || response.Body.String() != "valid" || upstream.Calls("invalid") != 2 {
 		t.Fatalf("digest recovery response = %d %q calls=%d", response.Code, response.Body.String(), upstream.Calls("invalid"))
 	}

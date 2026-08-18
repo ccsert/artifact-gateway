@@ -88,7 +88,7 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		http.NotFound(w, r)
 		return true
 	}
-	principal, ok := h.auth.Authenticate(r.Header.Get("Authorization"))
+	principal, ok := h.protocolPrincipal(r)
 	if !ok {
 		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			principal = anonymousPrincipal()
@@ -209,6 +209,17 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	return true
+}
+
+func (h nativeRawHandler) protocolPrincipal(r *http.Request) (Principal, bool) {
+	if principal, ok := h.auth.Authenticate(r.Header.Get("Authorization")); ok {
+		return principal, true
+	}
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return Principal{}, false
+	}
+	return h.auth.AuthenticateBasic(username, password)
 }
 
 func (h nativeRawHandler) startUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {

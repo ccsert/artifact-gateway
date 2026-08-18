@@ -31,6 +31,17 @@ provider claims or token material.
 Anonymous successful and denied requests record `actor=anonymous` and an
 authorization source/reason in the administrator-only audit log.
 
+The Console presents these same gates as one public-access boundary: the
+global gate is shown separately from Repository and Group/member opt-in, and a
+public-target count makes the potential blast radius visible before an
+administrator changes the global switch. This presentation does not introduce
+a new policy or bypass any gate.
+
+The unauthenticated `/browse` catalog presents only effective public targets.
+Its repository search, format filters, source-type guidance, and read-only
+notices are discovery features; publishing, grants, and administration still
+require an authenticated management identity.
+
 ## Client Examples
 
 Authenticated Maven pull:

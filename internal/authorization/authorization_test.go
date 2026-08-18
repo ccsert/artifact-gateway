@@ -106,6 +106,53 @@ func TestAuthenticateBasicReturnsConfiguredActorPrincipal(t *testing.T) {
 	}
 }
 
+func TestAuthenticateBasicAcceptsServiceAccountCredentialAsStableMachinePrincipal(t *testing.T) {
+	store := repository.NewMemoryStore()
+	account, err := store.CreateServiceAccount(context.Background(), repository.ServiceAccount{
+		ID: uuid.NewString(), Name: "maven-release-bot",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := "agc_service-account-basic-token"
+	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{
+		ID: uuid.NewString(), ServiceAccountID: account.ID, Name: "jenkins",
+		SecretHash: HashAPIKey(token), ExpiresAt: timePointer(time.Now().Add(time.Hour)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{APIKeys: store, ServiceAccounts: store}
+
+	principal, ok := authenticator.AuthenticateBasic("jenkins", token)
+	if !ok || principal.Actor != "service-account:"+account.ID || principal.AuthenticationKind != AuthenticationServiceAccountCredential || principal.Admin || principal.Role != "" {
+		t.Fatalf("principal=%+v authenticated=%t", principal, ok)
+	}
+
+	disabled := repository.ServiceAccountDisabled
+	if _, err := store.UpdateServiceAccount(context.Background(), repository.ServiceAccountUpdate{
+		ID: account.ID, State: &disabled,
+	}, account.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := authenticator.AuthenticateBasic("jenkins", token); ok {
+		t.Fatal("disabled Service Account credential authenticated through Basic")
+	}
+}
+
+func TestAuthenticateBasicDoesNotBroadenStandaloneAPIKeyProtocolAccess(t *testing.T) {
+	store := repository.NewMemoryStore()
+	token := "agk_bearer-only-token"
+	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{
+		ID: uuid.NewString(), Name: "management-client", SecretHash: HashAPIKey(token), Roles: []string{"reader"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := Authenticator{APIKeys: store, ServiceAccounts: store}
+	if _, ok := authenticator.AuthenticateBasic("client", token); ok {
+		t.Fatal("standalone Bearer API key unexpectedly authenticated through Basic")
+	}
+}
+
 func TestRepositoryAuthorizerManagedGrantSetOverridesLegacyPolicy(t *testing.T) {
 	authorizer := RepositoryAuthorizer{
 		Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "2"}},
