@@ -145,7 +145,9 @@ test("public browse surfaces stay aligned with the dark console palette", async 
   page,
 }) => {
   await page.goto("/browse");
-  await expect(page.getByRole("heading", { name: "公开制品" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "查找并使用可信的公开制品" }),
+  ).toBeVisible();
 
   const card = page.locator(".ant-card");
   await expect(card).not.toHaveCount(0);
@@ -162,7 +164,7 @@ test("public browse surfaces stay aligned with the dark console palette", async 
   expect(surface).toEqual({
     background: "rgba(24, 24, 27, 0.55)",
     border: "rgba(63, 63, 70, 0.35)",
-    contentPadding: "24px",
+    contentPadding: "40px",
   });
 });
 
