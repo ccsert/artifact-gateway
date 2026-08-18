@@ -268,8 +268,8 @@ capture_signed_snapshot "$original_capture" "$original_state"
 backup_dir="$workdir/backup"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
   "$root/scripts/backup-drill.sh" "$backup_dir"
-wait_gateway_ready
 "${compose[@]}" up -d --force-recreate --wait reference-apt-signer >/dev/null
+wait_gateway_ready
 
 mutation_response="$workdir/mutation-snapshot.json"
 mutation_body=$(printf '{"suite":"stable","sequence":2,"publicationSessionIds":["%s"]}' "$session_id")
