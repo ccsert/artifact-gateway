@@ -582,6 +582,65 @@ func TestPostgresMavenCommitCannotReferenceObjectDuringBlockedDeletion(t *testin
 	}
 }
 
+func TestPostgresCreateMavenPublishSessionIdempotentlyCoalescesConcurrentFirstUse(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "maven-idempotency-race-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const creators = 32
+	type createResult struct {
+		session  repository.MavenPublishSession
+		replayed bool
+		err      error
+	}
+	results := make(chan createResult, creators)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range creators {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			session := repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: "org.example:concurrent:1.0.0", Publisher: "admin", PomObject: "concurrent-1.0.0.pom", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "concurrent-1.0.0.pom", Digest: "sha256:concurrent", Size: 1}}}
+			created, replayed, createErr := store.CreateMavenPublishSessionIdempotently(ctx, session, "admin", "repositories/"+repo.ID+"/publish-sessions", "concurrent-key", "same-payload")
+			results <- createResult{created, replayed, createErr}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	var sessionID string
+	createdCount := 0
+	for result := range results {
+		if result.err != nil {
+			t.Fatalf("concurrent session create: %v", result.err)
+		}
+		if sessionID == "" {
+			sessionID = result.session.ID
+		} else if result.session.ID != sessionID {
+			t.Fatalf("concurrent session IDs differ: %s != %s", result.session.ID, sessionID)
+		}
+		if !result.replayed {
+			createdCount++
+		}
+	}
+	if createdCount != 1 {
+		t.Fatalf("created sessions=%d, want 1", createdCount)
+	}
+}
+
 func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

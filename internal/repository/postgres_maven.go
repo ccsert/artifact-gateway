@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,13 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 		return MavenPublishSession{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// FOR UPDATE cannot serialize concurrent first use because the idempotency
+	// row does not exist yet. Lock the complete idempotency scope before either
+	// transaction creates the open publisher/coordinate session.
+	lockKey := fmt.Sprintf("native-maven-publish:%d:%s%d:%s%d:%s", len(actor), actor, len(target), target, len(key), key)
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return MavenPublishSession{}, false, err
+	}
 	// Remove an expired key under the same transaction before attempting the
 	// insert. This keeps the primary key reusable after its 24h replay window.
 	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_publish_idempotency WHERE actor=$1 AND target=$2 AND key=$3 AND expires_at <= now()`, actor, target, key); err != nil {
@@ -59,6 +67,9 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 	}
 	objects, _ := json.Marshal(v.Objects)
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_publish_sessions (id,repository_id,coordinate,publisher,pom_object,state,expires_at,objects) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, v.ID, v.RepositoryID, v.Coordinate, v.Publisher, v.PomObject, v.State, v.ExpiresAt, objects); err != nil {
+		if isUnique(err) {
+			return MavenPublishSession{}, false, ErrNameExists
+		}
 		return MavenPublishSession{}, false, err
 	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO native_maven_publish_idempotency (actor,target,key,payload_hash,session_id,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '24 hours') ON CONFLICT (actor,target,key) DO NOTHING`, actor, target, key, payload, v.ID)
