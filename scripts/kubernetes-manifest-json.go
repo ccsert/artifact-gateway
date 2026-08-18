@@ -19,7 +19,6 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	defer manifest.Close()
 
 	decoder := yaml.NewDecoder(manifest)
 	documents := make([]map[string]any, 0)
@@ -35,6 +34,9 @@ func main() {
 		if len(document) != 0 {
 			documents = append(documents, document)
 		}
+	}
+	if err := manifest.Close(); err != nil {
+		fatal(err)
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(documents); err != nil {
