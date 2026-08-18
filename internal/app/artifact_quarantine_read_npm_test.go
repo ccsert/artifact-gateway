@@ -77,6 +77,13 @@ func TestNPMQuarantineReadPolicyHidesWholeVersionAndBlocksTarball(t *testing.T) 
 			t.Fatalf("%s tarball=%d body=%q", method, tarballResponse.Code, tarballResponse.Body.String())
 		}
 	}
+	versionRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/widget/1.0.0", nil)
+	authorize(versionRequest, "resolver-secret")
+	versionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(versionResponse, versionRequest)
+	if versionResponse.Code != http.StatusForbidden || !strings.Contains(versionResponse.Body.String(), repository.ArtifactQuarantinedReason) {
+		t.Fatalf("version metadata=%d body=%q", versionResponse.Code, versionResponse.Body.String())
+	}
 	requireQuarantineReadDeniedAudit(t, store, repository.FormatNPM)
 }
 
@@ -114,6 +121,9 @@ func TestNPMGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *
 	}
 	if response := request("/npm/npm-read-group/widget/-/" + blocked.TarballName); response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), repository.ArtifactQuarantinedReason) {
 		t.Fatalf("group tarball=%d body=%q", response.Code, response.Body.String())
+	}
+	if response := request("/npm/npm-read-group/widget/1.0.0"); response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), repository.ArtifactQuarantinedReason) {
+		t.Fatalf("group version metadata=%d body=%q", response.Code, response.Body.String())
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -454,7 +455,7 @@ func (h nativeMavenHandler) read(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		if strings.HasSuffix(assetPath, "maven-metadata.xml") {
+		if _, _, metadataRequest := mavenMetadataRequest(assetPath); metadataRequest {
 			h.metadata(w, r, repo, assetPath, user)
 			return
 		}
@@ -763,6 +764,15 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		}
 		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: principal.Actor, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
 		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
+		if errors.Is(err, repository.ErrNameExists) {
+			// A concurrent first asset may have created the replacement session
+			// after our lookup. Rejoin that live session instead of surfacing a
+			// transient 500 or overwriting its staged facts.
+			s, err = h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+			if err == nil {
+				err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
+			}
+		}
 	} else if err == nil {
 		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
 	}
@@ -857,6 +867,14 @@ func (h nativeMavenHandler) protocolPrincipal(r *http.Request) (Principal, bool)
 }
 
 func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, actor string) {
+	requestedPath := path
+	var checksum string
+	var ok bool
+	path, checksum, ok = mavenMetadataRequest(path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	items, err := h.store.ListMavenArtifacts(r.Context(), repo.ID)
 	if err != nil {
 		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
@@ -911,48 +929,43 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		}
 		var body strings.Builder
 		body.WriteString("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><version>" + version + "</version><versioning><snapshot><timestamp>" + latestTimestamp + "</timestamp><buildNumber>" + strconv.Itoa(latest.BuildNumber) + "</buildNumber></snapshot><snapshotVersions>")
-		for _, build := range builds {
-			// One snapshotVersion per build and extension, derived from the
-			// build's stored asset paths rather than a hardcoded pom+jar set.
-			value := mavenSnapshotBuildNamePrefix(coordinate, build.CreatedAt, build.BuildNumber)
-			updated := build.CreatedAt.UTC().Format("20060102150405")
-			extensions := map[string]bool{}
-			for _, asset := range assets {
-				slash := strings.LastIndexByte(asset.Path, '/')
-				name := asset.Path
-				if slash >= 0 {
-					name = asset.Path[slash+1:]
-				}
-				if !strings.HasPrefix(name, value) {
-					continue
-				}
-				extension := strings.TrimPrefix(name, value)
-				extension = strings.TrimPrefix(extension, ".")
-				// Checksum sidecars are served next to their asset, not listed.
-				base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(extension, ".sha512"), ".sha256"), ".sha1"), ".md5")
-				if base != extension {
-					continue
-				}
-				if extension != "" && !extensions[extension] {
-					extensions[extension] = true
-				}
+		// Maven resolves a SNAPSHOT from exactly one current value per
+		// extension/classifier pair. Older builds remain addressable by their
+		// immutable timestamped filenames but are not repeated in metadata.
+		filenamePrefix := mavenSnapshotBuildNamePrefix(coordinate, latest.CreatedAt, latest.BuildNumber)
+		value := strings.TrimPrefix(filenamePrefix, artifact+"-")
+		updated := latest.CreatedAt.UTC().Format("20060102150405")
+		type snapshotAsset struct{ extension, classifier string }
+		versions := map[string]snapshotAsset{}
+		for _, asset := range assets {
+			slash := strings.LastIndexByte(asset.Path, '/')
+			name := asset.Path
+			if slash >= 0 {
+				name = asset.Path[slash+1:]
 			}
-			ordered := make([]string, 0, len(extensions))
-			for extension := range extensions {
-				ordered = append(ordered, extension)
+			extension, classifier, ok := mavenSnapshotAssetIdentity(name, filenamePrefix)
+			if !ok {
+				continue
 			}
-			sort.Strings(ordered)
-			for _, extension := range ordered {
-				body.WriteString("<snapshotVersion><extension>" + extension + "</extension><value>" + value + "</value><updated>" + updated + "</updated></snapshotVersion>")
+			identity := extension + "\x00" + classifier
+			versions[identity] = snapshotAsset{extension: extension, classifier: classifier}
+		}
+		ordered := make([]string, 0, len(versions))
+		for identity := range versions {
+			ordered = append(ordered, identity)
+		}
+		sort.Strings(ordered)
+		for _, identity := range ordered {
+			item := versions[identity]
+			body.WriteString("<snapshotVersion><extension>" + item.extension + "</extension>")
+			if item.classifier != "" {
+				body.WriteString("<classifier>" + item.classifier + "</classifier>")
 			}
+			body.WriteString("<value>" + value + "</value><updated>" + updated + "</updated></snapshotVersion>")
 		}
 		body.WriteString("</snapshotVersions></versioning></metadata>")
-		w.Header().Set("Content-Type", "application/xml")
 		out := []byte(body.String())
-		if r.Method == http.MethodGet {
-			_, _ = w.Write(out)
-		}
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(out))})
+		h.writeGeneratedMavenMetadata(w, r, repo, requestedPath, actor, out, checksum)
 		return
 	}
 	versions := map[string]bool{}
@@ -995,11 +1008,73 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		}
 		return v
 	}(), "") + "</versions></versioning></metadata>")
-	w.Header().Set("Content-Type", "application/xml")
+	h.writeGeneratedMavenMetadata(w, r, repo, requestedPath, actor, body, checksum)
+}
+
+func mavenMetadataRequest(path string) (metadataPath, checksum string, ok bool) {
+	metadataPath = path
+	for _, suffix := range []string{".sha512", ".sha256", ".sha1", ".md5"} {
+		if strings.HasSuffix(metadataPath, suffix) {
+			metadataPath = strings.TrimSuffix(metadataPath, suffix)
+			checksum = suffix
+			break
+		}
+	}
+	return metadataPath, checksum, strings.HasSuffix(metadataPath, "maven-metadata.xml")
+}
+
+func (h nativeMavenHandler) writeGeneratedMavenMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, requestedPath, actor string, metadata []byte, checksum string) {
+	body := metadata
+	contentType := "application/xml"
+	switch checksum {
+	case ".sha512":
+		sum := sha512.Sum512(metadata)
+		body = []byte(hex.EncodeToString(sum[:]) + "\n")
+		contentType = "text/plain"
+	case ".sha256":
+		sum := sha256.Sum256(metadata)
+		body = []byte(hex.EncodeToString(sum[:]) + "\n")
+		contentType = "text/plain"
+	case ".sha1":
+		sum := sha1.Sum(metadata)
+		body = []byte(hex.EncodeToString(sum[:]) + "\n")
+		contentType = "text/plain"
+	case ".md5":
+		sum := md5.Sum(metadata)
+		body = []byte(hex.EncodeToString(sum[:]) + "\n")
+		contentType = "text/plain"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(body)
 	}
-	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: path, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
+	_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(), Format: "maven", Resource: requestedPath, Operation: strings.ToLower(r.Method), Status: 200, Bytes: int64(len(body))})
+}
+
+func mavenSnapshotAssetIdentity(name, filenamePrefix string) (extension, classifier string, ok bool) {
+	if !strings.HasPrefix(name, filenamePrefix) {
+		return "", "", false
+	}
+	remainder := strings.TrimPrefix(name, filenamePrefix)
+	for _, checksum := range []string{".sha512", ".sha256", ".sha1", ".md5"} {
+		if strings.HasSuffix(remainder, checksum) {
+			return "", "", false
+		}
+	}
+	if strings.HasPrefix(remainder, ".") {
+		extension = strings.TrimPrefix(remainder, ".")
+		return extension, "", extension != "" && !strings.Contains(extension, ".")
+	}
+	if !strings.HasPrefix(remainder, "-") {
+		return "", "", false
+	}
+	classified := strings.TrimPrefix(remainder, "-")
+	dot := strings.LastIndexByte(classified, '.')
+	if dot <= 0 || dot == len(classified)-1 {
+		return "", "", false
+	}
+	return classified[dot+1:], classified[:dot], true
 }
 func validMavenCoordinate(s string) bool {
 	p := strings.Split(s, ":")

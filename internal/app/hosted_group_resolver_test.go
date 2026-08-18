@@ -12,11 +12,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 // conanGatewayClient adapts the Conan-only fixture client to the OCIClient
@@ -179,6 +181,275 @@ func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 	}
 	if downloadCount != 4 || auditedDownloads[hosted.Name+":bypass:200"] != 1 || auditedDownloads[proxy.Name+":miss:200"] != 1 || auditedDownloads[proxy.Name+":hit:200"] != 1 || auditedDownloads[hosted.Name+":bypass:304"] != 1 {
 		t.Fatalf("group tarball audits=%#v count=%d all=%#v", auditedDownloads, downloadCount, store.Audits)
+	}
+}
+
+func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	tarball := npmFixtureTarball(t, "pnpm", "10.7.1")
+	sha512Digest := sha512.Sum512(tarball)
+	sha1Digest := sha1.Sum(tarball)
+	metadataRequests := 0
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pnpm" {
+			http.NotFound(w, r)
+			return
+		}
+		metadataRequests++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": "pnpm", "dist-tags": map[string]string{"latest": "10.7.1"},
+			"versions": map[string]any{
+				"10.7.1": map[string]any{
+					"name": "pnpm", "version": "10.7.1",
+					"dist": map[string]any{
+						"tarball":    upstream.URL + "/pnpm-10.7.1.tgz",
+						"integrity":  "sha512-" + base64.StdEncoding.EncodeToString(sha512Digest[:]),
+						"shasum":     hex.EncodeToString(sha1Digest[:]),
+						"signatures": []map[string]string{{"keyid": "SHA256:test-corepack-key", "sig": "signed-fixture"}},
+					},
+				},
+			},
+		})
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-corepack-proxy", Name: "npm-corepack-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-corepack-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 0},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-corepack-group/pnpm/10.7.1", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	responseBytes := response.Body.Len()
+	var version struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball    string `json:"tarball"`
+			Signatures []struct {
+				KeyID string `json:"keyid"`
+				Sig   string `json:"sig"`
+			} `json:"signatures"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version.Name != "pnpm" || version.Version != "10.7.1" || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-group/pnpm/-/pnpm-10.7.1.tgz") || len(version.Dist.Signatures) != 1 || version.Dist.Signatures[0].KeyID != "SHA256:test-corepack-key" {
+		t.Fatalf("version metadata=%#v", version)
+	}
+	if metadataRequests != 1 {
+		t.Fatalf("metadata requests=%d", metadataRequests)
+	}
+	var resolvedAudit *repository.AuditRecord
+	for index := range store.Audits {
+		if store.Audits[index].Resource == "pnpm@10.7.1" && store.Audits[index].Outcome == repository.AuditResolved {
+			resolvedAudit = &store.Audits[index]
+		}
+	}
+	if resolvedAudit == nil || resolvedAudit.GroupName != "npm-corepack-group" || resolvedAudit.Repository != "npm-corepack-group" || resolvedAudit.MemberName != proxy.Name || resolvedAudit.MemberType != string(repository.RepositoryTypeProxy) || resolvedAudit.CacheDisposition != "miss" || resolvedAudit.Bytes != int64(responseBytes) {
+		t.Fatalf("resolved audit=%#v all=%#v", resolvedAudit, store.Audits)
+	}
+}
+
+func TestV2GroupNPMVersionMetadataPreservesUpstreamFailureWhenAnotherVersionExists(t *testing.T) {
+	store := repository.NewMemoryStore()
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "npm-version-hosted", Name: "npm-version-hosted", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMGroupTestVersion(t, store, hosted, "widget", "1.0.0")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusInternalServerError)
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-version-proxy", Name: "npm-version-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-version-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-version-group/widget/2.0.0", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.Resource != "widget@2.0.0" || audit.Outcome != repository.AuditUpstreamError || audit.Status != http.StatusBadGateway {
+		t.Fatalf("terminal audit=%#v", audit)
+	}
+}
+
+func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *testing.T) {
+	store := repository.NewMemoryStore()
+	objects := NewMemoryOCIObjectStore()
+	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-empty-hosted", Name: "npm-empty-hosted", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	packageName, version := "yocto-queue", "0.1.0"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + packageName + "-" + version + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + packageName + "-" + version + ".tgz":
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-real-shape-proxy", Name: "npm-real-shape-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-real-shape-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
+		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/npm/npm-real-shape-group/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestV2GroupNPMColdTarballMetadataFailuresAuditMemberExactlyOnce(t *testing.T) {
+	const packageName, version = "group-lockfile-audit-widget", "1.2.3"
+	tarballName := packageName + "-" + version + ".tgz"
+	checksum := sha512.Sum512([]byte("fixture"))
+	tests := []struct {
+		name        string
+		upstream    http.HandlerFunc
+		wantStatus  int
+		wantOutcome repository.AuditOutcome
+	}{
+		{
+			name: "first upstream not found",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.NotFound(w, nil)
+			},
+			wantStatus:  http.StatusNotFound,
+			wantOutcome: repository.AuditNotFound,
+		},
+		{
+			name: "tarball host rejected by allowlist",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"name": packageName, "dist-tags": map[string]string{"latest": version},
+					"versions": map[string]any{version: map[string]any{
+						"name": packageName, "version": version,
+						"dist": map[string]string{
+							"tarball":   "https://blocked.example/" + tarballName,
+							"integrity": "sha512-" + base64.StdEncoding.EncodeToString(checksum[:]),
+							"shasum":    strings.Repeat("a", 40),
+						},
+					}},
+				})
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditProxyDenied,
+		},
+		{
+			name: "metadata upstream unavailable",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditUpstreamError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstream := httptest.NewServer(tt.upstream)
+			defer upstream.Close()
+			parsed, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := repository.NewMemoryStore()
+			proxy, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+				ID: uuid.NewString(), Name: "npm-group-cold-audit-proxy", Format: repository.FormatNPM,
+				Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsed.Hostname()},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			group := createV2Group(t, store, "npm-group-cold-audit", repository.FormatNPM,
+				repository.GroupMember{RepositoryID: proxy.ID},
+			)
+			handler := NewGatewayHandler(
+				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+				UpstreamClient{HTTPClient: upstream.Client()},
+			)
+			request := httptest.NewRequest(http.MethodGet, "/npm/"+group.Name+"/"+packageName+"/-/"+tarballName, nil)
+			authorize(request, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if len(store.Audits) != 1 {
+				t.Fatalf("audits=%#v", store.Audits)
+			}
+			audit := store.Audits[0]
+			if audit.GroupName != group.Name || audit.Repository != group.Name || audit.MemberName != proxy.Name ||
+				audit.Resource != packageName+"/-/"+tarballName || audit.Status != tt.wantStatus ||
+				audit.Outcome != tt.wantOutcome || audit.CacheDisposition != "miss" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
 	}
 }
 
@@ -681,6 +952,22 @@ func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 	}
 	if got := upstream.callCount("/" + assetPath); got != 0 {
 		t.Fatalf("upstream calls=%d, want 0 (hosted member preferred)", got)
+	}
+	metadataPath := "org/example/widget/maven-metadata.xml"
+	metadataRequest := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+metadataPath, nil)
+	authorize(metadataRequest, "resolver-secret")
+	metadataResponse := httptest.NewRecorder()
+	handler.ServeHTTP(metadataResponse, metadataRequest)
+	if metadataResponse.Code != http.StatusOK {
+		t.Fatalf("hosted group metadata=%d body=%q", metadataResponse.Code, metadataResponse.Body.String())
+	}
+	checksumRequest := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+metadataPath+".sha256", nil)
+	authorize(checksumRequest, "resolver-secret")
+	checksumResponse := httptest.NewRecorder()
+	handler.ServeHTTP(checksumResponse, checksumRequest)
+	metadataSum := sha256.Sum256(metadataResponse.Body.Bytes())
+	if checksumResponse.Code != http.StatusOK || strings.TrimSpace(checksumResponse.Body.String()) != hex.EncodeToString(metadataSum[:]) {
+		t.Fatalf("hosted group metadata checksum=%d body=%q", checksumResponse.Code, checksumResponse.Body.String())
 	}
 }
 

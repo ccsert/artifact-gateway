@@ -220,10 +220,12 @@ concurrency; format, type, and name remain immutable by design.
 ### User, Role, And Security Pages
 
 Nexus ships a broader Security section including LDAP, SAML and content
-selectors. Artifact Gateway provides Users, API Keys, Access Control, grants,
-anonymous policy, reusable authorization roles and OIDC role mapping. API Keys
-expose bounded roles, expiry, revocation and last-used timestamps; selector
-composition beyond a canonical format-aware prefix remains a deliberate gap.
+selectors. Artifact Gateway provides Users, API Keys, Service Accounts, Access
+Control, grants, anonymous policy, reusable authorization roles and OIDC role
+mapping. Service Accounts separate stable machine principals from rotatable
+credentials; API Keys expose bounded roles, expiry, revocation and last-used
+timestamps. Selector composition beyond a canonical format-aware prefix remains
+a deliberate gap.
 
 ### System Settings And Operations Pages
 

@@ -8,6 +8,19 @@ a dated version heading without rewriting their meaning.
 
 ## Unreleased
 
+- Added stable Service Accounts for Jenkins, CI robots, scanners, and
+  third-party applications, with one-time expiring credentials, overlapping
+  zero-downtime rotation, immediate account disable, Bearer and native-client
+  Basic authentication, Repository Grant integration, generated management
+  APIs, audit evidence, a bilingual Console workflow, and an isolated release
+  gate. Redesigned the public artifact catalog with a clear read-only boundary,
+  source and format summaries, repository search, format filters, and
+  Hosted/Proxy/Group guidance. The administrator surface now also explains its
+  global, Repository, and Group/member gates and blast radius without changing
+  the default-deny read-only policy.
+- Added each OCI manifest's immutable creation timestamp to repository browse
+  responses so consumers can select the newest publication without inferring
+  order from tags or digest text.
 - Switched the runtime, local Compose, Kubernetes, integration tests, and
   configuration contract fully to RustFS using the official AWS SDK for Go v2;
   removed MinIO services, SDK dependencies, migration tooling, and cutover
@@ -185,6 +198,28 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Generated Maven-compatible SNAPSHOT metadata using the latest timestamped
+  version value and separate extension/classifier fields, so standard Maven
+  clients can resolve POM, JAR, sources, and javadoc assets while older
+  immutable builds remain directly addressable; generated metadata now also
+  serves SHA-512, SHA-256, SHA-1, and MD5 sidecars through Hosted and Group
+  routes for warning-free client verification.
+- Served npm package-version metadata through Hosted, Proxy, and Group routes,
+  including cold proxy resolution and group tarball URL rewriting, so Corepack
+  can install pinned package-manager versions through Artifact Gateway.
+- Replaced expired native Maven staging sessions on the next authenticated PUT
+  so interrupted publishes can retry without remaining permanently blocked by
+  the expired coordinate lock.
+- Resolved npm Proxy and Group tarballs directly from a cold `package-lock.json`
+  URL before any packument request, accepted canonical single-root manifest
+  layouts used by legacy scoped packages plus harmless dot segments emitted by
+  official packages, retained valid versions when unrelated legacy metadata
+  lacks modern integrity, removed dist-tags that target skipped versions,
+  requested bounded install metadata and accepted large public packuments,
+  retained online-to-offline `npm ci` caching, and emitted one member-owned
+  terminal audit for metadata failures.
+- Honored repeated OCI `Accept` request headers when selecting manifest media
+  types, matching Docker clients that send one header field per supported type.
 - Prevented OpenAPI contract checks from reinstalling dependencies underneath
   a running Vite Console, and replaced the default lazy-route exception page
   with a bilingual recovery screen.
@@ -204,4 +239,5 @@ a dated version heading without rewriting their meaning.
 
 ### Security
 
-- Updated the Go toolchain and dependency pins used by release-readiness checks.
+- Updated the Go toolchain and release images to 1.26.6 so release-readiness
+  checks run on the patched standard library baseline.

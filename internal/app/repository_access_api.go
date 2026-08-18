@@ -65,6 +65,8 @@ func simulatedAuthenticationKind(actor string) authorization.AuthenticationKind 
 		return authorization.AuthenticationLocalSession
 	case strings.HasPrefix(actor, "api-key:"):
 		return authorization.AuthenticationAPIKey
+	case strings.HasPrefix(actor, "service-account:"):
+		return authorization.AuthenticationServiceAccountCredential
 	default:
 		return authorization.AuthenticationOIDC
 	}

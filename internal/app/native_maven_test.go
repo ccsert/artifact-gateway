@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
@@ -219,6 +220,46 @@ func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	_ = repo
 }
 
+func TestNativeMavenProtocolReplacesExpiredOpenSessionBeforeStaging(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired := repository.MavenPublishSession{
+		ID:           uuid.NewString(),
+		RepositoryID: repo.ID,
+		Coordinate:   "org.example:widget:1.2.0",
+		Publisher:    "maven",
+		PomObject:    "widget-1.2.0.pom",
+		State:        "open",
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		Objects:      []repository.MavenDeclaredObject{{Name: "widget-1.2.0.pom", Digest: "sha256:stale", Size: 1}},
+	}
+	if _, err = store.CreateMavenPublishSession(context.Background(), expired); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
+	request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/widget-1.2.0.pom", strings.NewReader(pom))
+	request.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("retry PUT=%d %s", response.Code, response.Body.String())
+	}
+
+	stale, err := store.GetMavenPublishSession(context.Background(), expired.ID)
+	if err != nil || stale.State != "expired" {
+		t.Fatalf("expired session=%#v err=%v", stale, err)
+	}
+	fresh, err := store.FindOpenMavenPublishSession(context.Background(), repo.ID, expired.Coordinate, expired.Publisher)
+	if err != nil || fresh.ID == expired.ID || len(fresh.Objects) != 1 || fresh.Objects[0].Digest == "sha256:stale" {
+		t.Fatalf("fresh session=%#v err=%v", fresh, err)
+	}
+}
+
 func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
@@ -338,7 +379,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 		t.Fatalf("snapshot metadata lacks timestamped value: %s", metadata)
 	}
 	timestamped := metadata[start+len("<value>") : end]
-	if code, response := read("org/example/widget/2.0.0-SNAPSHOT/" + timestamped + ".jar"); code != http.StatusOK || response != "snapshot jar" {
+	if code, response := read("org/example/widget/2.0.0-SNAPSHOT/widget-" + timestamped + ".jar"); code != http.StatusOK || response != "snapshot jar" {
 		t.Fatalf("timestamped SNAPSHOT JAR = %d %q", code, response)
 	}
 
@@ -822,7 +863,9 @@ func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
 
 	put(snapshot, "widget-1.0-SNAPSHOT.pom", pom)
 	put(snapshot, "widget-1.0-SNAPSHOT.jar", "snapshot jar build two")
-	second := commit(snapshot, []string{"widget-1.0-SNAPSHOT.pom", "widget-1.0-SNAPSHOT.jar"}, "snapshot-build-2")
+	put(snapshot, "widget-1.0-SNAPSHOT-sources.jar", "snapshot sources build two")
+	put(snapshot, "widget-1.0-SNAPSHOT-javadoc.jar", "snapshot javadoc build two")
+	second := commit(snapshot, []string{"widget-1.0-SNAPSHOT.pom", "widget-1.0-SNAPSHOT.jar", "widget-1.0-SNAPSHOT-sources.jar", "widget-1.0-SNAPSHOT-javadoc.jar"}, "snapshot-build-2")
 	if second.Code != http.StatusOK {
 		t.Fatalf("second snapshot commit = %d %s", second.Code, second.Body.String())
 	}
@@ -834,57 +877,69 @@ func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
 		t.Fatalf("second build number = %d, want 2 (%s)", secondArtifact.BuildNumber, second.Body.String())
 	}
 
-	// Version-level metadata lists both builds with their own timestamped
-	// values, and <snapshot> points at the newest build.
+	// Maven version-level metadata describes the newest build once per
+	// extension/classifier pair. Its <value> is the timestamped version, not a
+	// filename that repeats artifactId.
 	code, metadata := read("org/example/widget/1.0-SNAPSHOT/maven-metadata.xml")
 	if code != http.StatusOK {
 		t.Fatalf("snapshot metadata = %d %s", code, metadata)
 	}
+	metadataSum := sha256.Sum256([]byte(metadata))
+	code, metadataChecksum := read("org/example/widget/1.0-SNAPSHOT/maven-metadata.xml.sha256")
+	if code != http.StatusOK || strings.TrimSpace(metadataChecksum) != hex.EncodeToString(metadataSum[:]) {
+		t.Fatalf("snapshot metadata checksum = (%d, %q), want generated SHA-256", code, metadataChecksum)
+	}
 	if !strings.Contains(metadata, "<buildNumber>2</buildNumber>") {
 		t.Fatalf("metadata lacks latest buildNumber 2: %s", metadata)
 	}
-	var values []string
-	rest := metadata
-	for {
-		start := strings.Index(rest, "<value>")
-		if start < 0 {
-			break
+	type snapshotVersion struct {
+		Extension  string `xml:"extension"`
+		Classifier string `xml:"classifier"`
+		Value      string `xml:"value"`
+	}
+	var parsed struct {
+		Versioning struct {
+			SnapshotVersions []snapshotVersion `xml:"snapshotVersions>snapshotVersion"`
+		} `xml:"versioning"`
+	}
+	if err := xml.Unmarshal([]byte(metadata), &parsed); err != nil {
+		t.Fatalf("parse snapshot metadata: %v\n%s", err, metadata)
+	}
+	value := "1.0-" + secondArtifact.CreatedAt.UTC().Format("20060102.150405") + "-2"
+	want := map[string]string{
+		"pom:":        pom,
+		"jar:":        "snapshot jar build two",
+		"jar:sources": "snapshot sources build two",
+		"jar:javadoc": "snapshot javadoc build two",
+	}
+	if len(parsed.Versioning.SnapshotVersions) != len(want) {
+		t.Fatalf("snapshotVersions = %#v, want exactly the latest %d assets", parsed.Versioning.SnapshotVersions, len(want))
+	}
+	for _, item := range parsed.Versioning.SnapshotVersions {
+		key := item.Extension + ":" + item.Classifier
+		body, ok := want[key]
+		if !ok {
+			t.Fatalf("unexpected snapshotVersion %#v", item)
 		}
-		rest = rest[start+len("<value>"):]
-		end := strings.Index(rest, "</value>")
-		if end < 0 {
-			break
+		if item.Value != value {
+			t.Fatalf("snapshotVersion %#v value = %q, want timestamped version %q", item, item.Value, value)
 		}
-		values = append(values, rest[:end])
-		rest = rest[end:]
-	}
-	if len(values) != 4 {
-		t.Fatalf("metadata snapshotVersion values = %v, want 4 (2 builds x pom+jar)", values)
-	}
-	buildValues := map[string]bool{}
-	for _, value := range values {
-		buildValues[value] = true
-	}
-	if len(buildValues) != 2 {
-		t.Fatalf("metadata lists %d distinct builds, want 2: %v", len(buildValues), values)
+		name := "widget-" + item.Value
+		if item.Classifier != "" {
+			name += "-" + item.Classifier
+		}
+		name += "." + item.Extension
+		code, got := read("org/example/widget/1.0-SNAPSHOT/" + name)
+		if code != http.StatusOK || got != body {
+			t.Fatalf("metadata asset %s = (%d, %q), want (200, %q)", name, code, got, body)
+		}
 	}
 
-	// Each build's timestamped JAR serves its own bytes. The metadata <value>
-	// already carries the artifactId prefix.
-	buildJars := map[string]string{}
-	for value := range buildValues {
-		code, body := read("org/example/widget/1.0-SNAPSHOT/" + value + ".jar")
-		if code != http.StatusOK {
-			t.Fatalf("timestamped jar %s = %d", value, code)
-		}
-		buildJars[value] = body
-	}
-	served := map[string]bool{}
-	for _, body := range buildJars {
-		served[body] = true
-	}
-	if !served["snapshot jar build one"] || !served["snapshot jar build two"] {
-		t.Fatalf("timestamped jars = %v, want both builds' bytes", buildJars)
+	// Older immutable timestamped builds remain directly addressable even
+	// though normal Maven resolution only advertises the newest build.
+	firstValue := "widget-1.0-" + firstArtifact.CreatedAt.UTC().Format("20060102.150405") + "-1.jar"
+	if code, body := read("org/example/widget/1.0-SNAPSHOT/" + firstValue); code != http.StatusOK || body != "snapshot jar build one" {
+		t.Fatalf("first timestamped jar = (%d, %q), want original build", code, body)
 	}
 
 	// Releases stay immutable: a second commit of the same release coordinate

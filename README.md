@@ -107,6 +107,10 @@ no-op, and runs the persistent-store tests. Applied migration filenames and
 SHA-256 checksums are recorded in `artifact_gateway_schema_migrations`; edit
 history only through a new forward migration.
 
+Integration tests refuse a `TEST_DATABASE_URL` whose database name does not
+end in `_test`, so fixture repositories cannot pollute a development or
+operator-visible database.
+
 Native protocol fixtures exercise the externally visible behavior without an
 external package service:
 
@@ -274,10 +278,19 @@ Authentication page without restarting the Gateway. Runtime client secrets are
 encrypted with `GATEWAY_SETTINGS_ENCRYPTION_KEY` and are never returned by the
 management API.
 
+For CI robots and third-party applications, create a stable Service Account and
+bind Repository Grants to `service-account:<id>`. Its independently revocable
+credentials work as Bearer tokens and as passwords for native clients that use
+HTTP Basic; credential rotation does not change the authorization principal.
+See [`docs/service-account-operations.md`](docs/service-account-operations.md)
+for least-privilege setup, client examples, zero-downtime rotation, and incident
+response.
+
 An authenticated client can inspect the identity used by authorization with
 `GET /api/v2/identity`. The response reports a bounded credential source
-(`static_admin`, `static_resolver`, `local_session`, `api_key`, or `oidc`), the
-effective global role, and administrator status. For OIDC, it includes only
+(`static_admin`, `static_resolver`, `local_session`, `api_key`,
+`service_account_credential`, or `oidc`), the effective global role, and
+administrator status. For OIDC, it includes only
 configured role mappings that matched the validated token and whether the
 subject matched the configured administrator list; raw claims and token
 material are never returned.

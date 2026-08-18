@@ -769,7 +769,7 @@ func (h nativeOCIHandler) manifest(w http.ResponseWriter, r *http.Request, repo 
 		if h.blockQuarantinedManifestRead(w, r, repo, manifest, actor) {
 			return
 		}
-		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
+		if !ociAcceptsManifest(r.Header.Values("Accept"), manifest.MediaType) {
 			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")
 			return
 		}
@@ -965,18 +965,20 @@ func validOCIManifest(data []byte) bool {
 	return json.Unmarshal(data, &v) == nil && v != nil
 }
 
-func ociAcceptsManifest(accept, mediaType string) bool {
-	if accept == "" || mediaType == "" {
+func ociAcceptsManifest(accepts []string, mediaType string) bool {
+	if len(accepts) == 0 || mediaType == "" {
 		return true
 	}
 	mediaType = strings.TrimSpace(strings.Split(mediaType, ";")[0])
-	for _, entry := range strings.Split(accept, ",") {
-		value := strings.TrimSpace(strings.Split(entry, ";")[0])
-		if value == "*/*" || value == mediaType {
-			return true
-		}
-		if prefix, _, ok := strings.Cut(value, "/"); ok && strings.HasSuffix(value, "/*") && strings.HasPrefix(mediaType, prefix+"/") {
-			return true
+	for _, accept := range accepts {
+		for _, entry := range strings.Split(accept, ",") {
+			value := strings.TrimSpace(strings.Split(entry, ";")[0])
+			if value == "*/*" || value == mediaType {
+				return true
+			}
+			if prefix, _, ok := strings.Cut(value, "/"); ok && strings.HasSuffix(value, "/*") && strings.HasPrefix(mediaType, prefix+"/") {
+				return true
+			}
 		}
 	}
 	return false

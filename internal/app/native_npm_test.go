@@ -94,6 +94,38 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if packument.DistTags["latest"] != "1.2.3" || packument.DistTags["next"] != "2.0.0-beta.1" || len(packument.Versions) != 2 || !strings.HasPrefix(version.Dist.Integrity, "sha512-") || len(version.Dist.Shasum) != 40 || !strings.HasSuffix(version.Dist.Tarball, "/npm/npm-releases/@scope/widget/-/widget-1.2.3.tgz") || !strings.HasPrefix(version.ArtifactGateway.Digest, "sha256:") || version.ArtifactGateway.Publisher != "build-agent" || version.ArtifactGateway.Size != int64(len(tarball)) {
 		t.Fatalf("packument=%#v", packument)
 	}
+	versionMetadata := httptest.NewRecorder()
+	handler.ServeHTTP(versionMetadata, httptest.NewRequest(http.MethodGet, "/npm/npm-releases/@scope%2Fwidget/1.2.3", nil))
+	if versionMetadata.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", versionMetadata.Code, versionMetadata.Body.String())
+	}
+	var hostedVersion struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball string `json:"tarball"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(versionMetadata.Body).Decode(&hostedVersion); err != nil {
+		t.Fatal(err)
+	}
+	if hostedVersion.Name != "@scope/widget" || hostedVersion.Version != "1.2.3" || !strings.HasSuffix(hostedVersion.Dist.Tarball, "/npm/npm-releases/@scope/widget/-/widget-1.2.3.tgz") {
+		t.Fatalf("hosted version metadata=%#v", hostedVersion)
+	}
+	versionHead := httptest.NewRecorder()
+	handler.ServeHTTP(versionHead, httptest.NewRequest(http.MethodHead, "/npm/npm-releases/@scope%2Fwidget/1.2.3", nil))
+	if versionHead.Code != http.StatusOK || versionHead.Body.Len() != 0 || versionHead.Header().Get("Content-Length") == "" {
+		t.Fatalf("version HEAD=%d bytes=%d headers=%v", versionHead.Code, versionHead.Body.Len(), versionHead.Header())
+	}
+	var headAudit *repository.AuditRecord
+	for index := range store.Audits {
+		if store.Audits[index].Resource == "@scope/widget@1.2.3" && store.Audits[index].Operation == "head" {
+			headAudit = &store.Audits[index]
+		}
+	}
+	if headAudit == nil || headAudit.Status != http.StatusOK || headAudit.Bytes != 0 {
+		t.Fatalf("HEAD audit=%#v all=%#v", headAudit, store.Audits)
+	}
 
 	auditRequest := httptest.NewRequest(http.MethodPost, "/npm/npm-releases/-/npm/v1/security/advisories/bulk", strings.NewReader(`{}`))
 	auditResult := httptest.NewRecorder()
@@ -309,6 +341,385 @@ func TestNativeNPMProxyCachesPackumentAndVerifiedTarball(t *testing.T) {
 	}
 	if !foundMiss || !foundHit {
 		t.Fatalf("npm proxy audits missing hit/miss: %#v", store.Audits)
+	}
+}
+
+func TestNativeNPMProxyColdVersionMetadataResolvesForCorepack(t *testing.T) {
+	packageName, versionName := "pnpm", "10.7.1"
+	tarball := npmFixtureTarball(t, packageName, versionName)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	metadataRequests := 0
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pnpm" {
+			http.NotFound(w, r)
+			return
+		}
+		metadataRequests++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": packageName, "dist-tags": map[string]string{"latest": versionName},
+			"versions": map[string]any{versionName: map[string]any{
+				"name": packageName, "version": versionName,
+				"dist": map[string]string{
+					"tarball":   upstream.URL + "/pnpm-10.7.1.tgz",
+					"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+					"shasum":    hex.EncodeToString(sha1Sum[:]),
+				},
+			}},
+		})
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-corepack-direct", Name: "npm-corepack-direct", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{"127.0.0.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/pnpm/10.7.1", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d body=%s", response.Code, response.Body.String())
+	}
+	var version struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Dist    struct {
+			Tarball string `json:"tarball"`
+		} `json:"dist"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version.Name != packageName || version.Version != versionName || !strings.Contains(version.Dist.Tarball, "/npm/npm-corepack-direct/pnpm/-/pnpm-10.7.1.tgz") || metadataRequests != 1 {
+		t.Fatalf("version metadata=%#v requests=%d", version, metadataRequests)
+	}
+}
+
+func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) {
+	packageName, version := "lockfile-widget", "1.2.3"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + packageName + "-" + version + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + packageName + "-" + version + ".tgz":
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-lockfile-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestNativeNPMProxyKeepsValidVersionsWhenLegacyMetadataLacksIntegrity(t *testing.T) {
+	const packageName, validVersion, legacyVersion = "color-convert", "2.0.1", "0.3.0"
+	validTarball := npmFixtureTarball(t, packageName, validVersion)
+	sha512Sum := sha512.Sum512(validTarball)
+	sha1Sum := sha1.Sum(validTarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+packageName {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":      packageName,
+			"dist-tags": map[string]string{"latest": validVersion, "legacy": legacyVersion},
+			"versions": map[string]any{
+				legacyVersion: map[string]any{
+					"name": packageName, "version": legacyVersion,
+					"dist": map[string]string{
+						"tarball": upstream.URL + "/" + packageName + "-" + legacyVersion + ".tgz",
+						"shasum":  strings.Repeat("a", 40),
+					},
+				},
+				validVersion: map[string]any{
+					"name": packageName, "version": validVersion,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "-" + validVersion + ".tgz",
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				},
+			},
+		})
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-legacy-metadata-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	versionRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+validVersion, nil)
+	authorize(versionRequest, "resolver-secret")
+	versionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(versionResponse, versionRequest)
+	if versionResponse.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", versionResponse.Code, versionResponse.Body.String())
+	}
+	packumentRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName, nil)
+	authorize(packumentRequest, "resolver-secret")
+	packumentResponse := httptest.NewRecorder()
+	handler.ServeHTTP(packumentResponse, packumentRequest)
+	var packument struct {
+		DistTags map[string]string          `json:"dist-tags"`
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if packumentResponse.Code != http.StatusOK || json.NewDecoder(packumentResponse.Body).Decode(&packument) != nil {
+		t.Fatalf("packument=%d %s", packumentResponse.Code, packumentResponse.Body.String())
+	}
+	if _, ok := packument.Versions[validVersion]; !ok || len(packument.Versions) != 1 {
+		t.Fatalf("versions=%#v", packument.Versions)
+	}
+	if packument.DistTags["latest"] != validVersion {
+		t.Fatalf("dist-tags=%#v", packument.DistTags)
+	}
+	if _, ok := packument.DistTags["legacy"]; ok {
+		t.Fatalf("invalid legacy dist-tag remained: %#v", packument.DistTags)
+	}
+}
+
+func TestNativeNPMProxyRequestsBoundedInstallMetadata(t *testing.T) {
+	const packageName, version = "large-install-metadata", "1.0.0"
+	tarball := npmFixtureTarball(t, packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	upstreamAccept := ""
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamAccept = r.Header.Get("Accept")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": packageName, "dist-tags": map[string]string{"latest": version},
+			"versions": map[string]any{version: map[string]any{
+				"name": packageName, "version": version,
+				"dist": map[string]string{
+					"tarball":   upstream.URL + "/" + packageName + "-" + version + ".tgz",
+					"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+					"shasum":    hex.EncodeToString(sha1Sum[:]),
+				},
+			}},
+		})
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-install-metadata-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+version, nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("version metadata=%d %s", response.Code, response.Body.String())
+	}
+	if upstreamAccept != "application/vnd.npm.install-v1+json" {
+		t.Fatalf("upstream Accept=%q", upstreamAccept)
+	}
+}
+
+func TestNPMProxyPackumentLimitCoversLargePublicInstallMetadata(t *testing.T) {
+	if npmPackumentLimit < 64<<20 {
+		t.Fatalf("npmPackumentLimit=%d, want at least 64 MiB", npmPackumentLimit)
+	}
+}
+
+func TestNativeNPMProxyColdScopedLegacyRootTarballResolvesWithoutPackumentRequest(t *testing.T) {
+	packageName, version := "@types/json-schema", "7.0.15"
+	tarballName := "json-schema-" + version + ".tgz"
+	tarball := npmFixtureTarballWithRoot(t, "json-schema", packageName, version)
+	sha512Sum := sha512.Sum512(tarball)
+	sha1Sum := sha1.Sum(tarball)
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/" + packageName:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": packageName, "dist-tags": map[string]string{"latest": version},
+				"versions": map[string]any{version: map[string]any{
+					"name": packageName, "version": version,
+					"dist": map[string]string{
+						"tarball":   upstream.URL + "/" + packageName + "/-/" + tarballName,
+						"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:]),
+						"shasum":    hex.EncodeToString(sha1Sum[:]),
+					},
+				}},
+			})
+		case "/" + packageName + "/-/" + tarballName:
+			_, _ = w.Write(tarball)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	parsedUpstream, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-scoped-lockfile-proxy", Format: repository.FormatNPM,
+		Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsedUpstream.Hostname()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+		UpstreamClient{HTTPClient: upstream.Client()},
+	)
+	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), tarball) {
+		t.Fatalf("download=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestNativeNPMProxyColdTarballMetadataFailuresAuditExactlyOnce(t *testing.T) {
+	const packageName, version = "lockfile-audit-widget", "1.2.3"
+	tarballName := packageName + "-" + version + ".tgz"
+	checksum := sha512.Sum512([]byte("fixture"))
+	tests := []struct {
+		name        string
+		upstream    http.HandlerFunc
+		wantStatus  int
+		wantOutcome repository.AuditOutcome
+	}{
+		{
+			name: "first upstream not found",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.NotFound(w, nil)
+			},
+			wantStatus:  http.StatusNotFound,
+			wantOutcome: repository.AuditNotFound,
+		},
+		{
+			name: "tarball host rejected by allowlist",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"name": packageName, "dist-tags": map[string]string{"latest": version},
+					"versions": map[string]any{version: map[string]any{
+						"name": packageName, "version": version,
+						"dist": map[string]string{
+							"tarball":   "https://blocked.example/" + tarballName,
+							"integrity": "sha512-" + base64.StdEncoding.EncodeToString(checksum[:]),
+							"shasum":    strings.Repeat("a", 40),
+						},
+					}},
+				})
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditProxyDenied,
+		},
+		{
+			name: "metadata upstream unavailable",
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+			},
+			wantStatus:  http.StatusBadGateway,
+			wantOutcome: repository.AuditUpstreamError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstream := httptest.NewServer(tt.upstream)
+			defer upstream.Close()
+			parsed, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := repository.NewMemoryStore()
+			repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+				ID: uuid.NewString(), Name: "npm-cold-audit", Format: repository.FormatNPM,
+				Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{parsed.Hostname()},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := NewGatewayHandler(
+				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
+				UpstreamClient{HTTPClient: upstream.Client()},
+			)
+			request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
+			authorize(request, "resolver-secret")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if len(store.Audits) != 1 {
+				t.Fatalf("audits=%#v", store.Audits)
+			}
+			audit := store.Audits[0]
+			if audit.GroupName != repo.Name || audit.Repository != repo.Name || audit.MemberName != "" ||
+				audit.Resource != packageName+"/-/"+tarballName || audit.Status != tt.wantStatus ||
+				audit.Outcome != tt.wantOutcome || audit.CacheDisposition != "miss" {
+				t.Fatalf("audit=%#v", audit)
+			}
+		})
 	}
 }
 
@@ -624,6 +1035,10 @@ func npmFixturePublishDocumentWithTags(t *testing.T, name, version, tarballName 
 }
 
 func npmFixtureTarball(t *testing.T, name, version string) []byte {
+	return npmFixtureTarballWithRoot(t, "package", name, version)
+}
+
+func npmFixtureTarballWithRoot(t *testing.T, root, name, version string) []byte {
 	t.Helper()
 	manifest, err := json.Marshal(map[string]string{"name": name, "version": version})
 	if err != nil {
@@ -632,7 +1047,7 @@ func npmFixtureTarball(t *testing.T, name, version string) []byte {
 	var compressed bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressed)
 	tarWriter := tar.NewWriter(gzipWriter)
-	if err = tarWriter.WriteHeader(&tar.Header{Name: "package/package.json", Mode: 0o644, Size: int64(len(manifest))}); err != nil {
+	if err = tarWriter.WriteHeader(&tar.Header{Name: root + "/package.json", Mode: 0o644, Size: int64(len(manifest))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tarWriter.Write(manifest); err != nil {

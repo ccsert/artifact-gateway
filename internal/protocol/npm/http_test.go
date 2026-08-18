@@ -21,6 +21,26 @@ func TestParsePathSupportsScopedPackagesAndTarballs(t *testing.T) {
 	}
 }
 
+func TestParsePathSupportsPackageVersionMetadata(t *testing.T) {
+	version, ok := ParsePath("/npm/releases/pnpm/10.7.1")
+	if !ok || version.Repository != "releases" || version.Package != "pnpm" || version.Version != "10.7.1" || version.Kind != RouteVersion {
+		t.Fatalf("version=%#v ok=%t", version, ok)
+	}
+	scoped, ok := ParsePath("/npm/releases/@scope%2Fwidget/1.2.3-beta.1")
+	if !ok || scoped.Package != "@scope/widget" || scoped.Version != "1.2.3-beta.1" || scoped.Kind != RouteVersion {
+		t.Fatalf("scoped=%#v ok=%t", scoped, ok)
+	}
+	for _, route := range []string{
+		"/npm/releases/pnpm/latest",
+		"/npm/releases/pnpm/../../secret",
+		"/npm/releases/@scope%2Fwidget/not-a-version",
+	} {
+		if parsed, accepted := ParsePath(route); accepted {
+			t.Fatalf("invalid version route %q accepted as %#v", route, parsed)
+		}
+	}
+}
+
 func TestValidVersionUsesStrictSemVer(t *testing.T) {
 	for _, version := range []string{"0.0.0", "1.2.3", "1.2.3-beta.1", "1.2.3+build.7", "1.2.3-rc.1+linux"} {
 		if !ValidVersion(version) {
@@ -55,17 +75,109 @@ func TestValidateTarballChecksPackageIdentity(t *testing.T) {
 	}
 }
 
+func TestValidateTarballAcceptsOneCanonicalLegacyRoot(t *testing.T) {
+	body := npmTestTarballEntries(t, []npmTestTarEntry{
+		{Name: "json-schema/", Directory: true},
+		{Name: "json-schema/package.json", Body: `{"name":"@types/json-schema","version":"7.0.15"}`},
+		{Name: "json-schema/index.d.ts", Body: "export interface JSONSchema {}\n"},
+	})
+	if err := ValidateTarball(body, "@types/json-schema", "7.0.15"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateTarballAcceptsHarmlessDotSegmentsFromOfficialPackages(t *testing.T) {
+	body := npmTestTarballEntries(t, []npmTestTarEntry{
+		{Name: "package/./dist/index.js", Body: "module.exports = {}\n"},
+		{Name: "package/package.json", Body: `{"name":"agent-base","version":"7.1.4"}`},
+	})
+	if err := ValidateTarball(body, "agent-base", "7.1.4"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateTarballRejectsUnsafeOrAmbiguousManifestRoots(t *testing.T) {
+	identity := `{"name":"@types/json-schema","version":"7.0.15"}`
+	tests := []struct {
+		name    string
+		entries []npmTestTarEntry
+	}{
+		{
+			name: "absolute path",
+			entries: []npmTestTarEntry{
+				{Name: "json-schema/package.json", Body: identity},
+				{Name: "/json-schema/index.d.ts", Body: "export {}\n"},
+			},
+		},
+		{
+			name: "parent traversal",
+			entries: []npmTestTarEntry{
+				{Name: "json-schema/package.json", Body: identity},
+				{Name: "json-schema/../package/index.js", Body: "module.exports = {}\n"},
+			},
+		},
+		{
+			name: "nested manifest",
+			entries: []npmTestTarEntry{
+				{Name: "json-schema/nested/package.json", Body: identity},
+			},
+		},
+		{
+			name: "multiple manifest roots",
+			entries: []npmTestTarEntry{
+				{Name: "package/package.json", Body: identity},
+				{Name: "json-schema/package.json", Body: identity},
+			},
+		},
+		{
+			name: "duplicate manifest",
+			entries: []npmTestTarEntry{
+				{Name: "json-schema/package.json", Body: identity},
+				{Name: "json-schema/package.json", Body: identity},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateTarball(npmTestTarballEntries(t, tt.entries), "@types/json-schema", "7.0.15"); err == nil {
+				t.Fatal("unsafe or ambiguous tarball was accepted")
+			}
+		})
+	}
+}
+
+type npmTestTarEntry struct {
+	Name      string
+	Body      string
+	Directory bool
+}
+
 func npmTestTarball(t *testing.T, packageJSON string) []byte {
+	t.Helper()
+	return npmTestTarballEntries(t, []npmTestTarEntry{{Name: "package/package.json", Body: packageJSON}})
+}
+
+func npmTestTarballEntries(t *testing.T, entries []npmTestTarEntry) []byte {
 	t.Helper()
 	var compressed bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressed)
 	tarWriter := tar.NewWriter(gzipWriter)
-	body := []byte(packageJSON)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: "package/package.json", Mode: 0o644, Size: int64(len(body))}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tarWriter.Write(body); err != nil {
-		t.Fatal(err)
+	for _, entry := range entries {
+		body := []byte(entry.Body)
+		header := &tar.Header{Name: entry.Name, Mode: 0o644, Size: int64(len(body))}
+		if entry.Directory {
+			header.Typeflag = tar.TypeDir
+			header.Mode = 0o755
+			header.Size = 0
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if !entry.Directory {
+			if _, err := tarWriter.Write(body); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if err := tarWriter.Close(); err != nil {
 		t.Fatal(err)

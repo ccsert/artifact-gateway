@@ -5426,6 +5426,7 @@
           "static_resolver",
           "local_session",
           "api_key",
+          "service_account_credential",
           "oidc"
         ]
       },
@@ -5723,7 +5724,8 @@
           "digest",
           "mediaType",
           "size",
-          "tags"
+          "tags",
+          "createdAt"
         ],
         "properties": {
           "digest": {
@@ -5743,6 +5745,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "subjectDigest": {
             "type": "string",

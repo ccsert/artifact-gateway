@@ -42,6 +42,18 @@ One immutable byte object belonging to an Artifact, such as a Maven JAR, OCI
 blob, or Conan package file.
 _Avoid_: Artifact file, blob
 
+**Service Account**:
+A stable non-human authorization principal for one CI system or external
+application. Repository Grants bind to `service-account:<id>` and remain
+unchanged when credentials rotate. A Service Account has no global role.
+_Avoid_: API Key, robot User, credential
+
+**Service Account Credential**:
+A revocable, expiring secret that authenticates as its parent Service Account.
+Multiple credentials may overlap during rotation; plaintext is returned only
+at creation and is never persisted.
+_Avoid_: Service Account, Repository Grant, permanent token
+
 **Publication**:
 The atomic transition that makes a verified staged Artifact visible to readers.
 _Avoid_: Upload, commit

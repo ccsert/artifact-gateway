@@ -232,6 +232,7 @@ type generatedRepositoryAPIAdapter struct {
 	oci                    repository.NativeOCIStore
 	conan                  repository.NativeConanStore
 	apiKeys                repository.APIKeyStore
+	serviceAccounts        repository.ServiceAccountStore
 	users                  userManagementStore
 	authorizer             RepositoryAuthorizer
 	audit                  repository.Store

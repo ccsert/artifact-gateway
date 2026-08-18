@@ -8,6 +8,7 @@ import {
   LoginOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   SyncOutlined,
@@ -99,6 +100,13 @@ const navItems = [
     to: "/keys",
     label: "nav.apiKeys",
     icon: <KeyOutlined />,
+    group: "management",
+    admin: true,
+  },
+  {
+    to: "/service-accounts",
+    label: "nav.serviceAccounts",
+    icon: <RobotOutlined />,
     group: "management",
     admin: true,
   },
@@ -259,6 +267,7 @@ export function AppLayout() {
     "/audit-retention",
     "/identity-providers",
     "/keys",
+    "/service-accounts",
     "/users",
   ].includes(location.pathname);
   if (identity && !identity.administrator && adminOnlyPath) {

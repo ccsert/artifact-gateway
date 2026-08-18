@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	npmPublishBodyLimit = 384 << 20
-	npmTarballLimit     = 256 << 20
-	npmPackumentLimit   = 16 << 20
-	npmMetadataTTL      = 15 * time.Minute
+	npmPublishBodyLimit     = 384 << 20
+	npmTarballLimit         = 256 << 20
+	npmPackumentLimit       = 64 << 20
+	npmInstallMetadataMedia = "application/vnd.npm.install-v1+json"
+	npmMetadataTTL          = 15 * time.Minute
 )
 
 type nativeNPMHandler struct {
@@ -84,11 +85,17 @@ type npmProxyPackageResolution struct {
 }
 
 type npmProxyPackageError struct {
-	Status  int
-	Message string
+	Status      int
+	Message     string
+	Outcome     repository.AuditOutcome
+	Disposition string
 }
 
 func (e *npmProxyPackageError) Error() string { return e.Message }
+
+func newNPMProxyPackageError(status int, message string, outcome repository.AuditOutcome, disposition string) *npmProxyPackageError {
+	return &npmProxyPackageError{Status: status, Message: message, Outcome: outcome, Disposition: disposition}
+}
 
 type npmAuditTarget struct {
 	GroupName  string
@@ -210,6 +217,12 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+	case npmprotocol.RouteVersion:
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
+		}
+		h.versionMetadata(w, r, repo, route.Package, route.Version, principal.Actor)
 	case npmprotocol.RouteTarball:
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -222,6 +235,63 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 	}
 	return true
+}
+
+func (h nativeNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, versionName, actor string) {
+	var pkg repository.NPMPackage
+	disposition := "bypass"
+	if repo.Type == repository.RepositoryTypeProxy {
+		target := npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}
+		resolved, err := h.resolveProxyPackageWithAudit(r, repo, packageName, actor, target)
+		if err != nil {
+			var responseError *npmProxyPackageError
+			if errors.As(err, &responseError) {
+				h.recordNPMProxyPackageError(r, repo, target, packageName+"@"+versionName, actor, responseError)
+				h.writeError(w, responseError.Status, responseError.Message)
+				return
+			}
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "miss")
+			return
+		}
+		pkg = resolved.Package
+		disposition = resolved.Disposition
+		if resolved.Stale {
+			w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+		}
+	} else {
+		var err error
+		pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
+		if errors.Is(err, repository.ErrNotFound) {
+			h.writeError(w, http.StatusNotFound, "package version not found")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
+			return
+		}
+		if err != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+			return
+		}
+	}
+	unfiltered := pkg
+	pkg, blockedVersions, err := h.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+		return
+	}
+	if blockedVersions[versionName] {
+		blocked, _ := findNPMVersion(unfiltered, versionName)
+		h.writeNPMQuarantineDenied(w, r, repo, blocked, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name})
+		return
+	}
+	version, ok := findNPMVersion(pkg, versionName)
+	if !ok {
+		h.writeError(w, http.StatusNotFound, "package version not found")
+		h.recordAuditWithDisposition(r, repo, packageName+"@"+versionName, actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
+		return
+	}
+	h.writeNPMVersionMetadata(w, r, repo, repo.Name, version, actor, disposition)
 }
 
 func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, publisher string) {
@@ -337,9 +407,11 @@ func (h nativeNPMHandler) proxyPackument(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		var responseError *npmProxyPackageError
 		if errors.As(err, &responseError) {
+			h.recordNPMProxyPackageError(r, repo, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, packageName, actor, responseError)
 			h.writeError(w, responseError.Status, responseError.Message)
 			return
 		}
+		h.recordAuditForTarget(r, repo, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, packageName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
 		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
 		return
 	}
@@ -361,25 +433,25 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	pkg, err := h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 	now := time.Now().UTC()
 	if err == nil {
-		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(r, repo, pkg, packageName, actor, now, target); ok {
+		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(repo, pkg, now); ok {
 			return resolved, cacheErr
 		}
 	}
 	lockedCtx, release, err := repository.LockNPMProxyWithContext(r.Context(), h.store, "metadata:"+repo.ID+":"+packageName)
 	if err != nil {
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata cache is unavailable"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "package metadata cache is unavailable", repository.AuditStorageError, "bypass")
 	}
 	defer release()
 	r = r.WithContext(lockedCtx)
 	pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 	now = time.Now().UTC()
 	if err == nil {
-		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(r, repo, pkg, packageName, actor, now, target); ok {
+		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(repo, pkg, now); ok {
 			return resolved, cacheErr
 		}
 	}
 	if h.proxy == nil {
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: "npm upstream client is unavailable"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream client is unavailable", repository.AuditUpstreamError, "miss")
 	}
 	if h.metrics != nil {
 		h.metrics.recordCache(repo.Name, false)
@@ -387,9 +459,7 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	}
 	upstreamTarget := strings.TrimRight(repo.Endpoint, "/") + "/" + url.PathEscape(packageName)
 	upstreamHeaders := make(http.Header)
-	if accept := r.Header.Get("Accept"); accept != "" {
-		upstreamHeaders.Set("Accept", accept)
-	}
+	upstreamHeaders.Set("Accept", npmInstallMetadataMedia)
 	if err == nil && pkg.SourceEndpoint == repo.Endpoint && !pkg.Negative {
 		if pkg.UpstreamETag != "" {
 			upstreamHeaders.Set("If-None-Match", pkg.UpstreamETag)
@@ -400,14 +470,14 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	}
 	response, fetchErr := h.fetchNPMProxy(r.Context(), http.MethodGet, repo, upstreamTarget, upstreamHeaders)
 	if fetchErr != nil {
-		h.recordNPMUpstreamFailureForTarget(r, repo, target, packageName, actor, false)
 		if err == nil && len(pkg.Versions) > 0 && !pkg.Negative {
+			h.recordNPMUpstreamFailureForTarget(r, repo, target, packageName, actor, false)
 			return npmProxyPackageResolution{Package: pkg, Disposition: "stale", Stale: true}, nil
 		}
 		if errors.Is(fetchErr, errNPMUpstreamCircuitOpen) {
-			return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "npm upstream circuit is open"}
+			return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "npm upstream circuit is open", repository.AuditUpstreamError, "miss")
 		}
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: "npm upstream is unavailable"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream is unavailable", repository.AuditUpstreamError, "miss")
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotFound {
@@ -415,7 +485,7 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 			RepositoryID: repo.ID, Name: packageName, SourceEndpoint: repo.Endpoint,
 			NegativeExpiresAt: time.Now().UTC().Add(h.negativeTTL), Negative: true,
 		})
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusNotFound, Message: "package not found"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusNotFound, "package not found", repository.AuditNotFound, "miss")
 	}
 	if response.StatusCode == http.StatusNotModified && err == nil && len(pkg.Versions) > 0 && !pkg.Negative {
 		pkg.MetadataExpiresAt = time.Now().UTC().Add(h.metadataTTL)
@@ -426,50 +496,54 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 			pkg.UpstreamModified = value
 		}
 		if _, syncErr := h.store.SyncNPMProxyPackage(r.Context(), pkg); syncErr != nil {
-			return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "refresh npm proxy metadata failed"}
+			return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "refresh npm proxy metadata failed", repository.AuditStorageError, "hit")
 		}
 		return npmProxyPackageResolution{Package: pkg, Disposition: "hit"}, nil
 	}
 	if response.StatusCode != http.StatusOK {
-		if retryableNPMStatus(response.StatusCode) {
-			h.recordNPMUpstreamFailureForTarget(r, repo, target, packageName, actor, false)
-		}
 		if err == nil && len(pkg.Versions) > 0 && !pkg.Negative && response.StatusCode >= http.StatusInternalServerError {
+			h.recordNPMUpstreamFailureForTarget(r, repo, target, packageName, actor, false)
 			return npmProxyPackageResolution{Package: pkg, Disposition: "stale", Stale: true}, nil
 		}
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: "npm upstream returned an unexpected response"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream returned an unexpected response", repository.AuditUpstreamError, "miss")
 	}
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, npmPackumentLimit+1))
 	if readErr != nil || len(body) > npmPackumentLimit {
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: "npm upstream package metadata is invalid"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream package metadata is invalid", repository.AuditUpstreamError, "miss")
 	}
 	incoming, normalizeErr := npmProxyPackage(repo, packageName, body, response.Header, h.metadataTTL)
 	if normalizeErr != nil {
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: normalizeErr.Error()}
+		outcome := repository.AuditUpstreamError
+		if normalizeErr.Error() == "npm upstream tarball URL is not allowed" {
+			outcome = repository.AuditProxyDenied
+		}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, normalizeErr.Error(), outcome, "miss")
 	}
 	_, err = h.store.SyncNPMProxyPackage(r.Context(), incoming)
 	if err != nil {
 		if errors.Is(err, repository.ErrUpstreamChanged) {
-			return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusBadGateway, Message: "npm upstream changed immutable package metadata"}
+			return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream changed immutable package metadata", repository.AuditUpstreamError, "miss")
 		}
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "persist npm proxy metadata failed"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "persist npm proxy metadata failed", repository.AuditStorageError, "miss")
 	}
 	stored, err := h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 	if err != nil {
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable after refresh"}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "package metadata unavailable after refresh", repository.AuditStorageError, "miss")
 	}
 	return npmProxyPackageResolution{Package: stored, Disposition: "miss"}, nil
 }
 
 // resolveFromNPMProxyCache returns ok when a fresh packument or negative lookup
 // can answer the request. It is used before and after the per-package lock.
-func (h nativeNPMHandler) resolveFromNPMProxyCache(r *http.Request, repo repository.HostedRepository, pkg repository.NPMPackage, packageName, actor string, now time.Time, target npmAuditTarget) (npmProxyPackageResolution, error, bool) {
+func (h nativeNPMHandler) resolveFromNPMProxyCache(repo repository.HostedRepository, pkg repository.NPMPackage, now time.Time) (npmProxyPackageResolution, error, bool) {
 	if pkg.SourceEndpoint != repo.Endpoint {
 		return npmProxyPackageResolution{}, nil, false
 	}
 	if pkg.Negative && now.Before(pkg.NegativeExpiresAt) {
-		h.recordNPMNegativeHitForTarget(r, repo, target, packageName, actor)
-		return npmProxyPackageResolution{}, &npmProxyPackageError{Status: http.StatusNotFound, Message: "package not found"}, true
+		if h.metrics != nil {
+			h.metrics.recordNPMNegativeCacheHit()
+		}
+		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusNotFound, "package not found", repository.AuditNotFound, "negative"), true
 	}
 	if !pkg.Negative && now.Before(pkg.MetadataExpiresAt) {
 		if h.metrics != nil {
@@ -529,17 +603,21 @@ func npmProxyPackage(repo repository.HostedRepository, packageName string, body 
 		SourceEndpoint: repo.Endpoint, UpstreamETag: headers.Get("ETag"),
 		UpstreamModified: headers.Get("Last-Modified"), MetadataExpiresAt: now.Add(ttl),
 	}
+	invalidVersionMetadata := false
+	invalidTarballURL := false
 	for version, manifest := range document.Versions {
 		if !npmprotocol.ValidVersion(version) {
 			continue
 		}
 		var identity npmVersionIdentity
 		if json.Unmarshal(manifest, &identity) != nil || identity.Name != packageName || identity.Version != version || !validNPMProxyIntegrity(identity.Dist.Integrity, identity.Dist.Shasum) {
-			return repository.NPMPackage{}, errors.New("npm upstream version metadata is invalid")
+			invalidVersionMetadata = true
+			continue
 		}
 		tarballURL, parseErr := url.Parse(identity.Dist.Tarball)
 		if parseErr != nil || !proxyUpstreamURLAllowed(repo, tarballURL) {
-			return repository.NPMPackage{}, errors.New("npm upstream tarball URL is not allowed")
+			invalidTarballURL = true
+			continue
 		}
 		createdAt := now
 		if published := document.Time[version]; published != "" {
@@ -556,17 +634,28 @@ func npmProxyPackage(repo repository.HostedRepository, packageName string, body 
 		})
 	}
 	if len(pkg.Versions) == 0 {
+		if invalidTarballURL {
+			return repository.NPMPackage{}, errors.New("npm upstream tarball URL is not allowed")
+		}
+		if invalidVersionMetadata {
+			return repository.NPMPackage{}, errors.New("npm upstream version metadata is invalid")
+		}
 		return repository.NPMPackage{}, errors.New("npm upstream package has no supported versions")
 	}
 	versions := make(map[string]bool, len(pkg.Versions))
 	for _, version := range pkg.Versions {
 		versions[version.Version] = true
 	}
+	filteredDistTags := make(map[string]string, len(pkg.DistTags))
 	for tag, target := range pkg.DistTags {
-		if tag == "" || len(tag) > 128 || strings.ContainsAny(tag, "/\\\x00") || !versions[target] {
+		if tag == "" || len(tag) > 128 || strings.ContainsAny(tag, "/\\\x00") {
 			return repository.NPMPackage{}, errors.New("npm upstream distribution tags are invalid")
 		}
+		if versions[target] {
+			filteredDistTags[tag] = target
+		}
 	}
+	pkg.DistTags = filteredDistTags
 	return pkg, nil
 }
 
@@ -640,6 +729,15 @@ func cloneNPMStringMap(source map[string]string) map[string]string {
 	return cloned
 }
 
+func findNPMVersion(pkg repository.NPMPackage, versionName string) (repository.NPMVersion, bool) {
+	for _, version := range pkg.Versions {
+		if version.Version == versionName {
+			return version, true
+		}
+	}
+	return repository.NPMVersion{}, false
+}
+
 func (h nativeNPMHandler) npmVersionReadBlocked(ctx context.Context, repo repository.HostedRepository, version repository.NPMVersion) (bool, error) {
 	return repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatNPM, version.PackageName+"@"+version.Version, version.Digest)
 }
@@ -665,33 +763,10 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 	versions := make(map[string]any, len(pkg.Versions))
 	times := map[string]string{"created": pkg.CreatedAt.Format(time.RFC3339Nano), "modified": pkg.UpdatedAt.Format(time.RFC3339Nano)}
 	for _, version := range pkg.Versions {
-		var document map[string]any
-		if json.Unmarshal(version.Manifest, &document) != nil {
+		document, ok := h.npmVersionDocument(r, registryName, version)
+		if !ok {
 			continue
 		}
-		document["name"] = packageName
-		document["version"] = version.Version
-		document["dist"] = map[string]any{
-			"tarball":   h.tarballURL(r, registryName, packageName, version.TarballName),
-			"integrity": version.Integrity,
-			"shasum":    version.Shasum,
-		}
-		metadata := map[string]any{
-			"source": "hosted", "cacheStatus": "cached", "publisher": version.Publisher,
-		}
-		if version.UpstreamTarball != "" {
-			metadata["source"] = "proxy"
-			metadata["cacheStatus"] = "metadata"
-		}
-		if version.ObjectKey != "" {
-			metadata["cacheStatus"] = "cached"
-			metadata["digest"] = version.Digest
-			metadata["size"] = version.Size
-			if !version.CachedAt.IsZero() {
-				metadata["cachedAt"] = version.CachedAt.Format(time.RFC3339Nano)
-			}
-		}
-		document["_artifactGateway"] = metadata
 		versions[version.Version] = document
 		times[version.Version] = version.CreatedAt.Format(time.RFC3339Nano)
 	}
@@ -699,9 +774,28 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 		"_id": packageName, "name": packageName, "dist-tags": pkg.DistTags,
 		"versions": versions, "time": times,
 	}
+	h.writeNPMMetadataJSON(w, r, repo, packageName, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, payload)
+}
+
+func (h nativeNPMHandler) writeNPMVersionMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, version repository.NPMVersion, actor, disposition string) {
+	h.writeNPMVersionMetadataForTarget(w, r, repo, registryName, version, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name})
+}
+
+func (h nativeNPMHandler) writeNPMVersionMetadataForTarget(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, registryName string, version repository.NPMVersion, actor, disposition string, target npmAuditTarget) {
+	document, ok := h.npmVersionDocument(r, registryName, version)
+	if !ok {
+		h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		h.recordAuditForTarget(r, repo, target, version.PackageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+		return
+	}
+	h.writeNPMMetadataJSON(w, r, repo, version.PackageName+"@"+version.Version, actor, disposition, target, document)
+}
+
+func (h nativeNPMHandler) writeNPMMetadataJSON(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, resource, actor, disposition string, target npmAuditTarget, payload any) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "encode package metadata failed")
+		h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditStorageError, http.StatusInternalServerError, 0, disposition)
 		return
 	}
 	etagSum := sha256.Sum256(encoded)
@@ -710,14 +804,51 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 	w.Header().Set("ETag", etag)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
+		h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditResolved, http.StatusNotModified, 0, disposition)
 		return
 	}
 	w.Header().Set("Content-Length", utoa(uint64(len(encoded))))
 	w.WriteHeader(http.StatusOK)
+	servedBytes := int64(0)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(encoded)
+		servedBytes = int64(len(encoded))
 	}
-	h.recordAuditWithDisposition(r, repo, packageName, actor, repository.AuditResolved, http.StatusOK, int64(len(encoded)), disposition)
+	h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditResolved, http.StatusOK, servedBytes, disposition)
+}
+
+func (h nativeNPMHandler) npmVersionDocument(r *http.Request, registryName string, version repository.NPMVersion) (map[string]any, bool) {
+	var document map[string]any
+	if json.Unmarshal(version.Manifest, &document) != nil {
+		return nil, false
+	}
+	document["name"] = version.PackageName
+	document["version"] = version.Version
+	dist, ok := document["dist"].(map[string]any)
+	if !ok {
+		dist = make(map[string]any)
+	}
+	dist["tarball"] = h.tarballURL(r, registryName, version.PackageName, version.TarballName)
+	dist["integrity"] = version.Integrity
+	dist["shasum"] = version.Shasum
+	document["dist"] = dist
+	metadata := map[string]any{
+		"source": "hosted", "cacheStatus": "cached", "publisher": version.Publisher,
+	}
+	if version.UpstreamTarball != "" {
+		metadata["source"] = "proxy"
+		metadata["cacheStatus"] = "metadata"
+	}
+	if version.ObjectKey != "" {
+		metadata["cacheStatus"] = "cached"
+		metadata["digest"] = version.Digest
+		metadata["size"] = version.Size
+		if !version.CachedAt.IsZero() {
+			metadata["cachedAt"] = version.CachedAt.Format(time.RFC3339Nano)
+		}
+	}
+	document["_artifactGateway"] = metadata
+	return document, true
 }
 
 func (h nativeNPMHandler) tarball(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, tarballName, actor string) {
@@ -766,6 +897,20 @@ func (h nativeNPMHandler) proxyTarball(w http.ResponseWriter, r *http.Request, r
 
 func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, tarballName, actor string, target npmAuditTarget) {
 	version, err := h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+	if errors.Is(err, repository.ErrNotFound) {
+		if _, resolveErr := h.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
+			var responseError *npmProxyPackageError
+			if errors.As(resolveErr, &responseError) {
+				h.recordNPMProxyPackageError(r, repo, target, packageName+"/-/"+tarballName, actor, responseError)
+				h.writeError(w, responseError.Status, responseError.Message)
+				return
+			}
+			h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
+			h.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+			return
+		}
+		version, err = h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		h.writeError(w, http.StatusNotFound, "package tarball not found")
 		h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditNotFound, http.StatusNotFound, 0, "bypass")
@@ -977,11 +1122,22 @@ func (h nativeNPMHandler) recordAuditForTarget(r *http.Request, repo repository.
 	}
 }
 
-func (h nativeNPMHandler) recordNPMNegativeHitForTarget(r *http.Request, repo repository.HostedRepository, target npmAuditTarget, resource, actor string) {
-	if h.metrics != nil {
-		h.metrics.recordNPMNegativeCacheHit()
+func (h nativeNPMHandler) recordNPMProxyPackageError(r *http.Request, repo repository.HostedRepository, target npmAuditTarget, resource, actor string, responseError *npmProxyPackageError) {
+	if responseError == nil {
+		return
 	}
-	h.recordAuditForTarget(r, repo, target, resource, actor, repository.AuditNotFound, http.StatusNotFound, 0, "negative")
+	outcome := responseError.Outcome
+	if outcome == "" {
+		outcome = repository.AuditUpstreamError
+		if responseError.Status == http.StatusNotFound {
+			outcome = repository.AuditNotFound
+		}
+	}
+	disposition := responseError.Disposition
+	if disposition == "" {
+		disposition = "miss"
+	}
+	h.recordAuditForTarget(r, repo, target, resource, actor, outcome, responseError.Status, 0, disposition)
 }
 
 func (h nativeNPMHandler) recordNPMUpstreamFailureForTarget(r *http.Request, repo repository.HostedRepository, target npmAuditTarget, resource, actor string, integrityFailure bool) {

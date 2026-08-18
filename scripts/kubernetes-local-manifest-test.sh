@@ -8,7 +8,7 @@ rendered_json=$(mktemp)
 trap 'rm -f "$rendered" "$rendered_json"' EXIT
 
 kubectl kustomize "$overlay" >"$rendered"
-kubectl create --dry-run=client --validate=false -f "$rendered" -o json | jq -s . >"$rendered_json"
+go run "$root/scripts/kubernetes-manifest-json.go" "$rendered" >"$rendered_json"
 bash -n "$root/scripts/kubernetes-local.sh"
 test -f "$root/Dockerfile.console"
 test -f "$root/Dockerfile.apt-signer"

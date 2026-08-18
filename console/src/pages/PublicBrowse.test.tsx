@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { searchRepositoryArtifacts } from "../client";
@@ -76,5 +76,64 @@ describe("PublicBrowsePage APT browse", () => {
       path: { repositoryId },
       query: { q: undefined, pageSize: 100 },
     });
+  });
+
+  it("presents a searchable, format-aware read-only public catalog", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          items: [
+            {
+              id: "11111111-1111-4111-8111-111111111111",
+              name: "platform-images",
+              format: "oci",
+              type: "hosted",
+            },
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              name: "maven-public",
+              format: "maven",
+              type: "group",
+            },
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              name: "npm-cache",
+              format: "npm",
+              type: "proxy",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/browse"]}>
+        <PreferencesProvider>
+          <PublicBrowsePage />
+        </PreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "查找并使用可信的公开制品",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("公开只读")).toBeInTheDocument();
+    expect(screen.getByText(/3 个公开来源/)).toBeInTheDocument();
+    expect(screen.getByText(/3 种制品格式/)).toBeInTheDocument();
+    expect(screen.getByText("管理操作需要登录")).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText("搜索仓库名称或格式");
+    fireEvent.change(search, { target: { value: "maven" } });
+    expect(screen.getByText("maven-public")).toBeInTheDocument();
+    expect(screen.queryByText("platform-images")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "OCI" }));
+    expect(screen.getByText("platform-images")).toBeInTheDocument();
+    expect(screen.queryByText("maven-public")).not.toBeInTheDocument();
   });
 });

@@ -224,7 +224,8 @@ func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := "sha256:" + strings.Repeat("d", 64)
-	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "nginx", Digest: digest, ObjectKey: "oci/untagged", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1989}, digest); err != nil {
+	createdAt := time.Date(2026, 8, 13, 11, 14, 10, 0, time.UTC)
+	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "nginx", Digest: digest, ObjectKey: "oci/untagged", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1989, CreatedAt: createdAt}, digest); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
@@ -232,7 +233,7 @@ func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"digest":"`+digest+`"`) || !strings.Contains(response.Body.String(), `"tags":[]`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"digest":"`+digest+`"`) || !strings.Contains(response.Body.String(), `"tags":[]`) || !strings.Contains(response.Body.String(), `"createdAt":"2026-08-13T11:14:10Z"`) {
 		t.Fatalf("untagged OCI manifest browse=%d body=%s", response.Code, response.Body.String())
 	}
 }

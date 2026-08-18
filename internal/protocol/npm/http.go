@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"path"
 	"strings"
 )
 
@@ -16,6 +17,7 @@ type RouteKind uint8
 
 const (
 	RoutePackage RouteKind = iota + 1
+	RouteVersion
 	RouteTarball
 	RoutePing
 	RouteAuditBulk
@@ -25,6 +27,7 @@ const (
 type Route struct {
 	Repository string
 	Package    string
+	Version    string
 	Tarball    string
 	Kind       RouteKind
 }
@@ -61,6 +64,12 @@ func ParsePath(escapedPath string) (Route, bool) {
 			return Route{}, false
 		}
 		return Route{Repository: repositoryName, Package: packageName, Tarball: tarballName, Kind: RouteTarball}, true
+	}
+	if separator := strings.LastIndexByte(resource, '/'); separator > 0 && separator < len(resource)-1 {
+		packageName, version := resource[:separator], resource[separator+1:]
+		if ValidPackageName(packageName) && ValidVersion(version) {
+			return Route{Repository: repositoryName, Package: packageName, Version: version, Kind: RouteVersion}, true
+		}
 	}
 	if !ValidPackageName(resource) {
 		return Route{}, false
@@ -197,7 +206,11 @@ func ValidateTarballReader(body io.Reader, packageName, version string) error {
 	}
 	defer func() { _ = gzipReader.Close() }()
 	tarReader := tar.NewReader(io.LimitReader(gzipReader, 1<<30))
-	for entries := 0; entries < 10000; entries++ {
+	manifestFound := false
+	for entries := 0; ; entries++ {
+		if entries >= 10000 {
+			return errors.New("attachment contains too many tar entries")
+		}
 		header, nextErr := tarReader.Next()
 		if errors.Is(nextErr, io.EOF) {
 			break
@@ -205,11 +218,23 @@ func ValidateTarballReader(body io.Reader, packageName, version string) error {
 		if nextErr != nil {
 			return errors.New("attachment contains an invalid tar archive")
 		}
-		if header.Name != "package/package.json" {
+		entryPath, pathErr := canonicalNPMTarEntryPath(header.Name)
+		if pathErr != nil {
+			return pathErr
+		}
+		segments := strings.Split(entryPath, "/")
+		if len(segments) != 2 || segments[1] != "package.json" {
 			continue
 		}
+		if strings.Contains(segments[0], ":") {
+			return errors.New("attachment contains an unsafe package manifest root")
+		}
+		if manifestFound {
+			return errors.New("attachment contains multiple package manifests")
+		}
+		manifestFound = true
 		if header.Size <= 0 || header.Size > 1<<20 {
-			return errors.New("package/package.json has an invalid size")
+			return errors.New("top-level package.json has an invalid size")
 		}
 		var manifest struct {
 			Name    string `json:"name"`
@@ -217,11 +242,33 @@ func ValidateTarballReader(body io.Reader, packageName, version string) error {
 		}
 		decoder := json.NewDecoder(io.LimitReader(tarReader, header.Size))
 		if err = decoder.Decode(&manifest); err != nil || manifest.Name != packageName || manifest.Version != version {
-			return errors.New("package/package.json identity does not match the publication")
+			return errors.New("top-level package.json identity does not match the publication")
 		}
+	}
+	if manifestFound {
 		return nil
 	}
-	return errors.New("attachment does not contain package/package.json")
+	return errors.New("attachment does not contain one top-level package.json")
+}
+
+func canonicalNPMTarEntryPath(name string) (string, error) {
+	if name == "" || strings.HasPrefix(name, "/") || strings.ContainsAny(name, "\\\x00") {
+		return "", errors.New("attachment contains an unsafe tar path")
+	}
+	canonical := strings.TrimSuffix(name, "/")
+	if canonical == "" {
+		return "", errors.New("attachment contains an unsafe tar path")
+	}
+	for _, segment := range strings.Split(canonical, "/") {
+		if segment == "" || segment == ".." {
+			return "", errors.New("attachment contains an unsafe tar path")
+		}
+	}
+	cleaned := path.Clean(canonical)
+	if cleaned == "." || strings.HasPrefix(cleaned, "../") {
+		return "", errors.New("attachment contains an unsafe tar path")
+	}
+	return cleaned, nil
 }
 
 func PackagePath(name string) string {

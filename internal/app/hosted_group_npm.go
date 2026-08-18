@@ -16,6 +16,12 @@ type v2GroupNPMHandler struct {
 	native *nativeNPMHandler
 }
 
+type npmGroupVersionSource struct {
+	repository  repository.HostedRepository
+	disposition string
+	version     repository.NPMVersion
+}
+
 func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup) {
 	if h.native == nil {
 		http.NotFound(w, r)
@@ -87,6 +93,12 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			return
 		}
 		h.packument(w, r, resolver, group, members, route.Package, principal.Actor)
+	case npmprotocol.RouteVersion:
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		h.versionMetadata(w, r, resolver, group, members, route.Package, route.Version, principal.Actor)
 	case npmprotocol.RouteTarball:
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -97,49 +109,133 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 }
 
 func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) {
+	merged, firstError, stale, _, _ := h.resolvePackage(r, resolver, group, members, packageName, actor)
+	if len(merged.Versions) == 0 {
+		if firstError != nil {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, firstError.Outcome, firstError.Status)
+			h.native.writeError(w, firstError.Status, firstError.Message)
+		} else {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+			h.native.writeError(w, http.StatusNotFound, "package not found")
+		}
+		return
+	}
+	if stale {
+		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+	}
+	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
+	h.native.writePackument(w, r, groupRepo, group.Name, merged, actor, "bypass")
+}
+
+func (h v2GroupNPMHandler) versionMetadata(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, versionName, actor string) {
+	merged, firstError, stale, sources, blockedSources := h.resolvePackage(r, resolver, group, members, packageName, actor)
+	version, ok := findNPMVersion(merged, versionName)
+	if !ok {
+		resource := packageName + "@" + versionName
+		if blocked, blockedByPolicy := blockedSources[versionName]; blockedByPolicy {
+			h.native.writeNPMQuarantineDenied(w, r, blocked.repository, blocked.version, actor, blocked.disposition, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: blocked.repository.Name})
+		} else if firstError != nil {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, resource, strings.ToLower(r.Method), actor, firstError.Outcome, firstError.Status)
+			h.native.writeError(w, firstError.Status, firstError.Message)
+		} else {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, resource, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+			h.native.writeError(w, http.StatusNotFound, "package version not found")
+		}
+		return
+	}
+	source, sourced := sources[versionName]
+	if !sourced {
+		h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+		resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"@"+versionName, strings.ToLower(r.Method), actor, repository.AuditStorageError, http.StatusServiceUnavailable)
+		return
+	}
+	if stale {
+		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+	}
+	h.native.writeNPMVersionMetadataForTarget(w, r, source.repository, group.Name, version, actor, source.disposition, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: source.repository.Name})
+}
+
+func (h v2GroupNPMHandler) resolvePackage(r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) (repository.NPMPackage, *npmProxyPackageError, bool, map[string]npmGroupVersionSource, map[string]npmGroupVersionSource) {
 	merged := repository.NPMPackage{Name: packageName, DistTags: make(map[string]string)}
 	seenVersions := make(map[string]bool)
+	sources := make(map[string]npmGroupVersionSource)
+	blockedSources := make(map[string]npmGroupVersionSource)
 	var firstError *npmProxyPackageError
 	stale := false
 
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
+			status := http.StatusNotFound
+			outcome := repository.AuditNotFound
+			if !errors.Is(err, repository.ErrNotFound) {
+				status = http.StatusServiceUnavailable
+				outcome = repository.AuditStorageError
+			}
+			unavailableRepo := repository.HostedRepository{
+				ID: member.RepositoryID, Name: member.Name, Format: repository.FormatNPM,
+				Type: repository.RepositoryType(member.Type), Endpoint: member.Endpoint,
+			}
+			h.native.recordAuditForTarget(r, unavailableRepo, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: member.Name}, packageName, actor, outcome, status, 0, "bypass")
 			if firstError == nil && !errors.Is(err, repository.ErrNotFound) {
-				firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable"}
+				firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable", Outcome: repository.AuditStorageError, Disposition: "bypass"}
 			}
 			continue
 		}
 		var pkg repository.NPMPackage
+		disposition := "bypass"
 		if repo.Type == repository.RepositoryTypeProxy {
-			resolved, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name})
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+			resolved, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, target)
 			if resolveErr != nil {
 				var responseError *npmProxyPackageError
-				if errors.As(resolveErr, &responseError) && responseError.Status != http.StatusNotFound && firstError == nil {
-					firstError = responseError
+				if errors.As(resolveErr, &responseError) {
+					h.native.recordNPMProxyPackageError(r, repo, target, packageName, actor, responseError)
+					if responseError.Status != http.StatusNotFound && firstError == nil {
+						firstError = responseError
+					}
 				}
 				continue
 			}
 			pkg = resolved.Package
+			disposition = resolved.Disposition
 			stale = stale || resolved.Stale
 		} else {
 			pkg, err = h.native.store.GetNPMPackage(r.Context(), repo.ID, packageName)
 			if err != nil {
+				outcome := repository.AuditNotFound
+				status := http.StatusNotFound
+				if !errors.Is(err, repository.ErrNotFound) {
+					outcome = repository.AuditStorageError
+					status = http.StatusServiceUnavailable
+				}
+				h.native.recordAuditForTarget(r, repo, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}, packageName, actor, outcome, status, 0, disposition)
 				if !errors.Is(err, repository.ErrNotFound) && firstError == nil {
-					firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable"}
+					firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable", Outcome: repository.AuditStorageError, Disposition: disposition}
 				}
 				continue
 			}
 		}
+		unfiltered := pkg
 		pkg, blockedVersions, filterErr := h.native.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
 		if filterErr != nil {
+			h.native.recordAuditForTarget(r, repo, npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}, packageName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
 			if firstError == nil {
-				firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable"}
+				firstError = &npmProxyPackageError{Status: http.StatusServiceUnavailable, Message: "package metadata unavailable", Outcome: repository.AuditStorageError, Disposition: disposition}
 			}
 			continue
 		}
 		for version := range blockedVersions {
+			if !seenVersions[version] {
+				blockedVersion, _ := findNPMVersion(unfiltered, version)
+				blockedSources[version] = npmGroupVersionSource{repository: repo, disposition: disposition, version: blockedVersion}
+			}
 			seenVersions[version] = true
+		}
+		for _, version := range pkg.Versions {
+			if !seenVersions[version.Version] {
+				sources[version.Version] = npmGroupVersionSource{repository: repo, disposition: disposition, version: version}
+			}
 		}
 		mergeNPMGroupPackage(&merged, pkg, seenVersions)
 	}
@@ -153,21 +249,7 @@ func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, res
 		}
 	}
 
-	if len(merged.Versions) == 0 {
-		if firstError != nil {
-			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditUpstreamError, firstError.Status)
-			h.native.writeError(w, firstError.Status, firstError.Message)
-		} else {
-			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
-			h.native.writeError(w, http.StatusNotFound, "package not found")
-		}
-		return
-	}
-	if stale {
-		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
-	}
-	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
-	h.native.writePackument(w, r, groupRepo, group.Name, merged, actor, "bypass")
+	return merged, firstError, stale, sources, blockedSources
 }
 
 func mergeNPMGroupPackage(merged *repository.NPMPackage, incoming repository.NPMPackage, seenVersions map[string]bool) {
@@ -193,18 +275,46 @@ func mergeNPMGroupPackage(merged *repository.NPMPackage, incoming repository.NPM
 
 func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, tarballName, actor string) {
 	higherPriority := make([]repository.HostedRepository, 0, len(members))
+	memberFailureAudited := false
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			continue
 		}
 		version, err := h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+		if errors.Is(err, repository.ErrNotFound) && repo.Type == repository.RepositoryTypeProxy {
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+			if _, resolveErr := h.native.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
+				var responseError *npmProxyPackageError
+				if errors.As(resolveErr, &responseError) {
+					h.native.recordNPMProxyPackageError(r, repo, target, packageName+"/-/"+tarballName, actor, responseError)
+					memberFailureAudited = true
+					if responseError.Status == http.StatusNotFound {
+						higherPriority = append(higherPriority, repo)
+						continue
+					}
+					h.native.writeError(w, responseError.Status, responseError.Message)
+					return
+				}
+				h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
+				h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+				return
+			}
+			version, err = h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+		}
 		if errors.Is(err, repository.ErrNotFound) {
+			if repo.Type == repository.RepositoryTypeProxy {
+				target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
+				h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditNotFound, http.StatusNotFound, 0, "miss")
+				memberFailureAudited = true
+			}
 			higherPriority = append(higherPriority, repo)
 			continue
 		}
 		if err != nil {
+			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
 			h.native.writeError(w, http.StatusServiceUnavailable, "package tarball unavailable")
+			h.native.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "bypass")
 			return
 		}
 		for _, higher := range higherPriority {
@@ -245,6 +355,8 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 		}
 		return
 	}
-	resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+	if !memberFailureAudited {
+		resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+	}
 	h.native.writeError(w, http.StatusNotFound, "package tarball not found")
 }

@@ -36,12 +36,13 @@ type Principal struct {
 type AuthenticationKind string
 
 const (
-	UserSessionLifetime                             = 12 * time.Hour
-	AuthenticationStaticAdmin    AuthenticationKind = "static_admin"
-	AuthenticationStaticResolver AuthenticationKind = "static_resolver"
-	AuthenticationLocalSession   AuthenticationKind = "local_session"
-	AuthenticationAPIKey         AuthenticationKind = "api_key"
-	AuthenticationOIDC           AuthenticationKind = "oidc"
+	UserSessionLifetime                                       = 12 * time.Hour
+	AuthenticationStaticAdmin              AuthenticationKind = "static_admin"
+	AuthenticationStaticResolver           AuthenticationKind = "static_resolver"
+	AuthenticationLocalSession             AuthenticationKind = "local_session"
+	AuthenticationAPIKey                   AuthenticationKind = "api_key"
+	AuthenticationServiceAccountCredential AuthenticationKind = "service_account_credential"
+	AuthenticationOIDC                     AuthenticationKind = "oidc"
 )
 
 // OIDCRoleMappingMatch records only configured realm-role mappings that were
@@ -74,6 +75,7 @@ type Authenticator struct {
 	OIDC              *OIDCValidator
 	OIDCSource        OIDCValidatorSource
 	APIKeys           repository.APIKeyStore
+	ServiceAccounts   repository.ServiceAccountStore
 	Users             repository.UserStore
 	UserIdentities    repository.UserIdentityStore
 	UserSessions      repository.UserSessionStore
@@ -103,12 +105,8 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		principal, active := a.principalForTokenActor(actor)
 		return principal, active
 	}
-	if a.APIKeys != nil {
-		key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
-		if err == nil {
-			role := RoleFromRoles(key.Roles)
-			return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationAPIKey}, true
-		}
+	if principal, ok := a.apiKeyPrincipal(token); ok {
+		return principal, true
 	}
 	if userID, sessionID, sessionVersion, ok := a.userSessionClaims(token); ok && a.Users != nil {
 		user, err := a.Users.GetUser(context.Background(), userID)
@@ -183,12 +181,44 @@ func (a Authenticator) principalForTokenActor(actor string) (Principal, bool) {
 // AuthenticateBasic validates the resolver credential used by Maven, Conan,
 // and native protocol clients, then returns the credential's actor principal.
 func (a Authenticator) AuthenticateBasic(username, password string) (Principal, bool) {
-	if username == "" || !a.ResolverPasswordMatches(password) {
+	if username == "" {
 		return Principal{}, false
 	}
-	principal := a.PrincipalForActor(username)
-	principal.AuthenticationKind = AuthenticationStaticResolver
+	if a.ResolverPasswordMatches(password) {
+		principal := a.PrincipalForActor(username)
+		principal.AuthenticationKind = AuthenticationStaticResolver
+		return principal, true
+	}
+	principal, ok := a.apiKeyPrincipal(password)
+	if !ok || principal.AuthenticationKind != AuthenticationServiceAccountCredential {
+		return Principal{}, false
+	}
 	return principal, true
+}
+
+func (a Authenticator) apiKeyPrincipal(token string) (Principal, bool) {
+	if a.APIKeys == nil || token == "" {
+		return Principal{}, false
+	}
+	key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
+	if err != nil {
+		return Principal{}, false
+	}
+	if key.ServiceAccountID != "" {
+		if a.ServiceAccounts == nil {
+			return Principal{}, false
+		}
+		account, accountErr := a.ServiceAccounts.GetServiceAccount(context.Background(), key.ServiceAccountID)
+		if accountErr != nil || account.State != repository.ServiceAccountActive {
+			return Principal{}, false
+		}
+		return Principal{
+			Actor:              "service-account:" + account.ID,
+			AuthenticationKind: AuthenticationServiceAccountCredential,
+		}, true
+	}
+	role := RoleFromRoles(key.Roles)
+	return Principal{Actor: "api-key:" + key.ID, Admin: role == RoleAdmin, Role: role, AuthenticationKind: AuthenticationAPIKey}, true
 }
 
 // ResolverPasswordMatches validates a resolver secret without exposing the
@@ -531,6 +561,17 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 	if !validAuthenticationKind(claims.Authentication) || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
 		return Principal{}, false
 	}
+	if claims.Authentication == AuthenticationServiceAccountCredential {
+		const prefix = "service-account:"
+		if a.ServiceAccounts == nil || !strings.HasPrefix(claims.Actor, prefix) {
+			return Principal{}, false
+		}
+		accountID := strings.TrimPrefix(claims.Actor, prefix)
+		account, err := a.ServiceAccounts.GetServiceAccount(context.Background(), accountID)
+		if err != nil || account.State != repository.ServiceAccountActive {
+			return Principal{}, false
+		}
+	}
 	return Principal{
 		Actor:              claims.Actor,
 		Admin:              claims.Admin,
@@ -544,7 +585,7 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 
 func validAuthenticationKind(kind AuthenticationKind) bool {
 	switch kind {
-	case "", AuthenticationStaticAdmin, AuthenticationStaticResolver, AuthenticationLocalSession, AuthenticationAPIKey, AuthenticationOIDC:
+	case "", AuthenticationStaticAdmin, AuthenticationStaticResolver, AuthenticationLocalSession, AuthenticationAPIKey, AuthenticationServiceAccountCredential, AuthenticationOIDC:
 		return true
 	default:
 		return false

@@ -247,7 +247,7 @@ func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 			writeOCIError(w, http.StatusForbidden, "DENIED", repository.ArtifactQuarantinedReason)
 			return true, http.StatusForbidden
 		}
-		if !ociAcceptsManifest(r.Header.Get("Accept"), manifest.MediaType) {
+		if !ociAcceptsManifest(r.Header.Values("Accept"), manifest.MediaType) {
 			writeOCIError(w, http.StatusNotAcceptable, "MANIFEST_UNKNOWN", "manifest media type is not acceptable")
 			return true, http.StatusNotAcceptable
 		}

@@ -267,36 +267,14 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	))
 	defer serverB.Close()
 
-	metadataURL := serverA.URL + "/npm/" + repo.Name + "/" + packageName
-	metadataRequest, _ := http.NewRequest(http.MethodGet, metadataURL, nil)
-	metadataRequest.Header.Set("Authorization", "Bearer resolver-secret")
-	metadata, err := serverA.Client().Do(metadataRequest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	metadataBody, err := io.ReadAll(metadata.Body)
-	_ = metadata.Body.Close()
-	if err != nil || metadata.StatusCode != http.StatusOK {
-		t.Fatalf("metadata=%d body=%s err=%v", metadata.StatusCode, metadataBody, err)
-	}
-	var packument struct {
-		Versions map[string]struct {
-			Dist struct {
-				Tarball string `json:"tarball"`
-			} `json:"dist"`
-		} `json:"versions"`
-	}
-	if err = json.Unmarshal(metadataBody, &packument); err != nil {
-		t.Fatalf("decode metadata: %v", err)
-	}
-	tarballURL, err := url.Parse(packument.Versions[version].Dist.Tarball)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// package-lock.json can send npm ci straight to the Group/Proxy tarball URL.
+	// Do not prime the packument: the first tarball request must coordinate and
+	// persist metadata before applying the ordinary quota and object-cache flow.
+	tarballPath := "/npm/" + repo.Name + "/" + packageName + "/-/" + packageName + "-" + version + ".tgz"
 	if _, err = storeA.ReplaceRepositoryCapacityQuota(ctx, repo.ID, int64(len(tarball)-1)); err != nil {
 		t.Fatal(err)
 	}
-	overQuotaRequest, _ := http.NewRequest(http.MethodGet, serverA.URL+tarballURL.RequestURI(), nil)
+	overQuotaRequest, _ := http.NewRequest(http.MethodGet, serverA.URL+tarballPath, nil)
 	overQuotaRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	overQuota, err := serverA.Client().Do(overQuotaRequest)
 	if err != nil {
@@ -310,7 +288,7 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	if _, err = storeA.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 0); err != nil {
 		t.Fatal(err)
 	}
-	downloadRequest, _ := http.NewRequest(http.MethodGet, serverA.URL+tarballURL.RequestURI(), nil)
+	downloadRequest, _ := http.NewRequest(http.MethodGet, serverA.URL+tarballPath, nil)
 	downloadRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	download, err := serverA.Client().Do(downloadRequest)
 	if err != nil {
@@ -323,7 +301,7 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	}
 	upstream.Close()
 
-	offlineRequest, _ := http.NewRequest(http.MethodGet, serverB.URL+tarballURL.RequestURI(), nil)
+	offlineRequest, _ := http.NewRequest(http.MethodGet, serverB.URL+tarballPath, nil)
 	offlineRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	offline, err := serverB.Client().Do(offlineRequest)
 	if err != nil {
@@ -334,4 +312,14 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	if err != nil || offline.StatusCode != http.StatusOK || !bytes.Equal(offlineBody, tarball) {
 		t.Fatalf("offline=%d bytes=%d err=%v", offline.StatusCode, len(offlineBody), err)
 	}
+	audits, err := storeB.ListAudits(ctx, repository.AuditQuery{Repository: repo.Name, Format: string(repository.FormatNPM)})
+	if err != nil || len(audits) < 2 {
+		t.Fatalf("cross-instance audits=%#v err=%v", audits, err)
+	}
+	for _, audit := range audits {
+		if audit.Resource == packageName+"@"+version && audit.Outcome == repository.AuditResolved && audit.Status == http.StatusOK && audit.CacheDisposition == "hit" {
+			return
+		}
+	}
+	t.Fatalf("missing cross-instance warm-cache audit: %#v", audits)
 }

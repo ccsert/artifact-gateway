@@ -5,17 +5,20 @@ import (
 	"time"
 )
 
-// APIKey is a revocable administrative credential. SecretHash is never exposed
-// through management responses and is only used for bearer-token verification.
+// APIKey is a revocable bearer credential. Standalone keys retain their own
+// roles; service-account credentials inherit the stable account principal and
+// never use the credential ID as an authorization subject. SecretHash is never
+// exposed through management responses.
 type APIKey struct {
-	ID         string
-	Name       string
-	SecretHash string
-	Roles      []string
-	CreatedAt  time.Time
-	RevokedAt  *time.Time
-	ExpiresAt  *time.Time
-	LastUsedAt *time.Time
+	ID               string
+	ServiceAccountID string
+	Name             string
+	SecretHash       string
+	Roles            []string
+	CreatedAt        time.Time
+	RevokedAt        *time.Time
+	ExpiresAt        *time.Time
+	LastUsedAt       *time.Time
 }
 
 type APIKeyStore interface {

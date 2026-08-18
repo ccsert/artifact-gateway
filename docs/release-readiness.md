@@ -25,6 +25,7 @@ make cargo-contract
 make conan-e2e
 make readiness-e2e
 make resolver-rotation-e2e
+make service-account-rotation-e2e
 make oci-performance-e2e
 make cache-operations-e2e
 make openapi-check
@@ -99,6 +100,11 @@ storage credentials, or unredacted upstream URLs in that record.
       coordinates before the Maven orphan collector reclaims bytes.
 - [ ] `make resolver-rotation-e2e` rejects an OCI bearer token issued by the
       old resolver token after Gateway restart and permits a newly issued token.
+- [ ] `make service-account-rotation-e2e` creates an isolated CI Service
+      Account, binds one Repository Grant to its stable principal, proves old
+      and new credentials overlap during rotation, revokes only the old
+      credential, and finally proves disabling the Service Account rejects the
+      remaining credential without changing the grant.
 - [ ] `make oci-performance-e2e` completes cached OCI manifest reads with the
       default 50 requests at concurrency 10, zero errors, and p95 latency at or
       below one second. Override only with an approved release record using
@@ -173,7 +179,7 @@ storage credentials, or unredacted upstream URLs in that record.
 | --- | --- |
 | Hosted source | Native PostgreSQL metadata and RustFS S3-compatible object bytes |
 | External Proxy | Disabled unless the exact upstream host is in the protocol allowlist |
-| Authentication | Static resolver/admin tokens for local break-glass; HTTPS RS256 OIDC for production identity |
+| Authentication | Service Accounts with rotating credentials for CI/applications; HTTPS RS256 OIDC for human production identity; static resolver/admin tokens only for local break-glass |
 | Authorization | Deny unmatched repository readers when `GATEWAY_REPOSITORY_READERS` is configured |
 | OCI cache | Read-through, content-addressed S3 storage; cleanup every five minutes after TTL grace period |
 | Maven cache | Component files: 15 minutes; metadata and negative results: one minute |
@@ -187,7 +193,7 @@ storage credentials, or unredacted upstream URLs in that record.
 ```mermaid
 flowchart LR
   clients[Docker / ORAS / Maven / Gradle / npm / pip / Go] --> gateway[Artifact Gateway]
-  gateway --> auth[Static tokens or OIDC]
+  gateway --> auth[Service Accounts, OIDC, or break-glass tokens]
   gateway --> postgres[(PostgreSQL metadata, audit, and cache coordination)]
   gateway --> cache[(S3-compatible cache)]
   gateway --> proxy[Allowlisted external Proxy]
