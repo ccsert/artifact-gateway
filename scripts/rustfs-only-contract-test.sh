@@ -28,7 +28,15 @@ active_paths=(
   docs/release-readiness.md
 )
 
-if rg --line-number --ignore-case --glob '!**/*_test.go' 'minio|GATEWAY_S3_|TEST_S3_|github.com/minio' "${active_paths[@]}"; then
+if command -v rg >/dev/null 2>&1; then
+  legacy_matches=$(rg --line-number --ignore-case --glob '!**/*_test.go' 'minio|GATEWAY_S3_|TEST_S3_|github.com/minio' "${active_paths[@]}" || true)
+else
+  legacy_matches=$(grep --recursive --line-number --ignore-case --extended-regexp --exclude='*_test.go' \
+    'minio|GATEWAY_S3_|TEST_S3_|github.com/minio' "${active_paths[@]}" || true)
+fi
+
+if [[ -n "$legacy_matches" ]]; then
+  printf '%s\n' "$legacy_matches"
   printf '%s\n' 'active runtime, dependency, deployment, or roadmap files still contain legacy object-store compatibility' >&2
   exit 1
 fi
