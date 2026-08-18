@@ -278,10 +278,19 @@ Authentication page without restarting the Gateway. Runtime client secrets are
 encrypted with `GATEWAY_SETTINGS_ENCRYPTION_KEY` and are never returned by the
 management API.
 
+For CI robots and third-party applications, create a stable Service Account and
+bind Repository Grants to `service-account:<id>`. Its independently revocable
+credentials work as Bearer tokens and as passwords for native clients that use
+HTTP Basic; credential rotation does not change the authorization principal.
+See [`docs/service-account-operations.md`](docs/service-account-operations.md)
+for least-privilege setup, client examples, zero-downtime rotation, and incident
+response.
+
 An authenticated client can inspect the identity used by authorization with
 `GET /api/v2/identity`. The response reports a bounded credential source
-(`static_admin`, `static_resolver`, `local_session`, `api_key`, or `oidc`), the
-effective global role, and administrator status. For OIDC, it includes only
+(`static_admin`, `static_resolver`, `local_session`, `api_key`,
+`service_account_credential`, or `oidc`), the effective global role, and
+administrator status. For OIDC, it includes only
 configured role mappings that matched the validated token and whether the
 subject matched the configured administrator list; raw claims and token
 material are never returned.

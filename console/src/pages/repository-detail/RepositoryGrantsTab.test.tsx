@@ -5,6 +5,7 @@ import {
   listApiKeys,
   listAuthorizationRoles,
   listGrants,
+  listServiceAccounts,
   listUsers,
 } from "../../client";
 import type { Repository } from "../../client";
@@ -16,6 +17,7 @@ vi.mock("../../client", () => ({
   listApiKeys: vi.fn(),
   listAuthorizationRoles: vi.fn(),
   listGrants: vi.fn(),
+  listServiceAccounts: vi.fn(),
   listUsers: vi.fn(),
   replaceGrants: vi.fn(),
 }));
@@ -23,6 +25,7 @@ vi.mock("../../client", () => ({
 const mockListApiKeys = vi.mocked(listApiKeys);
 const mockListAuthorizationRoles = vi.mocked(listAuthorizationRoles);
 const mockListGrants = vi.mocked(listGrants);
+const mockListServiceAccounts = vi.mocked(listServiceAccounts);
 const mockListUsers = vi.mocked(listUsers);
 
 const repository: Repository = {
@@ -71,6 +74,21 @@ describe("RepositoryGrantsTab", () => {
         ],
       },
     } as never);
+    mockListServiceAccounts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "service-account-id",
+            name: "release-bot",
+            description: "release publisher",
+            state: "active",
+            createdAt: "2026-08-18T00:00:00Z",
+            updatedAt: "2026-08-18T00:00:00Z",
+            version: "1",
+          },
+        ],
+      },
+    } as never);
 
     const user = userEvent.setup();
     render(
@@ -87,6 +105,7 @@ describe("RepositoryGrantsTab", () => {
 
     expect(screen.getByText(/用户 · active-user/)).toBeInTheDocument();
     expect(screen.getByText(/API Key · Active key/)).toBeInTheDocument();
+    expect(screen.getByText(/服务账号 · release-bot/)).toBeInTheDocument();
     expect(screen.getByText(/OIDC \/ 自定义 actor/)).toBeInTheDocument();
     expect(screen.queryByText(/disabled-user/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Revoked key/)).not.toBeInTheDocument();

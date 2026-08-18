@@ -360,11 +360,12 @@ func (e AuditCleanupJobState) Valid() bool {
 
 // Defines values for AuthenticationKind.
 const (
-	AuthenticationKindApiKey         AuthenticationKind = "api_key"
-	AuthenticationKindLocalSession   AuthenticationKind = "local_session"
-	AuthenticationKindOidc           AuthenticationKind = "oidc"
-	AuthenticationKindStaticAdmin    AuthenticationKind = "static_admin"
-	AuthenticationKindStaticResolver AuthenticationKind = "static_resolver"
+	AuthenticationKindApiKey                   AuthenticationKind = "api_key"
+	AuthenticationKindLocalSession             AuthenticationKind = "local_session"
+	AuthenticationKindOidc                     AuthenticationKind = "oidc"
+	AuthenticationKindServiceAccountCredential AuthenticationKind = "service_account_credential"
+	AuthenticationKindStaticAdmin              AuthenticationKind = "static_admin"
+	AuthenticationKindStaticResolver           AuthenticationKind = "static_resolver"
 )
 
 // Valid indicates whether the value is a known member of the AuthenticationKind enum.
@@ -375,6 +376,8 @@ func (e AuthenticationKind) Valid() bool {
 	case AuthenticationKindLocalSession:
 		return true
 	case AuthenticationKindOidc:
+		return true
+	case AuthenticationKindServiceAccountCredential:
 		return true
 	case AuthenticationKindStaticAdmin:
 		return true
@@ -1708,6 +1711,42 @@ func (e SecurityPolicyMaxAllowedSeverity) Valid() bool {
 	}
 }
 
+// Defines values for ServiceAccountState.
+const (
+	ServiceAccountStateActive   ServiceAccountState = "active"
+	ServiceAccountStateDisabled ServiceAccountState = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the ServiceAccountState enum.
+func (e ServiceAccountState) Valid() bool {
+	switch e {
+	case ServiceAccountStateActive:
+		return true
+	case ServiceAccountStateDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateServiceAccountState.
+const (
+	UpdateServiceAccountStateActive   UpdateServiceAccountState = "active"
+	UpdateServiceAccountStateDisabled UpdateServiceAccountState = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the UpdateServiceAccountState enum.
+func (e UpdateServiceAccountState) Valid() bool {
+	switch e {
+	case UpdateServiceAccountStateActive:
+		return true
+	case UpdateServiceAccountStateDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
@@ -2605,6 +2644,19 @@ type CreateScheduledTask struct {
 // CreateScheduledTaskKind defines model for CreateScheduledTask.Kind.
 type CreateScheduledTaskKind string
 
+// CreateServiceAccount defines model for CreateServiceAccount.
+type CreateServiceAccount struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+}
+
+// CreateServiceAccountCredential defines model for CreateServiceAccountCredential.
+type CreateServiceAccountCredential struct {
+	// ExpiresAt Optional expiry. Defaults to 90 days and cannot exceed 365 days.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	Name      string     `json:"name"`
+}
+
 // CreateUser defines model for CreateUser.
 type CreateUser struct {
 	Description        *string              `json:"description,omitempty"`
@@ -2652,6 +2704,18 @@ type CreatedAPIKey struct {
 
 // CreatedAPIKeyRoles defines model for CreatedAPIKey.Roles.
 type CreatedAPIKeyRoles string
+
+// CreatedServiceAccountCredential defines model for CreatedServiceAccountCredential.
+type CreatedServiceAccountCredential struct {
+	CreatedAt        time.Time          `json:"createdAt"`
+	ExpiresAt        *time.Time         `json:"expiresAt,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+	LastUsedAt       *time.Time         `json:"lastUsedAt,omitempty"`
+	Name             string             `json:"name"`
+	RevokedAt        *time.Time         `json:"revokedAt,omitempty"`
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+	Token            string             `json:"token"`
+}
 
 // CurrentIdentity defines model for CurrentIdentity.
 type CurrentIdentity struct {
@@ -3690,6 +3754,43 @@ type SecurityPolicyEvaluationRequest struct {
 	SourceRepositoryId openapi_types.UUID `json:"sourceRepositoryId"`
 }
 
+// ServiceAccount defines model for ServiceAccount.
+type ServiceAccount struct {
+	CreatedAt   time.Time           `json:"createdAt"`
+	Description string              `json:"description"`
+	Id          openapi_types.UUID  `json:"id"`
+	Name        string              `json:"name"`
+	State       ServiceAccountState `json:"state"`
+	UpdatedAt   time.Time           `json:"updatedAt"`
+	Version     string              `json:"version"`
+}
+
+// ServiceAccountState defines model for ServiceAccount.State.
+type ServiceAccountState string
+
+// ServiceAccountCredential defines model for ServiceAccountCredential.
+type ServiceAccountCredential struct {
+	CreatedAt        time.Time          `json:"createdAt"`
+	ExpiresAt        *time.Time         `json:"expiresAt,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+	LastUsedAt       *time.Time         `json:"lastUsedAt,omitempty"`
+	Name             string             `json:"name"`
+	RevokedAt        *time.Time         `json:"revokedAt,omitempty"`
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+}
+
+// ServiceAccountCredentialList defines model for ServiceAccountCredentialList.
+type ServiceAccountCredentialList struct {
+	Items         []ServiceAccountCredential `json:"items"`
+	NextPageToken *string                    `json:"nextPageToken,omitempty"`
+}
+
+// ServiceAccountList defines model for ServiceAccountList.
+type ServiceAccountList struct {
+	Items         []ServiceAccount `json:"items"`
+	NextPageToken *string          `json:"nextPageToken,omitempty"`
+}
+
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
@@ -3707,6 +3808,15 @@ type UpdateRepository struct {
 
 // UpdateScheduledTask defines model for UpdateScheduledTask.
 type UpdateScheduledTask = CreateScheduledTask
+
+// UpdateServiceAccount defines model for UpdateServiceAccount.
+type UpdateServiceAccount struct {
+	Description *string                    `json:"description,omitempty"`
+	State       *UpdateServiceAccountState `json:"state,omitempty"`
+}
+
+// UpdateServiceAccountState defines model for UpdateServiceAccount.State.
+type UpdateServiceAccountState string
 
 // UpdateUser defines model for UpdateUser.
 type UpdateUser struct {
@@ -4316,6 +4426,23 @@ type ListScheduledTaskRunsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListServiceAccountsParams defines parameters for ListServiceAccounts.
+type ListServiceAccountsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// UpdateServiceAccountParams defines parameters for UpdateServiceAccount.
+type UpdateServiceAccountParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListServiceAccountCredentialsParams defines parameters for ListServiceAccountCredentials.
+type ListServiceAccountCredentialsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	Search *string               `form:"search,omitempty" json:"search,omitempty"`
@@ -4467,6 +4594,15 @@ type CreateScheduledTaskJSONRequestBody = CreateScheduledTask
 
 // UpdateScheduledTaskJSONRequestBody defines body for UpdateScheduledTask for application/json ContentType.
 type UpdateScheduledTaskJSONRequestBody = UpdateScheduledTask
+
+// CreateServiceAccountJSONRequestBody defines body for CreateServiceAccount for application/json ContentType.
+type CreateServiceAccountJSONRequestBody = CreateServiceAccount
+
+// UpdateServiceAccountJSONRequestBody defines body for UpdateServiceAccount for application/json ContentType.
+type UpdateServiceAccountJSONRequestBody = UpdateServiceAccount
+
+// CreateServiceAccountCredentialJSONRequestBody defines body for CreateServiceAccountCredential for application/json ContentType.
+type CreateServiceAccountCredentialJSONRequestBody = CreateServiceAccountCredential
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUser
@@ -4872,6 +5008,24 @@ type ServerInterface interface {
 
 	// (GET /scheduled-tasks/{taskId}/runs)
 	ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request, taskId ScheduledTaskId, params ListScheduledTaskRunsParams)
+
+	// (GET /service-accounts)
+	ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams)
+
+	// (POST /service-accounts)
+	CreateServiceAccount(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /service-accounts/{serviceAccountId})
+	UpdateServiceAccount(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, params UpdateServiceAccountParams)
+
+	// (GET /service-accounts/{serviceAccountId}/credentials)
+	ListServiceAccountCredentials(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, params ListServiceAccountCredentialsParams)
+
+	// (POST /service-accounts/{serviceAccountId}/credentials)
+	CreateServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID)
+
+	// (DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId})
+	RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, credentialId openapi_types.UUID)
 
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -9648,6 +9802,236 @@ func (siw *ServerInterfaceWrapper) ListScheduledTaskRuns(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListServiceAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServiceAccountsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceAccounts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "serviceAccountId" -------------
+	var serviceAccountId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "serviceAccountId", r.PathValue("serviceAccountId"), &serviceAccountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceAccountId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateServiceAccountParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateServiceAccount(w, r, serviceAccountId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceAccountCredentials operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceAccountCredentials(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "serviceAccountId" -------------
+	var serviceAccountId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "serviceAccountId", r.PathValue("serviceAccountId"), &serviceAccountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceAccountId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServiceAccountCredentialsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceAccountCredentials(w, r, serviceAccountId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceAccountCredential operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceAccountCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "serviceAccountId" -------------
+	var serviceAccountId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "serviceAccountId", r.PathValue("serviceAccountId"), &serviceAccountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceAccountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceAccountCredential(w, r, serviceAccountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeServiceAccountCredential operation middleware
+func (siw *ServerInterfaceWrapper) RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "serviceAccountId" -------------
+	var serviceAccountId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "serviceAccountId", r.PathValue("serviceAccountId"), &serviceAccountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceAccountId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "credentialId" -------------
+	var credentialId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "credentialId", r.PathValue("credentialId"), &credentialId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "credentialId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeServiceAccountCredential(w, r, serviceAccountId, credentialId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -10580,6 +10964,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/scheduled-tasks/{taskId}", wrapper.UpdateScheduledTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/scheduled-tasks/{taskId}/run", wrapper.RunScheduledTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks/{taskId}/runs", wrapper.ListScheduledTaskRuns)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/service-accounts", wrapper.ListServiceAccounts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/service-accounts", wrapper.CreateServiceAccount)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/service-accounts/{serviceAccountId}", wrapper.UpdateServiceAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials", wrapper.ListServiceAccountCredentials)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials", wrapper.CreateServiceAccountCredential)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials/{credentialId}", wrapper.RevokeServiceAccountCredential)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CreateUser)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
@@ -10660,6 +11050,8 @@ type ConanRecipeRevisionListJSONResponse ConanRecipeRevisionList
 type ConanReferenceListJSONResponse ConanReferencePage
 
 type CreatedAPIKeyJSONResponse CreatedAPIKey
+
+type CreatedServiceAccountCredentialJSONResponse CreatedServiceAccountCredential
 
 type CurrentIdentityJSONResponse CurrentIdentity
 
@@ -10762,6 +11154,14 @@ type SecurityPolicyJSONResponse struct {
 }
 
 type SecurityPolicyEvaluationJSONResponse SecurityPolicyEvaluation
+
+type ServiceAccountJSONResponse ServiceAccount
+
+type ServiceAccountCredentialJSONResponse ServiceAccountCredential
+
+type ServiceAccountCredentialListJSONResponse ServiceAccountCredentialList
+
+type ServiceAccountListJSONResponse ServiceAccountList
 
 type UserJSONResponse User
 
@@ -17064,6 +17464,385 @@ func (response ListScheduledTaskRuns404ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListServiceAccountsRequestObject struct {
+	Params ListServiceAccountsParams
+}
+
+type ListServiceAccountsResponseObject interface {
+	VisitListServiceAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListServiceAccounts200JSONResponse struct{ ServiceAccountListJSONResponse }
+
+func (response ListServiceAccounts200JSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceAccounts401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListServiceAccounts401ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountRequestObject struct {
+	Body *CreateServiceAccountJSONRequestBody
+}
+
+type CreateServiceAccountResponseObject interface {
+	VisitCreateServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type CreateServiceAccount201JSONResponse struct{ ServiceAccountJSONResponse }
+
+func (response CreateServiceAccount201JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccount400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceAccount400ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateServiceAccount401ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccount409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateServiceAccount409ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServiceAccountRequestObject struct {
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+	Params           UpdateServiceAccountParams
+	Body             *UpdateServiceAccountJSONRequestBody
+}
+
+type UpdateServiceAccountResponseObject interface {
+	VisitUpdateServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type UpdateServiceAccount200JSONResponse struct{ ServiceAccountJSONResponse }
+
+func (response UpdateServiceAccount200JSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServiceAccount400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateServiceAccount400ApplicationProblemPlusJSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServiceAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateServiceAccount401ApplicationProblemPlusJSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServiceAccount404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateServiceAccount404ApplicationProblemPlusJSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServiceAccount412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateServiceAccount412ApplicationProblemPlusJSONResponse) VisitUpdateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceAccountCredentialsRequestObject struct {
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+	Params           ListServiceAccountCredentialsParams
+}
+
+type ListServiceAccountCredentialsResponseObject interface {
+	VisitListServiceAccountCredentialsResponse(w http.ResponseWriter) error
+}
+
+type ListServiceAccountCredentials200JSONResponse struct {
+	ServiceAccountCredentialListJSONResponse
+}
+
+func (response ListServiceAccountCredentials200JSONResponse) VisitListServiceAccountCredentialsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceAccountCredentials401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListServiceAccountCredentials401ApplicationProblemPlusJSONResponse) VisitListServiceAccountCredentialsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceAccountCredentials404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListServiceAccountCredentials404ApplicationProblemPlusJSONResponse) VisitListServiceAccountCredentialsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountCredentialRequestObject struct {
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+	Body             *CreateServiceAccountCredentialJSONRequestBody
+}
+
+type CreateServiceAccountCredentialResponseObject interface {
+	VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error
+}
+
+type CreateServiceAccountCredential201JSONResponse struct {
+	CreatedServiceAccountCredentialJSONResponse
+}
+
+func (response CreateServiceAccountCredential201JSONResponse) VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountCredential400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceAccountCredential400ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountCredential401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateServiceAccountCredential401ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountCredential404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateServiceAccountCredential404ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccountCredential409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateServiceAccountCredential409ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceAccountCredentialRequestObject struct {
+	ServiceAccountId openapi_types.UUID `json:"serviceAccountId"`
+	CredentialId     openapi_types.UUID `json:"credentialId"`
+}
+
+type RevokeServiceAccountCredentialResponseObject interface {
+	VisitRevokeServiceAccountCredentialResponse(w http.ResponseWriter) error
+}
+
+type RevokeServiceAccountCredential200JSONResponse struct {
+	ServiceAccountCredentialJSONResponse
+}
+
+func (response RevokeServiceAccountCredential200JSONResponse) VisitRevokeServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceAccountCredential401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceAccountCredential401ApplicationProblemPlusJSONResponse) VisitRevokeServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceAccountCredential404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeServiceAccountCredential404ApplicationProblemPlusJSONResponse) VisitRevokeServiceAccountCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -18749,6 +19528,24 @@ type StrictServerInterface interface {
 
 	// (GET /scheduled-tasks/{taskId}/runs)
 	ListScheduledTaskRuns(ctx context.Context, request ListScheduledTaskRunsRequestObject) (ListScheduledTaskRunsResponseObject, error)
+
+	// (GET /service-accounts)
+	ListServiceAccounts(ctx context.Context, request ListServiceAccountsRequestObject) (ListServiceAccountsResponseObject, error)
+
+	// (POST /service-accounts)
+	CreateServiceAccount(ctx context.Context, request CreateServiceAccountRequestObject) (CreateServiceAccountResponseObject, error)
+
+	// (PUT /service-accounts/{serviceAccountId})
+	UpdateServiceAccount(ctx context.Context, request UpdateServiceAccountRequestObject) (UpdateServiceAccountResponseObject, error)
+
+	// (GET /service-accounts/{serviceAccountId}/credentials)
+	ListServiceAccountCredentials(ctx context.Context, request ListServiceAccountCredentialsRequestObject) (ListServiceAccountCredentialsResponseObject, error)
+
+	// (POST /service-accounts/{serviceAccountId}/credentials)
+	CreateServiceAccountCredential(ctx context.Context, request CreateServiceAccountCredentialRequestObject) (CreateServiceAccountCredentialResponseObject, error)
+
+	// (DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId})
+	RevokeServiceAccountCredential(ctx context.Context, request RevokeServiceAccountCredentialRequestObject) (RevokeServiceAccountCredentialResponseObject, error)
 
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -22122,6 +22919,184 @@ func (sh *strictHandler) ListScheduledTaskRuns(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListScheduledTaskRunsResponseObject); ok {
 		if err := validResponse.VisitListScheduledTaskRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListServiceAccounts operation middleware
+func (sh *strictHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams) {
+	var request ListServiceAccountsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServiceAccounts(ctx, request.(ListServiceAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServiceAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServiceAccountsResponseObject); ok {
+		if err := validResponse.VisitListServiceAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateServiceAccount operation middleware
+func (sh *strictHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+	var request CreateServiceAccountRequestObject
+
+	var body CreateServiceAccountJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateServiceAccount(ctx, request.(CreateServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateServiceAccountResponseObject); ok {
+		if err := validResponse.VisitCreateServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateServiceAccount operation middleware
+func (sh *strictHandler) UpdateServiceAccount(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, params UpdateServiceAccountParams) {
+	var request UpdateServiceAccountRequestObject
+
+	request.ServiceAccountId = serviceAccountId
+	request.Params = params
+
+	var body UpdateServiceAccountJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateServiceAccount(ctx, request.(UpdateServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateServiceAccountResponseObject); ok {
+		if err := validResponse.VisitUpdateServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListServiceAccountCredentials operation middleware
+func (sh *strictHandler) ListServiceAccountCredentials(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, params ListServiceAccountCredentialsParams) {
+	var request ListServiceAccountCredentialsRequestObject
+
+	request.ServiceAccountId = serviceAccountId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServiceAccountCredentials(ctx, request.(ListServiceAccountCredentialsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServiceAccountCredentials")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServiceAccountCredentialsResponseObject); ok {
+		if err := validResponse.VisitListServiceAccountCredentialsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateServiceAccountCredential operation middleware
+func (sh *strictHandler) CreateServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID) {
+	var request CreateServiceAccountCredentialRequestObject
+
+	request.ServiceAccountId = serviceAccountId
+
+	var body CreateServiceAccountCredentialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateServiceAccountCredential(ctx, request.(CreateServiceAccountCredentialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateServiceAccountCredential")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateServiceAccountCredentialResponseObject); ok {
+		if err := validResponse.VisitCreateServiceAccountCredentialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeServiceAccountCredential operation middleware
+func (sh *strictHandler) RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, credentialId openapi_types.UUID) {
+	var request RevokeServiceAccountCredentialRequestObject
+
+	request.ServiceAccountId = serviceAccountId
+	request.CredentialId = credentialId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeServiceAccountCredential(ctx, request.(RevokeServiceAccountCredentialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeServiceAccountCredential")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeServiceAccountCredentialResponseObject); ok {
+		if err := validResponse.VisitRevokeServiceAccountCredentialResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -13,9 +13,55 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
+
+func TestNativeRawAcceptsServiceAccountCredentialThroughBasicAuthentication(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "service-account-raw", Format: repository.FormatRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	account, err := store.CreateServiceAccount(context.Background(), repository.ServiceAccount{
+		ID: uuid.NewString(), Name: "raw-release-bot",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{
+		Principal: "service-account:" + account.ID, Scopes: []string{"repositories:write"},
+	}}, repo.Version); err != nil {
+		t.Fatal(err)
+	}
+	token := "agc_native-raw-basic"
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{
+		ID: uuid.NewString(), ServiceAccountID: account.ID, Name: "jenkins",
+		SecretHash: authorization.HashAPIKey(token), ExpiresAt: &expiresAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
+		store,
+		TestAdapter{},
+		Authenticator{APIKeys: store},
+	)
+
+	request := httptest.NewRequest(http.MethodPut, "/raw/service-account-raw/releases/app.txt", strings.NewReader("artifact"))
+	request.SetBasicAuth("jenkins", token)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("Basic Service Account PUT status=%d body=%s", response.Code, response.Body.String())
+	}
+}
 
 func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	store := repository.NewMemoryStore()

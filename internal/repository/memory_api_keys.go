@@ -19,6 +19,9 @@ func (s *MemoryStore) ListAPIKeys(_ context.Context) ([]APIKey, error) {
 	defer s.mu.RUnlock()
 	keys := make([]APIKey, 0, len(s.apiKeys))
 	for _, key := range s.apiKeys {
+		if key.ServiceAccountID != "" {
+			continue
+		}
 		key.Roles = append([]string(nil), key.Roles...)
 		keys = append(keys, key)
 	}
@@ -37,6 +40,12 @@ func (s *MemoryStore) FindActiveAPIKeyByHash(_ context.Context, hash string) (AP
 	now := time.Now().UTC()
 	for id, key := range s.apiKeys {
 		if key.SecretHash == hash && key.RevokedAt == nil && (key.ExpiresAt == nil || now.Before(*key.ExpiresAt)) {
+			if key.ServiceAccountID != "" {
+				account, ok := s.serviceAccounts[key.ServiceAccountID]
+				if !ok || account.State != ServiceAccountActive {
+					return APIKey{}, ErrNotFound
+				}
+			}
 			key.LastUsedAt = &now
 			s.apiKeys[id] = key
 			return key, nil
@@ -49,7 +58,7 @@ func (s *MemoryStore) RevokeAPIKey(_ context.Context, id string) (APIKey, error)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key, ok := s.apiKeys[id]
-	if !ok {
+	if !ok || key.ServiceAccountID != "" {
 		return APIKey{}, ErrNotFound
 	}
 	if key.RevokedAt == nil {

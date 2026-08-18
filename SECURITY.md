@@ -37,6 +37,10 @@ because the project has not started a public support program.
 - Replace every placeholder secret in `.env.example` and Compose examples.
 - Keep `GATEWAY_ADMIN_TOKEN`, resolver tokens, API keys, database credentials,
   object-store credentials, and `GATEWAY_EGRESS_PROXY_KEY` in a secret manager.
+- Use Service Accounts for CI and third-party applications. Bind Repository
+  Grants to the stable account principal, rotate its one-time credentials with
+  an overlap window, and disable the account to reject every credential during
+  incident response. See `docs/service-account-operations.md`.
 - Run database migrations as a separate deployment job and do not grant normal
   Gateway nodes schema-owner credentials.
 - Restrict Proxy upstream hosts and outbound network access. Per-repository
@@ -48,8 +52,8 @@ because the project has not started a public support program.
 - Expose operational and management routes only to intended networks and
   identities. Worker-only and scheduler-only nodes intentionally expose only
   liveness, readiness, and metrics endpoints.
-- Review audit records after permission, anonymous-access, retention, deletion,
-  promotion, and replication changes.
+- Review audit records after Service Account or credential changes, permission,
+  anonymous-access, retention, deletion, promotion, and replication changes.
 
 Run the repository's dependency audit before a release candidate:
 

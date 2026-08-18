@@ -25,6 +25,7 @@ var (
 	ErrIdentityExists                = errors.New("user identity already exists")
 	ErrIdentityAmbiguous             = errors.New("user identity matches multiple accounts")
 	ErrInvalidUserSession            = errors.New("user session is invalid")
+	ErrServiceAccountDisabled        = errors.New("service account is disabled")
 	ErrWebhookSubscriptionNameExists = errors.New("webhook subscription name already exists")
 	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
 	ErrAPTPackageConflict            = errors.New("APT package identity already has different immutable bytes")

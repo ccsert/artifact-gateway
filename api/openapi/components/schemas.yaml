@@ -493,6 +493,81 @@ CreatedAPIKey:
     properties:
       token:
         type: string
+ServiceAccount:
+  type: object
+  required: [id, name, description, state, createdAt, updatedAt, version]
+  additionalProperties: false
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    description: {type: string}
+    state: {type: string, enum: [active, disabled]}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+    version: {type: string}
+ServiceAccountList:
+  type: object
+  required: [items]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ServiceAccount"}
+    nextPageToken:
+      type: string
+CreateServiceAccount:
+  type: object
+  required: [name]
+  additionalProperties: false
+  properties:
+    name: {type: string, minLength: 1, maxLength: 128}
+    description: {type: string, maxLength: 1024, default: ""}
+UpdateServiceAccount:
+  type: object
+  minProperties: 1
+  additionalProperties: false
+  properties:
+    description: {type: string, maxLength: 1024}
+    state: {type: string, enum: [active, disabled]}
+ServiceAccountCredential:
+  type: object
+  required: [id, serviceAccountId, name, createdAt]
+  additionalProperties: false
+  properties:
+    id: {type: string, format: uuid}
+    serviceAccountId: {type: string, format: uuid}
+    name: {type: string}
+    createdAt: {type: string, format: date-time}
+    expiresAt: {type: string, format: date-time}
+    lastUsedAt: {type: string, format: date-time}
+    revokedAt: {type: string, format: date-time}
+ServiceAccountCredentialList:
+  type: object
+  required: [items]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: {"$ref": "#/ServiceAccountCredential"}
+    nextPageToken:
+      type: string
+CreateServiceAccountCredential:
+  type: object
+  required: [name]
+  additionalProperties: false
+  properties:
+    name: {type: string, minLength: 1, maxLength: 128}
+    expiresAt:
+      type: string
+      format: date-time
+      description: Optional expiry. Defaults to 90 days and cannot exceed 365 days.
+CreatedServiceAccountCredential:
+  allOf:
+  - "$ref": "#/ServiceAccountCredential"
+  - type: object
+    required: [token]
+    properties:
+      token: {type: string}
 User:
   type: object
   required:
@@ -1118,7 +1193,7 @@ EffectiveAccessPermissions:
     intelligence: {"$ref": "#/EffectiveAccessDecision"}
 AuthenticationKind:
   type: string
-  enum: [static_admin, static_resolver, local_session, api_key, oidc]
+  enum: [static_admin, static_resolver, local_session, api_key, service_account_credential, oidc]
 OIDCRoleMappingMatch:
   type: object
   required: [externalRole, gatewayRole]

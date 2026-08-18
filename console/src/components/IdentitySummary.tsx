@@ -9,6 +9,7 @@ export function authenticationKindLabel(kind: CurrentIdentity["kind"]): string {
     static_resolver: "静态解析凭据",
     local_session: "本地用户会话",
     api_key: "API Key",
+    service_account_credential: "服务账号凭据",
     oidc: "OIDC",
   };
   return labels[kind];
@@ -22,6 +23,10 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
     static_resolver: text("静态解析凭据", "Static resolver credential"),
     local_session: text("本地用户会话", "Local user session"),
     api_key: "API Key",
+    service_account_credential: text(
+      "服务账号凭据",
+      "Service account credential",
+    ),
     oidc: "OIDC",
   };
   const roleLabels = {

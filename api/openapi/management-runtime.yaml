@@ -39,6 +39,14 @@ paths:
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":
     "$ref": "./management/api-keys.yaml#/api_keys_apiKeyId"
+  "/service-accounts":
+    "$ref": "./management/service-accounts.yaml#/service_accounts"
+  "/service-accounts/{serviceAccountId}":
+    "$ref": "./management/service-accounts.yaml#/service_accounts_serviceAccountId"
+  "/service-accounts/{serviceAccountId}/credentials":
+    "$ref": "./management/service-accounts.yaml#/service_accounts_serviceAccountId_credentials"
+  "/service-accounts/{serviceAccountId}/credentials/{credentialId}":
+    "$ref": "./management/service-accounts.yaml#/service_accounts_serviceAccountId_credentials_credentialId"
   "/users":
     "$ref": "./management/users.yaml#/users"
   "/users/{userId}":
@@ -289,6 +297,22 @@ components:
       "$ref": "./components/schemas.yaml#/CreateAPIKey"
     CreatedAPIKey:
       "$ref": "./components/schemas.yaml#/CreatedAPIKey"
+    ServiceAccount:
+      "$ref": "./components/schemas.yaml#/ServiceAccount"
+    ServiceAccountList:
+      "$ref": "./components/schemas.yaml#/ServiceAccountList"
+    CreateServiceAccount:
+      "$ref": "./components/schemas.yaml#/CreateServiceAccount"
+    UpdateServiceAccount:
+      "$ref": "./components/schemas.yaml#/UpdateServiceAccount"
+    ServiceAccountCredential:
+      "$ref": "./components/schemas.yaml#/ServiceAccountCredential"
+    ServiceAccountCredentialList:
+      "$ref": "./components/schemas.yaml#/ServiceAccountCredentialList"
+    CreateServiceAccountCredential:
+      "$ref": "./components/schemas.yaml#/CreateServiceAccountCredential"
+    CreatedServiceAccountCredential:
+      "$ref": "./components/schemas.yaml#/CreatedServiceAccountCredential"
     User:
       "$ref": "./components/schemas.yaml#/User"
     UserList:
@@ -499,6 +523,16 @@ components:
       "$ref": "./components/responses.yaml#/UserList"
     CurrentIdentity:
       "$ref": "./components/responses.yaml#/CurrentIdentity"
+    ServiceAccount:
+      "$ref": "./components/responses.yaml#/ServiceAccount"
+    ServiceAccountList:
+      "$ref": "./components/responses.yaml#/ServiceAccountList"
+    ServiceAccountCredential:
+      "$ref": "./components/responses.yaml#/ServiceAccountCredential"
+    ServiceAccountCredentialList:
+      "$ref": "./components/responses.yaml#/ServiceAccountCredentialList"
+    CreatedServiceAccountCredential:
+      "$ref": "./components/responses.yaml#/CreatedServiceAccountCredential"
     AuditList:
       "$ref": "./components/responses.yaml#/AuditList"
     AuditRetentionPolicy:

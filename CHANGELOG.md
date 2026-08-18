@@ -8,6 +8,16 @@ a dated version heading without rewriting their meaning.
 
 ## Unreleased
 
+- Added stable Service Accounts for Jenkins, CI robots, scanners, and
+  third-party applications, with one-time expiring credentials, overlapping
+  zero-downtime rotation, immediate account disable, Bearer and native-client
+  Basic authentication, Repository Grant integration, generated management
+  APIs, audit evidence, a bilingual Console workflow, and an isolated release
+  gate. Redesigned the public artifact catalog with a clear read-only boundary,
+  source and format summaries, repository search, format filters, and
+  Hosted/Proxy/Group guidance. The administrator surface now also explains its
+  global, Repository, and Group/member gates and blast radius without changing
+  the default-deny read-only policy.
 - Added each OCI manifest's immutable creation timestamp to repository browse
   responses so consumers can select the newest publication without inferring
   order from tags or digest text.
@@ -229,4 +239,5 @@ a dated version heading without rewriting their meaning.
 
 ### Security
 
-- Updated the Go toolchain and dependency pins used by release-readiness checks.
+- Updated the Go toolchain and release images to 1.26.6 so release-readiness
+  checks run on the patched standard library baseline.

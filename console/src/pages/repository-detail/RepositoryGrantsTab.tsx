@@ -6,6 +6,7 @@ import {
   listAuthorizationRoles,
   listApiKeys,
   listGrants,
+  listServiceAccounts,
   listUsers,
   replaceGrants,
 } from "../../client";
@@ -14,6 +15,7 @@ import type {
   AuthorizationRole,
   Grant,
   Repository,
+  ServiceAccount,
   User,
 } from "../../client";
 import { Badge } from "../../components/Badge";
@@ -48,11 +50,12 @@ interface PrincipalOption {
   detail: string;
 }
 
-type PrincipalKind = "user" | "api-key" | "custom";
+type PrincipalKind = "user" | "api-key" | "service-account" | "custom";
 
 function principalKind(principal: string): PrincipalKind {
   if (principal.startsWith("user:")) return "user";
   if (principal.startsWith("api-key:")) return "api-key";
+  if (principal.startsWith("service-account:")) return "service-account";
   return "custom";
 }
 
@@ -112,6 +115,7 @@ function grantedCapabilitiesLabel(
 function principalOptions(
   users: User[],
   apiKeys: ApiKey[],
+  serviceAccounts: ServiceAccount[],
   text: Localize,
 ): PrincipalOption[] {
   return [
@@ -126,6 +130,16 @@ function principalOptions(
         value: `api-key:${key.id}`,
         label: `API Key · ${key.name}`,
         detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}`,
+      })),
+    ...serviceAccounts
+      .filter((account) => account.state === "active")
+      .map((account) => ({
+        value: `service-account:${account.id}`,
+        label: `${text("服务账号", "Service account")} · ${account.name}`,
+        detail: text(
+          "无全局角色，由仓库授权决定",
+          "No global role; repository grants decide access",
+        ),
       })),
   ];
 }
@@ -171,18 +185,25 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [usersResult, apiKeysResult, rolesResult] = await Promise.all([
-        listUsers(),
-        listApiKeys(),
-        listAuthorizationRoles(),
-      ]);
+      const [usersResult, apiKeysResult, serviceAccountsResult, rolesResult] =
+        await Promise.all([
+          listUsers(),
+          listApiKeys(),
+          listServiceAccounts({ query: { pageSize: 200 } }),
+          listAuthorizationRoles(),
+        ]);
       if (cancelled) return;
-      if (usersResult.error || apiKeysResult.error || rolesResult.error) {
+      if (
+        usersResult.error ||
+        apiKeysResult.error ||
+        serviceAccountsResult.error ||
+        rolesResult.error
+      ) {
         setPrincipalChoicesError(
           new Error(
             text(
-              "无法加载用户、API Key 或自定义角色，可继续使用自定义身份和内置权限。",
-              "Could not load users, API keys, or custom roles. You can still use a custom identity and built-in permissions.",
+              "无法加载用户、API Key、服务账号或自定义角色，可继续使用自定义身份和内置权限。",
+              "Could not load users, API keys, service accounts, or custom roles. You can still use a custom identity and built-in permissions.",
             ),
           ),
         );
@@ -191,6 +212,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         principalOptions(
           usersResult.data?.items ?? [],
           apiKeysResult.data?.items ?? [],
+          serviceAccountsResult.data?.items ?? [],
           text,
         ),
       );
@@ -326,8 +348,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         <EmptyState
           title={text("暂无授权规则", "No access grants")}
           hint={text(
-            "在编辑授权中选择用户、API Key，或填写 OIDC subject / 自定义 actor。",
-            "Choose a user or API key in Edit grants, or enter an OIDC subject/custom actor.",
+            "在编辑授权中选择用户、API Key、服务账号，或填写 OIDC subject / 自定义 actor。",
+            "Choose a user, API key, or service account in Edit grants, or enter an OIDC subject/custom actor.",
           )}
         />
       ) : (
@@ -361,8 +383,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             type="info"
             showIcon
             title={text(
-              "仓库规则只会追加权限，不能撤销用户或 API Key 已有的全局角色。",
-              "Repository rules add permissions; they cannot revoke an existing global user or API key role.",
+              "仓库规则只会追加权限，不能撤销用户或 API Key 已有的全局角色；服务账号没有全局角色。",
+              "Repository rules add permissions; they cannot revoke an existing global user or API key role. Service accounts have no global role.",
             )}
           />
           {principalChoicesError !== null && (
@@ -370,8 +392,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               type="warning"
               showIcon
               title={text(
-                "用户和 API Key 列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。",
-                "Users and API keys are temporarily unavailable. You can still choose OIDC/custom actor and enter its identifier.",
+                "用户、API Key 或服务账号列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。",
+                "Users, API keys, or service accounts are temporarily unavailable. You can still choose OIDC/custom actor and enter its identifier.",
               )}
             />
           )}
@@ -410,8 +432,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                             : g.principal || undefined
                         }
                         placeholder={text(
-                          "选择用户、API Key 或外部身份",
-                          "Select a user, API key, or external identity",
+                          "选择用户、API Key、服务账号或外部身份",
+                          "Select a user, API key, service account, or external identity",
                         )}
                         options={[
                           {
@@ -430,6 +452,17 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                             options: principalChoices
                               .filter((choice) =>
                                 choice.value.startsWith("api-key:"),
+                              )
+                              .map((choice) => ({
+                                value: choice.value,
+                                label: `${choice.label} · ${choice.detail}`,
+                              })),
+                          },
+                          {
+                            label: text("服务账号", "Service accounts"),
+                            options: principalChoices
+                              .filter((choice) =>
+                                choice.value.startsWith("service-account:"),
                               )
                               .map((choice) => ({
                                 value: choice.value,

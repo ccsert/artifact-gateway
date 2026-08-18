@@ -31,10 +31,13 @@ repository. `repositories:admin` includes write, read, and intelligence writes;
 `repositories:write` includes read; `repositories:read` permits only read; and
 `repositories:intelligence` is an independent metadata-writing capability that
 does not imply any repository read, publish, delete, or administration access.
-API keys may intentionally have no global role and authenticate only through
-explicit repository grants, which is the recommended shape for CI and scanner
-credentials. Grants are exact principal matches. A grant never grants access to
-another repository.
+Service Accounts intentionally have no global role and authenticate only
+through explicit Repository Grants, which is the recommended shape for CI,
+scanner, and third-party application credentials. Their credentials rotate
+without changing the stable `service-account:<id>` principal. Standalone API
+Keys retain their own global roles and are not interchangeable with Service
+Account credentials. Grants are exact principal matches. A grant never grants
+access to another repository.
 
 Until a repository has a managed grant set, legacy patterns remain in force:
 
