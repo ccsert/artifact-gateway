@@ -31,6 +31,23 @@ function contrast(foreground: string, background: string) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
+function captureRuntimeErrors(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
+}
+
+function expectOnlyInjectedRouteErrors(consoleErrors: string[]) {
+  expect(consoleErrors).toHaveLength(2);
+  for (const message of consoleErrors) {
+    expect(message).toContain("Injected route failure");
+  }
+}
+
 async function openInjectedRuntimeError(page: Page, theme: "dark" | "light") {
   await page.addInitScript((colorMode) => {
     localStorage.setItem("ag.console.theme", colorMode);
@@ -94,6 +111,7 @@ for (const scenario of [
   test(`route error page stays readable on ${scenario.name}`, async ({
     page,
   }, testInfo) => {
+    const runtimeErrors = captureRuntimeErrors(page);
     await page.setViewportSize({
       width: scenario.width,
       height: scenario.height,
@@ -117,6 +135,31 @@ for (const scenario of [
         title: titleStyle.color,
       };
     });
+    const geometry = await card.evaluate((element) => {
+      const box = (selector: string) =>
+        element.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      const card = element.getBoundingClientRect();
+      const symbol = box(".ag-route-error-symbol");
+      const title = box(".ag-route-error-title");
+      const description = box(".ag-route-error-description");
+      const detail = box(".ag-route-error-detail");
+      const actions = box(".ag-route-error-actions");
+      const primary = box(".ag-route-error-primary");
+      const secondary = box(".ag-route-error-secondary");
+      return {
+        cardInsideViewport:
+          card.left >= 0 &&
+          card.right <= window.innerWidth &&
+          card.top >= 0 &&
+          card.bottom <= document.documentElement.scrollHeight,
+        symbolTitleGap: title.top - symbol.bottom,
+        titleDescriptionGap: description.top - title.bottom,
+        descriptionDetailGap: detail.top - description.bottom,
+        detailActionsGap: actions.top - detail.bottom,
+        actionsOverlap:
+          primary.right > secondary.left && primary.bottom > secondary.top,
+      };
+    });
 
     await expect(card).toBeVisible();
     await expect(title).toBeVisible();
@@ -132,6 +175,16 @@ for (const scenario of [
     expect(
       contrast(styles.description, styles.background),
     ).toBeGreaterThanOrEqual(4.5);
+    expect(geometry.cardInsideViewport).toBe(true);
+    expect(geometry.symbolTitleGap).toBeGreaterThanOrEqual(18);
+    expect(geometry.symbolTitleGap).toBeLessThanOrEqual(22);
+    expect(geometry.titleDescriptionGap).toBeGreaterThanOrEqual(10);
+    expect(geometry.titleDescriptionGap).toBeLessThanOrEqual(14);
+    expect(geometry.descriptionDetailGap).toBeGreaterThanOrEqual(18);
+    expect(geometry.descriptionDetailGap).toBeLessThanOrEqual(22);
+    expect(geometry.detailActionsGap).toBeGreaterThanOrEqual(26);
+    expect(geometry.detailActionsGap).toBeLessThanOrEqual(30);
+    expect(geometry.actionsOverlap).toBe(false);
     expect(
       await page
         .locator("html")
@@ -139,6 +192,8 @@ for (const scenario of [
           Math.max(0, element.scrollWidth - element.clientWidth),
         ),
     ).toBe(0);
+    expectOnlyInjectedRouteErrors(runtimeErrors.consoleErrors);
+    expect(runtimeErrors.pageErrors).toEqual([]);
 
     if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
       await page.screenshot({
@@ -148,3 +203,28 @@ for (const scenario of [
     }
   });
 }
+
+test("route error recovery targets meet coarse-pointer sizing", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openInjectedRuntimeError(page, "dark");
+
+  for (const target of [
+    page.locator(".ag-route-error-detail summary"),
+    page.getByRole("button", { name: "重新加载" }),
+    page.getByRole("link", { name: "浏览公开制品" }),
+  ]) {
+    const box = await target.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  expectOnlyInjectedRouteErrors(runtimeErrors.consoleErrors);
+  expect(runtimeErrors.pageErrors).toEqual([]);
+  await context.close();
+});

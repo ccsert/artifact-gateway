@@ -2163,11 +2163,11 @@ export function PublicBrowsePage() {
   return (
     <main className="ag-login-shell min-h-screen px-4 py-6 text-zinc-200 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <SiteBrandMark className="flex size-10 items-center justify-center rounded-xl text-sm font-bold text-white" />
-            <div>
-              <div className="font-semibold tracking-tight text-zinc-100">
+        <div className="ag-public-browse-header mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <SiteBrandMark className="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" />
+            <div className="min-w-0">
+              <div className="break-words font-semibold tracking-tight text-zinc-100">
                 <SiteName />
               </div>
               <div className="mt-0.5 text-xs text-zinc-500">
@@ -2175,7 +2175,7 @@ export function PublicBrowsePage() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <PreferenceControls compact />
             <Link
               to="/login"

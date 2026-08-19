@@ -138,8 +138,29 @@ test("site identity and theme transition stay coordinated across desktop and mob
       const cardBox = card.getBoundingClientRect();
       const formBox = form.getBoundingClientRect();
       const previewBox = preview.getBoundingClientRect();
+      const formChildren = Array.from(form.children, (child) =>
+        child.getBoundingClientRect(),
+      );
+      const themeSection = form.querySelector<HTMLElement>(
+        ".ag-site-theme-settings",
+      )!;
+      const themeHeading = themeSection.querySelector<HTMLElement>(
+        ".ag-site-settings-section-heading",
+      )!;
+      const themeGrid = themeSection.querySelector<HTMLElement>(
+        ".ag-theme-option-grid",
+      )!;
       return {
         primaryGap: cardBox.top - headerBox.bottom,
+        formGaps: formChildren
+          .slice(1)
+          .map((box, index) => box.top - formChildren[index].bottom),
+        themeTopInset:
+          themeHeading.getBoundingClientRect().top -
+          themeSection.getBoundingClientRect().top,
+        themeContentGap:
+          themeGrid.getBoundingClientRect().top -
+          themeHeading.getBoundingClientRect().bottom,
         columnsOverlap: formBox.right > previewBox.left + 1,
         workspaceWidth: workspace.getBoundingClientRect().width,
         columnWidth: formBox.width + previewBox.width,
@@ -150,6 +171,14 @@ test("site identity and theme transition stay coordinated across desktop and mob
     });
   expect(desktopGeometry.primaryGap).toBeGreaterThanOrEqual(24);
   expect(desktopGeometry.primaryGap).toBeLessThanOrEqual(26);
+  for (const gap of desktopGeometry.formGaps) {
+    expect(gap).toBeGreaterThanOrEqual(23);
+    expect(gap).toBeLessThanOrEqual(25);
+  }
+  expect(desktopGeometry.themeTopInset).toBeGreaterThanOrEqual(24);
+  expect(desktopGeometry.themeTopInset).toBeLessThanOrEqual(26);
+  expect(desktopGeometry.themeContentGap).toBeGreaterThanOrEqual(15);
+  expect(desktopGeometry.themeContentGap).toBeLessThanOrEqual(17);
   expect(desktopGeometry.columnsOverlap).toBe(false);
   expect(
     Math.abs(desktopGeometry.workspaceWidth - desktopGeometry.columnWidth),
@@ -226,6 +255,116 @@ test("site identity and theme transition stay coordinated across desktop and mob
     });
   }
 
+  expect(consoleErrors).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test("maximum branding values stay bounded from desktop through narrow zoom", async ({
+  page,
+}) => {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  const siteName =
+    "Artifact Gateway Regional Distribution Control Plane Node".padEnd(80, "X");
+  const themeName = "Enterprise Regional Operations Theme".padEnd(80, "Y");
+  const availableThemes = defaultConsoleThemes.map((theme, index) =>
+    index === 0 ? { ...theme, name: themeName } : theme,
+  );
+  await mockSiteSettings(page, {
+    version: "11",
+    siteName,
+    logoUrl: "",
+    brandMark: "ABCDEFGH",
+    enabledThemeIds: availableThemes.map((theme) => theme.id),
+    defaultThemeId: availableThemes[0].id,
+    availableThemes,
+    updatedAt: "2026-08-19T08:00:00Z",
+  });
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+  await page.route("**/api/v2/public/repositories", (route) =>
+    route.fulfill({ json: { enabled: true, items: [] } }),
+  );
+
+  await page.setViewportSize({ width: 920, height: 900 });
+  await page.goto("/login");
+  const loginGeometry = await page
+    .locator(".ag-login-brand-panel")
+    .evaluate((panel) => {
+      const title = panel.querySelector("h1")!.getBoundingClientRect();
+      const note = panel
+        .querySelector<HTMLElement>(".ag-login-security-note")!
+        .getBoundingClientRect();
+      const mark = panel.querySelector<HTMLElement>(".ag-brand-mark")!;
+      const markText = mark.querySelector<HTMLElement>(".ag-brand-mark-text")!;
+      const range = document.createRange();
+      range.selectNodeContents(markText);
+      return {
+        titleBeforeNote: title.bottom <= note.top,
+        markTextWidth: range.getBoundingClientRect().width,
+        markAvailableWidth: mark.clientWidth - 6,
+        horizontalOverflow:
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      };
+    });
+  expect(loginGeometry.titleBeforeNote).toBe(true);
+  expect(loginGeometry.markTextWidth).toBeLessThanOrEqual(
+    loginGeometry.markAvailableWidth + 1,
+  );
+  expect(loginGeometry.horizontalOverflow).toBeLessThanOrEqual(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/browse");
+  const publicHeader = page.locator(".ag-public-browse-header");
+  const publicGeometry = await publicHeader.evaluate((header) => {
+    const children = Array.from(header.children, (child) =>
+      child.getBoundingClientRect(),
+    );
+    return {
+      childrenOverlap:
+        children.length >= 2 &&
+        children[0].right > children[1].left &&
+        children[0].bottom > children[1].top,
+      horizontalOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    };
+  });
+  expect(publicGeometry.childrenOverlap).toBe(false);
+  expect(publicGeometry.horizontalOverflow).toBeLessThanOrEqual(0);
+
+  await authenticateAsAdmin(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/site-settings");
+  await expect(page.getByText(themeName, { exact: true })).toBeVisible();
+  const themeGeometry = await page
+    .locator(".ag-theme-option")
+    .first()
+    .evaluate((option) => {
+      const optionBox = option.getBoundingClientRect();
+      const nameBox = option
+        .querySelector<HTMLElement>(".ag-theme-option-name")!
+        .getBoundingClientRect();
+      return {
+        nameInside:
+          nameBox.left >= optionBox.left && nameBox.right <= optionBox.right,
+        horizontalOverflow:
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      };
+    });
+  expect(themeGeometry.nameInside).toBe(true);
+  expect(themeGeometry.horizontalOverflow).toBeLessThanOrEqual(0);
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

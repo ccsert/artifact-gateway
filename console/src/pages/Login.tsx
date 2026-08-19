@@ -232,7 +232,7 @@ export function LoginPage() {
             <div className="font-mono text-xs uppercase tracking-wider text-cyan-300">
               {t("auth.loginTitle")}
             </div>
-            <h1 className="mt-4 text-4xl font-semibold text-white">
+            <h1 className="mt-4 break-words text-3xl font-semibold leading-tight text-white xl:text-4xl">
               <SiteName />
             </h1>
             <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-400">

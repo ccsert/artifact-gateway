@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Collapse, DatePicker, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -150,6 +150,8 @@ export function AuditsPage() {
   const [page, setPage] = useState(1);
   const [pageTokens, setPageTokens] = useState<string[]>([""]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     void listRepositories({ query: { pageSize: 200 } }).then(({ data }) =>
@@ -162,35 +164,43 @@ export function AuditsPage() {
 
   const load = useCallback(
     async (token = "", pageNumber = 1) => {
+      const requestID = ++requestSequence.current;
       setError(null);
-      setRecords(null);
-      setExpanded(null);
-      setPage(pageNumber);
-      setPageTokens((current) =>
-        pageNumber === 1
-          ? [token]
-          : [...current.slice(0, pageNumber - 1), token],
-      );
-      const { data, error: err } = await listAuditPage({
-        query: {
-          repository: repository || undefined,
-          group: group || undefined,
-          outcome: outcome || undefined,
-          format: format || undefined,
-          operation: operation || undefined,
-          actor: actor || undefined,
-          from: dateRange[0]?.toISOString(),
-          to: dateRange[1]?.toISOString(),
-          pageSize: limit,
-          pageToken: token || undefined,
-        },
-      });
-      if (err) {
-        setError(err);
-        return;
+      setRefreshing(true);
+      try {
+        const { data, error: err } = await listAuditPage({
+          query: {
+            repository: repository || undefined,
+            group: group || undefined,
+            outcome: outcome || undefined,
+            format: format || undefined,
+            operation: operation || undefined,
+            actor: actor || undefined,
+            from: dateRange[0]?.toISOString(),
+            to: dateRange[1]?.toISOString(),
+            pageSize: limit,
+            pageToken: token || undefined,
+          },
+        });
+        if (requestID !== requestSequence.current) return;
+        if (err) {
+          setError(err);
+          return;
+        }
+        setExpanded(null);
+        setPage(pageNumber);
+        setPageTokens((current) =>
+          pageNumber === 1
+            ? [token]
+            : [...current.slice(0, pageNumber - 1), token],
+        );
+        setRecords(data?.items ?? []);
+        setNextPageToken(data?.nextPageToken ?? null);
+      } catch (error) {
+        if (requestID === requestSequence.current) setError(error);
+      } finally {
+        if (requestID === requestSequence.current) setRefreshing(false);
       }
-      setRecords(data?.items ?? []);
-      setNextPageToken(data?.nextPageToken ?? null);
     },
     [repository, group, outcome, format, operation, actor, limit, dateRange],
   );
@@ -423,7 +433,11 @@ export function AuditsPage() {
               >
                 {text("清除", "Clear")}
               </Button>
-              <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={refreshing}
+                onClick={() => void load()}
+              >
                 {text("刷新", "Refresh")}
               </Button>
               <Button
@@ -494,7 +508,7 @@ export function AuditsPage() {
           </FilterField>
           <FilterField label={text("时间范围", "Date range")}>
             <DatePicker.RangePicker
-              className="w-full min-w-[310px]"
+              className="w-full min-w-0 sm:min-w-[310px]"
               allowEmpty={[true, true]}
               format="YYYY-MM-DD HH:mm"
               showTime={{ format: "HH:mm" }}
@@ -579,24 +593,27 @@ export function AuditsPage() {
           ]}
         />
       </Card>
-      {error !== null ? (
-        isNotFound(error) ? (
-          <Card className="mt-4">
-            <EmptyState
-              title={text("审计功能未启用", "Audit log is unavailable")}
-              hint={text(
-                "当前后端构建尚未挂载审计端点（返回 404）",
-                "The current backend does not expose the audit endpoint (404)",
-              )}
-            />
-          </Card>
+      {error !== null && records !== null && (
+        <ErrorBanner error={error} onRetry={() => void load()} />
+      )}
+      {records === null ? (
+        error !== null ? (
+          isNotFound(error) ? (
+            <Card className="mt-4">
+              <EmptyState
+                title={text("审计功能未启用", "Audit log is unavailable")}
+                hint={text(
+                  "当前后端构建尚未挂载审计端点（返回 404）",
+                  "The current backend does not expose the audit endpoint (404)",
+                )}
+              />
+            </Card>
+          ) : (
+            <ErrorBanner error={error} onRetry={() => void load()} />
+          )
         ) : (
-          <div className="mt-4">
-            <ErrorBanner error={error} onRetry={load} />
-          </div>
+          <Loading />
         )
-      ) : !records ? (
-        <Loading />
       ) : filtered.length === 0 ? (
         <Card className="mt-4">
           <EmptyState

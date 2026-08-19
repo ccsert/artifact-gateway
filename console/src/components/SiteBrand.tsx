@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { SiteSettings } from "../client";
 import { useSiteSettings } from "../lib/siteSettings";
 
@@ -24,11 +24,16 @@ export function SiteBrandMark({
 }) {
   const { settings: current } = useSiteSettings();
   const settings = preview ?? current;
+  const markLength = Math.max(1, Array.from(settings.brandMark).length);
+  const markStyle = {
+    "--ag-brand-mark-font-size": `${0.78 * Math.min(1, 2 / markLength)}em`,
+  } as CSSProperties;
 
   return (
     <span
       className={`ag-brand-mark ${className}`}
       data-has-logo={settings.logoUrl ? "true" : "false"}
+      style={markStyle}
       aria-hidden="true"
     >
       {settings.logoUrl && (

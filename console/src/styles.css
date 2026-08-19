@@ -620,8 +620,9 @@ html[data-theme="light"] .ag-login-brand-panel::after {
 }
 
 .ag-login-brand-copy {
+  min-width: 0;
   margin-block: auto;
-  padding-block: 64px;
+  padding-block: clamp(32px, 7vh, 64px);
 }
 
 .ag-login-security-note {
@@ -1379,8 +1380,9 @@ html[data-theme="light"] .ag-public-access-layer {
   max-width: 100%;
   padding-inline: 3px;
   overflow: hidden;
-  font-size: 0.78em;
+  font-size: var(--ag-brand-mark-font-size, 0.78em);
   line-height: 1;
+  letter-spacing: -0.04em;
   text-overflow: clip;
   white-space: nowrap;
 }
@@ -1479,7 +1481,7 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-site-settings-form {
   display: grid;
-  gap: 22px;
+  gap: 24px;
 }
 
 .ag-site-settings-section-heading h2 {
@@ -1525,7 +1527,7 @@ html[data-theme="light"] .ag-public-access-layer {
   display: grid;
   min-width: 0;
   gap: 16px;
-  padding-top: 22px;
+  padding-top: 24px;
   border-top: 1px solid var(--ag-border-subtle);
 }
 
@@ -1566,7 +1568,20 @@ html[data-theme="light"] .ag-public-access-layer {
   gap: 8px;
 }
 
+.ag-theme-option-header .ant-checkbox-wrapper {
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: flex-start;
+}
+
+.ag-theme-option-header .ant-checkbox-label {
+  min-width: 0;
+}
+
 .ag-theme-option-name {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--ag-text-strong);
   font-weight: 600;
 }
@@ -2254,5 +2269,16 @@ html[data-theme="light"] .ag-public-access-layer {
   .ag-sider-toggle.ant-btn {
     width: 44px;
     min-width: 44px;
+  }
+
+  .ag-route-error-detail summary,
+  .ag-route-error-primary,
+  .ag-route-error-secondary {
+    min-height: 44px;
+  }
+
+  .ag-route-error-detail summary {
+    display: flex;
+    align-items: center;
   }
 }

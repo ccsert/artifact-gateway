@@ -37,6 +37,54 @@ async function measureArtwork(artwork: Locator) {
   });
 }
 
+async function measureEmptyStateFlow(emptyState: Locator) {
+  return emptyState.evaluate((root) => {
+    const rootBox = root.getBoundingClientRect();
+    const artwork = root
+      .querySelector<HTMLElement>("[data-empty-artwork]")!
+      .getBoundingClientRect();
+    const description = root
+      .querySelector<HTMLElement>(".ant-empty-description")!
+      .getBoundingClientRect();
+    const footer = root
+      .querySelector<HTMLElement>(".ant-empty-footer")!
+      .getBoundingClientRect();
+    return {
+      artworkDescriptionGap: description.top - artwork.bottom,
+      descriptionActionGap: footer.top - description.bottom,
+      artworkDescriptionOverlap: artwork.bottom > description.top,
+      descriptionActionOverlap: description.bottom > footer.top,
+      contentInside:
+        artwork.left >= rootBox.left &&
+        artwork.right <= rootBox.right &&
+        footer.left >= rootBox.left &&
+        footer.right <= rootBox.right,
+    };
+  });
+}
+
+function captureRuntimeErrors(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
+}
+
+function expectBoundedEmptyStateFlow(
+  flow: Awaited<ReturnType<typeof measureEmptyStateFlow>>,
+) {
+  expect(flow.artworkDescriptionGap).toBeGreaterThanOrEqual(12);
+  expect(flow.artworkDescriptionGap).toBeLessThanOrEqual(22);
+  expect(flow.descriptionActionGap).toBeGreaterThanOrEqual(12);
+  expect(flow.descriptionActionGap).toBeLessThanOrEqual(26);
+  expect(flow.artworkDescriptionOverlap).toBe(false);
+  expect(flow.descriptionActionOverlap).toBe(false);
+  expect(flow.contentInside).toBe(true);
+}
+
 async function useDarkChinesePreferences(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("ag.console.theme", "dark");
@@ -66,6 +114,7 @@ async function mockFormatProfiles(page: Page) {
 test("public catalog empty state uses responsive theme artwork", async ({
   page,
 }) => {
+  const runtimeErrors = captureRuntimeErrors(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await useDarkChinesePreferences(page);
   await page.route("**/api/v2/public/repositories", (route) =>
@@ -78,7 +127,8 @@ test("public catalog empty state uses responsive theme artwork", async ({
     page.getByRole("link", { name: "管理登录" }).last(),
   ).toBeVisible();
 
-  const artwork = page.locator('[data-empty-artwork="public-catalog"]');
+  const emptyState = page.locator(".ag-empty-state-with-artwork").first();
+  const artwork = emptyState.locator('[data-empty-artwork="public-catalog"]');
   await expect(artwork).toBeVisible();
   await expect(artwork).toHaveAttribute(
     "src",
@@ -93,6 +143,7 @@ test("public catalog empty state uses responsive theme artwork", async ({
   const desktop = await measureArtwork(artwork);
   expect(desktop.width).toBeLessThanOrEqual(210);
   expect(desktop.density).toBeGreaterThanOrEqual(2.8);
+  expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
 
   await page.getByRole("button", { name: /选择主题.*Gateway Dark/ }).click();
   await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
@@ -107,11 +158,15 @@ test("public catalog empty state uses responsive theme artwork", async ({
   expect(mobile.density).toBeGreaterThanOrEqual(3);
   expect(mobile.cornerAlpha).toBe(0);
   expect(mobile.overflowsViewport).toBe(false);
+  expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
+  expect(runtimeErrors.consoleErrors).toEqual([]);
+  expect(runtimeErrors.pageErrors).toEqual([]);
 });
 
 test("repository first-use artwork leads directly to creation", async ({
   page,
 }) => {
+  const runtimeErrors = captureRuntimeErrors(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await useDarkChinesePreferences(page);
   await authenticateAsAdmin(page);
@@ -141,6 +196,7 @@ test("repository first-use artwork leads directly to creation", async ({
   });
   expect(desktop.width).toBeLessThanOrEqual(210);
   expect(desktop.density).toBeGreaterThanOrEqual(2.8);
+  expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
 
   await emptyState.getByRole("button", { name: "新建仓库" }).click();
   await expect(page.getByRole("dialog", { name: "新建仓库" })).toBeVisible();
@@ -160,11 +216,15 @@ test("repository first-use artwork leads directly to creation", async ({
   expect(mobile.density).toBeGreaterThanOrEqual(3);
   expect(mobile.cornerAlpha).toBe(0);
   expect(mobile.overflowsViewport).toBe(false);
+  expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
+  expect(runtimeErrors.consoleErrors).toEqual([]);
+  expect(runtimeErrors.pageErrors).toEqual([]);
 });
 
 test("repository filter-only empty state keeps the standard feedback", async ({
   page,
 }) => {
+  const runtimeErrors = captureRuntimeErrors(page);
   await useDarkChinesePreferences(page);
   await authenticateAsAdmin(page);
   await mockFormatProfiles(page);
@@ -193,4 +253,6 @@ test("repository filter-only empty state keeps the standard feedback", async ({
     page.getByText("暂无符合条件的仓库", { exact: true }),
   ).toBeVisible();
   await expect(page.locator("[data-empty-artwork]")).toHaveCount(0);
+  expect(runtimeErrors.consoleErrors).toEqual([]);
+  expect(runtimeErrors.pageErrors).toEqual([]);
 });
