@@ -5,6 +5,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -14,11 +16,80 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type blockingGoDeleteObjectStore struct {
+	OCIObjectStore
+	once    sync.Once
+	entered chan string
+	release chan struct{}
+}
+
+type blockingGoVisibleReferenceStore struct {
+	*repository.PostgresStore
+	once    sync.Once
+	entered chan string
+	release chan struct{}
+}
+
+func (s *blockingGoVisibleReferenceStore) GoModuleObjectHasVisibleReference(ctx context.Context, key string) (bool, error) {
+	var waitErr error
+	s.once.Do(func() {
+		s.entered <- key
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		}
+	})
+	if waitErr != nil {
+		return false, waitErr
+	}
+	return s.PostgresStore.GoModuleObjectHasVisibleReference(ctx, key)
+}
+
+type failOnceGoCollectedPostgresStore struct {
+	*repository.PostgresStore
+	fail bool
+}
+
+func (s *failOnceGoCollectedPostgresStore) MarkGoModuleObjectCollected(ctx context.Context, key string) error {
+	if s.fail {
+		s.fail = false
+		return errors.New("database unavailable after RustFS delete")
+	}
+	return s.PostgresStore.MarkGoModuleObjectCollected(ctx, key)
+}
+
+func goIntegrationAsset(repositoryID, modulePath, version, kind string, body []byte) repository.GoModuleAsset {
+	sum := sha256.Sum256(body)
+	digestHex := hex.EncodeToString(sum[:])
+	return repository.GoModuleAsset{
+		RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: kind,
+		Digest: "sha256:" + digestHex, ObjectKey: "native/go/sha256/" + digestHex, Size: int64(len(body)),
+	}
+}
+
+func (s *blockingGoDeleteObjectStore) Delete(ctx context.Context, key string) error {
+	var waitErr error
+	s.once.Do(func() {
+		s.entered <- key
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		}
+	})
+	if waitErr != nil {
+		return waitErr
+	}
+	return s.OCIObjectStore.Delete(ctx, key)
+}
 
 func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -307,9 +378,8 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 		t.Fatal(err)
 	}
 	maintenance := NativeGoMaintenance{Store: storeB, Objects: objectsB}
-	// The publication created three older intents. Processing one job per pass
-	// demonstrates that the cross-instance worker retains every referenced
-	// publication object before it reaches and deletes the orphan.
+	// The publication created three older intents. The worker retains every
+	// referenced publication object before it reaches and deletes the orphan.
 	for range 4 {
 		if err = maintenance.RunReclaimJobs(ctx, 10); err != nil {
 			t.Fatal(err)
@@ -422,6 +492,10 @@ func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *te
 	}
 	if status, body := put(serverA); status != http.StatusCreated {
 		t.Fatalf("publish=%d body=%s", status, body)
+	}
+	modules, err := storeB.ListGoModules(ctx, repo.ID, "example.com/", 10, "")
+	if err != nil || len(modules) != 1 || modules[0] != modulePath {
+		t.Fatalf("cross-instance Go module listing=%#v err=%v", modules, err)
 	}
 	publishedVersion, err := storeA.GetGoModuleVersion(ctx, repo.ID, modulePath, version)
 	if err != nil {
@@ -536,5 +610,350 @@ func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *te
 	}
 	if _, err = storeA.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@"+version); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("restored tombstone remained: %v", err)
+	}
+
+	if _, err = storeA.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, version); err != nil {
+		t.Fatal(err)
+	}
+	blockingObjects := &blockingGoDeleteObjectStore{OCIObjectStore: objectsB, entered: make(chan string, 1), release: make(chan struct{})}
+	maintenance := NativeGoMaintenance{Store: storeB, Objects: blockingObjects}
+	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(time.Hour), 10); err != nil {
+		t.Fatal(err)
+	}
+	restoreResult, reclaimResult := make(chan error, 1), make(chan error, 1)
+	go func() {
+		reclaimResult <- maintenance.RunReclaimJobs(ctx, 10)
+	}()
+	select {
+	case <-blockingObjects.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Go reclaim did not enter the blocking object delete")
+	}
+	go func() {
+		_, operationErr := storeA.RestoreGoModuleVersion(ctx, repo.ID, modulePath, version)
+		restoreResult <- operationErr
+	}()
+	select {
+	case restoreErr := <-restoreResult:
+		t.Fatalf("restore bypassed the reclaim object lock: %v", restoreErr)
+	case <-time.After(150 * time.Millisecond):
+	}
+	close(blockingObjects.release)
+	reclaimErr := <-reclaimResult
+	if reclaimErr != nil {
+		t.Fatalf("concurrent delayed reclaim: %v", reclaimErr)
+	}
+	restoreErr := <-restoreResult
+	if !errors.Is(restoreErr, repository.ErrDisabled) {
+		t.Fatalf("concurrent restore/reclaim error=%v", restoreErr)
+	}
+	collectedCapacity, err := storeA.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || collectedCapacity.UsedBytes != 0 || collectedCapacity.ObjectCount != 0 {
+		t.Fatalf("collected capacity=%#v err=%v", collectedCapacity, err)
+	}
+	if _, err = storeA.RestoreGoModuleVersion(ctx, repo.ID, modulePath, version); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("collected version restored: %v", err)
+	}
+	for _, asset := range publication.Assets {
+		if _, err = objectsA.Stat(ctx, asset.ObjectKey); !errors.Is(err, objectstore.ErrNotFound) {
+			t.Fatalf("collected %s object remains: %v", asset.Kind, err)
+		}
+	}
+}
+
+func TestPostgresGoReclaimWaitsForNewestSharedObjectTombstone(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("PostgreSQL integration environment is required")
+	}
+	ctx := context.Background()
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-shared-reclaim-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		modulePath   = "example.com/team/shared-reclaim-postgres"
+		sharedKey    = "native/go/shared-reclaim/go.mod"
+		sharedDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	)
+	publish := func(version, suffix string) {
+		t.Helper()
+		if _, _, publishErr := store.PublishGoModule(ctx, repository.GoModulePublication{
+			Version: repository.GoModuleVersion{RepositoryID: repo.ID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC()},
+			Assets: []repository.GoModuleAsset{
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "info", Digest: "sha256:" + strings.Repeat(suffix, 64), ObjectKey: "native/go/shared-reclaim/" + suffix + "/info", Size: 1},
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "mod", Digest: sharedDigest, ObjectKey: sharedKey, Size: 2},
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "zip", Digest: "sha256:" + strings.Repeat(string(suffix[0]+2), 64), ObjectKey: "native/go/shared-reclaim/" + suffix + "/zip", Size: 3},
+			},
+		}); publishErr != nil {
+			t.Fatal(publishErr)
+		}
+	}
+	publish("v1.0.0", "a")
+	publish("v1.1.0", "b")
+	if _, err = store.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	oldest, err := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@v1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	if _, err = store.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, "v1.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	newest, err := store.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@v1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches, err := store.GoModuleObjectMatchesTombstone(ctx, sharedKey, oldest.TombstonedAt)
+	if err != nil || matches {
+		t.Fatalf("stale PostgreSQL tombstone generation matched=%t err=%v", matches, err)
+	}
+	matches, err = store.GoModuleObjectMatchesTombstone(ctx, sharedKey, newest.TombstonedAt)
+	if err != nil || !matches {
+		t.Fatalf("newest PostgreSQL tombstone generation matched=%t err=%v", matches, err)
+	}
+	objects, err := store.ListReclaimableGoModuleObjects(ctx, newest.TombstonedAt, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.ObjectKey == sharedKey {
+			t.Fatal("shared PostgreSQL object became reclaimable inside the newest recovery window")
+		}
+	}
+	objects, err = store.ListReclaimableGoModuleObjects(ctx, newest.TombstonedAt.Add(time.Millisecond), 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.ObjectKey == sharedKey {
+			return
+		}
+	}
+	t.Fatal("shared PostgreSQL object did not become reclaimable after every recovery window elapsed")
+}
+
+func TestPostgresRustFSGoReclaimSerializesSharedTombstoneAndKeepsVisibleObject(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "go-shared-lock-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repoA, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-shared-lock-a-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoB, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-shared-lock-b-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const modulePath, version = "example.com/team/shared-lock", "v1.0.0"
+	body := []byte("one physical Go object shared by every representation")
+	assetFor := func(repositoryID, kind string) repository.GoModuleAsset {
+		return goIntegrationAsset(repositoryID, modulePath, version, kind, body)
+	}
+	sharedAsset := assetFor(repoA.ID, "zip")
+	if err = objects.PutVerifiedReader(ctx, sharedAsset.ObjectKey, bytes.NewReader(body), sharedAsset.Size, sharedAsset.Digest); err != nil {
+		t.Fatal(err)
+	}
+	for _, repo := range []repository.HostedRepository{repoA, repoB} {
+		assets := []repository.GoModuleAsset{assetFor(repo.ID, "info"), assetFor(repo.ID, "mod"), assetFor(repo.ID, "zip")}
+		if _, _, err = storeA.PublishGoModule(ctx, repository.GoModulePublication{
+			Version: repository.GoModuleVersion{RepositoryID: repo.ID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC()}, Assets: assets,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = storeA.TombstoneGoModuleVersion(ctx, repoA.ID, modulePath, version); err != nil {
+		t.Fatal(err)
+	}
+	tombstoneA, err := storeA.GetArtifactTombstone(ctx, repoA.ID, repository.FormatGo, modulePath+"@"+version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockingStore := &blockingGoVisibleReferenceStore{
+		PostgresStore: storeA, entered: make(chan string, 1), release: make(chan struct{}),
+	}
+	maintenance := NativeGoMaintenance{Store: blockingStore, Objects: objects}
+	if err = maintenance.EnqueueReclaimJobs(ctx, tombstoneA.TombstonedAt.Add(time.Millisecond), 10); err != nil {
+		t.Fatal(err)
+	}
+	reclaimResult := make(chan error, 1)
+	go func() { reclaimResult <- maintenance.RunReclaimJobs(ctx, 10) }()
+	select {
+	case key := <-blockingStore.entered:
+		if key != sharedAsset.ObjectKey {
+			t.Fatalf("blocked unexpected shared key %q", key)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Go reclaim did not reach visible-reference barrier")
+	}
+	tombstoneResult := make(chan error, 1)
+	go func() {
+		_, operationErr := storeB.TombstoneGoModuleVersion(ctx, repoB.ID, modulePath, version)
+		tombstoneResult <- operationErr
+	}()
+	select {
+	case tombstoneErr := <-tombstoneResult:
+		t.Fatalf("shared tombstone bypassed the reclaim object lock: %v", tombstoneErr)
+	case <-time.After(150 * time.Millisecond):
+	}
+	close(blockingStore.release)
+	if err = <-reclaimResult; err != nil {
+		t.Fatalf("shared reclaim: %v", err)
+	}
+	if err = <-tombstoneResult; err != nil {
+		t.Fatalf("serialized shared tombstone: %v", err)
+	}
+	if _, err = objects.Stat(ctx, sharedAsset.ObjectKey); err != nil {
+		t.Fatalf("visible shared RustFS object was deleted: %v", err)
+	}
+	capacityA, err := storeB.GetRepositoryCapacity(ctx, repoA.ID)
+	if err != nil || capacityA.UsedBytes != 0 || capacityA.ObjectCount != 0 {
+		t.Fatalf("collected shared-reference capacity=%#v err=%v", capacityA, err)
+	}
+	capacityB, err := storeB.GetRepositoryCapacity(ctx, repoB.ID)
+	wantB := int64(3 * len(body))
+	if err != nil || capacityB.UsedBytes != wantB || capacityB.ObjectCount != 3 {
+		t.Fatalf("newly tombstoned shared-reference capacity=%#v wantBytes=%d err=%v", capacityB, wantB, err)
+	}
+	if _, err = storeB.RestoreGoModuleVersion(ctx, repoA.ID, modulePath, version); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("collected shared reference restored: %v", err)
+	}
+	if _, err = storeB.RestoreGoModuleVersion(ctx, repoB.ID, modulePath, version); err != nil {
+		t.Fatalf("new shared tombstone lost its recovery window: %v", err)
+	}
+}
+
+func TestPostgresRustFSGoReclaimFailsRestoreClosedAfterCollectedMarkFailure(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "go-collecting-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objects.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-collecting-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const modulePath, version = "example.com/team/collecting-postgres", "v1.0.0"
+	bodies := map[string][]byte{"info": []byte("collecting-info"), "mod": []byte("collecting-mod"), "zip": []byte("collecting-zip")}
+	assets := make([]repository.GoModuleAsset, 0, 3)
+	for _, kind := range []string{"info", "mod", "zip"} {
+		asset := goIntegrationAsset(repo.ID, modulePath, version, kind, bodies[kind])
+		if err = objects.PutVerifiedReader(ctx, asset.ObjectKey, bytes.NewReader(bodies[kind]), asset.Size, asset.Digest); err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, asset)
+	}
+	if _, _, err = storeA.PublishGoModule(ctx, repository.GoModulePublication{
+		Version: repository.GoModuleVersion{RepositoryID: repo.ID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC()}, Assets: assets,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = storeA.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, version); err != nil {
+		t.Fatal(err)
+	}
+	tombstone, err := storeA.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@"+version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failingStore := &failOnceGoCollectedPostgresStore{PostgresStore: storeA, fail: true}
+	maintenance := NativeGoMaintenance{Store: failingStore, Objects: objects}
+	if err = maintenance.EnqueueReclaimJobs(ctx, tombstone.TombstonedAt.Add(time.Millisecond), 10); err != nil {
+		t.Fatal(err)
+	}
+	if err = maintenance.RunReclaimJobs(ctx, 10); err == nil {
+		t.Fatal("PostgreSQL collected mark failure was not surfaced")
+	}
+	for _, asset := range assets {
+		if _, statErr := objects.Stat(ctx, asset.ObjectKey); !errors.Is(statErr, objectstore.ErrNotFound) {
+			t.Fatalf("RustFS object %s remained after delete/mark failure: %v", asset.Kind, statErr)
+		}
+	}
+	if _, err = storeB.RestoreGoModuleVersion(ctx, repo.ID, modulePath, version); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("cross-instance restore bypassed PostgreSQL collecting fence: %v", err)
+	}
+	capacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || capacity.UsedBytes == 0 || capacity.ObjectCount == 0 {
+		t.Fatalf("collecting reference stopped charging capacity before final mark: %#v err=%v", capacity, err)
+	}
+	jobs, err := storeB.ListLifecycleJobs(ctx, repo.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range jobs {
+		if job.State == repository.LifecycleJobRetrying {
+			if _, err = storeB.RunLifecycleJobNow(ctx, repo.ID, job.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err = maintenance.RunReclaimJobs(ctx, 10); err != nil {
+		t.Fatalf("collecting retry: %v", err)
+	}
+	capacity, err = storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || capacity.UsedBytes != 0 || capacity.ObjectCount != 0 {
+		t.Fatalf("capacity after PostgreSQL collecting retry=%#v err=%v", capacity, err)
 	}
 }

@@ -17,6 +17,7 @@ goal. It intentionally excludes frontend work.
 - [x] Raw reclaim worker.
 - [x] Conan native recipe/package revision state model.
 - [x] Conan HTTP Hosted publication, resolution, deletion, and reclaim worker.
+- [x] Go Hosted retention, recoverable tombstones, delayed reclaim, and capacity release.
 
 ## Protocol Completion
 

@@ -20,6 +20,7 @@ type scheduledTaskExecutionStore interface {
 	repository.NativeConanStore
 	repository.NativeNPMStore
 	repository.NativePyPIStore
+	repository.NativeGoStore
 	repository.AuditRetentionStore
 }
 

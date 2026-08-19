@@ -1083,16 +1083,16 @@ RetentionPolicy:
     minimumVersions:
       type: integer
       minimum: 1
-      description: Minimum newest versions protected per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Raw paths do not use version-count rules.
+      description: Minimum newest versions protected per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Raw paths do not use version-count rules.
     maximumVersions:
       type: integer
       minimum: 0
       default: 0
-      description: Maximum versions retained per Maven module, OCI image, Conan reference, npm package, or normalized PyPI project. Zero disables the count cap; Raw paths do not use it.
+      description: Maximum versions retained per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Zero disables the count cap; Raw paths do not use it.
     coordinatePatterns:
       type: array
       maxItems: 20
-      description: Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, and PyPI project names or project versions.
+      description: Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, PyPI project names or project versions, and Go module paths or module versions.
       items: {type: string, minLength: 1, maxLength: 256}
     protectedPatterns:
       type: array

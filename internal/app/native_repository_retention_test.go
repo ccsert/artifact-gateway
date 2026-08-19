@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -135,6 +136,53 @@ func TestNativeRepositoryRetentionPlansOCIByImageAndRestoresTombstones(t *testin
 	}
 	if _, err = store.GetOCIManifest(ctx, repo.ID, "team/app", "v1"); err != nil {
 		t.Fatalf("restored OCI tag unavailable: %v", err)
+	}
+}
+
+func TestNativeRepositoryRetentionPlansGoModuleVersions(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "retention-go", Format: repository.FormatGo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retentionPolicyForTest(t, store, repo.ID, repository.RepositoryRetentionPolicy{KeepDays: 365, MinimumVersions: 1, MaximumVersions: 2})
+	now := time.Date(2026, 8, 19, 0, 0, 0, 0, time.UTC)
+	modulePath := "example.com/team/widget"
+	for index, version := range []string{"v1.0.0", "v1.1.0", "v1.2.0"} {
+		createdAt := now.Add(time.Duration(index-3) * 24 * time.Hour)
+		digest := "sha256:" + strings.Repeat(string(rune('a'+index)), 64)
+		if _, _, err = store.PublishGoModule(ctx, repository.GoModulePublication{
+			Version: repository.GoModuleVersion{RepositoryID: repo.ID, Module: modulePath, Version: version, PublishedAt: createdAt, CreatedAt: createdAt},
+			Assets: []repository.GoModuleAsset{
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "info", Digest: digest, ObjectKey: "native/go/" + version + "/info", Size: 1, CreatedAt: createdAt},
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "mod", Digest: digest, ObjectKey: "native/go/" + version + "/mod", Size: 2, CreatedAt: createdAt},
+				{RepositoryID: repo.ID, Module: modulePath, Version: version, Kind: "zip", Digest: digest, ObjectKey: "native/go/" + version + "/zip", Size: 3, CreatedAt: createdAt},
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	retention := NativeRepositoryRetention{Store: store, Now: func() time.Time { return now }}
+	candidates, err := retention.PlanRepositoryDetailed(ctx, repo.ID, repository.FormatGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].Coordinate != modulePath+"@v1.0.0" || candidates[0].Digest != "sha256:"+strings.Repeat("a", 64) {
+		t.Fatalf("Go candidates=%#v", candidates)
+	}
+	if !containsRetentionReason(candidates[0].Reasons, "maximum_versions") || candidates[0].VersionType != "version" {
+		t.Fatalf("Go candidate reasons=%#v", candidates[0])
+	}
+	if _, _, err = retention.EnqueueRepository(ctx, repo.ID, "go-retention"); err != nil {
+		t.Fatal(err)
+	}
+	if err = retention.RunJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.GetGoModuleVersion(ctx, repo.ID, modulePath, "v1.0.0"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("retained Go version remains visible: %v", err)
 	}
 }
 

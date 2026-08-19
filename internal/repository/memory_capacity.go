@@ -68,7 +68,7 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 		}
 	case FormatGo:
 		for _, asset := range s.goAssets {
-			if asset.RepositoryID == id {
+			if asset.RepositoryID == id && asset.CollectedAt.IsZero() {
 				capacity.UsedBytes += asset.Size
 				capacity.ObjectCount++
 			}

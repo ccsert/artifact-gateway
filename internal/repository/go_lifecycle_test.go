@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,4 +86,63 @@ func TestMemoryGoModuleVersionTombstoneAndRestoreControlVisibility(t *testing.T)
 	if err != nil || len(search) != 1 || search[0].Version != version || search[0].Digest != zipDigest {
 		t.Fatalf("restored search=%#v err=%v", search, err)
 	}
+}
+
+func TestMemoryGoReclaimWaitsForNewestTombstoneSharingObject(t *testing.T) {
+	const (
+		repositoryID = "go-shared-reclaim-window"
+		modulePath   = "example.com/team/shared"
+		sharedKey    = "native/go/shared/go.mod"
+		sharedDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	)
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: repositoryID, Name: repositoryID, Format: FormatGo, Type: RepositoryTypeHosted}); err != nil {
+		t.Fatal(err)
+	}
+	publish := func(version, suffix string) {
+		t.Helper()
+		if _, _, err := store.PublishGoModule(ctx, GoModulePublication{
+			Version: GoModuleVersion{RepositoryID: repositoryID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC()},
+			Assets: []GoModuleAsset{
+				{RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: "info", Digest: "sha256:" + strings.Repeat(suffix, 64), ObjectKey: "native/go/" + suffix + "/info", Size: 1},
+				{RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: "mod", Digest: sharedDigest, ObjectKey: sharedKey, Size: 2},
+				{RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: "zip", Digest: "sha256:" + strings.Repeat(string(suffix[0]+2), 64), ObjectKey: "native/go/" + suffix + "/zip", Size: 3},
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish("v1.0.0", "a")
+	publish("v1.1.0", "b")
+	if _, err := store.TombstoneGoModuleVersion(ctx, repositoryID, modulePath, "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	if _, err := store.TombstoneGoModuleVersion(ctx, repositoryID, modulePath, "v1.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	newest, err := store.GetArtifactTombstone(ctx, repositoryID, FormatGo, modulePath+"@v1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, err := store.ListReclaimableGoModuleObjects(ctx, newest.TombstonedAt, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.ObjectKey == sharedKey {
+			t.Fatal("shared object became reclaimable before the newest tombstone recovery window elapsed")
+		}
+	}
+	objects, err = store.ListReclaimableGoModuleObjects(ctx, newest.TombstonedAt.Add(time.Nanosecond), 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.ObjectKey == sharedKey {
+			return
+		}
+	}
+	t.Fatal("shared object did not become reclaimable after every tombstone recovery window elapsed")
 }

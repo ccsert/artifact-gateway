@@ -90,6 +90,8 @@ var supportedFormatProfiles = []FormatProfile{
 			RepositoryOperationBrowse,
 			RepositoryOperationDelete,
 			RepositoryOperationRestore,
+			RepositoryOperationRetain,
+			RepositoryOperationReclaim,
 		},
 		ProxyOperations: []RepositoryOperation{
 			RepositoryOperationRead,

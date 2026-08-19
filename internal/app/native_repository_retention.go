@@ -24,6 +24,7 @@ type repositoryRetentionStore interface {
 	repository.NativeConanStore
 	repository.NativeNPMStore
 	repository.NativePyPIStore
+	repository.NativeGoStore
 }
 
 type NativeRepositoryRetention struct {
@@ -53,6 +54,8 @@ type RepositoryRetentionCandidate struct {
 	npmVersion    string
 	pypiProject   string
 	pypiVersion   string
+	goModule      string
+	goVersion     string
 }
 
 type repositoryRetentionPayload struct {
@@ -223,6 +226,9 @@ func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID s
 	case repository.FormatPyPI:
 		_, err := m.Store.TombstonePyPIVersion(ctx, repositoryID, candidate.pypiProject, candidate.pypiVersion)
 		return err
+	case repository.FormatGo:
+		_, err := m.Store.TombstoneGoModuleVersion(ctx, repositoryID, candidate.goModule, candidate.goVersion)
+		return err
 	default:
 		return repository.ErrDisabled
 	}
@@ -265,6 +271,8 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 		candidates, err = m.planNPM(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	case repository.FormatPyPI:
 		candidates, err = m.planPyPI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+	case repository.FormatGo:
+		candidates, err = m.planGo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	default:
 		return nil, repository.ErrDisabled
 	}
@@ -342,6 +350,45 @@ func (m NativeRepositoryRetention) planNPM(ctx context.Context, repositoryID str
 			return candidates, nil
 		}
 		after = packages[len(packages)-1].Name
+	}
+}
+
+func (m NativeRepositoryRetention) planGo(ctx context.Context, repositoryID string, policy repository.RepositoryRetentionPolicy, coordinatePatterns, protectedPatterns []*regexp.Regexp) ([]RepositoryRetentionCandidate, error) {
+	var candidates []RepositoryRetentionCandidate
+	after := ""
+	for {
+		modules, err := m.Store.ListGoModules(ctx, repositoryID, "", 200, after)
+		if err != nil {
+			return nil, err
+		}
+		for _, modulePath := range modules {
+			versions, err := m.Store.ListGoModuleVersions(ctx, repositoryID, modulePath)
+			if err != nil {
+				return nil, err
+			}
+			sort.SliceStable(versions, func(i, j int) bool {
+				if versions[i].CreatedAt.Equal(versions[j].CreatedAt) {
+					return versions[i].Version > versions[j].Version
+				}
+				return versions[i].CreatedAt.After(versions[j].CreatedAt)
+			})
+			for index, version := range versions {
+				coordinate := modulePath + "@" + version.Version
+				asset, err := m.Store.GetGoModuleAsset(ctx, repositoryID, modulePath, version.Version, "zip")
+				if err != nil {
+					return nil, err
+				}
+				candidate, ok := m.versionedCandidate(repository.FormatGo, coordinate, asset.Digest, version.CreatedAt, index, policy, []string{coordinate, modulePath}, coordinatePatterns, protectedPatterns)
+				if ok {
+					candidate.CursorID, candidate.goModule, candidate.goVersion = coordinate, modulePath, version.Version
+					candidates = append(candidates, candidate)
+				}
+			}
+		}
+		if len(modules) < 200 {
+			return candidates, nil
+		}
+		after = modules[len(modules)-1]
 	}
 }
 

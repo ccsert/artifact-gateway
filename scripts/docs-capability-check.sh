@@ -34,7 +34,7 @@ for required in \
   fi
 done
 
-if ! contains_fixed_string 'npm, and PyPI Hosted lifecycle paths' "$readiness_doc"; then
+if ! contains_fixed_string 'npm, PyPI, and Go Hosted lifecycle paths' "$readiness_doc"; then
   printf 'release readiness document has stale hosted format coverage\n' >&2
   exit 1
 fi

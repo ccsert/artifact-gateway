@@ -13,7 +13,9 @@ a dated version heading without rewriting their meaning.
   representations, content-addressed PostgreSQL/RustFS persistence, idempotent
   replay, immutable-coordinate conflict rejection, publication scanning,
   management tombstone/restore with protocol, Group, search, and scan-identity
-  visibility enforcement, Hosted-first mixed Groups, and a real
+  visibility enforcement, repository retention planning, a 24-hour recovery
+  window followed by reference-safe object reclamation and capacity release,
+  Hosted-first mixed Groups, and a real
   `go mod download` acceptance gate.
 
 - Added stable Service Accounts for Jenkins, CI robots, scanners, and
@@ -178,7 +180,7 @@ a dated version heading without rewriting their meaning.
 - Added a discoverable repository Scanning workspace for manual immutable-
   artifact scans, capability and configuration guidance, historical backfill,
   and recent job status.
-- Updated retention controls to use Maven, OCI, Conan, Raw, npm, and PyPI
+- Updated retention controls to use Maven, OCI, Conan, Raw, npm, PyPI, and Go
   cleanup-unit terminology instead of Maven fallback copy.
 - Reorganized the repository security tab into separate quarantine-read and
   promotion-admission guardrails with format-aware scope, explicit saved and

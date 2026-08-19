@@ -210,12 +210,12 @@ flowchart LR
 
 ## Known Limitations
 
-- V1 supports OCI, Maven, Raw, Conan, npm, and PyPI Hosted lifecycle paths.
+- V1 supports OCI, Maven, Raw, Conan, npm, PyPI, and Go Hosted lifecycle paths.
   Checkpointed replication and promotion workers publish verified Artifacts for
-  each of those formats. Go supports atomic Hosted publication and standard
-  Hosted/Proxy/Group reads, but not delete/restore, retention, reclaim,
-  promotion, or replication. The lifecycle Jobs view exposes intelligence copy
-  details and an atomic
+  OCI, Maven, Raw, Conan, npm, and PyPI. Go supports atomic Hosted publication,
+  standard Hosted/Proxy/Group reads, delete/restore, retention, and delayed
+  reclaim, but not promotion or replication. The lifecycle Jobs view exposes
+  intelligence copy details and an atomic
   repository-level reconciliation action for failed or cancelled copy jobs.
   The backup/restore rehearsal retains persisted lifecycle jobs and plans, but
   does not require a worker to complete them after restore.

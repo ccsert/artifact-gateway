@@ -78,26 +78,31 @@ it, the policy is `keepDays=30` and `minimumVersions=1` with version `1`.
 version in the representation and an `If-Match` header; a successful replacement
 increments the stored version and a stale precondition returns `412`. Policy
 configuration does not synchronously remove content. The scheduler creates
-durable retention jobs for Maven, OCI, Conan, Raw, npm, and PyPI Hosted
+durable retention jobs for Maven, OCI, Conan, Raw, npm, PyPI, and Go Hosted
 repositories. Version-count rules group Maven by `groupId:artifactId`, OCI by
 image name, Conan by full reference, npm by package name, and PyPI by normalized
-project name; each group protects its newest `minimumVersions` and may select
-older entries beyond `maximumVersions`. Age eligibility uses the release or
+project name, and Go by canonical module path; each group protects its newest
+`minimumVersions` and may select older entries beyond `maximumVersions`. Age
+eligibility uses the release or
 publication time, while Maven SNAPSHOT builds may use `snapshotKeepDays`. Raw
 has no version grouping: each path is evaluated from its last update time and
 does not use minimum or maximum version counts. RE2 selection and protection
 patterns match each format's logical cleanup unit. Cleanup writes recoverable
 tombstones for a Maven coordinate or SNAPSHOT build, OCI manifest, Conan recipe
 revision closure, Raw path, npm package version, or complete PyPI project
-version. Byte removal remains deferred to the orphan collector.
+version, or complete Go module version. Byte removal remains deferred to the
+format collector.
 
-The orphan collector runs after a configurable grace period (minimum 24 hours).
-It deletes a staged object only when no live object reference, nonexpired
-session, or active lease names its digest; it rechecks this predicate in a
-PostgreSQL transaction immediately before S3 deletion. A failed delete is
-retryable. An S3 deletion that succeeds before the final metadata update leaves
-a tombstoned, non-readable reference and is repaired by the next collector run.
-No API exposes direct object keys.
+Collectors run after a configurable grace period (minimum 24 hours). The
+existing orphan collector remains responsible for formats whose tombstones
+remove their last metadata reference. All collectors use format object locks
+and recheck visible references before S3 deletion. Go first
+persists a `collecting` fence, so restore fails closed even when S3 deletion
+succeeds before the final `collected` metadata update; retry finishes that
+transition. A tombstoned shared Go reference is collected and stops consuming
+its Repository capacity after the window, while the byte object remains until
+its last visible reference disappears. Failed deletion remains retryable. No
+API exposes direct object keys.
 
 ## Authorization, errors, pagination, and compatibility
 

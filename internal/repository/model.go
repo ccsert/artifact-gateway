@@ -394,6 +394,16 @@ type GoModuleAsset struct {
 	SourceURL    string
 	CachedAt     time.Time
 	CreatedAt    time.Time
+	CollectingAt time.Time
+	CollectedAt  time.Time
+}
+
+type GoModuleObject struct {
+	RepositoryID string
+	ObjectKey    string
+	Digest       string
+	Size         int64
+	TombstonedAt time.Time
 }
 
 // GoModulePublication is the atomic Hosted visibility boundary for one module

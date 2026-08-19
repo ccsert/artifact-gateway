@@ -387,6 +387,7 @@ type NativeGoStore interface {
 	SyncGoProxyVersions(context.Context, string, string, []GoModuleVersion) error
 	PutGoModuleVersion(context.Context, GoModuleVersion) (GoModuleVersion, error)
 	PublishGoModule(context.Context, GoModulePublication) (GoModuleVersion, bool, error)
+	ListGoModules(context.Context, string, string, int, string) ([]string, error)
 	ListGoModuleVersions(context.Context, string, string) ([]GoModuleVersion, error)
 	GetGoModuleVersion(context.Context, string, string, string) (GoModuleVersion, error)
 	TombstoneGoModuleVersion(context.Context, string, string, string) (GoModuleVersion, error)
@@ -394,6 +395,11 @@ type NativeGoStore interface {
 	CacheGoModuleAsset(context.Context, GoModuleAsset) (GoModuleAsset, error)
 	GetGoModuleAsset(context.Context, string, string, string, string) (GoModuleAsset, error)
 	GoModuleObjectHasReference(context.Context, string) (bool, error)
+	ListReclaimableGoModuleObjects(context.Context, time.Time, int, string) ([]GoModuleObject, error)
+	GoModuleObjectHasVisibleReference(context.Context, string) (bool, error)
+	GoModuleObjectMatchesTombstone(context.Context, string, time.Time) (bool, error)
+	MarkGoModuleObjectCollecting(context.Context, string) error
+	MarkGoModuleObjectCollected(context.Context, string) error
 	LockGoObject(context.Context, string) (func(), error)
 }
 

@@ -35,7 +35,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) || !profile.GroupSupported {
 				t.Errorf("Go must expose Hosted, Proxy, and Group: %#v", profile)
 			}
-			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse, RepositoryOperationDelete, RepositoryOperationRestore} {
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse, RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
 					t.Errorf("Go Hosted missing operation %q", operation)
 				}
@@ -45,7 +45,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 					t.Errorf("Go Proxy missing operation %q", operation)
 				}
 			}
-			for _, operation := range []RepositoryOperation{RepositoryOperationPublish, RepositoryOperationDelete, RepositoryOperationRestore} {
+			for _, operation := range []RepositoryOperation{RepositoryOperationPublish, RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim} {
 				if FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
 					t.Errorf("Go Proxy advertises unsupported operation %q", operation)
 				}
@@ -153,7 +153,7 @@ func TestWorkerFormatsReflectExecutableBackgroundWork(t *testing.T) {
 		}
 	}
 	profile, ok := FormatProfileFor(FormatGo)
-	if !ok || hasBackgroundOperation(profile.HostedOperations) {
-		t.Fatalf("Go recovery worker leaked into user-facing lifecycle capabilities: %#v", profile)
+	if !ok || !FormatSupportsOperation(FormatGo, RepositoryTypeHosted, RepositoryOperationRetain) || !FormatSupportsOperation(FormatGo, RepositoryTypeHosted, RepositoryOperationReclaim) {
+		t.Fatalf("Go Hosted retention capabilities are missing: %#v", profile)
 	}
 }

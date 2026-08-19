@@ -47,6 +47,7 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.Na
 	app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	app.NativeGoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	aptpublication.Maintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	retention.StartScheduler(ctx, time.Hour)
 }

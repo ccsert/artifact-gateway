@@ -17,9 +17,9 @@ Artifact. Tombstoning removes a visible coordinate/reference and records its
 former identity; it never synchronously removes its byte object. Management
 restore is the only `tombstoned -> visible` transition and succeeds only while
 every required byte object remains recoverable. A collector makes that
-transition unavailable once it reclaims an unreferenced object. Formats that
-expose tombstone/restore before their delayed reclaim slice, including Go
-Module, continue charging tombstoned bytes to physical Repository capacity.
+transition unavailable once it reclaims an unreferenced object. Tombstoned Go
+Module bytes continue charging physical Repository capacity during the 24-hour
+recovery window; successful delayed collection releases that capacity.
 
 Quarantine is not a fourth lifecycle state. It is a Repository-local,
 versioned governance record over the immutable repository/format/coordinate/
@@ -33,6 +33,27 @@ lifecycle state. Release changes the governance decision and restores reads.
 For Conan, the quarantine identity is the recipe revision because the recipe
 and its visible package revisions are promoted and replicated atomically;
 package revisions remain independent lifecycle and scanner identities.
+
+## Go Module Slice
+
+A Go Hosted module version is one immutable lifecycle unit containing exactly
+one `.info`, `.mod`, and `.zip` representation. Repository retention groups
+versions by canonical module path, applies minimum/maximum version and age
+rules, and writes the same `module@version` tombstone as an explicit management
+delete. Protocol reads, Group aggregation, search, and scan identity queries
+hide the complete version immediately.
+
+The scheduler admits tombstoned Go references to durable reclaim jobs only
+after the default 24-hour recovery window. Each job coordinates on the content
+object key, verifies the current tombstone generation, and persists a
+`collecting` fence before touching S3. It deletes the byte object only when no
+visible Go version shares it, then marks the expired tombstoned references
+collected and releases their Repository capacity. Shared visible references
+keep the physical object but do not extend the expired reference's restore
+window. Tombstone and restore lock all three object keys in stable order;
+restore fails closed with `ErrDisabled` once any required representation is
+collecting or collected. Publication orphan cleanup uses a separate reclaim
+intent and therefore cannot bypass the recovery window.
 
 ## Shared Persistence
 
