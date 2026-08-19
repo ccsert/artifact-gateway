@@ -893,6 +893,74 @@ export type AnonymousAccessPolicy = {
   enabled: boolean;
 };
 
+export type SiteSettings = {
+  version: string;
+  siteName: string;
+  /**
+   * Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+   */
+  logoUrl: string;
+  /**
+   * Short textual fallback shown when no logo is configured or it cannot load.
+   */
+  brandMark: string;
+  enabledThemeIds: Array<string>;
+  defaultThemeId: string;
+  availableThemes: Array<ConsoleTheme>;
+  updatedAt: string;
+};
+
+export type SiteSettingsUpdate = {
+  siteName: string;
+  /**
+   * Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+   */
+  logoUrl: string;
+  brandMark: string;
+  enabledThemeIds: Array<string>;
+  defaultThemeId: string;
+};
+
+export type ConsoleTheme = {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description?: string;
+  mode: "dark" | "light";
+  token: ConsoleThemeToken;
+};
+
+export type ConsoleThemeToken = {
+  colorPrimary: string;
+  colorSuccess: string;
+  colorWarning: string;
+  colorError: string;
+  colorInfo: string;
+  colorTextBase: string;
+  colorBgBase: string;
+  colorText?: string;
+  colorTextSecondary?: string;
+  colorTextTertiary?: string;
+  colorTextQuaternary?: string;
+  colorTextDisabled?: string;
+  colorBgContainer?: string;
+  colorBgElevated?: string;
+  colorBgLayout?: string;
+  colorBgSpotlight?: string;
+  colorBorder?: string;
+  colorBorderSecondary?: string;
+  colorFillAlter?: string;
+  colorFillContent?: string;
+  colorFillContentHover?: string;
+  colorLink?: string;
+  colorLinkHover?: string;
+  colorLinkActive?: string;
+  colorPrimaryHover?: string;
+  colorPrimaryActive?: string;
+  colorPrimaryBg?: string;
+  controlOutline?: string;
+};
+
 export type OidcSettings = {
   version: string;
   source: "environment" | "database";
@@ -2034,6 +2102,71 @@ export type ReplaceAnonymousAccessPolicyResponses = {
 
 export type ReplaceAnonymousAccessPolicyResponse =
   ReplaceAnonymousAccessPolicyResponses[keyof ReplaceAnonymousAccessPolicyResponses];
+
+export type GetSiteSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/site-settings";
+};
+
+export type GetSiteSettingsErrors = {
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetSiteSettingsError =
+  GetSiteSettingsErrors[keyof GetSiteSettingsErrors];
+
+export type GetSiteSettingsResponses = {
+  /**
+   * Deployment-wide public Console name and brand assets
+   */
+  200: SiteSettings;
+};
+
+export type GetSiteSettingsResponse =
+  GetSiteSettingsResponses[keyof GetSiteSettingsResponses];
+
+export type ReplaceSiteSettingsData = {
+  body: SiteSettingsUpdate;
+  headers: {
+    "If-Match": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/site-settings";
+};
+
+export type ReplaceSiteSettingsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceSiteSettingsError =
+  ReplaceSiteSettingsErrors[keyof ReplaceSiteSettingsErrors];
+
+export type ReplaceSiteSettingsResponses = {
+  /**
+   * Deployment-wide public Console name and brand assets
+   */
+  200: SiteSettings;
+};
+
+export type ReplaceSiteSettingsResponse =
+  ReplaceSiteSettingsResponses[keyof ReplaceSiteSettingsResponses];
 
 export type GetOidcSettingsData = {
   body?: never;

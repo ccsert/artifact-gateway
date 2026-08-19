@@ -1,0 +1,31 @@
+---
+site_settings:
+  get:
+    operationId: getSiteSettings
+    description: Returns the deployment-wide public Console identity and the validated theme catalog.
+    security: []
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/SiteSettings"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: replaceSiteSettings
+    description: Replaces the deployment-wide Console identity, enabled theme set, and default theme.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/SiteSettingsUpdate"
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/SiteSettings"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"

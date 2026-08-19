@@ -17,6 +17,8 @@ paths:
     "$ref": "./management/search.yaml#/artifact_search"
   "/anonymous-access-policy":
     "$ref": "./management/anonymous-access.yaml#/anonymous_access_policy"
+  "/site-settings":
+    "$ref": "./management/site-settings.yaml#/site_settings"
   "/authentication/oidc":
     "$ref": "./management/authentication.yaml#/oidc_settings"
   "/authentication/oidc:test":
@@ -397,6 +399,14 @@ components:
       "$ref": "./components/schemas.yaml#/AuditRetentionPolicy"
     AnonymousAccessPolicy:
       "$ref": "./components/schemas.yaml#/AnonymousAccessPolicy"
+    SiteSettings:
+      "$ref": "./components/schemas.yaml#/SiteSettings"
+    SiteSettingsUpdate:
+      "$ref": "./components/schemas.yaml#/SiteSettingsUpdate"
+    ConsoleTheme:
+      "$ref": "./components/schemas.yaml#/ConsoleTheme"
+    ConsoleThemeToken:
+      "$ref": "./components/schemas.yaml#/ConsoleThemeToken"
     OIDCSettings:
       "$ref": "./components/schemas.yaml#/OIDCSettings"
     OIDCSettingsUpdate:
@@ -539,6 +549,8 @@ components:
       "$ref": "./components/responses.yaml#/AuditRetentionPolicy"
     AnonymousAccessPolicy:
       "$ref": "./components/responses.yaml#/AnonymousAccessPolicy"
+    SiteSettings:
+      "$ref": "./components/responses.yaml#/SiteSettings"
     OIDCSettings:
       "$ref": "./components/responses.yaml#/OIDCSettings"
     OIDCConnectionTest:

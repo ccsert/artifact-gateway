@@ -58,6 +58,7 @@ var supportedWorkerKinds = map[string]struct{}{
 
 type Config struct {
 	ListenAddress                  string
+	ConsoleThemeDir                string
 	NodeRoles                      []NodeRole
 	InstanceID                     string
 	WorkerFormats                  []string
@@ -128,6 +129,7 @@ type Config struct {
 func Load() (Config, error) {
 	cfg := Config{
 		ListenAddress:                  value("GATEWAY_LISTEN_ADDRESS", ":8080"),
+		ConsoleThemeDir:                strings.TrimSpace(os.Getenv("GATEWAY_CONSOLE_THEME_DIR")),
 		NodeRoles:                      parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
 		InstanceID:                     value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
 		WorkerFormats:                  parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),

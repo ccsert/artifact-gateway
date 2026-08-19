@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "aerok-light",
+  "name": "Aerok Light",
+  "description": "Aerok 浅色控制台主题，使用沉稳蓝色操作信号与高可读白色表面。",
+  "mode": "light",
+  "token": {
+    "colorPrimary": "#26499D",
+    "colorSuccess": "#25B444",
+    "colorWarning": "#E46F31",
+    "colorError": "#B2154E",
+    "colorInfo": "#0085BA",
+    "colorTextBase": "#1D1F25",
+    "colorBgBase": "#FFFFFF",
+    "colorText": "rgba(8, 17, 44, 0.88)",
+    "colorTextSecondary": "rgba(8, 17, 44, 0.65)",
+    "colorTextTertiary": "rgba(8, 17, 44, 0.45)",
+    "colorTextQuaternary": "rgba(8, 17, 44, 0.25)",
+    "colorTextDisabled": "rgba(8, 17, 44, 0.25)",
+    "colorBgSpotlight": "rgba(0, 0, 0, 0.85)",
+    "colorFillAlter": "rgba(8, 17, 44, 0.02)",
+    "colorFillContent": "rgba(8, 17, 44, 0.06)",
+    "colorFillContentHover": "rgba(8, 17, 44, 0.15)",
+    "colorLink": "#4E6FCA",
+    "colorLinkHover": "#26499D",
+    "colorLinkActive": "#18388B",
+    "colorPrimaryHover": "#4E6FCA",
+    "colorPrimaryActive": "#18388B",
+    "colorPrimaryBg": "#E0EAFD",
+    "controlOutline": "rgba(38, 73, 157, 0.18)"
+  }
+}

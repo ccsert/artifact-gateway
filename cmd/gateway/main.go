@@ -13,6 +13,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
@@ -28,6 +29,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "evidence" {
 		os.Exit(evidence.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "theme" {
+		os.Exit(consoletheme.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
@@ -35,6 +39,10 @@ func main() {
 	}
 
 	dependencies := app.NewDependencies(cfg)
+	if _, err := dependencies.ConsoleThemes.List(); err != nil {
+		slog.Error("load Console themes", "error", err)
+		os.Exit(1)
+	}
 	shutdownTracing, err := app.NewTracing(context.Background(), cfg)
 	if err != nil {
 		slog.Error("initialize tracing", "error", err)

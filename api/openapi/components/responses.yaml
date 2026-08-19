@@ -320,6 +320,15 @@ AnonymousAccessPolicy:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/AnonymousAccessPolicy"}
+SiteSettings:
+  description: Deployment-wide public Console name and brand assets
+  headers:
+    ETag:
+      required: true
+      schema: {type: string}
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/SiteSettings"}
 OIDCSettings:
   description: Effective runtime OIDC authentication settings with credentials redacted
   content:

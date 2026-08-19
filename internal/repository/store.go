@@ -48,6 +48,11 @@ type AnonymousAccessPolicyStore interface {
 	ReplaceAnonymousAccessPolicy(context.Context, AnonymousAccessPolicy, string) (AnonymousAccessPolicy, error)
 }
 
+type SiteSettingsStore interface {
+	GetSiteSettings(context.Context) (SiteSettings, error)
+	ReplaceSiteSettings(context.Context, SiteSettings, string) (SiteSettings, error)
+}
+
 type OIDCSettingsStore interface {
 	GetOIDCSettings(context.Context) (OIDCSettings, error)
 	ReplaceOIDCSettings(context.Context, OIDCSettings, string) (OIDCSettings, error)

@@ -14,6 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,7 @@ type Dependencies struct {
 	OIDCClient                    *authorization.OIDCClient
 	OIDCLoginValidator            *authorization.OIDCValidator
 	OIDCRuntime                   *OIDCRuntime
+	ConsoleThemes                 *consoletheme.Registry
 }
 
 type APTSigningMode string
@@ -97,6 +99,7 @@ func NewDependencies(cfg config.Config) Dependencies {
 		BuildGoVersion:                runtime.Version(),
 		ArtifactScannerHealthTimeout:  2 * time.Second,
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
+		ConsoleThemes:                 consoletheme.NewRegistry(cfg.ConsoleThemeDir),
 		APTSigning:                    aptSigningRuntime(cfg),
 		Runtime: DiagnosticRuntime{
 			InstanceID: cfg.InstanceID, Roles: roles,

@@ -14,6 +14,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
+	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
@@ -227,6 +228,8 @@ type generatedRepositoryAPIAdapter struct {
 	lifecycleJobs          repository.LifecycleJobStore
 	auditRetention         repository.AuditRetentionStore
 	anonymousAccess        repository.AnonymousAccessPolicyStore
+	siteSettings           repository.SiteSettingsStore
+	consoleThemes          *consoletheme.Registry
 	oidcRuntime            *OIDCRuntime
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore

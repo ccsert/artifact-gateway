@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artifact-gateway.local/schemas/console-theme-v1.json",
+  "title": "Artifact Gateway Console Theme",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "mode", "token"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "description": { "type": "string", "maxLength": 240 },
+    "mode": { "enum": ["dark", "light"] },
+    "token": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "colorPrimary",
+        "colorSuccess",
+        "colorWarning",
+        "colorError",
+        "colorInfo",
+        "colorTextBase",
+        "colorBgBase"
+      ],
+      "properties": {
+        "colorPrimary": { "$ref": "#/$defs/color" },
+        "colorSuccess": { "$ref": "#/$defs/color" },
+        "colorWarning": { "$ref": "#/$defs/color" },
+        "colorError": { "$ref": "#/$defs/color" },
+        "colorInfo": { "$ref": "#/$defs/color" },
+        "colorTextBase": { "$ref": "#/$defs/color" },
+        "colorBgBase": { "$ref": "#/$defs/color" },
+        "colorText": { "$ref": "#/$defs/color" },
+        "colorTextSecondary": { "$ref": "#/$defs/color" },
+        "colorTextTertiary": { "$ref": "#/$defs/color" },
+        "colorTextQuaternary": { "$ref": "#/$defs/color" },
+        "colorTextDisabled": { "$ref": "#/$defs/color" },
+        "colorBgContainer": { "$ref": "#/$defs/color" },
+        "colorBgElevated": { "$ref": "#/$defs/color" },
+        "colorBgLayout": { "$ref": "#/$defs/color" },
+        "colorBgSpotlight": { "$ref": "#/$defs/color" },
+        "colorBorder": { "$ref": "#/$defs/color" },
+        "colorBorderSecondary": { "$ref": "#/$defs/color" },
+        "colorFillAlter": { "$ref": "#/$defs/color" },
+        "colorFillContent": { "$ref": "#/$defs/color" },
+        "colorFillContentHover": { "$ref": "#/$defs/color" },
+        "colorLink": { "$ref": "#/$defs/color" },
+        "colorLinkHover": { "$ref": "#/$defs/color" },
+        "colorLinkActive": { "$ref": "#/$defs/color" },
+        "colorPrimaryHover": { "$ref": "#/$defs/color" },
+        "colorPrimaryActive": { "$ref": "#/$defs/color" },
+        "colorPrimaryBg": { "$ref": "#/$defs/color" },
+        "controlOutline": { "$ref": "#/$defs/color" }
+      }
+    }
+  },
+  "$defs": {
+    "color": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^(#[0-9A-Fa-f]{3,8}|rgba?\\([0-9.,% ]+\\)|hsla?\\([0-9.,% ]+\\)|transparent|current[Cc]olor)$"
+    }
+  }
+}

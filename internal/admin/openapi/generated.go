@@ -496,6 +496,39 @@ func (e ConanRecipeRevisionState) Valid() bool {
 	}
 }
 
+// Defines values for ConsoleThemeMode.
+const (
+	Dark  ConsoleThemeMode = "dark"
+	Light ConsoleThemeMode = "light"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemeMode enum.
+func (e ConsoleThemeMode) Valid() bool {
+	switch e {
+	case Dark:
+		return true
+	case Light:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemeSchemaVersion.
+const (
+	N1 ConsoleThemeSchemaVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemeSchemaVersion enum.
+func (e ConsoleThemeSchemaVersion) Valid() bool {
+	switch e {
+	case N1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateAPIKeyRoles.
 const (
 	CreateAPIKeyRolesAdmin  CreateAPIKeyRoles = "admin"
@@ -2557,6 +2590,54 @@ type ConanReferencePage struct {
 	NextPageToken *string          `json:"nextPageToken,omitempty"`
 }
 
+// ConsoleTheme defines model for ConsoleTheme.
+type ConsoleTheme struct {
+	Description   *string                   `json:"description,omitempty"`
+	Id            string                    `json:"id"`
+	Mode          ConsoleThemeMode          `json:"mode"`
+	Name          string                    `json:"name"`
+	SchemaVersion ConsoleThemeSchemaVersion `json:"schemaVersion"`
+	Token         ConsoleThemeToken         `json:"token"`
+}
+
+// ConsoleThemeMode defines model for ConsoleTheme.Mode.
+type ConsoleThemeMode string
+
+// ConsoleThemeSchemaVersion defines model for ConsoleTheme.SchemaVersion.
+type ConsoleThemeSchemaVersion int
+
+// ConsoleThemeToken defines model for ConsoleThemeToken.
+type ConsoleThemeToken struct {
+	ColorBgBase           string  `json:"colorBgBase"`
+	ColorBgContainer      *string `json:"colorBgContainer,omitempty"`
+	ColorBgElevated       *string `json:"colorBgElevated,omitempty"`
+	ColorBgLayout         *string `json:"colorBgLayout,omitempty"`
+	ColorBgSpotlight      *string `json:"colorBgSpotlight,omitempty"`
+	ColorBorder           *string `json:"colorBorder,omitempty"`
+	ColorBorderSecondary  *string `json:"colorBorderSecondary,omitempty"`
+	ColorError            string  `json:"colorError"`
+	ColorFillAlter        *string `json:"colorFillAlter,omitempty"`
+	ColorFillContent      *string `json:"colorFillContent,omitempty"`
+	ColorFillContentHover *string `json:"colorFillContentHover,omitempty"`
+	ColorInfo             string  `json:"colorInfo"`
+	ColorLink             *string `json:"colorLink,omitempty"`
+	ColorLinkActive       *string `json:"colorLinkActive,omitempty"`
+	ColorLinkHover        *string `json:"colorLinkHover,omitempty"`
+	ColorPrimary          string  `json:"colorPrimary"`
+	ColorPrimaryActive    *string `json:"colorPrimaryActive,omitempty"`
+	ColorPrimaryBg        *string `json:"colorPrimaryBg,omitempty"`
+	ColorPrimaryHover     *string `json:"colorPrimaryHover,omitempty"`
+	ColorSuccess          string  `json:"colorSuccess"`
+	ColorText             *string `json:"colorText,omitempty"`
+	ColorTextBase         string  `json:"colorTextBase"`
+	ColorTextDisabled     *string `json:"colorTextDisabled,omitempty"`
+	ColorTextQuaternary   *string `json:"colorTextQuaternary,omitempty"`
+	ColorTextSecondary    *string `json:"colorTextSecondary,omitempty"`
+	ColorTextTertiary     *string `json:"colorTextTertiary,omitempty"`
+	ColorWarning          string  `json:"colorWarning"`
+	ControlOutline        *string `json:"controlOutline,omitempty"`
+}
+
 // CreateAPIKey defines model for CreateAPIKey.
 type CreateAPIKey struct {
 	// ExpiresAt Optional expiry. Defaults to 90 days and cannot exceed 365 days.
@@ -3791,6 +3872,33 @@ type ServiceAccountList struct {
 	NextPageToken *string          `json:"nextPageToken,omitempty"`
 }
 
+// SiteSettings defines model for SiteSettings.
+type SiteSettings struct {
+	AvailableThemes []ConsoleTheme `json:"availableThemes"`
+
+	// BrandMark Short textual fallback shown when no logo is configured or it cannot load.
+	BrandMark       string   `json:"brandMark"`
+	DefaultThemeId  string   `json:"defaultThemeId"`
+	EnabledThemeIds []string `json:"enabledThemeIds"`
+
+	// LogoUrl Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+	LogoUrl   string    `json:"logoUrl"`
+	SiteName  string    `json:"siteName"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Version   string    `json:"version"`
+}
+
+// SiteSettingsUpdate defines model for SiteSettingsUpdate.
+type SiteSettingsUpdate struct {
+	BrandMark       string   `json:"brandMark"`
+	DefaultThemeId  string   `json:"defaultThemeId"`
+	EnabledThemeIds []string `json:"enabledThemeIds"`
+
+	// LogoUrl Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+	LogoUrl  string `json:"logoUrl"`
+	SiteName string `json:"siteName"`
+}
+
 // UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
@@ -4443,6 +4551,11 @@ type ListServiceAccountCredentialsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ReplaceSiteSettingsParams defines parameters for ReplaceSiteSettings.
+type ReplaceSiteSettingsParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	Search *string               `form:"search,omitempty" json:"search,omitempty"`
@@ -4603,6 +4716,9 @@ type UpdateServiceAccountJSONRequestBody = UpdateServiceAccount
 
 // CreateServiceAccountCredentialJSONRequestBody defines body for CreateServiceAccountCredential for application/json ContentType.
 type CreateServiceAccountCredentialJSONRequestBody = CreateServiceAccountCredential
+
+// ReplaceSiteSettingsJSONRequestBody defines body for ReplaceSiteSettings for application/json ContentType.
+type ReplaceSiteSettingsJSONRequestBody = SiteSettingsUpdate
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUser
@@ -5026,6 +5142,12 @@ type ServerInterface interface {
 
 	// (DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId})
 	RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountId openapi_types.UUID, credentialId openapi_types.UUID)
+
+	// (GET /site-settings)
+	GetSiteSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /site-settings)
+	ReplaceSiteSettings(w http.ResponseWriter, r *http.Request, params ReplaceSiteSettingsParams)
 
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -10032,6 +10154,65 @@ func (siw *ServerInterfaceWrapper) RevokeServiceAccountCredential(w http.Respons
 	handler.ServeHTTP(w, r)
 }
 
+// GetSiteSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSiteSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSiteSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceSiteSettings operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceSiteSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceSiteSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceSiteSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -10970,6 +11151,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials", wrapper.ListServiceAccountCredentials)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials", wrapper.CreateServiceAccountCredential)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/service-accounts/{serviceAccountId}/credentials/{credentialId}", wrapper.RevokeServiceAccountCredential)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/site-settings", wrapper.GetSiteSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/site-settings", wrapper.ReplaceSiteSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users", wrapper.CreateUser)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{userId}", wrapper.DeleteUser)
@@ -11162,6 +11345,15 @@ type ServiceAccountCredentialJSONResponse ServiceAccountCredential
 type ServiceAccountCredentialListJSONResponse ServiceAccountCredentialList
 
 type ServiceAccountListJSONResponse ServiceAccountList
+
+type SiteSettingsResponseHeaders struct {
+	ETag string
+}
+type SiteSettingsJSONResponse struct {
+	Body SiteSettings
+
+	Headers SiteSettingsResponseHeaders
+}
 
 type UserJSONResponse User
 
@@ -17843,6 +18035,112 @@ func (response RevokeServiceAccountCredential404ApplicationProblemPlusJSONRespon
 	return err
 }
 
+type GetSiteSettingsRequestObject struct {
+}
+
+type GetSiteSettingsResponseObject interface {
+	VisitGetSiteSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetSiteSettings200JSONResponse struct{ SiteSettingsJSONResponse }
+
+func (response GetSiteSettings200JSONResponse) VisitGetSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSiteSettings500ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetSiteSettings500ApplicationProblemPlusJSONResponse) VisitGetSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSiteSettingsRequestObject struct {
+	Params ReplaceSiteSettingsParams
+	Body   *ReplaceSiteSettingsJSONRequestBody
+}
+
+type ReplaceSiteSettingsResponseObject interface {
+	VisitReplaceSiteSettingsResponse(w http.ResponseWriter) error
+}
+
+type ReplaceSiteSettings200JSONResponse struct{ SiteSettingsJSONResponse }
+
+func (response ReplaceSiteSettings200JSONResponse) VisitReplaceSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSiteSettings400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceSiteSettings400ApplicationProblemPlusJSONResponse) VisitReplaceSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSiteSettings401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSiteSettings401ApplicationProblemPlusJSONResponse) VisitReplaceSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSiteSettings412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSiteSettings412ApplicationProblemPlusJSONResponse) VisitReplaceSiteSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -19546,6 +19844,12 @@ type StrictServerInterface interface {
 
 	// (DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId})
 	RevokeServiceAccountCredential(ctx context.Context, request RevokeServiceAccountCredentialRequestObject) (RevokeServiceAccountCredentialResponseObject, error)
+
+	// (GET /site-settings)
+	GetSiteSettings(ctx context.Context, request GetSiteSettingsRequestObject) (GetSiteSettingsResponseObject, error)
+
+	// (PUT /site-settings)
+	ReplaceSiteSettings(ctx context.Context, request ReplaceSiteSettingsRequestObject) (ReplaceSiteSettingsResponseObject, error)
 
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -23097,6 +23401,63 @@ func (sh *strictHandler) RevokeServiceAccountCredential(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeServiceAccountCredentialResponseObject); ok {
 		if err := validResponse.VisitRevokeServiceAccountCredentialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSiteSettings operation middleware
+func (sh *strictHandler) GetSiteSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetSiteSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSiteSettings(ctx, request.(GetSiteSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSiteSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSiteSettingsResponseObject); ok {
+		if err := validResponse.VisitGetSiteSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceSiteSettings operation middleware
+func (sh *strictHandler) ReplaceSiteSettings(w http.ResponseWriter, r *http.Request, params ReplaceSiteSettingsParams) {
+	var request ReplaceSiteSettingsRequestObject
+
+	request.Params = params
+
+	var body ReplaceSiteSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceSiteSettings(ctx, request.(ReplaceSiteSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceSiteSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceSiteSettingsResponseObject); ok {
+		if err := validResponse.VisitReplaceSiteSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

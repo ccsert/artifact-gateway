@@ -1189,6 +1189,19 @@ type AuditRetentionPolicy struct {
 	KeepDays int    `json:"keepDays"`
 }
 
+// SiteSettings is the versioned, deployment-wide Console identity. LogoURL
+// may be an HTTPS URL or a bounded raster-image data URL; BrandMark is the
+// short textual fallback shown when no logo is configured or it cannot load.
+type SiteSettings struct {
+	Version         string    `json:"version"`
+	SiteName        string    `json:"siteName"`
+	LogoURL         string    `json:"logoUrl,omitempty"`
+	BrandMark       string    `json:"brandMark"`
+	EnabledThemeIDs []string  `json:"enabledThemeIds"`
+	DefaultThemeID  string    `json:"defaultThemeId"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
 // OIDCSettings is the persisted singleton configuration for API bearer and
 // browser OIDC authentication. ClientSecret contains ciphertext at the
 // repository boundary and must never be serialized by an API response.

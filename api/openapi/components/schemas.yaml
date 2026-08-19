@@ -1527,6 +1527,112 @@ AnonymousAccessPolicy:
     enabled:
       type: boolean
       description: Permits unauthenticated protocol reads only when the Repository or Group policy also allows them.
+SiteSettings:
+  type: object
+  required: [version, siteName, logoUrl, brandMark, enabledThemeIds, defaultThemeId, availableThemes, updatedAt]
+  additionalProperties: false
+  properties:
+    version: {type: string}
+    siteName:
+      type: string
+      minLength: 1
+      maxLength: 80
+      pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'
+    logoUrl:
+      type: string
+      maxLength: 262144
+      description: Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+    brandMark:
+      type: string
+      minLength: 1
+      maxLength: 8
+      pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'
+      description: Short textual fallback shown when no logo is configured or it cannot load.
+    enabledThemeIds:
+      type: array
+      minItems: 1
+      maxItems: 32
+      uniqueItems: true
+      items: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
+    defaultThemeId:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]{1,63}$'
+    availableThemes:
+      type: array
+      items: {"$ref": "#/ConsoleTheme"}
+    updatedAt: {type: string, format: date-time}
+SiteSettingsUpdate:
+  type: object
+  required: [siteName, logoUrl, brandMark, enabledThemeIds, defaultThemeId]
+  additionalProperties: false
+  properties:
+    siteName:
+      type: string
+      minLength: 1
+      maxLength: 80
+      pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'
+    logoUrl:
+      type: string
+      maxLength: 262144
+      description: Optional HTTPS URL or bounded PNG, JPEG, or WebP data URL.
+    brandMark:
+      type: string
+      minLength: 1
+      maxLength: 8
+      pattern: '^[^\r\n\x00]*\S[^\r\n\x00]*$'
+    enabledThemeIds:
+      type: array
+      minItems: 1
+      maxItems: 32
+      uniqueItems: true
+      items: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
+    defaultThemeId:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]{1,63}$'
+ConsoleTheme:
+  type: object
+  required: [schemaVersion, id, name, mode, token]
+  additionalProperties: false
+  properties:
+    schemaVersion: {type: integer, enum: [1]}
+    id: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
+    name: {type: string, minLength: 1, maxLength: 80}
+    description: {type: string, maxLength: 240}
+    mode: {type: string, enum: [dark, light]}
+    token: {"$ref": "#/ConsoleThemeToken"}
+ConsoleThemeToken:
+  type: object
+  required: [colorPrimary, colorSuccess, colorWarning, colorError, colorInfo, colorTextBase, colorBgBase]
+  additionalProperties: false
+  properties:
+    colorPrimary: {type: string, maxLength: 96}
+    colorSuccess: {type: string, maxLength: 96}
+    colorWarning: {type: string, maxLength: 96}
+    colorError: {type: string, maxLength: 96}
+    colorInfo: {type: string, maxLength: 96}
+    colorTextBase: {type: string, maxLength: 96}
+    colorBgBase: {type: string, maxLength: 96}
+    colorText: {type: string, maxLength: 96}
+    colorTextSecondary: {type: string, maxLength: 96}
+    colorTextTertiary: {type: string, maxLength: 96}
+    colorTextQuaternary: {type: string, maxLength: 96}
+    colorTextDisabled: {type: string, maxLength: 96}
+    colorBgContainer: {type: string, maxLength: 96}
+    colorBgElevated: {type: string, maxLength: 96}
+    colorBgLayout: {type: string, maxLength: 96}
+    colorBgSpotlight: {type: string, maxLength: 96}
+    colorBorder: {type: string, maxLength: 96}
+    colorBorderSecondary: {type: string, maxLength: 96}
+    colorFillAlter: {type: string, maxLength: 96}
+    colorFillContent: {type: string, maxLength: 96}
+    colorFillContentHover: {type: string, maxLength: 96}
+    colorLink: {type: string, maxLength: 96}
+    colorLinkHover: {type: string, maxLength: 96}
+    colorLinkActive: {type: string, maxLength: 96}
+    colorPrimaryHover: {type: string, maxLength: 96}
+    colorPrimaryActive: {type: string, maxLength: 96}
+    colorPrimaryBg: {type: string, maxLength: 96}
+    controlOutline: {type: string, maxLength: 96}
 OIDCSettings:
   type: object
   required: [version, source, enabled, issuer, audience, clientId, clientSecretConfigured, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
