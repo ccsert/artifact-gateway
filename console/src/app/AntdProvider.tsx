@@ -49,6 +49,7 @@ export function AntdProvider({ children }: { children: ReactNode }) {
             colorTextDisabled: dark ? "#52525b" : "#a1a1aa",
           },
           Menu: {
+            collapsedWidth: 80,
             darkGroupTitleColor: "#85858f",
             darkItemBg: "transparent",
             darkItemColor: "#a1a1aa",

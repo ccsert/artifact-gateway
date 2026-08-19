@@ -123,21 +123,20 @@ const navItems = [
 function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div
-      className={`ag-brand-lockup flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"}`}
+      className="ag-brand-lockup flex items-center"
+      data-collapsed={collapsed ? "true" : "false"}
     >
       <div className="ag-brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white">
         AG
       </div>
-      {!collapsed && (
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-zinc-100">
-            Artifact Gateway
-          </div>
-          <div className="text-xs uppercase tracking-widest text-zinc-600">
-            Console
-          </div>
+      <div className="ag-brand-copy min-w-0">
+        <div className="truncate text-sm font-semibold text-zinc-100">
+          Artifact Gateway
         </div>
-      )}
+        <div className="text-xs uppercase tracking-widest text-zinc-600">
+          Console
+        </div>
+      </div>
     </div>
   );
 }
@@ -310,7 +309,7 @@ export function AppLayout() {
       ? location.pathname === item.to
       : location.pathname.startsWith(item.to),
   );
-  const createMenuItems = (hideGroupLabels: boolean): MenuProps["items"] =>
+  const createMenuItems = (): MenuProps["items"] =>
     (
       [
         { key: "runtime", label: "nav.runtime" },
@@ -330,15 +329,14 @@ export function AppLayout() {
             {
               key: `group-${group.key}`,
               type: "group" as const,
-              label: hideGroupLabels ? "" : t(group.label),
+              label: t(group.label),
               children,
             },
           ]
         : [];
     });
 
-  const desktopMenuItems = createMenuItems(collapsed);
-  const mobileMenuItems = createMenuItems(false);
+  const menuItems = createMenuItems();
 
   return (
     <div
@@ -351,25 +349,20 @@ export function AppLayout() {
       >
         <BrandLockup collapsed={collapsed} />
         <Menu
-          className={`ag-nav flex-1 border-0 bg-transparent ${collapsed ? "px-2" : "px-3"}`}
+          className="ag-nav ag-desktop-nav flex-1 border-0 bg-transparent"
           mode="inline"
           theme={colorMode}
           inlineCollapsed={collapsed}
           selectedKeys={selectedItem ? [selectedItem.to] : []}
-          items={desktopMenuItems}
+          items={menuItems}
         />
         <div
-          className={`ag-sider-footer flex border-t border-zinc-800/60 py-2 ${
-            collapsed
-              ? "justify-center px-0"
-              : "items-center justify-between px-4"
-          }`}
+          className="ag-sider-footer border-t border-zinc-800/60 py-2"
+          data-collapsed={collapsed ? "true" : "false"}
         >
-          {!collapsed && (
-            <span className="text-xs leading-4 text-zinc-600">
-              Native Hosted API v2
-            </span>
-          )}
+          <span className="ag-sider-meta text-xs leading-4 text-zinc-600">
+            Native Hosted API v2
+          </span>
           <Tooltip
             title={collapsed ? t("nav.expand") : t("nav.collapse")}
             placement="right"
@@ -404,7 +397,7 @@ export function AppLayout() {
           mode="inline"
           theme={colorMode}
           selectedKeys={selectedItem ? [selectedItem.to] : []}
-          items={mobileMenuItems}
+          items={menuItems}
           onClick={() => setMobileNavOpen(false)}
         />
         <div className="ag-mobile-nav-footer text-xs text-zinc-600">

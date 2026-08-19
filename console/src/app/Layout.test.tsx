@@ -122,6 +122,16 @@ describe("AppLayout", () => {
 
     await user.click(screen.getByRole("button", { name: "收起导航" }));
     expect(window.localStorage.getItem("ag:sider-collapsed")).toBe("1");
+    const desktopSider =
+      document.querySelector<HTMLElement>(".ag-sider-desktop");
+    expect(desktopSider).toHaveAttribute("data-collapsed", "true");
+    expect(within(desktopSider!).getByText("运行")).toBeInTheDocument();
+    expect(
+      within(desktopSider!).getByText("Artifact Gateway"),
+    ).toBeInTheDocument();
+    expect(
+      within(desktopSider!).getByText("Native Hosted API v2"),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /退出/ }));
     expect(auth.clearToken).toHaveBeenCalledOnce();
