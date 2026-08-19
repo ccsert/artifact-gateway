@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ClearOutlined,
   CloseOutlined,
+  InfoCircleOutlined,
   PlayCircleOutlined,
   RedoOutlined,
   ReloadOutlined,
@@ -64,6 +65,10 @@ type OperationRow = {
 type Localize = (chinese: string, english: string) => string;
 type JobAction = "run" | "retry" | "cancel";
 
+function operationRowKey(row: OperationRow) {
+  return `${row.kind}-${row.id}`;
+}
+
 const KIND_LABELS: Record<string, [string, string]> = {
   retention: ["制品保留", "Artifact retention"],
   promotion: ["制品晋级", "Artifact promotion"],
@@ -75,11 +80,11 @@ const KIND_LABELS: Record<string, [string, string]> = {
 
 function useCompactOperationLayout() {
   const [compact, setCompact] = useState(
-    () => window.matchMedia("(max-width: 720px)").matches,
+    () => window.matchMedia("(max-width: 1120px)").matches,
   );
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 720px)");
+    const media = window.matchMedia("(max-width: 1120px)");
     const update = () => setCompact(media.matches);
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -217,68 +222,125 @@ function OperationTimeline({
 function OperationActions({
   row,
   acting,
+  detailsOpen,
   text,
+  onInspect,
   onAction,
 }: {
   row: OperationRow;
   acting: boolean;
+  detailsOpen: boolean;
   text: Localize;
+  onInspect: (row: OperationRow) => void;
   onAction: (row: OperationRow, action: JobAction) => void;
 }) {
-  if (!row.repositoryId)
-    return <span className="text-xs text-zinc-600">—</span>;
   return (
     <Space size="small">
-      {(row.state === "pending" || row.state === "retrying") && (
-        <Tooltip
-          title={text("立即加入执行队列", "Queue for immediate execution")}
-        >
-          <Button
-            aria-label={text(
-              "立即加入执行队列",
-              "Queue for immediate execution",
-            )}
-            size="small"
-            icon={<PlayCircleOutlined />}
-            loading={acting}
-            onClick={() => onAction(row, "run")}
-          />
-        </Tooltip>
-      )}
-      {(row.state === "failed" || row.state === "cancelled") && (
-        <Tooltip title={text("重新执行任务", "Retry job")}>
-          <Button
-            aria-label={text("重新执行任务", "Retry job")}
-            size="small"
-            icon={<RedoOutlined />}
-            loading={acting}
-            onClick={() => onAction(row, "retry")}
-          />
-        </Tooltip>
-      )}
-      {(row.state === "pending" || row.state === "retrying") && (
-        <Popconfirm
-          title={text("取消此任务？", "Cancel this job?")}
-          description={text(
-            "取消后仍可从任务中心重新执行。",
-            "You can retry it later from Operations.",
-          )}
-          okText={text("取消任务", "Cancel job")}
-          cancelText={text("返回", "Back")}
-          onConfirm={() => onAction(row, "cancel")}
-        >
-          <Tooltip title={text("取消任务", "Cancel job")}>
+      <Tooltip
+        title={text(
+          detailsOpen ? "收起任务详情" : "查看任务详情",
+          detailsOpen ? "Hide job details" : "View job details",
+        )}
+      >
+        <Button
+          aria-label={text("查看任务详情", "View job details")}
+          aria-expanded={detailsOpen}
+          type={detailsOpen ? "primary" : "default"}
+          size="small"
+          icon={<InfoCircleOutlined />}
+          onClick={() => onInspect(row)}
+        />
+      </Tooltip>
+      {row.repositoryId &&
+        (row.state === "pending" || row.state === "retrying") && (
+          <Tooltip
+            title={text("立即加入执行队列", "Queue for immediate execution")}
+          >
             <Button
-              aria-label={text("取消任务", "Cancel job")}
-              danger
+              aria-label={text(
+                "立即加入执行队列",
+                "Queue for immediate execution",
+              )}
               size="small"
-              icon={<CloseOutlined />}
+              icon={<PlayCircleOutlined />}
               loading={acting}
+              onClick={() => onAction(row, "run")}
             />
           </Tooltip>
-        </Popconfirm>
-      )}
+        )}
+      {row.repositoryId &&
+        (row.state === "failed" || row.state === "cancelled") && (
+          <Tooltip title={text("重新执行任务", "Retry job")}>
+            <Button
+              aria-label={text("重新执行任务", "Retry job")}
+              size="small"
+              icon={<RedoOutlined />}
+              loading={acting}
+              onClick={() => onAction(row, "retry")}
+            />
+          </Tooltip>
+        )}
+      {row.repositoryId &&
+        (row.state === "pending" || row.state === "retrying") && (
+          <Popconfirm
+            title={text("取消此任务？", "Cancel this job?")}
+            description={text(
+              "取消后仍可从任务中心重新执行。",
+              "You can retry it later from Operations.",
+            )}
+            okText={text("取消任务", "Cancel job")}
+            cancelText={text("返回", "Back")}
+            onConfirm={() => onAction(row, "cancel")}
+          >
+            <Tooltip title={text("取消任务", "Cancel job")}>
+              <Button
+                aria-label={text("取消任务", "Cancel job")}
+                danger
+                size="small"
+                icon={<CloseOutlined />}
+                loading={acting}
+              />
+            </Tooltip>
+          </Popconfirm>
+        )}
     </Space>
+  );
+}
+
+function OperationDetailsPanel({
+  row,
+  text,
+}: {
+  row: OperationRow;
+  text: Localize;
+}) {
+  return (
+    <div className="ag-operation-details">
+      <dl className="ag-operation-details-meta">
+        <div>
+          <dt>{text("任务 ID", "Job ID")}</dt>
+          <dd className="font-mono">{row.id}</dd>
+        </div>
+        <div>
+          <dt>{text("仓库", "Repository")}</dt>
+          <dd>{row.repository ?? text("全局任务", "Global job")}</dd>
+        </div>
+      </dl>
+      {row.details && <LifecycleJobDetails details={row.details} />}
+      {row.lastError && (
+        <div className="break-words rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs leading-5 text-rose-300">
+          {row.lastError}
+        </div>
+      )}
+      {!row.details && !row.lastError && (
+        <p className="text-xs leading-5 text-zinc-500">
+          {text(
+            "此任务没有报告额外的执行详情。",
+            "This job did not report additional execution details.",
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -287,14 +349,18 @@ function OperationMobileCard({
   locale,
   kindLabel,
   acting,
+  detailsOpen,
   text,
+  onInspect,
   onAction,
 }: {
   row: OperationRow;
   locale: string;
   kindLabel: (kind: string) => string;
   acting: boolean;
+  detailsOpen: boolean;
   text: Localize;
+  onInspect: (row: OperationRow) => void;
   onAction: (row: OperationRow, action: JobAction) => void;
 }) {
   return (
@@ -306,24 +372,21 @@ function OperationMobileCard({
       <div className="mt-4 border-t border-zinc-800/60 pt-4">
         <OperationTimeline row={row} locale={locale} text={text} />
       </div>
-      {row.details && (
-        <details className="mt-4 border-t border-zinc-800/60 pt-3">
-          <summary className="cursor-pointer text-xs font-medium text-cyan-300">
-            {text("查看任务详情", "View job details")}
-          </summary>
-          <div className="mt-3">
-            <LifecycleJobDetails details={row.details} />
-          </div>
-        </details>
-      )}
       <div className="mt-4 flex justify-end border-t border-zinc-800/60 pt-3">
         <OperationActions
           row={row}
           acting={acting}
+          detailsOpen={detailsOpen}
           text={text}
+          onInspect={onInspect}
           onAction={onAction}
         />
       </div>
+      {detailsOpen && (
+        <div className="mt-4 border-t border-zinc-800/60 pt-4">
+          <OperationDetailsPanel row={row} text={text} />
+        </div>
+      )}
     </article>
   );
 }
@@ -477,13 +540,16 @@ export function OperationsPage() {
   const kindOptions = Array.from(
     new Set((rows ?? []).map((row) => row.kind)),
   ).sort();
+  const toggleJobDetails = (row: OperationRow) => {
+    const rowKey = operationRowKey(row);
+    setExpandedJobKey((current) => (current === rowKey ? null : rowKey));
+  };
 
   const columns: ColumnsType<OperationRow> = [
     {
       title: text("任务", "Job"),
       key: "identity",
-      fixed: "left",
-      width: 300,
+      width: 250,
       render: (_, row) => (
         <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
       ),
@@ -491,13 +557,13 @@ export function OperationsPage() {
     {
       title: text("状态与进度", "Status and progress"),
       key: "status",
-      width: 300,
+      width: 250,
       render: (_, row) => <OperationStatus row={row} text={text} />,
     },
     {
       title: text("时间线", "Timeline"),
       key: "timeline",
-      width: 260,
+      width: 200,
       render: (_, row) => (
         <OperationTimeline row={row} locale={locale} text={text} />
       ),
@@ -505,13 +571,14 @@ export function OperationsPage() {
     {
       title: text("操作", "Actions"),
       key: "actions",
-      fixed: "right",
-      width: 120,
+      width: 140,
       render: (_, row) => (
         <OperationActions
           row={row}
           acting={actingJob === row.id}
+          detailsOpen={expandedJobKey === operationRowKey(row)}
           text={text}
+          onInspect={toggleJobDetails}
           onAction={(target, action) => void controlJob(target, action)}
         />
       ),
@@ -712,12 +779,14 @@ export function OperationsPage() {
                     <div className="ag-operation-mobile-list">
                       {visibleRows.map((row) => (
                         <OperationMobileCard
-                          key={`${row.kind}-${row.id}`}
+                          key={operationRowKey(row)}
                           row={row}
                           locale={locale}
                           kindLabel={kindLabel}
                           acting={actingJob === row.id}
+                          detailsOpen={expandedJobKey === operationRowKey(row)}
                           text={text}
+                          onInspect={toggleJobDetails}
                           onAction={(target, action) =>
                             void controlJob(target, action)
                           }
@@ -727,34 +796,20 @@ export function OperationsPage() {
                   ) : (
                     <Table<OperationRow>
                       className="ag-console-table ag-operation-desktop-table"
-                      rowKey={(row) => `${row.kind}-${row.id}`}
+                      rowKey={operationRowKey}
                       size="middle"
                       dataSource={visibleRows}
                       columns={columns}
                       expandable={{
                         expandedRowKeys: expandedJobKey ? [expandedJobKey] : [],
-                        onExpand: (expanded, row) =>
-                          setExpandedJobKey(
-                            expanded ? `${row.kind}-${row.id}` : null,
-                          ),
-                        rowExpandable: (row) =>
-                          Boolean(row.details || row.lastError),
+                        showExpandColumn: false,
                         expandedRowRender: (row) => (
-                          <div className="space-y-2 py-1">
-                            {row.details && (
-                              <LifecycleJobDetails details={row.details} />
-                            )}
-                            {row.lastError && (
-                              <div className="break-words rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs leading-5 text-rose-300">
-                                {row.lastError}
-                              </div>
-                            )}
-                          </div>
+                          <OperationDetailsPanel row={row} text={text} />
                         ),
                       }}
                       pagination={false}
                       virtual
-                      scroll={{ x: 980, y: 520 }}
+                      scroll={{ x: 840, y: 520 }}
                     />
                   )}
                 </Card>
@@ -765,7 +820,7 @@ export function OperationsPage() {
             key: "diagnostics",
             label: text("系统诊断", "System diagnostics"),
             children: (
-              <div className="ag-page-stack">
+              <div className="ag-page-stack ag-diagnostics-tab">
                 <SystemDiagnosticsPanel />
                 <RuntimeNodesPanel />
               </div>

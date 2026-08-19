@@ -165,7 +165,7 @@ export function RuntimeNodesPanel({
   }, [load, pollIntervalMs]);
 
   return (
-    <Card className="mt-4">
+    <Card className="ag-runtime-nodes-card">
       <CardHeader
         title={text("运行节点", "Runtime nodes")}
         extra={

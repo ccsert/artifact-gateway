@@ -88,6 +88,32 @@ describe("SystemDiagnosticsPanel", () => {
     expect(screen.getByText("maven")).toBeInTheDocument();
   });
 
+  it("separates build metadata from runtime identity", async () => {
+    mockGetDiagnostics.mockResolvedValue({ data: diagnostics } as never);
+    const { container } = renderPanel();
+
+    const identityHeading = await screen.findByRole("heading", {
+      name: "构建与运行身份",
+    });
+    const identityCard = identityHeading.closest(".ag-card");
+    expect(identityCard).not.toBeNull();
+    expect(
+      within(identityCard as HTMLElement).getByRole("heading", {
+        name: "构建信息",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(identityCard as HTMLElement).getByRole("heading", {
+        name: "运行身份",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        ".ag-diagnostics-identity-card .ant-descriptions",
+      ),
+    ).toBeNull();
+  });
+
   it("surfaces node issues in the diagnostic action list", async () => {
     mockGetDiagnostics.mockResolvedValue({
       data: {

@@ -628,6 +628,46 @@ button:not(:disabled):active,
   border-bottom: 0;
 }
 
+.ag-operation-details {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.ag-operation-details-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.ag-operation-details-meta > div {
+  min-width: 0;
+}
+
+.ag-operation-details-meta dt {
+  color: var(--ag-text-mute);
+  font-size: 11px;
+}
+
+.ag-operation-details-meta dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ag-text-soft);
+  font-size: 12px;
+}
+
+.ag-diagnostics-tab {
+  display: grid;
+  gap: 24px;
+}
+
+.ag-diagnostics-tab > * {
+  min-width: 0;
+  margin: 0 !important;
+}
+
 .ag-system-diagnostics > * + * {
   margin-top: 16px;
 }
@@ -635,16 +675,74 @@ button:not(:disabled):active,
 .ag-diagnostics-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "dependencies"
+    "identity"
+    "queues";
   align-items: start;
   gap: 16px;
 }
 
 .ag-diagnostics-dependencies-card {
-  order: 1;
+  grid-area: dependencies;
 }
 
 .ag-diagnostics-identity-card {
-  order: 2;
+  grid-area: identity;
+}
+
+.ag-diagnostics-queue-card {
+  grid-area: queues;
+}
+
+.ag-diagnostic-identity-groups {
+  padding: 2px 20px 10px;
+}
+
+.ag-diagnostic-identity-group {
+  min-width: 0;
+  padding-block: 14px;
+}
+
+.ag-diagnostic-identity-group + .ag-diagnostic-identity-group {
+  border-top: 1px solid var(--ag-border-subtle);
+}
+
+.ag-diagnostic-identity-group h3 {
+  margin: 0 0 10px;
+  color: var(--ag-text-mute);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ag-diagnostic-identity-group dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ag-diagnostic-identity-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.ag-diagnostic-identity-row dt {
+  color: var(--ag-text-mute);
+  font-size: 12px;
+}
+
+.ag-diagnostic-identity-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ag-text-soft);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .ag-diagnostic-issue-row,
@@ -659,6 +757,9 @@ button:not(:disabled):active,
 @media (min-width: 1200px) {
   .ag-diagnostics-detail-grid {
     grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    grid-template-areas:
+      "dependencies identity"
+      "queues identity";
   }
 }
 
@@ -1172,6 +1273,16 @@ button:not(:disabled):active,
   }
 }
 
+@media (max-width: 1120px) {
+  .ag-operation-desktop-table {
+    display: none;
+  }
+
+  .ag-operation-mobile-list {
+    display: block;
+  }
+}
+
 @media (max-width: 720px) {
   .ag-topbar {
     min-height: 104px;
@@ -1198,14 +1309,6 @@ button:not(:disabled):active,
   .ag-topbar .ant-btn {
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .ag-operation-desktop-table {
-    display: none;
-  }
-
-  .ag-operation-mobile-list {
-    display: block;
   }
 
   .ag-diagnostic-issue-row,

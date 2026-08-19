@@ -95,12 +95,112 @@ test("operations survives legacy runtime node null arrays", async ({
   await page.goto("/operations");
   await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible();
   await page.getByRole("tab", { name: "系统诊断" }).click();
+  await expect(page.getByRole("heading", { name: "构建信息" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "运行身份", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "运行节点" })).toBeVisible();
   await expect(page.getByText("legacy-worker", { exact: true })).toBeVisible();
   await expect(page.getByText("无格式 Worker", { exact: true })).toBeVisible();
+  const backgroundQueues = page
+    .getByRole("heading", { name: "后台队列" })
+    .locator(
+      "xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' ag-card ')][1]",
+    );
+  const runtimeNodes = page
+    .getByRole("heading", { name: "运行节点" })
+    .locator(
+      "xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' ag-card ')][1]",
+    );
+  await expect
+    .poll(async () => {
+      const queueBox = await backgroundQueues.boundingBox();
+      const runtimeBox = await runtimeNodes.boundingBox();
+      if (!queueBox || !runtimeBox) return -1;
+      return Math.round(runtimeBox.y - (queueBox.y + queueBox.height));
+    })
+    .toBeGreaterThanOrEqual(24);
+  const identityCard = page.locator(".ag-diagnostics-identity-card");
+  await expect
+    .poll(() =>
+      identityCard.evaluate(
+        (element) => element.scrollWidth - element.clientWidth,
+      ),
+    )
+    .toBe(0);
   await expect(
     page.getByText("Unexpected Application Error!", { exact: true }),
   ).not.toBeVisible();
+});
+
+test("job history uses one compact and consistent detail path", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1180, height: 900 });
+  await authenticateAsAdmin(page);
+  await page.route("**/api/v2/repositories**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/lifecycle-jobs**", (route) =>
+    route.fulfill({
+      json: [
+        {
+          repositoryId: "repo-oci",
+          repositoryName: "images-production-with-a-long-name",
+          job: {
+            id: "job-failed-001",
+            kind: "promotion",
+            state: "failed",
+            createdAt: "2026-08-08T08:00:00Z",
+            completedAt: "2026-08-08T08:02:00Z",
+            attempts: 3,
+            maxAttempts: 3,
+            lastError: "目标仓库拒绝了晋级请求",
+          },
+        },
+        {
+          repositoryId: "repo-maven",
+          repositoryName: "maven-releases",
+          job: {
+            id: "job-completed-001",
+            kind: "retention",
+            state: "completed",
+            createdAt: "2026-08-08T07:00:00Z",
+            completedAt: "2026-08-08T07:02:00Z",
+            attempts: 1,
+            maxAttempts: 3,
+          },
+        },
+      ],
+    }),
+  );
+  await page.route("**/api/v2/audit-retention/jobs**", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/v2/scheduled-tasks", (route) =>
+    route.fulfill({ json: [] }),
+  );
+
+  await page.goto("/operations");
+  await page.getByRole("tab", { name: "执行记录" }).click();
+
+  const table = page.locator(".ag-operation-desktop-table");
+  await expect(table).toBeVisible();
+  await expect(table.locator(".ant-table-row-expand-icon")).toHaveCount(0);
+  const detailButtons = table.getByRole("button", { name: "查看任务详情" });
+  await expect(detailButtons).toHaveCount(2);
+  await expect
+    .poll(() =>
+      table
+        .locator(".ant-table-container")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
+    .toBe(0);
+  await detailButtons.nth(1).click();
+  await expect(detailButtons.nth(1)).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    table.getByText("此任务没有报告额外的执行详情。", { exact: true }),
+  ).toBeVisible();
 });
 
 test("job history keeps the record path compact on mobile", async ({

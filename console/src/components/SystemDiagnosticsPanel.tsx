@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   CheckCircleOutlined,
   CopyOutlined,
   ReloadOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Space, Table, Tooltip } from "antd";
+import { Alert, Button, Space, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { getDiagnostics } from "../client";
 import type {
@@ -49,6 +50,23 @@ const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
 };
 
 type Localize = (chinese: string, english: string) => string;
+
+function DiagnosticIdentityItem({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="ag-diagnostic-identity-row">
+      <dt>{label}</dt>
+      <dd className={mono ? "font-mono" : undefined}>{value}</dd>
+    </div>
+  );
+}
 
 function scannerOperationalDetail(
   scanner: DiagnosticScanner,
@@ -431,59 +449,57 @@ export function SystemDiagnosticsPanel() {
           <CardHeader
             title={text("构建与运行身份", "Build and runtime identity")}
           />
-          <Descriptions
-            className="px-5 py-4"
-            size="small"
-            column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 1, xxl: 2 }}
-            items={[
-              {
-                key: "version",
-                label: text("版本", "Version"),
-                children: diagnostics.build.version,
-              },
-              {
-                key: "revision",
-                label: text("修订", "Revision"),
-                children: (
-                  <span className="font-mono text-xs">
-                    {diagnostics.build.revision}
-                  </span>
-                ),
-              },
-              { key: "go", label: "Go", children: diagnostics.build.goVersion },
-              {
-                key: "instance",
-                label: text("实例", "Instance"),
-                children: (
-                  <span className="font-mono text-xs">
-                    {diagnostics.runtime.instanceId || "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "roles",
-                label: text("角色", "Roles"),
-                children: diagnostics.runtime.roles.join(" · ") || "—",
-              },
-              {
-                key: "worker-formats",
-                label: text("Worker 格式", "Worker formats"),
-                children: diagnostics.runtime.workerFormats.join(" · ") || "—",
-              },
-              {
-                key: "worker-kinds",
-                label: text("Worker 任务", "Worker jobs"),
-                children: diagnostics.runtime.workerKinds.join(" · ") || "—",
-              },
-              {
-                key: "modified",
-                label: text("工作区", "Workspace"),
-                children: diagnostics.build.modified
-                  ? text("有未提交修改", "Modified")
-                  : text("干净", "Clean"),
-              },
-            ]}
-          />
+          <div className="ag-diagnostic-identity-groups">
+            <section className="ag-diagnostic-identity-group">
+              <h3>{text("构建信息", "Build information")}</h3>
+              <dl>
+                <DiagnosticIdentityItem
+                  label={text("版本", "Version")}
+                  value={diagnostics.build.version}
+                />
+                <DiagnosticIdentityItem
+                  label={text("修订", "Revision")}
+                  value={diagnostics.build.revision}
+                  mono
+                />
+                <DiagnosticIdentityItem
+                  label="Go"
+                  value={diagnostics.build.goVersion}
+                  mono
+                />
+                <DiagnosticIdentityItem
+                  label={text("工作区", "Workspace")}
+                  value={
+                    diagnostics.build.modified
+                      ? text("有未提交修改", "Modified")
+                      : text("干净", "Clean")
+                  }
+                />
+              </dl>
+            </section>
+            <section className="ag-diagnostic-identity-group">
+              <h3>{text("运行身份", "Runtime identity")}</h3>
+              <dl>
+                <DiagnosticIdentityItem
+                  label={text("实例", "Instance")}
+                  value={diagnostics.runtime.instanceId || "—"}
+                  mono
+                />
+                <DiagnosticIdentityItem
+                  label={text("角色", "Roles")}
+                  value={diagnostics.runtime.roles.join(" · ") || "—"}
+                />
+                <DiagnosticIdentityItem
+                  label={text("Worker 格式", "Worker formats")}
+                  value={diagnostics.runtime.workerFormats.join(" · ") || "—"}
+                />
+                <DiagnosticIdentityItem
+                  label={text("Worker 任务", "Worker jobs")}
+                  value={diagnostics.runtime.workerKinds.join(" · ") || "—"}
+                />
+              </dl>
+            </section>
+          </div>
         </Card>
         <Card className="ag-diagnostics-dependencies-card">
           <CardHeader
@@ -575,25 +591,24 @@ export function SystemDiagnosticsPanel() {
             )}
           </div>
         </Card>
+        <Card className="ag-diagnostics-queue-card">
+          <CardHeader title={text("后台队列", "Background queues")} />
+          <Table<DiagnosticQueueStat>
+            className="ag-console-table"
+            rowKey={(queue) => `${queue.kind}-${queue.format}-${queue.state}`}
+            size="small"
+            dataSource={diagnostics.queues}
+            columns={queueColumns}
+            locale={{
+              emptyText: text("当前没有活跃队列", "No active queue entries"),
+            }}
+            pagination={false}
+            scroll={
+              diagnostics.queues.length > 8 ? { x: 500, y: 320 } : { x: 500 }
+            }
+          />
+        </Card>
       </div>
-
-      <Card>
-        <CardHeader title={text("后台队列", "Background queues")} />
-        <Table<DiagnosticQueueStat>
-          className="ag-console-table"
-          rowKey={(queue) => `${queue.kind}-${queue.format}-${queue.state}`}
-          size="small"
-          dataSource={diagnostics.queues}
-          columns={queueColumns}
-          locale={{
-            emptyText: text("当前没有活跃队列", "No active queue entries"),
-          }}
-          pagination={false}
-          scroll={
-            diagnostics.queues.length > 8 ? { x: 500, y: 320 } : { x: 500 }
-          }
-        />
-      </Card>
     </div>
   );
 }
