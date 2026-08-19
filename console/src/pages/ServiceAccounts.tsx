@@ -134,28 +134,33 @@ export function ServiceAccountsPage() {
     async (pageToken?: string) => {
       setError(null);
       if (pageToken) setLoadingMoreAccounts(true);
-      const { data, error: loadError } = await listServiceAccounts({
-        query: { pageSize: 200, pageToken },
-      });
-      if (pageToken) setLoadingMoreAccounts(false);
-      if (loadError || !data) {
-        setError(
-          loadError ??
-            new Error(
-              text("加载服务账号失败", "Failed to load service accounts"),
-            ),
+      try {
+        const { data, error: loadError } = await listServiceAccounts({
+          query: { pageSize: 200, pageToken },
+        });
+        if (loadError || !data) {
+          setError(
+            loadError ??
+              new Error(
+                text("加载服务账号失败", "Failed to load service accounts"),
+              ),
+          );
+          return;
+        }
+        setAccounts((current) =>
+          pageToken && current ? [...current, ...data.items] : data.items,
         );
-        return;
+        setNextAccountsPageToken(data.nextPageToken ?? "");
+        setSelectedAccountId((current) =>
+          pageToken || data.items.some((account) => account.id === current)
+            ? current
+            : (data.items[0]?.id ?? ""),
+        );
+      } catch (nextError) {
+        setError(nextError);
+      } finally {
+        if (pageToken) setLoadingMoreAccounts(false);
       }
-      setAccounts((current) =>
-        pageToken && current ? [...current, ...data.items] : data.items,
-      );
-      setNextAccountsPageToken(data.nextPageToken ?? "");
-      setSelectedAccountId((current) =>
-        pageToken || data.items.some((account) => account.id === current)
-          ? current
-          : (data.items[0]?.id ?? ""),
-      );
     },
     [text],
   );
@@ -172,23 +177,32 @@ export function ServiceAccountsPage() {
       setCredentialsError(null);
       if (pageToken) setLoadingMoreCredentials(true);
       else setLoadingMoreCredentials(false);
-      const { data, error: loadError } = await listServiceAccountCredentials({
-        path: { serviceAccountId: selectedAccountId },
-        query: { pageSize: 200, pageToken },
-      });
-      if (requestId !== credentialRequestId.current) return;
-      setLoadingMoreCredentials(false);
-      if (loadError || !data) {
-        setCredentialsError(
-          loadError ??
-            new Error(text("加载凭据失败", "Failed to load credentials")),
+      try {
+        const { data, error: loadError } = await listServiceAccountCredentials({
+          path: { serviceAccountId: selectedAccountId },
+          query: { pageSize: 200, pageToken },
+        });
+        if (requestId !== credentialRequestId.current) return;
+        if (loadError || !data) {
+          setCredentialsError(
+            loadError ??
+              new Error(text("加载凭据失败", "Failed to load credentials")),
+          );
+          return;
+        }
+        setCredentials((current) =>
+          pageToken && current ? [...current, ...data.items] : data.items,
         );
-        return;
+        setNextCredentialsPageToken(data.nextPageToken ?? "");
+      } catch (nextError) {
+        if (requestId === credentialRequestId.current) {
+          setCredentialsError(nextError);
+        }
+      } finally {
+        if (requestId === credentialRequestId.current) {
+          setLoadingMoreCredentials(false);
+        }
       }
-      setCredentials((current) =>
-        pageToken && current ? [...current, ...data.items] : data.items,
-      );
-      setNextCredentialsPageToken(data.nextPageToken ?? "");
     },
     [selectedAccountId, text],
   );
@@ -206,47 +220,61 @@ export function ServiceAccountsPage() {
   const submitAccount = async () => {
     setBusy(true);
     setError(null);
-    const { data, error: createError } = await createServiceAccount({
-      body: {
-        name: accountName.trim(),
-        description: accountDescription.trim() || undefined,
-      },
-    });
-    setBusy(false);
-    if (createError || !data) {
-      setError(createError ?? new Error(text("创建失败", "Creation failed")));
-      return;
+    try {
+      const { data, error: createError } = await createServiceAccount({
+        body: {
+          name: accountName.trim(),
+          description: accountDescription.trim() || undefined,
+        },
+      });
+      if (createError || !data) {
+        setError(createError ?? new Error(text("创建失败", "Creation failed")));
+        return;
+      }
+      createDialog.hide();
+      setAccountName("");
+      setAccountDescription("");
+      await loadAccounts();
+      setSelectedAccountId(data.id);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    createDialog.hide();
-    setAccountName("");
-    setAccountDescription("");
-    await loadAccounts();
-    setSelectedAccountId(data.id);
   };
 
   const submitCredential = async () => {
     if (!selectedAccount) return;
     setBusy(true);
     setCredentialsError(null);
-    const { data, error: createError } = await createServiceAccountCredential({
-      path: { serviceAccountId: selectedAccount.id },
-      body: {
-        name: credentialName.trim(),
-        expiresAt: new Date(Date.now() + validDays * 86_400_000).toISOString(),
-      },
-    });
-    setBusy(false);
-    if (createError || !data) {
-      setCredentialsError(
-        createError ?? new Error(text("签发失败", "Issuance failed")),
+    try {
+      const { data, error: createError } = await createServiceAccountCredential(
+        {
+          path: { serviceAccountId: selectedAccount.id },
+          body: {
+            name: credentialName.trim(),
+            expiresAt: new Date(
+              Date.now() + validDays * 86_400_000,
+            ).toISOString(),
+          },
+        },
       );
-      return;
+      if (createError || !data) {
+        setCredentialsError(
+          createError ?? new Error(text("签发失败", "Issuance failed")),
+        );
+        return;
+      }
+      credentialDialog.hide();
+      setCredentialName("");
+      setValidDays(90);
+      setReveal(data);
+      await loadCredentials();
+    } catch (nextError) {
+      setCredentialsError(nextError);
+    } finally {
+      setBusy(false);
     }
-    credentialDialog.hide();
-    setCredentialName("");
-    setValidDays(90);
-    setReveal(data);
-    await loadCredentials();
   };
 
   const confirmAccountState = async () => {
@@ -254,36 +282,46 @@ export function ServiceAccountsPage() {
     setBusy(true);
     const nextState =
       accountStateChange.state === "active" ? "disabled" : "active";
-    const { error: updateError } = await updateServiceAccount({
-      path: { serviceAccountId: accountStateChange.id },
-      headers: { "If-Match": accountStateChange.version },
-      body: { state: nextState },
-    });
-    setBusy(false);
-    if (updateError) {
-      setError(updateError);
-      return;
+    try {
+      const { error: updateError } = await updateServiceAccount({
+        path: { serviceAccountId: accountStateChange.id },
+        headers: { "If-Match": accountStateChange.version },
+        body: { state: nextState },
+      });
+      if (updateError) {
+        setError(updateError);
+        return;
+      }
+      setAccountStateChange(null);
+      await loadAccounts();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    setAccountStateChange(null);
-    await loadAccounts();
   };
 
   const confirmRevoke = async () => {
     if (!selectedAccount || !credentialToRevoke) return;
     setBusy(true);
-    const { error: revokeError } = await revokeServiceAccountCredential({
-      path: {
-        serviceAccountId: selectedAccount.id,
-        credentialId: credentialToRevoke.id,
-      },
-    });
-    setBusy(false);
-    if (revokeError) {
-      setCredentialsError(revokeError);
-      return;
+    try {
+      const { error: revokeError } = await revokeServiceAccountCredential({
+        path: {
+          serviceAccountId: selectedAccount.id,
+          credentialId: credentialToRevoke.id,
+        },
+      });
+      if (revokeError) {
+        setCredentialsError(revokeError);
+        return;
+      }
+      setCredentialToRevoke(null);
+      await loadCredentials();
+    } catch (nextError) {
+      setCredentialsError(nextError);
+    } finally {
+      setBusy(false);
     }
-    setCredentialToRevoke(null);
-    await loadCredentials();
   };
 
   const activeAccounts =
@@ -414,11 +452,19 @@ export function ServiceAccountsPage() {
         ]}
       />
 
-      {error !== null && <ErrorBanner error={error} onRetry={loadAccounts} />}
+      {error !== null && accounts !== null && (
+        <ErrorBanner error={error} onRetry={loadAccounts} />
+      )}
       {accounts === null ? (
-        <Card bodyClassName="p-8">
-          <Loading label={text("加载服务账号…", "Loading service accounts…")} />
-        </Card>
+        error !== null ? (
+          <ErrorBanner error={error} onRetry={loadAccounts} />
+        ) : (
+          <Card bodyClassName="p-8">
+            <Loading
+              label={text("加载服务账号…", "Loading service accounts…")}
+            />
+          </Card>
+        )
       ) : accounts.length === 0 ? (
         <Card bodyClassName="p-8">
           <EmptyState
@@ -435,7 +481,7 @@ export function ServiceAccountsPage() {
           />
         </Card>
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
             <div className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
               {text("机器主体", "Machine principals")}

@@ -99,6 +99,34 @@ afterEach(() => {
 });
 
 describe("ServiceAccountsPage", () => {
+  it("does not present a failed initial request as still loading", async () => {
+    mockListServiceAccounts.mockResolvedValue({
+      error: { message: "service account inventory unavailable" },
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText("请求出错")).toBeInTheDocument();
+    expect(
+      screen.getByText("service account inventory unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("加载服务账号…")).not.toBeInTheDocument();
+  });
+
+  it("turns a rejected initial request into a recoverable page error", async () => {
+    mockListServiceAccounts.mockRejectedValue(
+      new Error("service account request rejected"),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("请求出错")).toBeInTheDocument();
+    expect(
+      screen.getByText("service account request rejected"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /重试/ })).toBeInTheDocument();
+  });
+
   it("presents one stable machine principal separately from its rotating credentials", async () => {
     mockListServiceAccounts.mockResolvedValue({
       data: { items: [activeAccount] },

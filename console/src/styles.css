@@ -480,6 +480,29 @@ button:not(:disabled):active,
 
 /* ========== 卡片与表面 ========== */
 
+/* Page flow is a layout contract, not a list of known sibling combinations.
+   Every direct region receives a stable rhythm even when its component type or
+   loading/error state changes. Semantic lead/primary regions add one half-step. */
+.ag-page-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.ag-page-stack > * {
+  min-width: 0;
+  margin-block: 0 !important;
+}
+
+.ag-page-stack > .ag-page-header {
+  margin-bottom: 8px !important;
+}
+
+.ag-page-stack > .ag-page-primary {
+  margin-top: 8px !important;
+}
+
 .ag-card {
   position: relative;
   overflow: hidden;
@@ -501,23 +524,6 @@ button:not(:disabled):active,
 .ag-metric-strip + .ag-card,
 .ag-filter-bar + .ag-card {
   margin-top: 16px;
-}
-
-/* Ant Design component styles outrank utility margins. Keep page-level
-   surfaces on an explicit spacing rhythm instead of relying on mt/mb classes. */
-.ag-page-stack > .ag-card + .ag-card,
-.ag-page-stack > .ag-card + .ant-collapse,
-.ag-page-stack > .ant-collapse + .ag-card,
-.ag-page-stack > .ag-feedback-stack + .ag-card,
-.ag-page-stack > .ag-card + .ag-filter-bar,
-.ag-page-stack > .ag-filter-bar + .ag-card,
-.ag-page-stack > .ag-metric-strip + .ant-tabs,
-.ag-page-stack > .ag-metric-strip + .ag-feedback-stack {
-  margin-top: 16px;
-}
-
-.ag-page-stack > .ant-collapse {
-  margin-block: 0;
 }
 
 .ag-access-tabs > .ant-tabs-nav {
