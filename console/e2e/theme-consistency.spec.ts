@@ -20,6 +20,20 @@ async function mockFormatProfiles(page: Page) {
   );
 }
 
+function measureLifecycleInsets(root: HTMLElement) {
+  const rootBox = root.getBoundingClientRect();
+  const itemBoxes = Array.from(
+    root.querySelectorAll<HTMLElement>(".ag-lifecycle-step"),
+    (item) => item.getBoundingClientRect(),
+  );
+  return {
+    top: Math.min(...itemBoxes.map((box) => box.top - rootBox.top)),
+    right: Math.min(...itemBoxes.map((box) => rootBox.right - box.right)),
+    bottom: Math.min(...itemBoxes.map((box) => rootBox.bottom - box.bottom)),
+    left: Math.min(...itemBoxes.map((box) => box.left - rootBox.left)),
+  };
+}
+
 test("theme and language preferences persist on the sign-in surface", async ({
   page,
 }) => {
@@ -420,6 +434,12 @@ test("dashboard excludes archived repositories from operational status", async (
   const lifecycleSteps = page.locator(".ag-lifecycle-steps");
   await expect(lifecycleSteps).toHaveClass(/ant-steps-navigation/);
   await expect(lifecycleSteps.getByRole("button")).toHaveCount(5);
+  const desktopLifecycleInsets = await lifecycleSteps.evaluate(
+    measureLifecycleInsets,
+  );
+  for (const inset of Object.values(desktopLifecycleInsets)) {
+    expect(inset).toBeGreaterThanOrEqual(16);
+  }
   const lifecycleArrowAlignments = await page
     .locator(".ag-lifecycle-step:not(:last-child)")
     .evaluateAll((stages) =>
@@ -446,6 +466,18 @@ test("dashboard excludes archived repositories from operational status", async (
         .evaluate((stage) => getComputedStyle(stage, "::after").borderTopStyle),
     )
     .toBe("dashed");
+  const firstLifecycleStep = lifecycleSteps.getByRole("button").first();
+  const idleStepBackground = await firstLifecycleStep.evaluate(
+    (step) => getComputedStyle(step).backgroundColor,
+  );
+  await firstLifecycleStep.hover();
+  await expect
+    .poll(() =>
+      firstLifecycleStep.evaluate(
+        (step) => getComputedStyle(step).backgroundColor,
+      ),
+    )
+    .not.toBe(idleStepBackground);
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
     await page.screenshot({
       path: testInfo.outputPath("dashboard-lifecycle-desktop.png"),
@@ -489,6 +521,12 @@ test("dashboard excludes archived repositories from operational status", async (
     .first()
     .boundingBox();
   expect(firstMetricBox?.width).toBeGreaterThan(300);
+  const mobileLifecycleInsets = await lifecycleSteps.evaluate(
+    measureLifecycleInsets,
+  );
+  for (const inset of Object.values(mobileLifecycleInsets)) {
+    expect(inset).toBeGreaterThanOrEqual(16);
+  }
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
     await page.screenshot({
       path: testInfo.outputPath("dashboard-lifecycle-mobile.png"),

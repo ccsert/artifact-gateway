@@ -996,7 +996,7 @@ button:not(:disabled):active,
 
 .ag-lifecycle-steps {
   min-width: 0;
-  padding: 8px 10px 12px;
+  padding: 16px 20px 20px;
 }
 
 .ag-lifecycle-step {
