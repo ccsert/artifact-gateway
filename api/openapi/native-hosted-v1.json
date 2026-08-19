@@ -3193,8 +3193,14 @@
           "201": {
             "description": "Module version published"
           },
+          "400": {
+            "description": "Request body could not be read"
+          },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Authenticated principal lacks Repository write permission"
           },
           "409": {
             "$ref": "#/components/responses/Problem"
@@ -3204,6 +3210,15 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "description": "Publication persistence failed"
+          },
+          "503": {
+            "description": "Publication coordination is unavailable"
+          },
+          "507": {
+            "description": "Repository capacity quota exceeded"
           }
         }
       },
