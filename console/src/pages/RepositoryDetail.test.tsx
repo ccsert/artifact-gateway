@@ -112,11 +112,12 @@ describe("RepositoryDetailPage scanning deep link", () => {
       await screen.findByRole("tab", { name: "制品扫描", selected: true }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("tab", { name: "策略与安全", selected: true }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("navigation", { name: "仓库任务" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(11);
+    expect(
+      screen.queryByRole("tab", { name: "策略与安全" }),
+    ).not.toBeInTheDocument();
     expect(await screen.findByText("扫描工作区已加载")).toBeInTheDocument();
     await waitFor(() => expect(scanningTab.render).toHaveBeenCalled());
     expect(scanningTab.render.mock.calls.at(-1)?.[0]).toMatchObject({

@@ -351,6 +351,67 @@ test("npm detail keeps version selection and package content aligned when intell
   expect(Math.abs((detailBox?.y ?? 0) - (versionBox?.y ?? 0))).toBeLessThan(2);
 });
 
+test("repository detail exposes every available task in one flat desktop row", async ({
+  page,
+}, testInfo) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page, { format: "npm" });
+
+  await page.goto(`/repositories/${repositoryId}`);
+
+  const navigation = page.getByRole("navigation", { name: "仓库任务" });
+  const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
+  await expect(taskTabs).toHaveCount(11);
+  for (const label of [
+    "制品",
+    "发布",
+    "访问授权",
+    "保留策略",
+    "制品扫描",
+    "安全准入",
+    "容量",
+    "晋升 / 复制",
+    "生命周期任务",
+    "墓碑",
+    "设置",
+  ]) {
+    await expect(
+      navigation.getByRole("tab", { name: label, exact: true }),
+    ).toBeVisible();
+  }
+  await expect(navigation.locator(".ant-tabs-nav-more")).toBeHidden();
+
+  const tabBoxes = await taskTabs.evaluateAll((tabs) =>
+    tabs.map((tab) => {
+      const box = tab.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    }),
+  );
+  expect(Math.max(...tabBoxes.map((box) => box.top))).toBeLessThan(
+    Math.min(...tabBoxes.map((box) => box.bottom)),
+  );
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-task-navigation.png"),
+      fullPage: true,
+    });
+  }
+});
+
 test("repository detail keeps operational content above the fold", async ({
   page,
 }, testInfo) => {
@@ -379,11 +440,27 @@ test("repository detail keeps operational content above the fold", async ({
   await page.keyboard.press("Escape");
 
   const navigation = page.getByRole("navigation", { name: "仓库任务" });
-  const sectionTabs = navigation
-    .locator(".ag-repository-section-tabs")
-    .getByRole("tab");
-  const taskTabs = page.locator(".ag-repository-task-tabs").getByRole("tab");
-  await expect(sectionTabs).toHaveCount(4);
+  const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
+  await expect(taskTabs).toHaveCount(10);
+  for (const label of [
+    "制品",
+    "访问授权",
+    "保留策略",
+    "制品扫描",
+    "安全准入",
+    "容量",
+    "晋升 / 复制",
+    "生命周期任务",
+    "墓碑",
+    "设置",
+  ]) {
+    await expect(
+      navigation.getByRole("tab", { name: label, exact: true }),
+    ).toBeVisible();
+  }
+  await expect(
+    navigation.getByRole("tab", { name: "发布", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "设置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "设置" })).toHaveCount(0);
 
@@ -414,29 +491,20 @@ test("repository detail keeps operational content above the fold", async ({
     });
   }
 
-  await page.getByRole("tab", { name: "策略与安全" }).click();
-  await expect(taskTabs).toHaveCount(4);
-  await expect(
-    page.getByRole("tab", { name: "访问授权", selected: true }),
-  ).toBeVisible();
+  await page.getByRole("tab", { name: "访问授权" }).click();
+  await expect(page.getByRole("tab", { name: "访问授权" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page).toHaveURL(/\?tab=grants$/);
 
   await page.goto(`/repositories/${repositoryId}`);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(sectionTabs).toHaveCount(4);
+  await expect(taskTabs).toHaveCount(10);
   await expect(
-    page.getByRole("tab", {
-      name: "制品与发布",
-      exact: true,
-      selected: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.locator(".ag-repository-group-label-compact").filter({
-      hasText: "制品",
-    }),
-  ).toBeVisible();
+    page.getByRole("tab", { name: "制品", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,

@@ -103,8 +103,6 @@ type Tab =
   | "tombstones"
   | "settings";
 
-type TabGroup = "content" | "governance" | "operations" | "settings";
-
 function RepositoryTabSurface({
   standalone,
   children,
@@ -173,54 +171,8 @@ const TABS: RepositoryTabDefinition[] = [
   { key: "settings", label: "设置", labelEn: "Settings" },
 ];
 
-const TAB_GROUPS: {
-  key: TabGroup;
-  label: string;
-  labelEn: string;
-  compactLabel: string;
-  compactLabelEn: string;
-  tabs: Tab[];
-}[] = [
-  {
-    key: "content",
-    label: "制品与发布",
-    labelEn: "Artifacts & publish",
-    compactLabel: "制品",
-    compactLabelEn: "Artifacts",
-    tabs: ["artifacts", "publish"],
-  },
-  {
-    key: "governance",
-    label: "策略与安全",
-    labelEn: "Policy & security",
-    compactLabel: "策略",
-    compactLabelEn: "Policy",
-    tabs: ["grants", "retention", "scanning", "security"],
-  },
-  {
-    key: "operations",
-    label: "运行与分发",
-    labelEn: "Operations & distribution",
-    compactLabel: "运行",
-    compactLabelEn: "Operations",
-    tabs: ["capacity", "distribute", "jobs", "tombstones"],
-  },
-  {
-    key: "settings",
-    label: "设置",
-    labelEn: "Settings",
-    compactLabel: "设置",
-    compactLabelEn: "Settings",
-    tabs: ["settings"],
-  },
-];
-
 function repositoryTabFromQuery(value: string | null): Tab {
   return TABS.find((tab) => tab.key === value)?.key ?? "artifacts";
-}
-
-function repositoryGroupForTab(tab: Tab): TabGroup {
-  return TAB_GROUPS.find((group) => group.tabs.includes(tab))?.key ?? "content";
 }
 
 function repositoryTabAvailable(
@@ -993,16 +945,6 @@ export function RepositoryDetailPage() {
   const availableTabs = TABS.filter((item) =>
     repositoryTabAvailable(item, repo),
   );
-  const availableGroups = TAB_GROUPS.map((group) => ({
-    ...group,
-    availableTabs: group.tabs
-      .map((key) => availableTabs.find((item) => item.key === key))
-      .filter((item): item is RepositoryTabDefinition => item !== undefined),
-  })).filter((group) => group.availableTabs.length > 0);
-  const activeGroup = repositoryGroupForTab(tab);
-  const activeGroupTabs =
-    availableGroups.find((group) => group.key === activeGroup)?.availableTabs ??
-    [];
 
   return (
     <div className="ag-page-stack">
@@ -1025,53 +967,17 @@ export function RepositoryDetailPage() {
         aria-label={text("仓库任务", "Repository tasks")}
       >
         <Tabs
-          className="ag-repository-section-tabs"
+          className="ag-repository-tabs"
           size="small"
           animated={false}
-          activeKey={activeGroup}
-          onChange={(key) => {
-            const nextGroup = availableGroups.find(
-              (group) => group.key === key,
-            );
-            const nextTab = nextGroup?.availableTabs[0];
-            if (nextTab) selectTab(nextTab.key);
-          }}
-          items={availableGroups.map((group) => ({
-            key: group.key,
-            label: (
-              <>
-                <span
-                  className="ag-repository-group-label-wide"
-                  aria-hidden="true"
-                >
-                  {text(group.label, group.labelEn)}
-                </span>
-                <span
-                  className="ag-repository-group-label-compact"
-                  aria-hidden="true"
-                >
-                  {text(group.compactLabel, group.compactLabelEn)}
-                </span>
-                <span className="sr-only">
-                  {text(group.label, group.labelEn)}
-                </span>
-              </>
-            ),
+          tabBarGutter={12}
+          activeKey={tab}
+          onChange={(key) => selectTab(key as Tab)}
+          items={availableTabs.map((item) => ({
+            key: item.key,
+            label: text(item.label, item.labelEn),
           }))}
         />
-        {activeGroupTabs.length > 1 && (
-          <Tabs
-            className="ag-repository-task-tabs"
-            size="small"
-            animated={false}
-            activeKey={tab}
-            onChange={(key) => selectTab(key as Tab)}
-            items={activeGroupTabs.map((item) => ({
-              key: item.key,
-              label: text(item.label, item.labelEn),
-            }))}
-          />
-        )}
       </nav>
       <RepositoryTabSurface
         standalone={tab === "scanning" || tab === "security"}
