@@ -1,7 +1,9 @@
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AntdProvider } from "../app/AntdProvider";
 import { PreferencesProvider } from "../lib/preferences";
-import { FilterBar, MetricStrip } from "./ConsolePrimitives";
+import { CopyableValue, FilterBar, MetricStrip } from "./ConsolePrimitives";
 
 afterEach(cleanup);
 
@@ -45,5 +47,50 @@ describe("MetricStrip", () => {
     expect(container.querySelector(".ag-metric-value")).not.toHaveClass(
       "truncate",
     );
+  });
+});
+
+describe("CopyableValue", () => {
+  function renderCopyableValue() {
+    return render(
+      <PreferencesProvider>
+        <AntdProvider>
+          <CopyableValue value="sha256:verified" />
+        </AntdProvider>
+      </PreferencesProvider>,
+    );
+  }
+
+  it("announces a successful copy and exposes the completed state", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    renderCopyableValue();
+
+    await user.click(screen.getByRole("button", { name: "复制" }));
+
+    expect(writeText).toHaveBeenCalledWith("sha256:verified");
+    expect(
+      await screen.findByRole("button", { name: "已复制" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("已复制到剪贴板");
+  });
+
+  it("shows actionable feedback when clipboard access fails", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    renderCopyableValue();
+
+    await user.click(screen.getByRole("button", { name: "复制" }));
+
+    expect(
+      await screen.findByText("复制失败，请手动复制该值。"),
+    ).toBeInTheDocument();
   });
 });

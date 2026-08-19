@@ -435,7 +435,7 @@ export function AppLayout() {
           </Space>
         </header>
         <main className="ag-main mx-auto w-full max-w-[1440px] flex-1 px-6 py-6">
-          <div key={location.pathname} className="ag-page-enter">
+          <div>
             <Outlet />
           </div>
         </main>

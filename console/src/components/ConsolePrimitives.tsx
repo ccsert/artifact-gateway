@@ -1,6 +1,6 @@
-import { CopyOutlined } from "@ant-design/icons";
-import { Button, Tooltip } from "antd";
-import { useState, type ReactNode } from "react";
+import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
+import { App, Button, Tooltip } from "antd";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePreferences } from "../lib/preferences";
 
 export interface MetricItem {
@@ -101,8 +101,20 @@ export function CopyableValue({
   className?: string;
 }) {
   const { text } = usePreferences();
+  const { message } = App.useApp();
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<number | undefined>(undefined);
   const copyLabel = copied ? text("已复制", "Copied") : text("复制", "Copy");
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== undefined) {
+        window.clearTimeout(resetTimer.current);
+      }
+    },
+    [],
+  );
+
   return (
     <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
       <Tooltip title={value}>
@@ -114,19 +126,33 @@ export function CopyableValue({
           size="small"
           className="shrink-0"
           aria-label={copyLabel}
-          icon={<CopyOutlined />}
+          icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           onClick={async (event) => {
             event.stopPropagation();
             try {
               await navigator.clipboard.writeText(value);
               setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
+              if (resetTimer.current !== undefined) {
+                window.clearTimeout(resetTimer.current);
+              }
+              resetTimer.current = window.setTimeout(() => {
+                setCopied(false);
+                resetTimer.current = undefined;
+              }, 1500);
             } catch {
-              // Clipboard access can be unavailable in an insecure local context.
+              void message.error(
+                text(
+                  "复制失败，请手动复制该值。",
+                  "Copy failed. Copy the value manually.",
+                ),
+              );
             }
           }}
         />
       </Tooltip>
+      <span className="sr-only" role="status" aria-live="polite">
+        {copied ? text("已复制到剪贴板", "Copied to clipboard") : ""}
+      </span>
     </span>
   );
 }

@@ -11,7 +11,12 @@ export function Spinner({ className = "" }: { className?: string }) {
 export function Loading({ label }: { label?: string }) {
   const { text } = usePreferences();
   return (
-    <div className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-zinc-400">
+    <div
+      className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-zinc-400"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
       <Spinner />
       <span className="text-sm">{label ?? text("加载中…", "Loading…")}</span>
     </div>

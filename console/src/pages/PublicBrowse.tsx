@@ -2474,7 +2474,7 @@ export function PublicBrowsePage() {
                           className="group block text-left"
                         >
                           <Card
-                            className="h-full border-zinc-800/90 bg-zinc-950/35 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80 group-hover:shadow-xl group-hover:shadow-black/20"
+                            className="ag-public-repository-card h-full border-zinc-800/90 bg-zinc-950/35 group-hover:-translate-y-0.5 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80 group-hover:shadow-xl group-hover:shadow-black/20"
                             bodyClassName="flex h-full min-h-52 flex-col p-5"
                           >
                             <div className="flex items-start justify-between gap-3">

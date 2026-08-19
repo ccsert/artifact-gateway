@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-19T02:46:16Z",
+  "title": "Design System: Artifact Gateway Console",
+  "extensions": {
+    "colorMeta": {
+      "primary-dark": {
+        "role": "primary",
+        "displayName": "Signal Cyan",
+        "canonical": "#06b6d4",
+        "tonalRamp": ["#083344", "#164e63", "#155e75", "#0e7490", "#0891b2", "#06b6d4", "#67e8f9", "#cffafe"]
+      },
+      "primary-dark-hover": {
+        "role": "primary",
+        "displayName": "Signal Cyan Hover",
+        "canonical": "#22d3ee",
+        "tonalRamp": ["#083344", "#164e63", "#155e75", "#0e7490", "#0891b2", "#22d3ee", "#a5f3fc", "#ecfeff"]
+      },
+      "primary-dark-active": {
+        "role": "primary",
+        "displayName": "Signal Cyan Active",
+        "canonical": "#0891b2",
+        "tonalRamp": ["#083344", "#164e63", "#155e75", "#0e7490", "#0891b2", "#06b6d4", "#67e8f9", "#cffafe"]
+      },
+      "primary-light": {
+        "role": "primary",
+        "displayName": "Daylight Signal Cyan",
+        "canonical": "#0891b2",
+        "tonalRamp": ["#083344", "#164e63", "#155e75", "#0e7490", "#0891b2", "#06b6d4", "#67e8f9", "#cffafe"]
+      },
+      "primary-soft-dark": {
+        "role": "primary",
+        "displayName": "Signal Wash Dark",
+        "canonical": "rgba(6, 182, 212, 0.12)",
+        "tonalRamp": ["#0c1b20", "#102a32", "#16424e", "#1d5b6b", "#347b8d", "#65a5b2", "#a8d3da", "#e7f7f9"]
+      },
+      "primary-soft-light": {
+        "role": "primary",
+        "displayName": "Signal Wash Light",
+        "canonical": "rgba(8, 145, 178, 0.10)",
+        "tonalRamp": ["#0d2630", "#173c49", "#215565", "#327185", "#5593a5", "#83b7c4", "#badce2", "#edf8fa"]
+      },
+      "dark-bg": {
+        "role": "neutral",
+        "displayName": "Night Ledger",
+        "canonical": "#08090b",
+        "tonalRamp": ["#08090b", "#141417", "#1b1b1f", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#f4f4f5"]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "Verified Surface",
+        "canonical": "#141417",
+        "tonalRamp": ["#08090b", "#141417", "#1b1b1f", "#27272a", "#3f3f46", "#71717a", "#d4d4d8", "#fafafa"]
+      },
+      "dark-elevated": {
+        "role": "neutral",
+        "displayName": "Raised Instrument",
+        "canonical": "#1b1b1f",
+        "tonalRamp": ["#08090b", "#141417", "#1b1b1f", "#27272a", "#52525b", "#a1a1aa", "#e4e4e7", "#fafafa"]
+      },
+      "dark-text": {
+        "role": "neutral",
+        "displayName": "Operational Text Dark",
+        "canonical": "#e4e4e7",
+        "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"]
+      },
+      "dark-text-strong": {
+        "role": "neutral",
+        "displayName": "Decisive Text Dark",
+        "canonical": "#fafafa",
+        "tonalRamp": ["#18181b", "#27272a", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5", "#fafafa"]
+      },
+      "dark-text-secondary": {
+        "role": "neutral",
+        "displayName": "Supporting Text Dark",
+        "canonical": "#b4b4bd",
+        "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5"]
+      },
+      "dark-text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Metadata Dark",
+        "canonical": "#8f8f9a",
+        "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#8f8f9a", "#d4d4d8", "#f4f4f5"]
+      },
+      "light-bg": {
+        "role": "neutral",
+        "displayName": "Daylight Canvas",
+        "canonical": "#f6f7f9",
+        "tonalRamp": ["#18181b", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#f4f4f5", "#f6f7f9"]
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "Daylight Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#18181b", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#f4f4f5", "#ffffff"]
+      },
+      "light-text": {
+        "role": "neutral",
+        "displayName": "Operational Text Light",
+        "canonical": "#27272a",
+        "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"]
+      },
+      "light-text-strong": {
+        "role": "neutral",
+        "displayName": "Decisive Text Light",
+        "canonical": "#18181b",
+        "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5", "#ffffff"]
+      },
+      "light-text-secondary": {
+        "role": "neutral",
+        "displayName": "Supporting Text Light",
+        "canonical": "#52525b",
+        "tonalRamp": ["#18181b", "#27272a", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5", "#ffffff"]
+      },
+      "success-dark": {
+        "role": "secondary",
+        "displayName": "Verified Success",
+        "canonical": "#34d399",
+        "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#047857", "#059669", "#34d399", "#a7f3d0", "#ecfdf5"]
+      },
+      "warning-dark": {
+        "role": "tertiary",
+        "displayName": "Operator Warning",
+        "canonical": "#fbbf24",
+        "tonalRamp": ["#451a03", "#78350f", "#92400e", "#b45309", "#d97706", "#fbbf24", "#fde68a", "#fffbeb"]
+      },
+      "error-dark": {
+        "role": "tertiary",
+        "displayName": "Blocking Error",
+        "canonical": "#fb7185",
+        "tonalRamp": ["#4c0519", "#881337", "#9f1239", "#be123c", "#e11d48", "#fb7185", "#fecdd3", "#fff1f2"]
+      }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Page Headline", "purpose": "One page identity per surface." },
+      "title": { "displayName": "Work Surface Title", "purpose": "Cards, drawers, modals, and focused sections." },
+      "body": { "displayName": "Operational Body", "purpose": "Controls, tables, task copy, and explanations." },
+      "label": { "displayName": "Compact Label", "purpose": "Fields, table headings, metrics, and metadata." },
+      "technical": { "displayName": "Evidence Mono", "purpose": "Coordinates, digests, principals, commands, paths, and request IDs." }
+    },
+    "shadows": [
+      {
+        "name": "structural-card",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 16px -8px rgba(0, 0, 0, 0.4)",
+        "purpose": "Low structural separation for work surfaces in dark mode."
+      },
+      {
+        "name": "raised-instrument",
+        "value": "0 8px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4)",
+        "purpose": "Modals, drawers, popovers, and other genuine overlays."
+      }
+    ],
+    "motion": [
+      { "name": "press-fast", "value": "120ms", "purpose": "Immediate press feedback on pointer-activated controls." },
+      { "name": "component-mid", "value": "180ms", "purpose": "Ordinary component state, color, opacity, and transform transitions." },
+      { "name": "overlay-enter", "value": "220ms", "purpose": "Occasional overlay or feedback entrance, never frequent route navigation." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Responsive entrance and state feedback." },
+      { "name": "ease-in-out-soft", "value": "cubic-bezier(0.45, 0, 0.15, 1)", "purpose": "On-screen movement that needs symmetric acceleration." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "600px" },
+      { "name": "stacked", "value": "900px" },
+      { "name": "mobile-navigation", "value": "1023px" },
+      { "name": "wide-workspace", "value": "1200px" },
+      { "name": "content-max", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single dominant action on an operational decision surface.",
+      "html": "<button class=\"ds-btn-primary\">APPLY POLICY</button>",
+      "css": ".ds-btn-primary { height: 34px; padding: 0 15px; border: 0; border-radius: var(--ag-radius-sm, 8px); color: #fafafa; background: var(--ag-brand, #06b6d4); font: 500 14px/22px Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 180ms cubic-bezier(0.16,1,0.3,1), transform 120ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary:hover { background: #22d3ee; } .ds-btn-primary:focus-visible { outline: 2px solid var(--ag-brand-glow, rgba(6,182,212,.35)); outline-offset: 2px; } .ds-btn-primary:active { transform: scale(.98); background: #0891b2; }"
+    },
+    {
+      "name": "Default Action",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Neutral secondary action that keeps the primary decision unambiguous.",
+      "html": "<button class=\"ds-btn-default\">VIEW DETAILS</button>",
+      "css": ".ds-btn-default { height: 34px; padding: 0 15px; border: 1px solid var(--ag-border, rgba(63,63,70,.65)); border-radius: var(--ag-radius-sm, 8px); color: var(--ag-text, #e4e4e7); background: var(--ag-surface-solid, #141417); font: 500 14px/22px Inter, ui-sans-serif, system-ui, sans-serif; transition: border-color 180ms cubic-bezier(0.16,1,0.3,1), background-color 180ms cubic-bezier(0.16,1,0.3,1), transform 120ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-default:hover { border-color: var(--ag-brand, #06b6d4); background: var(--ag-surface-hover, rgba(39,39,42,.55)); } .ds-btn-default:focus-visible { outline: 2px solid var(--ag-brand-glow, rgba(6,182,212,.35)); outline-offset: 2px; } .ds-btn-default:active { transform: scale(.98); }"
+    },
+    {
+      "name": "Repository Search",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Compact outlined input for searching names, coordinates, and digests.",
+      "html": "<label class=\"ds-field\"><span>REPOSITORY OR COORDINATE</span><input value=\"maven-central-proxy\" aria-label=\"Repository or coordinate\"></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: var(--ag-text-mute, #8f8f9a); font: 500 12px/20px Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; } .ds-field input { height: 34px; padding: 4px 11px; border: 1px solid var(--ag-border, rgba(63,63,70,.65)); border-radius: var(--ag-radius-sm, 8px); color: var(--ag-text, #e4e4e7); background: var(--ag-surface-solid, #141417); font: 400 14px/22px Inter, ui-sans-serif, system-ui, sans-serif; transition: border-color 180ms cubic-bezier(0.16,1,0.3,1), box-shadow 180ms cubic-bezier(0.16,1,0.3,1); } .ds-field input:focus-visible { border-color: var(--ag-brand, #06b6d4); outline: 0; box-shadow: 0 0 0 2px var(--ag-brand-glow, rgba(6,182,212,.35)); }"
+    },
+    {
+      "name": "Operational Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Grounded work surface with structural rather than decorative elevation.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-label\">REPOSITORY HEALTH</div><strong>Ready</strong><p>PostgreSQL and object storage are reachable.</p></section>",
+      "css": ".ds-card { padding: 16px; border: 1px solid var(--ag-border-subtle, rgba(63,63,70,.35)); border-radius: var(--ag-radius, 10px); color: var(--ag-text, #e4e4e7); background: var(--ag-surface-solid, #141417); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 4px 16px -8px rgba(0,0,0,.4); font: 400 14px/22px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-card-label { margin-bottom: 8px; color: var(--ag-text-mute, #8f8f9a); font-size: 12px; font-weight: 500; letter-spacing: .04em; } .ds-card strong { display: block; color: var(--ag-text-strong, #fafafa); font-size: 16px; } .ds-card p { margin: 4px 0 0; color: var(--ag-text-dim, #b4b4bd); }"
+    },
+    {
+      "name": "Selected Navigation Item",
+      "kind": "nav",
+      "refersTo": "menu-item-selected",
+      "description": "Current location with a restrained wash and a narrow signal edge.",
+      "html": "<a class=\"ds-nav-selected\" href=\"#\"><span aria-hidden=\"true\">◆</span>Repositories</a>",
+      "css": ".ds-nav-selected { position: relative; display: flex; height: 38px; align-items: center; gap: 10px; padding: 0 12px; border-radius: var(--ag-radius-sm, 8px); color: #a5f3fc; background: linear-gradient(90deg, rgba(6,182,212,.14), rgba(6,182,212,.05)); font: 500 14px/22px Inter, ui-sans-serif, system-ui, sans-serif; text-decoration: none; } .ds-nav-selected::before { position: absolute; top: 20%; bottom: 20%; left: 0; width: 2px; border-radius: 2px; background: var(--ag-brand, #06b6d4); content: \"\"; } .ds-nav-selected:focus-visible { outline: 2px solid var(--ag-brand-glow, rgba(6,182,212,.35)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Metric Strip",
+      "kind": "custom",
+      "description": "Compact page summary with tabular values and explicit semantic tone.",
+      "html": "<div class=\"ds-metric\"><span>ACTIVE REPOSITORIES</span><strong>24</strong><small>2 require attention</small></div>",
+      "css": ".ds-metric { min-width: 0; padding: 14px 20px; border: 1px solid var(--ag-border-subtle, rgba(63,63,70,.35)); border-radius: var(--ag-radius, 10px); color: var(--ag-text, #e4e4e7); background: var(--ag-surface-solid, #141417); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-metric span { display: block; color: var(--ag-text-mute, #8f8f9a); font-size: 12px; font-weight: 500; letter-spacing: .04em; } .ds-metric strong { display: block; margin-top: 4px; color: var(--ag-text-strong, #fafafa); font-size: 20px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; } .ds-metric small { display: block; margin-top: 2px; color: var(--ag-text-dim, #b4b4bd); font-size: 12px; line-height: 20px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Verified Control Plane",
+    "overview": "Artifact Gateway Console should feel like the control surface for a system whose claims can be proved. The visual language is dark, precise, operational, and quiet: real status, immutable identity, policy boundaries, and recoverable actions receive attention before decoration. The interface is an Operate surface where density, scanability, predictable Ant Design behavior, keyboard access, and fast state feedback outrank spectacle.",
+    "keyCharacteristics": [
+      "Evidence-led hierarchy",
+      "Protocol-native specificity",
+      "Restrained signal color",
+      "Layered but grounded surfaces",
+      "Crisp motion"
+    ],
+    "rules": [
+      { "name": "The Signal Rarity Rule", "body": "Cyan is reserved for action, location, focus, and trusted system links; it should not become a general decorative fill.", "section": "colors" },
+      { "name": "The Status Has Words Rule", "body": "Success, warning, and error colors must be paired with text, an icon, or both.", "section": "colors" },
+      { "name": "The Evidence Is Monospace Rule", "body": "Use monospace only where exact character identity matters.", "section": "typography" },
+      { "name": "The Twelve-Pixel Floor Rule", "body": "Ten- or eleven-pixel text is reserved for non-essential marks only.", "section": "typography" },
+      { "name": "The Parent Owns Rhythm Rule", "body": "Direct page children have no external vertical margin; the page stack owns spacing.", "section": "layout" },
+      { "name": "The Geometry Is Evidence Rule", "body": "Responsive acceptance uses DOM rectangles, overflow assertions, and desktop/mobile screenshots.", "section": "layout" },
+      { "name": "The Flat-Until-Raised Rule", "body": "Large shadows appear only when a component has actually moved above its context.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve real API data, protocol deep links, copy commands, immutable identities, and format-specific operations when refining a surface.",
+      "Do use Ant Design components and tokens before creating a custom primitive.",
+      "Do keep async and authorization states explicit.",
+      "Do verify responsive geometry and real browser behavior."
+    ],
+    "donts": [
+      "Don't turn the Console into a generic card-and-table admin template.",
+      "Don't fabricate operational data or release status.",
+      "Don't use transition-all, animate layout properties, or replay page entrances during frequent administration.",
+      "Don't introduce a second component, toast, or motion library when Ant Design and CSS already cover the interaction."
+    ]
+  }
+}
