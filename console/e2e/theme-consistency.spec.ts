@@ -345,7 +345,8 @@ test("deleted repositories stay archived unless explicitly requested", async ({
 
 test("dashboard excludes archived repositories from operational status", async ({
   page,
-}) => {
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await authenticateAsAdmin(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({
@@ -414,6 +415,37 @@ test("dashboard excludes archived repositories from operational status", async (
     "分发",
   ]);
   await expect(page.getByText("仅风险命中时", { exact: true })).toBeVisible();
+  const lifecycleArrowAlignments = await page
+    .locator(".ag-lifecycle-stage:not(:last-child)")
+    .evaluateAll((stages) =>
+      stages.map((stage) => {
+        const stageBox = stage.getBoundingClientRect();
+        const iconBox = stage
+          .querySelector(".ag-lifecycle-stage-icon")!
+          .getBoundingClientRect();
+        const arrowStyle = getComputedStyle(stage, "::after");
+        const arrowCenter =
+          stageBox.top +
+          Number.parseFloat(arrowStyle.top) +
+          Number.parseFloat(arrowStyle.height) / 2;
+        const iconCenter = iconBox.top + iconBox.height / 2;
+        return {
+          display: arrowStyle.display,
+          verticalDelta: Math.abs(arrowCenter - iconCenter),
+        };
+      }),
+    );
+  expect(lifecycleArrowAlignments).toHaveLength(4);
+  for (const alignment of lifecycleArrowAlignments) {
+    expect(alignment.display).not.toBe("none");
+    expect(alignment.verticalDelta).toBeLessThanOrEqual(1);
+  }
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("dashboard-lifecycle-desktop.png"),
+      fullPage: true,
+    });
+  }
   await expect(
     page
       .getByRole("group", { name: "页面摘要" })
@@ -449,6 +481,12 @@ test("dashboard excludes archived repositories from operational status", async (
     .first()
     .boundingBox();
   expect(firstMetricBox?.width).toBeGreaterThan(300);
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("dashboard-lifecycle-mobile.png"),
+      fullPage: true,
+    });
+  }
 
   await openNavigation.click();
   const drawer = page.getByRole("dialog");

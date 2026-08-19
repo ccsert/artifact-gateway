@@ -1010,7 +1010,9 @@ button:not(:disabled):active,
 .ag-lifecycle-stage:not(:last-child)::after {
   position: absolute;
   z-index: 1;
-  top: 31px;
+  /* Stage padding + index row + grid gap place the icon at 44px; center the
+     12px chevron on the following 34px icon rather than on the index. */
+  top: 55px;
   right: -6px;
   width: 12px;
   height: 12px;
