@@ -6,7 +6,7 @@ cd "$repo_root"
 
 environment_file=${GATEWAY_ENV_FILE:-.env}
 test -f "$environment_file" || { printf '%s\n' 'Backup readiness requires a configured environment file.' >&2; exit 1; }
-# shellcheck disable=SC1091
+# shellcheck disable=SC1090
 source "$environment_file"
 
 free_port() {
@@ -21,6 +21,7 @@ isolated_environment=$(mktemp)
 grant_headers=$(mktemp)
 grant_response=$(mktemp)
 oci_headers=$(mktemp)
+go_workspace=$(mktemp -d)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
 
@@ -37,12 +38,14 @@ cleanup() {
   rm -f "$grant_headers"
   rm -f "$grant_response"
   rm -f "$oci_headers"
+  chmod -R u+w "$go_workspace" >/dev/null 2>&1 || true
+  rm -rf "$go_workspace"
   rm -rf "$backup_dir"
 }
 trap cleanup EXIT
 
 compose up -d --build --wait
-# shellcheck disable=SC1091
+# shellcheck disable=SC1090
 source "$isolated_environment"
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
 gateway_token() {
@@ -50,10 +53,10 @@ gateway_token() {
     python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
 }
 create_hosted_repository() {
-  local format=$1 name=$2 key=$3 response
+  local format=$1 name=$2 key=$3 anonymous_read=${4:-false} response
   response=$(curl --silent --show-error --fail \
     -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: $key" \
-    --data "$(printf '{\"name\":\"%s\",\"format\":\"%s\"}' "$name" "$format")" "$gateway_url/api/v2/repositories")
+    --data "$(printf '{\"name\":\"%s\",\"format\":\"%s\",\"anonymousRead\":%s}' "$name" "$format" "$anonymous_read")" "$gateway_url/api/v2/repositories")
   python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$response"
 }
 enqueue_idempotently() {
@@ -105,6 +108,61 @@ assert_restored_replication_completion() {
     return 1
   }
 }
+assert_go_module_download() {
+  local repository_name=$1 module_path=$2 version=$3 cache_name=$4 output
+  mkdir -p "$go_workspace/$cache_name/mod" "$go_workspace/$cache_name/build"
+  if ! output=$(cd "$go_workspace" && \
+    GOPROXY="$gateway_url/go/$repository_name" GOSUMDB=off GONOSUMDB='*' GONOPROXY=none \
+      GOMODCACHE="$go_workspace/$cache_name/mod" GOCACHE="$go_workspace/$cache_name/build" \
+      go mod download -json "$module_path@$version" 2>&1); then
+    printf 'Go module download failed for %s@%s after repository recovery:\n%s\n' "$module_path" "$version" "$output" >&2
+    return 1
+  fi
+  python3 -c '
+import json
+import sys
+
+module_path, version = sys.argv[1:]
+value = json.load(sys.stdin)
+if value.get("Path") != module_path or value.get("Version") != version or value.get("Error"):
+    raise SystemExit(f"unexpected go mod download result: {value}")
+' "$module_path" "$version" <<<"$output"
+}
+write_go_module_zip() {
+  local output=$1 module_path=$2 version=$3 marker=$4
+  python3 - "$output" "$module_path" "$version" "$marker" <<'PY'
+import sys
+import zipfile
+
+output, module_path, version, marker = sys.argv[1:]
+prefix = f"{module_path}@{version}/"
+with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    archive.writestr(prefix + "go.mod", f"module {module_path}\n\ngo 1.20\n")
+    archive.writestr(prefix + "restore.go", f'package restore\n\nconst Marker = "{marker}"\n')
+PY
+}
+publish_go_module() {
+  local repository_name=$1 module_path=$2 version=$3 archive=$4 expected_status=${5:-201} status
+  status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --request PUT -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --data-binary "@$archive" \
+    "$gateway_url/go/$repository_name/$module_path/@v/$version.zip")
+  [[ "$status" == "$expected_status" ]] || {
+    printf 'Publishing Go module %s@%s returned HTTP %s.\n' "$module_path" "$version" "$status" >&2
+    return 1
+  }
+}
+go_asset_digest() {
+  local repository_name=$1 module_path=$2 version=$3 kind=$4
+  curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+    "$gateway_url/go/$repository_name/$module_path/@v/$version.$kind" | shasum -a 256 | awk '{print $1}'
+}
+assert_rustfs_object_state() {
+  local state=$1 object_key=$2
+  GATEWAY_RUSTFS_ENDPOINT="http://127.0.0.1:$rustfs_api_port" \
+    GATEWAY_RUSTFS_BUCKET="${GATEWAY_RUSTFS_BUCKET:-gateway-cache}" \
+    RUSTFS_ACCESS_KEY="$RUSTFS_ACCESS_KEY" RUSTFS_SECRET_KEY="$RUSTFS_SECRET_KEY" \
+    go run ./scripts/rustfs-object-state "$state" "$object_key"
+}
 run_id="backup-${RANDOM}"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E_RUN_ID="$run_id" ./scripts/raw-e2e.sh
 raw_group="raw-ready-${run_id}"
@@ -115,6 +173,9 @@ promotion_target_repository="promotion-restore-${run_id}"
 oci_source_repository="oci-restore-${run_id}"
 maven_source_repository="maven-restore-${run_id}"
 conan_source_repository="conan-restore-${run_id}"
+go_source_repository="go-restore-${run_id}"
+go_module_path="example.com/backup/restore"
+go_version="v1.0.0"
 create_repository=$(printf '{"name":"%s","format":"raw"}' "$grant_repository")
 repository=$(curl --silent --show-error --fail \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -203,6 +264,25 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request POST "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id:commit")
 [[ "$status" == 200 ]] || { printf 'Committing Conan publication returned HTTP %s.\n' "$status" >&2; exit 1; }
 
+go_source_id=$(create_hosted_repository go "$go_source_repository" "go-source-${run_id}" true)
+go_archive="$go_workspace/$go_version.zip"
+write_go_module_zip "$go_archive" "$go_module_path" "$go_version" before-backup
+publish_go_module "$go_source_repository" "$go_module_path" "$go_version" "$go_archive"
+go_info_digest=$(go_asset_digest "$go_source_repository" "$go_module_path" "$go_version" info)
+go_mod_digest=$(go_asset_digest "$go_source_repository" "$go_module_path" "$go_version" mod)
+go_zip_digest=$(go_asset_digest "$go_source_repository" "$go_module_path" "$go_version" zip)
+go_lifecycle_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  "$gateway_url/api/v2/repositories/$go_source_id/lifecycle-jobs")
+go_reclaim_job_ids=$(python3 -c '
+import json
+import sys
+
+jobs = [job for job in json.load(sys.stdin) if job.get("kind") == "reclaim"]
+if len(jobs) != 3:
+    raise SystemExit(f"expected three Go publication reclaim intents, got {len(jobs)}")
+print(",".join(sorted(job["id"] for job in jobs)))
+' <<<"$go_lifecycle_jobs")
+
 oci_replication_target_id=$(create_hosted_repository oci "oci-replication-restore-${run_id}" "oci-replication-target-${run_id}")
 oci_promotion_target_id=$(create_hosted_repository oci "oci-promotion-restore-${run_id}" "oci-promotion-target-${run_id}")
 maven_replication_target_id=$(create_hosted_repository maven "maven-replication-restore-${run_id}" "maven-replication-target-${run_id}")
@@ -243,6 +323,7 @@ anonymous_policy_version=$(python3 -c 'import json, sys; print(json.load(sys.std
 curl --silent --show-error --fail -X PUT \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' -H "If-Match: $anonymous_policy_version" \
   --data "{\"version\":\"$anonymous_policy_version\",\"enabled\":true}" "$gateway_url/api/v2/anonymous-access-policy" >/dev/null
+assert_go_module_download "$go_source_repository" "$go_module_path" "$go_version" pre-backup
 conan_payload=$(printf '{"name":"%s","anonymous":true,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":true}]}' "$conan_group")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -269,6 +350,13 @@ quarantine_response=$(curl --silent --show-error --fail --request PUT \
 grep -Fq '"state":"quarantined"' <<<"$quarantine_response" || { printf '%s\n' 'Creating quarantine recovery evidence failed.' >&2; exit 1; }
 
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/backup-drill.sh "$backup_dir"
+go_mutation_version="v1.1.0"
+go_mutation_archive="$go_workspace/$go_mutation_version.zip"
+write_go_module_zip "$go_mutation_archive" "$go_module_path" "$go_mutation_version" after-backup
+publish_go_module "$go_source_repository" "$go_module_path" "$go_mutation_version" "$go_mutation_archive"
+go_mutation_zip_digest=$(go_asset_digest "$go_source_repository" "$go_module_path" "$go_mutation_version" zip)
+go_mutation_object_key="native/go/sha256/$go_mutation_zip_digest"
+assert_rustfs_object_state present "$go_mutation_object_key"
 mutation_payload=$(printf '{"name":"post-restore-%s","anonymous":false,"cacheQuotaBytes":1048576,"members":[{"name":"fixture","type":"hosted","endpoint":"http://host.docker.internal:9","position":0,"anonymous":false}]}' "$run_id")
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
@@ -286,6 +374,33 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v1/raw/groups/post-restore-$run_id")
 [[ "$status" == 404 ]] || { printf 'Post-backup Raw Group survived restore with HTTP %s.\n' "$status" >&2; exit 1; }
 [[ $(curl --silent --show-error "$gateway_url/raw/$raw_group/release/app.txt") == 'raw release artifact' ]] || { printf '%s\n' 'Restored Raw cache content is unavailable.' >&2; exit 1; }
+assert_go_module_download "$go_source_repository" "$go_module_path" "$go_version" post-restore
+for go_asset in "info:$go_info_digest" "mod:$go_mod_digest" "zip:$go_zip_digest"; do
+  kind=${go_asset%%:*}
+  expected_digest=${go_asset#*:}
+  restored_digest=$(go_asset_digest "$go_source_repository" "$go_module_path" "$go_version" "$kind")
+  [[ "$restored_digest" == "$expected_digest" ]] || {
+    printf 'Restored Go %s digest changed: got %s, expected %s.\n' "$kind" "$restored_digest" "$expected_digest" >&2
+    exit 1
+  }
+done
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  "$gateway_url/go/$go_source_repository/$go_module_path/@v/$go_mutation_version.info")
+[[ "$status" == 404 ]] || { printf 'Post-backup Go mutation survived restore with HTTP %s.\n' "$status" >&2; exit 1; }
+assert_rustfs_object_state absent "$go_mutation_object_key"
+restored_go_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  "$gateway_url/api/v2/repositories/$go_source_id/lifecycle-jobs")
+python3 -c '
+import json
+import sys
+
+expected = set(sys.argv[1].split(","))
+actual = {job["id"] for job in json.load(sys.stdin) if job.get("kind") == "reclaim"}
+missing = sorted(expected - actual)
+if missing:
+    raise SystemExit(f"restored Go lifecycle jobs are missing: {missing}")
+' "$go_reclaim_job_ids" <<<"$restored_go_jobs"
 restored_grants=$(curl --silent --show-error --fail --dump-header "$grant_headers" \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v2/repositories/$repository_id/grants")
 tr -d '\r' <"$grant_headers" | grep -qi '^etag: 2$' || { printf '%s\n' 'Restored Repository grants did not retain version 2.' >&2; exit 1; }
@@ -334,4 +449,4 @@ grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%
 [[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
 [[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and RustFS restore preserved OCI, Maven, Raw, and Conan promotion jobs and replication plans, artifact quarantine, Raw cache, Conan state, Repository grants, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and RustFS restore preserved OCI, Maven, Raw, Conan, and Go Artifacts, Go recovery intents, promotion jobs and replication plans, artifact quarantine, Repository grants, and authorization audits.'

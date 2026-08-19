@@ -12,21 +12,32 @@ the local stack started by `make up`. The scripts keep backups under
 
 ## Drill
 
-1. Record the UTC start time and run `scripts/backup-drill.sh`.
-2. Confirm the PostgreSQL dump and RustFS tar archive pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
-3. Make a reversible test change by creating a disposable Group or by fetching a
-   Proxy artifact, then record the expected audit entry and cached object. For
-   V2 validation, record the Raw canonical path or Conan revision coordinate,
-   the member allowlist decision, and whether the read was authenticated or
-   anonymous. When a managed Repository is in scope, record its grant-set ETag,
+1. Record the UTC start time and establish the evidence that the backup must
+   preserve: create or fetch a test Artifact, record its expected audit entry,
+   and resolve it through its protocol client. For V2 validation, record the
+   Raw canonical path or Conan revision coordinate, the member allowlist
+   decision, and whether the read was authenticated or anonymous. For Go Hosted
+   validation, record the module path, version, and digests of its `.info`,
+   `.mod`, and `.zip` representations, then resolve it with a fresh
+   `GOMODCACHE`. When a managed Repository is in scope, record its grant-set ETag,
    a principal with `repositories:read`, and a separately authenticated
    principal without that scope; never record either credential.
+2. Run `scripts/backup-drill.sh`, then confirm the PostgreSQL dump and RustFS
+   tar archive pass `shasum -a 256 --check <backup-dir>/SHA256SUMS`.
+3. Make a reversible post-backup mutation by creating a disposable Group or an
+   additional Artifact version. Record the resource and, when practical, its
+   unique object digest; both its metadata and unreferenced object must be
+   absent after restore.
 4. Record the UTC recovery start time and run `scripts/restore-drill.sh <backup-dir>`.
 5. Confirm `curl -fsS -o /dev/null -w '%{http_code}' http://localhost:8080/readyz`
    returns `204`, query `GET /api/v1/audits` with an administrator token, and
    resolve the cached artifact. For V2 data, also resolve the recorded Raw path
    and Conan 2 revision through the restored Gateway and confirm their audit
-   records retain format, actor, member, cache disposition, and outcome.
+   records retain format, actor, member, cache disposition, and outcome. For Go
+   Hosted data, repeat the download with another fresh `GOMODCACHE` and verify
+   all three representation digests still match the recorded values.
+   Confirm the post-backup mutation is absent through both its management or
+   protocol API and a direct object-store lookup of its unique object digest.
    For a managed Repository, confirm the recorded grant-set ETag and principal
    remain present, the granted principal reads the recorded object, and the
    ungranted principal receives the protocol's normal authorization denial.

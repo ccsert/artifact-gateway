@@ -113,13 +113,16 @@ storage credentials, or unredacted upstream URLs in that record.
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
 - [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
       `324aba95`) into fresh isolated volumes, migrates it to the current
-      checkout while retaining the same RustFS service, verifies persisted
-      Maven object bytes and OCI/Maven Groups, creates current
-      Raw/Conan Group state, then starts the prior revision against those
-      volumes and verifies the persisted OCI Group can still be read. V2
-      migrations are additive: a rollback binary must not need V2 rows to
-      serve existing OCI Groups. This is an application/schema upgrade gate;
-      the project no longer ships a legacy object-store migration path.
+      checkout while retaining the same PostgreSQL and RustFS state, verifies
+      persisted Maven object bytes and OCI/Maven Groups, and uses the real Go
+      client to resolve a base Go Proxy module after its upstream is made
+      unreachable. It then publishes and resolves a current Go Hosted module,
+      creates current Raw/Conan Group state, starts the prior revision against
+      those volumes, re-verifies the base OCI, Maven, and Go Proxy state, and
+      finally rolls forward to prove both Go Proxy and Go Hosted content remain
+      readable. V2 migrations are additive: a rollback binary must not need V2
+      rows to serve existing OCI Groups. This is an application/schema upgrade
+      gate; the project no longer ships a legacy object-store migration path.
 - [ ] Before rolling out migration `000095`, stop accepting new replication
       requests, drain every pre-upgrade replication plan to a terminal state,
       and stop all old replication workers. Apply the migration and start only
@@ -131,13 +134,17 @@ storage credentials, or unredacted upstream URLs in that record.
       empty instead of publishing it; resolve such a plan explicitly rather
       than bypassing that fail-closed result.
 - [ ] `make backup-restore-readiness` runs PostgreSQL and RustFS backup/restore
-      against isolated volumes. It creates OCI, Maven, Raw, and Conan source
+      against isolated volumes. It creates OCI, Maven, Raw, Conan, and Go source
       Artifacts through HTTP, creates and replays promotion jobs and replication
-      plans for each format, then verifies all saved instructions and their
-      management audit records after restore. It also verifies restored Raw
-      cache content, artifact quarantine state and reason, Conan Group state,
-      Repository grant version/content, and the Native Raw authorization
-      denial/allow behavior. Run `make backup-drill`
+      plans for the lifecycle-enabled formats, then verifies all saved
+      instructions and their management audit records after restore. For Go it
+      runs a real `go mod download` before and after restore, verifies the exact
+      `.info`, `.mod`, and `.zip` digests plus durable publication-recovery
+      intents, and proves a post-backup module mutation is absent from both the
+      protocol surface and RustFS. It also
+      verifies restored Raw cache content, artifact quarantine state and reason,
+      Conan Group state, Repository grant version/content, and the Native Raw
+      authorization denial/allow behavior. Run `make backup-drill`
       against the release environment only after the isolated rehearsal passes.
 - [ ] `make native-apt-e2e` proves exact recovery of an immutable signed APT
       snapshot in addition to the broader backup rehearsal: signing-state
@@ -207,11 +214,11 @@ flowchart LR
   Checkpointed replication and promotion workers publish verified Artifacts for
   each of those formats. Go supports atomic Hosted publication and standard
   Hosted/Proxy/Group reads, but not delete/restore, retention, reclaim,
-  promotion, or replication. The
-  lifecycle Jobs view exposes intelligence copy details and an atomic
+  promotion, or replication. The lifecycle Jobs view exposes intelligence copy
+  details and an atomic
   repository-level reconciliation action for failed or cancelled copy jobs.
-  backup/restore rehearsal retains persisted lifecycle jobs and plans, but does
-  not require a worker to complete them after restore.
+  The backup/restore rehearsal retains persisted lifecycle jobs and plans, but
+  does not require a worker to complete them after restore.
 - Raw Hosted supports authenticated PUT and DELETE, single-byte-range GET/HEAD,
   derived checksum sidecars, and resumable uploads. Conditional write/update
   semantics and non-HTTP client tooling are unsupported. Conan supports Conan 2
