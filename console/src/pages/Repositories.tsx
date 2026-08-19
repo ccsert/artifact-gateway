@@ -16,7 +16,12 @@ import {
 } from "../client";
 import type { Repository, Format, FormatProfile } from "../client";
 import { PageHeader, Card, Pagination, Field } from "../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
+import {
+  Loading,
+  ErrorBanner,
+  EmptyState,
+  EmptyStateArtwork,
+} from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
 import { formatBytes, formatNumber } from "../lib/format";
@@ -32,6 +37,8 @@ import {
   repositoryFormats,
   repositoryTypes,
 } from "../lib/formatProfiles";
+import emptyRepositoriesDark from "../assets/empty-repositories.webp";
+import emptyRepositoriesLight from "../assets/empty-repositories-light.webp";
 
 function CreateRepositoryDialog({
   profiles,
@@ -630,8 +637,8 @@ export function RepositoriesPage() {
             hint={
               items.length === 0
                 ? text(
-                    "点击右上角「新建仓库」创建第一个仓库",
-                    "Use New repository to create the first repository",
+                    "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
+                    "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
                   )
                 : deletedCount > 0 && stateFilter === "operational"
                   ? text(
@@ -642,6 +649,23 @@ export function RepositoriesPage() {
                       "调整筛选条件后重试",
                       "Adjust the filters and try again",
                     )
+            }
+            image={
+              items.length === 0 ? (
+                <EmptyStateArtwork
+                  darkSrc={emptyRepositoriesDark}
+                  lightSrc={emptyRepositoriesLight}
+                  name="repositories"
+                />
+              ) : undefined
+            }
+            action={
+              items.length === 0 ? (
+                <CreateRepositoryDialog
+                  profiles={formatProfiles}
+                  onCreated={load}
+                />
+              ) : undefined
             }
           />
         </Card>

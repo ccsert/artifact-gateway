@@ -3,7 +3,6 @@ import type { FormEvent } from "react";
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
-  AppstoreOutlined,
   CheckOutlined,
   CopyOutlined,
   DownOutlined,
@@ -23,7 +22,12 @@ import {
 } from "../client";
 import type { ArtifactSummary } from "../client";
 import { Card } from "../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
+import {
+  Loading,
+  ErrorBanner,
+  EmptyState,
+  EmptyStateArtwork,
+} from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usageFor, type UsageSnippet } from "../lib/usage";
@@ -46,11 +50,14 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../components/PublicBrowsePrimitives";
+import emptyPublicCatalogDark from "../assets/empty-public-catalog.webp";
+import emptyPublicCatalogLight from "../assets/empty-public-catalog-light.webp";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
 import { APTAssetDetail } from "../components/APTAssetDetail";
 import { useClipboardAction } from "../components/ConsolePrimitives";
+import { SiteBrandMark, SiteName } from "../components/SiteBrand";
 
 type PublicRepositoryFormat =
   "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
@@ -2158,12 +2165,10 @@ export function PublicBrowsePage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.08)]">
-              <AppstoreOutlined className="text-lg" />
-            </div>
+            <SiteBrandMark className="flex size-10 items-center justify-center rounded-xl text-sm font-bold text-white" />
             <div>
               <div className="font-semibold tracking-tight text-zinc-100">
-                Artifact Gateway
+                <SiteName />
               </div>
               <div className="mt-0.5 text-xs text-zinc-500">
                 {t("public.browseTitle")}
@@ -2355,6 +2360,21 @@ export function PublicBrowsePage() {
                     "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。",
                     "An administrator must enable global anonymous access and allow reads on a repository.",
                   )}
+                  image={
+                    <EmptyStateArtwork
+                      darkSrc={emptyPublicCatalogDark}
+                      lightSrc={emptyPublicCatalogLight}
+                      name="public-catalog"
+                    />
+                  }
+                  action={
+                    <Link
+                      to="/login"
+                      className="text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                    >
+                      {t("public.managementLogin")}
+                    </Link>
+                  }
                 />
               ) : (
                 <div>
@@ -2400,6 +2420,7 @@ export function PublicBrowsePage() {
                   </div>
                   {visibleRepositories.length === 0 ? (
                     <EmptyState
+                      compact
                       title={text(
                         "没有匹配的公开仓库",
                         "No matching public repositories",
@@ -2417,6 +2438,13 @@ export function PublicBrowsePage() {
                         >
                           {text("清除筛选", "Clear filters")}
                         </Button>
+                      }
+                      image={
+                        <EmptyStateArtwork
+                          darkSrc={emptyPublicCatalogDark}
+                          lightSrc={emptyPublicCatalogLight}
+                          name="public-catalog"
+                        />
                       }
                     />
                   ) : (
@@ -2495,6 +2523,7 @@ export function PublicBrowsePage() {
               />
             ) : items.length === 0 ? (
               <EmptyState
+                compact
                 title={text(
                   "没有匹配的公开制品",
                   "No matching public artifacts",
@@ -2503,6 +2532,13 @@ export function PublicBrowsePage() {
                   "确认仓库已启用匿名读取，或调整查询条件。",
                   "Confirm anonymous reads are enabled or adjust the query.",
                 )}
+                image={
+                  <EmptyStateArtwork
+                    darkSrc={emptyPublicCatalogDark}
+                    lightSrc={emptyPublicCatalogLight}
+                    name="public-catalog"
+                  />
+                }
               />
             ) : (
               <Card>

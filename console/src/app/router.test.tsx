@@ -20,6 +20,10 @@ vi.mock("react-router-dom", async () => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  localStorage.clear();
+  route.error = new TypeError(
+    "Failed to fetch dynamically imported module: http://localhost:4173/src/app/Layout.tsx",
+  );
 });
 
 describe("RouteErrorPage", () => {
@@ -42,5 +46,32 @@ describe("RouteErrorPage", () => {
     expect(
       screen.queryByText("Unexpected Application Error!"),
     ).not.toBeInTheDocument();
+  });
+
+  it("presents a regular runtime failure with theme-safe recovery actions", async () => {
+    localStorage.setItem("ag.console.theme", "light");
+    route.error = new TypeError(
+      "Cannot read properties of null (reading 'useContext')",
+    );
+
+    render(
+      <PreferencesProvider>
+        <RouteErrorPage />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "页面加载失败" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("技术详情")).toBeInTheDocument();
+    expect(
+      screen.getByText("Cannot read properties of null (reading 'useContext')"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新加载" })).toHaveClass(
+      "ag-route-error-primary",
+    );
+    expect(screen.getByRole("link", { name: "浏览公开制品" })).toHaveClass(
+      "ag-route-error-secondary",
+    );
   });
 });

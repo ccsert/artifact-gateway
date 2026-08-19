@@ -40,15 +40,23 @@ export function ErrorBanner({
   onRetry?: () => void;
 }) {
   const { text } = usePreferences();
-  const problem = error as Problem | undefined;
-  const message =
-    problem?.message ??
-    (error instanceof Error
-      ? error.message
-      : text(
-          "请求失败，请检查网络或 Token",
-          "Request failed. Check the network or token.",
-        ));
+  const problem =
+    typeof error === "object" && error !== null
+      ? (error as Problem)
+      : undefined;
+  const plainText = typeof error === "string" ? error.trim() : "";
+  const routeUnavailable = /(?:^|\b)404(?:\b|$).*not found/i.test(plainText);
+  const message = routeUnavailable
+    ? text(
+        "当前 Gateway 未提供此接口，Console 与 Gateway 版本可能不一致。请更新或重启 Gateway 后重试。",
+        "The connected Gateway does not expose this endpoint. The Console and Gateway versions may not match; update or restart Gateway and retry.",
+      )
+    : problem?.message ||
+      (error instanceof Error ? error.message : plainText) ||
+      text(
+        "请求失败，请检查网络或 Token",
+        "Request failed. Check the network or token.",
+      );
   return (
     <Alert
       className="ag-feedback-enter"
@@ -90,18 +98,20 @@ export function EmptyState({
   title,
   hint,
   action,
+  image,
   compact = false,
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
+  image?: ReactNode;
   compact?: boolean;
 }) {
   return (
     <Empty
-      className={`ag-feedback-enter ${compact ? "py-5" : "py-12"}`}
+      className={`ag-feedback-enter ${image ? "ag-empty-state-with-artwork" : ""} ${compact ? "ag-empty-state-compact py-5" : "py-12"}`}
       style={compact ? { marginBlock: 0, marginInline: 0 } : undefined}
-      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      image={image ?? Empty.PRESENTED_IMAGE_SIMPLE}
       description={
         <div className="space-y-1 text-center">
           <p className="text-sm font-medium text-zinc-400">{title}</p>
@@ -111,5 +121,30 @@ export function EmptyState({
     >
       {action}
     </Empty>
+  );
+}
+
+export function EmptyStateArtwork({
+  darkSrc,
+  lightSrc,
+  name,
+}: {
+  darkSrc: string;
+  lightSrc: string;
+  name: string;
+}) {
+  const { colorMode } = usePreferences();
+
+  return (
+    <img
+      className="ag-empty-state-artwork"
+      src={colorMode === "light" ? lightSrc : darkSrc}
+      width="600"
+      height="400"
+      alt=""
+      aria-hidden="true"
+      decoding="async"
+      data-empty-artwork={name}
+    />
   );
 }
