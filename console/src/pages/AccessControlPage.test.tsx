@@ -68,6 +68,105 @@ afterEach(() => {
 });
 
 describe("AccessControlPage", () => {
+  it("keeps permission evaluation usable when service accounts are unavailable", async () => {
+    mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
+    mockGetAnonymousAccessPolicy.mockResolvedValue({
+      data: { enabled: false, version: "1" },
+    } as never);
+    mockListRepositories.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            name: "releases",
+            format: "raw",
+            type: "hosted",
+            state: "active",
+          },
+        ],
+      },
+    } as never);
+    mockListUsers.mockResolvedValue({
+      data: {
+        items: [{ name: "active-user", role: "reader", state: "active" }],
+      },
+    } as never);
+    mockListApiKeys.mockResolvedValue({ data: { items: [] } } as never);
+    mockListServiceAccounts.mockResolvedValue({
+      error: "404 page not found",
+    } as never);
+    mockGetRepositoryEffectiveAccess.mockResolvedValue({
+      data: {
+        actor: "user:active-user",
+        resource: "",
+        simulated: true,
+        repository: {
+          id: "00000000-0000-4000-8000-000000000001",
+          name: "releases",
+          format: "raw",
+          type: "hosted",
+          state: "active",
+        },
+        identity: {
+          kind: "local_session",
+          subject: "active-user",
+          displayName: "active-user",
+        },
+        anonymousRead: {
+          allowed: false,
+          source: "repository",
+          reason: "private",
+        },
+        permissions: {
+          read: { allowed: true, source: "role", reason: "reader" },
+          write: { allowed: false, source: "none", reason: "not granted" },
+          admin: { allowed: false, source: "none", reason: "not granted" },
+          intelligence: {
+            allowed: false,
+            source: "none",
+            reason: "not granted",
+          },
+        },
+      },
+    } as never);
+
+    const user = userEvent.setup();
+    render(
+      <PreferencesProvider>
+        <AntdProvider>
+          <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
+            <AccessControlPage />
+          </MemoryRouter>
+        </AntdProvider>
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "服务账号暂时不可用，仍可检查当前身份、用户、API Key 和自定义 actor。",
+      ),
+    ).toBeVisible();
+
+    const principalPicker = screen.getByRole("combobox", {
+      name: "授权主体",
+    });
+    await user.click(principalPicker);
+    await user.click(screen.getByText(/用户 · active-user/));
+    await user.click(screen.getByRole("button", { name: /检\s*查/ }));
+
+    await waitFor(() =>
+      expect(mockGetRepositoryEffectiveAccess).toHaveBeenCalledWith({
+        path: { repositoryId: "00000000-0000-4000-8000-000000000001" },
+        query: {
+          actor: "user:active-user",
+          role: "reader",
+          resource: undefined,
+        },
+      }),
+    );
+    expect(await screen.findByText("模拟结果")).toBeInTheDocument();
+  });
+
   it("omits disabled users and unusable API keys from the principal picker", async () => {
     mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
     mockGetAnonymousAccessPolicy.mockResolvedValue({

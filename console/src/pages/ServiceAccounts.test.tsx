@@ -127,6 +127,21 @@ describe("ServiceAccountsPage", () => {
     expect(screen.getByRole("button", { name: /重试/ })).toBeInTheDocument();
   });
 
+  it("explains when the connected Gateway does not expose service accounts", async () => {
+    mockListServiceAccounts.mockResolvedValue({
+      error: "404 page not found",
+    } as never);
+
+    renderPage();
+
+    expect(
+      await screen.findByText(
+        "当前 Gateway 未提供此接口，Console 与 Gateway 版本可能不一致。请更新或重启 Gateway 后重试。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /重试/ })).toBeInTheDocument();
+  });
+
   it("presents one stable machine principal separately from its rotating credentials", async () => {
     mockListServiceAccounts.mockResolvedValue({
       data: { items: [activeAccount] },

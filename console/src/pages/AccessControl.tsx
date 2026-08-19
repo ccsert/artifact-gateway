@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Button,
   Collapse,
   Input,
@@ -16,6 +17,7 @@ import {
   DatabaseOutlined,
   ExperimentOutlined,
   GlobalOutlined,
+  ReloadOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link, useSearchParams } from "react-router-dom";
@@ -281,6 +283,9 @@ export function AccessControlPage() {
   const [evaluatorOptionsLoading, setEvaluatorOptionsLoading] = useState(true);
   const [evaluatorOptionsError, setEvaluatorOptionsError] =
     useState<unknown>(null);
+  const [serviceAccountsError, setServiceAccountsError] =
+    useState<unknown>(null);
+  const [evaluatorOptionsRevision, setEvaluatorOptionsRevision] = useState(0);
   const [selectedPrincipal, setSelectedPrincipal] = useState(CURRENT_PRINCIPAL);
   const [customActor, setCustomActor] = useState("");
   const [customRole, setCustomRole] = useState<EvaluatorRole>("none");
@@ -351,35 +356,53 @@ export function AccessControlPage() {
     let cancelled = false;
     setEvaluatorOptionsLoading(true);
     setEvaluatorOptionsError(null);
-    void Promise.all([
-      listUsers(),
-      listApiKeys(),
-      listServiceAccounts({ query: { pageSize: 200 } }),
-      listRepositories({ query: { pageSize: 200 } }),
-    ]).then(
-      ([
-        usersResult,
-        apiKeysResult,
-        serviceAccountsResult,
-        repositoriesResult,
-      ]) => {
+    setServiceAccountsError(null);
+    void (async () => {
+      try {
+        const [
+          usersOutcome,
+          apiKeysOutcome,
+          serviceAccountsOutcome,
+          repositoriesOutcome,
+        ] = await Promise.allSettled([
+          listUsers(),
+          listApiKeys(),
+          listServiceAccounts({ query: { pageSize: 200 } }),
+          listRepositories({ query: { pageSize: 200 } }),
+        ]);
         if (cancelled) return;
-        setEvaluatorOptionsLoading(false);
+
+        const usersResult =
+          usersOutcome.status === "fulfilled" ? usersOutcome.value : undefined;
+        const apiKeysResult =
+          apiKeysOutcome.status === "fulfilled"
+            ? apiKeysOutcome.value
+            : undefined;
+        const serviceAccountsResult =
+          serviceAccountsOutcome.status === "fulfilled"
+            ? serviceAccountsOutcome.value
+            : undefined;
+        const repositoriesResult =
+          repositoriesOutcome.status === "fulfilled"
+            ? repositoriesOutcome.value
+            : undefined;
+        const requiredError =
+          (usersOutcome.status === "rejected"
+            ? usersOutcome.reason
+            : usersResult?.error) ??
+          (apiKeysOutcome.status === "rejected"
+            ? apiKeysOutcome.reason
+            : apiKeysResult?.error) ??
+          (repositoriesOutcome.status === "rejected"
+            ? repositoriesOutcome.reason
+            : repositoriesResult?.error);
         if (
-          usersResult.error ||
-          apiKeysResult.error ||
-          serviceAccountsResult.error ||
-          repositoriesResult.error ||
-          !usersResult.data ||
-          !apiKeysResult.data ||
-          !serviceAccountsResult.data ||
-          !repositoriesResult.data
+          !usersResult?.data ||
+          !apiKeysResult?.data ||
+          !repositoriesResult?.data
         ) {
           setEvaluatorOptionsError(
-            usersResult.error ??
-              apiKeysResult.error ??
-              serviceAccountsResult.error ??
-              repositoriesResult.error ??
+            requiredError ??
               new Error(
                 text(
                   "加载权限检查选项失败",
@@ -389,10 +412,25 @@ export function AccessControlPage() {
           );
           return;
         }
-        setUsers(usersResult.data.items);
-        setApiKeys(apiKeysResult.data.items);
-        setServiceAccounts(serviceAccountsResult.data.items);
-        const activeRepositories = repositoriesResult.data.items.filter(
+        const usersData = usersResult.data;
+        const apiKeysData = apiKeysResult.data;
+        const repositoriesData = repositoriesResult.data;
+        setUsers(usersData.items);
+        setApiKeys(apiKeysData.items);
+        if (serviceAccountsResult?.data) {
+          setServiceAccounts(serviceAccountsResult.data.items);
+        } else {
+          setServiceAccounts([]);
+          setServiceAccountsError(
+            (serviceAccountsOutcome.status === "rejected"
+              ? serviceAccountsOutcome.reason
+              : serviceAccountsResult?.error) ??
+              new Error(
+                text("加载服务账号失败", "Failed to load service accounts"),
+              ),
+          );
+        }
+        const activeRepositories = repositoriesData.items.filter(
           (repository) => repository.state === "active",
         );
         setRepositories(activeRepositories);
@@ -401,12 +439,16 @@ export function AccessControlPage() {
             ? current
             : (activeRepositories[0]?.id ?? ""),
         );
-      },
-    );
+      } catch (nextError) {
+        if (!cancelled) setEvaluatorOptionsError(nextError);
+      } finally {
+        if (!cancelled) setEvaluatorOptionsLoading(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [text]);
+  }, [evaluatorOptionsRevision, text]);
 
   const updateAnonymousPolicy = async (enabled: boolean) => {
     if (!anonymousPolicy || savingAnonymousPolicy) return;
@@ -913,6 +955,34 @@ export function AccessControlPage() {
                         <ErrorBanner error={evaluatorOptionsError} />
                       </div>
                     )}
+                    {serviceAccountsError !== null && (
+                      <Alert
+                        className="mb-4"
+                        type="warning"
+                        showIcon
+                        title={text(
+                          "部分身份来源不可用",
+                          "Some identity sources are unavailable",
+                        )}
+                        description={text(
+                          "服务账号暂时不可用，仍可检查当前身份、用户、API Key 和自定义 actor。",
+                          "Service accounts are temporarily unavailable. You can still evaluate the current identity, users, API keys, and custom actors.",
+                        )}
+                        action={
+                          <Button
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            onClick={() =>
+                              setEvaluatorOptionsRevision(
+                                (revision) => revision + 1,
+                              )
+                            }
+                          >
+                            {text("重试", "Retry")}
+                          </Button>
+                        }
+                      />
+                    )}
                     <div className="grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] items-end gap-3">
                       <FilterField label={text("授权主体", "Principal")}>
                         <Select
@@ -1129,8 +1199,11 @@ export function AccessControlPage() {
             label: text("策略与模板", "Policies & templates"),
             children: (
               <div className="ag-page-stack">
-                <Card bodyClassName="overflow-hidden p-0">
-                  <div className="border-b border-zinc-800 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_38%)] px-5 py-5">
+                <Card
+                  className="ag-public-access-card"
+                  bodyClassName="overflow-hidden p-0"
+                >
+                  <div className="ag-public-access-header px-5 py-5">
                     <div className="flex flex-wrap items-start justify-between gap-5">
                       <div className="flex min-w-0 items-start gap-3">
                         <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-lg text-emerald-300">
@@ -1157,7 +1230,7 @@ export function AccessControlPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                      <div className="ag-public-access-summary flex items-center gap-3 rounded-xl px-4 py-3">
                         <div className="text-right">
                           <div className="text-xs uppercase tracking-wider text-zinc-600">
                             {text("公开范围", "Public surface")}
@@ -1223,7 +1296,7 @@ export function AccessControlPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-px bg-zinc-800 lg:grid-cols-3">
+                  <ol className="ag-public-access-layers grid lg:grid-cols-3">
                     {[
                       {
                         icon: <SafetyCertificateOutlined />,
@@ -1253,15 +1326,15 @@ export function AccessControlPage() {
                         ),
                       },
                     ].map((layer, index) => (
-                      <div
+                      <li
                         key={layer.title}
-                        className="bg-zinc-950/35 px-5 py-4"
+                        className="ag-public-access-layer px-5 py-4"
                       >
                         <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                          <span className="flex size-7 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400">
+                          <span className="ag-public-access-layer-icon flex size-7 items-center justify-center rounded-lg text-zinc-400">
                             {layer.icon}
                           </span>
-                          <span className="text-xs font-semibold text-zinc-600">
+                          <span className="ag-public-access-step text-xs font-semibold text-zinc-600">
                             0{index + 1}
                           </span>
                           {layer.title}
@@ -1269,10 +1342,10 @@ export function AccessControlPage() {
                         <p className="mt-2 text-xs leading-5 text-zinc-500">
                           {layer.description}
                         </p>
-                      </div>
+                      </li>
                     ))}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-5 py-3">
+                  </ol>
+                  <div className="ag-public-access-footer flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
                       <Badge tone="green">
                         {text("只开放读取协议", "Read protocols only")}

@@ -20,6 +20,7 @@ import {
   Select,
   Space,
   Switch,
+  theme as antdTheme,
 } from "antd";
 import {
   deleteUser,
@@ -55,6 +56,7 @@ export function UserDetailsDrawer({
 }: UserDetailsDrawerProps) {
   const { message, modal } = App.useApp();
   const { locale, text } = usePreferences();
+  const { token } = antdTheme.useToken();
   const [profileForm] = Form.useForm<UpdateUser>();
   const [passwordForm] = Form.useForm<ResetUserPassword>();
   const [profileBusy, setProfileBusy] = useState(false);
@@ -351,7 +353,11 @@ export function UserDetailsDrawer({
               <AntdBadge
                 count={user.failedLoginAttempts}
                 showZero
-                color={user.failedLoginAttempts ? "#d97706" : "#52525b"}
+                color={
+                  user.failedLoginAttempts
+                    ? token.colorWarning
+                    : token.colorTextQuaternary
+                }
               />
             </Descriptions.Item>
             <Descriptions.Item label={text("密码更新时间", "Password changed")}>
